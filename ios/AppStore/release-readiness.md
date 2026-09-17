@@ -45,6 +45,17 @@ Screenshots under `ios/build/screenshots/`: `12-full-screen-home.png`,
 release build connected to production. Test results and artifacts are local and
 ignored by Git.
 
+## Production configuration done on 17 September 2026
+
+- Vercel Production: `APPLE_SIGN_IN_ENABLED`, `NATIVE_GOOGLE_SIGN_IN_ENABLED`, `APPLE_IAP_ENABLED` and `APPLE_WEB_SIGN_IN_ENABLED` are `true`; both Apple private keys and the IAP issuer/key ids are set. Production serves Google, Apple and email on the native login; the web login now also shows Continue with Apple.
+- Production Supabase: Apple provider enabled with client ids `eu.memoai.memo,eu.memoai.web` and a six-month client secret generated on 17 September 2026 (rotate before 16 March 2027 with `scripts/apple/web-client-secret.mjs`); the native Google callback `eu.memoai.memo.auth://google/callback**` is on the redirect allowlist.
+- Apple Developer: Services ID `eu.memoai.web` (Sign in with Apple, primary App ID `eu.memoai.memo`, domains memoai.eu, www.memoai.eu and both Supabase hosts, return URLs both Supabase callbacks).
+- App Store Connect: production and sandbox server-notification URLs are `https://www.memoai.eu/api/mobile/notifications` (the apex host answers a POST with a 307 redirect, so the www host is required).
+- App Store Connect API: access approved; team keys `DL79AMQY5C` (App Manager) and `M2VD53GP68` (Admin, required for cloud-managed distribution signing); issuer `6715f045-a181-4ad1-b072-5824a5bf1220`. Private keys live in `~/.config/memoai/apple/` (a symlink in `~/.appstoreconnect/private_keys/` serves altool). `scripts/apple/asc-builds.mjs` lists builds.
+- **Build 1.0.0 (1) exported with cloud signing, validated (no errors) and uploaded to App Store Connect on 17 September 2026** (delivery `c3d6b52d-00ed-49fd-983f-b6d5c312d8dd`). Export compliance is answered by `ITSAppUsesNonExemptEncryption=false` in Info.plist.
+- Build 1 processed (`VALID`) and is `IN_BETA_TESTING` for the internal TestFlight group **Memo internal** (`c60398fa-…`, access to all builds); the account holder is invited (accept the TestFlight e-mail, then install from the TestFlight app). `scripts/apple/asc-api.mjs` makes ad-hoc App Store Connect API calls.
+- Still open: install from TestFlight and run the device checks (microphone/tutor, native Apple and Google sign-in, Sandbox purchases, Manage Apple subscriptions); a completed web Apple sign-in on a real Apple Account; screenshots, age rating and review notes in App Store Connect; the submission itself.
+
 ## Required before calling the app ready
 
 1. **Real authentication:** complete Google and Apple sign-in on the connected
@@ -88,6 +99,14 @@ ignored by Git.
    final signed binary and complete TestFlight checks. No main merge, production
    activation, build upload, App Review submission or public release has occurred
    in this task.
+
+## Production configuration (17 September 2026)
+
+- Vercel production holds `APPLE_APP_ID`, `APPLE_BUNDLE_ID`, `APPLE_IAP_*`, `APPLE_SIGN_IN_*` and a fresh `APPLE_AUTH_TOKEN_ENCRYPTION_KEY`; `APPLE_SIGN_IN_ENABLED`, `NATIVE_GOOGLE_SIGN_IN_ENABLED`, `APPLE_IAP_ENABLED` and `APPLE_WEB_SIGN_IN_ENABLED` are `true`. Production was redeployed; the app's login on `memoai.eu` shows Google, Apple and email, the web login gained "Continue with Apple" and is otherwise unchanged.
+- Production Supabase: Apple provider enabled with client IDs `eu.memoai.web,eu.memoai.memo` (the web Services ID first, because Supabase sends the first one to Apple's authorize endpoint) and a six-month client secret from `scripts/apple/web-client-secret.mjs` (rotate before **March 2027**); `eu.memoai.memo.auth://google/callback**` added to the redirect allowlist.
+- Apple Developer: Services ID `eu.memoai.web` ("Memo AI web sign in") with Sign in with Apple, primary App ID `eu.memoai.memo`, domains `memoai.eu`, `www.memoai.eu` and both Supabase hosts, return URLs `https://<project>.supabase.co/auth/v1/callback` for production and staging.
+- Web "Continue with Apple" reaches Apple's sign-in page with `client_id=eu.memoai.web`; completing it with a real Apple Account is the remaining check.
+- Still pending in App Store Connect: the server-notifications URLs (`https://www.memoai.eu/api/mobile/notifications` — the bare domain 307-redirects and Apple does not follow redirects), App Store Connect API access (needed for a command-line export/upload), the four products at one service level, screenshots and review notes.
 
 ## Current operational blockers
 

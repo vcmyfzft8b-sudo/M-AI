@@ -713,6 +713,85 @@ The two `Not authorised.` issues are new, and are **not** the defect #412 fixed.
 written off as verification noise either — see the section below, which is an open question rather
 than a resolution.
 
+## 2026-09-08 — A preview's timer assertion came from outside the bundle
+
+**Not a resolution.** Like the 2026-09-05 entry, this records how to recognise an issue that never
+happened in production, so each triage run does not re-investigate it.
+
+- **Sentry:** `MEMOAI-WEB-3N`, issue `145742465`
+- **Route:** `/creator/lectures/:id`
+- **Normalized message:** `Cannot clear timer: timer created with requestAnimationFrame() but
+  cleared with clearTimeout()`
+- **Events:** three, `2026-09-08T15:28:35Z` to `2026-09-08T15:30:27Z`, all `environment: preview`
+- **Status:** not production evidence; no fix, no branch.
+
+Every marker says one browser session against one preview deployment, not a learner:
+
+- `environment: preview`, `url: https://memo-xzeh5b93i-nace-valencics-projects.vercel.app/creator/lectures/demo-note-anatomija`
+  — a `*.vercel.app` host and the seeded demo note, not `www.memoai.eu` and not real material
+- `release: 46c754af70e58abe96025fd2f962c82bafcfb604`, the head of `codex/quiz-feedback-overflow`,
+  pushed at `2026-09-08T15:22Z`. All three events land in the six minutes after that push.
+- `Safari 26.6` on `Mac OS X`, three events inside two minutes, and nothing since
+
+**The message is not ours and not our dependencies'.** It appears nowhere in `src/` and nowhere in
+`node_modules/`, so it cannot have been thrown by code we ship. `mechanism:
+auto.browser.global_handlers.onunhandledrejection` means Sentry's global handler caught it from the
+page, which includes anything a browser extension or the browser's own instrumentation injects into
+it. That is the likeliest source on a developer's Safari.
+
+Treat a recurrence as real only if it carries `environment: production` and a `www.memoai.eu` url.
+
+## 2026-09-10 — A Sentry performance detector, not an error
+
+**Not a resolution**, and not a defect. This one is a shape of Sentry issue the scan cannot tell
+apart from an exception, recorded so a run does not try to fix a measurement.
+
+- **Sentry:** `MEMOAI-WEB-3R`, issue `146277430`
+- **Route:** `POST /api/inngest`
+- **Title:** `Consecutive HTTP`
+- **Event:** `2026-09-10T18:45:31Z`, one occurrence, `environment: production`, release
+  `078990e4dbf304dba802764633a7c5777d49f9de`
+- **Status:** out of scope; no fix, no branch.
+
+The issue's `issueType` is `performance_consecutive_http`, its `issueCategory` is `http_client`, and
+its `level` is `info`. It carries no exception and no stack trace — it is Sentry's span detector
+observing that one transaction made several HTTP calls in sequence. Nothing failed: no 5xx, no
+timeout, no uncaught exception, which is the whole of what this triage covers.
+
+`scripts/sentry-error-scan.mjs` asks for `is:unresolved` and gets performance issues alongside
+errors, so check `issueCategory` before treating a low-count `level: info` issue as a defect. An
+actual Inngest failure arrives as an exception with a stack trace and `level: error`.
+
+## Open — the landing page's call-stack overflow has no frame to attribute it to
+
+**This is not a resolved incident.** It is recorded so the next run recognises the id, and does not
+open a speculative patch to a page it cannot reproduce a failure on.
+
+- **Sentry:** `MEMOAI-WEB-1P`, issue `122566057`
+- **Route:** `/`, the marketing landing page
+- **Normalized message:** `RangeError: Maximum call stack size exceeded.`
+- **Events:** 54 between `2026-05-25T16:49:24Z` and `2026-09-09T07:26:40Z`, `environment: production`
+- **Status:** `needs-human`. Not reproduced, and deliberately not fixed (triage rule 8).
+
+**Why it is not actionable as it stands.** Only one of the 54 events is still inside Sentry's
+retention window, and its stack is a single frame with no filename and no function — `line 198` of
+nothing. There is no source file, no symbol and no in-app frame, so there is nothing to read and
+nothing to guard. The breadcrumbs before it are all healthy: `/api/track` 200, two `?_rsc=` prefetches
+200, an analytics `POST` 200.
+
+**What the one retained event does say.** `os: iOS 18.7.8`, `browser: Google 375.1.776343893` — the
+Google app's in-app WebView, not Safari and not Chrome proper. The trailing period in `Maximum call
+stack size exceeded.` is WebKit's wording. `mechanism: auto.browser.global_handlers.onerror`,
+`handled: no`, `userCount: 0` across all 54 events, which is what anonymous landing traffic looks
+like. An unbounded recursion in an in-app browser's injected script produces exactly this signature:
+a global `onerror` with no attributable frame.
+
+**What would make it actionable.** Any one of: a second event carrying a real stack frame; a
+reproduction of the landing page in an iOS in-app WebView; or source maps resolving that frame. A
+run that gets one of those should triage it on that evidence rather than on this entry. Until then,
+do not add a recursion guard to landing-page code chosen by guesswork — 54 events over three and a
+half months with zero identified users does not justify changing a page that is otherwise healthy.
+
 ## Open — a tutor turn answered 401 mid-walkthrough in production, once, and was never explained
 
 **This is not a resolved incident.** It is recorded here so the next automated run recognises the

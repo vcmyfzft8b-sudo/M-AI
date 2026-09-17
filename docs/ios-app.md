@@ -2,6 +2,8 @@
 
 ## Status
 
+**Handoff:** the ordered list of what is still needed before submission, and the web/app separation contract, is `ios/AppStore/NEXT-STEPS.md`.
+
 Implemented on `codex/ios-app-wrapper` and pushed with the account holder’s authorization. Vercel Preview is ready; production remains on `main`. The App Store Connect record was created on 15 September 2026: Memo AI, Apple ID `6812409212`, bundle `eu.memoai.memo`, primary language English (U.K.), SKU `memoai-ios`. A fresh signed archive and App Store distribution export include PWA theme synchronization, both login providers, the corrected launch screen, the Apple sign-in entitlement and all four subscription product IDs (`ios/build/MemoAI-settings-theme.xcarchive`, `ios/build/export-settings-theme`). Export verification confirmed the correct app/team, Apple sign-in entitlement, and disabled debugging. The account holder authorized pushing the test branch for its Vercel Preview on 15 September 2026. Production remains unchanged, and no build has been uploaded or submitted for review. Apple billing remains disabled in production. It is enabled only in the isolated staging Preview for Sandbox validation. Account setup and the release checks below must finish before production activation or submission.
 
 The app supports iPhone and iPad on iOS 17+. It wraps the existing Memo app in WKWebView, opening `https://memoai.eu/auth/continue` to resume a session or show login directly. It adds native Sign in with Apple, Google sign-in through ASWebAuthenticationSession, StoreKit 2 subscriptions, native file sharing, camera/microphone permission prompts, and connection recovery. There are no native third-party SDK dependencies. The website and server changes in this branch must ship with the wrapper.

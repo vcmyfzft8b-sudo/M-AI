@@ -159,6 +159,66 @@ test('a known Sentry issue tracked on the backlog does not reopen the gate', () 
   assert.equal(decision.actionable, false)
 })
 
+test('a Sentry performance detector does not open the gate, but is still reported', () => {
+  // `performance_consecutive_http` and its siblings carry no exception and no stack
+  // trace, and every detection files a new issue id -- so backlogging one never stops
+  // the next. They are set aside by category, not by id.
+  const decision = gate({
+    vercel: { groups: [] },
+    sentry: {
+      issues: [
+        { id: '147678291', issueType: 'performance_consecutive_http', lastSeen: '2026-08-18T11:00:00Z' },
+      ],
+    },
+    backlog: { entries: [] },
+  })
+  assert.equal(decision.actionable, false)
+  assert.deepEqual(decision.freshSentryIssueIds, [])
+  assert.deepEqual(decision.ignoredSentryIssueIds, ['147678291'])
+  assert.match(decision.reason, /performance detector/)
+})
+
+test('setting detectors aside does not hide a real error in the same window', () => {
+  const decision = gate({
+    vercel: { groups: [] },
+    sentry: {
+      issues: [{ id: '111', issueType: 'performance_n_plus_one_db_queries', lastSeen: '2026-08-18T11:00:00Z' }],
+      additional: [{ id: '222', issueType: 'error', lastSeen: '2026-08-18T11:00:00Z' }],
+    },
+    backlog: { entries: [] },
+  })
+  assert.equal(decision.actionable, true)
+  assert.deepEqual(decision.freshSentryIssueIds, ['222'])
+  assert.deepEqual(decision.ignoredSentryIssueIds, ['111'])
+})
+
+test('a hydration error is not a performance detector and still opens the gate', () => {
+  // `replay_hydration_error` is a real client-side defect that happens to be filed
+  // under a non-error category; matching on the `performance_` prefix keeps it.
+  const decision = gate({
+    vercel: { groups: [] },
+    sentry: {
+      issues: [
+        { id: '113442418', issueType: 'replay_hydration_error', issueCategory: 'frontend', lastSeen: '2026-08-18T11:00:00Z' },
+      ],
+    },
+    backlog: { entries: [] },
+  })
+  assert.equal(decision.actionable, true)
+  assert.deepEqual(decision.freshSentryIssueIds, ['113442418'])
+})
+
+test('a report written before issueType was carried stays actionable', () => {
+  // Fail open: an unclassified issue is triaged, not silently set aside.
+  const decision = gate({
+    vercel: { groups: [] },
+    sentry: { issues: [{ id: '999', lastSeen: '2026-08-18T11:00:00Z' }] },
+    backlog: { entries: [] },
+  })
+  assert.equal(decision.actionable, true)
+  assert.deepEqual(decision.freshSentryIssueIds, ['999'])
+})
+
 test('a lossy scan opens the gate even with nothing fresh, so the gap gets reported', () => {
   const decision = gate({ vercel: { groups: [], lossy: true }, backlog: { entries: [] } })
   assert.equal(decision.actionable, true)

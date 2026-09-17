@@ -759,8 +759,16 @@ observing that one transaction made several HTTP calls in sequence. Nothing fail
 timeout, no uncaught exception, which is the whole of what this triage covers.
 
 `scripts/sentry-error-scan.mjs` asks for `is:unresolved` and gets performance issues alongside
-errors, so check `issueCategory` before treating a low-count `level: info` issue as a defect. An
-actual Inngest failure arrives as an exception with a stack trace and `level: error`.
+errors. An actual Inngest failure arrives as an exception with a stack trace and `level: error`.
+
+**Since PR #417 the gate does this on its own**, so a detector no longer wakes a run: the scan
+carries `issueType` and `issueCategory` through, and `gate()` sets aside any issue whose `issueType`
+begins with `performance_`, naming it in `ignoredSentryIssueIds` rather than dropping it silently.
+Judge by that prefix rather than by `issueCategory`, which is what an earlier draft of this entry
+suggested: `replay_hydration_error` carries `issueCategory: frontend`, so a rule of "category is not
+`error`" would have quietly suppressed a real client-side defect. The same class recurred as
+`147678291` on 2026-09-17, and each detection files a **new** issue id, which is why backlogging one
+never stopped the next and the fix had to be by class.
 
 ## Open — the landing page's call-stack overflow has no frame to attribute it to
 

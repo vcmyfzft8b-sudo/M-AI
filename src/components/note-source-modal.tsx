@@ -53,6 +53,16 @@ import {
   compressScanImageForUpload,
 } from "@/lib/file-compression-client";
 import { prepareAudioSourceForUpload } from "@/lib/audio-source-preparation";
+import {
+  discardNativeRecording,
+  isNativeRecorderAvailable,
+  pauseNativeRecording,
+  readNativeRecordingState,
+  resumeNativeRecording,
+  startNativeRecording,
+  stopNativeRecording,
+  type NativeRecorderSnapshot,
+} from "@/lib/mobile/native-recorder";
 import { canConvertScanPreview } from "@/lib/scan-preview";
 import { uploadToSignedUrlWithRetry } from "@/lib/signed-upload-client";
 import {
@@ -326,6 +336,17 @@ export function NoteSourceModal({
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const elapsedRef = useRef(0);
+  /*
+   * The app's own count of the take in progress, and the instant we read it.
+   *
+   * Nothing on this page ticks while the phone is locked — iOS suspends the web
+   * content process, which is the whole reason capture moved native — so the
+   * clock is drawn from wall-clock arithmetic on this reading rather than from
+   * an interval that counts its own firings. Non-null for exactly as long as
+   * audio is sitting on the device: that is what tells a closing modal there is
+   * a recording to throw away.
+   */
+  const nativeSyncRef = useRef<{ elapsed: number; at: number; paused: boolean } | null>(null);
   const requestCloseRef = useRef<() => void>(() => undefined);
   const activeRequestControllerRef = useRef<AbortController | null>(null);
   const createdLectureIdRef = useRef<string | null>(null);
@@ -357,6 +378,7 @@ export function NoteSourceModal({
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [recordingSupported, setRecordingSupported] = useState<boolean | null>(null);
+  const [nativeRecorder, setNativeRecorder] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -535,6 +557,50 @@ export function NoteSourceModal({
     });
   }, []);
 
+  /*
+   * The app is the authority on how long the take is, and on whether it is
+   * running at all: a call, Siri or another app taking the microphone pauses
+   * the recorder without this page being told, and while the screen is locked
+   * the page is not running to be told anyway.
+   */
+  const applyNativeSnapshot = useCallback((snapshot: NativeRecorderSnapshot) => {
+    if (snapshot.state === "idle") {
+      return;
+    }
+
+    const paused = snapshot.state === "paused";
+    nativeSyncRef.current = { elapsed: snapshot.elapsed, at: Date.now(), paused };
+    setIsPaused(paused);
+    setElapsedSeconds(() => {
+      const seconds = Math.floor(snapshot.elapsed);
+      elapsedRef.current = seconds;
+      return seconds;
+    });
+  }, []);
+
+  /** Draws the clock from the last reading and the wall clock since. */
+  const startNativeClock = useCallback(() => {
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+    }
+
+    timerRef.current = window.setInterval(() => {
+      const sync = nativeSyncRef.current;
+
+      if (!sync) {
+        return;
+      }
+
+      setElapsedSeconds(() => {
+        const seconds = Math.floor(
+          sync.paused ? sync.elapsed : sync.elapsed + (Date.now() - sync.at) / 1000,
+        );
+        elapsedRef.current = seconds;
+        return seconds;
+      });
+    }, 250);
+  }, []);
+
   const resetState = useCallback(() => {
     if (timerRef.current) {
       window.clearInterval(timerRef.current);
@@ -547,6 +613,13 @@ export function NoteSourceModal({
     }
 
     recorderRef.current = null;
+    // A take still on the device when the modal closes is one nobody asked to
+    // keep: the draft it would have belonged to is gone with the modal.
+    if (nativeSyncRef.current) {
+      nativeSyncRef.current = null;
+      void discardNativeRecording().catch(() => null);
+    }
+
     setVisualizerStream(null);
     chunksRef.current = [];
     elapsedRef.current = 0;
@@ -629,7 +702,9 @@ export function NoteSourceModal({
   }, [deleteCreatedLecture, t]);
 
   useEffect(() => {
-    setRecordingSupported(typeof window !== "undefined" && "MediaRecorder" in window);
+    const native = isNativeRecorderAvailable();
+    setNativeRecorder(native);
+    setRecordingSupported(native || (typeof window !== "undefined" && "MediaRecorder" in window));
   }, []);
 
   useEffect(() => {
@@ -670,6 +745,47 @@ export function NoteSourceModal({
       resetState();
     }
   }, [open, resetState]);
+
+  /*
+   * Re-reads the app's own count while a native take runs.
+   *
+   * Two things this page cannot see make its clock wrong on its own: it stops
+   * running altogether while iOS has the app suspended, and the recorder can be
+   * paused behind its back by a call or by another app taking the microphone.
+   * Coming back to the foreground is the moment that matters most, so the
+   * reading is taken then as well as on a slow interval.
+   */
+  useEffect(() => {
+    if (!nativeRecorder || !isRecording) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const sync = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      void readNativeRecordingState()
+        .then((snapshot) => {
+          if (!cancelled) {
+            applyNativeSnapshot(snapshot);
+          }
+        })
+        .catch(() => null);
+    };
+
+    const interval = window.setInterval(sync, 2000);
+    document.addEventListener("visibilitychange", sync);
+    sync();
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [applyNativeSnapshot, isRecording, nativeRecorder]);
 
   useEffect(() => {
     return () => {
@@ -725,6 +841,14 @@ export function NoteSourceModal({
     }
 
     try {
+      if (nativeRecorder) {
+        applyNativeSnapshot(await startNativeRecording());
+        setIsRecording(true);
+        setError(null);
+        startNativeClock();
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       setVisualizerStream(stream);
@@ -791,6 +915,39 @@ export function NoteSourceModal({
   }
 
   const stopRecording = useCallback(async () => {
+    if (nativeSyncRef.current) {
+      setIsRecording(false);
+      setIsPaused(false);
+
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
+      // Collecting the audio is a transfer across the bridge, not an instant
+      // hand-off: a two-hour lecture is tens of megabytes of base64.
+      setBusyLabel(t("capture.busy.preparing"));
+
+      try {
+        const recording = await stopNativeRecording();
+        nativeSyncRef.current = null;
+        setBusyLabel(null);
+        await replaceAudioSource({
+          file: recording.file,
+          durationSeconds: recording.durationSeconds,
+          previewUrl: URL.createObjectURL(recording.file),
+          origin: "recording",
+        });
+      } catch (stopError) {
+        setBusyLabel(null);
+        setError(
+          compressionErrorMessage(stopError, t) ?? t("capture.error.recordStartFailed"),
+        );
+      }
+
+      return;
+    }
+
     recorderRef.current?.stop();
     recorderRef.current = null;
     setIsRecording(false);
@@ -800,9 +957,14 @@ export function NoteSourceModal({
       window.clearInterval(timerRef.current);
       timerRef.current = null;
     }
-  }, []);
+  }, [replaceAudioSource, t]);
 
   const pauseRecording = useCallback(() => {
+    if (nativeSyncRef.current) {
+      void pauseNativeRecording().then(applyNativeSnapshot).catch(() => null);
+      return;
+    }
+
     if (!recorderRef.current || recorderRef.current.state !== "recording") {
       return;
     }
@@ -814,9 +976,14 @@ export function NoteSourceModal({
       window.clearInterval(timerRef.current);
       timerRef.current = null;
     }
-  }, []);
+  }, [applyNativeSnapshot]);
 
   const resumeRecording = useCallback(() => {
+    if (nativeSyncRef.current) {
+      void resumeNativeRecording().then(applyNativeSnapshot).catch(() => null);
+      return;
+    }
+
     if (!recorderRef.current || recorderRef.current.state !== "paused") {
       return;
     }
@@ -833,7 +1000,7 @@ export function NoteSourceModal({
         });
       }, 1000);
     }
-  }, []);
+  }, [applyNativeSnapshot]);
 
   const requestClose = useCallback(() => {
     sourceSheetDragStartYRef.current = null;
@@ -2080,7 +2247,7 @@ export function NoteSourceModal({
                 >
                   {renderPreparedSourceCard()}
 
-                  {selectedMode === "record" && !isRecording ? (
+                  {selectedMode === "record" && !isRecording && !nativeRecorder ? (
                     <button
                       type="button"
                       className="memo-capture-row"
@@ -2131,7 +2298,9 @@ export function NoteSourceModal({
                               ? t("capture.recordHintIdle")
                               : isPaused
                                 ? t("capture.recordPaused")
-                                : t("capture.recordActive")}
+                                : nativeRecorder
+                                  ? t("capture.recordLockScreenHint")
+                                  : t("capture.recordActive")}
                           </span>
                           {isRecording ? (
                           <button

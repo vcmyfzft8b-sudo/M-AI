@@ -622,6 +622,7 @@ export const en: Messages = {
   "capture.recordHintIdle": "Press Start recording when the lecture begins.",
   "capture.recordPaused": "Recording is paused",
   "capture.recordActive": "Recording — the note is made when you stop.",
+  "capture.recordLockScreenHint": "Recording — you can lock your phone, it keeps going.",
   "capture.recordAgain": "Record again",
   "capture.resumeRecording": "Resume recording",
   "capture.pauseRecording": "Pause",

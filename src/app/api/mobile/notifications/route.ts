@@ -27,7 +27,8 @@ export async function POST(request: Request) {
     }
     // The request is finished and correct; something inside it was refused, and nothing but a
     // report says so. Silence here is what left the 503s on the dashboard with no explanation.
-    captureBackgroundError(error, { operation: "apple_notification_rejected", tags: { route } });
+    captureBackgroundError(error, { operation: "apple_notification_rejected", tags: { route },
+      extra: { vercelRequestId: request.headers.get("x-vercel-id") } });
     return NextResponse.json({ received: true, accepted: false });
   }
 }

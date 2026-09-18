@@ -75,13 +75,19 @@ export async function verifyAppleNotification(jws: string) {
   }
 }
 
-// Apple's verifier says which failures a later attempt could not survive: a signature, bundle id,
-// environment or chain-shape mismatch is the payload itself, and it will fail identically for the
-// next three days. A revocation check that could not run, or a certificate we cannot date, may be
-// Apple or the network and deserves the retry.
+// Only the statuses that describe the PAYLOAD as somebody else's: a bundle id or app id that is
+// not ours, an environment neither verifier matched, a certificate chain that is not three certs
+// long. Those read the same way for the next three days.
+//
+// Everything else stays retryable even when it sounds terminal, because the library reuses those
+// statuses for our own side of the exchange. VERIFICATION_FAILURE is the catch-all wrapper around
+// the whole of verifyJWT and is also what a chain that does not meet our pinned roots throws — so
+// it is what an unrotated root would throw for EVERY notification. FAILURE is mostly an OCSP
+// verdict: a responder we cannot parse, or a response that has gone stale. Acknowledging those
+// would quietly discard real billing notifications during an outage we could still recover from.
 const PERMANENT_VERIFICATION_STATUSES: ReadonlySet<VerificationStatus> = new Set([
-  VerificationStatus.VERIFICATION_FAILURE, VerificationStatus.INVALID_APP_IDENTIFIER,
-  VerificationStatus.INVALID_ENVIRONMENT, VerificationStatus.INVALID_CHAIN_LENGTH, VerificationStatus.FAILURE,
+  VerificationStatus.INVALID_APP_IDENTIFIER, VerificationStatus.INVALID_ENVIRONMENT,
+  VerificationStatus.INVALID_CHAIN_LENGTH,
 ]);
 
 /**

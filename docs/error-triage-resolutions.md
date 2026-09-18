@@ -928,11 +928,28 @@ transaction whose `appAccountToken` is not on it.
 
 The route now also classifies the failure. Apple reads only the status, so 503 means "send it
 again" and is right for a database fault, a revocation check that could not run, or an Apple
-outage; a payload that will never verify — wrong signature, wrong bundle id, wrong environment, or
-a sandbox account nobody allowlisted — is acknowledged with a 200 and reported as a warning
-instead, because no number of retries changes the answer. `appleNotificationRetryable` decides this
-from the Apple library's own `VerificationStatus`, never from the text of a message, and anything
-it does not recognise stays retryable: acknowledging a notification we should have kept loses it.
+outage. Only a payload that is positively somebody else's is acknowledged with a 200 and reported
+as a warning instead: a bundle id or app id that is not ours, an environment neither verifier
+matched, a certificate chain that is not three certs long, or a sandbox account nobody allowlisted.
+`appleNotificationRetryable` decides this from the Apple library's own `VerificationStatus`, never
+from the text of a message.
+
+**`VERIFICATION_FAILURE` and `FAILURE` deliberately stay retryable**, though both sound terminal.
+`VERIFICATION_FAILURE` is the catch-all wrapper around the whole of `verifyJWT`, and it is also
+what a chain that does not meet our pinned roots throws — so an Apple root rotation we had not
+picked up would throw it for *every* notification. `FAILURE` is mostly an OCSP verdict: a responder
+we cannot parse, or a response gone stale. Acknowledging either would quietly discard real billing
+notifications during an outage we could still recover from. The cost of the other choice is five
+log lines for a genuinely forged payload, which is the trade worth taking.
+
+One consequence to know about rather than discover. In production with
+`APPLE_SANDBOX_REVIEW_USER_IDS` unset, a real sandbox *purchase* notification is now acknowledged
+rather than retried, because that configuration accepts no sandbox entitlement from anybody. If the
+variable is unset only briefly — a deploy that has not landed yet, which is exactly how this
+incident started — that purchase is dropped instead of arriving on Apple's next attempt. It costs a
+TestFlight or App Review tester one restore, never a paying customer: a production transaction
+verifies on the first attempt and never touches this path. The event is now a warning in Sentry
+rather than silence, which is the part that was actually missing.
 
 **Do not read a future 503 here as this bug returning.** This one is silent by construction; every
 failure after PR #425 carries a Sentry event tagged `apple_notification_retry` (503) or

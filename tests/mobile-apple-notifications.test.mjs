@@ -129,18 +129,23 @@ test("the production verifier carries the app id and the sandbox one does not", 
 
 // Whether to ask Apple to send it again. Wrong on the permanent side costs three days of 5xx;
 // wrong on the acknowledged side loses a purchase, so anything unrecognised must stay retryable.
-test("a payload that will never verify is not worth another attempt", () => {
+test("a payload that belongs to somebody else is not worth another attempt", () => {
   const apple = loadApple({ allowlist: undefined, verdicts: {} });
-  for (const status of ["VERIFICATION_FAILURE", "INVALID_APP_IDENTIFIER", "INVALID_ENVIRONMENT", "INVALID_CHAIN_LENGTH", "FAILURE"]) {
+  for (const status of ["INVALID_APP_IDENTIFIER", "INVALID_ENVIRONMENT", "INVALID_CHAIN_LENGTH"]) {
     assert.equal(apple.appleNotificationRetryable(new VerificationException(VerificationStatus[status])), false, status);
   }
   assert.equal(apple.appleNotificationRetryable(new apple.AppleNotificationRejected("Sandbox account not allowed")), false);
 });
 
-test("a revocation check that could not run, and anything unrecognised, is retryable", () => {
+// The statuses the library reuses for our own side of the exchange. An unrotated pinned root makes
+// every notification a VERIFICATION_FAILURE and a stale OCSP response makes every one a FAILURE;
+// acknowledging those would discard real billing notifications during an outage we could recover
+// from, so they keep the retry even though a forged payload also lands here.
+test("a failure that could be ours, and anything unrecognised, is retryable", () => {
   const apple = loadApple({ allowlist: undefined, verdicts: {} });
-  assert.equal(apple.appleNotificationRetryable(new VerificationException(VerificationStatus.RETRYABLE_VERIFICATION_FAILURE)), true);
-  assert.equal(apple.appleNotificationRetryable(new VerificationException(VerificationStatus.INVALID_CERTIFICATE)), true);
+  for (const status of ["VERIFICATION_FAILURE", "FAILURE", "RETRYABLE_VERIFICATION_FAILURE", "INVALID_CERTIFICATE"]) {
+    assert.equal(apple.appleNotificationRetryable(new VerificationException(VerificationStatus[status])), true, status);
+  }
   assert.equal(apple.appleNotificationRetryable(new Error("Apple entitlement insert failed")), true);
   assert.equal(apple.appleNotificationRetryable(undefined), true);
 });

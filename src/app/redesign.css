@@ -19600,6 +19600,15 @@
   gap: 0.6rem;
 }
 
+/* A text input has an intrinsic width of its own (about twenty characters),
+   which at a large text size is wider than the card; as a grid item it would
+   widen the column and the whole form with it. Zero minimums keep the form
+   inside the card and let the input take what is left. */
+.memo-auth-form > *,
+.memo-auth-actions > * {
+  min-width: 0;
+}
+
 .memo-auth-field {
   display: flex;
   align-items: center;
@@ -19630,7 +19639,8 @@
 }
 
 .memo-auth-field input {
-  flex: 1;
+  flex: 1 1 0;
+  width: 0;
   min-width: 0;
   border: 0;
   outline: none;

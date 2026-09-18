@@ -208,6 +208,8 @@ export function DiscountOffer({
    * this is the honest display of a deadline rather than the deadline itself.
    */
   const [secondsLeft, setSecondsLeft] = useState(() => remainingSeconds(offerRestored));
+  /** Read by the countdown, which must not close a sheet mid-purchase. */
+  const busyRef = useRef(false);
 
   useEffect(
     () => () => {
@@ -353,7 +355,6 @@ export function DiscountOffer({
    * the only place a drag starts, and both leave through the shared exit.
    */
   useEffect(() => {
-    if (nativeOffer) return;
     if (!offerOpen) {
       setSecondsLeft(remainingSeconds(offerRestored));
       expiresAtRef.current = null;
@@ -442,7 +443,13 @@ export function DiscountOffer({
       // this is so the screen says so rather than sitting on a dead offer.
       if (left === 0) {
         window.clearInterval(id);
-        closeOfferRef.current?.();
+
+        // Not while a purchase is being started: Apple's sheet sits on top of
+        // this one and the charge is already under way, so pulling the offer
+        // out from under it would withdraw a prize that is being spent.
+        if (!busyRef.current) {
+          closeOfferRef.current?.();
+        }
       }
     }, 1000);
 
@@ -450,7 +457,7 @@ export function DiscountOffer({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [offerOpen, offerRestored, nativeOffer]);
+  }, [offerOpen, offerRestored]);
 
   const wheelSheet = useSheet(
     useCallback(() => onWheelOpenChange(false), [onWheelOpenChange]),
@@ -487,6 +494,8 @@ export function DiscountOffer({
     }, [onOfferOpenChange, onWheelOpenChange]),
     { scrollable: true },
   );
+
+  busyRef.current = nativeOffer ? apple.busy : isCheckingOut;
 
   const closeWheel = wheelSheet.dismiss;
   const closeOffer = offerSheet.dismiss;
@@ -688,17 +697,17 @@ export function DiscountOffer({
             />
             <p className="memo-offer-kicker">{t("offer.kicker")}</p>
             <p className="memo-offer-headline">{t("offer.headline")}</p>
-            <p className="memo-offer-sub">{t(nativeOffer ? "native.introCaption" : "offer.sub")}</p>
+            <p className="memo-offer-sub">{t("offer.sub")}</p>
 
             {/* Big numbers and nothing else. The urgency is the number. */}
-            {!nativeOffer ? <p
+            <p
               className={`memo-offer-timer ${secondsLeft <= 60 ? "urgent" : ""}`.trim()}
               role="timer"
               aria-live="off"
             >
               {String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:
               {String(secondsLeft % 60).padStart(2, "0")}
-            </p> : null}
+            </p>
 
             <div className="memo-offer-plans">
               {OFFER_PLANS.filter(offerPlan => !nativeOffer || apple.productForPlan(offerPlan.id)).map((offerPlan) => {

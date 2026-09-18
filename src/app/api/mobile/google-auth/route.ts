@@ -19,6 +19,12 @@ async function enabled() {
 
 // PKCE starts in the WKWebView cookie jar; only the provider interaction leaves
 // for ASWebAuthenticationSession. Its callback carries a one-use code, not tokens.
+//
+// The provider returns to an ordinary HTTPS page of ours, which bounces to the
+// app's scheme (see /auth/mobile-callback). Supabase used to be asked to
+// redirect to that scheme itself, and when it would not, it fell back to the
+// site URL: the sign-in sheet landed on the plain web app, the app never saw a
+// callback, and there was nothing to report.
 export async function GET(request: NextRequest) {
   if (request.headers.get("sec-fetch-site") === "cross-site") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   if (!await enabled()) return NextResponse.json({ error: "Unavailable" }, { status: 503 });
@@ -26,7 +32,7 @@ export async function GET(request: NextRequest) {
   if (limited) return limited;
   const { supabase, applyCookies } = await createSupabaseRouteHandlerClient();
   const state = randomBytes(32).toString("hex");
-  const redirect = new URL("eu.memoai.memo.auth://google/callback");
+  const redirect = new URL("/auth/mobile-callback", request.nextUrl.origin);
   redirect.searchParams.set("state", state);
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google", options: { redirectTo: redirect.toString(), skipBrowserRedirect: true, queryParams: { prompt: "select_account" } },

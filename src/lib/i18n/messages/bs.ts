@@ -2066,6 +2066,7 @@ export const bs: Messages = {
   // Native iOS app and Apple subscription controls.
   "native.unavailable": "Pretplate trenutno nisu dostupne. Pokušaj ponovo.",
   "native.verifyFailed": "Kupovina još nije potvrđena. Pokušaj putem opcije Obnovi kupovine; nećeš ponovo platiti.",
+  "native.signInFailed": "Prijava nije mogla biti dovršena. Pokušaj ponovo.",
   "native.year": "godina",
   "native.month": "mjesec",
   "native.renewal": "Plaćanje se naplaćuje s tvog Apple računa. Pretplata se automatski obnavlja ako je ne otkažeš najmanje 24 sata prije kraja tekućeg perioda. Upravljaj njome ili je otkaži u postavkama Apple pretplata.",

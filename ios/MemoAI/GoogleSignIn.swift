@@ -22,26 +22,44 @@ final class GoogleSignIn: NSObject, ASWebAuthenticationPresentationContextProvid
                     if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin {
                         pending.resume(returning: ["status": "cancelled"]); return
                     }
-                    guard error == nil, let callback,
+                    if let error {
+                        pending.resume(throwing: BridgeFailure(reason: "browser: \(error.localizedDescription)")); return
+                    }
+                    let items = callback.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems } ?? []
+                    // The provider reports its own failures on the callback; say so
+                    // instead of pretending the callback never arrived.
+                    if let problem = items.first(where: { $0.name == "error" })?.value {
+                        let detail = items.first(where: { $0.name == "error_description" })?.value
+                            ?? items.first(where: { $0.name == "error_code" })?.value ?? ""
+                        pending.resume(throwing: BridgeFailure(reason: "provider: \(problem) \(detail)".trimmingCharacters(in: .whitespaces))); return
+                    }
+                    guard let callback,
                           callback.scheme == "eu.memoai.memo.auth", callback.host == "google",
                           callback.path == "/callback", callback.user == nil, callback.password == nil,
-                          callback.port == nil, callback.fragment == nil,
-                          let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems,
-                          items.filter({ $0.name == "state" }).count == 1,
-                          items.first(where: { $0.name == "state" })?.value == state,
-                          items.filter({ $0.name == "code" }).count == 1,
+                          callback.port == nil, callback.fragment == nil else {
+                        pending.resume(throwing: BridgeFailure(reason: "callback: unexpected address")); return
+                    }
+                    guard items.filter({ $0.name == "state" }).count == 1,
+                          items.first(where: { $0.name == "state" })?.value == state else {
+                        pending.resume(throwing: BridgeFailure(reason: "callback: state mismatch")); return
+                    }
+                    guard items.filter({ $0.name == "code" }).count == 1,
                           let code = items.first(where: { $0.name == "code" })?.value,
                           !code.isEmpty, code.count <= 4096 else {
-                        pending.resume(throwing: Store.StoreError.unavailable); return
+                        pending.resume(throwing: BridgeFailure(reason: "callback: no code")); return
                     }
                     pending.resume(returning: ["code": code, "state": state])
                 }
             }
             session = auth
             auth.presentationContextProvider = self
+            // No shared Safari cookies: Google asks for the account every time,
+            // which is what the button promises, and iOS then skips its
+            // "wants to use supabase.co to sign in" prompt.
+            auth.prefersEphemeralWebBrowserSession = true
             if !auth.start() {
                 session = nil; anchor = nil
-                pending.resume(throwing: Store.StoreError.unavailable)
+                pending.resume(throwing: BridgeFailure(reason: "browser: could not start"))
             }
         }
     }

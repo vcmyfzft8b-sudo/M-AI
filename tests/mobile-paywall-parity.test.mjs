@@ -101,6 +101,11 @@ test("Apple wheel offer keeps the PWA sheet and uses actual first-period prices"
   }
   assert.match(ios, /€64.99, then €129.99/);
   assert.match(ios, /€9.99/);
-  assert.doesNotMatch(ios, /memo-native-paywall|role="timer"|Close the offer and it is gone/);
+  assert.doesNotMatch(ios, /memo-native-paywall/);
+  // The same sheet on both, countdown included: the app records its spin on
+  // the same profile column, so the deadline it shows is the server's.
+  assert.match(ios, /role="timer"/);
   assert.match(web, /role="timer"/);
+  assert.match(ios, /Close the offer and it is gone/);
+  assert.match(web, /Close the offer and it is gone/);
 });

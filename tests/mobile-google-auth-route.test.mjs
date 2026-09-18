@@ -53,9 +53,13 @@ test("native Google begins PKCE using a fixed callback and a short-lived HTTP-on
   const body = await response.json(); assert.match(body.state, /^[0-9a-f]{64}$/);
   const options = h.calls.find(c => c[0] === "start")[1];
   assert.equal(options.provider, "google"); assert.equal(options.options.skipBrowserRedirect, true);
+  // The provider returns to our own HTTPS page, which bounces to the app's
+  // scheme; asking the provider for that scheme directly is what failed
+  // silently, so the callback must stay an ordinary address on this origin.
   const callback = new URL(options.options.redirectTo);
-  assert.equal(callback.protocol, "eu.memoai.memo.auth:"); assert.equal(callback.host, "google");
-  assert.equal(callback.pathname, "/callback"); assert.equal(callback.searchParams.get("state"), body.state);
+  assert.equal(callback.origin, "https://memoai.eu");
+  assert.equal(callback.pathname, "/auth/mobile-callback");
+  assert.equal(callback.searchParams.get("state"), body.state);
   const cookie = h.calls.find(c => c[0] === "cookie");
   assert.equal(cookie[3].httpOnly, true); assert.equal(cookie[3].sameSite, "strict"); assert.equal(cookie[3].maxAge, 600);
   assert.ok(h.calls.some(c => c[0] === "applyCookies"));
@@ -83,4 +87,55 @@ test("Google completion rejects deleting users, wrong providers and account swit
   }
   const h = harness({ exchangeFails: true }); const response = await h.run();
   assert.equal(response.status, 401); assert.doesNotMatch(await response.text(), /private/);
+});
+
+// The page the provider returns to. It holds no session and spends no code: it
+// exists so the sign-in sheet sees a navigation to the app's own scheme.
+function loadBridge() {
+  const modules = { "next/server": { NextResponse: class extends Response {} } };
+  const context = { exports: {}, require: name => modules[name], URL, URLSearchParams };
+  vm.runInNewContext(ts.transpileModule(readFileSync(new URL("../src/app/auth/mobile-callback/route.ts", import.meta.url), "utf8"),
+    { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, context);
+  return context.exports;
+}
+
+const bridge = loadBridge();
+
+async function bounce(query) {
+  const request = new Request(`https://memoai.eu/auth/mobile-callback?${new URLSearchParams(query)}`);
+  request.nextUrl = new URL(request.url);
+  const response = await bridge.GET(request);
+  return { status: response.status, location: new URL(response.headers.get("location")), headers: response.headers };
+}
+
+test("the callback page bounces the provider's answer to the app, and nothing else", async () => {
+  const state = "a".repeat(64);
+  const ok = await bounce({ state, code: "synthetic-code" });
+  assert.equal(ok.status, 302);
+  assert.equal(ok.location.protocol, "eu.memoai.memo.auth:");
+  assert.equal(ok.location.host, "google");
+  assert.equal(ok.location.pathname, "/callback");
+  assert.equal(ok.location.searchParams.get("state"), state);
+  assert.equal(ok.location.searchParams.get("code"), "synthetic-code");
+  assert.equal(ok.headers.get("cache-control"), "no-store");
+  assert.equal(ok.headers.get("referrer-policy"), "no-referrer");
+
+  // A provider failure is carried across rather than ending the sheet silently.
+  const failed = await bounce({ state, error: "access_denied", error_description: "user refused" });
+  assert.equal(failed.location.searchParams.get("error"), "access_denied");
+  assert.equal(failed.location.searchParams.get("error_description"), "user refused");
+  assert.equal(failed.location.searchParams.get("code"), null);
+
+  // No code at all is still a failure the app can name.
+  assert.equal((await bounce({ state })).location.searchParams.get("error"), "missing_code");
+
+  // A state that is not ours is dropped, so the app refuses what comes back.
+  const forged = await bounce({ state: "../evil", code: "x" });
+  assert.equal(forged.location.searchParams.get("state"), null);
+  assert.equal(forged.location.host, "google");
+
+  // Oversized values are never reflected.
+  const huge = await bounce({ state, code: "c".repeat(4097) });
+  assert.equal(huge.location.searchParams.get("code"), null);
+  assert.equal(huge.location.searchParams.get("error"), "missing_code");
 });

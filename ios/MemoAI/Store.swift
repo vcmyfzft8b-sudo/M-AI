@@ -143,3 +143,9 @@ final class Store {
 
     enum StoreError: Error { case unavailable }
 }
+
+/// A native step that failed for a reason worth showing: the page appends it
+/// to its generic message so a failed sign-in can be reported precisely.
+struct BridgeFailure: Error {
+    let reason: String
+}

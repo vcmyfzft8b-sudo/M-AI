@@ -2053,6 +2053,7 @@ export const en: Messages = {
   // Native iOS app and Apple subscription controls.
   "native.unavailable": "Subscriptions are temporarily unavailable. Please try again.",
   "native.verifyFailed": "Your purchase could not be confirmed yet. Use Restore purchases to try again; you will not be charged again.",
+  "native.signInFailed": "Sign-in could not be completed. Please try again.",
   "native.year": "year",
   "native.month": "month",
   "native.renewal": "Payment is charged to your Apple Account. The subscription renews automatically unless cancelled at least 24 hours before the current period ends. Manage or cancel it in your Apple subscription settings.",

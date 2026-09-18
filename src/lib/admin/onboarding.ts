@@ -8,7 +8,6 @@ import {
   type GradeGoal,
   type OnboardingBreakdown,
   ONBOARDING_QUESTIONS,
-  SURVEY_LABELS,
   toQuestionBreakdown,
 } from "@/lib/admin/onboarding-questions";
 import { type DateRange, rangeToTimestamps } from "@/lib/admin/ranges";
@@ -63,14 +62,13 @@ export async function getOnboardingBreakdown(range: DateRange): Promise<Onboardi
     byQuestion.set(row.question, list);
   }
 
-  const survey = toQuestionBreakdown(
-    { key: "survey", title: "Survey", group: "legacy", labels: SURVEY_LABELS, listed: true },
-    byQuestion.get("survey") ?? [],
-  );
+  const surveyRows = byQuestion.get("survey") ?? [];
 
   return {
-    completed: survey.answered,
-    surveyed: survey.answers.find((answer) => answer.value === "answered")?.count ?? 0,
+    completed: surveyRows.reduce((sum, row) => sum + Number(row.respondents ?? 0), 0),
+    surveyed: Number(
+      surveyRows.find((row) => row.answer === "answered")?.respondents ?? 0,
+    ),
     questions: ONBOARDING_QUESTIONS.map((question) =>
       toQuestionBreakdown(question, byQuestion.get(question.key) ?? []),
     ),

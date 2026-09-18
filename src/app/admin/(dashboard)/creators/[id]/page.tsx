@@ -35,7 +35,6 @@ import {
 import {
   CREATOR_RANGE_PRESETS,
   creatorRangePreset,
-  resolveRange,
 } from "@/lib/admin/ranges";
 import {
   creatorRevenue,
@@ -49,8 +48,8 @@ import {
   getCreator,
   getCreatorMetrics,
   getDailyDeltas,
-  getEarliestDataDay,
   listVideos,
+  resolveDashboardRange,
   toDailySeries,
 } from "@/lib/admin/ugc";
 
@@ -69,17 +68,17 @@ export default async function CreatorDetailPage({
   const { id } = await params;
   const search = await searchParams;
   const preset = creatorRangePreset(search?.range);
-  // Only the all-time window needs to know where the data starts.
-  const earliest = preset === "all" ? await getEarliestDataDay() : null;
-  const range = resolveRange(preset, { earliestDay: earliest });
+  const range = await resolveDashboardRange(preset);
 
-  // One batch for everything the page reads. The metrics need the creator
-  // row, so they chain off that one promise rather than the whole batch.
+  // One batch for everything the page reads.
   const creatorPromise = getCreator(id);
 
   const [creator, metrics, deltas, videos, salesData, baseline] = await Promise.all([
     creatorPromise,
-    creatorPromise.then((row) => (row ? getCreatorMetrics([row], range) : null)),
+    getCreatorMetrics(
+      creatorPromise.then((row) => (row ? [row] : [])),
+      range,
+    ),
     getDailyDeltas(range, { creatorId: id, onlyMemo: true }),
     // Scoped to the selected range: listing every post while the tiles above
     // were windowed made the two disagree and looked like a bug.
@@ -92,7 +91,7 @@ export default async function CreatorDetailPage({
     notFound();
   }
 
-  const entry = metrics?.get(creator.id);
+  const entry = metrics.get(creator.id);
   const series = toDailySeries(deltas, range);
 
   const codes = salesData
@@ -302,7 +301,6 @@ export default async function CreatorDetailPage({
 
               <ActionForm action={updateAccountAction} hideMessage>
                 <input type="hidden" name="account_id" value={account.id} />
-                <input type="hidden" name="creator_id" value={creator.id} />
                 <div
                   style={{
                     display: "flex",
@@ -342,14 +340,14 @@ export default async function CreatorDetailPage({
               <div style={{ display: "flex", gap: "0.25rem", marginTop: "0.5rem" }}>
                 <InlineAction
                   action={refreshAccountAction}
-                  fields={{ account_id: account.id, creator_id: creator.id }}
+                  fields={{ account_id: account.id }}
                   title="Re-read followers from the public profile page"
                 >
                   Refresh followers
                 </InlineAction>
                 <InlineAction
                   action={removeAccountAction}
-                  fields={{ account_id: account.id, creator_id: creator.id }}
+                  fields={{ account_id: account.id }}
                   variant="danger"
                   confirm={`Remove @${account.handle}? Its videos and view history are deleted too.`}
                 >

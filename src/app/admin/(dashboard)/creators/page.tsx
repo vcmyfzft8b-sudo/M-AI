@@ -36,7 +36,6 @@ import {
   CREATOR_RANGE_PRESETS,
   creatorRangePreset,
   monthsCovered,
-  resolveRange,
 } from "@/lib/admin/ranges";
 import {
   creatorRevenue,
@@ -47,9 +46,9 @@ import {
 import {
   getCreatorMetrics,
   getDailyDeltas,
-  getEarliestDataDay,
   listCreators,
   listVideos,
+  resolveDashboardRange,
   sumMetrics,
   toDailySeries,
 } from "@/lib/admin/ugc";
@@ -102,12 +101,11 @@ export default async function CreatorsPage({
   const modeFilter = params?.mode ?? "";
   const kindFilter = params?.kind ?? "";
 
-  // Only the all-time window needs to know where the data starts.
-  const earliest = preset === "all" ? await getEarliestDataDay() : null;
-  const range = resolveRange(preset, { earliestDay: earliest });
+  const range = await resolveDashboardRange(preset);
 
-  // Everything the page reads goes out in one batch; the per-creator metrics
-  // chain off the creator list rather than waiting for the whole batch.
+  // Everything the page reads goes out in one batch. Filters narrow which
+  // creators feed every number on the page, so the tiles, the chart and the
+  // table can never disagree about what is being shown.
   const creatorsPromise = listCreators();
   const scopedCreators = creatorsPromise.then((all) =>
     all.filter((creator) => {
@@ -142,21 +140,19 @@ export default async function CreatorsPage({
   ] = await Promise.all([
     creatorsPromise,
     scopedCreators,
-    scopedCreators.then((list) => getCreatorMetrics(list, range)),
+    getCreatorMetrics(scopedCreators, range),
     getDailyDeltas(range, { onlyMemo: true }),
     range.previous
       ? getDailyDeltas(range.previous, { onlyMemo: true })
       : Promise.resolve([]),
     range.previous
-      ? scopedCreators.then((list) => getCreatorMetrics(list, range.previous!))
+      ? getCreatorMetrics(scopedCreators, range.previous)
       : Promise.resolve(null),
     listVideos({ classification: "unknown", limit: 25 }),
     getLatestSyncRun(),
     loadSalesData().catch(() => null),
   ]);
 
-  // Filters narrow which creators feed every number on the page, so the tiles,
-  // the chart and the table can never disagree about what is being shown.
   const creatorIds = new Set(creators.map((creator) => creator.id));
 
   const scoped = deltas.filter((row) => creatorIds.has(row.creator_id));

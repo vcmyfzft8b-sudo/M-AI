@@ -60,20 +60,15 @@ export default async function FinancePage({
   // independent reads, so they go out together. Only Stripe is allowed to
   // fail the page: it is what the page is about.
   const creatorsPromise = listCreators({ includeArchived: true }).catch(() => []);
-  const [salesResult, allCreators, metrics, baseline] = await Promise.all([
-    loadSalesData().then(
-      (data) => ({ data, error: null as unknown }),
-      (error: unknown) => ({ data: null, error }),
+  const [salesData, allCreators, metrics, baseline] = await Promise.all([
+    loadSalesData().catch((error: unknown) =>
+      error instanceof Error ? error : new Error("unknown error"),
     ),
     creatorsPromise,
-    creatorsPromise
-      .then((list) =>
-        getCreatorMetrics(
-          list.filter((creator) => creator.status !== "archived"),
-          range,
-        ),
-      )
-      .catch(() => null),
+    getCreatorMetrics(
+      creatorsPromise.then((list) => list.filter((creator) => creator.status !== "archived")),
+      range,
+    ).catch(() => null),
     getBaselineCampaignViews(VALUE_BASELINE_DAYS).catch(() => ({
       views: 0,
       from: range.from,
@@ -81,24 +76,21 @@ export default async function FinancePage({
     })),
   ]);
 
-  if (!salesResult.data) {
-    const error = salesResult.error;
-
+  if (salesData instanceof Error) {
     return (
       <>
         <header className="admin-header">
           <h1 className="admin-title">Finance</h1>
         </header>
         <Alert tone="error">
-          Could not reach Stripe:{" "}
-          {error instanceof Error ? error.message : "unknown error"}. Check that
+          Could not reach Stripe: {salesData.message}. Check that
           STRIPE_SECRET_KEY is set for this environment.
         </Alert>
       </>
     );
   }
 
-  const data = salesResult.data;
+  const data = salesData;
   const summary = summarizeSales(data, range);
   const series = revenueSeries(data, range);
 

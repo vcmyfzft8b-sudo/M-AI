@@ -14,6 +14,8 @@ import { useFormStatus } from "react-dom";
 
 import { type ActionState, IDLE_STATE } from "@/lib/admin/action-state";
 
+import { Alert } from "./ui";
+
 /** Form plumbing shared by every admin mutation. */
 
 export function SubmitButton({
@@ -68,9 +70,9 @@ function StatusLine({ state }: { state: ActionState }) {
 
   if (pending) {
     return (
-      <div className="admin-alert" data-tone="info" role="status">
+      <Alert tone="info" role="status">
         <Loader2 size={13} className="admin-spin" aria-hidden="true" /> Saving…
-      </div>
+      </Alert>
     );
   }
 
@@ -79,14 +81,32 @@ function StatusLine({ state }: { state: ActionState }) {
   }
 
   return (
-    <div
-      className="admin-alert"
-      data-tone={state.status === "error" ? "error" : "success"}
-      role="status"
-    >
+    <Alert tone={state.status === "error" ? "error" : "success"} role="status">
       {state.message}
-    </div>
+    </Alert>
   );
+}
+
+/**
+ * A page refresh some time from now, outliving the form that asked for it.
+ *
+ * The first refresh after a success often unmounts the very form that
+ * submitted — a review-queue row that no longer needs review, an account row
+ * that was removed — so a timer owned by the component would be cleared
+ * before it fired and the background work would never reach the screen. The
+ * router is app-wide, so the timer lives here instead; one pending refresh
+ * at a time is enough, the latest request winning.
+ */
+let pendingRefresh: number | undefined;
+
+function scheduleRefresh(router: ReturnType<typeof useRouter>, delayMs: number) {
+  window.clearTimeout(pendingRefresh);
+  pendingRefresh = window.setTimeout(() => {
+    pendingRefresh = undefined;
+    startTransition(() => {
+      router.refresh();
+    });
+  }, delayMs);
 }
 
 /**
@@ -138,17 +158,9 @@ export function ActionForm({
       router.refresh();
     });
 
-    if (!state.refreshAfterMs) {
-      return;
+    if (state.refreshAfterMs) {
+      scheduleRefresh(router, state.refreshAfterMs);
     }
-
-    const timer = window.setTimeout(() => {
-      startTransition(() => {
-        router.refresh();
-      });
-    }, state.refreshAfterMs);
-
-    return () => window.clearTimeout(timer);
   }, [state, resetOnSuccess, onSuccess, router]);
 
   return (

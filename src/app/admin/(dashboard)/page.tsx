@@ -44,8 +44,8 @@ import {
   getBaselineCampaignViews,
   getCreatorMetrics,
   getDailyDeltas,
-  getEarliestDataDay,
   listCreators,
+  resolveDashboardRange,
   sumMetrics,
   toDailySeries,
 } from "@/lib/admin/ugc";
@@ -107,21 +107,14 @@ export default async function AdminOverviewPage({
 }) {
   const params = await searchParams;
   const preset = normalizeRangePreset(params?.range);
-  // Only the all-time window needs to know where the data starts; every other
-  // preset is fixed by the calendar, so they skip that round trip.
-  const earliest = preset === "all" ? await getEarliestDataDay() : null;
-  const range = resolveRange(preset, { earliestDay: earliest });
+  const range = await resolveDashboardRange(preset);
 
   // Today's views only land with the nightly scrape, so the today window would
   // rank every creator at zero. Yesterday is the freshest day that has data.
-  const creatorWindow =
-    preset === "today"
-      ? resolveRange("yesterday", { earliestDay: earliest })
-      : range;
+  const creatorWindow = preset === "today" ? resolveRange("yesterday") : range;
 
-  // Everything the page reads goes out in one batch. The creator metrics
-  // depend on the creator list, so they chain off that one promise rather
-  // than waiting for the whole batch; nothing else depends on anything.
+  // Everything the page reads goes out in one batch; the loaders dedupe the
+  // creator list between themselves.
   const creatorsPromise = listCreators();
 
   const [
@@ -140,10 +133,8 @@ export default async function AdminOverviewPage({
     baseline,
   ] = await Promise.all([
     creatorsPromise,
-    creatorsPromise.then((list) => getCreatorMetrics(list, range)),
-    preset === "today"
-      ? creatorsPromise.then((list) => getCreatorMetrics(list, creatorWindow))
-      : null,
+    getCreatorMetrics(creatorsPromise, range),
+    preset === "today" ? getCreatorMetrics(creatorsPromise, creatorWindow) : null,
     getDailyDeltas(range, { onlyMemo: true }),
     getTrafficSummary(range),
     getOnlineVisitors(),

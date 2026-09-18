@@ -11,6 +11,7 @@ import {
   formatCount,
   formatDate,
   formatExact,
+  formatPercent,
   RangeTabs,
   StatCard,
 } from "@/components/admin/ui";
@@ -155,7 +156,7 @@ export default async function UsersPage({
       <Section
         id="onboarding"
         title="Onboarding answers"
-        hint={`What people told us when they signed up ${range.label.toLowerCase()}. Percentages are of everyone who answered that question; the survey branches, so not every question is asked of everyone.`}
+        hint={`What people told us in the survey, for everyone who finished onboarding ${range.label.toLowerCase()}. Percentages are of everyone who answered that question; the survey branches, so not every question is asked of everyone.`}
       >
         {onboarding === null ? (
           <EmptyState title="Onboarding answers unavailable">
@@ -169,14 +170,14 @@ export default async function UsersPage({
               <StatCard
                 label="Finished onboarding"
                 value={formatExact(onboarding.completed)}
-                meta={`${formatExact(totals.newInRange)} signed up in the window`}
+                meta="in this window, whenever they signed up"
               />
               <StatCard
                 label="Answered the survey"
                 value={formatExact(onboarding.surveyed)}
                 meta={
                   onboarding.completed > 0
-                    ? `${((onboarding.surveyed / onboarding.completed) * 100).toFixed(0)}% of those who finished`
+                    ? `${formatPercent(onboarding.surveyed / onboarding.completed, 0)} of those who finished`
                     : undefined
                 }
               />
@@ -185,11 +186,10 @@ export default async function UsersPage({
                   key={goal.scale}
                   label={`Grade goal, out of ${goal.scale}`}
                   value={`${goal.averageCurrent.toFixed(1)} → ${goal.averageTarget.toFixed(1)}`}
-                  meta={`${formatExact(goal.respondents)} answered · ${
-                    goal.respondents > 0
-                      ? ((goal.aimingHigher / goal.respondents) * 100).toFixed(0)
-                      : "0"
-                  }% aiming higher`}
+                  meta={`${formatExact(goal.respondents)} answered · ${formatPercent(
+                    goal.respondents > 0 ? goal.aimingHigher / goal.respondents : 0,
+                    0,
+                  )} aiming higher`}
                 />
               ))}
             </div>

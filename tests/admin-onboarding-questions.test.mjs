@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  isListed,
   LABELLED_OPTION_LISTS,
   ONBOARDING_QUESTIONS,
   toQuestionBreakdown,
@@ -28,7 +29,7 @@ test("every value the survey can store has an English label on the dashboard", (
 
 test("every labelled question is backed by the option list it labels", () => {
   for (const entry of ONBOARDING_QUESTIONS) {
-    if (entry.listed && entry.key !== "grade_scale") {
+    if (isListed(entry) && entry.key !== "grade_scale") {
       assert.ok(LABELLED_OPTION_LISTS[entry.key], `${entry.key} has labels but no option list`);
     }
   }
@@ -50,6 +51,17 @@ test("a listed question draws every option, zero or not, most popular first", ()
     ],
   );
   assert.equal(breakdown.answers[0].share, 5 / 8);
+});
+
+test("labels are the survey's own English wording, not a second copy", () => {
+  const { labels } = question("audience");
+
+  // From src/lib/i18n/messages/en.ts via the option's labelKey.
+  assert.equal(labels.me_family, "For me + family");
+  assert.equal(question("role").labels.working_professional, "Working");
+  // The shared year lists keep a school prefix so the merged card reads.
+  assert.equal(question("school_year").labels.grade_1, "Primary, Year 1");
+  assert.equal(question("school_year").labels.freshman, "University, 1st year");
 });
 
 test("a value the option list does not know is still shown under its raw value", () => {

@@ -4,8 +4,11 @@ import { cache } from "react";
 
 import {
   addDays,
+  type DateRange,
   eachDay,
+  type RangePreset,
   rangeToTimestamps,
+  resolveRange,
   todayInReportZone,
 } from "@/lib/admin/ranges";
 import type {
@@ -184,12 +187,15 @@ export function toDailySeries(
  * those views belong to the day they happened.
  */
 export async function getCreatorMetrics(
-  creators: CreatorWithAccounts[],
+  // A promise is accepted so a page can batch this with the creator list it
+  // depends on instead of waiting for the list first.
+  creatorsOrPromise: CreatorWithAccounts[] | Promise<CreatorWithAccounts[]>,
   range: { from: string; to: string },
 ): Promise<Map<string, CreatorMetrics>> {
-  // Three independent reads, so they go out together rather than one after
+  // Four independent reads, so they go out together rather than one after
   // another: the round trip, not the query, is what a dashboard render waits on.
-  const [deltas, lifetime, followerSnapshots] = await Promise.all([
+  const [creators, deltas, lifetime, followerSnapshots] = await Promise.all([
+    creatorsOrPromise,
     getDailyDeltas(range, { onlyMemo: true }),
     cachedLifetimeTotals(),
     cachedFollowerSnapshots(addDays(range.from, -1), range.to),
@@ -433,6 +439,18 @@ export function sumMetrics(
     totals.viewsGained > 0 ? interactions / totals.viewsGained : 0;
 
   return totals;
+}
+
+/**
+ * The window a dashboard page shows for a preset.
+ *
+ * Only the all-time window needs to know where the data starts; every other
+ * preset is fixed by the calendar, so they skip that round trip.
+ */
+export async function resolveDashboardRange(preset: RangePreset): Promise<DateRange> {
+  return resolveRange(preset, {
+    earliestDay: preset === "all" ? await getEarliestDataDay() : null,
+  });
 }
 
 /** The earliest day we hold any UGC data, used to bound the "all time" range. */

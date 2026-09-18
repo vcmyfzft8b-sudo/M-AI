@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -16,32 +16,37 @@ import {
  * tab is hidden and catches up on return: a background tab would otherwise
  * spend Stripe and Vercel calls all day for nobody to read.
  */
-export function AutoRefresh({
-  /** Pages showing live presence poll on the faster beat. */
-  live = false,
-}: {
-  live?: boolean;
-}) {
-  const router = useRouter();
-  const [refreshedAt, setRefreshedAt] = useState<number>(() => Date.now());
+/**
+ * Runs `tick` every `seconds` while the tab is visible.
+ *
+ * Ticks are skipped while the tab is hidden. When it is shown again the
+ * interval restarts and, if a whole period has passed since the last tick,
+ * one runs at once rather than leaving stale numbers up until the next beat.
+ * `tick` is read through a ref, so a new closure never restarts the interval.
+ */
+export function useVisibleInterval(tick: () => void, seconds: number) {
+  const tickRef = useRef(tick);
 
-  const intervalSeconds = live ? ONLINE_REFRESH_SECONDS : DASHBOARD_REFRESH_SECONDS;
+  useEffect(() => {
+    tickRef.current = tick;
+  });
 
   useEffect(() => {
     let timer: number | undefined;
+    let lastTick = Date.now();
 
-    const refresh = () => {
-      setRefreshedAt(Date.now());
-      router.refresh();
+    const run = () => {
+      lastTick = Date.now();
+      tickRef.current();
     };
 
     const start = () => {
       window.clearInterval(timer);
       timer = window.setInterval(() => {
         if (document.visibilityState === "visible") {
-          refresh();
+          run();
         }
-      }, intervalSeconds * 1000);
+      }, seconds * 1000);
     };
 
     const onVisibility = () => {
@@ -49,10 +54,8 @@ export function AutoRefresh({
         return;
       }
 
-      // Catch up immediately if the tab was hidden past a whole interval,
-      // rather than showing stale numbers until the next tick.
-      if (Date.now() - refreshedAt >= intervalSeconds * 1000) {
-        refresh();
+      if (Date.now() - lastTick >= seconds * 1000) {
+        run();
       }
 
       start();
@@ -65,10 +68,21 @@ export function AutoRefresh({
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-    // `refreshedAt` deliberately excluded: it changes on every refresh and
-    // would otherwise restart the interval each time.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router, intervalSeconds]);
+  }, [seconds]);
+}
+
+export function AutoRefresh({
+  /** Pages showing live presence poll on the faster beat. */
+  live = false,
+}: {
+  live?: boolean;
+}) {
+  const router = useRouter();
+
+  useVisibleInterval(
+    () => router.refresh(),
+    live ? ONLINE_REFRESH_SECONDS : DASHBOARD_REFRESH_SECONDS,
+  );
 
   return null;
 }

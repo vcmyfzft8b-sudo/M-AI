@@ -108,3 +108,9 @@ $$;
 
 revoke all on function public.admin_onboarding_grades(timestamptz, timestamptz)
   from public, anon, authenticated;
+
+-- Both functions window on the completion instant, which nothing indexed
+-- before; without this each call scans every profile.
+create index if not exists profiles_onboarding_completed_at_idx
+  on public.profiles (onboarding_completed_at)
+  where onboarding_completed_at is not null;

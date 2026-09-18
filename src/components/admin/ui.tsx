@@ -259,12 +259,15 @@ export function RangeTabs({
 export function Alert({
   tone,
   children,
+  role,
 }: {
   tone: "error" | "success" | "info";
   children: ReactNode;
+  /** `status` for a line that announces the outcome of something the user did. */
+  role?: "status";
 }) {
   return (
-    <div className="admin-alert" data-tone={tone}>
+    <div className="admin-alert" data-tone={tone} role={role}>
       {children}
     </div>
   );

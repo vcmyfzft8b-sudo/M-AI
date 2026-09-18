@@ -671,7 +671,11 @@ export function getStripeClient() {
     throw new Error("STRIPE_SECRET_KEY is not configured.");
   }
 
-  return new Stripe(env.STRIPE_SECRET_KEY);
+  // Retried on network errors, 409s, 429s and 5xx, with an idempotency key the
+  // SDK adds itself so a POST can never double up. The admin dashboard fans
+  // its reads out across many small requests, and one transient failure among
+  // them must not take the whole revenue view down.
+  return new Stripe(env.STRIPE_SECRET_KEY, { maxNetworkRetries: 2 });
 }
 
 /**

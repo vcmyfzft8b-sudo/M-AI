@@ -39,14 +39,14 @@ import {
  * Every action re-checks the allowlist: a server action is a public endpoint,
  * so the layout guard alone would not protect it.
  *
- * None of the creator, account or video actions call `revalidatePath`. A
- * revalidation inside an action makes Next re-render the page before the
- * action can answer, so "Saved." used to wait on a full creators-page render
- * — every metric, the Stripe summary — before it could appear. The forms
- * refresh the page themselves once the answer is back, in a transition that
- * leaves the current screen usable while the fresh one streams in. Anything
- * slow that is not needed for the answer (a TikTok scrape, re-checking every
- * video) is handed to `after()` and runs once the response has gone out.
+ * None of the actions call `revalidatePath`. A revalidation inside an action
+ * makes Next re-render the page before the action can answer — and, because
+ * the Stripe cache entries are tagged with the path, it also threw the whole
+ * Stripe read away, so "Saved." used to wait on a full creators-page render
+ * plus a fresh Stripe scan before it could appear. The forms refresh the page
+ * themselves once the answer is back, in a transition that leaves the current
+ * screen usable while the fresh one streams in. The TikTok profile scrape on
+ * a new account is not needed for the answer and is handed to `after()`.
  */
 
 function ok(message: string, options?: { refreshAfterMs?: number }): ActionState {
@@ -56,9 +56,12 @@ function ok(message: string, options?: { refreshAfterMs?: number }): ActionState
 /**
  * How long the page waits before refreshing again to pick up background work.
  *
- * A profile scrape is a single TikTok page fetch; the re-check walks every
- * video but does no network. Both are comfortably done in this time, and a
+ * Only the TikTok profile scrape on a new account runs in the background: a
+ * single page fetch per account, comfortably done in this time, and a
  * refresh that lands a little early only costs one more a moment later.
+ * Re-checking every video is awaited instead — it can involve a model call
+ * over every post on a mixed account, so no fixed wait would be honest, and
+ * two passes running at once would race each other's writes.
  */
 const BACKGROUND_WORK_MS = 8000;
 
@@ -458,13 +461,10 @@ export async function updateAccountAction(
     return fail(`Could not save: ${error.message}`);
   }
 
-  // Changing the account's mode changes what counts, so re-run detection —
-  // after the answer has gone back, since it walks every video.
-  after(() => reclassifyAll().catch(() => ({ updated: 0 })));
+  // Changing the account's mode changes what counts, so re-run detection.
+  await reclassifyAll().catch(() => ({ updated: 0 }));
 
-  return ok("Account updated. Its videos are being re-checked.", {
-    refreshAfterMs: BACKGROUND_WORK_MS,
-  });
+  return ok("Account updated and videos re-checked.");
 }
 
 export async function removeAccountAction(
@@ -534,9 +534,8 @@ export async function classifyVideoAction(
       actor: context.user.email ?? "admin",
     });
 
-    // Re-score it so it does not sit in the review queue — once the answer
-    // has gone back, since the re-check walks every video.
-    after(() => reclassifyAll().catch(() => ({ updated: 0 })));
+    // Immediately re-score it so it does not sit in the review queue.
+    await reclassifyAll().catch(() => ({ updated: 0 }));
   } else if (decision === "memo" || decision === "personal") {
     await setVideoClassification({
       videoId,
@@ -548,10 +547,7 @@ export async function classifyVideoAction(
     return fail("Unknown decision.");
   }
 
-  return ok(
-    decision === "auto" ? "Handed back to automatic detection." : "Video updated.",
-    decision === "auto" ? { refreshAfterMs: BACKGROUND_WORK_MS } : undefined,
-  );
+  return ok("Video updated.");
 }
 
 // -------------------------------------------------------------------- sync --
@@ -638,11 +634,9 @@ export async function addRuleAction(
     );
   }
 
-  after(() => reclassifyAll().catch(() => ({ updated: 0 })));
+  await reclassifyAll().catch(() => ({ updated: 0 }));
 
-  return ok("Rule added. Every video is being re-checked.", {
-    refreshAfterMs: BACKGROUND_WORK_MS,
-  });
+  return ok("Rule added and every video re-checked.");
 }
 
 export async function toggleRuleAction(
@@ -666,11 +660,9 @@ export async function toggleRuleAction(
     return fail(`Could not update the rule: ${error.message}`);
   }
 
-  after(() => reclassifyAll().catch(() => ({ updated: 0 })));
+  await reclassifyAll().catch(() => ({ updated: 0 }));
 
-  return ok(active ? "Rule enabled. Videos are being re-checked." : "Rule disabled. Videos are being re-checked.", {
-    refreshAfterMs: BACKGROUND_WORK_MS,
-  });
+  return ok(active ? "Rule enabled." : "Rule disabled.");
 }
 
 export async function deleteRuleAction(
@@ -695,11 +687,9 @@ export async function deleteRuleAction(
     return fail(`Could not delete the rule: ${error.message}`);
   }
 
-  after(() => reclassifyAll().catch(() => ({ updated: 0 })));
+  await reclassifyAll().catch(() => ({ updated: 0 }));
 
-  return ok("Rule deleted. Every video is being re-checked.", {
-    refreshAfterMs: BACKGROUND_WORK_MS,
-  });
+  return ok("Rule deleted and every video re-checked.");
 }
 
 // ------------------------------------------------------------------ admins --
@@ -766,10 +756,9 @@ export async function removeAdminAction(
 export async function readOnlineCountAction(): Promise<number> {
   await requireAdmin();
 
-  const [live, online] = await Promise.all([
-    getRealtimeVisitors(),
-    getOnlineVisitors(),
-  ]);
+  // Vercel is the authority on the number; the beacon only stands in when
+  // Vercel is unavailable, so its query is not run for nothing on every tick.
+  const live = await getRealtimeVisitors();
 
-  return live ?? online.length;
+  return live ?? (await getOnlineVisitors()).length;
 }

@@ -4,6 +4,7 @@ import { revalidateTag, unstable_cache } from "next/cache";
 import type Stripe from "stripe";
 
 import { addDays, parseDay, todayInReportZone } from "@/lib/admin/ranges";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import { DASHBOARD_REFRESH_SECONDS } from "@/lib/admin/refresh";
 import type {
   PaymentSnapshot,
@@ -23,7 +24,7 @@ import { getStripeClient } from "@/lib/billing";
 export const SALES_CACHE_TAG = "admin-sales";
 
 /** Hard page caps so a runaway account can never hang a dashboard request. */
-const MAX_PAGES_PER_WINDOW = 10;
+const MAX_PAGES_PER_WINDOW = 20;
 const PAGE_SIZE = 100;
 
 const DAY_SECONDS = 24 * 60 * 60;
@@ -96,7 +97,7 @@ function readPromotionCodeId(discount: unknown): string | null {
   return null;
 }
 
-type CreatedWindow = { gte?: number; lt?: number };
+type CreatedWindow = { gte: number; lt: number };
 
 /**
  * Consecutive `created` windows covering `sinceUnix` up to now.
@@ -106,7 +107,7 @@ type CreatedWindow = { gte?: number; lt?: number };
  * every call. That is what lets a finished window be cached under a stable
  * key instead of shifting a few minutes each time the page loads.
  *
- * With `openStart` the first window has no lower bound, for listings that
+ * With `openStart` the first window starts at the epoch, for listings that
  * must include everything ever created rather than a recent slice.
  */
 function createdWindows(
@@ -122,12 +123,8 @@ function createdWindows(
     windows.push({ gte: from, lt: from + width });
   }
 
-  if (windows.length === 0) {
-    windows.push({ gte: sinceUnix, lt: sinceUnix + width });
-  }
-
   if (options?.openStart) {
-    windows[0] = { lt: windows[0].lt };
+    windows[0] = { gte: 0, lt: windows[0].lt };
   }
 
   return windows;
@@ -142,29 +139,6 @@ function createdWindows(
  * in a fraction of the serial walk's time.
  */
 const WINDOW_CONCURRENCY = 8;
-
-/** Runs the tasks with at most `WINDOW_CONCURRENCY` in flight, keeping their order. */
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  task: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-
-  const worker = async () => {
-    while (next < items.length) {
-      const index = next;
-      next += 1;
-      results[index] = await task(items[index]);
-    }
-  };
-
-  await Promise.all(
-    Array.from({ length: Math.min(WINDOW_CONCURRENCY, items.length) }, worker),
-  );
-
-  return results;
-}
 
 /** Walks one window page by page. Each page arrives newest first. */
 async function listWindow<T extends { id: string }>(
@@ -220,6 +194,7 @@ async function loadSubscriptions(stripe: Stripe, sinceUnix: number) {
     await mapWithConcurrency(
       // Open at the bottom: a subscription is live however long ago it began.
       createdWindows(sinceUnix, SUBSCRIPTION_WINDOW_DAYS, { openStart: true }),
+      WINDOW_CONCURRENCY,
       (window) =>
         listWindow(window, (params) =>
           stripe.subscriptions.list({
@@ -328,15 +303,17 @@ async function fetchInvoiceWindow(
 }
 
 /**
- * How long a finished invoice window is reused.
+ * When an invoice window stops being re-read.
  *
  * A paid invoice never changes, and once a window's creation dates are older
- * than the longest retry Stripe attempts, nothing created in it is still
- * waiting to be paid. Those windows are the bulk of the scan and the slowest
- * part of it, so they are kept for a week instead of being re-read every
- * quarter of an hour. Only the recent windows, where an invoice can still
- * flip to paid, follow the dashboard's own beat.
+ * than any payment Stripe will still collect, nothing in it can move. Stripe's
+ * own retries stop inside a month; sixty days also covers an invoice settled
+ * by hand a while after it was raised. Windows older than that are final and
+ * kept for a week instead of being re-read every quarter of an hour; the
+ * recent ones, where an invoice can still flip to paid, follow the
+ * dashboard's own beat.
  */
+const FINAL_AFTER_DAYS = 60;
 const FINAL_WINDOW_CACHE_SECONDS = 7 * DAY_SECONDS;
 
 const cachedFinalInvoiceWindow = unstable_cache(
@@ -351,23 +328,59 @@ const cachedRecentInvoiceWindow = unstable_cache(
   { revalidate: DASHBOARD_REFRESH_SECONDS, tags: [SALES_CACHE_TAG] },
 );
 
-async function loadPayments(sinceUnix: number) {
-  const finalBefore =
-    Math.floor(Date.now() / 1000) - LATE_PAYMENT_GRACE_DAYS * DAY_SECONDS;
+type InvoiceWindows = { invoices: InvoiceSnapshot[]; truncated: boolean };
 
-  const { items, truncated } = newestFirst(
-    await mapWithConcurrency(
-      createdWindows(sinceUnix, INVOICE_WINDOW_DAYS),
-      async ({ gte = 0, lt = Number.MAX_SAFE_INTEGER }) => {
-        const window =
-          lt <= finalBefore
-            ? await cachedFinalInvoiceWindow(gte, lt)
-            : await cachedRecentInvoiceWindow(gte, lt);
-
-        return { items: window.invoices, truncated: window.truncated };
-      },
-    ),
+function mergeNewestFirst(windows: InvoiceWindows[]): InvoiceWindows {
+  const merged = newestFirst(
+    windows.map((window) => ({ items: window.invoices, truncated: window.truncated })),
   );
+
+  return { invoices: merged.items, truncated: merged.truncated };
+}
+
+/**
+ * Every final window between two epoch-aligned bounds, already merged.
+ *
+ * The per-window entries above are what make a cold read parallel; this one
+ * is what makes a warm read cheap. Without it every render fetched some sixty
+ * window entries from the data cache — a network round trip each on Vercel —
+ * and merged every invoice ever paid to reach a figure that cannot have
+ * moved. Keyed on the bounds, which only change when a window becomes final.
+ */
+async function fetchFinalInvoices(gte: number, lt: number): Promise<InvoiceWindows> {
+  const windows = await mapWithConcurrency(
+    createdWindows(gte, INVOICE_WINDOW_DAYS).filter((window) => window.lt <= lt),
+    WINDOW_CONCURRENCY,
+    (window) => cachedFinalInvoiceWindow(window.gte, window.lt),
+  );
+
+  return mergeNewestFirst(windows);
+}
+
+const cachedFinalInvoices = unstable_cache(
+  fetchFinalInvoices,
+  ["admin-stripe-invoices-final-merged"],
+  { revalidate: FINAL_WINDOW_CACHE_SECONDS, tags: [SALES_CACHE_TAG] },
+);
+
+async function loadPayments(sinceUnix: number) {
+  const finalBefore = Math.floor(Date.now() / 1000) - FINAL_AFTER_DAYS * DAY_SECONDS;
+  const windows = createdWindows(sinceUnix, INVOICE_WINDOW_DAYS);
+  const finalWindows = windows.filter((window) => window.lt <= finalBefore);
+  const recentWindows = windows.filter((window) => window.lt > finalBefore);
+
+  const [finalInvoices, recentInvoices] = await Promise.all([
+    finalWindows.length > 0
+      ? cachedFinalInvoices(finalWindows[0].gte, finalWindows[finalWindows.length - 1].lt)
+      : Promise.resolve<InvoiceWindows>({ invoices: [], truncated: false }),
+    mapWithConcurrency(recentWindows, WINDOW_CONCURRENCY, (window) =>
+      cachedRecentInvoiceWindow(window.gte, window.lt),
+    ).then(mergeNewestFirst),
+  ]);
+
+  // Every recent window is newer than every final one, so newest first means
+  // the recent invoices ahead of the final ones.
+  const items = [...recentInvoices.invoices, ...finalInvoices.invoices];
 
   const payments: PaymentSnapshot[] = [];
   // Which promotion code a customer used, learned from any invoice carrying one
@@ -397,7 +410,11 @@ async function loadPayments(sinceUnix: number) {
     });
   }
 
-  return { payments, customerCodes, truncated };
+  return {
+    payments,
+    customerCodes,
+    truncated: finalInvoices.truncated || recentInvoices.truncated,
+  };
 }
 
 async function loadPromotionCodes(stripe: Stripe) {
@@ -504,7 +521,7 @@ export async function loadSalesData(): Promise<SalesData> {
   };
 }
 
-/** Paid revenue between two reporting days, in minor units, from data already loaded. */
+/** Paid revenue between two reporting days, in minor units. */
 export function revenueBetween(
   data: Pick<SalesData, "payments">,
   from: string,
@@ -516,14 +533,6 @@ export function revenueBetween(
       return day >= from && day <= to;
     })
     .reduce((sum, payment) => sum + payment.amount, 0);
-}
-
-/** Paid revenue between two reporting days, in minor units. */
-export async function getRevenueBetween(
-  from: string,
-  to: string,
-): Promise<number> {
-  return revenueBetween(await loadSalesData(), from, to);
 }
 
 /** Drops the cached Stripe read, for a "refresh now" control. */

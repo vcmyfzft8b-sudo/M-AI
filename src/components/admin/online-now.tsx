@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 import { readOnlineCountAction } from "@/app/admin/(dashboard)/actions";
 import { ONLINE_REFRESH_SECONDS } from "@/lib/admin/refresh";
 
+import { useVisibleInterval } from "./auto-refresh";
+import { formatExact } from "./ui";
+
 /**
  * The "online now" figure, kept live on its own.
  *
@@ -21,51 +24,17 @@ export function OnlineNow({ initial }: { initial: number }) {
     setCount(initial);
   }, [initial]);
 
-  useEffect(() => {
-    let cancelled = false;
-    let timer: number | undefined;
-
-    const poll = async () => {
-      if (document.visibilityState !== "visible") {
-        return;
-      }
-
-      try {
-        const next = await readOnlineCountAction();
-
-        if (!cancelled) {
-          setCount(next);
-        }
-      } catch {
-        // Leave the last good number in place; the next tick tries again.
-      }
-    };
-
-    const start = () => {
-      window.clearInterval(timer);
-      timer = window.setInterval(poll, ONLINE_REFRESH_SECONDS * 1000);
-    };
-
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") {
-        void poll();
-        start();
-      }
-    };
-
-    start();
-    document.addEventListener("visibilitychange", onVisibility);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, []);
+  useVisibleInterval(() => {
+    readOnlineCountAction().then(setCount, (error: unknown) => {
+      // The last good number stays up and the next tick tries again; logged
+      // so a session that has quietly expired is not mistaken for a live one.
+      console.error("Online count poll failed", error);
+    });
+  }, ONLINE_REFRESH_SECONDS);
 
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-      {new Intl.NumberFormat("en-US").format(count)}
+      {formatExact(count)}
       {count > 0 && (
         <span className="admin-dot" data-pulse="true" style={{ color: "var(--green)" }} />
       )}

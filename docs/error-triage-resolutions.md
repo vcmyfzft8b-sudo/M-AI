@@ -909,8 +909,8 @@ before believing a preview event describes a learner.
   on deployment `dpl_7U9wTrwZTKpGrsb2gCaoxk9FXyte`, and `19:11:54.230Z` on
   `dpl_A4ZpymeFB2eXVrWSQBKbT9twZ8po`. One succeeded in between, at `16:45:43.934Z`, because
   `APPLE_SANDBOX_REVIEW_USER_IDS` had by then reached a running deployment
-- **Resolution:** [PR #423](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/423)
-- **Production cutoff:** the deployment that carries PR #423's merge commit. Until it is merged,
+- **Resolution:** [PR #425](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/425)
+- **Production cutoff:** the deployment that carries PR #425's merge commit. Until it is merged,
   every event above is the recorded incident and none of them opens a second fix
 - **Regression test:** `tests/mobile-apple-notifications.test.mjs` — the first test fails on the
   release that produced these 503s
@@ -922,7 +922,7 @@ and every TestFlight and App Review purchase event. `verifyAppleNotification`
 hold a sandbox entitlement — an authorization list, standing in for a decoding capability. With it
 unset, or simply not yet on the running deployment, production could not read a sandbox payload at
 all. Apple resends anything but a 200 at 1, 12, 24, 48 and 72 hours, so one refused notification
-buys three days of 5xx. PR #423 separates the two: production always tries the sandbox verifier,
+buys three days of 5xx. PR #425 separates the two: production always tries the sandbox verifier,
 and the allowlist keeps its real job in `verifyTransaction`, which still refuses a sandbox
 transaction whose `appAccountToken` is not on it.
 
@@ -935,7 +935,7 @@ from the Apple library's own `VerificationStatus`, never from the text of a mess
 it does not recognise stays retryable: acknowledging a notification we should have kept loses it.
 
 **Do not read a future 503 here as this bug returning.** This one is silent by construction; every
-failure after PR #423 carries a Sentry event tagged `apple_notification_retry` (503) or
+failure after PR #425 carries a Sentry event tagged `apple_notification_retry` (503) or
 `apple_notification_rejected` (200). A 503 with no Sentry event beside it on a release at or after
 the merge would mean the route never ran — a platform fault, not this. A recurrence of *this*
 defect would show as `apple_notification_rejected` with `VerificationException INVALID_ENVIRONMENT`

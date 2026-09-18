@@ -2079,6 +2079,7 @@ export const sr: Messages = {
   "native.introCaption": "Popust važi za prvi obračunski period.",
   "native.priceChanged": "Appleova cena ili pravo na ponudu se promenilo. Pre nastavka proveri ažurirane pakete.",
   "native.working": "U toku…",
+  "native.securePayment": "Sigurno plaćanje preko App Store-a",
   "native.subscribe": "Pretplati se putem Applea",
   "native.restore": "Obnovi kupovine",
   "native.pending": "Kupovina čeka odobrenje. Pristup će se ažurirati nakon odobrenja.",

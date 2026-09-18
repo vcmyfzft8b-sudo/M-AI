@@ -2101,6 +2101,7 @@ export const sl = {
   "native.introCaption": "Popust velja za prvo obračunsko obdobje.",
   "native.priceChanged": "Applova cena ali upravičenost do ponudbe se je spremenila. Pred nadaljevanjem preveri posodobljene pakete.",
   "native.working": "Poteka…",
+  "native.securePayment": "Varno plačilo prek App Stora",
   "native.subscribe": "Naroči se z Applom",
   "native.restore": "Obnovi nakupe",
   "native.pending": "Nakup čaka na odobritev. Dostop se posodobi po odobritvi.",

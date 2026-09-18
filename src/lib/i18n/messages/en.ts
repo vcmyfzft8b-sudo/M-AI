@@ -2066,6 +2066,7 @@ export const en: Messages = {
   "native.introCaption": "The discount applies to your first billing period.",
   "native.priceChanged": "Apple’s price or offer eligibility has changed. Review the updated plans before continuing.",
   "native.working": "Working…",
+  "native.securePayment": "Secure payment through the App Store",
   "native.subscribe": "Subscribe with Apple",
   "native.restore": "Restore purchases",
   "native.pending": "Your purchase is awaiting approval. Access will update after approval.",

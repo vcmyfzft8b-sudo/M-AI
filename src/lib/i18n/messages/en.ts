@@ -528,12 +528,6 @@ export const en: Messages = {
   "api.codeSentTimerFailed": "We sent the code, but the resend timer could not be updated. Wait a minute and try again.",
 
   /* ---- Auth screens ---- */
-  "auth.password.title": "Sign in with a password",
-  "auth.password.copy": "Use the password already set for your Memo account. You can also sign in with an email code.",
-  "auth.password.label": "Password",
-  "auth.password.pending": "Signing in…",
-  "auth.password.error": "The email or password was not accepted. Try again or use an email code.",
-  "auth.password.useCode": "Use an email code instead",
   "auth.signIn": "Sign in",
   "auth.signUp": "Sign up",
   "auth.continue.copy": "Sign in, or create a new account.",

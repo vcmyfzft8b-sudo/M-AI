@@ -3,7 +3,12 @@ import { z } from "zod";
 
 import { parseFormDataRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
+import { accountDeletionRequested } from "@/lib/mobile/account-lifecycle";
+import { reviewCodeMatches } from "@/lib/review-login";
+import {
+  createSupabaseRouteHandlerClient,
+  createSupabaseServiceRoleClient,
+} from "@/lib/supabase/server";
 import {
   emailAddressSchema,
   nextPathSchema,
@@ -82,11 +87,7 @@ export async function POST(request: NextRequest) {
 
   const next = parsed.data.next;
   const { supabase, applyCookies } = await createSupabaseRouteHandlerClient();
-  const { error } = await supabase.auth.verifyOtp({
-    email: parsed.data.email,
-    token: parsed.data.code,
-    type: "email",
-  });
+  const { error } = await verifyCode(supabase, parsed.data.email, parsed.data.code);
 
   if (error) {
     const retryUrl = request.nextUrl.clone();
@@ -104,4 +105,31 @@ export async function POST(request: NextRequest) {
   successUrl.pathname = next;
   successUrl.search = "";
   return applyCookies(NextResponse.redirect(successUrl, { status: 303 }));
+}
+
+type RouteSupabase = Awaited<ReturnType<typeof createSupabaseRouteHandlerClient>>["supabase"];
+
+/**
+ * A mailed code is checked by Supabase. A review account's fixed code is
+ * checked here, and then turned into the same kind of session by consuming an
+ * admin-issued magic link on the spot — so the cookie jar ends up exactly as
+ * it would after a mailed code, and nothing downstream knows the difference.
+ * The link never leaves the server. An account that is being deleted stays
+ * out, as with every other way in.
+ */
+async function verifyCode(supabase: RouteSupabase, email: string, code: string) {
+  if (!reviewCodeMatches(email, code)) {
+    return supabase.auth.verifyOtp({ email, token: code, type: "email" });
+  }
+
+  const { data, error } = await createSupabaseServiceRoleClient().auth.admin.generateLink({
+    type: "magiclink",
+    email: email.trim().toLowerCase(),
+  });
+
+  if (error || !data.user || accountDeletionRequested(data.user)) {
+    return { error: error ?? new Error("Account unavailable") };
+  }
+
+  return supabase.auth.verifyOtp({ token_hash: data.properties.hashed_token, type: "magiclink" });
 }

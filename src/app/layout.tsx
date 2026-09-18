@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { getImageProps } from "next/image";
 import { headers } from "next/headers";
 import { NativeProvider } from "@/components/native-provider";
 import { isNativeUserAgent } from "@/lib/mobile/runtime";
@@ -11,7 +12,13 @@ import { LaunchScreen } from "@/components/launch-screen";
 import { ServiceWorkerRegistration } from "@/components/service-worker";
 import { ThemeController } from "@/components/theme-controller";
 import { VisitTracker } from "@/components/visit-tracker";
-import { SEO_BRAND_NAME, SEO_SITE_URL } from "@/lib/brand";
+import {
+  BRAND_LOCKUP_HEIGHT,
+  BRAND_LOCKUP_SRC,
+  BRAND_LOCKUP_WIDTH,
+  SEO_BRAND_NAME,
+  SEO_SITE_URL,
+} from "@/lib/brand";
 import { LOCALE_BCP47, LOCALE_OG_TAG } from "@/lib/i18n/locales";
 import { getMessages } from "@/lib/i18n/messages";
 import { getLocale, getTranslations } from "@/lib/i18n/server";
@@ -125,6 +132,20 @@ const MATERIAL_SYMBOLS_HREF =
  * Next's metadata API has no field for these, so they go in the head by hand.
  */
 const APPLE_STARTUP_IMAGES = splashScreens();
+
+/**
+ * The two brand images every screen reaches for — the lockup in the home
+ * topbar, paywall and offer, and the mascot on the sign-in cards and in the
+ * wheel's hub. Sheets such as the wheel mount on a tap, so an image that only
+ * starts loading then fills in a beat after the sheet has opened; on a cold
+ * app launch the same happens to the home topbar. Preloading the exact
+ * candidates `next/image` will request (same optimiser URL, same sizes) means
+ * the sheet opens with its images already in the cache.
+ */
+const PRELOADED_IMAGES = [
+  getImageProps({ src: BRAND_LOCKUP_SRC, alt: "", width: BRAND_LOCKUP_WIDTH, height: BRAND_LOCKUP_HEIGHT }).props,
+  getImageProps({ src: "/memo-mascot.png", alt: "", width: 320, height: 288 }).props,
+];
 
 /**
  * The colour the installed app's own chrome takes on Android — its title bar
@@ -255,6 +276,16 @@ export default async function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link rel="stylesheet" href={MATERIAL_SYMBOLS_HREF} />
+        {PRELOADED_IMAGES.map((image) => (
+          <link
+            key={image.src}
+            rel="preload"
+            as="image"
+            href={image.src}
+            imageSrcSet={image.srcSet}
+            imageSizes={image.sizes}
+          />
+        ))}
         {APPLE_STARTUP_IMAGES.map((screen) => (
           <link
             key={screen.media}

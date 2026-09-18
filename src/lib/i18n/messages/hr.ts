@@ -535,12 +535,6 @@ export const hr: Messages = {
   "api.codeSentTimerFailed": "Poslali smo kod, ali odbrojavanje za ponovno slanje nije bilo moguće ažurirati. Pričekaj minutu i pokušaj ponovno.",
 
   /* ---- Auth screens ---- */
-  "auth.password.title": "Prijava lozinkom",
-  "auth.password.copy": "Upotrijebi lozinku koja je već postavljena za tvoj Memo račun. Možeš se prijaviti i kodom iz e-pošte.",
-  "auth.password.label": "Lozinka",
-  "auth.password.pending": "Prijava…",
-  "auth.password.error": "E-pošta ili lozinka nije prihvaćena. Pokušaj ponovno ili upotrijebi kod iz e-pošte.",
-  "auth.password.useCode": "Umjesto toga upotrijebi kod iz e-pošte",
   "auth.signIn": "Prijava",
   "auth.signUp": "Registracija",
   "auth.continue.copy": "Prijavi se ili izradi novi račun.",

@@ -255,9 +255,13 @@ export function DiscountOffer({
 
     if (nativeOffer) {
       // Introductory offers are governed by Apple eligibility, with no invented
-      // ten-minute expiry or Stripe coupon written to the learner's profile.
+      // ten-minute expiry. The spin is still recorded on the profile, exactly
+      // as on the web, so the wheel is once a day in the app as well.
       try {
-        const offers = halfOffProducts(await nativeRequest("products"));
+        const [offers] = await Promise.all([
+          nativeRequest("products").then(halfOffProducts),
+          fetch("/api/discount-wheel", { method: "POST" }).catch(() => null),
+        ]);
         if (!offers.length) throw new Error("Offer unavailable");
         setAppleOffers(offers);
         onClaimed();
@@ -467,7 +471,7 @@ export function DiscountOffer({
    */
   const offerSheet = useSheet(
     useCallback(() => {
-      if (!nativeOffer && !boughtRef.current) {
+      if (!boughtRef.current) {
         void fetch("/api/discount-wheel", { method: "DELETE" }).catch(() => {});
       }
 
@@ -480,7 +484,7 @@ export function DiscountOffer({
       clearOfferResume();
       onOfferOpenChange(false);
       onWheelOpenChange(false);
-    }, [onOfferOpenChange, onWheelOpenChange, nativeOffer]),
+    }, [onOfferOpenChange, onWheelOpenChange]),
     { scrollable: true },
   );
 
@@ -613,7 +617,9 @@ export function DiscountOffer({
                 ))}
               </div>
               <div className="memo-wheel-hub">
-                <Image src="/memo-mascot.png" alt="" width={320} height={288} />
+                {/* Eager: the sheet opens on a tap, and a hub that fills in a
+                    moment later looks like the wheel loading in pieces. */}
+                <Image src="/memo-mascot.png" alt="" width={320} height={288} priority />
               </div>
             </div>
 
@@ -678,6 +684,7 @@ export function DiscountOffer({
               width={BRAND_LOCKUP_WIDTH}
               height={BRAND_LOCKUP_HEIGHT}
               className="memo-offer-logo"
+              priority
             />
             <p className="memo-offer-kicker">{t("offer.kicker")}</p>
             <p className="memo-offer-headline">{t("offer.headline")}</p>

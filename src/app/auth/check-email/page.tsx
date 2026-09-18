@@ -36,7 +36,7 @@ export default async function CheckEmailPage({
   const cooldownSeconds = Number(params?.cooldownSeconds);
 
   return (
-    <AuthScreen>
+    <AuthScreen backHref="/auth/continue">
       <div className="memo-auth-card">
         {/* The heading belongs to the page rather than the card component, and
             it stays here — but on the card's head, so this screen reads as the

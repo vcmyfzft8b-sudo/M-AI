@@ -12,25 +12,31 @@ import { isNativeUserAgent } from "@/lib/mobile/runtime";
  * `min(100%, 28rem)` card serve every width; only type and padding step up.
  *
  * The header carries only the back control: the card below already shows the
- * mascot, so a second brand mark in the corner said nothing twice. The app has
- * no landing page to go back to, so its header is an empty band that keeps the
- * card at the same height as on the web.
+ * mascot, so a second brand mark in the corner said nothing twice.
+ *
+ * Where the arrow leads is the page's call. The chooser's default is the
+ * landing page, which the iOS app does not have (the wrapper opens sign-in
+ * directly and rewrites "/" back to it), so there the app draws an empty band
+ * that keeps the card at the same height. A page that names a target — the
+ * e-mail steps go back to the chooser — gets the arrow on both platforms, and
+ * `back={false}` removes it where there is nothing to go back to.
  */
 export async function AuthScreen({
   backHref = "/",
+  back,
   children,
 }: {
   backHref?: string;
+  back?: boolean;
   children: ReactNode;
 }) {
-  // The iOS app has no landing page: the wrapper opens sign-in directly and
-  // rewrites "/" back to it, so a back arrow would only lead to itself.
   const native = isNativeUserAgent((await headers()).get("user-agent"));
+  const showBack = back ?? (native ? backHref !== "/" : true);
 
   return (
     <main className="memo memo-auth">
       <header className="memo-auth-header">
-        {native ? <span className="memo-auth-header-gap" aria-hidden="true" /> : <AuthBackLink href={backHref} />}
+        {showBack ? <AuthBackLink href={backHref} /> : <span className="memo-auth-header-gap" aria-hidden="true" />}
       </header>
 
       <div className="memo-auth-stage">{children}</div>

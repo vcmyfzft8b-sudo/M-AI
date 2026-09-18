@@ -30,7 +30,7 @@ export default async function EmailEntryPage({
   }
 
   return (
-    <AuthScreen>
+    <AuthScreen backHref="/auth/continue">
       <div className="memo-auth-card">
         <div className="memo-auth-head">
           <Image

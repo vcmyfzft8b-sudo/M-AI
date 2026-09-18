@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import {
   addDays,
   eachDay,
@@ -60,16 +62,23 @@ type DeltaRow = {
   videos_posted: number;
 };
 
-export async function listCreators(options?: {
-  includeArchived?: boolean;
-}): Promise<CreatorWithAccounts[]> {
+/*
+ * The reads below are wrapped in React's `cache` so that one request runs
+ * each of them once, however many panels ask. The layout and the overview
+ * both count the review queue, the overview and the finance summary both
+ * want the same day's deltas, and so on — before this each caller paid for
+ * its own round trip to the database. `cache` keys on argument identity, so
+ * the wrapped functions take primitives rather than range objects.
+ */
+
+const cachedCreators = cache(async (includeArchived: boolean) => {
   const serviceRole = createSupabaseServiceRoleClient();
   let query = serviceRole
     .from("ugc_creators")
     .select("*, accounts:ugc_creator_accounts(*)")
     .order("name", { ascending: true });
 
-  if (!options?.includeArchived) {
+  if (!includeArchived) {
     query = query.neq("status", "archived");
   }
 
@@ -80,6 +89,12 @@ export async function listCreators(options?: {
   }
 
   return (data ?? []) as unknown as CreatorWithAccounts[];
+});
+
+export async function listCreators(options?: {
+  includeArchived?: boolean;
+}): Promise<CreatorWithAccounts[]> {
+  return cachedCreators(options?.includeArchived ?? false);
 }
 
 export async function getCreator(id: string): Promise<CreatorWithAccounts | null> {
@@ -97,23 +112,29 @@ export async function getCreator(id: string): Promise<CreatorWithAccounts | null
   return (data as unknown as CreatorWithAccounts | null) ?? null;
 }
 
+const cachedDeltas = cache(
+  async (from: string, to: string, onlyMemo: boolean): Promise<DeltaRow[]> => {
+    const serviceRole = createSupabaseServiceRoleClient();
+    const { data, error } = await callRpc(serviceRole, "ugc_daily_view_deltas", {
+      p_from: from,
+      p_to: to,
+      p_only_memo: onlyMemo,
+    });
+
+    if (error) {
+      throw new Error(`Could not load view history: ${error.message}`);
+    }
+
+    return (data ?? []) as DeltaRow[];
+  },
+);
+
 /** Day-by-day deltas for a window, optionally narrowed to one creator. */
 export async function getDailyDeltas(
   range: { from: string; to: string },
   options?: { creatorId?: string; onlyMemo?: boolean },
 ): Promise<DeltaRow[]> {
-  const serviceRole = createSupabaseServiceRoleClient();
-  const { data, error } = await callRpc(serviceRole, "ugc_daily_view_deltas", {
-    p_from: range.from,
-    p_to: range.to,
-    p_only_memo: options?.onlyMemo ?? true,
-  });
-
-  if (error) {
-    throw new Error(`Could not load view history: ${error.message}`);
-  }
-
-  const rows = (data ?? []) as DeltaRow[];
+  const rows = await cachedDeltas(range.from, range.to, options?.onlyMemo ?? true);
 
   return options?.creatorId
     ? rows.filter((row) => row.creator_id === options.creatorId)
@@ -166,8 +187,13 @@ export async function getCreatorMetrics(
   creators: CreatorWithAccounts[],
   range: { from: string; to: string },
 ): Promise<Map<string, CreatorMetrics>> {
-  const serviceRole = createSupabaseServiceRoleClient();
-  const deltas = await getDailyDeltas(range, { onlyMemo: true });
+  // Three independent reads, so they go out together rather than one after
+  // another: the round trip, not the query, is what a dashboard render waits on.
+  const [deltas, lifetime, followerSnapshots] = await Promise.all([
+    getDailyDeltas(range, { onlyMemo: true }),
+    cachedLifetimeTotals(),
+    cachedFollowerSnapshots(addDays(range.from, -1), range.to),
+  ]);
 
   const metrics = new Map<string, CreatorMetrics>();
 
@@ -205,17 +231,7 @@ export async function getCreatorMetrics(
     entry.videosPosted += Number(row.videos_posted ?? 0);
   }
 
-  // Lifetime Memo AI totals, independent of the selected window.
-  const { data: lifetime } = await serviceRole
-    .from("ugc_videos")
-    .select("creator_id, views, saves")
-    .eq("classification", "memo");
-
-  for (const row of (lifetime ?? []) as Array<{
-    creator_id: string;
-    views: number;
-    saves: number;
-  }>) {
+  for (const row of lifetime) {
     const entry = metrics.get(row.creator_id);
 
     if (!entry) {
@@ -227,7 +243,7 @@ export async function getCreatorMetrics(
     entry.totalVideos += 1;
   }
 
-  await addFollowerGrowth(metrics, range);
+  addFollowerGrowth(metrics, followerSnapshots);
 
   for (const entry of metrics.values()) {
     const interactions =
@@ -239,29 +255,54 @@ export async function getCreatorMetrics(
   return metrics;
 }
 
-/** Follower change across the window, from the first and last daily snapshots. */
-async function addFollowerGrowth(
-  metrics: Map<string, CreatorMetrics>,
-  range: { from: string; to: string },
-) {
+/** Lifetime Memo AI totals per creator, independent of any window. */
+const cachedLifetimeTotals = cache(async () => {
   const serviceRole = createSupabaseServiceRoleClient();
-
   const { data } = await serviceRole
-    .from("ugc_account_stats")
-    .select("creator_id, captured_on, follower_count")
-    // One day of lead-in so a window that starts today still has a baseline.
-    .gte("captured_on", addDays(range.from, -1))
-    .lte("captured_on", range.to)
-    .order("captured_on", { ascending: true });
+    .from("ugc_videos")
+    .select("creator_id, views, saves")
+    .eq("classification", "memo");
 
+  return (data ?? []) as Array<{
+    creator_id: string;
+    views: number;
+    saves: number;
+  }>;
+});
+
+type FollowerSnapshot = {
+  creator_id: string;
+  captured_on: string;
+  follower_count: number | null;
+};
+
+/**
+ * Daily follower snapshots between two days, oldest first. `from` is the
+ * day before the window so a window that starts today still has a baseline.
+ */
+const cachedFollowerSnapshots = cache(
+  async (from: string, to: string): Promise<FollowerSnapshot[]> => {
+    const serviceRole = createSupabaseServiceRoleClient();
+    const { data } = await serviceRole
+      .from("ugc_account_stats")
+      .select("creator_id, captured_on, follower_count")
+      .gte("captured_on", from)
+      .lte("captured_on", to)
+      .order("captured_on", { ascending: true });
+
+    return (data ?? []) as FollowerSnapshot[];
+  },
+);
+
+/** Follower change across the window, from the first and last daily snapshots. */
+function addFollowerGrowth(
+  metrics: Map<string, CreatorMetrics>,
+  snapshots: FollowerSnapshot[],
+) {
   const first = new Map<string, number>();
   const last = new Map<string, number>();
 
-  for (const row of (data ?? []) as Array<{
-    creator_id: string;
-    captured_on: string;
-    follower_count: number | null;
-  }>) {
+  for (const row of snapshots) {
     if (row.follower_count === null) {
       continue;
     }
@@ -333,7 +374,8 @@ export async function listVideos(options: {
   }));
 }
 
-export async function countVideosNeedingReview(): Promise<number> {
+/** Counted once per request: the layout badge and the overview banner share it. */
+export const countVideosNeedingReview = cache(async (): Promise<number> => {
   const serviceRole = createSupabaseServiceRoleClient();
   const { count } = await serviceRole
     .from("ugc_videos")
@@ -341,7 +383,7 @@ export async function countVideosNeedingReview(): Promise<number> {
     .eq("classification", "unknown");
 
   return count ?? 0;
-}
+});
 
 export type CampaignTotals = {
   viewsGained: number;
@@ -394,7 +436,7 @@ export function sumMetrics(
 }
 
 /** The earliest day we hold any UGC data, used to bound the "all time" range. */
-export async function getEarliestDataDay(): Promise<string | null> {
+export const getEarliestDataDay = cache(async (): Promise<string | null> => {
   const serviceRole = createSupabaseServiceRoleClient();
   const { data } = await serviceRole
     .from("ugc_video_stats")
@@ -404,7 +446,7 @@ export async function getEarliestDataDay(): Promise<string | null> {
     .maybeSingle();
 
   return (data as { captured_on: string } | null)?.captured_on ?? null;
-}
+});
 
 export async function setVideoClassification(options: {
   videoId: string;

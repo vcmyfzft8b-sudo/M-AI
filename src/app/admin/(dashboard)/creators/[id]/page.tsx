@@ -40,9 +40,9 @@ import {
 import {
   creatorRevenue,
   formatMoney,
-  getRevenueBetween,
   loadSalesData,
   promoCodeStats,
+  revenueBetween,
 } from "@/lib/admin/sales";
 import {
   getBaselineCampaignViews,
@@ -69,40 +69,40 @@ export default async function CreatorDetailPage({
   const { id } = await params;
   const search = await searchParams;
   const preset = creatorRangePreset(search?.range);
-  const earliest = await getEarliestDataDay();
+  // Only the all-time window needs to know where the data starts.
+  const earliest = preset === "all" ? await getEarliestDataDay() : null;
   const range = resolveRange(preset, { earliestDay: earliest });
 
-  const creator = await getCreator(id);
+  // One batch for everything the page reads. The metrics need the creator
+  // row, so they chain off that one promise rather than the whole batch.
+  const creatorPromise = getCreator(id);
+
+  const [creator, metrics, deltas, videos, salesData, baseline] = await Promise.all([
+    creatorPromise,
+    creatorPromise.then((row) => (row ? getCreatorMetrics([row], range) : null)),
+    getDailyDeltas(range, { creatorId: id, onlyMemo: true }),
+    // Scoped to the selected range: listing every post while the tiles above
+    // were windowed made the two disagree and looked like a bug.
+    listVideos({ creatorId: id, limit: 200, range }),
+    loadSalesData().catch(() => null),
+    getBaselineCampaignViews(VALUE_BASELINE_DAYS),
+  ]);
 
   if (!creator) {
     notFound();
   }
 
-  const [metrics, deltas, videos] = await Promise.all([
-    getCreatorMetrics([creator], range),
-    getDailyDeltas(range, { creatorId: id, onlyMemo: true }),
-    // Scoped to the selected range: listing every post while the tiles above
-    // were windowed made the two disagree and looked like a bug.
-    listVideos({ creatorId: id, limit: 200, range }),
-  ]);
-
-  const entry = metrics.get(creator.id);
+  const entry = metrics?.get(creator.id);
   const series = toDailySeries(deltas, range);
 
-  const codes = await loadSalesData()
-    .then((data) =>
-      creatorRevenue([creator], promoCodeStats(data, range), data.codeRedemptions).get(
+  const codes = salesData
+    ? creatorRevenue([creator], promoCodeStats(salesData, range), salesData.codeRedemptions).get(
         creator.id,
-      ),
-    )
-    .catch(() => null);
+      )
+    : null;
 
-  const baseline = await getBaselineCampaignViews(VALUE_BASELINE_DAYS);
-  const baselineRevenue = await getRevenueBetween(baseline.from, baseline.to).catch(
-    () => 0,
-  );
   const viewValue = computeViewValue({
-    revenue: baselineRevenue,
+    revenue: salesData ? revenueBetween(salesData, baseline.from, baseline.to) : 0,
     views: baseline.views,
     days: VALUE_BASELINE_DAYS,
   });

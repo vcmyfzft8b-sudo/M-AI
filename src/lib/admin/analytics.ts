@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { type DateRange, rangeToTimestamps } from "@/lib/admin/ranges";
 import type { SiteSessionRow } from "@/lib/database.types";
 import { callRpc } from "@/lib/admin/db";
@@ -51,14 +53,18 @@ export type TrafficSummary = {
   series: TrafficDay[];
 };
 
-export async function getTrafficSeries(range: {
-  from: string;
-  to: string;
-}): Promise<TrafficDay[]> {
+/*
+ * Wrapped in React's `cache` so one request reads each of these once however
+ * many panels ask: the overview wants the online list for its count and the
+ * traffic summary wants it again for the same number. Keyed on primitives,
+ * because `cache` compares arguments by identity.
+ */
+
+const cachedTrafficSeries = cache(async (from: string, to: string) => {
   const serviceRole = createSupabaseServiceRoleClient();
   const { data, error } = await callRpc(serviceRole, "site_traffic_daily", {
-    p_from: range.from,
-    p_to: range.to,
+    p_from: from,
+    p_to: to,
   });
 
   if (error) {
@@ -80,6 +86,13 @@ export async function getTrafficSeries(range: {
     signedInVisitors: Number(row.signed_in_visitors ?? 0),
     newVisitors: Number(row.new_visitors ?? 0),
   }));
+});
+
+export async function getTrafficSeries(range: {
+  from: string;
+  to: string;
+}): Promise<TrafficDay[]> {
+  return cachedTrafficSeries(range.from, range.to);
 }
 
 export async function getTrafficBreakdown(range: {
@@ -118,7 +131,7 @@ export async function getTrafficBreakdown(range: {
   };
 }
 
-export async function getOnlineVisitors(): Promise<OnlineVisitor[]> {
+export const getOnlineVisitors = cache(async (): Promise<OnlineVisitor[]> => {
   const serviceRole = createSupabaseServiceRoleClient();
   const since = new Date(
     Date.now() - ONLINE_WINDOW_MINUTES * 60 * 1000,
@@ -177,7 +190,7 @@ export async function getOnlineVisitors(): Promise<OnlineVisitor[]> {
       pageViews: session.page_views,
     };
   });
-}
+});
 
 export async function getTrafficSummary(range: DateRange): Promise<TrafficSummary> {
   const [series, previousSeries, online] = await Promise.all([

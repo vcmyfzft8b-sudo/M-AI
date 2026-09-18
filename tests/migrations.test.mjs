@@ -469,6 +469,85 @@ test("site_traffic_daily buckets the 22:00-24:00 UTC window on the Ljubljana day
   );
 });
 
+test("the onboarding survey is pivoted per question and windowed by completion", options, async () => {
+  const { query } = await migratedDatabase();
+
+  // Three accounts inside the window: two full survey answers on the
+  // five-point scale, one from before the survey (only the derived summary).
+  // A fourth finished onboarding before the window and must not count.
+  await query(
+    `with people as (
+       insert into auth.users (email)
+       values ('a@example.com'), ('b@example.com'), ('c@example.com'), ('d@example.com')
+       returning id, email
+     ),
+     answers (email, completed_at, education_level, role, heard_from, scale, current_grade, target_grade, age_range) as (
+       values
+         ('a@example.com', '2026-09-10 10:00+00'::timestamptz, 'high_school',
+          'high_school_student', 'tiktok', 5, 3.4, 4.5, null),
+         ('b@example.com', '2026-09-11 10:00+00', 'high_school',
+          'high_school_student', 'instagram_reels', 5, 3.6, 3.6, null),
+         ('c@example.com', '2026-09-12 10:00+00', 'university',
+          null, null, null, null, null, '19_22'),
+         ('d@example.com', '2026-08-01 10:00+00', 'university',
+          'university_student', 'chatgpt', 10, 7.2, 9, null)
+     )
+     insert into public.profiles
+       (id, email, onboarding_completed_at, education_level,
+        onboarding_role, onboarding_heard_from, onboarding_grade_scale,
+        onboarding_current_average_grade, onboarding_target_grade, age_range)
+     select p.id, a.email, a.completed_at, a.education_level, a.role, a.heard_from,
+            a.scale, a.current_grade, a.target_grade, a.age_range
+     from answers a join people p on p.email = a.email`,
+  );
+
+  const rows = await query(
+    `select question, answer, respondents
+     from public.admin_onboarding_breakdown('2026-09-01', '2026-10-01')
+     order by question, answer`,
+  );
+
+  const counts = Object.fromEntries(
+    rows.map((row) => [`${row.question}:${row.answer}`, Number(row.respondents)]),
+  );
+
+  assert.deepEqual(counts, {
+    "age_range:19_22": 1,
+    // Rounded to the nearest half mark on the five-point scale: 3.4 → 3.5,
+    // 3.6 → 3.5, and both targets keep their own buckets.
+    "current_grade_5:3.5": 2,
+    "target_grade_5:3.5": 1,
+    "target_grade_5:4.5": 1,
+    "education_level:high_school": 2,
+    "education_level:university": 1,
+    "grade_scale:5": 2,
+    "heard_from:instagram_reels": 1,
+    "heard_from:tiktok": 1,
+    "role:high_school_student": 2,
+    // The account that finished before the survey existed still counts as
+    // having finished, so the completion figure is honest.
+    "survey:answered": 2,
+    "survey:none": 1,
+  });
+
+  const grades = await query(
+    `select grade_scale, respondents, average_current, average_target, aiming_higher
+     from public.admin_onboarding_grades('2026-09-01', '2026-10-01')`,
+  );
+
+  assert.deepEqual(
+    grades.map((row) => ({
+      scale: Number(row.grade_scale),
+      respondents: Number(row.respondents),
+      current: Number(row.average_current),
+      target: Number(row.average_target),
+      aimingHigher: Number(row.aiming_higher),
+    })),
+    [{ scale: 5, respondents: 2, current: 3.5, target: 4.05, aimingHigher: 1 }],
+    "the ten-point account finished before the window and is left out",
+  );
+});
+
 test("stored instants do not depend on the session timezone", options, async () => {
   const { db, query } = await migratedDatabase();
 

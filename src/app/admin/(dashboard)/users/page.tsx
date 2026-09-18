@@ -1,5 +1,6 @@
 import { AreaChart } from "@/components/admin/chart";
 import { NativeSubmitButton } from "@/components/admin/native-submit";
+import { OnboardingBreakdownGroups } from "@/components/admin/onboarding-breakdown";
 import { PendingLink } from "@/components/admin/pending-link";
 import { SearchForm } from "@/components/admin/search-form";
 import {
@@ -13,6 +14,7 @@ import {
   RangeTabs,
   StatCard,
 } from "@/components/admin/ui";
+import { getOnboardingBreakdown, type OnboardingBreakdown } from "@/lib/admin/onboarding";
 import { normalizeRangePreset, resolveRange } from "@/lib/admin/ranges";
 import {
   getUserGrowth,
@@ -65,10 +67,15 @@ export default async function UsersPage({
       ? IMPERSONATION_ERRORS[params.impersonation] ?? null
       : null;
 
-  const [totals, growth, result] = await Promise.all([
+  const [totals, growth, result, onboarding] = await Promise.all([
     getUserTotals(range),
     getUserGrowth(range),
     listUsers({ page, pageSize: 50, search, filter }),
+    // The survey panel must never take the user list down with it.
+    getOnboardingBreakdown(range).catch((error: unknown) => {
+      console.error("Onboarding breakdown failed", error);
+      return null as OnboardingBreakdown | null;
+    }),
   ]);
 
   const totalPages = Math.max(Math.ceil(result.total / result.pageSize), 1);
@@ -142,6 +149,52 @@ export default async function UsersPage({
           />
         ) : (
           <EmptyState title="No sign-ups in this window" />
+        )}
+      </Section>
+
+      <Section
+        id="onboarding"
+        title="Onboarding answers"
+        hint={`What people told us when they signed up ${range.label.toLowerCase()}. Percentages are of everyone who answered that question; the survey branches, so not every question is asked of everyone.`}
+      >
+        {onboarding === null ? (
+          <EmptyState title="Onboarding answers unavailable">
+            The survey aggregate could not be read. The details are in the server logs.
+          </EmptyState>
+        ) : onboarding.completed === 0 ? (
+          <EmptyState title="Nobody finished onboarding in this window" />
+        ) : (
+          <>
+            <div className="admin-grid">
+              <StatCard
+                label="Finished onboarding"
+                value={formatExact(onboarding.completed)}
+                meta={`${formatExact(totals.newInRange)} signed up in the window`}
+              />
+              <StatCard
+                label="Answered the survey"
+                value={formatExact(onboarding.surveyed)}
+                meta={
+                  onboarding.completed > 0
+                    ? `${((onboarding.surveyed / onboarding.completed) * 100).toFixed(0)}% of those who finished`
+                    : undefined
+                }
+              />
+              {onboarding.grades.map((goal) => (
+                <StatCard
+                  key={goal.scale}
+                  label={`Grade goal, out of ${goal.scale}`}
+                  value={`${goal.averageCurrent.toFixed(1)} → ${goal.averageTarget.toFixed(1)}`}
+                  meta={`${formatExact(goal.respondents)} answered · ${
+                    goal.respondents > 0
+                      ? ((goal.aimingHigher / goal.respondents) * 100).toFixed(0)
+                      : "0"
+                  }% aiming higher`}
+                />
+              ))}
+            </div>
+            <OnboardingBreakdownGroups breakdown={onboarding} />
+          </>
         )}
       </Section>
 

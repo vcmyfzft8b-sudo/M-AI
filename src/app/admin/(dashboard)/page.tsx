@@ -1,5 +1,5 @@
-import { AutoRefresh } from "@/components/admin/auto-refresh";
 import { AreaChart, type ChartPoint } from "@/components/admin/chart";
+import { OnlineNow } from "@/components/admin/online-now";
 import { PendingLink } from "@/components/admin/pending-link";
 import {
   Alert,
@@ -32,10 +32,10 @@ import {
 } from "@/lib/admin/ranges";
 import {
   formatMoney,
-  getRevenueBetween,
   loadSalesData,
   type PaymentSnapshot,
   projectionAtDayStart,
+  revenueBetween,
   type SalesData,
   summarizeSales,
 } from "@/lib/admin/sales";
@@ -107,13 +107,27 @@ export default async function AdminOverviewPage({
 }) {
   const params = await searchParams;
   const preset = normalizeRangePreset(params?.range);
-  const earliest = await getEarliestDataDay();
+  // Only the all-time window needs to know where the data starts; every other
+  // preset is fixed by the calendar, so they skip that round trip.
+  const earliest = preset === "all" ? await getEarliestDataDay() : null;
   const range = resolveRange(preset, { earliestDay: earliest });
 
-  const creators = await listCreators();
+  // Today's views only land with the nightly scrape, so the today window would
+  // rank every creator at zero. Yesterday is the freshest day that has data.
+  const creatorWindow =
+    preset === "today"
+      ? resolveRange("yesterday", { earliestDay: earliest })
+      : range;
+
+  // Everything the page reads goes out in one batch. The creator metrics
+  // depend on the creator list, so they chain off that one promise rather
+  // than waiting for the whole batch; nothing else depends on anything.
+  const creatorsPromise = listCreators();
 
   const [
+    creators,
     metrics,
+    creatorMetrics,
     deltas,
     beaconTraffic,
     online,
@@ -123,8 +137,13 @@ export default async function AdminOverviewPage({
     reviewCount,
     syncRun,
     salesData,
+    baseline,
   ] = await Promise.all([
-    getCreatorMetrics(creators, range),
+    creatorsPromise,
+    creatorsPromise.then((list) => getCreatorMetrics(list, range)),
+    preset === "today"
+      ? creatorsPromise.then((list) => getCreatorMetrics(list, creatorWindow))
+      : null,
     getDailyDeltas(range, { onlyMemo: true }),
     getTrafficSummary(range),
     getOnlineVisitors(),
@@ -136,6 +155,9 @@ export default async function AdminOverviewPage({
     // Stripe is the one dependency that can be slow or down; the overview has
     // to render without it.
     loadSalesData().catch(() => null as SalesData | null),
+    // What a view is worth, for the finance summary below. Degrades to "not
+    // enough data" rather than taking the overview down with it.
+    getBaselineCampaignViews(VALUE_BASELINE_DAYS).catch(() => null),
   ]);
 
   const sales = salesData ? summarizeSales(salesData, range) : null;
@@ -148,18 +170,12 @@ export default async function AdminOverviewPage({
   const totals = sumMetrics(metrics);
   const series = toDailySeries(deltas, range);
 
-  // What a view is worth, for the finance summary below. Both halves degrade
-  // to "not enough data" rather than taking the overview down with them.
-  const baseline = await getBaselineCampaignViews(VALUE_BASELINE_DAYS).catch(
-    () => ({ views: 0, from: range.from, to: range.to }),
-  );
-  const baselineRevenue = await getRevenueBetween(
-    baseline.from,
-    baseline.to,
-  ).catch(() => 0);
   const viewValue = computeViewValue({
-    revenue: baselineRevenue,
-    views: baseline.views,
+    revenue:
+      salesData && baseline
+        ? revenueBetween(salesData, baseline.from, baseline.to)
+        : 0,
+    views: baseline?.views ?? 0,
     days: VALUE_BASELINE_DAYS,
   });
 
@@ -174,19 +190,10 @@ export default async function AdminOverviewPage({
     : beaconTraffic;
   const onlineCount = liveNow ?? online.length;
 
-  // Today's views only land with the nightly scrape, so the today window would
-  // rank every creator at zero. Yesterday is the freshest day that has data.
-  const creatorWindow =
-    preset === "today"
-      ? resolveRange("yesterday", { earliestDay: earliest })
-      : range;
-  const creatorMetrics =
-    preset === "today"
-      ? await getCreatorMetrics(creators, creatorWindow)
-      : metrics;
+  const rankedMetrics = creatorMetrics ?? metrics;
 
   const topCreators = [...creators]
-    .map((creator) => ({ creator, entry: creatorMetrics.get(creator.id) }))
+    .map((creator) => ({ creator, entry: rankedMetrics.get(creator.id) }))
     .filter((row) => (row.entry?.viewsGained ?? 0) > 0)
     .sort((a, b) => (b.entry?.viewsGained ?? 0) - (a.entry?.viewsGained ?? 0))
     .slice(0, 6);
@@ -206,9 +213,6 @@ export default async function AdminOverviewPage({
         </div>
         <RangeTabs active={preset} basePath="/admin" />
       </header>
-
-      {/* The overview carries the live online count, so it polls faster too. */}
-      <AutoRefresh live />
 
       {needsSetup && (
         <Alert tone="info">
@@ -272,18 +276,7 @@ export default async function AdminOverviewPage({
         />
         <StatCard
           label="Online now"
-          value={
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-              {formatExact(onlineCount)}
-              {onlineCount > 0 && (
-                <span
-                  className="admin-dot"
-                  data-pulse="true"
-                  style={{ color: "var(--green)" }}
-                />
-              )}
-            </span>
-          }
+          value={<OnlineNow initial={onlineCount} />}
           meta={`${formatCount(traffic.visitors)} visits this period`}
         />
       </div>

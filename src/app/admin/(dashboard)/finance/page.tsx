@@ -29,10 +29,10 @@ import {
 import {
   creatorRevenue,
   formatMoney,
-  getRevenueBetween,
   loadSalesData,
   projectionAtDayStart,
   promoCodeStats,
+  revenueBetween,
   revenueSeries,
   summarizeSales,
   trialForecast,
@@ -56,11 +56,34 @@ export default async function FinancePage({
   const preset = normalizeRangePreset(params?.range);
   const range = resolveRange(preset);
 
-  let data;
+  // Stripe, the creator list, their metrics and the view-value baseline are
+  // independent reads, so they go out together. Only Stripe is allowed to
+  // fail the page: it is what the page is about.
+  const creatorsPromise = listCreators({ includeArchived: true }).catch(() => []);
+  const [salesResult, allCreators, metrics, baseline] = await Promise.all([
+    loadSalesData().then(
+      (data) => ({ data, error: null as unknown }),
+      (error: unknown) => ({ data: null, error }),
+    ),
+    creatorsPromise,
+    creatorsPromise
+      .then((list) =>
+        getCreatorMetrics(
+          list.filter((creator) => creator.status !== "archived"),
+          range,
+        ),
+      )
+      .catch(() => null),
+    getBaselineCampaignViews(VALUE_BASELINE_DAYS).catch(() => ({
+      views: 0,
+      from: range.from,
+      to: range.to,
+    })),
+  ]);
 
-  try {
-    data = await loadSalesData();
-  } catch (error) {
+  if (!salesResult.data) {
+    const error = salesResult.error;
+
     return (
       <>
         <header className="admin-header">
@@ -75,6 +98,7 @@ export default async function FinancePage({
     );
   }
 
+  const data = salesResult.data;
   const summary = summarizeSales(data, range);
   const series = revenueSeries(data, range);
 
@@ -89,10 +113,6 @@ export default async function FinancePage({
       : null;
   const codes = promoCodeStats(data, range);
   const forecast = trialForecast(data, { days: 14 });
-  const allCreators = await listCreators({ includeArchived: true }).catch(
-    () => [],
-  );
-
   // Archived creators keep their place in the code-ownership map (their old
   // payments still carry their code) but are not billed for the window: a
   // monthly retainer on an archived creator is not owed anything.
@@ -100,9 +120,6 @@ export default async function FinancePage({
     (creator) => creator.status !== "archived",
   );
 
-  const metrics = await getCreatorMetrics(activeCreators, range).catch(
-    () => null,
-  );
   const codeUsage = creatorRevenue(activeCreators, codes, data.codeRedemptions);
   const monthFraction = monthsCovered(range.days);
 
@@ -141,16 +158,8 @@ export default async function FinancePage({
   const margin = summary.revenue - totalCost;
   const marginRate = summary.revenue > 0 ? margin / summary.revenue : null;
 
-  const baseline = await getBaselineCampaignViews(VALUE_BASELINE_DAYS).catch(() => ({
-    views: 0,
-    from: range.from,
-    to: range.to,
-  }));
-  const baselineRevenue = await getRevenueBetween(baseline.from, baseline.to).catch(
-    () => 0,
-  );
   const viewValue = computeViewValue({
-    revenue: baselineRevenue,
+    revenue: revenueBetween(data, baseline.from, baseline.to),
     views: baseline.views,
     days: VALUE_BASELINE_DAYS,
   });

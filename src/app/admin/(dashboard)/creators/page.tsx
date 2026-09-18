@@ -36,7 +36,6 @@ import {
   CREATOR_RANGE_PRESETS,
   creatorRangePreset,
   monthsCovered,
-  resolveRange,
 } from "@/lib/admin/ranges";
 import {
   creatorRevenue,
@@ -47,9 +46,9 @@ import {
 import {
   getCreatorMetrics,
   getDailyDeltas,
-  getEarliestDataDay,
   listCreators,
   listVideos,
+  resolveDashboardRange,
   sumMetrics,
   toDailySeries,
 } from "@/lib/admin/ugc";
@@ -102,52 +101,59 @@ export default async function CreatorsPage({
   const modeFilter = params?.mode ?? "";
   const kindFilter = params?.kind ?? "";
 
-  const earliest = await getEarliestDataDay();
-  const range = resolveRange(preset, { earliestDay: earliest });
+  const range = await resolveDashboardRange(preset);
 
-  const allCreators = await listCreators();
+  // Everything the page reads goes out in one batch. Filters narrow which
+  // creators feed every number on the page, so the tiles, the chart and the
+  // table can never disagree about what is being shown.
+  const creatorsPromise = listCreators();
+  const scopedCreators = creatorsPromise.then((all) =>
+    all.filter((creator) => {
+      if (creatorFilter && creator.id !== creatorFilter) {
+        return false;
+      }
 
-  // Filters narrow which creators feed every number on the page, so the tiles,
-  // the chart and the table can never disagree about what is being shown.
-  const creators = allCreators.filter((creator) => {
-    if (creatorFilter && creator.id !== creatorFilter) {
-      return false;
-    }
+      if (kindFilter && creator.kind !== kindFilter) {
+        return false;
+      }
 
-    if (kindFilter && creator.kind !== kindFilter) {
-      return false;
-    }
+      if (modeFilter) {
+        return creator.accounts.some(
+          (account) => account.content_mode === modeFilter,
+        );
+      }
 
-    if (modeFilter) {
-      return creator.accounts.some(
-        (account) => account.content_mode === modeFilter,
-      );
-    }
-
-    return true;
-  });
-
-  const creatorIds = new Set(creators.map((creator) => creator.id));
+      return true;
+    }),
+  );
 
   const [
+    allCreators,
+    creators,
     metrics,
     deltas,
     previousDeltas,
     previousMetrics,
     reviewQueue,
     syncRun,
+    salesData,
   ] = await Promise.all([
-    getCreatorMetrics(creators, range),
+    creatorsPromise,
+    scopedCreators,
+    getCreatorMetrics(scopedCreators, range),
     getDailyDeltas(range, { onlyMemo: true }),
     range.previous
       ? getDailyDeltas(range.previous, { onlyMemo: true })
       : Promise.resolve([]),
     range.previous
-      ? getCreatorMetrics(creators, range.previous)
+      ? getCreatorMetrics(scopedCreators, range.previous)
       : Promise.resolve(null),
     listVideos({ classification: "unknown", limit: 25 }),
     getLatestSyncRun(),
+    loadSalesData().catch(() => null),
   ]);
+
+  const creatorIds = new Set(creators.map((creator) => creator.id));
 
   const scoped = deltas.filter((row) => creatorIds.has(row.creator_id));
   const scopedPrevious = previousDeltas.filter((row) =>
@@ -164,15 +170,9 @@ export default async function CreatorsPage({
   // Code usage stays here as a measure of *tracked* conversions per creator.
   // The money side — code revenue, costs, payouts and margin — lives on the
   // Finance page now, where it sits next to the rest of the Stripe figures.
-  const codeUsage = await loadSalesData()
-    .then((data) =>
-      creatorRevenue(
-        creators,
-        promoCodeStats(data, range),
-        data.codeRedemptions,
-      ),
-    )
-    .catch(() => null);
+  const codeUsage = salesData
+    ? creatorRevenue(creators, promoCodeStats(salesData, range), salesData.codeRedemptions)
+    : null;
 
   const totalCodesUsed = creators.reduce(
     (sum, creator) => sum + (codeUsage?.get(creator.id)?.payments ?? 0),

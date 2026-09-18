@@ -35,22 +35,21 @@ import {
 import {
   CREATOR_RANGE_PRESETS,
   creatorRangePreset,
-  resolveRange,
 } from "@/lib/admin/ranges";
 import {
   creatorRevenue,
   formatMoney,
-  getRevenueBetween,
   loadSalesData,
   promoCodeStats,
+  revenueBetween,
 } from "@/lib/admin/sales";
 import {
   getBaselineCampaignViews,
   getCreator,
   getCreatorMetrics,
   getDailyDeltas,
-  getEarliestDataDay,
   listVideos,
+  resolveDashboardRange,
   toDailySeries,
 } from "@/lib/admin/ugc";
 
@@ -69,40 +68,40 @@ export default async function CreatorDetailPage({
   const { id } = await params;
   const search = await searchParams;
   const preset = creatorRangePreset(search?.range);
-  const earliest = await getEarliestDataDay();
-  const range = resolveRange(preset, { earliestDay: earliest });
+  const range = await resolveDashboardRange(preset);
 
-  const creator = await getCreator(id);
+  // One batch for everything the page reads.
+  const creatorPromise = getCreator(id);
+
+  const [creator, metrics, deltas, videos, salesData, baseline] = await Promise.all([
+    creatorPromise,
+    getCreatorMetrics(
+      creatorPromise.then((row) => (row ? [row] : [])),
+      range,
+    ),
+    getDailyDeltas(range, { creatorId: id, onlyMemo: true }),
+    // Scoped to the selected range: listing every post while the tiles above
+    // were windowed made the two disagree and looked like a bug.
+    listVideos({ creatorId: id, limit: 200, range }),
+    loadSalesData().catch(() => null),
+    getBaselineCampaignViews(VALUE_BASELINE_DAYS),
+  ]);
 
   if (!creator) {
     notFound();
   }
 
-  const [metrics, deltas, videos] = await Promise.all([
-    getCreatorMetrics([creator], range),
-    getDailyDeltas(range, { creatorId: id, onlyMemo: true }),
-    // Scoped to the selected range: listing every post while the tiles above
-    // were windowed made the two disagree and looked like a bug.
-    listVideos({ creatorId: id, limit: 200, range }),
-  ]);
-
   const entry = metrics.get(creator.id);
   const series = toDailySeries(deltas, range);
 
-  const codes = await loadSalesData()
-    .then((data) =>
-      creatorRevenue([creator], promoCodeStats(data, range), data.codeRedemptions).get(
+  const codes = salesData
+    ? creatorRevenue([creator], promoCodeStats(salesData, range), salesData.codeRedemptions).get(
         creator.id,
-      ),
-    )
-    .catch(() => null);
+      )
+    : null;
 
-  const baseline = await getBaselineCampaignViews(VALUE_BASELINE_DAYS);
-  const baselineRevenue = await getRevenueBetween(baseline.from, baseline.to).catch(
-    () => 0,
-  );
   const viewValue = computeViewValue({
-    revenue: baselineRevenue,
+    revenue: salesData ? revenueBetween(salesData, baseline.from, baseline.to) : 0,
     views: baseline.views,
     days: VALUE_BASELINE_DAYS,
   });
@@ -302,7 +301,6 @@ export default async function CreatorDetailPage({
 
               <ActionForm action={updateAccountAction} hideMessage>
                 <input type="hidden" name="account_id" value={account.id} />
-                <input type="hidden" name="creator_id" value={creator.id} />
                 <div
                   style={{
                     display: "flex",
@@ -342,14 +340,14 @@ export default async function CreatorDetailPage({
               <div style={{ display: "flex", gap: "0.25rem", marginTop: "0.5rem" }}>
                 <InlineAction
                   action={refreshAccountAction}
-                  fields={{ account_id: account.id, creator_id: creator.id }}
+                  fields={{ account_id: account.id }}
                   title="Re-read followers from the public profile page"
                 >
                   Refresh followers
                 </InlineAction>
                 <InlineAction
                   action={removeAccountAction}
-                  fields={{ account_id: account.id, creator_id: creator.id }}
+                  fields={{ account_id: account.id }}
                   variant="danger"
                   confirm={`Remove @${account.handle}? Its videos and view history are deleted too.`}
                 >

@@ -1762,6 +1762,30 @@ export type Database = {
         };
         Returns: string;
       };
+      admin_onboarding_breakdown: {
+        Args: {
+          p_from: string;
+          p_to: string;
+        };
+        Returns: {
+          question: string;
+          answer: string;
+          respondents: number;
+        }[];
+      };
+      admin_onboarding_grades: {
+        Args: {
+          p_from: string;
+          p_to: string;
+        };
+        Returns: {
+          grade_scale: number;
+          respondents: number;
+          average_current: number | string;
+          average_target: number | string;
+          aiming_higher: number;
+        }[];
+      };
       site_traffic_daily: {
         Args: {
           p_from: string;

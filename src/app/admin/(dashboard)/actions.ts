@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { z } from "zod";
 
 import type { ActionState } from "@/lib/admin/action-state";
@@ -10,7 +10,9 @@ import {
   removeAdminUser,
   requireAdmin,
 } from "@/lib/admin/auth";
+import { getOnlineVisitors } from "@/lib/admin/analytics";
 import { setVideoClassification } from "@/lib/admin/ugc";
+import { getRealtimeVisitors } from "@/lib/admin/vercel-analytics";
 import type {
   UgcContentMode,
   UgcPlatform,
@@ -36,11 +38,32 @@ import {
  *
  * Every action re-checks the allowlist: a server action is a public endpoint,
  * so the layout guard alone would not protect it.
+ *
+ * None of the actions call `revalidatePath`. A revalidation inside an action
+ * makes Next re-render the page before the action can answer — and, because
+ * the Stripe cache entries are tagged with the path, it also threw the whole
+ * Stripe read away, so "Saved." used to wait on a full creators-page render
+ * plus a fresh Stripe scan before it could appear. The forms refresh the page
+ * themselves once the answer is back, in a transition that leaves the current
+ * screen usable while the fresh one streams in. The TikTok profile scrape on
+ * a new account is not needed for the answer and is handed to `after()`.
  */
 
-function ok(message: string): ActionState {
-  return { status: "success", message };
+function ok(message: string, options?: { refreshAfterMs?: number }): ActionState {
+  return { status: "success", message, ...options };
 }
+
+/**
+ * How long the page waits before refreshing again to pick up background work.
+ *
+ * Only the TikTok profile scrape on a new account runs in the background: a
+ * single page fetch per account, comfortably done in this time, and a
+ * refresh that lands a little early only costs one more a moment later.
+ * Re-checking every video is awaited instead — it can involve a model call
+ * over every post on a mixed account, so no fixed wait would be honest, and
+ * two passes running at once would race each other's writes.
+ */
+const BACKGROUND_WORK_MS = 8000;
 
 function fail(message: string): ActionState {
   return { status: "error", message };
@@ -283,26 +306,27 @@ export async function createCreatorAction(
     );
   }
 
-  // Fill in followers and avatar straight away so the new card is not blank
-  // while waiting for the next scrape. Free, and failure is harmless.
-  const { data: accounts } = await serviceRole
-    .from("ugc_creator_accounts")
-    .select("id")
-    .eq("creator_id", creatorId);
+  // Fill in followers and avatar so the new card is not blank while waiting
+  // for the next scrape. Free, and failure is harmless — but it is a TikTok
+  // page fetch per account, so it runs after the answer has gone back.
+  after(async () => {
+    const { data: accounts } = await serviceRole
+      .from("ugc_creator_accounts")
+      .select("id")
+      .eq("creator_id", creatorId);
 
-  await Promise.all(
-    ((accounts ?? []) as Array<{ id: string }>).map((account) =>
-      refreshAccountProfile(account.id).catch(() => false),
-    ),
-  );
-
-  revalidatePath("/admin/creators");
-  revalidatePath("/admin");
+    await Promise.all(
+      ((accounts ?? []) as Array<{ id: string }>).map((account) =>
+        refreshAccountProfile(account.id).catch(() => false),
+      ),
+    );
+  });
 
   return ok(
     `Added ${name} with ${handles.length} account${handles.length === 1 ? "" : "s"}.${
       invalid.length > 0 ? ` Skipped unreadable link: ${invalid[0]}` : ""
-    }`,
+    } Follower counts are being fetched.`,
+    { refreshAfterMs: BACKGROUND_WORK_MS },
   );
 }
 
@@ -348,9 +372,6 @@ export async function updateCreatorAction(
   if (error) {
     return fail(`Could not save: ${error.message}`);
   }
-
-  revalidatePath("/admin/creators");
-  revalidatePath(`/admin/creators/${id}`);
 
   return ok("Saved.");
 }
@@ -399,16 +420,20 @@ export async function addAccountAction(
     );
   }
 
-  await Promise.all(
-    ((inserted ?? []) as Array<{ id: string }>).map((account) =>
-      refreshAccountProfile(account.id).catch(() => false),
+  // The profile scrape is a TikTok page fetch per account; it runs once the
+  // answer has gone back and the page picks the counts up on its next refresh.
+  after(() =>
+    Promise.all(
+      ((inserted ?? []) as Array<{ id: string }>).map((account) =>
+        refreshAccountProfile(account.id).catch(() => false),
+      ),
     ),
   );
 
-  revalidatePath(`/admin/creators/${creatorId}`);
-  revalidatePath("/admin/creators");
-
-  return ok(`Added ${handles.map((entry) => `@${entry.handle}`).join(", ")}.`);
+  return ok(
+    `Added ${handles.map((entry) => `@${entry.handle}`).join(", ")}. Follower counts are being fetched.`,
+    { refreshAfterMs: BACKGROUND_WORK_MS },
+  );
 }
 
 export async function updateAccountAction(
@@ -419,7 +444,6 @@ export async function updateAccountAction(
   const serviceRole = createSupabaseServiceRoleClient();
 
   const accountId = readString(formData, "account_id");
-  const creatorId = readString(formData, "creator_id");
   const contentMode = contentModeSchema.safeParse(readString(formData, "content_mode"));
   const status = statusSchema.safeParse(readString(formData, "status"));
 
@@ -440,9 +464,6 @@ export async function updateAccountAction(
   // Changing the account's mode changes what counts, so re-run detection.
   await reclassifyAll().catch(() => ({ updated: 0 }));
 
-  revalidatePath(`/admin/creators/${creatorId}`);
-  revalidatePath("/admin/creators");
-
   return ok("Account updated and videos re-checked.");
 }
 
@@ -454,7 +475,6 @@ export async function removeAccountAction(
   const serviceRole = createSupabaseServiceRoleClient();
 
   const accountId = readString(formData, "account_id");
-  const creatorId = readString(formData, "creator_id");
 
   if (!accountId) {
     return fail("Missing account.");
@@ -469,9 +489,6 @@ export async function removeAccountAction(
     return fail(`Could not remove the account: ${error.message}`);
   }
 
-  revalidatePath(`/admin/creators/${creatorId}`);
-  revalidatePath("/admin/creators");
-
   return ok("Account removed along with its video history.");
 }
 
@@ -482,15 +499,12 @@ export async function refreshAccountAction(
   await requireAdmin();
 
   const accountId = readString(formData, "account_id");
-  const creatorId = readString(formData, "creator_id");
 
   if (!accountId) {
     return fail("Missing account.");
   }
 
   const refreshed = await refreshAccountProfile(accountId);
-
-  revalidatePath(`/admin/creators/${creatorId}`);
 
   return refreshed
     ? ok("Follower counts refreshed from the public profile.")
@@ -533,9 +547,6 @@ export async function classifyVideoAction(
     return fail("Unknown decision.");
   }
 
-  revalidatePath("/admin/creators");
-  revalidatePath("/admin");
-
   return ok("Video updated.");
 }
 
@@ -548,10 +559,6 @@ export async function pollSyncAction(
   await requireAdmin();
 
   const result = await pollAndIngest();
-
-  revalidatePath("/admin/creators");
-  revalidatePath("/admin");
-  revalidatePath("/admin/settings");
 
   if (result.status === "running") {
     return ok("Still collecting. Check again in a minute.");
@@ -577,9 +584,6 @@ export async function reclassifyAction(
   await requireAdmin();
 
   const { updated } = await reclassifyAll();
-
-  revalidatePath("/admin/creators");
-  revalidatePath("/admin");
 
   return ok(
     updated === 0
@@ -632,9 +636,6 @@ export async function addRuleAction(
 
   await reclassifyAll().catch(() => ({ updated: 0 }));
 
-  revalidatePath("/admin/settings");
-  revalidatePath("/admin/creators");
-
   return ok("Rule added and every video re-checked.");
 }
 
@@ -660,9 +661,6 @@ export async function toggleRuleAction(
   }
 
   await reclassifyAll().catch(() => ({ updated: 0 }));
-
-  revalidatePath("/admin/settings");
-  revalidatePath("/admin/creators");
 
   return ok(active ? "Rule enabled." : "Rule disabled.");
 }
@@ -690,8 +688,6 @@ export async function deleteRuleAction(
   }
 
   await reclassifyAll().catch(() => ({ updated: 0 }));
-
-  revalidatePath("/admin/settings");
 
   return ok("Rule deleted and every video re-checked.");
 }
@@ -721,8 +717,6 @@ export async function addAdminAction(
     return fail(error instanceof Error ? error.message : "Could not add the admin.");
   }
 
-  revalidatePath("/admin/settings");
-
   return ok(`${parsed.data} can now sign in to the dashboard.`);
 }
 
@@ -748,7 +742,23 @@ export async function removeAdminAction(
     return fail(error instanceof Error ? error.message : "Could not remove the admin.");
   }
 
-  revalidatePath("/admin/settings");
-
   return ok("Admin access removed.");
+}
+
+/**
+ * The live visitor count on its own.
+ *
+ * The overview used to re-render the whole page every minute to keep this
+ * one number current — every Supabase read, the Stripe summary and the full
+ * page payload, for a figure that fits in an integer. The tile now polls this
+ * instead, and the page refreshes on the ordinary fifteen-minute beat.
+ */
+export async function readOnlineCountAction(): Promise<number> {
+  await requireAdmin();
+
+  // Vercel is the authority on the number; the beacon only stands in when
+  // Vercel is unavailable, so its query is not run for nothing on every tick.
+  const live = await getRealtimeVisitors();
+
+  return live ?? (await getOnlineVisitors()).length;
 }

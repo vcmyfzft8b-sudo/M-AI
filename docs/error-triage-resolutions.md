@@ -910,8 +910,11 @@ before believing a preview event describes a learner.
   `dpl_A4ZpymeFB2eXVrWSQBKbT9twZ8po`. One succeeded in between, at `16:45:43.934Z`, because
   `APPLE_SANDBOX_REVIEW_USER_IDS` had by then reached a running deployment
 - **Resolution:** [PR #425](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/425)
-- **Production cutoff:** the deployment that carries PR #425's merge commit. Until it is merged,
-  every event above is the recorded incident and none of them opens a second fix
+- **Production cutoff:** merge commit `ab4fd2b795724724a0ebef740054bc9f8b69a3f8`, deployment
+  `dpl_9ogeUKsTrBfScBzDcRjDiuMfsB5n`, ready and holding the production alias at
+  `2026-09-18T22:24:00Z`. Verified at `2026-09-18T22:25:05.836Z`: Apple's sandbox test notification
+  was requested against production and Apple recorded the attempt as `SUCCESS`, with the matching
+  `200` in the Vercel record for that deployment
 - **Regression test:** `tests/mobile-apple-notifications.test.mjs` — the first test fails on the
   release that produced these 503s
 

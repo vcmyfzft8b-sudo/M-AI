@@ -1,6 +1,6 @@
 import "server-only";
 
-import { AppStoreServerAPIClient, Environment, SignedDataVerifier, type JWSTransactionDecodedPayload } from "@apple/app-store-server-library";
+import { AppStoreServerAPIClient, Environment, SignedDataVerifier, VerificationException, VerificationStatus, type JWSTransactionDecodedPayload } from "@apple/app-store-server-library";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { entitlementFromVerifiedTransaction } from "@/lib/mobile/transaction";
 import roots from "@/lib/mobile/apple-roots.json";
@@ -41,6 +41,11 @@ export function appleBillingConfigured() {
   try { appleVerifier(); appleAPI(); return true; } catch { return false; }
 }
 
+/** A notification Apple can resend for three days without it ever becoming acceptable. */
+export class AppleNotificationRejected extends Error {
+  constructor(message: string, options?: { cause?: unknown }) { super(message, options); this.name = "AppleNotificationRejected"; }
+}
+
 async function verifyTransaction(jws: string, userId?: string) {
   let environment = appleEnvironment();
   let verified: JWSTransactionDecodedPayload;
@@ -50,18 +55,50 @@ async function verifyTransaction(jws: string, userId?: string) {
         || !process.env.APPLE_SANDBOX_REVIEW_USER_IDS) throw error;
     environment = Environment.SANDBOX;
     verified = await appleVerifier(environment).verifyAndDecodeTransaction(jws);
-    if (!verified.appAccountToken || !sandboxReviewer(verified.appAccountToken)) throw new Error("Sandbox account not allowed");
+    if (!verified.appAccountToken || !sandboxReviewer(verified.appAccountToken)) throw new AppleNotificationRejected("Sandbox account not allowed");
   }
   return { environment, verified };
 }
 
+/**
+ * Apple sends Sandbox notifications — its own connectivity test, and every TestFlight and App
+ * Review purchase event — to the production server URL, so production must be able to READ one.
+ * Reading is not authorising: the allowlist still decides what a sandbox payload may grant, in
+ * verifyTransaction below. Gating the decode on it made every sandbox notification a 503, which
+ * Apple then retried at 1, 12, 24, 48 and 72 hours.
+ */
 export async function verifyAppleNotification(jws: string) {
   try { return await appleVerifier().verifyAndDecodeNotification(jws); }
   catch (error) {
-    if (appleEnvironment() !== Environment.PRODUCTION || !process.env.APPLE_SANDBOX_REVIEW_USER_IDS) throw error;
-    // The nested verified transaction must still belong to an allowlisted account.
+    if (appleEnvironment() !== Environment.PRODUCTION) throw error;
     return appleVerifier(Environment.SANDBOX).verifyAndDecodeNotification(jws);
   }
+}
+
+// Only the statuses that describe the PAYLOAD as somebody else's: a bundle id or app id that is
+// not ours, an environment neither verifier matched, a certificate chain that is not three certs
+// long. Those read the same way for the next three days.
+//
+// Everything else stays retryable even when it sounds terminal, because the library reuses those
+// statuses for our own side of the exchange. VERIFICATION_FAILURE is the catch-all wrapper around
+// the whole of verifyJWT and is also what a chain that does not meet our pinned roots throws — so
+// it is what an unrotated root would throw for EVERY notification. FAILURE is mostly an OCSP
+// verdict: a responder we cannot parse, or a response that has gone stale. Acknowledging those
+// would quietly discard real billing notifications during an outage we could still recover from.
+const PERMANENT_VERIFICATION_STATUSES: ReadonlySet<VerificationStatus> = new Set([
+  VerificationStatus.INVALID_APP_IDENTIFIER, VerificationStatus.INVALID_ENVIRONMENT,
+  VerificationStatus.INVALID_CHAIN_LENGTH,
+]);
+
+/**
+ * Whether asking Apple to send this notification again could ever produce a different outcome.
+ * Retryable by default: only a positively identified dead end is worth acknowledging, because
+ * acknowledging a notification we should have kept loses it for good.
+ */
+export function appleNotificationRetryable(error: unknown) {
+  if (error instanceof AppleNotificationRejected) return false;
+  if (error instanceof VerificationException) return !PERMANENT_VERIFICATION_STATUSES.has(error.status);
+  return true;
 }
 
 export async function saveAppleTransaction(signedTransaction: string, userId?: string, refresh = false) {

@@ -277,9 +277,11 @@ export function OnboardingPaywall({
         })}
       </div>
 
+      {/* The app pays through the App Store, so the reassurance line must
+          never name Stripe there — not even while the products are loading. */}
       <p className="memo-paywall-due">
         <CircleCheck className="h-5 w-5" />
-        {t(trialEligible ? "paywall.nothingToday" : "paywall.securePayment")}
+        {t(trialEligible ? "paywall.nothingToday" : native ? "native.securePayment" : "paywall.securePayment")}
       </p>
 
       <button

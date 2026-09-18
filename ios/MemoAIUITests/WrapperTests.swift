@@ -295,13 +295,15 @@ final class WrapperTests: XCTestCase {
     }
 
     // Signed-out review on a fresh simulator: the sign-in screen must offer
-    // Apple, Google and email with no back arrow, and a password login must
-    // reach the AI-consent gate. Credentials come from MEMO_QA_EMAIL/PASSWORD.
-    @MainActor func testPreviewSignInScreenAndPasswordLogin() throws {
+    // Apple, Google and email with no back arrow, and the e-mail code login
+    // must reach the AI-consent gate. The account comes from MEMO_QA_EMAIL and
+    // its fixed review code from MEMO_QA_CODE (the Preview's
+    // APP_REVIEW_LOGIN_CODE for that account); there is no password screen.
+    @MainActor func testPreviewSignInScreenAndCodeLogin() throws {
         let env = ProcessInfo.processInfo.environment
         guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
-              let email = env["MEMO_QA_EMAIL"], let password = env["MEMO_QA_PASSWORD"] else {
-            throw XCTSkip("Requires a staging Preview and a synthetic password account")
+              let email = env["MEMO_QA_EMAIL"], let code = env["MEMO_QA_CODE"] else {
+            throw XCTSkip("Requires a staging Preview and a synthetic review account")
         }
         let app = XCUIApplication()
         app.launchEnvironment["MEMO_IOS_URL"] = preview
@@ -330,25 +332,28 @@ final class WrapperTests: XCTestCase {
         XCTAssertTrue(app.webViews.buttons.matching(contains("Google")).firstMatch.exists)
         XCTAssertTrue(app.webViews.buttons.matching(contains("Apple")).firstMatch.exists,
                       "Sign in with Apple must accompany Google (App Review 4.8)")
-        let passwordLink = app.webViews.links.matching(either("Sign in with a password", "Prijava z geslom")).firstMatch
-        // The button works only once React has hydrated; retry a few times.
-        for _ in 0..<4 where !passwordLink.exists {
-            emailButton.tap()
-            _ = passwordLink.waitForExistence(timeout: 6)
-        }
-        XCTAssertTrue(passwordLink.exists, "Continue with email must open the email entry page")
-        snap("S2 Email entry")
-        passwordLink.tap()
         let emailField = app.webViews.textFields.firstMatch
-        XCTAssertTrue(emailField.waitForExistence(timeout: 15))
+        // The button works only once React has hydrated; retry a few times.
+        for _ in 0..<4 where !emailField.exists {
+            emailButton.tap()
+            _ = emailField.waitForExistence(timeout: 6)
+        }
+        XCTAssertTrue(emailField.exists, "Continue with email must open the email entry page")
+        XCTAssertFalse(app.webViews.links.matching(either("Sign in with a password", "Prijava z geslom")).firstMatch.exists,
+                       "Sign-in is by e-mail code only, as on the web")
+        XCTAssertFalse(app.webViews.images.matching(contains("Memo")).firstMatch.exists, "The auth header carries no brand logo")
+        snap("S2 Email entry")
         emailField.tap()
         emailField.typeText(email)
-        let passwordField = app.webViews.secureTextFields.firstMatch
-        XCTAssertTrue(passwordField.waitForExistence(timeout: 5))
-        passwordField.tap()
-        passwordField.typeText(password)
-        snap("S3 Password form")
-        let submit = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@", "sign in", "prijav")).firstMatch
+        let send = app.webViews.buttons.matching(either("Continue", "Nadaljuj")).firstMatch
+        XCTAssertTrue(send.waitForExistence(timeout: 5))
+        send.tap()
+        let codeField = app.webViews.textFields.firstMatch
+        XCTAssertTrue(codeField.waitForExistence(timeout: 20), "Sending the code must open the code entry page")
+        snap("S3 Code entry")
+        codeField.tap()
+        codeField.typeText(code)
+        let submit = app.webViews.buttons.matching(either("Continue", "Nadaljuj")).firstMatch
         XCTAssertTrue(submit.waitForExistence(timeout: 5))
         submit.tap()
         // A first sign-in meets the AI-consent gate; an account that already

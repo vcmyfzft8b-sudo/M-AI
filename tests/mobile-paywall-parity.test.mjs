@@ -74,10 +74,13 @@ test("an ineligible Apple account sees no promised trial or free checkout", () =
   const html = paywall(true, trial.map(({ trialDays, ...product }) => product));
   assert.doesNotMatch(html, /Nothing to pay today|Start the 3-day free trial|3 days free/);
   assert.match(html, /Billed yearly: £124.99/);
+  // The reassurance line under the plans names the App Store, never Stripe.
+  assert.doesNotMatch(html, /Stripe/);
+  assert.match(html, /Secure payment through the App Store/);
 });
 test("missing StoreKit products cannot show Stripe prices as Apple prices", () => {
   const html = paywall(true, []);
-  assert.doesNotMatch(html, /€20|€130|Nothing to pay today/);
+  assert.doesNotMatch(html, /€20|€130|Nothing to pay today|Stripe/);
   assert.match(html, /disabled=""/);
 });
 test("Apple wheel offer keeps the PWA sheet and uses actual first-period prices", () => {

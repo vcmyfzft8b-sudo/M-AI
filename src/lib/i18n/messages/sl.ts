@@ -551,12 +551,6 @@ export const sl = {
   "api.codeSentTimerFailed": "Kodo smo poslali, vendar časovnika za ponovno pošiljanje ni bilo mogoče posodobiti. Počakaj minuto in poskusi znova.",
 
   /* ---- Auth screens ---- */
-  "auth.password.title": "Prijava z geslom",
-  "auth.password.copy": "Uporabi geslo, ki je že nastavljeno za tvoj račun Memo. Prijaviš se lahko tudi s kodo po e-pošti.",
-  "auth.password.label": "Geslo",
-  "auth.password.pending": "Prijavljanje…",
-  "auth.password.error": "E-poštni naslov ali geslo ni bilo sprejeto. Poskusi znova ali uporabi kodo po e-pošti.",
-  "auth.password.useCode": "Namesto tega uporabi kodo po e-pošti",
   "auth.signIn": "Prijava",
   "auth.signUp": "Registracija",
   "auth.continue.copy": "Prijavi se ali ustvari nov račun.",
@@ -2107,6 +2101,7 @@ export const sl = {
   "native.introCaption": "Popust velja za prvo obračunsko obdobje.",
   "native.priceChanged": "Applova cena ali upravičenost do ponudbe se je spremenila. Pred nadaljevanjem preveri posodobljene pakete.",
   "native.working": "Poteka…",
+  "native.securePayment": "Varno plačilo prek App Stora",
   "native.subscribe": "Naroči se z Applom",
   "native.restore": "Obnovi nakupe",
   "native.pending": "Nakup čaka na odobritev. Dostop se posodobi po odobritvi.",

@@ -1,4 +1,15 @@
-# iOS release readiness — 16 September 2026 (afternoon update)
+# iOS release readiness — 18 September 2026 update
+
+## 18 September 2026
+
+| Check | Result |
+| --- | --- |
+| Review account | `apple-review@memoai.eu` created in production, onboarded, on `APPLE_SANDBOX_REVIEW_USER_IDS`; signs in on production (verified by HTTP) and in the iPhone 17 Pro Max and iPad Pro 13" simulators; holds one generated note ("Plant Life Cycle", synthetic) with flashcards and a quiz. After PR #421 it signs in with the fixed code (`APP_REVIEW_LOGIN_CODE`), verified on the branch preview under the native user agent. |
+| Sandbox server notification | `requestTestNotification` → `https://www.memoai.eu/api/mobile/notifications`: SUCCESS. |
+| App Store Connect | Four subscriptions at level 1, READY_TO_SUBMIT, each with a review screenshot; USD prices aligned ($19.99 / $129.99, offers $9.99 / $64.99) and visible in the simulator paywall; age rating answered; 6 + 6 + 4 screenshots (iPhone 6.9", 6.5", iPad 13") COMPLETE; review contact, demo account and notes saved; build 1.0.0 (1) attached to version 1.0. Privacy questionnaire and the version's subscription attachment still need the account holder in the browser. |
+| Separation contract | Caught on the iPad simulator: the app's paywall showed "Secure payment through Stripe" while StoreKit was still loading. Fixed in PR #421 (`native.securePayment`), guarded by `tests/mobile-paywall-parity.test.mjs`. 48 mobile tests and the full suite (1,365) pass. |
+| Still not verified | Everything that needs the physical iPhone: microphone/tutor, native Google and Apple sign-in round trips, Sandbox purchases, Manage Apple subscriptions, account deletion end to end. |
+
 
 **Not ready for App Review or production activation.** This is the release gate,
 not a claim that compiling or passing the wrapper tests verifies the whole app.

@@ -1584,8 +1584,13 @@ export function HomeDashboard({
    * The wheel is on offer while the server says there is a spin left and this
    * session has not already used it. `hasClaimedDiscount` is what covers the
    * gap between spinning and the server catching up.
+   *
+   * The app adds one more condition — StoreKit must report an eligible
+   * half-price offer — but it never drops the daily limit: a spin in the app
+   * is recorded on the same profile column as a spin on the web, so the wheel
+   * comes back tomorrow on both, not after every relaunch.
    */
-  const wheelAvailable = (native ? nativeHalfOffAvailable : canSpinWheel === true) && !hasClaimedDiscount;
+  const wheelAvailable = canSpinWheel === true && (!native || nativeHalfOffAvailable) && !hasClaimedDiscount;
   const showDiscountPromo = !hasPaidAccess && wheelAvailable && inLibraryView;
   /*
    * ...and whenever it is not on offer, the slot keeps an ordinary way to buy.

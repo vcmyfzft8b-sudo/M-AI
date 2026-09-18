@@ -535,12 +535,6 @@ export const bs: Messages = {
   "api.codeSentTimerFailed": "Poslali smo kod, ali odbrojavanje za ponovno slanje nije bilo moguće ažurirati. Sačekaj minutu i pokušaj ponovo.",
 
   /* ---- Auth screens ---- */
-  "auth.password.title": "Prijava lozinkom",
-  "auth.password.copy": "Upotrijebi lozinku koja je već postavljena za tvoj Memo račun. Možeš se prijaviti i kodom iz e-pošte.",
-  "auth.password.label": "Lozinka",
-  "auth.password.pending": "Prijava…",
-  "auth.password.error": "E-pošta ili lozinka nije prihvaćena. Pokušaj ponovo ili upotrijebi kod iz e-pošte.",
-  "auth.password.useCode": "Umjesto toga upotrijebi kod iz e-pošte",
   "auth.signIn": "Prijava",
   "auth.signUp": "Registracija",
   "auth.continue.copy": "Prijavi se ili napravi novi račun.",
@@ -2085,6 +2079,7 @@ export const bs: Messages = {
   "native.introCaption": "Popust važi za prvi obračunski period.",
   "native.priceChanged": "Appleova cijena ili pravo na ponudu se promijenilo. Prije nastavka provjeri ažurirane pakete.",
   "native.working": "U toku…",
+  "native.securePayment": "Sigurno plaćanje putem App Storea",
   "native.subscribe": "Pretplati se putem Applea",
   "native.restore": "Obnovi kupovine",
   "native.pending": "Kupovina čeka odobrenje. Pristup će se ažurirati nakon odobrenja.",

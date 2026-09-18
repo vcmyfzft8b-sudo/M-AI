@@ -19450,10 +19450,20 @@
   display: grid;
   gap: 1.1rem;
   width: min(100%, 28rem);
+  /* Never wider than the stage. With a large text size an e-mail address in
+     the copy is one unbreakable word wider than the screen; without these the
+     grid column grew to fit it and the whole card ran off the right edge. */
+  min-width: 0;
+  max-width: 100%;
   padding: 1.5rem 1.25rem 1.6rem;
   border-radius: 26px;
   background: var(--surface);
   box-shadow: var(--shadow);
+}
+
+.memo-auth-card > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* The panel carried no mark at all, so the mascot — the app's whole identity —
@@ -19488,6 +19498,7 @@
   font-size: 0.95rem;
   line-height: 1.5;
   text-wrap: pretty;
+  overflow-wrap: anywhere;
 }
 
 /* The sign-in line is one short sentence and reads best held to a narrow
@@ -19681,6 +19692,12 @@
   color: var(--danger);
 }
 
+.memo-auth-inline-link {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .memo-auth-actions {
   display: grid;
   gap: 0.5rem;
@@ -19693,6 +19710,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.5rem;
   width: 100%;
   font-variant-numeric: tabular-nums;
 }

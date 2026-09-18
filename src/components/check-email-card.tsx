@@ -160,7 +160,7 @@ export function CheckEmailCard(props: {
                 : t("auth.resendNow")}
           </button>
         </form>
-        <Link href="/" className="memo-auth-ghost">
+        <Link href="/auth/continue" className="memo-auth-ghost">
           {t("auth.useAnotherMethod")}
         </Link>
       </div>

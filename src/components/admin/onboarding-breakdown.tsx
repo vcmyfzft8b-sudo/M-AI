@@ -6,22 +6,154 @@ import type {
 } from "@/lib/admin/onboarding";
 
 /**
- * One survey question as a card: the share of each answer as a bar, the
- * percentage beside it and the raw count for anyone checking the arithmetic.
- * The bars are scaled to the most popular answer, so the shape of the
- * distribution reads at a glance, while the percentages are of everyone who
- * answered.
+ * One survey question as a card: a donut of the answer shares beside a legend
+ * that carries every option with its share and raw count.
+ *
+ * The donut is for the shape at a glance and the legend for the figures, so
+ * neither has to do the other's job: a slice is never labelled with a number
+ * and a legend row is never asked to convey proportion. Past five answers
+ * the smaller ones fold into one neutral "other" slice — a donut with a dozen
+ * slivers reads as noise — but every row still appears in the legend, marked
+ * as part of that slice.
  */
-function AnswerRow({ answer, max }: { answer: OnboardingAnswer; max: number }) {
-  const width = max > 0 ? Math.max((answer.count / max) * 100, answer.count > 0 ? 2 : 0) : 0;
+
+/** How many answers get a slice of their own before the rest fold together. */
+const MAX_SLICES = 5;
+
+const SIZE = 104;
+const STROKE = 20;
+const RADIUS = (SIZE - STROKE) / 2;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+type Slice = {
+  key: string;
+  label: string;
+  count: number;
+  share: number;
+  /** Index into the categorical series, or `null` for the folded remainder. */
+  series: number | null;
+};
+
+function toSlices(answers: OnboardingAnswer[], answered: number): Slice[] {
+  const chosen = answers.filter((answer) => answer.count > 0);
+  const own = chosen.slice(0, MAX_SLICES);
+  const rest = chosen.slice(MAX_SLICES);
+
+  const slices: Slice[] = own.map((answer, index) => ({
+    key: answer.value,
+    label: answer.label,
+    count: answer.count,
+    share: answer.share,
+    series: index,
+  }));
+
+  if (rest.length > 0) {
+    const count = rest.reduce((sum, answer) => sum + answer.count, 0);
+
+    slices.push({
+      key: "__other",
+      label: `${rest.length} other answers`,
+      count,
+      share: answered > 0 ? count / answered : 0,
+      series: null,
+    });
+  }
+
+  return slices;
+}
+
+function Donut({ slices, answered }: { slices: Slice[]; answered: number }) {
+  // Where each slice starts along the ring, as a running total of the shares
+  // before it — worked out ahead of the markup so nothing mutates mid-render.
+  const starts: number[] = [];
+  let running = 0;
+
+  for (const slice of slices) {
+    starts.push(running);
+    running += slice.share;
+  }
 
   return (
+    <svg
+      className="admin-donut"
+      viewBox={`0 0 ${SIZE} ${SIZE}`}
+      width={SIZE}
+      height={SIZE}
+      role="img"
+      aria-label={slices
+        .map((slice) => `${slice.label} ${formatPercent(slice.share, 0)}`)
+        .join(", ")}
+    >
+      {slices.map((slice, index) => {
+        const length = CIRCUMFERENCE * slice.share;
+        const dashOffset = -(CIRCUMFERENCE * starts[index]);
+
+        return (
+          <circle
+            key={slice.key}
+            className="admin-donut-slice"
+            data-series={slice.series ?? "other"}
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={RADIUS}
+            fill="none"
+            strokeWidth={STROKE}
+            strokeDasharray={`${length} ${CIRCUMFERENCE - length}`}
+            strokeDashoffset={dashOffset}
+            // Starts at twelve o'clock and runs clockwise, the way a share
+            // is usually read.
+            transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
+          >
+            <title>
+              {`${slice.label}: ${formatPercent(slice.share, 0)} (${formatExact(slice.count)})`}
+            </title>
+          </circle>
+        );
+      })}
+      {/* The 2px surface gap between slices, drawn over the joins. */}
+      {slices.length > 1 &&
+        slices.map((slice, index) => {
+          const angle = starts[index] * 2 * Math.PI - Math.PI / 2;
+          const inner = RADIUS - STROKE / 2 - 1;
+          const outer = RADIUS + STROKE / 2 + 1;
+
+          return (
+            <line
+              key={`gap-${slice.key}`}
+              className="admin-donut-gap"
+              x1={SIZE / 2 + inner * Math.cos(angle)}
+              y1={SIZE / 2 + inner * Math.sin(angle)}
+              x2={SIZE / 2 + outer * Math.cos(angle)}
+              y2={SIZE / 2 + outer * Math.sin(angle)}
+            />
+          );
+        })}
+      <text
+        className="admin-donut-total"
+        x={SIZE / 2}
+        y={SIZE / 2}
+        textAnchor="middle"
+        dominantBaseline="central"
+      >
+        {formatExact(answered)}
+      </text>
+    </svg>
+  );
+}
+
+function LegendRow({
+  answer,
+  series,
+}: {
+  answer: OnboardingAnswer;
+  /** The slice this row belongs to: its own series, the folded one, or none. */
+  series: number | "other" | "none";
+}) {
+  return (
     <div className="admin-breakdown-row" data-empty={answer.count === 0 ? "true" : undefined}>
+      <span className="admin-swatch" data-series={series} aria-hidden="true" />
       <span className="admin-breakdown-label" title={answer.label}>
         {answer.label}
-      </span>
-      <span className="admin-bar-track">
-        <span className="admin-bar-fill" style={{ width: `${width}%` }} />
       </span>
       <span className="admin-breakdown-share">{formatPercent(answer.share, 0)}</span>
       <span className="admin-breakdown-count">{formatExact(answer.count)}</span>
@@ -30,7 +162,22 @@ function AnswerRow({ answer, max }: { answer: OnboardingAnswer; max: number }) {
 }
 
 export function QuestionCard({ question }: { question: OnboardingQuestionBreakdown }) {
-  const max = Math.max(0, ...question.answers.map((answer) => answer.count));
+  const slices = toSlices(question.answers, question.answered);
+
+  // Which slice each legend row belongs to: its own series for the first
+  // five with a count, the folded slice for the rest, none for a zero.
+  const seriesByValue = new Map<string, number | "other" | "none">();
+  let seen = 0;
+
+  for (const answer of question.answers) {
+    if (answer.count === 0) {
+      seriesByValue.set(answer.value, "none");
+      continue;
+    }
+
+    seriesByValue.set(answer.value, seen < MAX_SLICES ? seen : "other");
+    seen += 1;
+  }
 
   return (
     <article className="admin-breakdown-card">
@@ -44,10 +191,17 @@ export function QuestionCard({ question }: { question: OnboardingQuestionBreakdo
       {question.answered === 0 ? (
         <p className="admin-breakdown-empty">Nobody answered this in the window.</p>
       ) : (
-        <div className="admin-breakdown-rows">
-          {question.answers.map((answer) => (
-            <AnswerRow key={answer.value} answer={answer} max={max} />
-          ))}
+        <div className="admin-breakdown-body">
+          <Donut slices={slices} answered={question.answered} />
+          <div className="admin-breakdown-rows">
+            {question.answers.map((answer) => (
+              <LegendRow
+                key={answer.value}
+                answer={answer}
+                series={seriesByValue.get(answer.value) ?? "none"}
+              />
+            ))}
+          </div>
         </div>
       )}
     </article>

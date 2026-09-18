@@ -63,6 +63,17 @@ export function LandingAuthOptions(props: {
   const [notice, setNotice] = useState("");
   const emailHref = `/auth/email-entry?mode=${props.mode ?? "signup"}&next=${encodeURIComponent(props.next)}`;
 
+  /*
+   * The wrapper replies to a failed native sign-in with its localised
+   * "action failed" text plus, in brackets, the step that failed (the
+   * provider's error, a rejected callback, a server status). The headline is
+   * ours; the bracketed detail is kept so a failure can be reported exactly.
+   */
+  function signInFailure(error: unknown) {
+    const detail = error instanceof Error ? /\[(.+)\]\s*$/.exec(error.message)?.[1] : undefined;
+    return detail ? `${t("native.signInFailed")} (${detail})` : t("native.signInFailed");
+  }
+
   function isPending(target: Exclude<PendingTarget, null>) {
     return pendingTarget === target;
   }
@@ -81,7 +92,7 @@ export function LandingAuthOptions(props: {
             setPendingTarget("google"); setNotice("");
             void nativeRequest<{ status: string }>("signInWithGoogle").then(result => {
               if (result.status === "signedIn") window.location.assign(props.next);
-            }).catch(() => setNotice(t("native.verifyFailed"))).finally(() => setPendingTarget(null));
+            }).catch(error => setNotice(signInFailure(error))).finally(() => setPendingTarget(null));
           }}
         >
           <input type="hidden" name="next" value={props.next} />
@@ -109,7 +120,7 @@ export function LandingAuthOptions(props: {
             setPendingTarget("apple"); setNotice("");
             void nativeRequest<{ status: string }>("signInWithApple").then(result => {
               if (result.status === "signedIn") window.location.assign(props.next);
-            }).catch(() => setNotice(t("native.verifyFailed"))).finally(() => setPendingTarget(null));
+            }).catch(error => setNotice(signInFailure(error))).finally(() => setPendingTarget(null));
           }}
         >
           <input type="hidden" name="next" value={props.next} />

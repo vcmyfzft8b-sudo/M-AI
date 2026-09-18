@@ -440,7 +440,15 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                     replyHandler(["status": "done"], nil)
                 default: replyHandler(nil, "Unsupported request")
                 }
-            } catch { replyHandler(nil, text("actionFailed")) }
+            } catch {
+                // A reason travels with the generic text so the page can show
+                // what actually failed; the web copy stays the headline.
+                let reason: String?
+                if let failure = error as? BridgeFailure { reason = failure.reason }
+                else if let message = (error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String { reason = message }
+                else { reason = nil }
+                replyHandler(nil, reason.map { "\(text("actionFailed")) [\($0)]" } ?? text("actionFailed"))
+            }
         }
     }
 
@@ -452,7 +460,11 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
               headers: {'content-type': 'application/json'},
               body: body === null ? undefined : JSON.stringify(body)
             });
-            if (!response.ok) throw new Error('Request failed');
+            if (!response.ok) {
+              let detail = '';
+              try { detail = (await response.json()).error || ''; } catch {}
+              throw new Error('server ' + response.status + (detail ? ': ' + detail : ''));
+            }
             return await response.json();
             """, arguments: ["path": path, "body": body as Any? ?? NSNull()], in: nil, contentWorld: .page)
         guard let result = value as? [String: Any] else { throw Store.StoreError.unavailable }

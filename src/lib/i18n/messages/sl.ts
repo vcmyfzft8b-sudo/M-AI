@@ -2088,6 +2088,7 @@ export const sl = {
   // Native iOS app and Apple subscription controls.
   "native.unavailable": "Naročnine trenutno niso na voljo. Poskusi znova.",
   "native.verifyFailed": "Nakupa še ni bilo mogoče potrditi. Poskusi z možnostjo Obnovi nakupe; ponovno plačilo ni potrebno.",
+  "native.signInFailed": "Prijave ni bilo mogoče dokončati. Poskusi znova.",
   "native.year": "leto",
   "native.month": "mesec",
   "native.renewal": "Plačilo se obračuna tvojemu računu Apple. Naročnina se samodejno podaljša, razen če jo prekličeš vsaj 24 ur pred koncem trenutnega obdobja. Upravljaj ali prekliči jo v nastavitvah naročnin Apple.",

@@ -893,3 +893,51 @@ defects, exactly as a verification session can re-provoke the bug being fixed (s
 the top of this file). Deleting a seeded account while its browser session is still open is the
 clearest case — prefer closing the page before deleting the user, and read the `os` / `browser` tags
 before believing a preview event describes a learner.
+
+## 2026-09-18 — Production could not read a Sandbox App Store notification
+
+- **Vercel fingerprints:** `server_error:POST /api/mobile/notifications:` and the same route with
+  the `[DEP0169] DeprecationWarning: url.parse()` line, which is Node warning about a dependency on
+  the same request and says nothing about the failure
+- **Sentry:** none, and that is the second half of the defect — the route's `catch { }` bound no
+  error and reported nothing, so the only trace of this anywhere was the error-rate chart
+- **Route:** `POST /api/mobile/notifications` — Apple's App Store Server Notifications V2 webhook
+- **Operation:** verifying a notification whose payload is signed for the Sandbox environment
+- **Normalized message:** none. A 503 with an empty body and an empty `traceId`
+- **Historical events:** `2026-09-18T16:37:11.536Z` (Apple's sandbox test notification, which Apple
+  itself recorded as `UNSUCCESSFUL_HTTP_RESPONSE_CODE`), `16:42:52.237Z`, `16:42:53Z`, `16:42:54Z`
+  on deployment `dpl_7U9wTrwZTKpGrsb2gCaoxk9FXyte`, and `19:11:54.230Z` on
+  `dpl_A4ZpymeFB2eXVrWSQBKbT9twZ8po`. One succeeded in between, at `16:45:43.934Z`, because
+  `APPLE_SANDBOX_REVIEW_USER_IDS` had by then reached a running deployment
+- **Resolution:** [PR #423](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/423)
+- **Production cutoff:** the deployment that carries PR #423's merge commit. Until it is merged,
+  every event above is the recorded incident and none of them opens a second fix
+- **Regression test:** `tests/mobile-apple-notifications.test.mjs` — the first test fails on the
+  release that produced these 503s
+
+Apple delivers Sandbox notifications to the **production** server URL: its own connectivity test,
+and every TestFlight and App Review purchase event. `verifyAppleNotification`
+(`src/lib/mobile/apple.ts`) fell back to the sandbox verifier only when
+`APPLE_SANDBOX_REVIEW_USER_IDS` was set, and that variable is an allowlist of accounts permitted to
+hold a sandbox entitlement — an authorization list, standing in for a decoding capability. With it
+unset, or simply not yet on the running deployment, production could not read a sandbox payload at
+all. Apple resends anything but a 200 at 1, 12, 24, 48 and 72 hours, so one refused notification
+buys three days of 5xx. PR #423 separates the two: production always tries the sandbox verifier,
+and the allowlist keeps its real job in `verifyTransaction`, which still refuses a sandbox
+transaction whose `appAccountToken` is not on it.
+
+The route now also classifies the failure. Apple reads only the status, so 503 means "send it
+again" and is right for a database fault, a revocation check that could not run, or an Apple
+outage; a payload that will never verify — wrong signature, wrong bundle id, wrong environment, or
+a sandbox account nobody allowlisted — is acknowledged with a 200 and reported as a warning
+instead, because no number of retries changes the answer. `appleNotificationRetryable` decides this
+from the Apple library's own `VerificationStatus`, never from the text of a message, and anything
+it does not recognise stays retryable: acknowledging a notification we should have kept loses it.
+
+**Do not read a future 503 here as this bug returning.** This one is silent by construction; every
+failure after PR #423 carries a Sentry event tagged `apple_notification_retry` (503) or
+`apple_notification_rejected` (200). A 503 with no Sentry event beside it on a release at or after
+the merge would mean the route never ran — a platform fault, not this. A recurrence of *this*
+defect would show as `apple_notification_rejected` with `VerificationException INVALID_ENVIRONMENT`
+on a Sandbox payload, and the first thing to check then is whether `appleEnvironment()` still
+returns `PRODUCTION` for the deployment that answered.

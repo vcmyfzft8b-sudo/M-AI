@@ -94,28 +94,31 @@ export function LibraryChat({
   }, [messages, isTyping, streamingAnswer, open]);
 
   /*
-   * And again whenever the keyboard resizes the log under it. The effect above
-   * only runs when the conversation changes, and the keyboard changes nothing
-   * about the conversation — it just takes half the log away, leaving the last
-   * message stranded behind the composer.
+   * And again whenever the keyboard takes the log's height away. The effect
+   * above only runs when the conversation changes, and the keyboard changes
+   * nothing about the conversation — it just takes half the log away, leaving
+   * the last message stranded behind the composer.
+   *
+   * Watched as a size rather than as a viewport event: the log gives up its
+   * height over the quarter second the keyboard's inset is drawn in, while
+   * `visualViewport` reports the whole keyboard once — and in the wrapper it
+   * reports it before any of that is drawn, so a restick hung off it lands on
+   * a log that is still full height and does nothing. See the same fix on the
+   * note's own chat in `lecture-workspace`.
    */
   useEffect(() => {
-    const viewport = window.visualViewport;
+    const node = logRef.current;
 
-    if (!viewport || !open) {
+    if (!node || !open) {
       return;
     }
 
-    const stick = () => {
-      const node = logRef.current;
+    const sizes = new ResizeObserver(() => {
+      node.scrollTop = node.scrollHeight;
+    });
 
-      if (node) {
-        node.scrollTop = node.scrollHeight;
-      }
-    };
-
-    viewport.addEventListener("resize", stick);
-    return () => viewport.removeEventListener("resize", stick);
+    sizes.observe(node);
+    return () => sizes.disconnect();
   }, [open]);
 
   useEffect(() => {

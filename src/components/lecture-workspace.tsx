@@ -1805,22 +1805,31 @@ export function LectureWorkspace({
      * The keyboard shortens the log without moving what is in it, so the line
      * that was resting on the composer ends up behind it — you tap the field to
      * answer and the message you were answering is gone. Nothing changes in the
-     * DOM when that happens, so the observer above never fires; the viewport is
-     * the only thing that moved.
+     * DOM when that happens, so the observer above never fires.
+     *
+     * Watched as a size rather than as a viewport event, because the log does
+     * not lose its height when the viewport does. The keyboard's inset is drawn
+     * over a quarter of a second and the log gives up its height along with it,
+     * while `visualViewport` reports the whole thing once — and in the wrapper
+     * it reports it *before* any of that has been drawn, so the one restick it
+     * triggers lands on a log that is still its full height and does nothing.
+     * Measured on an iPhone 17 with sixteen messages in the log: the last four
+     * ended up behind the composer, where the same chat in Safari — which
+     * reports the keyboard in pieces, and so resticks all the way down — keeps
+     * them. A size observer answers every frame of the shrink on both.
      */
-    const viewport = window.visualViewport;
-    const restick = () => {
+    const sizes = new ResizeObserver(() => {
       if (pinned) {
         stick();
       }
-    };
+    });
 
-    viewport?.addEventListener("resize", restick);
+    sizes.observe(log);
 
     return () => {
       observer.disconnect();
+      sizes.disconnect();
       log.removeEventListener("scroll", handleScroll);
-      viewport?.removeEventListener("resize", restick);
     };
   }, [chatLogNode]);
 

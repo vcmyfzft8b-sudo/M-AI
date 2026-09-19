@@ -12,13 +12,12 @@ import WidgetKit
 struct RecordingLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RecordingActivityAttributes.self) { context in
+            // No background tint: the system's own material follows the
+            // phone's appearance, so the banner is dark on a dark Lock Screen
+            // instead of a pale card pinned to one theme. The lockup carries a
+            // white sticker outline around every stroke, so the wordmark reads
+            // on either ground without a second asset.
             LockScreenBanner(context: context)
-                // The brand lockup is drawn in Memo's own near-black on a pale
-                // sticker outline. Left on the system's translucent Lock Screen
-                // material it is dark on dark, so the banner brings Memo's
-                // canvas with it and reads the same at night as in daylight.
-                .activityBackgroundTint(.memoCanvas)
-                .activitySystemActionForegroundColor(.memoInk)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -76,7 +75,7 @@ private struct LockScreenBanner: View {
             Spacer(minLength: 8)
             Clock(state: context.state)
                 .font(.system(.title, design: .rounded).weight(.semibold))
-                .foregroundStyle(Color.memoInk)
+                .foregroundStyle(.primary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -91,7 +90,7 @@ private struct StatusLine: View {
             RecordingDot(isPaused: state.isPaused)
             Text(state.status)
                 .font(.subheadline)
-                .foregroundStyle(Color.memoInk.opacity(0.65))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
     }
@@ -102,7 +101,7 @@ private struct RecordingDot: View {
 
     var body: some View {
         Circle()
-            .fill(isPaused ? Color.memoInk.opacity(0.4) : Color.red)
+            .fill(isPaused ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.red))
             .frame(width: 8, height: 8)
     }
 }
@@ -160,11 +159,4 @@ private struct MemoMark: View {
             .aspectRatio(contentMode: .fit)
             .frame(width: size, height: size)
     }
-}
-
-private extension Color {
-    /// Memo's page background and body colour, so the banner looks like the app
-    /// rather than like a system notification.
-    static let memoCanvas = Color(red: 0.945, green: 0.945, blue: 0.961)
-    static let memoInk = Color(red: 0.118, green: 0.098, blue: 0.180)
 }

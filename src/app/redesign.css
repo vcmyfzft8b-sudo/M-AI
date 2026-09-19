@@ -20926,6 +20926,19 @@
    gap, and the app runs that layout at every size.
    ========================================================================= */
 
+/*
+ * The coral call to action carries a glow wider than the button. The sheet's
+ * body scrolls, and `overflow-y: auto` clips the other axis too — CSS has no
+ * "scroll one way, overflow the other" — so the scroll box, whose edges sit
+ * exactly on the button's, sliced the glow off in a hard rectangle. The
+ * padding gives the glow room to fade out inside the scroller; the matching
+ * negative margin puts every row back where it was, so nothing moves.
+ */
+.note-source-modal .note-source-modal-body {
+  margin-inline: -1.5rem;
+  padding-inline: 1.5rem;
+}
+
 @media (min-width: 1100px) {
   .note-source-modal-stack {
     width: 39rem;

@@ -64,6 +64,7 @@ import { palacePreparation } from "@/lib/palace/preparation";
 import { StudyQuizQuestion, StudyPracticeQuestion } from "@/components/study-question";
 import { StudyFlashcard } from "@/components/study-flashcard";
 import { LectureTutor } from "@/components/lecture-tutor";
+import { ChatMarkdown } from "@/components/chat-markdown";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { requestChatAnswer } from "@/lib/chat-stream-client";
@@ -1162,9 +1163,18 @@ function sanitizePracticeTestSessionState(
 function ChatBubble({ message }: { message: ChatMessageWithCitations }) {
   const assistant = message.role === "assistant";
 
+  /*
+   * Only the tutor's side is markdown. What the learner typed is shown exactly
+   * as they typed it — an asterisk in their question is an asterisk, not the
+   * start of emphasis, and their own line breaks are kept by `pre-wrap`.
+   */
   return (
     <div className={assistant ? "memo-bubble-bot" : "memo-bubble-user"}>
-      <p className="memo-bubble-copy">{message.content}</p>
+      {assistant ? (
+        <ChatMarkdown content={message.content} />
+      ) : (
+        <p className="memo-bubble-copy">{message.content}</p>
+      )}
     </div>
   );
 }
@@ -3852,10 +3862,7 @@ export function LectureWorkspace({
               placeholder only shows before the first token arrives. */}
           {streamingAnswer ? (
             <div className="memo-bubble-bot streaming">
-              <p className="memo-bubble-copy">
-                {streamingAnswer}
-                <span className="memo-caret" aria-hidden="true" />
-              </p>
+              <ChatMarkdown content={streamingAnswer} streaming />
             </div>
           ) : isSending ? (
             <TypingDots />

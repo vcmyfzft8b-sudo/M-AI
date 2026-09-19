@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { stripDashPunctuation } from "@/lib/ai/answer-punctuation";
 import { createEmbeddings } from "@/lib/ai/embeddings";
 import { generateStructuredObject, streamStructuredObject } from "@/lib/ai/json";
 import {
@@ -49,9 +50,11 @@ const libraryAnswerSchema = z.object({
     .string()
     .min(1)
     .describe(
-      "The reply, in the language of the learner's last message. It opens with the answer "
-        + "itself — no preamble — and is around 60 words and never more than 120. It ends with "
-        + "exactly one short question unless they were only saying thanks or goodbye.",
+      "The reply, in the language of the learner's last message, written as Markdown: a blank "
+        + "line between paragraphs, \"- \" for a genuine list, **bold** for the one term that "
+        + "matters. It opens with the answer itself — no preamble — and is around 60 words and "
+        + "never more than 120. It ends with exactly one short question unless they were only "
+        + "saying thanks or goodbye.",
     ),
   /** Titles of the notes the answer leaned on, so the UI can show its sources. */
   usedNotes: z.array(z.string()).max(6),
@@ -233,7 +236,13 @@ async function streamLibraryAnswer(
   }
 
   try {
-    return await streamStructuredObject({ ...call, streamField: "answer", onDelta });
+    return await streamStructuredObject({
+      ...call,
+      streamField: "answer",
+      // Cleaned on the way out as well as at the end, so the text the learner
+      // watches arrive matches the text they are left with.
+      onDelta: (text) => onDelta(stripDashPunctuation(text)),
+    });
   } catch (error) {
     console.error("[library-chat] streaming failed, falling back to a plain call", error);
     return null;
@@ -347,7 +356,8 @@ export async function answerLibraryChat(params: {
     (await generateStructuredObject(call));
 
   return {
-    answer: result.answer,
+    // The em dash is out by instruction and, here, by construction. See answer-punctuation.ts.
+    answer: stripDashPunctuation(result.answer),
     usedNotes: result.usedNotes,
     noteCount: notes.length,
     usedTranscripts: useTranscripts,

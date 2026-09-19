@@ -62,9 +62,11 @@ export const chatAnswerSchema = z.object({
     .string()
     .min(1)
     .describe(
-      "The reply, in the language of the learner's last message. It opens with the answer "
-        + "itself — no preamble — and is around 60 words and never more than 120. It ends with "
-        + "exactly one short question unless they were only saying thanks or goodbye.",
+      "The reply, in the language of the learner's last message, written as Markdown: a blank "
+        + "line between paragraphs, \"- \" for a genuine list, **bold** for the one term that "
+        + "matters. It opens with the answer itself — no preamble — and is around 60 words and "
+        + "never more than 120. It ends with exactly one short question unless they were only "
+        + "saying thanks or goodbye.",
     ),
   citations: z.array(citationSchema).max(4),
 });

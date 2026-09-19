@@ -7,6 +7,7 @@ import { useT } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
 import { useInstantNavigation } from "@/components/navigation-loading";
+import { ChatMarkdown } from "@/components/chat-markdown";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { sheetClass, useSheet } from "@/components/use-sheet";
@@ -368,7 +369,11 @@ export function LibraryChat({
               <span className="memo-avatar">
                 <Image src="/memo-mascot.png" alt="" width={320} height={288} />
               </span>
-              <div>{message.text}</div>
+              {/* Markdown on the tutor's side only; the learner's question is
+                  shown exactly as they typed it. */}
+              <div>
+                <ChatMarkdown content={message.text} />
+              </div>
             </div>
           ) : (
             <div key={message.id} className="memo-homechat-question">
@@ -386,8 +391,7 @@ export function LibraryChat({
               <Image src="/memo-mascot.png" alt="" width={320} height={288} />
             </span>
             <div>
-              {streamingAnswer}
-              <span className="memo-caret" aria-hidden="true" />
+              <ChatMarkdown content={streamingAnswer} streaming />
             </div>
           </div>
         ) : isTyping ? (

@@ -173,6 +173,30 @@ function buildContext(source) {
     .map((text, idx) => ({ idx, startMs: idx * 30_000, endMs: (idx + 1) * 30_000, text: text.trim() }));
 }
 
+/*
+ * What the answer's Markdown actually is. The reply is rendered (ChatMarkdown), so the two
+ * things worth counting are opposite failures: prose that never breaks into paragraphs, and a
+ * two-sentence answer served as a bulleted list because the model was told lists exist.
+ */
+function describeLayout(answer) {
+  const bullets = (answer.match(/^\s*([-*]|\d+\.)\s+/gm) ?? []).length;
+
+  return {
+    /*
+     * The em dash is the tell the product owner asked to be rid of, and a model reaches for it
+     * constantly. Counted rather than graded, because this one is not a matter of opinion: an
+     * en dash counts too, since that is what a model reaches for next when told to stop.
+     */
+    dashes: (answer.match(/[—–]/g) ?? []).length,
+    paragraphs: answer.split(/\n\s*\n/).filter((block) => block.trim()).length,
+    bullets,
+    headings: (answer.match(/^#{1,6}\s/gm) ?? []).length,
+    bold: (answer.match(/\*\*[^*]+\*\*/g) ?? []).length,
+    // One bullet is never a list, and a heading has nothing to divide in four lines.
+    overFormatted: bullets === 1 || (answer.match(/^#{1,6}\s/gm) ?? []).length > 0,
+  };
+}
+
 /** How many sentences end in a question mark — the closing-question rule, counted. */
 function countQuestions(answer) {
   return (answer.match(/\?/g) ?? []).length;
@@ -265,6 +289,7 @@ for (const fixture of fixtures) {
         providerSort: config.providerSort,
       });
       const verdict = await grade({ fixture, question, answer: text });
+      const layout = describeLayout(text);
       const expectedLanguage = question.language ?? fixture.language;
 
       rows.push({
@@ -289,6 +314,7 @@ for (const fixture of fixtures) {
               ? !endsWithQuestion(text)
               : endsWithQuestion(text) && countQuestions(text) <= 1,
         friendly: verdict.friendly && !verdict.condescending,
+        ...layout,
         text,
       });
 
@@ -298,7 +324,9 @@ for (const fixture of fixtures) {
           `${String(row.ms).padStart(6)}ms  ${row.languageOk ? "lang✓" : `LANG=${row.language}`} ` +
           `${row.opensWithAnswer ? "lead✓" : "LEAD✗"} ${row.accurate ? "true✓" : "TRUE✗"} ` +
           `${row.answersTheAsk ? "ask✓" : "ASK✗"} ${row.closingOk ? "q✓" : `Q=${row.questionMarks}`} ` +
-          `${row.friendly ? "warm✓" : "WARM✗"}`,
+          `${row.friendly ? "warm✓" : "WARM✗"} ` +
+          `¶${row.paragraphs}${row.bullets ? ` •${row.bullets}` : ""}${row.bold ? ` b${row.bold}` : ""}` +
+          `${row.overFormatted ? " OVERFORMATTED" : ""}${row.dashes ? ` DASH×${row.dashes}` : ""}`,
       );
 
       if (!row.accurate && row.inaccuracy) {
@@ -333,6 +361,15 @@ console.log(`accurate           ${(rate((row) => row.accurate) * 100).toFixed(0)
 console.log(`did what was asked ${(rate((row) => row.answersTheAsk) * 100).toFixed(0)}%`);
 console.log(`closing question   ${(rate((row) => row.closingOk) * 100).toFixed(0)}%`);
 console.log(`warm, not preachy  ${(rate((row) => row.friendly) * 100).toFixed(0)}%`);
+console.log(
+  `layout             ${rows.filter((row) => row.bullets > 0).length} of ${rows.length} used a list, ` +
+    `${rows.filter((row) => row.paragraphs > 1).length} split paragraphs, ` +
+    `${rows.filter((row) => row.overFormatted).length} over-formatted`,
+);
+console.log(
+  `em/en dashes       ${rows.reduce((total, row) => total + row.dashes, 0)} across ` +
+    `${rows.filter((row) => row.dashes > 0).length} of ${rows.length} answers`,
+);
 console.log(
   `cost               $${ledger.costUsd.toFixed(4)} over ${ledger.calls} calls (grading included)`,
 );

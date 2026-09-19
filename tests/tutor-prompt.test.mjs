@@ -71,6 +71,27 @@ test("brevity is given a number, not an adjective", () => {
   }
 });
 
+/*
+ * The answer is rendered as Markdown by both chats (ChatMarkdown), so the model
+ * has to be told that it is writing Markdown — and told where to stop. Both
+ * halves matter: without the first the panel shows literal hyphens and
+ * asterisks, and without the second every two-sentence answer arrives as a
+ * bulleted list, which is longer to read and looks like a form.
+ */
+test("the answer is written as Markdown, and only where structure earns its place", () => {
+  for (const surface of ["lecture", "library"]) {
+    const instructions = buildTutorInstructions(surface);
+
+    assert.match(instructions, /rendered as Markdown, so write it as Markdown/);
+    assert.match(instructions, /a blank line between paragraphs/);
+    assert.match(instructions, /Structure only where it earns its place/);
+    assert.match(instructions, /Never bullet a single item/);
+    // A bubble is not a document: it has no outline for a heading to join.
+    assert.match(instructions, /Never use a heading/);
+    assert.match(instructions, /at most five bullets|At most five bullets/);
+  }
+});
+
 test("warmth is told to shorten the answer rather than lengthen it", () => {
   const instructions = buildTutorInstructions("lecture");
 

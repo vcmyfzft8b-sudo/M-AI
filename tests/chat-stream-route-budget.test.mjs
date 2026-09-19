@@ -151,10 +151,11 @@ test("the chat budget is measured against the route's own maxDuration", () => {
 // The reason the route needs a budget at all: the answer is two serial model calls, and the
 // second one is started from a catch block that cannot know how long the first one took.
 test("a failed chat stream still falls back to a full second call", () => {
-  assert.ok(
-    PIPELINE_SOURCE.includes(
-      "const answer = (await streamChatAnswer(call, params.onDelta)) ?? (await generateStructuredObject(call));",
-    ),
+  // Matched on the shape rather than on the exact line: this is here to catch the fallback
+  // being removed, not to fail the day somebody wraps the expression differently.
+  assert.match(
+    PIPELINE_SOURCE.replace(/\s+/g, " "),
+    /const answer = \(await streamChatAnswer\(call, params\.onDelta\)\) \?\? \(await generateStructuredObject\(call\)\);/,
     "the streamed attempt no longer falls back to generateStructuredObject in the same invocation",
   );
 });

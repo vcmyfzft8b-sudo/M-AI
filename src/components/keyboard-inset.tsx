@@ -108,6 +108,14 @@ export function KeyboardInset() {
     /** `visualViewport.height` with nothing focused — the bar's control. */
     let restingHeight = 0;
     let barPublished = "";
+    /**
+     * The visible viewport plus the inset — the height the page would have if
+     * the keyboard were not there. Sampled from events rather than per frame:
+     * it is invariant through the keyboard's own movement, which is the only
+     * thing `write` is called sixty times a second for, and reading it there
+     * would mean a layout flush every one of those frames.
+     */
+    let fullHeight = 0;
     /** When the current field took focus, for the accessory bar's wait. */
     let focusedAt = 0;
     let barTimer = 0;
@@ -230,7 +238,23 @@ export function KeyboardInset() {
     };
 
     const write = (inset: number) => {
-      const height = Math.round(viewport.height);
+      /*
+       * The visible height, in step with the inset rather than ahead of it.
+       *
+       * A sheet's cap is `viewport + inset`, and that sum is invariant: the
+       * keyboard takes exactly as much off the visible viewport as it adds to
+       * the strip behind it. But the browser hands the shrunken viewport over
+       * in a single frame while the inset is drawn over a quarter of a second,
+       * and for that quarter second the two terms disagree by however much of
+       * the keyboard has not been drawn yet — so the cap collapses by a whole
+       * keyboard and springs back. Sheets short enough never to be capped
+       * never showed it; the flashcard editor is, and it dropped 308px and
+       * bounced back up, measured on an iPhone 17.
+       *
+       * Reporting the viewport the drawn keyboard implies, rather than the one
+       * that has already arrived, keeps the sum exactly where it was.
+       */
+      const height = Math.round(Math.max(0, fullHeight - inset));
       /*
        * At rest the page is not panned, whatever the last reading said. iOS
        * pans the visual viewport to clear the keys and unwinds it afterwards,
@@ -322,7 +346,8 @@ export function KeyboardInset() {
       }
 
       const t = Math.min(1, (now - upStart) / KEYBOARD_MS);
-      writeUp(upFrom + (upTo - upFrom) * ease(t));
+      const eased = ease(t);
+      writeUp(upFrom + (upTo - upFrom) * eased);
 
       if (t >= 1) {
         upStart = 0;
@@ -331,6 +356,7 @@ export function KeyboardInset() {
 
       return true;
     };
+
 
     /*
      * Safari's form accessory bar — the strip of arrows and Done above the keys.
@@ -463,6 +489,7 @@ export function KeyboardInset() {
 
     const track = () => {
       const raw = measure();
+      fullHeight = viewport.height + rawInset();
       const step = raw - published;
 
       /*
@@ -563,6 +590,7 @@ export function KeyboardInset() {
       }, 0);
     };
 
+    fullHeight = viewport.height + rawInset();
     write(measure());
     restingHeight = viewport.height;
     writeUp(isTyping() ? 1 : 0);

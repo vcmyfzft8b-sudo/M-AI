@@ -9766,9 +9766,22 @@
      */
     --memo-kb-up: var(--memo-keyboard-up, 0);
     --memo-kb-down: calc(1 - var(--memo-kb-up));
-    /* Scrolling a focused field into view has to stop short of the keys: the
-       sheet's scrollport now runs on behind them. */
-    --memo-kb-scroll: calc(var(--memo-kb-ground) + 1.1rem);
+    /*
+     * Where a focused field comes to rest when the sheet scrolls it into view.
+     *
+     * The clearance, and nothing more. It used to be the ground plus a margin,
+     * from back when the ground was padding and the scrollport really did run
+     * on behind the keys — but the ground is a border now, a scrollport ends
+     * where its border begins, and the scrollport's own bottom edge is already
+     * the top of the keyboard. Adding the keyboard again counted it twice, and
+     * the scroller answered by dragging the field a whole keyboard further up
+     * than it needed to: measured on the flashcard editor, 101px of scroll
+     * delivered after the keyboard had finished, as a jump of its own.
+     *
+     * At the clearance, a field the sheet has to scroll for lands 12pt above
+     * the keys — the same gap the foot of every other sheet keeps.
+     */
+    --memo-kb-scroll: var(--memo-kb-clear);
   }
 
   /* `-webkit-touch-callout` is iOS WebKit; `[data-native]` is our wrapper. */

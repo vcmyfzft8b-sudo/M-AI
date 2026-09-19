@@ -9595,9 +9595,34 @@
      * when it is, and the home indicator keeps its strip.
      */
     --memo-kb-foot: calc(var(--memo-kb) + var(--memo-kb-clear));
+    /*
+     * 1 while a field is focused, which on a phone is the same thing as the
+     * keys being up.
+     *
+     * The inset cannot answer this on its own. In the wrapper the layout
+     * viewport never shrinks, so `--memo-kb` measures the keyboard and reads
+     * large. Mobile Safari does whichever it likes: measured on one device
+     * minutes apart, it reported a 714pt layout viewport with a 310px inset
+     * once and a 404pt one with an inset of 0 the next time, depending on
+     * whether the document had scrolled. Both are right for *positioning* — the
+     * formula answers for each — but neither can be tested for "the keys are
+     * up", and testing it anyway left every foot in Safari resting at its full
+     * padding while the wrapper had tightened to 12pt. Focus is the one signal
+     * both agree on, and `:has()` reads it without any JavaScript.
+     *
+     * Multiplied rather than branched on, because CSS has no branch: a foot is
+     * `down x resting + up x clearance`, and exactly one of the two is 1.
+     */
+    --memo-kb-up: 0;
+    --memo-kb-down: calc(1 - var(--memo-kb-up));
     /* Scrolling a focused field into view has to stop short of the keys: the
        sheet's scrollport now runs on behind them. */
     --memo-kb-scroll: calc(var(--memo-kb) + 1.1rem);
+  }
+
+  html:has(:is(input, textarea, select, [contenteditable]):focus)
+    :is(.memo, .memo-portal) {
+    --memo-kb-up: 1;
   }
 
   /*
@@ -10097,7 +10122,10 @@
   .memo-m-homebar {
     position: absolute;
     inset: auto 1.15rem
-      max(var(--memo-kb-clear), calc(1.9rem + var(--memo-safe-bottom) - var(--memo-kb)))
+      calc(
+        var(--memo-kb-down) * (1.9rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-clear)
+      )
       1.15rem;
     z-index: 4;
     display: flex;
@@ -10197,7 +10225,11 @@
     max-height: var(--memo-sheet-max);
     overflow-y: auto;
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
-    padding: 0.6rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
+    padding: 0.6rem 1.15rem
+      calc(
+        var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-foot)
+      );
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -10519,7 +10551,10 @@
   .memo-dock {
     position: absolute;
     inset: auto 1.15rem
-      max(var(--memo-kb-clear), calc(1.6rem + var(--memo-safe-bottom) - var(--memo-kb)))
+      calc(
+        var(--memo-kb-down) * (1.6rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-clear)
+      )
       1.15rem;
     z-index: 4;
     display: flex;
@@ -10835,7 +10870,10 @@
 
   .memo-note-chat-sheet .memo-chat-foot {
     padding: 0 1.15rem
-      max(var(--memo-kb-clear), calc(1.6rem + var(--memo-safe-bottom) - var(--memo-kb)));
+      calc(
+        var(--memo-kb-down) * (1.6rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-clear)
+      );
   }
 
   .memo-m-chat-title {
@@ -10892,7 +10930,11 @@
     position: fixed;
     inset: auto 0 0 0;
     z-index: 6;
-    padding: 1.2rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
+    padding: 1.2rem 1.15rem
+      calc(
+        var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-foot)
+      );
     border-radius: 30px 30px 0 0;
     background: var(--surface);
     box-shadow: var(--shadow-lg);
@@ -10938,7 +10980,10 @@
   .memo-sub-chatbar {
     position: absolute;
     inset: auto 1.15rem
-      max(var(--memo-kb-clear), calc(1.6rem + var(--memo-safe-bottom) - var(--memo-kb)))
+      calc(
+        var(--memo-kb-down) * (1.6rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-clear)
+      )
       1.15rem;
     display: flex;
     align-items: center;
@@ -11216,7 +11261,11 @@
     -webkit-overflow-scrolling: touch;
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     border-radius: 34px 34px 0 0;
-    padding: 0.6rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
+    padding: 0.6rem 1.15rem
+      calc(
+        var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-foot)
+      );
     background: var(--bg);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
@@ -11409,7 +11458,11 @@
 
   .note-source-modal {
     max-height: var(--memo-sheet-max);
-    padding: 0.6rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
+    padding: 0.6rem 1.15rem
+      calc(
+        var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-foot)
+      );
     border-radius: 34px 34px 0 0;
     --panel-paint: var(--bg);
     background: var(--panel-paint);
@@ -11644,7 +11697,11 @@
     position: fixed;
     inset: auto 0 0 0;
     z-index: 128;
-    padding: 0.6rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
+    padding: 0.6rem 1.15rem
+      calc(
+        var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-foot)
+      );
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -11718,7 +11775,11 @@
     max-height: var(--memo-sheet-max);
     overflow-y: auto;
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
-    padding: 0.6rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
+    padding: 0.6rem 1.15rem
+      calc(
+        var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-foot)
+      );
     border: 0;
     border-radius: 34px 34px 0 0;
     background: var(--bg);
@@ -11824,7 +11885,11 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
-    padding: 0.6rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
+    padding: 0.6rem 1.15rem
+      calc(
+        var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-foot)
+      );
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -12029,7 +12094,10 @@
      */
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     padding: 0.6rem 1.15rem
-      max(var(--memo-kb-clear), calc(2rem + var(--memo-safe-bottom) - var(--memo-kb)));
+      calc(
+        var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-clear)
+      );
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -12082,14 +12150,21 @@
 
   /* Already on the bottom edge; it only ever needed the keys' own padding. */
   .note-read-usage-mobile-sheet {
-    padding-bottom: max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
+    padding-bottom: calc(
+      var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
+      + var(--memo-kb-up) * var(--memo-kb-foot)
+    );
   }
 
   .memo-sheet {
     position: fixed;
     inset: auto 0 0 0;
     z-index: 106;
-    padding: 0.6rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
+    padding: 0.6rem 1.15rem
+      calc(
+        var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-foot)
+      );
     max-height: var(--memo-sheet-max);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -12393,7 +12468,10 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding: 1rem 1.15rem
-      max(var(--memo-kb-clear), calc(2.5rem + var(--memo-safe-bottom) - var(--memo-kb)));
+      calc(
+        var(--memo-kb-down) * (2.5rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-clear)
+      );
   }
 
   .memo-sheet-h1 {
@@ -12642,7 +12720,10 @@
   .memo-m-chat-foot {
     position: relative;
     padding: 0 1.15rem
-      max(var(--memo-kb-clear), calc(1.6rem + var(--memo-safe-bottom) - var(--memo-kb)));
+      calc(
+        var(--memo-kb-down) * (1.6rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-clear)
+      );
   }
 
   .memo-m-chat-composer {
@@ -12745,7 +12826,7 @@
      * the body twice that far up. This is only the resting padding, which
      * the keys take away as they come up.
      */
-    padding: 1rem 1.15rem max(0px, calc(2rem + var(--memo-safe-bottom) - var(--memo-kb)));
+    padding: 1rem 1.15rem calc(var(--memo-kb-down) * (2rem + var(--memo-safe-bottom)));
   }
 
   .memo-capture-head {
@@ -12987,7 +13068,10 @@
     /* The artboard starts its header 0.5rem below the status bar; edge to
        edge that is the safe area, whichever is larger. */
     padding: max(0.5rem, env(safe-area-inset-top)) 1.15rem
-      max(calc(1.25rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
+      calc(
+        var(--memo-kb-down) * (1.25rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-foot)
+      );
     border: 0;
     border-radius: 0;
     --panel-paint: var(--bg);
@@ -18403,7 +18487,11 @@
     width: 100%;
     max-height: calc(var(--memo-vv) + var(--memo-kb) - 4rem);
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
-    padding: 0.6rem 1.15rem max(calc(1.4rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
+    padding: 0.6rem 1.15rem
+      calc(
+        var(--memo-kb-down) * (1.4rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-foot)
+      );
     border-radius: 34px 34px 0 0;
     background: var(--surface);
     box-shadow: var(--shadow-lg);
@@ -18416,7 +18504,11 @@
     width: 100%;
     max-height: calc(var(--memo-vv) + var(--memo-kb) - 7rem);
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
-    padding: 1.1rem 1.15rem max(calc(1.5rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
+    padding: 1.1rem 1.15rem
+      calc(
+        var(--memo-kb-down) * (1.5rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-foot)
+      );
     border-radius: 30px 30px 0 0;
     --panel-paint: var(--surface);
     background: var(--panel-paint);
@@ -19726,7 +19818,10 @@
   .memo-palace-panel {
     max-height: calc(var(--memo-vv) + var(--memo-kb) - 1rem);
     padding-top: 0.35rem;
-    padding-bottom: max(calc(0.6rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
+    padding-bottom: calc(
+      var(--memo-kb-down) * (0.6rem + var(--memo-safe-bottom))
+      + var(--memo-kb-up) * var(--memo-kb-foot)
+    );
     gap: 0.35rem;
   }
   .memo-palace-panel.card { --palace-card-height: clamp(5rem, calc(100dvh - 13.5rem), 10rem); }
@@ -19998,7 +20093,10 @@
    * strip and the card centres evenly in what is left.
    */
   padding: 1rem 1.15rem
-    max(0.75rem, calc(2.5rem + var(--memo-safe-bottom, 0px) - var(--memo-kb, 0px)));
+    calc(
+      var(--memo-kb-down, 1) * (2.5rem + var(--memo-safe-bottom, 0px))
+      + var(--memo-kb-up, 0) * 0.75rem
+    );
 }
 
 .memo-auth-stage > :first-child {
@@ -20522,7 +20620,10 @@
      * against the keyboard, so the floor is what it sits on instead.
      */
     inset: auto 1.15rem
-      max(var(--memo-kb-clear), calc(0.15rem + var(--memo-safe-bottom) - var(--memo-kb)))
+      calc(
+        var(--memo-kb-down) * (0.15rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-clear)
+      )
       1.15rem;
   }
 

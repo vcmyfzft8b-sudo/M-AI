@@ -112,7 +112,13 @@ const MISSING_CONTEXT_PATTERNS = [
   /\bthe lecture\b/i,
   /\bthe notes\b/i,
   /\bthe source material\b/i,
-  /\bthe source\b/i,
+  /*
+   * "the source" only when the answer depends on reading it. The bare phrase rejected
+   * "Which statement correctly describes the source of a synapse's excitatory effect?" — a
+   * question about where an effect comes from, which is what "source" usually means in a
+   * lecture. "according to the source" and "based on the source" have their own entries below.
+   */
+  /\bthe source\s*(?:[?.,;:]|$|(?:say|says|said|state|states|show|shows|mention|tell|list|contain)\w*)/i,
   /\bthe text above\b/i,
   /\bthe text below\b/i,
   /\bthe table above\b/i,
@@ -164,8 +170,14 @@ const MISSING_CONTEXT_PATTERNS = [
   /\bv\s+grafu\b/i,
   /\bv\s+ilustracij[ie]\b/i,
   /\bna\s+ilustracij[ie]\b/i,
-  /\bzgoraj\b/i,
-  /\bspodaj\b/i,
+  /*
+   * "above" and "below", but not the direction words they are half of. Slovenian builds
+   * "od spodaj navzgor" (from the bottom upwards) out of the same token, and that rejected a
+   * perfectly good question asking for the order of the OSI layers. A genuine pointer — "kot je
+   * prikazano spodaj" — still matches, there and through DEICTIC_FIGURE_REFERENCE.
+   */
+  /\bzgoraj\b(?!\s+\S*navz)/i,
+  /\bspodaj\b(?!\s+\S*navz)/i,
   /\bkot je prikazano\b/i,
   /\bkot je ponazorjeno\b/i,
   /\bv prikazu\b/i,

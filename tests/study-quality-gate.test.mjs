@@ -128,3 +128,27 @@ test("a numbered chapter, page or table is a citation, not a dangling pointer", 
   // And a location noun is one when the number closes the phrase it is being read off.
   assert.equal(dependsOnMissingStudyContext("Na temelju tablice 4.2, izracunajte prosjek."), true);
 });
+
+test("a word that is half of a direction is not a pointer", () => {
+  /*
+   * Slovenian builds "od spodaj navzgor" (from the bottom upwards) out of the same token as
+   * "below", and the bare /\bspodaj\b/ rejected a perfectly ordinary question asking for the
+   * order of the OSI layers. Found in a real generated deck on staging, not in a fixture.
+   */
+  assert.equal(dependsOnMissingStudyContext("Katero je pravilno vrstni red plasti modela OSI od spodaj navzgor?"), false);
+  assert.equal(dependsOnMissingStudyContext("Naštejte plasti modela OSI od zgoraj navzdol."), false);
+
+  // A genuine pointer still is one.
+  assert.equal(dependsOnMissingStudyContext("Kot je prikazano spodaj, kaj se zgodi?"), true);
+  assert.equal(dependsOnMissingStudyContext("Opišite shemo zgoraj."), true);
+});
+
+test("\"the source\" is only a dependency when the answer has to read it", () => {
+  // /\bthe source\b/ rejected "the source of an effect", which is what the word usually means in
+  // a lecture. Also from a real deck.
+  assert.equal(dependsOnMissingStudyContext("Which statement correctly describes the source of a synapse's excitatory effect?"), false);
+  assert.equal(dependsOnMissingStudyContext("What is the source of an action potential?"), false);
+
+  assert.equal(dependsOnMissingStudyContext("What does the source say about inflation?"), true);
+  assert.equal(dependsOnMissingStudyContext("According to the source, what happened?"), true);
+});

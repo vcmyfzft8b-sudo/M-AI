@@ -20247,3 +20247,53 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
+
+/* ===========================================================================
+   Print
+   ---------------------------------------------------------------------------
+   Last in the file on purpose. A print layout is laid out at the paper's width
+   — roughly 735px of content on A4 — so `@media (max-width: 1099px)` matches
+   while printing even from a desktop browser, and the phone rules above would
+   otherwise apply. `@media print` carries no extra specificity, so only source
+   order can beat them.
+   ========================================================================= */
+
+@media print {
+  /*
+   * The legal documents are the one thing on this site people are told to keep
+   * a copy of, and consumer law expects terms to be available in a durable
+   * medium. The phone chrome is a fixed frame around a scroller, which prints
+   * as a single clipped page — measured: the terms of use went from 8 pages to
+   * 1. Unwinding the frame puts the document back into normal flow, where the
+   * printer paginates it.
+   */
+  .memo-legal {
+    height: auto;
+    overflow: visible;
+  }
+
+  .memo-legal-screen {
+    position: static;
+    overflow: visible;
+  }
+
+  .memo-legal-topbar {
+    position: static;
+    padding: 0 0 1rem;
+  }
+
+  .memo-legal-screen .memo-screen-scroll {
+    overflow: visible;
+    padding-top: 0;
+    /* The fade exists to take content out as it passes under the floating row.
+       Nothing floats on paper, and the mask would only bleach the first lines
+       of the document. */
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  /* Nothing to go back to on paper. */
+  .memo-legal-back {
+    display: none;
+  }
+}

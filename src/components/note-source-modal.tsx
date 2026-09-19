@@ -379,6 +379,15 @@ export function NoteSourceModal({
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [recordingSupported, setRecordingSupported] = useState<boolean | null>(null);
   const [nativeRecorder, setNativeRecorder] = useState(false);
+  /*
+   * The gap between the tap and the first tick of the clock.
+   *
+   * It is never long, but it is never nothing either: the app has an audio
+   * session to configure and, the first time, a microphone to ask for, and the
+   * browser has `getUserMedia` to resolve. Without this the button just sat
+   * there looking ignored, which is the one thing a record button must not do.
+   */
+  const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -627,6 +636,7 @@ export function NoteSourceModal({
     setLinkValue("");
     setIsRecording(false);
     setIsPaused(false);
+    setIsStarting(false);
     setElapsedSeconds(0);
     setError(null);
     setBusyLabel(null);
@@ -793,6 +803,14 @@ export function NoteSourceModal({
       return;
     }
 
+    // Set before the first await, so the button answers the tap in the same
+    // frame rather than after the microphone does.
+    if (isStarting) {
+      return;
+    }
+
+    setIsStarting(true);
+
     try {
       if (nativeRecorder) {
         applyNativeSnapshot(await startNativeRecording());
@@ -862,6 +880,8 @@ export function NoteSourceModal({
       setError(
         compressionErrorMessage(recordError, t) ?? t("capture.error.recordStartFailed"),
       );
+    } finally {
+      setIsStarting(false);
     }
   }
 
@@ -2407,11 +2427,13 @@ export function NoteSourceModal({
                           </button>
                           <button
                             type="button"
-                            disabled={Boolean(busyLabel)}
+                            disabled={Boolean(busyLabel) || isStarting}
                             className="ios-primary-button"
                             onClick={() => void startRecording()}
                           >
-                            {busyLabel ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                            {busyLabel || isStarting ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : null}
                             {/* Wrapped for the same reason as the stop button above. */}
                             <span>{busyLabel ?? t("capture.startRecording")}</span>
                           </button>

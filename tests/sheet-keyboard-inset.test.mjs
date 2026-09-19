@@ -338,6 +338,28 @@ test("the keyboard's own measurement is still published for them to read", () =>
     /upFrom \+ \(upTo - upFrom\) \* ease\(t\)/,
     "and it ramps on the keyboard's curve, not linearly",
   );
+  /*
+   * And it sets off with the ground, never ahead of it. iOS reports the first
+   * viewport change 124ms after `focusin`; a clearance ramping through that
+   * window tightens the foot by 54pt against a ground that is still flat, and
+   * the sheet drops that far before it rises.
+   */
+  assert.match(
+    inset,
+    /const syncClearance[\s\S]{0,600}published > 0 \|\| viewport\.offsetTop > 0/,
+    "the clearance waits for the ground, or for a browser that will never have one",
+  );
+  /*
+   * Which of those it is gets asked per keyboard. Mobile Safari picks per
+   * interaction — the same session panned the visual viewport for one sheet and
+   * left the page behind the keys for the next — and remembering the answer put
+   * the rename sheet underneath the keyboard for the rest of the page's life.
+   */
+  assert.doesNotMatch(
+    inset,
+    /let pans\b/,
+    "the regime is a question about this moment, not a flag about this page",
+  );
   assert.match(css, /--memo-vv:\s*var\(--memo-viewport, 100dvh\)/);
   assert.match(css, /--memo-sheet-max:\s*calc\(var\(--memo-vv\) \+ var\(--memo-kb\) - 54px\)/);
 });

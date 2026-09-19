@@ -112,53 +112,23 @@ export function KeyboardInset() {
     let focusedAt = 0;
     let barTimer = 0;
     /**
-     * Whether this browser pans the page out from under the keyboard rather
-     * than leaving it behind them.
-     *
-     * Mobile Safari does: it keeps a layout viewport the page cannot see all of
-     * and slides the visible part up, so the bottom edge of the page *is* the
-     * keyboard's top edge and nothing is ever behind the keys. The wrapper and
-     * Android do not — there the page keeps its height and the keyboard sits on
-     * top of it, which is the inset every sheet pads past.
-     *
-     * Worth latching rather than re-deciding each frame, because the two are
-     * only distinguishable once the browser has finished moving: for a frame or
-     * two at the start of a Safari keyboard the page is still full height with
-     * only the top of it visible, which measures as a whole keyboard's worth of
-     * ground and paints a strip of sheet that is gone again by the next frame.
-     * Once a browser has shown itself to be a panning one it stays one.
-     */
-    let pans = false;
-    /**
      * The very first keyboard of a page load is held back one frame.
      *
-     * That is the one moment the two regimes look alike: a panning browser
-     * reports the shrunken visual viewport a frame before it has finished with
-     * the layout viewport, so the page is briefly its full height with only the
-     * top of it visible, and the ground measures a whole keyboard that is about
-     * to turn out not to be there. One frame later the browser has settled and
-     * `pans` has the answer for the rest of the session — so the wait is over
-     * as soon as it has been paid, and where the keyboard is real the second
+     * WebKit shrinks the visual viewport before it has finished with the layout
+     * viewport, so for a frame the page is still its full height with only the
+     * top of it visible and the ground measures a whole keyboard that is about
+     * to turn out not to be there — 310px on one frame and 0 on the next,
+     * measured on an iPhone 17 in Safari. Where the keyboard is real the second
      * frame simply agrees and nothing is lost but a frame of it.
      *
-     * The wrapper is excused: it is a WKWebView we configure ourselves, it
-     * never pans, and there is no reason to spend a frame asking.
+     * The wrapper is excused: it is a WKWebView we configure ourselves, its
+     * layout viewport never moves, and there is no reason to spend a frame
+     * asking.
      */
     let sawKeyboard = root.hasAttribute("data-native");
     /** Frame counter, and the frame the held rise was first seen on. */
     let frameId = 1;
     let heldFrame = 0;
-
-    const notePanning = () => {
-      if (
-        !pans &&
-        (viewport.offsetTop > 0 ||
-          document.documentElement.clientHeight !== window.innerHeight)
-      ) {
-        pans = true;
-      }
-    };
-
     /*
      * A foot pinned to the bottom edge, so the keyboard can be measured against
      * the thing that actually needs the answer.
@@ -189,13 +159,33 @@ export function KeyboardInset() {
         ),
       );
 
-    const measure = () => {
-      notePanning();
-
-      if (pans) {
-        return 0;
+    /**
+     * Turn the clearance on once the ground is on its way, and not before.
+     *
+     * Focus is not the moment the keyboard moves: iOS reports the first
+     * viewport change 124ms after `focusin` — measured on an iPhone 17 — and a
+     * clearance ramping through that window tightens the foot by 54pt against
+     * a ground that is still flat, so the sheet drops that far before it rises.
+     *
+     * `offsetTop` is the other way it can begin. Mobile Safari sometimes pans
+     * the page out from under the keyboard instead of leaving it behind them,
+     * and then the ground is legitimately 0 for as long as the keys are up and
+     * there is nothing else to wait for. Which of the two it does is a question
+     * about this moment and not about this browser: the same session panned for
+     * one sheet and not for the next, and deciding it once left the sheet that
+     * disagreed sitting underneath the keyboard.
+     */
+    const syncClearance = (rising = false) => {
+      if (!isTyping()) {
+        return;
       }
 
+      if (rising || glideStart > 0 || published > 0 || viewport.offsetTop > 0) {
+        rampUp(1);
+      }
+    };
+
+    const measure = () => {
       const raw = rawInset();
 
       if (raw === 0 || sawKeyboard) {
@@ -363,7 +353,6 @@ export function KeyboardInset() {
       const settled = restingHeight > 0 ? restingHeight : viewport.height;
       const overlaps =
         isTyping() &&
-        !pans &&
         published === 0 &&
         focusedAt > 0 &&
         performance.now() - focusedAt >= KEYBOARD_MS &&
@@ -419,6 +408,7 @@ export function KeyboardInset() {
         : write(idle() ? 0 : clamp(measure()));
       const ramping = stepUp(now);
 
+      syncClearance();
       publishBar();
 
       if (stillGliding || glideStart > 0) {
@@ -488,9 +478,7 @@ export function KeyboardInset() {
        * A browser that pans is the exception, because there the ground never
        * moves at all and there would be nothing to wait for.
        */
-      if (isTyping() && (pans || glideStart || published > 0 || raw > 0)) {
-        rampUp(1);
-      }
+      syncClearance(raw > 0);
 
       if (isTyping() && !focusedAt) {
         focusedAt = performance.now();

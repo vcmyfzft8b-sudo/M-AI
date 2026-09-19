@@ -109,13 +109,13 @@ test("no phone sheet takes the keyboard out of its bottom edge", () => {
   }
 });
 
-test("every phone sheet pads its foot clear of the keys", () => {
+test("every phone sheet keeps its content clear of the keys", () => {
   for (const sheet of SHEETS) {
-    const pads = rulesFor(sheet).some((rule) =>
-      /padding[^;]*--memo-kb\b/.test(rule.body),
+    const clears = rulesFor(sheet).some((rule) =>
+      /(?:padding|border-bottom)[^;]*--memo-kb\b/.test(rule.body),
     );
 
-    assert.ok(pads, `.${sheet} never pads its foot by --memo-kb, so the keys cover it`);
+    assert.ok(clears, `.${sheet} never answers for the keys, so they cover it`);
   }
 });
 
@@ -151,25 +151,40 @@ test("every sheet leaves the same gap between a focused field and the keys", () 
   );
   assert.match(
     css,
-    /--memo-kb-foot:\s*calc\(var\(--memo-kb\) \+ var\(--memo-kb-clear\)\)/,
-    "a sheet's keys-up foot is the keyboard plus that clearance, nothing else",
+    /--memo-kb-ground:\s*calc\(var\(--memo-kb\) \+ var\(--memo-kb-bar\)\)/,
+    "the strip behind the keys is the inset plus anything visualViewport misses",
+  );
+  assert.match(
+    css,
+    /--memo-kb-bar:\s*0px/,
+    "no platform gets an accessory bar reserved unless it actually draws one",
+  );
+  assert.match(
+    css,
+    /-webkit-touch-callout: none[\s\S]{0,200}--memo-kb-bar:\s*calc\(var\(--memo-kb-up\)/,
+    "iOS on the web is the only place the accessory bar is reserved, and only while focused",
   );
 
   for (const sheet of SHEETS) {
     const feet = rulesFor(sheet)
       // `(?<![-\w])` so `scroll-padding` is not mistaken for the foot itself.
-      .flatMap((rule) => [...rule.body.matchAll(/(?<![-\w])padding(?:-bottom)?:([^;]*);/g)])
+      .flatMap((rule) => [
+        ...rule.body.matchAll(/(?<![-\w])(?:padding(?:-bottom)?|border-bottom):([^;]*);/g),
+      ])
       .map((m) => m[1])
-      .filter((value) => /--memo-kb\b|--memo-kb-foot|--memo-kb-clear/.test(value));
+      .filter((value) => /--memo-kb\b|--memo-kb-clear/.test(value));
 
     assert.ok(feet.length > 0, `.${sheet} never pads its foot for the keys`);
 
     for (const foot of feet) {
       const value = foot.trim();
 
-      // A bare `var(--memo-kb)` is a container reserving room for the keys; the
-      // foot inside it is what supplies the gap. That one is fine as it stands.
-      if (/^var\(--memo-kb\)$/.test(value)) {
+      /*
+       * The ground behind the keys is a reserve, not a gap — it is what the
+       * keyboard overlaps, and the foot inside it supplies the clearance. A
+       * bare `var(--memo-kb)` reads the same way on a container.
+       */
+      if (/^var\(--memo-kb(?:-ground)?\)(?: solid .+)?$/.test(value)) {
         continue;
       }
 
@@ -180,7 +195,7 @@ test("every sheet leaves the same gap between a focused field and the keys", () 
        * honest shape names the clearance.
        */
       assert.ok(
-        /--memo-kb-foot|--memo-kb-clear/.test(value),
+        /--memo-kb-clear/.test(value),
         `.${sheet} sets its own gap instead of using the shared clearance: ${value}`,
       );
     }

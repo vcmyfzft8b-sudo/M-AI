@@ -9586,15 +9586,36 @@
      */
     --memo-kb-clear: 0.75rem;
     /*
-     * A bottom sheet's foot while the keys are up: the keyboard, plus that
-     * clearance. A sheet is anchored to the bottom edge and its ground runs on
-     * behind the keys, so its own padding is what holds the content above them.
+     * The strip of sheet that lives behind the keyboard, drawn as a bottom
+     * border rather than padding.
      *
-     * Always paired with `max()` against the sheet's resting padding, which is
-     * the larger of the two whenever the keyboard is down — so nothing moves
-     * when it is, and the home indicator keeps its strip.
+     * A sheet stays anchored to the bottom edge so its ground runs on under the
+     * keys and the keyboard overlaps a continuous surface. But a border sits
+     * *outside* the padding box, and the padding box is what a sheet scrolls —
+     * so the scrollport stops at the keys while the ground does not. Padding
+     * would have extended both, and that is the bug this replaced: with the
+     * scrollport running on behind the keyboard, WebKit scrolled a focused
+     * field into a region the keys were covering, and the field you were typing
+     * into ended up under the accessory bar. It showed on the flashcard editor,
+     * whose fields sit in the middle of a long list rather than at its end.
      */
-    --memo-kb-foot: calc(var(--memo-kb) + var(--memo-kb-clear));
+    --memo-kb-ground: calc(var(--memo-kb) + var(--memo-kb-bar));
+    /*
+     * Safari's form accessory bar — the ∧ ∨ Done strip above the keys.
+     *
+     * `visualViewport` does not count it. With the keys up it reports that
+     * strip as visible page, so the measured inset stops short of it and the
+     * bar comes down on whatever is at the foot of a sheet: on the flashcard
+     * editor it covered half the "Add card" button. Measured on an iPhone 17 —
+     * the bar is 46pt with a 9pt gap under it.
+     *
+     * Zero by default, because the wrapper turns the bar off outright
+     * (`MemoWebView` answers nil for `inputAccessoryView`) and no other
+     * platform draws one. The override below is scoped to iOS on the web, and
+     * folded through `--memo-kb-up` so it is only there while a field has
+     * focus — which is the only time the bar exists.
+     */
+    --memo-kb-bar: 0px;
     /*
      * 1 while a field is focused, which on a phone is the same thing as the
      * keys being up.
@@ -9617,12 +9638,19 @@
     --memo-kb-down: calc(1 - var(--memo-kb-up));
     /* Scrolling a focused field into view has to stop short of the keys: the
        sheet's scrollport now runs on behind them. */
-    --memo-kb-scroll: calc(var(--memo-kb) + 1.1rem);
+    --memo-kb-scroll: calc(var(--memo-kb-ground) + 1.1rem);
   }
 
   html:has(:is(input, textarea, select, [contenteditable]):focus)
     :is(.memo, .memo-portal) {
     --memo-kb-up: 1;
+  }
+
+  /* `-webkit-touch-callout` is iOS WebKit; `[data-native]` is our wrapper. */
+  @supports (-webkit-touch-callout: none) {
+    html:not([data-native]) :is(.memo, .memo-portal) {
+      --memo-kb-bar: calc(var(--memo-kb-up) * 3.45rem);
+    }
   }
 
   /*
@@ -9681,7 +9709,7 @@
 
   .memo-screen {
     position: fixed;
-    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb-ground) 0;
     display: flex;
     flex-direction: column;
     background: var(--bg);
@@ -10185,7 +10213,7 @@
 
   .memo-home-screen {
     position: fixed;
-    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb-ground) 0;
     display: flex;
     flex-direction: column;
     background: var(--bg);
@@ -10228,13 +10256,16 @@
     padding: 0.6rem 1.15rem
       calc(
         var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
-        + var(--memo-kb-up) * var(--memo-kb-foot)
+        + var(--memo-kb-up) * var(--memo-kb-clear)
       );
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
-  }
+      /* The strip the keyboard overlaps. Outside the padding box, so the
+       sheet's scrollport still stops at the keys. */
+    border-bottom: var(--memo-kb-ground) solid var(--bg);
+}
 
   .memo-dialog .memo-grab {
     display: block;
@@ -10818,7 +10849,7 @@
 
   .memo-note-screen {
     position: fixed;
-    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb-ground) 0;
     display: flex;
     flex-direction: column;
     background: var(--bg);
@@ -10933,13 +10964,16 @@
     padding: 1.2rem 1.15rem
       calc(
         var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
-        + var(--memo-kb-up) * var(--memo-kb-foot)
+        + var(--memo-kb-up) * var(--memo-kb-clear)
       );
     border-radius: 30px 30px 0 0;
     background: var(--surface);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
-  }
+      /* The strip the keyboard overlaps. Outside the padding box, so the
+       sheet's scrollport still stops at the keys. */
+    border-bottom: var(--memo-kb-ground) solid var(--surface);
+}
 
   .memo-quiz-sheet-head {
     display: flex;
@@ -11074,7 +11108,7 @@
 
   .memo-settings-screen {
     position: fixed;
-    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb-ground) 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -11264,12 +11298,15 @@
     padding: 0.6rem 1.15rem
       calc(
         var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
-        + var(--memo-kb-up) * var(--memo-kb-foot)
+        + var(--memo-kb-up) * var(--memo-kb-clear)
       );
     background: var(--bg);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
-  }
+      /* The strip the keyboard overlaps. Outside the padding box, so the
+       sheet's scrollport still stops at the keys. */
+    border-bottom: var(--memo-kb-ground) solid var(--bg);
+}
 
   /* The grabber the design gives every sheet, hidden on the desktop dialog. */
   .memo-confirm .memo-grab {
@@ -11287,7 +11324,7 @@
 
   .memo-support-screen {
     position: fixed;
-    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb-ground) 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -11461,14 +11498,17 @@
     padding: 0.6rem 1.15rem
       calc(
         var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
-        + var(--memo-kb-up) * var(--memo-kb-foot)
+        + var(--memo-kb-up) * var(--memo-kb-clear)
       );
     border-radius: 34px 34px 0 0;
     --panel-paint: var(--bg);
     background: var(--panel-paint);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
-  }
+      /* The strip the keyboard overlaps. Outside the padding box, so the
+       sheet's scrollport still stops at the keys. */
+    border-bottom: var(--memo-kb-ground) solid var(--panel-paint);
+}
 
   .note-source-modal-drag-handle {
     display: block;
@@ -11700,7 +11740,7 @@
     padding: 0.6rem 1.15rem
       calc(
         var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
-        + var(--memo-kb-up) * var(--memo-kb-foot)
+        + var(--memo-kb-up) * var(--memo-kb-clear)
       );
     border-radius: 34px 34px 0 0;
     background: var(--bg);
@@ -11708,7 +11748,10 @@
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
     transition: transform 0.42s cubic-bezier(0.32, 1.3, 0.5, 1);
     touch-action: none;
-  }
+      /* The strip the keyboard overlaps. Outside the padding box, so the
+       sheet's scrollport still stops at the keys. */
+    border-bottom: var(--memo-kb-ground) solid var(--bg);
+}
 
   .memo-action-sheet-target {
     margin: 0 0 0.9rem;
@@ -11778,7 +11821,7 @@
     padding: 0.6rem 1.15rem
       calc(
         var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
-        + var(--memo-kb-up) * var(--memo-kb-foot)
+        + var(--memo-kb-up) * var(--memo-kb-clear)
       );
     border: 0;
     border-radius: 34px 34px 0 0;
@@ -11786,7 +11829,10 @@
     color: var(--text);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
-  }
+      /* The strip the keyboard overlaps. Outside the padding box, so the
+       sheet's scrollport still stops at the keys. */
+    border-bottom: var(--memo-kb-ground) solid var(--bg);
+}
 
   .library-folder-mobile-sheet-handle {
     display: block;
@@ -11888,13 +11934,16 @@
     padding: 0.6rem 1.15rem
       calc(
         var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
-        + var(--memo-kb-up) * var(--memo-kb-foot)
+        + var(--memo-kb-up) * var(--memo-kb-clear)
       );
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
-  }
+      /* The strip the keyboard overlaps. Outside the padding box, so the
+       sheet's scrollport still stops at the keys. */
+    border-bottom: var(--memo-kb-ground) solid var(--bg);
+}
 
   .library-folder-modal > * {
     flex: 0 0 auto;
@@ -12102,18 +12151,10 @@
     background: var(--bg);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  /*
-   * Alone among these sheets this one is a grid that scrolls itself, and a
-   * scrolling grid's own bottom padding is not reliably part of what it can
-   * scroll to. So the keys' clearance rides on the last row's margin, which
-   * always is: without it the last deck of a long list comes to rest behind
-   * the keyboard with no way to scroll it out.
-   */
-  .study-manager-sheet > :last-child {
-    margin-bottom: var(--memo-kb);
-  }
+      /* The strip the keyboard overlaps. Outside the padding box, so the
+       sheet's scrollport still stops at the keys. */
+    border-bottom: var(--memo-kb-ground) solid var(--bg);
+}
 
   .study-manager-drag-handle {
     display: block;
@@ -12152,9 +12193,12 @@
   .note-read-usage-mobile-sheet {
     padding-bottom: calc(
       var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
-      + var(--memo-kb-up) * var(--memo-kb-foot)
+      + var(--memo-kb-up) * var(--memo-kb-clear)
     );
-  }
+      /* The strip the keyboard overlaps. Outside the padding box, so the
+       sheet's scrollport still stops at the keys. */
+    border-bottom: var(--memo-kb-ground) solid var(--bg);
+}
 
   .memo-sheet {
     position: fixed;
@@ -12163,7 +12207,7 @@
     padding: 0.6rem 1.15rem
       calc(
         var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
-        + var(--memo-kb-up) * var(--memo-kb-foot)
+        + var(--memo-kb-up) * var(--memo-kb-clear)
       );
     max-height: var(--memo-sheet-max);
     overflow-y: auto;
@@ -12176,7 +12220,10 @@
     transform: translateY(0);
     transition: transform 0.42s cubic-bezier(0.32, 1.3, 0.5, 1);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
-  }
+      /* The strip the keyboard overlaps. Outside the padding box, so the
+       sheet's scrollport still stops at the keys. */
+    border-bottom: var(--memo-kb-ground) solid var(--bg);
+}
 
   .memo-sheet.dragging {
     transition: none;
@@ -12200,7 +12247,7 @@
     /* The keys eat into the column rather than the sheet's height, so the
        composer at its foot rides up with them and the surface carries on
        behind them. */
-    padding-bottom: var(--memo-kb);
+    border-bottom: var(--memo-kb-ground) solid var(--bg);
     border-radius: 34px 34px 0 0;
     box-shadow: var(--shadow-lg);
     overflow: hidden;
@@ -13070,14 +13117,17 @@
     padding: max(0.5rem, env(safe-area-inset-top)) 1.15rem
       calc(
         var(--memo-kb-down) * (1.25rem + var(--memo-safe-bottom))
-        + var(--memo-kb-up) * var(--memo-kb-foot)
+        + var(--memo-kb-up) * var(--memo-kb-clear)
       );
     border: 0;
     border-radius: 0;
     --panel-paint: var(--bg);
     background: var(--panel-paint);
     box-shadow: none;
-  }
+      /* The strip the keyboard overlaps. Outside the padding box, so the
+       sheet's scrollport still stops at the keys. */
+    border-bottom: var(--memo-kb-ground) solid var(--panel-paint);
+}
 
   .note-source-modal.mobile-draggable-sheet .note-source-modal-drag-handle {
     display: none;
@@ -18490,12 +18540,15 @@
     padding: 0.6rem 1.15rem
       calc(
         var(--memo-kb-down) * (1.4rem + var(--memo-safe-bottom))
-        + var(--memo-kb-up) * var(--memo-kb-foot)
+        + var(--memo-kb-up) * var(--memo-kb-clear)
       );
     border-radius: 34px 34px 0 0;
     background: var(--surface);
     box-shadow: var(--shadow-lg);
-  }
+      /* The strip the keyboard overlaps. Outside the padding box, so the
+       sheet's scrollport still stops at the keys. */
+    border-bottom: var(--memo-kb-ground) solid var(--surface);
+}
 
   .memo-palace-panel {
     position: fixed;
@@ -18507,14 +18560,17 @@
     padding: 1.1rem 1.15rem
       calc(
         var(--memo-kb-down) * (1.5rem + var(--memo-safe-bottom))
-        + var(--memo-kb-up) * var(--memo-kb-foot)
+        + var(--memo-kb-up) * var(--memo-kb-clear)
       );
     border-radius: 30px 30px 0 0;
     --panel-paint: var(--surface);
     background: var(--panel-paint);
     box-shadow: var(--shadow-lg);
 
-  }
+      /* The strip the keyboard overlaps. Outside the padding box, so the
+       sheet's scrollport still stops at the keys. */
+    border-bottom: var(--memo-kb-ground) solid var(--panel-paint);
+}
 
   /* The way out moves to the top corner: the bottom left is where the thumb
      that steers lives, and a back button under it is a back button pressed. */
@@ -19820,10 +19876,13 @@
     padding-top: 0.35rem;
     padding-bottom: calc(
       var(--memo-kb-down) * (0.6rem + var(--memo-safe-bottom))
-      + var(--memo-kb-up) * var(--memo-kb-foot)
+      + var(--memo-kb-up) * var(--memo-kb-clear)
     );
     gap: 0.35rem;
-  }
+      /* The strip the keyboard overlaps. Outside the padding box, so the
+       sheet's scrollport still stops at the keys. */
+    border-bottom: var(--memo-kb-ground) solid var(--bg);
+}
   .memo-palace-panel.card { --palace-card-height: clamp(5rem, calc(100dvh - 13.5rem), 10rem); }
   .memo-palace-panel .lecture-flashcard,
   .memo-palace-panel .lecture-flashcard-rotator,

@@ -110,3 +110,21 @@ test("the whole labelled set, as one number", () => {
 
   assert.equal(correct, BROKEN.length + GOOD.length);
 });
+
+test("a numbered chapter, page or table is a citation, not a dangling pointer", () => {
+  /*
+   * The first cut of the numbered rule treated any noun-plus-number as a reference to absent
+   * material, which is right for pictures and wrong for everything else: nobody writes "figure
+   * 3.1" about a figure the reader can already see, but citing chapter 3 of a statute or naming
+   * first normal form is ordinary subject matter. A law course lost every question it had.
+   */
+  assert.equal(dependsOnMissingStudyContext("Kaj ureja poglavje 3 Zakona o delovnih razmerjih?"), false);
+  assert.equal(dependsOnMissingStudyContext("What does chapter 4 of the Civil Code regulate?"), false);
+  assert.equal(dependsOnMissingStudyContext("What is Table 1 normal form in database design?"), false);
+  assert.equal(dependsOnMissingStudyContext("Na kateri strani periodnega sistema so halogeni?"), false);
+
+  // A picture with a number stays a pointer whatever follows it.
+  assert.equal(dependsOnMissingStudyContext("Kaj prikazuje slika 3.1 v tem poglavju?"), true);
+  // And a location noun is one when the number closes the phrase it is being read off.
+  assert.equal(dependsOnMissingStudyContext("Na temelju tablice 4.2, izracunajte prosjek."), true);
+});

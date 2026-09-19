@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  askJev,
   batchJevQuestions,
   isJevEnabled,
   JEV_MAX_CHOICE_OPTIONS,
+  JEV_TIMEOUT_MS,
   jevCostUsd,
   parseJevAnswer,
   parseJevAnswers,
@@ -259,6 +261,51 @@ test("a confident duplicate is linked; an unsure one is left alone", async () =>
       { index: 1, duplicateOf: 0 },
       { index: 2, duplicateOf: null },
     ]);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("a batched call spends the budget it has left, not the budget it started with", async () => {
+  // Six batches each granted the original budget would hold a 5s invocation open for 30s, one
+  // batch at a time — which is the overrun JEV_MIN_BUDGET_MS exists to prevent.
+  const realFetch = globalThis.fetch;
+  const seen = [];
+  globalThis.fetch = async (_url, init) => {
+    const { questions } = JSON.parse(init.body);
+    seen.push(Object.keys(questions).length);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    return {
+      ok: true,
+      json: async () => ({
+        answers: Object.fromEntries(
+          Object.keys(questions).map((key) => [key, { type: "boolean", probability: 0.5 }]),
+        ),
+        usage: { inputTokens: 1, outputTokens: 0 },
+      }),
+    };
+  };
+
+  try {
+    const questions = Object.fromEntries(
+      Array.from({ length: 12 }, (_unused, index) => [
+        `q${index}`,
+        { type: "boolean", instructions: "?" },
+      ]),
+    );
+    const answered = await askJev({
+      state: "x",
+      questions,
+      apiKey: "k",
+      questionsPerRequest: 2,
+      // Enough for the first couple of batches and nowhere near enough for all six.
+      remainingBudgetMs: JEV_TIMEOUT_MS,
+      batchDelayMs: 900,
+    });
+
+    assert.equal(answered, null, "must give up and let the caller fall back");
+    assert.ok(seen.length < 6, `should stop early, made ${seen.length} of 6 requests`);
   } finally {
     globalThis.fetch = realFetch;
   }

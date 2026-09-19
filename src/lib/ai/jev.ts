@@ -332,7 +332,24 @@ export async function askJev(params: AskJevParams): Promise<JevResponse | null> 
       await new Promise((resolve) => setTimeout(resolve, params.batchDelayMs));
     }
 
-    const result = await askJevOnce({ ...params, apiKey, questions: batch });
+    /*
+     * The budget is what is *left*, not what there was.
+     *
+     * Each batch derives its timeout from this, so passing the original figure to all six would
+     * let a stalling gateway hold a 5-second budget open for thirty — the exact overrun that
+     * JEV_MIN_BUDGET_MS exists to prevent, arrived at one batch at a time. Once it is spent the
+     * loop stops and the caller falls back, which is cheaper than a step that misses its deadline.
+     */
+    const remainingBudgetMs =
+      params.remainingBudgetMs === undefined
+        ? undefined
+        : params.remainingBudgetMs - (Date.now() - startedAt);
+
+    if (remainingBudgetMs !== undefined && remainingBudgetMs < JEV_MIN_BUDGET_MS) {
+      return null;
+    }
+
+    const result = await askJevOnce({ ...params, apiKey, remainingBudgetMs, questions: batch });
 
     requestCount += result.requestCount;
 

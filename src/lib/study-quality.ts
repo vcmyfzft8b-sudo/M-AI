@@ -43,8 +43,25 @@ function wordPattern(body: string, flags = "iu") {
  * Stems rather than full forms, so the Slavic cases (slika/sliki/sliko/sliku) are covered without
  * enumerating every declension of every noun in every language.
  */
-const FIGURE_NOUN =
-  "fig(?:ure|ura|\\.)?|diagram\\p{L}*|dijagram\\p{L}*|chart\\p{L}*|graf\\p{L}*|graph\\p{L}*|table|tabel\\p{L}*|tablic\\p{L}*|image|picture|photo|foto\\p{L}*|slik\\p{L}*|rysun\\p{L}*|ilustracij\\p{L}*|illustration|shem\\p{L}*|schemat\\p{L}*|scheme|prikaz\\p{L}*|snimk\\p{L}*|chapter|poglavj\\p{L}*|poglavlj\\p{L}*|rozdzia\\p{L}*|stran(?:i|a|ic\\p{L}*)?|page|slide|prosojnic\\p{L}*|slajd\\p{L}*";
+/**
+ * Things a question points *at* instead of containing. Stems rather than full forms, so the
+ * Slavic cases (slika/sliki/sliko/sliku) are covered without enumerating every declension.
+ *
+ * Split in two because a number means opposite things either side of the line. A numbered
+ * picture is always a pointer — nobody writes "figure 3.1" about a figure the reader can see in
+ * the question. A numbered chapter, page or section is usually a *citation*: "Kaj ureja poglavje
+ * 3 Zakona o delovnih razmerjih?" is an ordinary law question, and "What is Table 1 normal form?"
+ * is an ordinary database one. Those are caught by the deictic rule instead, which needs an
+ * "above" or a "previous" to fire.
+ */
+const VISUAL_NOUN =
+  "fig(?:ure|ura|\\.)?|diagram\\p{L}*|dijagram\\p{L}*|chart\\p{L}*|graf\\p{L}*|graph\\p{L}*|image|picture|photo|foto\\p{L}*|slik\\p{L}*|rysun\\p{L}*|ilustracij\\p{L}*|illustration|shem\\p{L}*|schemat\\p{L}*|scheme|prikaz\\p{L}*|snimk\\p{L}*|slide|prosojnic\\p{L}*|slajd\\p{L}*";
+
+/** Locations in a document. Only a pointer when something says which way to look. */
+const LOCATION_NOUN =
+  "table|tabel\\p{L}*|tablic\\p{L}*|chapter|section|poglavj\\p{L}*|poglavlj\\p{L}*|rozdzia\\p{L}*|stran(?:i|a|ic\\p{L}*)?|page";
+
+const FIGURE_NOUN = `${VISUAL_NOUN}|${LOCATION_NOUN}`;
 
 /**
  * "above", "below", "previous", "shown" — and their Slovenian, Croatian/Bosnian/Serbian and
@@ -59,7 +76,10 @@ const DEICTIC =
  * one, and a question that does is naming something the student cannot see.
  */
 const NUMBERED_FIGURE_REFERENCE = wordPattern(
-  `(?:${FIGURE_NOUN})\\s*\\.?\\s*\\d+(?:[.,]\\d+)*`,
+  `(?:(?:${VISUAL_NOUN})\\s*\\.?\\s*\\d+(?:[.,]\\d+)*` +
+    // A location noun needs the number to close the phrase — "na temelju tablice 4.2," points at
+    // a table, while "Table 1 normal form" names a concept and carries on into the sentence.
+    `|(?:${LOCATION_NOUN})\\s*\\.?\\s*\\d+(?:[.,]\\d+)*(?!\\s+\\p{L}))`,
 );
 
 /**

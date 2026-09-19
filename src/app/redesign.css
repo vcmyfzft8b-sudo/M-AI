@@ -2080,13 +2080,18 @@
   height: 2.1rem;
 }
 
+/*
+ * No `white-space: pre-wrap` here any more. The answer is rendered markdown
+ * (ChatMarkdown), so its paragraphs are real elements with their own spacing;
+ * honouring the source newlines on top of that spaced every answer twice. The
+ * question below keeps its own line breaks, because that is text somebody typed.
+ */
 .memo-homechat-answer > div {
   flex: 1;
   min-width: 0;
   font-size: 1.1rem;
   line-height: 1.55;
   letter-spacing: -0.015em;
-  white-space: pre-wrap;
 }
 
 .memo-homechat-question {
@@ -2096,6 +2101,7 @@
 
 .memo-homechat-question > div {
   max-width: 70%;
+  white-space: pre-wrap;
   padding: 0.7rem 1.1rem;
   border-radius: 16px;
   background: var(--field);
@@ -3044,22 +3050,12 @@
   line-height: 1.5;
 }
 
-/* The cursor that trails the answer while it is being written. */
-.memo-bubble-bot.streaming .memo-bubble-copy {
-  white-space: pre-wrap;
-}
-
-.memo-caret {
-  display: inline-block;
-  width: 0.5rem;
-  height: 1.05em;
-  margin-left: 0.15rem;
-  border-radius: 1px;
-  background: var(--muted);
-  vertical-align: text-bottom;
-  animation: memo-caret-blink 1s steps(1, end) infinite;
-}
-
+/*
+ * The cursor that trails the answer while it is being written. It is drawn by
+ * `.memo-prose.is-streaming` on the last block of the answer rather than by an
+ * element of its own — markdown ends in a block, so a sibling span would sit on
+ * its own line and jump to the left margin on every token.
+ */
 @keyframes memo-caret-blink {
   0%,
   50% { opacity: 1; }
@@ -3396,6 +3392,191 @@
 .memo-bubble-copy {
   margin: 0;
   white-space: pre-wrap;
+}
+
+/*
+ * A chat answer's own structure.
+ *
+ * Both chats render the tutor's reply through `ChatMarkdown`, so this is the
+ * one place an answer's paragraphs, lists and emphasis are styled — the note
+ * bubble on a lecture page and the ask-bar answer on the home screen share it,
+ * and neither carries prose CSS of its own.
+ *
+ * Everything here is sized in `em` and coloured from the inherited token, so
+ * the same block works on the grey bot bubble, on the page background behind
+ * the home answer, and in both appearances. Nothing sets a colour outright.
+ */
+.memo-prose {
+  min-width: 0;
+  /*
+   * A bubble is narrow and a model writes identifiers, URLs and German-length
+   * compounds. Without this one of them pushes the bubble past the panel and
+   * the whole conversation scrolls sideways.
+   */
+  overflow-wrap: break-word;
+}
+
+.memo-prose > *:first-child {
+  margin-top: 0;
+}
+
+.memo-prose > *:last-child {
+  margin-bottom: 0;
+}
+
+/*
+ * The gap that makes a paragraph a paragraph. It is smaller than a note's
+ * because an answer is a few lines long and a full blank line between two of
+ * them reads as two messages rather than one.
+ */
+.memo-prose p {
+  margin: 0 0 0.6em;
+}
+
+/*
+ * The markers are set here because something upstream removes them: the app's
+ * reset leaves every list `list-style: none`, so a bulleted answer arrived as
+ * indented text with nothing down the left margin — which is exactly the thing
+ * this whole change exists to stop.
+ */
+.memo-prose ul {
+  list-style: disc outside;
+}
+
+.memo-prose ol {
+  list-style: decimal outside;
+}
+
+.memo-prose ul ul {
+  list-style: circle outside;
+}
+
+.memo-prose ul,
+.memo-prose ol {
+  margin: 0.5em 0 0.6em;
+  /*
+   * The marker sits inside the bubble's padding rather than hanging off its
+   * left edge, which is what `list-style-position: outside` plus the browser's
+   * default 40px indent would do in a 92%-wide bubble on a phone.
+   */
+  padding-left: 1.35em;
+}
+
+.memo-prose li {
+  margin: 0.2em 0;
+}
+
+.memo-prose li > p {
+  margin: 0;
+}
+
+.memo-prose li::marker {
+  color: var(--muted);
+}
+
+/* Nested lists are the model over-structuring a short answer; keep them tight. */
+.memo-prose li > ul,
+.memo-prose li > ol {
+  margin: 0.2em 0 0.2em;
+}
+
+.memo-prose strong {
+  font-weight: 620;
+}
+
+/*
+ * A heading in a four-line answer is over-formatting, and the prompt asks for
+ * none. When one arrives anyway it reads as an emphasised line rather than as
+ * furniture — the bubble is not a document and has no outline to join.
+ */
+.memo-prose h1,
+.memo-prose h2,
+.memo-prose h3,
+.memo-prose h4,
+.memo-prose h5,
+.memo-prose h6 {
+  margin: 0.6em 0 0.3em;
+  font-size: 1em;
+  font-weight: 620;
+  line-height: inherit;
+}
+
+.memo-prose code {
+  padding: 0.1em 0.35em;
+  border-radius: 6px;
+  background: var(--line);
+  font-size: 0.92em;
+  /* An identifier has no spaces to break at, so it is allowed to break anywhere. */
+  overflow-wrap: anywhere;
+}
+
+.memo-prose pre {
+  margin: 0.5em 0 0.6em;
+  padding: 0.7em 0.85em;
+  border-radius: 12px;
+  background: var(--line);
+  /* A long line scrolls inside the block; the panel itself never scrolls sideways. */
+  overflow-x: auto;
+}
+
+.memo-prose pre code {
+  padding: 0;
+  background: none;
+}
+
+.memo-prose blockquote {
+  margin: 0.5em 0 0.6em;
+  padding-left: 0.8em;
+  border-left: 2px solid var(--line);
+  color: var(--muted);
+}
+
+.memo-prose a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.memo-prose hr {
+  margin: 0.8em 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* A table is rare and always too wide for a bubble, so it scrolls on its own. */
+.memo-prose table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.memo-prose th,
+.memo-prose td {
+  padding: 0.3em 0.6em;
+  border: 1px solid var(--line);
+  text-align: left;
+}
+
+/*
+ * The caret that follows the words as they arrive.
+ *
+ * Drawn on the last rendered block rather than as an element after it: markdown
+ * ends in a block, so a sibling would sit on its own line and jump to the left
+ * margin on every token.
+ */
+.memo-prose.is-streaming > *:last-child::after {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 1.05em;
+  margin-left: 0.15rem;
+  border-radius: 1px;
+  background: var(--muted);
+  vertical-align: text-bottom;
+  animation: memo-caret-blink 1s steps(1, end) infinite;
 }
 
 .memo-chat-status {

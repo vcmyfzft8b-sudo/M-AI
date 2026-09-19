@@ -10,6 +10,7 @@ import {
   isBudgetOverrunFailure,
   toUserFacingAiErrorMessage,
 } from "@/lib/ai/errors";
+import { stripDashPunctuation } from "@/lib/ai/answer-punctuation";
 import { chatAnswerSchema } from "@/lib/ai/schemas";
 import { generateStructuredObject, streamStructuredObject } from "@/lib/ai/json";
 import { createEmbeddings } from "@/lib/ai/embeddings";
@@ -1164,7 +1165,11 @@ async function streamChatAnswer(
   }
 
   try {
-    return await streamStructuredObject({ ...call, streamField: "answer", onDelta });
+    return await streamStructuredObject({
+      ...call,
+      streamField: "answer",
+      onDelta: (text) => onDelta(stripDashPunctuation(text)),
+    });
   } catch (error) {
     console.error("[chat] streaming failed, falling back to a plain call", error);
     return null;
@@ -1302,7 +1307,15 @@ export async function answerLectureChat(params: {
     ),
   };
 
-  const answer = (await streamChatAnswer(call, params.onDelta)) ?? (await generateStructuredObject(call));
+  /*
+   * The tutor is told not to write an em dash and, measured, it does not. This is the half
+   * that makes it a guarantee rather than a preference: the same substitution runs on each
+   * streamed chunk and on the finished text, so what the learner watches arrive and what is
+   * saved say the same thing.
+   */
+  const answer = (await streamChatAnswer(call, params.onDelta)) ??
+    (await generateStructuredObject(call));
+  const answerText = stripDashPunctuation(answer.answer);
 
   const citations = answer.citations.map((citation) => ({
     idx: citation.idx,
@@ -1323,7 +1336,7 @@ export async function answerLectureChat(params: {
     lecture_id: params.lectureId,
     user_id: params.userId,
     role: "assistant" as const,
-    content: answer.answer,
+    content: answerText,
     citations_json: citations,
   };
 

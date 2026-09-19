@@ -156,7 +156,19 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
   },
   coverage_plan: { thinkingLevel: "low", outputHeadroom: 1.6, defaultModel: GLM_TEXT_MODEL },
   study_items: { thinkingLevel: "low", outputHeadroom: 1.6, defaultModel: GLM_TEXT_MODEL },
-  chat: { thinkingLevel: "minimal", outputHeadroom: 1, defaultModel: GLM_TEXT_MODEL },
+  /*
+   * The one stage a learner sits and watches, so it is routed the way the tutor is: by
+   * latency, not throughput. The two sorts were measured against each other on this same
+   * model on 2026-09-04 (see `ProviderSort`) — 938ms to the first word against 6900ms at the
+   * median, and 2855ms against 11649ms at p90. Nothing about the answer changes; the wait
+   * before it starts appearing does, and on a chat panel that wait is the whole impression.
+   */
+  chat: {
+    thinkingLevel: "minimal",
+    outputHeadroom: 1,
+    defaultModel: GLM_TEXT_MODEL,
+    providerSort: "latency",
+  },
   /*
    * The mind map: one call that reads the finished note and re-shapes it as a tree.
    *
@@ -419,8 +431,38 @@ export function isGeminiModel(model: string) {
  * primary's gateway shares its outages.
  */
 export function resolveStageFallbackModel(stage: AiStage): string | null {
-  return stage === "note_write" ? "or/google/gemini-3.7-flash" : null;
+  return STAGE_FALLBACK_MODELS[stage] ?? null;
 }
+
+/*
+ * The two stages that may not inherit GEMINI_TEXT_MODEL as their fallback.
+ *
+ * `note_write` is the older of the two: the 2026-08-23 measurement showed models separate
+ * hardest there.
+ *
+ * `chat` was added on 2026-09-19, after watching the fallback tier answer for itself on a
+ * preview deployment (which has no OPENROUTER_API_KEY, so every chat answer there IS the
+ * fallback). Asked "Hvala, super razlaga!" at the end of a Slovenian conversation,
+ * gemini-2.5-flash-lite repeated its previous answer — in English. Measured against the same
+ * prompt and fixture, twelve answers each (scripts/chat-eval.mjs --model=...):
+ *
+ *   model                   right language   opens with the answer   did what was asked   warm
+ *   gemini-2.5-flash-lite            83%              83%                    75%           25%
+ *   gemini-3.5-flash-lite           100%             100%                   100%           83%
+ *
+ * That is the same model that already writes what the spoken tutor says out loud and checks
+ * GLM's Slovenian (TUTOR_VOICE_MODEL, LANGUAGE_CHECK_MODEL) — it is trusted with
+ * learner-facing prose in this product precisely because it gets these things right. It costs
+ * $0.3/$2.5 per million against $0.1/$0.4, on a tier that only runs when the primary has
+ * already failed, for an answer of a couple of hundred tokens.
+ *
+ * This matters more now than it did: the chat stage's own 60s leash (STAGE_TIMEOUT_MS) means a
+ * struggling primary reaches this tier sooner and more often than it used to.
+ */
+const STAGE_FALLBACK_MODELS: Partial<Record<AiStage, string>> = {
+  note_write: "or/google/gemini-3.7-flash",
+  chat: "or/google/gemini-3.5-flash-lite",
+};
 
 /**
  * Whether a failed gateway call should be retried against the direct provider.
@@ -561,6 +603,21 @@ const STAGE_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
    * own deadline is what the learner actually feels.
    */
   language_check: 30_000,
+  /*
+   * A chat answer is a couple of hundred tokens with somebody watching the panel, and it had
+   * no leash at all: it took OpenRouter's 180s default, which is not a timeout for this stage
+   * so much as the absence of one. Two things went wrong with that. A learner waited three
+   * minutes to be told it had failed, and — because the streamed attempt and the plain call it
+   * falls back to were each sized at 180s inside a 300s invocation — the platform could kill
+   * the function mid-fallback and send no error frame at all (the 504 of 2026-09-16, locked
+   * down in tests/chat-stream-route-budget.test.mjs).
+   *
+   * Sixty seconds is far past anything a healthy call needs and still leaves most of the
+   * invocation for the recovery underneath it: a stalled primary now fails at 60s and the
+   * fallback answers inside the same minute or two, which is the difference between a late
+   * answer and no answer.
+   */
+  chat: 60_000,
 };
 
 /**
@@ -575,6 +632,9 @@ const MANDATORY_REASONING_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
   note_outline: 200_000,
   note_write: 200_000,
   podcast_script: 200_000,
+  // Chat wants the same short leash whichever model runs it: the learner is waiting either
+  // way. Named here so the mandatory-reasoning branch cannot quietly restore the 180s default.
+  chat: 60_000,
 };
 
 /**

@@ -10,7 +10,8 @@ import { useInstantNavigation } from "@/components/navigation-loading";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { sheetClass, useSheet } from "@/components/use-sheet";
-import { readChatStream } from "@/lib/chat-stream-client";
+import { requestChatAnswer } from "@/lib/chat-stream-client";
+import { getRequestErrorMessage } from "@/lib/request-error-message";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 
@@ -160,49 +161,36 @@ export function LibraryChat({
       content: message.text,
     }));
 
+    const askedId = `u${Date.now()}`;
+
     setDraft("");
     setError(null);
     setIsScopeMenuOpen(false);
     onOpenChange(true);
-    setMessages((current) => [
-      ...current,
-      { id: `u${Date.now()}`, role: "user", text: question },
-    ]);
+    setMessages((current) => [...current, { id: askedId, role: "user", text: question }]);
     setIsTyping(true);
     setStreamingAnswer("");
 
     try {
-      const response = await fetch("/api/library-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const { response, payload } = await requestChatAnswer<{ answer?: string; error?: string }>({
+        url: "/api/library-chat",
+        body: {
           question,
           sourceLanguageAction,
           scope,
           folderId: scope === "folder" ? scopeFolderId : null,
           useTranscripts,
           history,
-        }),
+        },
+        onDelta: (text) => setStreamingAnswer((current) => current + text),
+        // A second attempt starts from a blank bubble: half of one answer
+        // followed by all of another would read as gibberish.
+        onAttemptStart: () => setStreamingAnswer(""),
+        t,
       });
 
-      /*
-       * A refusal — no subscription, a rate limit — arrives as ordinary JSON
-       * before the stream begins, so both shapes are handled: an event stream
-       * is read frame by frame, anything else is parsed as it always was.
-       */
-      const payload = response.headers.get("Content-Type")?.includes("text/event-stream")
-        ? await readChatStream<{ answer?: string }>(
-            response,
-            (text) => setStreamingAnswer((current) => current + text),
-            t,
-          )
-        : ((await response.json().catch(() => null)) as { answer?: string; error?: string } | null);
-
       if (!response.ok || !payload?.answer) {
-        throw new Error(
-          (payload as { error?: string } | null)?.error ??
-            t("libraryChat.error.answerFailed"),
-        );
+        throw new Error(payload?.error ?? t("libraryChat.error.answerFailed"));
       }
 
       setMessages((current) => [
@@ -210,7 +198,16 @@ export function LibraryChat({
         { id: `a${Date.now()}`, role: "assistant", text: payload.answer as string },
       ]);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : t("libraryChat.error.answerFailed"));
+      setError(getRequestErrorMessage(caught, t("libraryChat.error.answerFailed"), t));
+      /*
+       * Nothing the learner typed is lost to a failure: the question goes back
+       * into the composer so asking again is one tap, and the unanswered bubble
+       * leaves the log — this chat is never saved, so that bubble is also the
+       * history the next turn would be sent, and a dangling question in it makes
+       * the tutor answer the wrong thing.
+       */
+      setDraft((current) => (current.trim() ? current : question));
+      setMessages((current) => current.filter((message) => message.id !== askedId));
     } finally {
       setIsTyping(false);
       setStreamingAnswer("");

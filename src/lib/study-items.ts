@@ -52,7 +52,7 @@ import {
   quizBatchSchema,
 } from "@/lib/notes/study-prompts";
 import { isGradableAnswerGuide } from "@/lib/practice-test-scoring";
-import { isHighQualityStudyPrompt } from "@/lib/study-quality";
+import { areHighQualityQuizOptions, isHighQualityStudyPrompt } from "@/lib/study-quality";
 import type { CoverageCardDraft, CoverageUnitPlan, SourceUnit } from "@/lib/study-models";
 import type { FlashcardDifficulty } from "@/lib/database.types";
 
@@ -634,6 +634,19 @@ export async function generateItemQuizDrafts(params: {
           const item = itemById.get(question.itemId);
 
           if (!item) {
+            return [];
+          }
+
+          /*
+           * The same gate the practice-test drafts pass through below.
+           *
+           * It was missing here, so a quiz question that pointed at a figure the learner cannot
+           * see went straight into the deck — this path is the default pipeline, and the gate in
+           * quiz.ts only guards the legacy concept planner. Measured across five fixtures in
+           * three languages it drops none of the 269 questions those runs produced, so it costs
+           * nothing on material that is already good and catches the case that is not.
+           */
+          if (!isHighQualityStudyPrompt(question.question) || !areHighQualityQuizOptions(question.options)) {
             return [];
           }
 

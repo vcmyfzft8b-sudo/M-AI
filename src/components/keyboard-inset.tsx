@@ -105,6 +105,7 @@ export function KeyboardInset() {
     let upStart = 0;
     /** `visualViewport.height` with nothing focused — the bar's control. */
     let restingHeight = 0;
+    let barPublished = "";
     /**
      * Whether this browser pans the page out from under the keyboard rather
      * than leaving it behind them.
@@ -139,7 +140,9 @@ export function KeyboardInset() {
      * never pans, and there is no reason to spend a frame asking.
      */
     let sawKeyboard = root.hasAttribute("data-native");
-    let heldRise = false;
+    /** Frame counter, and the frame the held rise was first seen on. */
+    let frameId = 1;
+    let heldFrame = 0;
 
     const notePanning = () => {
       if (
@@ -172,6 +175,15 @@ export function KeyboardInset() {
       "position:fixed;left:0;bottom:0;width:0;height:0;visibility:hidden;pointer-events:none";
     document.body.appendChild(ground);
 
+    const rawInset = () =>
+      Math.max(
+        0,
+        Math.round(
+          ground.getBoundingClientRect().bottom -
+            (viewport.offsetTop + viewport.height),
+        ),
+      );
+
     const measure = () => {
       notePanning();
 
@@ -185,23 +197,17 @@ export function KeyboardInset() {
         return raw;
       }
 
-      if (!heldRise) {
-        heldRise = true;
+      // Counted in frames rather than calls: this runs from the viewport
+      // listener as well as the loop, and two calls in one frame would spend
+      // the wait without any of it having passed.
+      if (!heldFrame || heldFrame === frameId) {
+        heldFrame = heldFrame || frameId;
         return 0;
       }
 
       sawKeyboard = true;
       return raw;
     };
-
-    const rawInset = () =>
-      Math.max(
-        0,
-        Math.round(
-          ground.getBoundingClientRect().bottom -
-            (viewport.offsetTop + viewport.height),
-        ),
-      );
 
     /**
      * Nothing focused and nothing being drawn: there is no keyboard, whatever
@@ -342,7 +348,12 @@ export function KeyboardInset() {
         viewport.offsetTop < 8 &&
         viewport.height >= settledHeight - 8;
 
-      root.style.setProperty("--memo-keyboard-bar", overlaps ? "1" : "0");
+      const next = overlaps ? "1" : "0";
+
+      if (next !== barPublished) {
+        barPublished = next;
+        root.style.setProperty("--memo-keyboard-bar", next);
+      }
     };
 
     /**
@@ -376,6 +387,7 @@ export function KeyboardInset() {
     };
 
     function follow(now: number) {
+      frameId += 1;
       const stillGliding = glideStart > 0;
       const moved = stillGliding
         ? settle(now)

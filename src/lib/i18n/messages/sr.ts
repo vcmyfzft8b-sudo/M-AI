@@ -1218,6 +1218,7 @@ export const sr: Messages = {
   "help.category.recording": "Snimanje i beleške",
   "help.category.account": "Nalog i pristup",
   "legal.prevailingNotice": "Ovaj tekst je prevod. U slučaju odstupanja merodavna je slovenačka verzija.",
+  "legal.otherDocuments": "Ostali dokumenti",
 
   /* ---- Lecture failure messages (rendered from the stored failure code) ---- */
   "failure.private_network_link": "Ovaj link vodi na privatnu mrežu pa ne možemo da ga otvorimo. Nalepi javno dostupan link.",

@@ -9576,30 +9576,25 @@
     --memo-safe-top: env(safe-area-inset-top, 0px);
     --memo-safe-bottom: env(safe-area-inset-bottom, 0px);
     /*
-     * What every bottom sheet pads its content by, so the keys clear it.
+     * What sits between a focused field and the keys.
      *
-     * A sheet stays anchored to the bottom edge and pads rather than rises, so
-     * the keyboard slides over the sheet's own surface. Ending the sheet on
-     * top of the keys instead drew its bottom edge across the middle of the
-     * screen with the page showing through beside it, which reads as a sheet
-     * cut in half rather than one the keyboard is overlapping.
-     *
-     * The home indicator's strip is only worth clearing while the keyboard is
-     * down — the keys cover it themselves — so `max()` drops it rather than
-     * adding it on top, and the gap above the keyboard stays whatever padding
-     * the sheet already asked for.
+     * 12pt, measured off iOS's own composers rather than picked: on a 393pt
+     * screen the message box's bottom edge lands 36 device pixels above the
+     * keyboard. Every sheet used to keep its own resting padding here instead —
+     * 2rem on most, 1.6rem on the composers — so typing felt different
+     * depending on which one you had opened.
      */
-    --memo-kb-pad: max(var(--memo-safe-bottom), var(--memo-kb));
+    --memo-kb-clear: 0.75rem;
     /*
-     * The home indicator's strip, but only while the keys are not already
-     * covering it.
+     * A bottom sheet's foot while the keys are up: the keyboard, plus that
+     * clearance. A sheet is anchored to the bottom edge and its ground runs on
+     * behind the keys, so its own padding is what holds the content above them.
      *
-     * A foot that sits *inside* something which has itself made room for the
-     * keyboard — a composer in a sheet, the dock on a screen — must not add the
-     * indicator's inset again on top of it. Doing so left the chat composer
-     * floating a thumb's width above the keys with nothing in the gap.
+     * Always paired with `max()` against the sheet's resting padding, which is
+     * the larger of the two whenever the keyboard is down — so nothing moves
+     * when it is, and the home indicator keeps its strip.
      */
-    --memo-kb-gap: max(0px, var(--memo-safe-bottom) - var(--memo-kb));
+    --memo-kb-foot: calc(var(--memo-kb) + var(--memo-kb-clear));
     /* Scrolling a focused field into view has to stop short of the keys: the
        sheet's scrollport now runs on behind them. */
     --memo-kb-scroll: calc(var(--memo-kb) + 1.1rem);
@@ -10101,7 +10096,9 @@
 
   .memo-m-homebar {
     position: absolute;
-    inset: auto 1.15rem calc(1.9rem + var(--memo-kb-gap)) 1.15rem;
+    inset: auto 1.15rem
+      max(var(--memo-kb-clear), calc(1.9rem + var(--memo-safe-bottom) - var(--memo-kb)))
+      1.15rem;
     z-index: 4;
     display: flex;
     align-items: center;
@@ -10200,7 +10197,7 @@
     max-height: var(--memo-sheet-max);
     overflow-y: auto;
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
+    padding: 0.6rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -10521,7 +10518,9 @@
 
   .memo-dock {
     position: absolute;
-    inset: auto 1.15rem calc(1.6rem + var(--memo-kb-gap)) 1.15rem;
+    inset: auto 1.15rem
+      max(var(--memo-kb-clear), calc(1.6rem + var(--memo-safe-bottom) - var(--memo-kb)))
+      1.15rem;
     z-index: 4;
     display: flex;
     align-items: center;
@@ -10835,7 +10834,8 @@
   }
 
   .memo-note-chat-sheet .memo-chat-foot {
-    padding: 0 1.15rem calc(1.6rem + var(--memo-kb-gap));
+    padding: 0 1.15rem
+      max(var(--memo-kb-clear), calc(1.6rem + var(--memo-safe-bottom) - var(--memo-kb)));
   }
 
   .memo-m-chat-title {
@@ -10892,7 +10892,7 @@
     position: fixed;
     inset: auto 0 0 0;
     z-index: 6;
-    padding: 1.2rem 1.15rem calc(2rem + var(--memo-kb-pad));
+    padding: 1.2rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
     border-radius: 30px 30px 0 0;
     background: var(--surface);
     box-shadow: var(--shadow-lg);
@@ -10937,7 +10937,9 @@
 
   .memo-sub-chatbar {
     position: absolute;
-    inset: auto 1.15rem calc(1.6rem + var(--memo-kb-gap)) 1.15rem;
+    inset: auto 1.15rem
+      max(var(--memo-kb-clear), calc(1.6rem + var(--memo-safe-bottom) - var(--memo-kb)))
+      1.15rem;
     display: flex;
     align-items: center;
     gap: 0.6rem;
@@ -11214,7 +11216,7 @@
     -webkit-overflow-scrolling: touch;
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     border-radius: 34px 34px 0 0;
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
+    padding: 0.6rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
     background: var(--bg);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
@@ -11407,7 +11409,7 @@
 
   .note-source-modal {
     max-height: var(--memo-sheet-max);
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
+    padding: 0.6rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
     border-radius: 34px 34px 0 0;
     --panel-paint: var(--bg);
     background: var(--panel-paint);
@@ -11642,7 +11644,7 @@
     position: fixed;
     inset: auto 0 0 0;
     z-index: 128;
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
+    padding: 0.6rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -11716,7 +11718,7 @@
     max-height: var(--memo-sheet-max);
     overflow-y: auto;
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
+    padding: 0.6rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
     border: 0;
     border-radius: 34px 34px 0 0;
     background: var(--bg);
@@ -11822,7 +11824,7 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
+    padding: 0.6rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -12027,7 +12029,7 @@
      */
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     padding: 0.6rem 1.15rem
-      calc(2rem + max(0px, var(--memo-safe-bottom) - var(--memo-kb)));
+      max(var(--memo-kb-clear), calc(2rem + var(--memo-safe-bottom) - var(--memo-kb)));
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -12080,14 +12082,14 @@
 
   /* Already on the bottom edge; it only ever needed the keys' own padding. */
   .note-read-usage-mobile-sheet {
-    padding-bottom: calc(2rem + var(--memo-kb-pad));
+    padding-bottom: max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
   }
 
   .memo-sheet {
     position: fixed;
     inset: auto 0 0 0;
     z-index: 106;
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
+    padding: 0.6rem 1.15rem max(calc(2rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
     max-height: var(--memo-sheet-max);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -12390,7 +12392,8 @@
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 1rem 1.15rem calc(2.5rem + var(--memo-kb-gap));
+    padding: 1rem 1.15rem
+      max(var(--memo-kb-clear), calc(2.5rem + var(--memo-safe-bottom) - var(--memo-kb)));
   }
 
   .memo-sheet-h1 {
@@ -12638,7 +12641,8 @@
 
   .memo-m-chat-foot {
     position: relative;
-    padding: 0 1.15rem calc(1.6rem + var(--memo-kb-gap));
+    padding: 0 1.15rem
+      max(var(--memo-kb-clear), calc(1.6rem + var(--memo-safe-bottom) - var(--memo-kb)));
   }
 
   .memo-m-chat-composer {
@@ -12735,7 +12739,13 @@
     display: flex;
     flex-direction: column;
     gap: 1.1rem;
-    padding: 1rem 1.15rem calc(2rem + var(--memo-kb-gap));
+    /*
+     * No clearance of its own: the capture sheet around this already ends
+     * `--memo-kb-clear` above the keys, and adding it again here would put
+     * the body twice that far up. This is only the resting padding, which
+     * the keys take away as they come up.
+     */
+    padding: 1rem 1.15rem max(0px, calc(2rem + var(--memo-safe-bottom) - var(--memo-kb)));
   }
 
   .memo-capture-head {
@@ -12977,7 +12987,7 @@
     /* The artboard starts its header 0.5rem below the status bar; edge to
        edge that is the safe area, whichever is larger. */
     padding: max(0.5rem, env(safe-area-inset-top)) 1.15rem
-      calc(1.25rem + var(--memo-kb-pad));
+      max(calc(1.25rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
     border: 0;
     border-radius: 0;
     --panel-paint: var(--bg);
@@ -18380,7 +18390,7 @@
   /*
    * On the phone the study screen is a sheet, the way every other panel in this
    * app is a sheet: full width, off the bottom edge, rounded at the top, and
-   * padding its content clear of the keys with `--memo-kb-pad` so the keyboard
+   * padding its content clear of the keys with `--memo-kb-foot` so the keyboard
    * slides over it rather than covering what you are typing into.
    */
   .memo-palace-sheet {
@@ -18393,7 +18403,7 @@
     width: 100%;
     max-height: calc(var(--memo-vv) + var(--memo-kb) - 4rem);
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
-    padding: 0.6rem 1.15rem calc(1.4rem + var(--memo-kb-pad));
+    padding: 0.6rem 1.15rem max(calc(1.4rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
     border-radius: 34px 34px 0 0;
     background: var(--surface);
     box-shadow: var(--shadow-lg);
@@ -18406,7 +18416,7 @@
     width: 100%;
     max-height: calc(var(--memo-vv) + var(--memo-kb) - 7rem);
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
-    padding: 1.1rem 1.15rem calc(1.5rem + var(--memo-kb-pad));
+    padding: 1.1rem 1.15rem max(calc(1.5rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
     border-radius: 30px 30px 0 0;
     --panel-paint: var(--surface);
     background: var(--panel-paint);
@@ -19716,7 +19726,7 @@
   .memo-palace-panel {
     max-height: calc(var(--memo-vv) + var(--memo-kb) - 1rem);
     padding-top: 0.35rem;
-    padding-bottom: calc(0.6rem + var(--memo-kb-pad));
+    padding-bottom: max(calc(0.6rem + var(--memo-safe-bottom)), var(--memo-kb-foot));
     gap: 0.35rem;
   }
   .memo-palace-panel.card { --palace-card-height: clamp(5rem, calc(100dvh - 13.5rem), 10rem); }
@@ -19988,7 +19998,7 @@
    * strip and the card centres evenly in what is left.
    */
   padding: 1rem 1.15rem
-    calc(1rem + max(0px, 1.5rem + var(--memo-safe-bottom, 0px) - var(--memo-kb, 0px)));
+    max(0.75rem, calc(2.5rem + var(--memo-safe-bottom, 0px) - var(--memo-kb, 0px)));
 }
 
 .memo-auth-stage > :first-child {
@@ -20511,7 +20521,9 @@
      * gone (they cover that strip) and 0.15rem alone would tuck the bar right
      * against the keyboard, so the floor is what it sits on instead.
      */
-    inset: auto 1.15rem max(0.9rem, calc(0.15rem + var(--memo-kb-gap))) 1.15rem;
+    inset: auto 1.15rem
+      max(var(--memo-kb-clear), calc(0.15rem + var(--memo-safe-bottom) - var(--memo-kb)))
+      1.15rem;
   }
 
   /* The note screen runs under the home indicator: the 7rem the scroller keeps

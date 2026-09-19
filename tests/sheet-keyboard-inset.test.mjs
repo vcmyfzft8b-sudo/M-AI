@@ -137,6 +137,56 @@ function maxHeights(body) {
   return [...body.matchAll(/max-height:([^;]*);/g)].map((m) => m[1].trim());
 }
 
+/**
+ * 12pt, measured off iOS's own composer: on a 393pt screen the message box's
+ * bottom edge lands 36 device pixels above the keyboard. Every sheet used to
+ * keep its own resting padding there instead, so the gap you typed into
+ * depended on which sheet you had opened.
+ */
+test("every sheet leaves the same gap between a focused field and the keys", () => {
+  assert.match(
+    css,
+    /--memo-kb-clear:\s*0\.75rem/,
+    "the measured clearance is the number every sheet is supposed to use",
+  );
+  assert.match(
+    css,
+    /--memo-kb-foot:\s*calc\(var\(--memo-kb\) \+ var\(--memo-kb-clear\)\)/,
+    "a sheet's keys-up foot is the keyboard plus that clearance, nothing else",
+  );
+
+  for (const sheet of SHEETS) {
+    const feet = rulesFor(sheet)
+      // `(?<![-\w])` so `scroll-padding` is not mistaken for the foot itself.
+      .flatMap((rule) => [...rule.body.matchAll(/(?<![-\w])padding(?:-bottom)?:([^;]*);/g)])
+      .map((m) => m[1])
+      .filter((value) => /--memo-kb\b|--memo-kb-foot|--memo-kb-clear/.test(value));
+
+    assert.ok(feet.length > 0, `.${sheet} never pads its foot for the keys`);
+
+    for (const foot of feet) {
+      const value = foot.trim();
+
+      // A bare `var(--memo-kb)` is a container reserving room for the keys; the
+      // foot inside it is what supplies the gap. That one is fine as it stands.
+      if (/^var\(--memo-kb\)$/.test(value)) {
+        continue;
+      }
+
+      /*
+       * `calc(<rest> + var(--memo-kb))` is the shape that went wrong: a sheet's
+       * resting padding stacked on top of the whole keyboard inset, so the gap
+       * came out as that padding rather than the measured clearance. Every
+       * honest shape names the clearance.
+       */
+      assert.ok(
+        /--memo-kb-foot|--memo-kb-clear/.test(value),
+        `.${sheet} sets its own gap instead of using the shared clearance: ${value}`,
+      );
+    }
+  }
+});
+
 test("no phone sheet is capped against a viewport that ignores the keyboard", () => {
   for (const sheet of SHEETS) {
     const caps = rulesFor(sheet).flatMap((rule) => maxHeights(rule.body));
@@ -187,7 +237,6 @@ test("the keyboard's own measurement is still published for them to read", () =>
     /--memo-viewport-top/,
     "so does the pan offset, or Safari draws fixed sheets above the screen",
   );
-  assert.match(css, /--memo-kb-pad:\s*max\(var\(--memo-safe-bottom\), var\(--memo-kb\)\)/);
   assert.match(css, /--memo-vv:\s*var\(--memo-viewport, 100dvh\)/);
   assert.match(css, /--memo-sheet-max:\s*calc\(var\(--memo-vv\) \+ var\(--memo-kb\) - 54px\)/);
 });

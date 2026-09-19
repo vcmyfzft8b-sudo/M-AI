@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BrandLogo } from "@/components/brand-logo";
+import { InstantLink } from "@/components/instant-link";
 import { LegalBackLink } from "@/components/legal-back-link";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { Msym } from "@/components/msym";
@@ -95,9 +95,9 @@ export default async function LegalPage({
     <main className="memo memo-legal">
       <div className="memo-legal-screen">
         <div className="memo-legal-topbar">
-          <Link href="/" className="memo-legal-brand" aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}>
+          <InstantLink href="/" className="memo-legal-brand" aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}>
             <BrandLogo subtitle="" priority />
-          </Link>
+          </InstantLink>
           <LegalBackLink href="/" className="memo-legal-back">
             <Msym name="arrow_back" fill={false} weight={500} />
             <span className="memo-legal-back-label">{t("common.back")}</span>
@@ -120,12 +120,12 @@ export default async function LegalPage({
             </h2>
             <nav className="memo-legal-more" aria-labelledby="legal-other-documents">
               {others.map((other) => (
-                <Link key={other.slug} href={`/legal/${other.slug}`} className="memo-settings-row">
+                <InstantLink key={other.slug} href={`/legal/${other.slug}`} className="memo-settings-row">
                   <span className="memo-settings-copy">
                     <span className="memo-settings-title">{other.title}</span>
                   </span>
                   <Msym name="chevron_right" fill={false} weight={400} />
-                </Link>
+                </InstantLink>
               ))}
             </nav>
 

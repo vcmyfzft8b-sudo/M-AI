@@ -6,7 +6,7 @@ import {
   AdminMobileNav,
   AdminNav,
 } from "@/components/admin/nav";
-import { NavigationProgress } from "@/components/admin/pending-link";
+import { NavigationProgress, PendingLink } from "@/components/admin/pending-link";
 import { BrandLogo } from "@/components/brand-logo";
 import { requireAdmin, touchAdminLastSeen } from "@/lib/admin/auth";
 import { countVideosNeedingReview } from "@/lib/admin/ugc";
@@ -32,10 +32,10 @@ export default async function AdminDashboardLayout({
       <NavigationProgress />
 
       <aside className="admin-sidebar">
-        <a className="admin-brand" href="/admin" aria-label="Memo AI admin">
+        <PendingLink className="admin-brand" href="/admin" aria-label="Memo AI admin">
           <BrandLogo compact />
           <span className="admin-brand-label">admin</span>
-        </a>
+        </PendingLink>
 
         <AdminNav reviewCount={reviewCount} />
 

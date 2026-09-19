@@ -9,6 +9,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { I18nProvider } from "@/components/i18n-provider";
 import { KeyboardInset } from "@/components/keyboard-inset";
 import { LaunchScreen } from "@/components/launch-screen";
+import { NavigationFeedbackProvider } from "@/components/navigation-loading";
 import { ServiceWorkerRegistration } from "@/components/service-worker";
 import { ThemeController } from "@/components/theme-controller";
 import { VisitTracker } from "@/components/visit-tracker";
@@ -349,7 +350,21 @@ export default async function RootLayout({
           <ThemeController />
           <ServiceWorkerRegistration />
           <KeyboardInset />
-          {children}
+          {/*
+            * Navigation feedback for every route, not just the two layouts
+            * that used to carry it. `InstantLink` shows nothing at all without
+            * a provider above it — it stays an ordinary link rather than delay
+            * a push for a skeleton nobody will render — so a tap anywhere
+            * outside /app and /creator (a legal document, an auth screen, the
+            * landing footer) had no sign it had landed until the server
+            * answered.
+            *
+            * /app and /creator keep their own providers inside this one. The
+            * nearest one wins, so nothing about those trees changes, and the
+            * creator demo's has to stay where it is: it reads the demo base
+            * path from a context that only exists inside that layout.
+            */}
+          <NavigationFeedbackProvider>{children}</NavigationFeedbackProvider>
           <VisitTracker />
           </NativeProvider>
         </I18nProvider>

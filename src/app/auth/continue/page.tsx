@@ -1,8 +1,8 @@
-import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 
 import { AuthScreen } from "@/components/auth-screen";
+import { InstantLink } from "@/components/instant-link";
 import { LandingAuthOptions } from "@/components/landing-auth-options";
 import { getAuthProviderAvailability } from "@/lib/auth-providers";
 import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
@@ -56,9 +56,9 @@ export default async function ContinuePage() {
 
       <p className="memo-auth-legal">
         {t("auth.legalBefore", { brand: BRAND_NAME })}
-        <Link href="/legal/terms-of-use">{t("legal.termsInline")}</Link>
+        <InstantLink href="/legal/terms-of-use">{t("legal.termsInline")}</InstantLink>
         {t("auth.legalAnd")}
-        <Link href="/legal/privacy-policy">{t("legal.privacyInline")}</Link>
+        <InstantLink href="/legal/privacy-policy">{t("legal.privacyInline")}</InstantLink>
         {t("auth.legalAfterContinue")}
       </p>
 

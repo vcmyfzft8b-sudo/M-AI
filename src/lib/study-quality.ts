@@ -13,9 +13,11 @@ export const MIN_CONCEPT_QUALITY_SCORE = 6;
  *
  * That is not the set of languages this runs on. The gate reads *generated question text*, which
  * is written in the language of the uploaded material, and a student can upload anything —
- * measured on a hand-labelled set in scripts/jev-eval.mjs, the phrase list scored 0.64 and let
- * five of six broken questions through, every non-English one among them, plus two English
- * shapes nobody had thought to add ("on the previous page", "did the lecturer say").
+ * measured on the hand-labelled set in tests/study-quality-gate.test.mjs, the phrase list scored
+ * 0.56 and let eleven of fourteen broken questions through, every non-English one among them,
+ * plus English shapes nobody had thought to add ("on the previous page", "did the lecturer say")
+ * — while separately throwing away good questions, which is what the narrowed patterns below
+ * are for.
  *
  * So the phrase list stays for what it is good at, and two structural rules sit beside it. Both
  * key on the fact that a reference to absent material has a *shape*, not a vocabulary: a figure

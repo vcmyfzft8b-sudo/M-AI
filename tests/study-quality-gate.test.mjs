@@ -12,9 +12,9 @@ import {
  *
  * It reads generated question text, which is written in the language of whatever the student
  * uploaded — so "the languages we ship the interface in" was never the right target, and the
- * phrase list was written against English and Slovenian only. Measured on the labelled set in
- * scripts/jev-eval.mjs, that list scored 0.62 and let eleven of fourteen broken questions
- * through; with the structural rules it scores 1.00 and drops none of the good ones.
+ * phrase list was written against English and Slovenian only. Measured on the cases below, that
+ * list scored 0.56 and let eleven of fourteen broken questions through while dropping three good
+ * ones; with the structural rules it scores 1.00 and drops none.
  *
  * The broken cases below are the ones that were reaching real decks. The good cases are the
  * reason the rules key on shape rather than vocabulary — every one of them contains a word the

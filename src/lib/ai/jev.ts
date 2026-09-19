@@ -346,6 +346,10 @@ export async function askJev(params: AskJevParams): Promise<JevResponse | null> 
   }
 
   if (params.remainingBudgetMs !== undefined && params.remainingBudgetMs < JEV_MIN_BUDGET_MS) {
+    // Observable, because a silent bail here is indistinguishable from "Jev is switched off" —
+    // which is exactly how it presented the first time this ran end to end.
+    console.warn(`[jev] skipped: ${params.remainingBudgetMs}ms of budget left`);
+
     return null;
   }
 
@@ -374,6 +378,8 @@ export async function askJev(params: AskJevParams): Promise<JevResponse | null> 
         : params.remainingBudgetMs - (Date.now() - startedAt);
 
     if (remainingBudgetMs !== undefined && remainingBudgetMs < JEV_MIN_BUDGET_MS) {
+      console.warn(`[jev] batch ${index + 1}/${batches.length} abandoned: ${remainingBudgetMs}ms left`);
+
       return null;
     }
 

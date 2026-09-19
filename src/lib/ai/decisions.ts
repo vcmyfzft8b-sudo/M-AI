@@ -25,19 +25,23 @@ import {
  * the path it already had. That is what makes this safe to leave switched on: the worst outcome
  * of a bad day at TypeSafe is the product we shipped last week.
  *
- * Only `linkDuplicateItems` is wired into the product, and deliberately so. Measured against GLM
- * on identical inputs (scripts/jev-eval.mjs), Jev *tied* on every quality metric — importance
- * ranking 1.000 to 1.000, duplicate detection 100% recall and zero false positives for both,
- * marking in full agreement, both refusing an answer that asked to be given full marks. It won
- * only on latency, so the one place it is worth a vendor with no second source is the one where
- * latency is a learner sitting and waiting: the duplicate judge spends 30-80 seconds a batch
- * writing integers, on the practice-test attempt route.
+ * NOTHING HERE IS WIRED INTO THE PRODUCT. Read the note on `linkDuplicateItems` before wiring
+ * any of it: the duplicate judge was wired, tested end to end against staging, and taken out
+ * again, and the reason it came out is a property of the model's request shape rather than of
+ * that one call site.
  *
- * The other three stay here unwired because the benchmark measures them, and because the moment
- * the account is on paid credits they are the next candidates. They are not dead code; they are
- * the experiment. `scoreItemImportance` in particular did *not* do what it was built for — it
- * inflates the scale just as much as GLM does (67% of facts in the top two levels against 63%) —
- * so wiring it on the strength of the idea rather than the measurement would have been a mistake.
+ * What the measurements said, on identical inputs (scripts/jev-eval.mjs): Jev *tied* on every quality
+ * metric — importance ranking 1.000 to 1.000, duplicate detection 100% recall for both (with one
+ * false positive from GLM and none from Jev), marking in full agreement, both refusing an answer
+ * that asked to be given full marks. It won only on latency, 3-11x.
+ *
+ * `scoreItemImportance` did *not* do what it was built for: it inflates the 1-5 scale just as much
+ * as GLM does, 67% of facts in the top two levels against 63%. The hypothesis that a rater with no
+ * stake in the writing would use the scale better is not supported, and wiring it on the strength
+ * of the idea rather than the measurement would have been a mistake.
+ *
+ * Kept, unwired, because the benchmark runs against it and because a tie on quality at a third of
+ * the latency is worth revisiting if the request-shape problem below is ever solved.
  */
 
 export type DecisionUsage = {
@@ -206,6 +210,40 @@ export async function scoreItemImportance(
  * Only earlier items are offered as options, which both halves the answer space and makes the
  * relation acyclic by construction — collapseDuplicateItems unions the links undirected anyway,
  * so nothing is lost and a mutual-duplicate pair can no longer point at each other.
+ */
+/*
+ * WHY THIS IS NOT WIRED, THOUGH IT WAS, AND WORKED.
+ *
+ * This encoding is quadratic in the size of the batch and the batch is the whole point.
+ *
+ * Every question carries its own answer space, so item i ships descriptions of all i items before
+ * it. Over a list of n that is n(n-1)/2 option descriptions in one request — for the 300-item
+ * batch `judgeCollapseDuplicateItems` actually sends, about 45,000 of them. Measured against the
+ * live gateway with realistic claim text: 41 items is an 88KB request and answers in 1.5s; 64
+ * items is 210KB and answers; 100 items is 504KB and is rejected outright with a 400. Between 64
+ * and 90 items the service stops answering at all.
+ *
+ * This was found by running it, not by reading it. The benchmark's fixtures produce around thirty
+ * items, comfortably inside the working range, so every measurement above was taken on a list far
+ * smaller than production's. The first real note put through it on staging extracted 65 items,
+ * got a 400, fell back to GLM and finished correctly — which is the fallback doing exactly its
+ * job, and also the shape of a feature that would help only the small lectures while quietly
+ * doing nothing for the large ones. The large ones are the reason the judge exists: the
+ * 2026-08-25 incident that created it was a skipped judge leaving thousands of near-duplicates in
+ * a 150k-token outline prompt.
+ *
+ * Shrinking the request does not rescue it. Index-only option labels (the state already carries
+ * every claim, numbered) cut a 64-item request from 210KB to 42KB but still fail by 150. Batching
+ * fewer questions per request bounds each payload, but the state is re-sent and re-billed with
+ * every batch, so a 300-item dedupe becomes twelve requests and roughly $0.02 against GLM's
+ * $0.0008 — more expensive than the model it replaced, for a judgment that measured level with it.
+ * Capping how far back a question may look bounds both, and buys the saving by giving up exactly
+ * the cross-list restatements the mechanical dedupe already cannot see.
+ *
+ * What would fit this model is a different question: let the cheap lexical pass propose candidate
+ * pairs and ask Jev a boolean per candidate. That is linear in practice and plays to what it is
+ * good at. It is a different feature, with different ground truth, and it needs its own
+ * measurement before anybody writes it.
  */
 export const DUPLICATE_NONE = "none";
 

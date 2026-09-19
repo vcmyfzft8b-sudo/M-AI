@@ -271,6 +271,23 @@ test("a focused field is lifted clear of the keys and never pulled down to them"
   );
 });
 
+/*
+ * The stage a flashcard stands in is `flex: 1` under a cap, so on a short
+ * screen it is handed less than the card's floor — and a card that insists on
+ * its floor does not shrink, it overflows, straight over the answer row
+ * underneath. Measured in Safari, where the browser's chrome costs 160px of
+ * screen: a 272px stage with a 320px card in it, the card's bottom edge at 584
+ * and the review buttons starting at 572. The wrapper never showed it, because
+ * 874px of screen leaves the stage its full 352.
+ */
+test("a flashcard cannot be taller than the stage it stands in", () => {
+  assert.match(
+    css,
+    /lecture-flashcard-face \{\s*min-height: min\(20rem, 100%\)/,
+    "the card's floor has to yield to the room the stage actually has",
+  );
+});
+
 test("no phone sheet is capped against a viewport that ignores the keyboard", () => {
   for (const sheet of SHEETS) {
     const caps = rulesFor(sheet).flatMap((rule) => maxHeights(rule.body));

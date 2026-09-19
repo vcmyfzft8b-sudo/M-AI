@@ -46,18 +46,27 @@ export const noteArtifactSchema = z.object({
 /*
  * The description on `answer` is not documentation: it is sent to the model as
  * part of the response schema, which is the last thing it reads before it
- * writes. The closing question is the rule that goes missing first when an
- * answer runs long, and restating it here — at the field itself — is what makes
- * it stick.
+ * writes. Brevity and the closing question are the two rules that go missing
+ * first when an answer runs long, and restating them here — at the field
+ * itself — is what makes them stick.
+ *
+ * The floor is one character rather than the ten it used to be. A ten-character
+ * minimum is not a quality bar, it is a trap for the shortest correct reply —
+ * "Ja, drži." is nine — and now that the tutor is told to answer in as few words
+ * as the question takes, the trap is one it will walk into more often. Failing
+ * validation there spends the retry ladder on a good answer and can end with the
+ * learner seeing an error instead of it.
  */
 export const chatAnswerSchema = z.object({
   answer: z
     .string()
-    .min(10)
+    .min(1)
     .describe(
-      "The reply, in the language of the learner's last message. Simple, short enough to read " +
-        "on a phone, and ending with exactly one short question unless they were only saying " +
-        "thanks or goodbye.",
+      "The reply, in the language of the learner's last message, written as Markdown: a blank "
+        + "line between paragraphs, \"- \" for a genuine list, **bold** for the one term that "
+        + "matters. It opens with the answer itself — no preamble — and is around 60 words and "
+        + "never more than 120. It ends with exactly one short question unless they were only "
+        + "saying thanks or goodbye.",
     ),
   citations: z.array(citationSchema).max(4),
 });

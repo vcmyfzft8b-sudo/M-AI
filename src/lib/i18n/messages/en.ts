@@ -622,6 +622,7 @@ export const en: Messages = {
   "capture.recordHintIdle": "Press Start recording when the lecture begins.",
   "capture.recordPaused": "Recording is paused",
   "capture.recordActive": "Recording — the note is made when you stop.",
+  "capture.recordLockScreenHint": "Recording — you can lock your phone, it keeps going.",
   "capture.recordAgain": "Record again",
   "capture.resumeRecording": "Resume recording",
   "capture.pauseRecording": "Pause",
@@ -1210,6 +1211,7 @@ export const en: Messages = {
   "help.category.recording": "Recording and notes",
   "help.category.account": "Account and access",
   "legal.prevailingNotice": "This text is a translation. Where the versions differ, the Slovenian one prevails.",
+  "legal.otherDocuments": "Other documents",
 
   /* ---- Lecture failure messages (rendered from the stored failure code) ---- */
   "failure.private_network_link": "This link points to a private network, so we cannot open it. Paste a publicly reachable link.",

@@ -629,6 +629,7 @@ export const hr: Messages = {
   "capture.recordHintIdle": "Pritisni Počni snimanje kada predavanje počne.",
   "capture.recordPaused": "Snimanje je pauzirano",
   "capture.recordActive": "Snimanje je u tijeku – bilješka nastaje kada zaustaviš.",
+  "capture.recordLockScreenHint": "Snimanje je u tijeku – možeš zaključati telefon, snimanje se nastavlja.",
   "capture.recordAgain": "Snimi ponovno",
   "capture.resumeRecording": "Nastavi snimanje",
   "capture.pauseRecording": "Pauziraj",
@@ -1218,6 +1219,7 @@ export const hr: Messages = {
   "help.category.recording": "Snimanje i bilješke",
   "help.category.account": "Račun i pristup",
   "legal.prevailingNotice": "Ovaj tekst je prijevod. U slučaju odstupanja mjerodavna je slovenska verzija.",
+  "legal.otherDocuments": "Ostali dokumenti",
 
   /* ---- Lecture failure messages (rendered from the stored failure code) ---- */
   "failure.private_network_link": "Ova poveznica vodi na privatnu mrežu pa je ne možemo otvoriti. Zalijepi javno dostupnu poveznicu.",

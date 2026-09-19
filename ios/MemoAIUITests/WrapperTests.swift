@@ -18,6 +18,58 @@ final class WrapperTests: XCTestCase {
         }
     }
 
+    /// Signs in with the fixed review code, when the app is showing sign-in.
+    ///
+    /// The code stands in for a mailed one for the accounts named in the
+    /// Preview's `APP_REVIEW_ACCOUNT_EMAILS`; there is no password screen.
+    /// Returns false when the app was already signed in.
+    @MainActor @discardableResult
+    private func signInWithCode(_ app: XCUIApplication, email: String, code: String) -> Bool {
+        func either(_ english: String, _ slovenian: String) -> NSPredicate {
+            NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", english, slovenian)
+        }
+        let emailButton = app.webViews.buttons.matching(either("Continue with email", "Nadaljuj z e-po")).firstMatch
+        guard emailButton.waitForExistence(timeout: 60) else { return false }
+
+        let emailField = app.webViews.textFields.firstMatch
+        // Server-rendered buttons do nothing until React has hydrated.
+        for _ in 0..<4 where !emailField.exists {
+            emailButton.tap()
+            _ = emailField.waitForExistence(timeout: 6)
+        }
+        emailField.tap()
+        emailField.typeText(email)
+
+        // Waiting on "a text field" is not waiting for the next page: the email
+        // field is still on screen, so the code would be typed into that one.
+        // The heading is what actually changes.
+        let codeHeading = app.webViews.staticTexts.matching(either("Enter the code", "Vnesi kodo")).firstMatch
+        let send = app.webViews.buttons.matching(either("Continue", "Nadaljuj")).firstMatch
+        for _ in 0..<4 where !codeHeading.exists {
+            if send.exists { send.tap() }
+            _ = codeHeading.waitForExistence(timeout: 20)
+        }
+        XCTAssertTrue(codeHeading.exists, "Sending the code must open the code entry page")
+
+        let codeField = app.webViews.textFields.firstMatch
+        codeField.tap()
+        codeField.typeText(code)
+        for _ in 0..<4 where codeHeading.exists {
+            if send.exists { send.tap() }
+            RunLoop.current.run(until: Date().addingTimeInterval(6))
+        }
+        XCTAssertFalse(codeHeading.exists, "The review code must be accepted")
+
+        let allow = app.webViews.buttons.matching(either("Allow AI processing", "Dovoli obdelavo")).firstMatch
+        if allow.waitForExistence(timeout: 30) {
+            for _ in 0..<4 where allow.exists {
+                allow.tap()
+                RunLoop.current.run(until: Date().addingTimeInterval(6))
+            }
+        }
+        return true
+    }
+
     /// Scrolls the note's horizontal tab strip: swipe on a chip that sits well
     /// inside the screen (a clipped one has no visible frame), or drag along
     /// the row when none does.
@@ -371,6 +423,139 @@ final class WrapperTests: XCTestCase {
         expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: emailButton)
         waitForExpectations(timeout: 30)
         snap("S5 Signed in")
+    }
+
+    // Recording survives the app leaving the screen, on a staging Preview.
+    //
+    // This is the page's side of the recorder. The native half — that capture
+    // keeps running with the phone locked, and that the Lock Screen banner
+    // counts up while it does — is not reachable from XCUITest, which can
+    // background an app but cannot lock the device.
+    //
+    // Backgrounding is the same failure the native recorder exists to fix:
+    // `MediaRecorder` loses the microphone the moment WebKit suspends the web
+    // content process, so before this the clock came back reading whatever it
+    // said when the app went away. Nothing is created, so the account keeps its
+    // free note. Grant the microphone first:
+    // xcrun simctl privacy <udid> grant microphone eu.memoai.memo
+    @MainActor func testPreviewRecordingSurvivesTheAppLeavingTheScreen() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let preview = env["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              let email = env["MEMO_QA_EMAIL"], let code = env["MEMO_QA_CODE"] else {
+            throw XCTSkip("Requires a staging Preview and a synthetic review account")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        signInWithCode(app, email: email, code: code)
+        passConsentGate(app)
+        continueAfterFailure = false
+        func snap(_ name: String) {
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = name
+            shot.lifetime = .keepAlways
+            add(shot)
+        }
+        // A fresh simulator gets the Slovenian catalogue from its IP country.
+        // Case-insensitively: the card's label is drawn uppercase by the
+        // stylesheet, and that is the label the accessibility tree reports.
+        func either(_ english: String, _ slovenian: String) -> NSPredicate {
+            NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@", english, slovenian)
+        }
+        func webButton(_ english: String, _ slovenian: String) -> XCUIElement {
+            app.webViews.buttons.matching(either(english, slovenian)).firstMatch
+        }
+
+        // A signed-in account that has not subscribed meets the offer sheet on
+        // the way in; the free note behind it is what this test records into.
+        let closeOffer = webButton("Close the subscription offer", "Zapri ponudbo naročnine")
+        if closeOffer.waitForExistence(timeout: 30) {
+            for _ in 0..<4 where closeOffer.exists {
+                closeOffer.tap()
+                RunLoop.current.run(until: Date().addingTimeInterval(4))
+            }
+        }
+        let newNote = webButton("New note", "Nov zapisek")
+        if !newNote.waitForExistence(timeout: 60) {
+            snap("L0 No way in")
+            return XCTFail("Requires a signed-in account with its free note unspent")
+        }
+        newNote.tap()
+        // "New note" opens a picker of sources before the capture sheet itself.
+        let recordSource = webButton("Record audio", "Posnemi zvok")
+        for _ in 0..<4 where recordSource.waitForExistence(timeout: 10) {
+            recordSource.tap()
+            RunLoop.current.run(until: Date().addingTimeInterval(3))
+        }
+        let start = webButton("Start recording", "Začni snemanje")
+        if !start.waitForExistence(timeout: 20) {
+            snap("L1 No recording control")
+            return XCTFail("The capture sheet must offer recording")
+        }
+        snap("L1 Before recording")
+        for _ in 0..<4 where start.exists {
+            start.tap()
+            RunLoop.current.run(until: Date().addingTimeInterval(4))
+        }
+
+        /// The clock on the capture screen, as whole seconds.
+        func elapsed() -> Int? {
+            let clock = app.webViews.staticTexts.matching(
+                NSPredicate(format: "label MATCHES %@", "^[0-9]{1,2}:[0-9]{2}(:[0-9]{2})?$")).firstMatch
+            guard clock.exists else { return nil }
+            return clock.label.split(separator: ":").compactMap { Int($0) }.reduce(0) { $0 * 60 + $1 }
+        }
+
+        // Recording has started once the clock leaves 0:00 on its own.
+        let started = Date()
+        while Date().timeIntervalSince(started) < 30, (elapsed() ?? 0) < 2 {
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
+        }
+        guard let before = elapsed(), before >= 2 else {
+            snap("L2 Recording did not start")
+            return XCTFail("The clock must run once recording starts")
+        }
+        XCTAssertTrue(webButton("Pause", "Začasno ustavi").exists, "A running recording offers a pause")
+        snap("L2 Recording")
+
+        // Away long enough that a page-side timer would visibly fall behind.
+        let away = 15
+        XCUIDevice.shared.press(.home)
+        RunLoop.current.run(until: Date().addingTimeInterval(TimeInterval(away)))
+        app.activate()
+        // The page reads the app's own count when it comes back; give it a beat.
+        let resumed = Date()
+        while Date().timeIntervalSince(resumed) < 20, (elapsed() ?? 0) < before + away {
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
+        }
+        snap("L3 Back from the background")
+        guard let after = elapsed() else { return XCTFail("The capture screen must survive the app leaving") }
+        XCTAssertGreaterThanOrEqual(after - before, away - 2,
+                                    "The clock must count the time the app spent off screen")
+
+        let stop = webButton("Stop and create the note", "Ustavi in ustvari zapisek")
+        XCTAssertTrue(stop.waitForExistence(timeout: 10))
+        // The audio crosses the bridge in slices before the card can name it.
+        let ready = app.webViews.staticTexts.matching(either("Recording ready", "Pripravljen posnetek")).firstMatch
+        for _ in 0..<3 where !ready.exists {
+            if stop.exists, stop.isHittable { stop.tap() }
+            _ = ready.waitForExistence(timeout: 30)
+        }
+        if !ready.exists {
+            snap("L4 Stop did not hand back the audio")
+            return XCTFail("Stopping must hand the page the finished audio")
+        }
+        let file = app.webViews.staticTexts.matching(
+            NSPredicate(format: "label ENDSWITH %@", ".m4a")).firstMatch
+        XCTAssertTrue(file.waitForExistence(timeout: 10),
+                      "The audio is the app's own m4a, not a MediaRecorder container")
+        snap("L4 Recording ready")
+
+        // Leave the account as it was found: no note, no spent free note.
+        let cancel = app.webViews.buttons.matching(
+            NSPredicate(format: "label == %@ OR label == %@", "Cancel", "Prekliči")).firstMatch
+        if cancel.waitForExistence(timeout: 5) { cancel.tap() }
     }
 
     // Click-through of every screen on a staging Preview with a signed-in

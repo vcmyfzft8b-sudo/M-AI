@@ -223,6 +223,13 @@ test("a failed GLM call falls back to the pre-switch Gemini, routed through the 
   assert.equal(resolveStageFallbackModel("note_write"), "or/google/gemini-3.7-flash");
   assert.equal(resolveStageFallbackModel("note_extract"), null);
   assert.equal(resolveStageFallbackModel("note_outline"), null);
+  /*
+   * Chat names its own fallback for a reason worth keeping: on a preview, where every answer is
+   * the fallback, gemini-2.5-flash-lite answered a Slovenian "thank you" by repeating its
+   * previous answer in English. 3.5-flash-lite is the model already trusted with the spoken
+   * tutor's prose and with checking GLM's Slovenian.
+   */
+  assert.equal(resolveStageFallbackModel("chat"), "or/google/gemini-3.5-flash-lite");
 });
 
 test("GLM gets a shorter leash than Gemini so its fallback fits the same invocation", () => {
@@ -287,7 +294,43 @@ test("the outline and write stages get a timeout sized for their output, others 
   assert.equal(resolveStageTimeoutMs("note_outline"), 240_000);
   assert.equal(resolveStageTimeoutMs("note_write"), 240_000);
   assert.equal(resolveStageTimeoutMs("note_extract"), undefined);
-  assert.equal(resolveStageTimeoutMs("chat"), undefined);
+});
+
+/*
+ * Chat is the stage with somebody watching it, and the leash is there for the invocation
+ * arithmetic rather than for the model: a streamed attempt and the plain call it falls back to
+ * both run inside one 300s route, and at the gateway's 180s default they cannot both fit — which
+ * is how POST /chat/stream answered 504 on 2026-09-16 with no error frame at all.
+ */
+test("chat is leashed short enough that its fallback still fits the invocation", async () => {
+  const { resolveStageTimeoutMs, GLM_TEXT_MODEL } = await import("../src/lib/ai/model-config.ts");
+
+  assert.equal(resolveStageTimeoutMs("chat"), 60_000);
+  // GLM takes the mandatory-reasoning branch, which has its own table of timeouts.
+  assert.equal(resolveStageTimeoutMs("chat", GLM_TEXT_MODEL), 60_000);
+  assert.ok(
+    resolveStageTimeoutMs("chat", GLM_TEXT_MODEL) * 2 < 300_000,
+    "the streamed attempt and its fallback have to fit one invocation together",
+  );
+});
+
+test("chat is routed by latency, like the spoken tutor and unlike the note pipeline", async () => {
+  const { resolveStageModelConfig } = await import("../src/lib/ai/model-config.ts");
+
+  const chat = resolveStageModelConfig({
+    stage: "chat",
+    env: {},
+    fallbackModel: "gemini-2.5-flash-lite",
+  });
+  const notes = resolveStageModelConfig({
+    stage: "note_write",
+    env: {},
+    fallbackModel: "gemini-2.5-flash-lite",
+  });
+
+  // Nobody watches a note being written; a chat answer is watched token by token.
+  assert.equal(chat.providerSort, "latency");
+  assert.equal(notes.providerSort, "throughput");
 });
 
 const paragraphsOf = (wordsEach, count) =>

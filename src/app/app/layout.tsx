@@ -6,7 +6,7 @@ import { AppShell } from "@/components/app-shell";
 import { ImpersonationBannerSlot } from "@/components/impersonation-banner-slot";
 import { NavigationFeedbackProvider } from "@/components/navigation-loading";
 import { getViewerAppState } from "@/lib/billing";
-import { requireUser } from "@/lib/auth";
+import { PREVIEW_AUTH_BYPASS_USER_ID, requireUser } from "@/lib/auth";
 import { readActiveTestPersona } from "@/lib/test-persona-server";
 import { isNativeUserAgent } from "@/lib/mobile/runtime";
 
@@ -23,7 +23,17 @@ export default async function AppLayout({
   const pathname = headerStore.get("x-pathname") ?? "/app";
   const native = isNativeUserAgent(headerStore.get("user-agent"));
   const nativeAccountPage = native && ["/app/consent", "/app/settings", "/app/support"].includes(pathname);
-  if (native && user.user_metadata?.memo_native_ai_consent !== "v1" && !nativeAccountPage) redirect("/app/consent");
+  /*
+   * The dev bypass account is taken as having consented, for the same reason it
+   * is taken as having onboarded: it is fabricated rather than created, so it
+   * has no user_metadata to record a consent in and the route that would record
+   * one answers 401. In the wrapper that left the whole app behind a card whose
+   * only button could never do anything. `PREVIEW_AUTH_BYPASS` is what mints
+   * this id and production never sets it.
+   */
+  const consented =
+    user.id === PREVIEW_AUTH_BYPASS_USER_ID || user.user_metadata?.memo_native_ai_consent === "v1";
+  if (native && !consented && !nativeAccountPage) redirect("/app/consent");
 
   if (appState && !appState.onboardingComplete && pathname !== "/app/start" && !nativeAccountPage) {
     /*

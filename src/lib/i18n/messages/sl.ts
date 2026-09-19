@@ -645,6 +645,7 @@ export const sl = {
   "capture.recordHintIdle": "Pritisni Začni snemanje, ko se predavanje začne.",
   "capture.recordPaused": "Snemanje je začasno ustavljeno",
   "capture.recordActive": "Snemanje poteka – zapisek nastane, ko ustaviš.",
+  "capture.recordLockScreenHint": "Snemanje poteka – telefon lahko ugasneš, snemanje teče naprej.",
   "capture.recordAgain": "Posnemi znova",
   "capture.resumeRecording": "Nadaljuj snemanje",
   "capture.pauseRecording": "Začasno ustavi",
@@ -1235,6 +1236,7 @@ export const sl = {
   "help.category.recording": "Snemanje in zapiski",
   "help.category.account": "Račun in dostop",
   "legal.prevailingNotice": "To besedilo je prevod. V primeru razhajanj velja slovenska različica.",
+  "legal.otherDocuments": "Drugi dokumenti",
 
   /* ---- Lecture failure messages (rendered from the stored failure code) ---- */
   "failure.private_network_link": "Ta povezava kaže na zasebno omrežje, zato je ne moremo odpreti. Prilepi javno dostopno povezavo.",

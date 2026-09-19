@@ -742,14 +742,34 @@
   to { opacity: 1; }
 }
 
-@keyframes memo-rec-pulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(0.9); opacity: 0.72; }
+/*
+ * The recording orb: a coral disc that breathes, with two ripples leaving it
+ * half a cycle apart so something is always moving outward. The old orb shrank
+ * to 0.9 and dropped to 72% opacity twice a second, which read as a warning
+ * light rather than as a microphone listening — and on the phone, where the
+ * artboard wanted a still orb, it was switched off altogether and the screen
+ * had no sign of life on it at all.
+ *
+ * Transform and opacity only. This runs for the length of a lecture, and an
+ * animation that touched layout or paint would be a decoration charged to the
+ * battery.
+ */
+@keyframes memo-rec-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
 }
 
-@keyframes memo-rec-ring {
-  0% { transform: scale(0.92); opacity: 0.55; }
-  100% { transform: scale(1.35); opacity: 0; }
+@keyframes memo-rec-ripple {
+  0% { transform: scale(1); opacity: 0.5; }
+  70% { opacity: 0; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+/* Each bar runs at its own speed, so the row reads as a level meter rather
+   than as a row of metronomes. */
+@keyframes memo-rec-level {
+  0%, 100% { transform: scaleY(0.24); }
+  50% { transform: scaleY(1); }
 }
 
 @keyframes memo-rec-bar {
@@ -2080,13 +2100,18 @@
   height: 2.1rem;
 }
 
+/*
+ * No `white-space: pre-wrap` here any more. The answer is rendered markdown
+ * (ChatMarkdown), so its paragraphs are real elements with their own spacing;
+ * honouring the source newlines on top of that spaced every answer twice. The
+ * question below keeps its own line breaks, because that is text somebody typed.
+ */
 .memo-homechat-answer > div {
   flex: 1;
   min-width: 0;
   font-size: 1.1rem;
   line-height: 1.55;
   letter-spacing: -0.015em;
-  white-space: pre-wrap;
 }
 
 .memo-homechat-question {
@@ -2096,6 +2121,7 @@
 
 .memo-homechat-question > div {
   max-width: 70%;
+  white-space: pre-wrap;
   padding: 0.7rem 1.1rem;
   border-radius: 16px;
   background: var(--field);
@@ -3044,22 +3070,12 @@
   line-height: 1.5;
 }
 
-/* The cursor that trails the answer while it is being written. */
-.memo-bubble-bot.streaming .memo-bubble-copy {
-  white-space: pre-wrap;
-}
-
-.memo-caret {
-  display: inline-block;
-  width: 0.5rem;
-  height: 1.05em;
-  margin-left: 0.15rem;
-  border-radius: 1px;
-  background: var(--muted);
-  vertical-align: text-bottom;
-  animation: memo-caret-blink 1s steps(1, end) infinite;
-}
-
+/*
+ * The cursor that trails the answer while it is being written. It is drawn by
+ * `.memo-prose.is-streaming` on the last block of the answer rather than by an
+ * element of its own — markdown ends in a block, so a sibling span would sit on
+ * its own line and jump to the left margin on every token.
+ */
 @keyframes memo-caret-blink {
   0%,
   50% { opacity: 1; }
@@ -3396,6 +3412,191 @@
 .memo-bubble-copy {
   margin: 0;
   white-space: pre-wrap;
+}
+
+/*
+ * A chat answer's own structure.
+ *
+ * Both chats render the tutor's reply through `ChatMarkdown`, so this is the
+ * one place an answer's paragraphs, lists and emphasis are styled — the note
+ * bubble on a lecture page and the ask-bar answer on the home screen share it,
+ * and neither carries prose CSS of its own.
+ *
+ * Everything here is sized in `em` and coloured from the inherited token, so
+ * the same block works on the grey bot bubble, on the page background behind
+ * the home answer, and in both appearances. Nothing sets a colour outright.
+ */
+.memo-prose {
+  min-width: 0;
+  /*
+   * A bubble is narrow and a model writes identifiers, URLs and German-length
+   * compounds. Without this one of them pushes the bubble past the panel and
+   * the whole conversation scrolls sideways.
+   */
+  overflow-wrap: break-word;
+}
+
+.memo-prose > *:first-child {
+  margin-top: 0;
+}
+
+.memo-prose > *:last-child {
+  margin-bottom: 0;
+}
+
+/*
+ * The gap that makes a paragraph a paragraph. It is smaller than a note's
+ * because an answer is a few lines long and a full blank line between two of
+ * them reads as two messages rather than one.
+ */
+.memo-prose p {
+  margin: 0 0 0.6em;
+}
+
+/*
+ * The markers are set here because something upstream removes them: the app's
+ * reset leaves every list `list-style: none`, so a bulleted answer arrived as
+ * indented text with nothing down the left margin — which is exactly the thing
+ * this whole change exists to stop.
+ */
+.memo-prose ul {
+  list-style: disc outside;
+}
+
+.memo-prose ol {
+  list-style: decimal outside;
+}
+
+.memo-prose ul ul {
+  list-style: circle outside;
+}
+
+.memo-prose ul,
+.memo-prose ol {
+  margin: 0.5em 0 0.6em;
+  /*
+   * The marker sits inside the bubble's padding rather than hanging off its
+   * left edge, which is what `list-style-position: outside` plus the browser's
+   * default 40px indent would do in a 92%-wide bubble on a phone.
+   */
+  padding-left: 1.35em;
+}
+
+.memo-prose li {
+  margin: 0.2em 0;
+}
+
+.memo-prose li > p {
+  margin: 0;
+}
+
+.memo-prose li::marker {
+  color: var(--muted);
+}
+
+/* Nested lists are the model over-structuring a short answer; keep them tight. */
+.memo-prose li > ul,
+.memo-prose li > ol {
+  margin: 0.2em 0 0.2em;
+}
+
+.memo-prose strong {
+  font-weight: 620;
+}
+
+/*
+ * A heading in a four-line answer is over-formatting, and the prompt asks for
+ * none. When one arrives anyway it reads as an emphasised line rather than as
+ * furniture — the bubble is not a document and has no outline to join.
+ */
+.memo-prose h1,
+.memo-prose h2,
+.memo-prose h3,
+.memo-prose h4,
+.memo-prose h5,
+.memo-prose h6 {
+  margin: 0.6em 0 0.3em;
+  font-size: 1em;
+  font-weight: 620;
+  line-height: inherit;
+}
+
+.memo-prose code {
+  padding: 0.1em 0.35em;
+  border-radius: 6px;
+  background: var(--line);
+  font-size: 0.92em;
+  /* An identifier has no spaces to break at, so it is allowed to break anywhere. */
+  overflow-wrap: anywhere;
+}
+
+.memo-prose pre {
+  margin: 0.5em 0 0.6em;
+  padding: 0.7em 0.85em;
+  border-radius: 12px;
+  background: var(--line);
+  /* A long line scrolls inside the block; the panel itself never scrolls sideways. */
+  overflow-x: auto;
+}
+
+.memo-prose pre code {
+  padding: 0;
+  background: none;
+}
+
+.memo-prose blockquote {
+  margin: 0.5em 0 0.6em;
+  padding-left: 0.8em;
+  border-left: 2px solid var(--line);
+  color: var(--muted);
+}
+
+.memo-prose a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.memo-prose hr {
+  margin: 0.8em 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* A table is rare and always too wide for a bubble, so it scrolls on its own. */
+.memo-prose table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.memo-prose th,
+.memo-prose td {
+  padding: 0.3em 0.6em;
+  border: 1px solid var(--line);
+  text-align: left;
+}
+
+/*
+ * The caret that follows the words as they arrive.
+ *
+ * Drawn on the last rendered block rather than as an element after it: markdown
+ * ends in a block, so a sibling would sit on its own line and jump to the left
+ * margin on every token.
+ */
+.memo-prose.is-streaming > *:last-child::after {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 1.05em;
+  margin-left: 0.15rem;
+  border-radius: 1px;
+  background: var(--muted);
+  vertical-align: text-bottom;
+  animation: memo-caret-blink 1s steps(1, end) infinite;
 }
 
 .memo-chat-status {
@@ -6321,6 +6522,176 @@
   font-weight: 750;
 }
 
+/* --- public legal documents ----------------------------------------------- */
+
+/*
+ * /legal/[slug] — the terms, the privacy policy and the refund policy.
+ *
+ * The document itself is the help reader above, unchanged. What this block adds
+ * is the chrome the app shell would otherwise supply, because these three
+ * routes deliberately sit outside it: a brand row, a way back, and — below the
+ * breakpoint — the same fixed frame every other phone screen uses, which is
+ * what keeps the top row clear of the iOS status bar.
+ */
+.memo-legal-screen {
+  animation: memo-fade-in 0.18s ease-out;
+}
+
+.memo-legal-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: calc(1.2rem + var(--memo-safe-top, 0px)) 1.6rem 0;
+}
+
+.memo-legal-brand {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.memo-legal-brand .brand-logo-mark {
+  --lockup-h: 2.6rem;
+}
+
+/*
+ * The way back. A labelled pill where there is room for a label, and the app's
+ * round icon button on the phone — where every other screen's back control is
+ * a bare arrow, and a pill in the corner would be the one thing on the page
+ * that did not come from the app.
+ */
+.memo-legal-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 0 0 auto;
+  height: 3rem;
+  padding: 0 1.2rem;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 650;
+  transition: box-shadow 0.16s ease;
+}
+
+.memo-legal-back:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-legal-back .msym {
+  font-size: 1.2rem;
+}
+
+.memo-legal-page {
+  margin: 0 auto;
+  padding: 1.6rem 1.6rem 4rem;
+}
+
+/*
+ * A legal document is 24 numbered sections rather than the handful an in-app
+ * answer runs to, so its headings get a hairline above them: without one the
+ * card reads as a single unbroken wall and there is nothing to scan for. The
+ * opening standfirst keeps the help reader's lead-paragraph treatment.
+ */
+.memo-legal-body > .markdown > p:first-child {
+  margin-bottom: 1.4rem;
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+.memo-legal-body h2 {
+  margin-top: 2.2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.memo-legal-body h2:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.memo-legal-body > .markdown > *:last-child {
+  margin-bottom: 0;
+}
+
+.memo-legal-more-heading {
+  margin: 2rem 0 0.7rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.memo-legal-more {
+  display: grid;
+  gap: 0.85rem;
+}
+
+/* The cross-links are one-line rows, so they do not need the settings row's
+   full two-line height. */
+.memo-legal-more .memo-settings-row {
+  min-height: 4.2rem;
+}
+
+/*
+ * Statutory fine print, and the note that a translated document is a
+ * translation. Both have to stay on the page, and neither should read as a
+ * clause of the document above: they sit outside the card, at the size the app
+ * gives every other aside.
+ */
+.memo-legal-fineprint {
+  margin-top: 2rem;
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+/*
+ * The shared markdown renderer wraps its output in Tailwind's `text-sm
+ * text-stone-700`, which would otherwise hand the fine print a fixed size and
+ * a light-mode ink that is all but invisible on the dark page. Both are reset
+ * here, on the wrapper and on the paragraphs it emits.
+ */
+.memo-legal-fineprint .markdown,
+.memo-legal-fineprint .markdown p {
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.memo-legal-fineprint .markdown p {
+  margin: 0;
+}
+
+.memo-legal-fineprint .markdown p + p {
+  margin-top: 0.6rem;
+}
+
+/* Reads as one continuous run of small text — no bold lead-in, no link
+   styling. */
+.memo-legal-fineprint strong {
+  font-weight: inherit;
+}
+
+.memo-legal-fineprint a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.memo-legal-prevailing {
+  margin: 0.9rem 0 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.memo-legal-copyright {
+  margin: 2rem 0 0;
+  color: var(--muted-2);
+  font-size: 0.9rem;
+}
+
 /* --- settings screen ------------------------------------------------------ */
 
 .memo-settings-screen {
@@ -6530,14 +6901,39 @@
   color: var(--muted-2);
 }
 
-.memo-record-wave {
-  width: min(14rem, 100%);
-  color: #ff3b30;
+.memo-record-level {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.3rem;
+  height: 1.9rem;
 }
 
-.memo-record-orb.paused .core,
-.memo-record-orb.paused .ring {
-  animation-play-state: paused;
+.memo-record-level span {
+  width: 0.26rem;
+  height: 100%;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--coral);
+  transform: scaleY(0.24);
+  transform-origin: center;
+  animation: memo-rec-level 1.15s ease-in-out infinite;
+  transition: transform 300ms ease, opacity 300ms ease;
+}
+
+.memo-record-level span:nth-child(1) { animation-duration: 1.4s; animation-delay: -0.9s; }
+.memo-record-level span:nth-child(2) { animation-duration: 1s; animation-delay: -0.35s; }
+.memo-record-level span:nth-child(3) { animation-duration: 1.25s; animation-delay: -0.6s; }
+.memo-record-level span:nth-child(4) { animation-duration: 0.9s; animation-delay: -0.15s; }
+.memo-record-level span:nth-child(5) { animation-duration: 1.3s; animation-delay: -0.75s; }
+
+/* Paused settles rather than freezing: `animation-play-state: paused` stopped
+   the orb wherever the frame happened to fall, which looked like a rendering
+   fault as often as it looked deliberate. */
+.memo-record-level.paused span {
+  animation: none;
+  transform: scaleY(0.18);
+  opacity: 0.45;
 }
 
 /* record modal */
@@ -6557,29 +6953,54 @@
   height: 9rem;
 }
 
-.memo-record-orb .ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  background: rgba(255, 59, 48, 0.16);
-  animation: memo-rec-ring 1.8s ease-out infinite;
-}
-
-.memo-record-orb .halo {
-  position: absolute;
-  width: 7rem;
-  height: 7rem;
-  border-radius: 999px;
-  background: rgba(255, 59, 48, 0.14);
-}
-
+/* Both ripples start at the core's size; the halo is the same ripple, half a
+   cycle behind. They are the only two elements in the orb besides the core, so
+   the markup does not change. */
+.memo-record-orb .ring,
+.memo-record-orb .halo,
 .memo-record-orb .core {
   width: 5.2rem;
   height: 5.2rem;
   border-radius: 999px;
-  background: #ff3b30;
-  box-shadow: 0 12px 30px rgba(255, 59, 48, 0.32);
-  animation: memo-rec-pulse 1.2s ease-in-out infinite;
+}
+
+.memo-record-orb .ring,
+.memo-record-orb .halo {
+  position: absolute;
+  background: rgba(244, 95, 90, 0.26);
+  opacity: 0;
+  animation: memo-rec-ripple 2.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+
+.memo-record-orb .halo {
+  animation-delay: -1.4s;
+}
+
+.memo-record-orb .core {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--coral);
+  color: #fff;
+  box-shadow: 0 10px 26px rgba(244, 95, 90, 0.34);
+  animation: memo-rec-breathe 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  transition: transform 320ms ease, box-shadow 320ms ease, filter 320ms ease;
+}
+
+.memo-record-orb-mic {
+  font-size: 2.1rem;
+}
+
+.memo-record-orb.paused .ring,
+.memo-record-orb.paused .halo {
+  animation: none;
+}
+
+.memo-record-orb.paused .core {
+  animation: none;
+  filter: saturate(0.5);
+  box-shadow: 0 6px 16px rgba(244, 95, 90, 0.18);
 }
 
 .memo-record-clock {
@@ -7531,10 +7952,6 @@
     font-size: 1.02rem;
   }
 
-  /* The desktop orb is a plain red disc; the mic is the phone artboard's. */
-  .memo-record-orb-mic {
-    display: none;
-  }
 }
 
 .note-source-modal .memo-modal-actions {
@@ -8226,6 +8643,28 @@
 @media (prefers-reduced-motion: reduce) {
   .memo-offer-timer {
     animation: none;
+  }
+
+  /* The orb still has to say "listening" without moving: the ripple holds at
+     its widest, faintly, and the level meter holds part way up. */
+  .memo-record-orb .core,
+  .memo-record-orb .ring,
+  .memo-record-orb .halo,
+  .memo-record-level span {
+    animation: none;
+  }
+
+  .memo-record-orb .ring {
+    transform: scale(1.5);
+    opacity: 0.35;
+  }
+
+  .memo-record-orb .halo {
+    display: none;
+  }
+
+  .memo-record-level span {
+    transform: scaleY(0.5);
   }
 }
 
@@ -9194,31 +9633,79 @@
   .memo-portal {
     /* `KeyboardInset` publishes the measured height on the document element;
        the fallback keeps every calc() honest before it has run and on any
-       browser without `visualViewport`. */
+       browser without `visualViewport`.
+
+       It reads 0 in mobile Safari, correctly: Safari shrinks the layout
+       viewport to the space above the keys, so a sheet on the bottom edge is
+       already clear of them and has nothing to pad past. That is also why no
+       sheet is capped in `dvh` any more — `dvh` does not shrink with the
+       keyboard, so a sheet measured against it was allowed to be taller than
+       the viewport it sits in and hung its header off the top of the screen.
+       `100%` is the containing block, which is that viewport in every case. */
     --memo-kb: var(--memo-keyboard, 0px);
+    /*
+     * What is actually on screen, and how far down it starts. Mobile Safari
+     * pans the visual viewport inside a layout viewport it never shrinks, so
+     * neither `dvh` nor `%` can answer either question — both measure the taller
+     * screen you cannot see. `KeyboardInset` measures them; the fallbacks are
+     * the old behaviour, for the first paint and for anything without
+     * `visualViewport`.
+     */
+    --memo-vv: var(--memo-viewport, 100dvh);
+    --memo-vv-top: var(--memo-viewport-top, 0px);
+    /*
+     * How tall a bottom sheet may be: from the bottom edge it is anchored to,
+     * up to 54px below the top of the visible area. The keyboard inset is added
+     * back because that much of the sheet is deliberately behind the keys — it
+     * is padding, not content, and clamping it away would crush the content
+     * instead.
+     */
+    --memo-sheet-max: calc(var(--memo-vv) + var(--memo-kb) - 54px);
     --memo-safe-top: env(safe-area-inset-top, 0px);
     --memo-safe-bottom: env(safe-area-inset-bottom, 0px);
+    /*
+     * What every bottom sheet pads its content by, so the keys clear it.
+     *
+     * A sheet stays anchored to the bottom edge and pads rather than rises, so
+     * the keyboard slides over the sheet's own surface. Ending the sheet on
+     * top of the keys instead drew its bottom edge across the middle of the
+     * screen with the page showing through beside it, which reads as a sheet
+     * cut in half rather than one the keyboard is overlapping.
+     *
+     * The home indicator's strip is only worth clearing while the keyboard is
+     * down — the keys cover it themselves — so `max()` drops it rather than
+     * adding it on top, and the gap above the keyboard stays whatever padding
+     * the sheet already asked for.
+     */
+    --memo-kb-pad: max(var(--memo-safe-bottom), var(--memo-kb));
+    /*
+     * The home indicator's strip, but only while the keys are not already
+     * covering it.
+     *
+     * A foot that sits *inside* something which has itself made room for the
+     * keyboard — a composer in a sheet, the dock on a screen — must not add the
+     * indicator's inset again on top of it. Doing so left the chat composer
+     * floating a thumb's width above the keys with nothing in the gap.
+     */
+    --memo-kb-gap: max(0px, var(--memo-safe-bottom) - var(--memo-kb));
+    /* Scrolling a focused field into view has to stop short of the keys: the
+       sheet's scrollport now runs on behind them. */
+    --memo-kb-scroll: calc(var(--memo-kb) + 1.1rem);
   }
 
   /*
-   * Sheets that live inside a full-screen wrapper are pinned to the bottom of
-   * *that*, so subtracting the keyboard from their own height is not enough —
-   * the wrapper has to end above the keys or the sheet stays behind them.
+   * A note for the next person who reaches for `--memo-kb` here: wrappers and
+   * scrims stay the full viewport, always, and the keyboard is read once per
+   * sheet — in that sheet's own foot padding, never as its bottom edge.
    *
-   * `.study-manager-backdrop` is deliberately not in this list. It is the only
-   * one of these that is both the scrim and the sheet's parent, and its
-   * `backdrop-filter` makes it the containing block for the fixed sheet inside
-   * it — so ending the scrim above the keys subtracted `--memo-kb` a second
-   * time, and the edit sheet sat a whole keyboard's height above the keyboard
-   * with its header pushed off the top of the screen. The scrim stays the full
-   * viewport and the sheet alone reads the inset.
+   * `.library-folder-modal-overlay` is why. It paints a `backdrop-filter`,
+   * which makes it the containing block for the fixed sheet inside it, so
+   * ending the overlay above the keys subtracted the inset a second time: the
+   * "Nova mapa" sheet came to rest a whole keyboard's height above the
+   * keyboard with its header off the top of the screen. `.note-source-modal-wrap`
+   * and `.ios-sheet-wrap` wrap sheets that are `position: fixed` in their own
+   * right, so moving those wrappers was never doing anything for them either.
    */
-  .note-source-modal-wrap,
-  .library-folder-modal-overlay,
-  .memo-portal .ios-sheet-wrap {
-    bottom: var(--memo-kb);
-  }
-
 
   .memo-only-desktop {
     display: none !important;
@@ -9262,7 +9749,7 @@
 
   .memo-screen {
     position: fixed;
-    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     background: var(--bg);
@@ -9702,7 +10189,7 @@
 
   .memo-m-homebar {
     position: absolute;
-    inset: auto 1.15rem calc(1.9rem + var(--memo-safe-bottom)) 1.15rem;
+    inset: auto 1.15rem calc(1.9rem + var(--memo-kb-gap)) 1.15rem;
     z-index: 4;
     display: flex;
     align-items: center;
@@ -9761,7 +10248,7 @@
 
   .memo-home-screen {
     position: fixed;
-    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     background: var(--bg);
@@ -9795,12 +10282,13 @@
     top: auto;
     left: 0;
     right: 0;
-    bottom: var(--memo-kb);
+    bottom: 0;
     transform: translateY(0);
     width: auto;
-    max-height: calc(100dvh - var(--memo-kb) - 54px);
+    max-height: var(--memo-sheet-max);
     overflow-y: auto;
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
+    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -10121,7 +10609,7 @@
 
   .memo-dock {
     position: absolute;
-    inset: auto 1.15rem calc(1.6rem + var(--memo-safe-bottom)) 1.15rem;
+    inset: auto 1.15rem calc(1.6rem + var(--memo-kb-gap)) 1.15rem;
     z-index: 4;
     display: flex;
     align-items: center;
@@ -10384,7 +10872,7 @@
 
   .memo-note-screen {
     position: fixed;
-    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     background: var(--bg);
@@ -10435,7 +10923,7 @@
   }
 
   .memo-note-chat-sheet .memo-chat-foot {
-    padding: 0 1.15rem calc(1.6rem + var(--memo-safe-bottom));
+    padding: 0 1.15rem calc(1.6rem + var(--memo-kb-gap));
   }
 
   .memo-m-chat-title {
@@ -10490,9 +10978,9 @@
 
   .memo-quiz-sheet {
     position: fixed;
-    inset: auto 0 var(--memo-kb) 0;
+    inset: auto 0 0 0;
     z-index: 6;
-    padding: 1.2rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    padding: 1.2rem 1.15rem calc(2rem + var(--memo-kb-pad));
     border-radius: 30px 30px 0 0;
     background: var(--surface);
     box-shadow: var(--shadow-lg);
@@ -10537,7 +11025,7 @@
 
   .memo-sub-chatbar {
     position: absolute;
-    inset: auto 1.15rem calc(1.6rem + var(--memo-safe-bottom)) 1.15rem;
+    inset: auto 1.15rem calc(1.6rem + var(--memo-kb-gap)) 1.15rem;
     display: flex;
     align-items: center;
     gap: 0.6rem;
@@ -10616,8 +11104,8 @@
 
   .memo-sheet-full.memo-wheel-sheet,
   .memo-sheet-full.memo-offer-sheet {
-    top: calc(3.5rem + var(--memo-safe-top));
-    bottom: var(--memo-kb);
+    top: calc(var(--memo-vv-top) + 3.5rem + var(--memo-safe-top));
+    bottom: 0;
     left: 0;
     transform: translateY(0);
     width: auto;
@@ -10627,7 +11115,7 @@
 
   .memo-settings-screen {
     position: fixed;
-    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -10806,14 +11294,15 @@
     top: auto;
     left: 0;
     right: 0;
-    bottom: var(--memo-kb);
+    bottom: 0;
     transform: translateY(0);
     width: auto;
-    max-height: calc(100dvh - var(--memo-kb) - 54px);
+    max-height: var(--memo-sheet-max);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     border-radius: 34px 34px 0 0;
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
     background: var(--bg);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
@@ -10835,7 +11324,7 @@
 
   .memo-support-screen {
     position: fixed;
-    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -10845,6 +11334,112 @@
   .memo-support-screen .memo-page {
     max-width: none;
     padding: 0 1.15rem calc(2.5rem + var(--memo-safe-bottom));
+  }
+
+  /* The frame below is fixed, so the wrapper holds no flow content at all.
+     Pinning it to the viewport the way `.memo-shell` is pinned stops the
+     document behind the frame from becoming a second, empty scroller. */
+  .memo-legal {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  /*
+   * A public legal document, on the phone: the same fixed frame the in-app
+   * reader uses. `--memo-safe-top` is the whole point of it in the iOS
+   * wrapper — the web view runs edge to edge there, and the row that used to
+   * sit at `top: 0` was drawn underneath the status bar and cut in half by it.
+   */
+  .memo-legal-screen {
+    position: fixed;
+    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  /* Floating, like the library's own top row: the brand and the way back stay
+     put while the document passes behind them and fades out at the scroller's
+     mask, instead of scrolling away with it. */
+  .memo-legal-topbar {
+    position: absolute;
+    top: 0.5rem;
+    left: 1.15rem;
+    right: 1.15rem;
+    z-index: 5;
+    padding: 0;
+    /* The row is only its two controls; the text behind it stays reachable. */
+    pointer-events: none;
+  }
+
+  .memo-legal-topbar > * {
+    pointer-events: auto;
+  }
+
+  .memo-legal-brand .brand-logo-mark {
+    --lockup-h: 3.1rem;
+  }
+
+  .memo-legal-back {
+    width: 3.1rem;
+    height: 3.1rem;
+    padding: 0;
+    justify-content: center;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+
+  .memo-legal-back .msym {
+    font-size: 1.6rem;
+  }
+
+  /* Round and unlabelled at this width, but the name still has to reach a
+     screen reader — so the label is hidden rather than removed, on the same
+     clip-rect as `.memo-visually-hidden`. It cannot simply wear that class:
+     above the breakpoint the same label is the pill's visible text. */
+  .memo-legal-back-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .memo-legal-screen .memo-page {
+    max-width: none;
+    padding: 0 1.15rem calc(2.5rem + var(--memo-safe-bottom));
+  }
+
+  /* The in-app reader's back arrow has the top row to itself, so its title can
+     start right under it. Here the row also carries the lockup, and a title
+     tucked straight under the artwork reads as part of it — so the document
+     starts a little lower. */
+  .memo-legal-screen .memo-screen-scroll {
+    padding-top: 5.25rem;
+    /* And the fade runs a little further down than the shared one, so a line of
+       the document is fully gone by the time it reaches the foot of the lockup
+       rather than showing through the artwork's transparent background. */
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 2.6rem,
+      #000 4.5rem
+    );
+    mask-image: linear-gradient(to bottom, transparent 0, transparent 2.6rem, #000 4.5rem);
+  }
+
+  .memo-legal-screen .memo-article-title {
+    font-size: 1.6rem;
+  }
+
+  .memo-legal-more-heading {
+    font-size: 1.2rem;
+    font-weight: 750;
   }
 
   /* The way back floats over the screen, so the title has the row to itself
@@ -10899,8 +11494,8 @@
   }
 
   .note-source-modal {
-    max-height: calc(100dvh - 54px - var(--memo-kb));
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    max-height: var(--memo-sheet-max);
+    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
     border-radius: 34px 34px 0 0;
     --panel-paint: var(--bg);
     background: var(--panel-paint);
@@ -11133,9 +11728,9 @@
    */
   .memo-action-sheet {
     position: fixed;
-    inset: auto 0 var(--memo-kb, 0px) 0;
+    inset: auto 0 0 0;
     z-index: 128;
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -11200,15 +11795,16 @@
   /* The folder picker is a bottom sheet on the phone. */
   .library-folder-mobile-sheet {
     position: fixed;
-    inset: auto 0 var(--memo-kb) 0;
+    inset: auto 0 0 0;
     z-index: 126;
     /* Production lays this out as a gapped grid; the design stacks it with
        its own margins, and the gap was adding 16px above the header. */
     display: block;
     gap: 0;
-    max-height: calc(100dvh - var(--memo-kb) - 54px);
+    max-height: var(--memo-sheet-max);
     overflow-y: auto;
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
+    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
     border: 0;
     border-radius: 34px 34px 0 0;
     background: var(--bg);
@@ -11301,9 +11897,20 @@
        pins top *and* bottom, which stretched the sheet down the whole screen
        and left the field floating in the middle of it. */
     position: fixed;
-    inset: auto 0 var(--memo-kb) 0;
-    max-height: calc(100dvh - var(--memo-kb) - 54px);
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    inset: auto 0 0 0;
+    max-height: var(--memo-sheet-max);
+    /*
+     * The sheet scrolls, not the field's row. Production hangs the scroll on
+     * the body, which is the only child here allowed to shrink — so when the
+     * cap bites, every fixed-size part keeps its height and the body collapses,
+     * taking the name field with it. On a short screen you were left looking at
+     * a folder mark and a hint with nothing to type into. Scrolling the whole
+     * sheet is what every other sheet in the app does.
+     */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
+    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -11315,9 +11922,9 @@
   }
 
   .library-folder-modal-body {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     min-height: 0;
-    overflow-y: auto;
+    overflow-y: visible;
   }
 
   /*
@@ -11493,25 +12100,37 @@
     top: auto;
     left: 0;
     right: 0;
-    bottom: var(--memo-kb);
+    bottom: 0;
     transform: none;
     width: auto;
-    max-height: calc(100dvh - var(--memo-kb) - 54px);
+    max-height: var(--memo-sheet-max);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     /*
      * Where anything scrolls a field into view — WebKit clearing the keyboard,
      * or the sheet's own correction — it stops this far short of the edge. Without
      * it the focused field lands flush against the top, which under a 34px
-     * rounded corner means half of it is cut off.
+     * rounded corner means half of it is cut off. At the foot it stops short of
+     * the keys, which the scrollport now runs on behind.
      */
-    scroll-padding: 1.1rem 0;
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     padding: 0.6rem 1.15rem
       calc(2rem + max(0px, var(--memo-safe-bottom) - var(--memo-kb)));
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /*
+   * Alone among these sheets this one is a grid that scrolls itself, and a
+   * scrolling grid's own bottom padding is not reliably part of what it can
+   * scroll to. So the keys' clearance rides on the last row's margin, which
+   * always is: without it the last deck of a long list comes to rest behind
+   * the keyboard with no way to scroll it out.
+   */
+  .study-manager-sheet > :last-child {
+    margin-bottom: var(--memo-kb);
   }
 
   .study-manager-drag-handle {
@@ -11547,14 +12166,20 @@
     opacity: 0;
   }
 
+  /* Already on the bottom edge; it only ever needed the keys' own padding. */
+  .note-read-usage-mobile-sheet {
+    padding-bottom: calc(2rem + var(--memo-kb-pad));
+  }
+
   .memo-sheet {
     position: fixed;
-    inset: auto 0 var(--memo-kb) 0;
+    inset: auto 0 0 0;
     z-index: 106;
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
-    max-height: calc(100dvh - var(--memo-kb) - 54px);
+    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
+    max-height: var(--memo-sheet-max);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -11579,10 +12204,14 @@
 
   .memo-sheet-full {
     position: fixed;
-    inset: calc(54px + var(--memo-safe-top)) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + 54px + var(--memo-safe-top)) 0 0 0;
     z-index: 106;
     display: flex;
     flex-direction: column;
+    /* The keys eat into the column rather than the sheet's height, so the
+       composer at its foot rides up with them and the surface carries on
+       behind them. */
+    padding-bottom: var(--memo-kb);
     border-radius: 34px 34px 0 0;
     box-shadow: var(--shadow-lg);
     overflow: hidden;
@@ -11849,7 +12478,7 @@
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 1rem 1.15rem calc(2.5rem + var(--memo-safe-bottom));
+    padding: 1rem 1.15rem calc(2.5rem + var(--memo-kb-gap));
   }
 
   .memo-sheet-h1 {
@@ -12097,7 +12726,7 @@
 
   .memo-m-chat-foot {
     position: relative;
-    padding: 0 1.15rem calc(1.6rem + var(--memo-safe-bottom));
+    padding: 0 1.15rem calc(1.6rem + var(--memo-kb-gap));
   }
 
   .memo-m-chat-composer {
@@ -12194,7 +12823,7 @@
     display: flex;
     flex-direction: column;
     gap: 1.1rem;
-    padding: 1rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    padding: 1rem 1.15rem calc(2rem + var(--memo-kb-gap));
   }
 
   .memo-capture-head {
@@ -12427,16 +13056,16 @@
    * specificity to land.
    */
   .note-source-modal.mobile-draggable-sheet {
-    /* Full screen, but stopping above the keyboard — the design gives its
-       capture screen the same inset it gives every other shell. */
-    inset: 0 0 var(--memo-kb) 0;
+    /* Full screen; the keyboard comes out of the padding rather than the
+       inset, so the sheet's ground runs on behind the keys. */
+    inset: 0 0 0 0;
     /* Header, then the body that takes what is left. */
     grid-template-rows: auto minmax(0, 1fr);
     gap: 0;
     /* The artboard starts its header 0.5rem below the status bar; edge to
        edge that is the safe area, whichever is larger. */
     padding: max(0.5rem, env(safe-area-inset-top)) 1.15rem
-      calc(env(safe-area-inset-bottom) + 1.25rem);
+      calc(1.25rem + var(--memo-kb-pad));
     border: 0;
     border-radius: 0;
     --panel-paint: var(--bg);
@@ -12618,38 +13247,24 @@
   }
 
   /*
-   * The recording orb, at the artboard's proportions: one coral ring around a
-   * coral core with a mic in it. Production draws a red core, no mic, and a
-   * second halo between them. The wave and the pause control stay — the
-   * artboard has neither, but they are what makes a recording screen usable.
+   * The recording orb, at the artboard's proportions: a coral core with a mic
+   * in it, ringed in coral. The artboard draws it still; a screen a student
+   * leaves running for an hour needs to show that it is still listening, so
+   * the ripples and the level meter under the clock stay, as does the pause
+   * control the artboard has no counterpart for.
    */
   .memo-record {
     gap: 1.4rem;
     padding: 3.5rem 0 0;
   }
 
-  /* The artboard's orb is two still circles. The pulse and the halo are the
-     old modal's; the running clock and the live waveform already say that
-     something is being recorded. */
-  .memo-record-orb .ring {
-    background: rgba(244, 95, 90, 0.14);
-    animation: none;
-  }
-
-  .memo-record-orb .halo {
-    display: none;
-  }
-
+  /* The phone's orb is drawn larger than the desktop one. Everything else —
+     the coral, the breath, the ripples — is the shared rule's. */
+  .memo-record-orb .ring,
+  .memo-record-orb .halo,
   .memo-record-orb .core {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     width: 6.4rem;
     height: 6.4rem;
-    background: var(--coral);
-    color: #fff;
-    box-shadow: none;
-    animation: none;
   }
 
   .memo-record-orb-mic {
@@ -17839,7 +18454,8 @@
   /*
    * On the phone the study screen is a sheet, the way every other panel in this
    * app is a sheet: full width, off the bottom edge, rounded at the top, and
-   * sitting on `--memo-kb` so the keyboard pushes it up rather than covering it.
+   * padding its content clear of the keys with `--memo-kb-pad` so the keyboard
+   * slides over it rather than covering what you are typing into.
    */
   .memo-palace-sheet {
     place-items: end center;
@@ -17849,8 +18465,9 @@
 
   .memo-palace-sheet-inner {
     width: 100%;
-    max-height: calc(100% - 4rem);
-    padding: 0.6rem 1.15rem calc(1.4rem + var(--memo-safe-bottom));
+    max-height: calc(var(--memo-vv) + var(--memo-kb) - 4rem);
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
+    padding: 0.6rem 1.15rem calc(1.4rem + var(--memo-kb-pad));
     border-radius: 34px 34px 0 0;
     background: var(--surface);
     box-shadow: var(--shadow-lg);
@@ -17858,11 +18475,12 @@
 
   .memo-palace-panel {
     position: fixed;
-    inset: auto 0 var(--memo-kb) 0;
+    inset: auto 0 0 0;
     translate: none;
     width: 100%;
-    max-height: calc(100% - 7rem);
-    padding: 1.1rem 1.15rem calc(1.5rem + var(--memo-safe-bottom));
+    max-height: calc(var(--memo-vv) + var(--memo-kb) - 7rem);
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
+    padding: 1.1rem 1.15rem calc(1.5rem + var(--memo-kb-pad));
     border-radius: 30px 30px 0 0;
     --panel-paint: var(--surface);
     background: var(--panel-paint);
@@ -19170,9 +19788,9 @@
 
 @media (max-width: 1099px) and (max-height: 540px) {
   .memo-palace-panel {
-    max-height: calc(100dvh - var(--memo-kb) - 1rem);
+    max-height: calc(var(--memo-vv) + var(--memo-kb) - 1rem);
     padding-top: 0.35rem;
-    padding-bottom: calc(0.6rem + var(--memo-safe-bottom));
+    padding-bottom: calc(0.6rem + var(--memo-kb-pad));
     gap: 0.35rem;
   }
   .memo-palace-panel.card { --palace-card-height: clamp(5rem, calc(100dvh - 13.5rem), 10rem); }
@@ -19434,8 +20052,17 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  /*
+   * A foot of 2.5rem against a head of 1rem is the resting proportion — the
+   * card sits a little above centre on a full screen, which is where a sign-in
+   * card belongs. With the keyboard up there is no room to spend on that: the
+   * extra 1.5rem, and the home indicator's inset with it, went into the gap
+   * between the card and the keys and left the card visibly bottom-heavy. Both
+   * are inside the `max()`, so they are gone the moment the keys cover that
+   * strip and the card centres evenly in what is left.
+   */
   padding: 1rem 1.15rem
-    calc(2.5rem + max(0px, var(--memo-safe-bottom, 0px) - var(--memo-kb, 0px)));
+    calc(1rem + max(0px, 1.5rem + var(--memo-safe-bottom, 0px) - var(--memo-kb, 0px)));
 }
 
 .memo-auth-stage > :first-child {
@@ -19952,7 +20579,13 @@
   html[data-native] .memo-m-homebar,
   html[data-native] .memo-dock,
   html[data-native] .memo-sub-chatbar {
-    inset: auto 1.15rem calc(0.15rem + var(--memo-safe-bottom)) 1.15rem;
+    /*
+     * The `max()` is for the keyboard. Resting on the home indicator this comes
+     * out at the indicator's inset, as it should; with the keys up the inset is
+     * gone (they cover that strip) and 0.15rem alone would tuck the bar right
+     * against the keyboard, so the floor is what it sits on instead.
+     */
+    inset: auto 1.15rem max(0.9rem, calc(0.15rem + var(--memo-kb-gap))) 1.15rem;
   }
 
   /* The note screen runs under the home indicator: the 7rem the scroller keeps
@@ -19969,5 +20602,55 @@
   html[data-native] body {
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* ===========================================================================
+   Print
+   ---------------------------------------------------------------------------
+   Last in the file on purpose. A print layout is laid out at the paper's width
+   — roughly 735px of content on A4 — so `@media (max-width: 1099px)` matches
+   while printing even from a desktop browser, and the phone rules above would
+   otherwise apply. `@media print` carries no extra specificity, so only source
+   order can beat them.
+   ========================================================================= */
+
+@media print {
+  /*
+   * The legal documents are the one thing on this site people are told to keep
+   * a copy of, and consumer law expects terms to be available in a durable
+   * medium. The phone chrome is a fixed frame around a scroller, which prints
+   * as a single clipped page — measured: the terms of use went from 8 pages to
+   * 1. Unwinding the frame puts the document back into normal flow, where the
+   * printer paginates it.
+   */
+  .memo-legal {
+    height: auto;
+    overflow: visible;
+  }
+
+  .memo-legal-screen {
+    position: static;
+    overflow: visible;
+  }
+
+  .memo-legal-topbar {
+    position: static;
+    padding: 0 0 1rem;
+  }
+
+  .memo-legal-screen .memo-screen-scroll {
+    overflow: visible;
+    padding-top: 0;
+    /* The fade exists to take content out as it passes under the floating row.
+       Nothing floats on paper, and the mask would only bleach the first lines
+       of the document. */
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  /* Nothing to go back to on paper. */
+  .memo-legal-back {
+    display: none;
   }
 }

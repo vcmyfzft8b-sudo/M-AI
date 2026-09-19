@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { AuthScreen } from "@/components/auth-screen";
 import { LandingAuthOptions } from "@/components/landing-auth-options";
 import { getAuthProviderAvailability } from "@/lib/auth-providers";
-import { getOptionalUser } from "@/lib/auth";
+import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import { getTranslations } from "@/lib/i18n/server";
 import { BRAND_NAME } from "@/lib/brand";
 import { hasPublicSupabaseEnv } from "@/lib/public-env";
@@ -14,7 +14,14 @@ export default async function ContinuePage() {
   const isVercelPreview = process.env.VERCEL_ENV === "preview";
 
   if (hasPublicSupabaseEnv) {
-    const user = await getOptionalUser();
+    /*
+     * The bypass counts as signed in here, as it does everywhere else. This is
+     * the iOS wrapper's fixed start URL, so checking only for a real Supabase
+     * session left the dev sign-in unreachable from the app: it opened on this
+     * card with no way past it. `PREVIEW_AUTH_BYPASS` is what production never
+     * sets, so nothing changes for a real account.
+     */
+    const user = await getOptionalUserOrPreviewBypass();
     if (user) {
       redirect("/app");
     }

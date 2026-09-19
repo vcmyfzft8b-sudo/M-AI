@@ -350,23 +350,34 @@ const DUPLICATE_JUDGE_INSTRUCTIONS =
   "For each knowledge item, decide whether it states the SAME single fact as another item in the list — same subject, same relationship, same value, merely worded, spelled or angled differently. If so, duplicateOf is that item's index; otherwise null. Two different facts about the same subject are NOT duplicates: 'X uses base-period quantities' and 'X overstates inflation' are different facts about X. Judge each item independently and be precise.";
 
 function scoreDedupe(links, truthPartner) {
-  let truePositive = 0;
-  let falsePositive = 0;
+  /*
+   * One verdict per item, and each planted pair credited once.
+   *
+   * The incumbent may link in either direction and the normalisation above flips the late ones,
+   * which can leave two entries describing the same collapse. Counting those separately produced
+   * a recall of 2.00 on synapse-en — an impossible number, and a sign the metric was scoring the
+   * shape of the answer rather than the answer.
+   */
+  const claimed = new Map();
 
   for (const link of links) {
-    if (link.duplicateOf === null) {
-      continue;
+    if (link.duplicateOf !== null && !claimed.has(link.index)) {
+      claimed.set(link.index, link.duplicateOf);
     }
+  }
 
-    const partner = truthPartner.get(link.index);
+  const matched = new Set();
+  let falsePositive = 0;
 
-    if (partner === link.duplicateOf) {
-      truePositive += 1;
+  for (const [index, duplicateOf] of claimed) {
+    if (truthPartner.get(index) === duplicateOf) {
+      matched.add(index);
     } else {
       falsePositive += 1;
     }
   }
 
+  const truePositive = matched.size;
   const expected = truthPartner.size;
 
   return {

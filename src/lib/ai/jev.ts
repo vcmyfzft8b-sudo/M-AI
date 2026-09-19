@@ -62,12 +62,25 @@ const JEV_MIN_BUDGET_MS = 1_500;
 /**
  * How many questions ride on one request.
  *
- * Not a documented limit — a measured one. On the free tier, 50 questions answer reliably in
- * ~650ms, 150 returns 503 and 300 returns 429. The state is re-sent with each batch, which is
- * the only cost of splitting: on a typical item list that is ~1,400 tokens, or $0.00006 per
- * extra batch. Raise this once the account is on paid credits and the ceiling is known.
+ * Not a documented limit — a measured one, re-measured on paid credits where the free tier's
+ * rate limiter is no longer what fails. Eight trials at each size, same state:
+ *
+ *   25 questions   8/8   p50 398ms
+ *   50             8/8   p50 572ms
+ *   100            8/8   p50 603ms
+ *   150            7/8   p50 703ms
+ *   250            2/8
+ *   300            1/8
+ *
+ * A request does not get meaningfully slower as questions are added — the model answers them in
+ * parallel — but past about a hundred it starts failing outright, and the failure rate climbs
+ * steeply. So this sits at the top of the range that never failed, which turns a full 300-item
+ * dedupe into three requests rather than six.
+ *
+ * The state is re-sent with each batch, and that is the only cost of splitting: on a typical
+ * item list, ~1,400 tokens or $0.00006 per extra batch.
  */
-export const JEV_QUESTIONS_PER_REQUEST = 50;
+export const JEV_QUESTIONS_PER_REQUEST = 100;
 
 /** Jev's documented ceiling on one Choice question's answer space. */
 export const JEV_MAX_CHOICE_OPTIONS = 255;
@@ -285,7 +298,15 @@ export type AskJevParams = {
   remainingBudgetMs?: number;
   apiKey?: string | null;
   questionsPerRequest?: number;
-  /** Retries on the free tier's 429/503. Zero in production; the benchmark turns it up. */
+  /**
+   * Retries on a 429 or 5xx.
+   *
+   * Not zero by default, which it was until the gateway was measured on paid credits: roughly one
+   * request in ten comes back 503 "service temporarily unavailable" whatever the pacing — 9/10 at
+   * no gap, at 500ms and at 1500ms alike — and a 503 arrives in ~350ms, so retrying it is far
+   * cheaper than dropping a tenth of all batches onto a writer that takes thirty seconds. The
+   * retry is bounded by the remaining budget like everything else here.
+   */
   retries?: number;
   /**
    * Pause between batched requests.
@@ -299,6 +320,13 @@ export type AskJevParams = {
 };
 
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+
+/**
+ * Short, because the fault being retried is not congestion. A 503 here comes back in ~350ms and
+ * the next attempt succeeds; the long backoff this started with was written for the free tier's
+ * rate limiter, which is a different problem and no longer the one we have.
+ */
+const JEV_RETRY_BACKOFF_MS = 250;
 
 /**
  * Asks Jev every question, in as few requests as the batch ceiling allows, or returns null.
@@ -375,10 +403,20 @@ export async function askJev(params: AskJevParams): Promise<JevResponse | null> 
   return { answers, usage, durationMs: Date.now() - startedAt, requestCount };
 }
 
+/**
+ * How many times a failed request is retried when the caller does not say.
+ *
+ * Two, because the observed failure is a transient 503 at about a 10% rate and independent
+ * between attempts, which takes the chance of losing a batch from 1 in 10 to about 1 in 1,000 —
+ * for two extra requests that cost ~350ms and nothing at all in tokens, since a refused request
+ * is not billed.
+ */
+const JEV_DEFAULT_RETRIES = 2;
+
 async function askJevOnce(
   params: AskJevParams & { apiKey: string },
 ): Promise<{ parsed: { answers: JevAnswers; usage: JevUsage } | null; requestCount: number }> {
-  const retries = params.retries ?? 0;
+  const retries = params.retries ?? JEV_DEFAULT_RETRIES;
   let requestCount = 0;
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
@@ -410,7 +448,7 @@ async function askJevOnce(
 
       if (!response.ok) {
         if (RETRYABLE_STATUS.has(response.status) && attempt < retries) {
-          await new Promise((resolve) => setTimeout(resolve, 1_500 * (attempt + 1)));
+          await new Promise((resolve) => setTimeout(resolve, JEV_RETRY_BACKOFF_MS * (attempt + 1)));
           continue;
         }
 
@@ -432,7 +470,7 @@ async function askJevOnce(
       return { parsed, requestCount };
     } catch (error) {
       if (attempt < retries) {
-        await new Promise((resolve) => setTimeout(resolve, 1_500 * (attempt + 1)));
+        await new Promise((resolve) => setTimeout(resolve, JEV_RETRY_BACKOFF_MS * (attempt + 1)));
         continue;
       }
 

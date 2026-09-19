@@ -9,6 +9,7 @@ import {
   buildTutorInstructions,
   type TutorHistoryTurn,
 } from "@/lib/ai/tutor-prompt";
+import { fetchLearnerProfile } from "@/lib/learner-profile.server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { serializeVector } from "@/lib/utils";
 
@@ -46,11 +47,11 @@ const libraryAnswerSchema = z.object({
   /* The description travels to the model with the schema — see chatAnswerSchema. */
   answer: z
     .string()
-    .min(4)
+    .min(1)
     .describe(
-      "The reply, in the language of the learner's last message. Simple, short enough to read " +
-        "on a phone, and ending with exactly one short question unless they were only saying " +
-        "thanks or goodbye.",
+      "The reply, in the language of the learner's last message. It opens with the answer "
+        + "itself — no preamble — and is around 60 words and never more than 120. It ends with "
+        + "exactly one short question unless they were only saying thanks or goodbye.",
     ),
   /** Titles of the notes the answer leaned on, so the UI can show its sources. */
   usedNotes: z.array(z.string()).max(6),
@@ -157,12 +158,27 @@ async function resolveLectureIds(params: {
   return (data ?? []) as LectureRow[];
 }
 
+/**
+ * The excerpts nearest the question, or none of them.
+ *
+ * Every note's summary and key topics are in the prompt whatever happens here,
+ * so an embedding provider having a bad minute should cost the answer its
+ * quotes, never its existence. A single note failing to retrieve was already
+ * survivable; this makes the embedding call survivable too.
+ */
 async function fetchTranscriptContext(params: {
   lectureIds: string[];
   question: string;
 }) {
   const supabase = createSupabaseServiceRoleClient();
-  const [embedding] = await createEmbeddings([params.question]);
+  let embedding: number[] | undefined;
+
+  try {
+    [embedding] = await createEmbeddings([params.question]);
+  } catch (error) {
+    console.warn("[library-chat] embedding failed; answering from summaries alone", error);
+    return new Map<string, TranscriptMatch[]>();
+  }
 
   if (!embedding) {
     return new Map<string, TranscriptMatch[]>();
@@ -234,7 +250,10 @@ export async function answerLibraryChat(params: {
   onDelta?: (text: string) => void;
 }): Promise<LibraryChatResult> {
   const supabase = createSupabaseServiceRoleClient();
-  const lectures = await resolveLectureIds(params);
+  const [lectures, learner] = await Promise.all([
+    resolveLectureIds(params),
+    fetchLearnerProfile(params.userId),
+  ]);
   const lectureIds = lectures.map((lecture) => lecture.id);
 
   /*
@@ -297,6 +316,7 @@ export async function answerLibraryChat(params: {
       {
         question: params.question,
         conversation: buildTutorHistory(params.history ?? []),
+        ...(learner ? { learner } : {}),
         scope: params.scope,
         noteCount: notes.length,
         ...(notes.length === 0

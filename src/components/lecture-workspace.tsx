@@ -66,7 +66,7 @@ import { StudyFlashcard } from "@/components/study-flashcard";
 import { LectureTutor } from "@/components/lecture-tutor";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
-import { readChatStream } from "@/lib/chat-stream-client";
+import { requestChatAnswer } from "@/lib/chat-stream-client";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { usePathname, useRouter } from "next/navigation";
 import type {
@@ -2811,40 +2811,37 @@ export function LectureWorkspace({
     const currentQuestion = draft;
     setQuestion("");
 
-    let response: Response;
-    let payload: ChatResponse | null = null;
-    try {
-      response = await fetch(`/api/lectures/${detail.lecture.id}/chat/stream`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          question: currentQuestion,
-          sourceLanguageAction,
-        }),
-      });
-
-      /*
-       * A refusal — the trial limit, a lecture still processing — comes back as
-       * ordinary JSON before the stream begins, so both shapes are handled: an
-       * event stream is read frame by frame, anything else is parsed as before.
-       */
-      payload = response.headers.get("Content-Type")?.includes("text/event-stream")
-        ? await readChatStream<ChatResponse>(
-            response,
-            (text) => setStreamingAnswer((current) => current + text),
-            t,
-          )
-        : ((await response.json().catch(() => null)) as ChatResponse | null);
-    } catch (error) {
-      setChatError(getRequestErrorMessage(error, t("chat.error.answerFailed"), t));
+    /*
+     * Whatever goes wrong from here, the learner does not lose what they typed:
+     * the question goes back into the composer so sending it again is one tap,
+     * and the unanswered bubble is taken out of the log so the conversation the
+     * tutor reads next time has no dangling question in it.
+     */
+    function restoreUnansweredQuestion() {
+      setQuestion((current) => (current.trim() ? current : currentQuestion));
       setDetail((current) => ({
         ...current,
         chatMessages: current.chatMessages.filter(
           (message) => message.id !== tempUserMessage.id,
         ),
       }));
+    }
+
+    let response: Response;
+    let payload: ChatResponse | null = null;
+    try {
+      ({ response, payload } = await requestChatAnswer<ChatResponse>({
+        url: `/api/lectures/${detail.lecture.id}/chat/stream`,
+        body: { question: currentQuestion, sourceLanguageAction },
+        onDelta: (text) => setStreamingAnswer((current) => current + text),
+        // A second attempt starts from a blank bubble: half of one answer
+        // followed by all of another would read as gibberish.
+        onAttemptStart: () => setStreamingAnswer(""),
+        t,
+      }));
+    } catch (error) {
+      setChatError(getRequestErrorMessage(error, t("chat.error.answerFailed"), t));
+      restoreUnansweredQuestion();
       return;
     } finally {
       setIsSending(false);
@@ -2859,24 +2856,14 @@ export function LectureWorkspace({
         setChatError(getApiErrorMessage(payload, t("chat.error.answerFailed")));
       }
 
-      setDetail((current) => ({
-        ...current,
-        chatMessages: current.chatMessages.filter(
-          (message) => message.id !== tempUserMessage.id,
-        ),
-      }));
+      restoreUnansweredQuestion();
       return;
     }
 
     const chatAnswer = payload?.answer;
     if (!chatAnswer) {
       setChatError(t("chat.error.answerFailed"));
-      setDetail((current) => ({
-        ...current,
-        chatMessages: current.chatMessages.filter(
-          (message) => message.id !== tempUserMessage.id,
-        ),
-      }));
+      restoreUnansweredQuestion();
       return;
     }
 

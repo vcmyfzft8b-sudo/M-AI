@@ -156,7 +156,19 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
   },
   coverage_plan: { thinkingLevel: "low", outputHeadroom: 1.6, defaultModel: GLM_TEXT_MODEL },
   study_items: { thinkingLevel: "low", outputHeadroom: 1.6, defaultModel: GLM_TEXT_MODEL },
-  chat: { thinkingLevel: "minimal", outputHeadroom: 1, defaultModel: GLM_TEXT_MODEL },
+  /*
+   * The one stage a learner sits and watches, so it is routed the way the tutor is: by
+   * latency, not throughput. The two sorts were measured against each other on this same
+   * model on 2026-09-04 (see `ProviderSort`) — 938ms to the first word against 6900ms at the
+   * median, and 2855ms against 11649ms at p90. Nothing about the answer changes; the wait
+   * before it starts appearing does, and on a chat panel that wait is the whole impression.
+   */
+  chat: {
+    thinkingLevel: "minimal",
+    outputHeadroom: 1,
+    defaultModel: GLM_TEXT_MODEL,
+    providerSort: "latency",
+  },
   /*
    * The mind map: one call that reads the finished note and re-shapes it as a tree.
    *
@@ -561,6 +573,21 @@ const STAGE_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
    * own deadline is what the learner actually feels.
    */
   language_check: 30_000,
+  /*
+   * A chat answer is a couple of hundred tokens with somebody watching the panel, and it had
+   * no leash at all: it took OpenRouter's 180s default, which is not a timeout for this stage
+   * so much as the absence of one. Two things went wrong with that. A learner waited three
+   * minutes to be told it had failed, and — because the streamed attempt and the plain call it
+   * falls back to were each sized at 180s inside a 300s invocation — the platform could kill
+   * the function mid-fallback and send no error frame at all (the 504 of 2026-09-16, locked
+   * down in tests/chat-stream-route-budget.test.mjs).
+   *
+   * Sixty seconds is far past anything a healthy call needs and still leaves most of the
+   * invocation for the recovery underneath it: a stalled primary now fails at 60s and the
+   * fallback answers inside the same minute or two, which is the difference between a late
+   * answer and no answer.
+   */
+  chat: 60_000,
 };
 
 /**
@@ -575,6 +602,9 @@ const MANDATORY_REASONING_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
   note_outline: 200_000,
   note_write: 200_000,
   podcast_script: 200_000,
+  // Chat wants the same short leash whichever model runs it: the learner is waiting either
+  // way. Named here so the mandatory-reasoning branch cannot quietly restore the 180s default.
+  chat: 60_000,
 };
 
 /**

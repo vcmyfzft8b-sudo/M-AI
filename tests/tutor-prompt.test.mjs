@@ -20,7 +20,7 @@ test("both surfaces are told to answer first rather than withhold", () => {
   for (const surface of ["lecture", "library"]) {
     const instructions = buildTutorInstructions(surface);
 
-    assert.match(instructions, /Answer the question first/);
+    assert.match(instructions, /The first sentence is the answer/);
     assert.match(instructions, /Never hold the answer back/);
   }
 });
@@ -49,7 +49,52 @@ test("simple and clear is stated as the goal, not thoroughness", () => {
   const instructions = buildTutorInstructions("lecture");
 
   assert.match(instructions, /Simple and clear beats complete/);
-  assert.match(instructions, /Never pad an answer to look thorough/);
+  assert.match(instructions, /A learner who wants more will ask/);
+});
+
+/*
+ * Length is the rule the product is most often judged on and the one a model
+ * drifts off first, so it is pinned in three places: a target, a ceiling, and
+ * the named padding that is what actually makes a short answer long. "Be brief"
+ * on its own buys a shorter preamble, not a shorter answer.
+ */
+test("brevity is given a number, not an adjective", () => {
+  for (const surface of ["lecture", "library"]) {
+    const instructions = buildTutorInstructions(surface);
+
+    assert.match(instructions, /Around 60 words, and never more than 120/);
+    assert.match(instructions, /No preamble/);
+    assert.match(instructions, /no restating what they asked/);
+    // A chip that asks for five questions gets five questions, not five plus an
+    // essay about them — a half-line to introduce a list is as much framing as it gets.
+    assert.match(instructions, /at most a half-line to introduce it, and no closing recap/);
+  }
+});
+
+test("warmth is told to shorten the answer rather than lengthen it", () => {
+  const instructions = buildTutorInstructions("lecture");
+
+  assert.match(instructions, /Warmth is in the tone, not in extra sentences/);
+  assert.match(instructions, /No cheerleading paragraph/);
+  assert.match(instructions, /never a compliment on the question itself/);
+});
+
+/*
+ * The onboarding has always known who the learner is; until this the tutor did
+ * not, and a nine-year-old and a postgraduate got the same words. What the
+ * block must not become is small talk, so both halves are locked down.
+ */
+test("the learner block is for pitching the answer, not for performing familiarity", () => {
+  for (const surface of ["lecture", "library"]) {
+    const instructions = buildTutorInstructions(surface);
+
+    assert.match(instructions, /may carry a `learner` block/);
+    assert.match(instructions, /Use it to pitch the answer/);
+    assert.match(instructions, /Never in every message/);
+    assert.match(instructions, /Never invent what it does not say/);
+    // A missing block is the ordinary case, not a problem to mention.
+    assert.match(instructions, /If the block is missing, write for a capable student/);
+  }
 });
 
 test("the tutor is Memo AI and will not name what runs it", () => {
@@ -103,12 +148,14 @@ test("a message too short to identify does not get a guessed language", () => {
   assert.match(instructions, /Slovenian, Croatian, Serbian and Bosnian are not interchangeable/);
 });
 
-test("the closing checklist restates the three rules that decay", () => {
+test("the closing checklist restates the rules that decay", () => {
   const instructions = buildTutorInstructions("library");
   const checklist = instructions.slice(instructions.indexOf("## Before you answer"));
 
   assert.match(checklist, /Is it in the language of their last message\?/);
-  assert.match(checklist, /short and simple enough to read on a phone/);
+  // Phrased as a cut, not a check: by the time this is read the answer exists.
+  assert.match(checklist, /If not, cut until it is/);
+  assert.match(checklist, /Does the first sentence answer the question outright/);
   assert.match(checklist, /exactly one short question/);
 });
 

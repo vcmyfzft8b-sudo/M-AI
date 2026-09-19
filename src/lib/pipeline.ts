@@ -15,6 +15,7 @@ import { generateStructuredObject, streamStructuredObject } from "@/lib/ai/json"
 import { createEmbeddings } from "@/lib/ai/embeddings";
 import { parseAudioChunkManifest } from "@/lib/audio-processing";
 import { CHAT_MATCH_COUNT } from "@/lib/constants";
+import { fetchLearnerProfile } from "@/lib/learner-profile.server";
 import {
   buildTutorHistory,
   buildTutorInstructions,
@@ -1170,6 +1171,46 @@ async function streamChatAnswer(
   }
 }
 
+/**
+ * The transcript chunks nearest the question — or none of them.
+ *
+ * Retrieval is two dependencies deep (an embedding call to a model provider,
+ * then a pgvector search) and until now either one failing threw the whole
+ * answer away. That is the wrong trade for this product: the note's summary,
+ * its key topics and the conversation are already in the prompt, and a tutor
+ * answering from those is enormously better than a tutor answering "the answer
+ * could not be generated". So a failure here costs the citations, not the reply.
+ */
+async function retrieveLectureContext(params: {
+  lectureId: string;
+  question: string;
+}): Promise<RpcMatchResult[]> {
+  const supabase = createSupabaseServiceRoleClient();
+
+  try {
+    const [embedding] = await createEmbeddings([params.question]);
+
+    if (!embedding) {
+      return [];
+    }
+
+    const { data, error } = await supabase.rpc("match_transcript_segments" as never, {
+      filter_lecture_id: params.lectureId,
+      match_count: CHAT_MATCH_COUNT,
+      query_embedding: serializeVector(embedding),
+    } as never);
+
+    if (error) {
+      throw error as PostgrestError;
+    }
+
+    return (data ?? []) as RpcMatchResult[];
+  } catch (error) {
+    console.warn("[chat] transcript retrieval failed; answering from the note alone", error);
+    return [];
+  }
+}
+
 export async function answerLectureChat(params: {
   lectureId: string;
   userId: string;
@@ -1186,7 +1227,7 @@ export async function answerLectureChat(params: {
 }) {
   const supabase = createSupabaseServiceRoleClient();
 
-  const [{ data: artifact }, { data: lecture }, { data: priorMessages }, embeddingResponse] =
+  const [{ data: artifact }, { data: lecture }, { data: priorMessages }, context, learner] =
     await Promise.all([
       supabase
         .from("lecture_artifacts")
@@ -1210,10 +1251,10 @@ export async function answerLectureChat(params: {
         .eq("user_id", params.userId)
         .order("created_at", { ascending: false })
         .limit(TUTOR_HISTORY_TURN_LIMIT),
-      createEmbeddings([params.question]),
+      retrieveLectureContext({ lectureId: params.lectureId, question: params.question }),
+      fetchLearnerProfile(params.userId),
     ]);
 
-  const queryEmbedding = serializeVector(embeddingResponse[0]);
   const artifactRow = (artifact ?? null) as {
     summary: string;
     key_topics: string[];
@@ -1222,29 +1263,26 @@ export async function answerLectureChat(params: {
   } | null;
   const lectureRow = (lecture ?? null) as { title: string | null } | null;
 
-  const { data: matches, error: matchError } = await supabase.rpc(
-    "match_transcript_segments" as never,
-    {
-      filter_lecture_id: params.lectureId,
-      match_count: CHAT_MATCH_COUNT,
-      query_embedding: queryEmbedding,
-    } as never,
-  );
-
-  if (matchError) {
-    throw matchError as PostgrestError;
-  }
-
-  const context = (matches ?? []) as RpcMatchResult[];
-
   const conversation = buildTutorHistory(
     ((priorMessages ?? []) as TutorHistoryTurn[]).slice().reverse(),
   );
 
-  const actionLanguage = params.sourceLanguageAction ? await resolveSourceLanguage({
-    text: artifactRow?.structured_notes_md ?? artifactRow?.summary ?? "", metadata: artifactRow?.model_metadata,
-    lectureId: params.lectureId, userId: params.userId,
-  }) : null;
+  /*
+   * Also best-effort: this only decides which language a chip's answer comes
+   * back in, and a language check that fails is not a reason to fail the
+   * answer. Without it the ordinary latest-message rule applies.
+   */
+  const actionLanguage = params.sourceLanguageAction
+    ? await resolveSourceLanguage({
+        text: artifactRow?.structured_notes_md ?? artifactRow?.summary ?? "",
+        metadata: artifactRow?.model_metadata,
+        lectureId: params.lectureId,
+        userId: params.userId,
+      }).catch((error) => {
+        console.warn("[chat] source-language lookup failed; answering in the message language", error);
+        return null;
+      })
+    : null;
   const call = {
     schema: chatAnswerSchema,
     stage: "chat" as const,
@@ -1253,6 +1291,7 @@ export async function answerLectureChat(params: {
       {
         question: params.question,
         conversation,
+        ...(learner ? { learner } : {}),
         noteTitle: lectureRow?.title ?? null,
         summary: artifactRow?.summary ?? null,
         keyTopics: artifactRow?.key_topics ?? [],
@@ -1294,7 +1333,7 @@ export async function answerLectureChat(params: {
     .select("*");
 
   if (insertError) {
-    throw insertError;
+    console.error("[chat] could not save the turn; returning the answer unsaved", insertError);
   }
 
   const persistedMessages = (insertedMessages ?? []) as Array<{
@@ -1314,8 +1353,23 @@ export async function answerLectureChat(params: {
       : [],
   }));
 
+  /*
+   * The answer exists by this point — it has been paid for and, on the streamed
+   * path, the learner has already watched it being written. Returning null
+   * because the *database* had a bad moment would replace it on screen with an
+   * error for a reason that is purely ours, so a write that fails costs the
+   * history rather than the reply: the turn comes back unsaved, and the next
+   * question simply starts a conversation one turn short.
+   */
+  const unsavedAnswer = {
+    ...assistantMessage,
+    id: `unsaved-${Date.now()}`,
+    created_at: new Date().toISOString(),
+    citations,
+  } as unknown as ChatMessageWithCitations;
+
   return {
-    answer: mapped.find((message) => message.role === "assistant") ?? null,
+    answer: mapped.find((message) => message.role === "assistant") ?? unsavedAnswer,
     context,
   };
 }

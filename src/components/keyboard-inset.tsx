@@ -60,22 +60,61 @@ export function KeyboardInset() {
       const next = `${inset}/${height}/${top}`;
 
       if (next === previous) {
-        return;
+        return false;
       }
 
       previous = next;
       root.style.setProperty("--memo-keyboard", `${inset}px`);
       root.style.setProperty("--memo-viewport", `${height}px`);
       root.style.setProperty("--memo-viewport-top", `${top}px`);
+      return true;
+    };
+
+    /*
+     * iOS reports the viewport while the keyboard animates, but not on every
+     * frame — so a sheet driven straight off those events moves in steps. A
+     * CSS transition was the first answer and the wrong one: it cannot know the
+     * keyboard's duration or curve, so it lagged behind the keys on the way up
+     * and carried on after they had gone on the way down, and it animated
+     * padding, which lays the sheet out again every frame.
+     *
+     * Sampling the viewport each frame instead means the sheet is driven by the
+     * keyboard's own movement rather than an imitation of it: it tracks exactly,
+     * at whatever the display refreshes at. The loop runs only while the number
+     * is still moving and stops once it has held for a few frames, so it costs
+     * nothing at rest.
+     */
+    let frame = 0;
+    let settled = 0;
+
+    const follow = () => {
+      const moved = sync();
+      settled = moved ? 0 : settled + 1;
+
+      // ~5 frames of stillness is the keyboard having arrived, not a pause.
+      frame = settled < 5 ? requestAnimationFrame(follow) : 0;
+    };
+
+    const track = () => {
+      sync();
+
+      if (!frame) {
+        settled = 0;
+        frame = requestAnimationFrame(follow);
+      }
     };
 
     sync();
-    viewport.addEventListener("resize", sync);
-    viewport.addEventListener("scroll", sync);
+    viewport.addEventListener("resize", track);
+    viewport.addEventListener("scroll", track);
 
     return () => {
-      viewport.removeEventListener("resize", sync);
-      viewport.removeEventListener("scroll", sync);
+      if (frame) {
+        cancelAnimationFrame(frame);
+      }
+
+      viewport.removeEventListener("resize", track);
+      viewport.removeEventListener("scroll", track);
       root.style.removeProperty("--memo-keyboard");
       root.style.removeProperty("--memo-viewport");
       root.style.removeProperty("--memo-viewport-top");

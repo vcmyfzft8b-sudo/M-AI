@@ -67,6 +67,7 @@ import { LectureTutor } from "@/components/lecture-tutor";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { requestChatAnswer } from "@/lib/chat-stream-client";
+import { getRequestErrorMessage } from "@/lib/request-error-message";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { usePathname, useRouter } from "next/navigation";
 import type {
@@ -226,12 +227,6 @@ type StudySessionSnapshot = {
 };
 
 const STUDY_SESSION_STORAGE_KEY_PREFIX = "lecture-study-session:";
-/*
- * The one error whose text is decided here rather than by the server: an
- * aborted `fetch` never reached one. Resolved through the caller's `t` so it
- * arrives in the reader's language like every other failure on this screen.
- */
-const NETWORK_REQUEST_ERROR_KEY = "error.network" satisfies MessageKey;
 const FAST_DETAIL_POLL_INTERVAL_MS = 5000;
 const MIN_DETAIL_REFRESH_INTERVAL_MS = 3000;
 const STUDY_SESSION_SAVE_DEBOUNCE_MS = 5000;
@@ -249,26 +244,6 @@ const KEYBOARD_SETTLE_MS = 300;
 
 function ignoreBackgroundRequestError() {
   return null;
-}
-
-function isInterruptedFetchError(error: unknown) {
-  if (typeof DOMException !== "undefined" && error instanceof DOMException) {
-    return error.name === "AbortError" || error.name === "NetworkError";
-  }
-
-  return error instanceof TypeError && /failed to fetch|load failed|network/i.test(error.message);
-}
-
-function getRequestErrorMessage(
-  error: unknown,
-  fallback: string,
-  t: Translate<MessageKey>,
-) {
-  if (isInterruptedFetchError(error)) {
-    return t(NETWORK_REQUEST_ERROR_KEY);
-  }
-
-  return error instanceof Error ? error.message : fallback;
 }
 
 /**

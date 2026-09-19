@@ -188,18 +188,25 @@ async function fetchTranscriptContext(params: {
 
   const results = await Promise.all(
     params.lectureIds.map(async (lectureId) => {
-      const { data, error } = await supabase.rpc("match_transcript_segments" as never, {
-        filter_lecture_id: lectureId,
-        match_count: TRANSCRIPT_MATCHES_PER_NOTE,
-        query_embedding: queryEmbedding,
-      } as never);
+      // One note failing to retrieve should not sink the whole answer — whether it
+      // comes back as a Postgres error or throws on the way there. Twenty-five of
+      // these run at once, so one of them rejecting would take the rest with it.
+      try {
+        const { data, error } = await supabase.rpc("match_transcript_segments" as never, {
+          filter_lecture_id: lectureId,
+          match_count: TRANSCRIPT_MATCHES_PER_NOTE,
+          query_embedding: queryEmbedding,
+        } as never);
 
-      // One note failing to retrieve should not sink the whole answer.
-      if (error) {
+        if (error) {
+          return [lectureId, [] as TranscriptMatch[]] as const;
+        }
+
+        return [lectureId, ((data ?? []) as TranscriptMatch[])] as const;
+      } catch (error) {
+        console.warn(`[library-chat] transcript search failed for ${lectureId}`, error);
         return [lectureId, [] as TranscriptMatch[]] as const;
       }
-
-      return [lectureId, ((data ?? []) as TranscriptMatch[])] as const;
     }),
   );
 

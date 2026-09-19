@@ -11,6 +11,7 @@ import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { requestChatAnswer } from "@/lib/chat-stream-client";
+import { getRequestErrorMessage } from "@/lib/request-error-message";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 
@@ -197,7 +198,7 @@ export function LibraryChat({
         { id: `a${Date.now()}`, role: "assistant", text: payload.answer as string },
       ]);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : t("libraryChat.error.answerFailed"));
+      setError(getRequestErrorMessage(caught, t("libraryChat.error.answerFailed"), t));
       /*
        * Nothing the learner typed is lost to a failure: the question goes back
        * into the composer so asking again is one tap, and the unanswered bubble

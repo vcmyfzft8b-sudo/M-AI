@@ -5,7 +5,7 @@ import WidgetKit
 /// Screen widgets, and a Live Activity has to be rendered by an extension even
 /// though the app is what starts it.
 @main
-struct MemoAIWidgetsBundle: WidgetBundle {
+struct RecordingWidgetBundle: WidgetBundle {
     var body: some Widget {
         RecordingLiveActivity()
     }

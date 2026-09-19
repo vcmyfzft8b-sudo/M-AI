@@ -13,8 +13,6 @@
  * the finished file.
  */
 
-import { isNativeIOS, nativeRequest } from "./client";
-
 export type NativeRecorderSnapshot = {
   state: "idle" | "recording" | "paused";
   /** Seconds of audio captured — the app's count, not the page's. */
@@ -39,33 +37,53 @@ const RECORDER_BRIDGE_VERSION = 2;
  */
 const CHUNK_BYTES = 2 * 1024 * 1024;
 
+/**
+ * The bridge itself, rather than `nativeRequest`'s user-agent test: the app
+ * defines `window.memoNative` only on the origins it trusts, and its version is
+ * the one thing that says whether these commands exist. Reaching for the global
+ * here also keeps this module free of React, so its chunking has tests.
+ */
+function bridge() {
+  const memoNative = typeof window === "undefined" ? undefined : window.memoNative;
+
+  if (!memoNative || memoNative.version < RECORDER_BRIDGE_VERSION) {
+    throw new Error("Native recorder unavailable");
+  }
+
+  return memoNative;
+}
+
+function request<T>(command: string, payload?: Record<string, unknown>) {
+  return bridge().request(command, payload) as Promise<T>;
+}
+
 export function isNativeRecorderAvailable() {
-  return (
-    isNativeIOS() &&
-    typeof window !== "undefined" &&
-    (window.memoNative?.version ?? 0) >= RECORDER_BRIDGE_VERSION
-  );
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return (window.memoNative?.version ?? 0) >= RECORDER_BRIDGE_VERSION;
 }
 
 export async function startNativeRecording() {
-  return await nativeRequest<NativeRecorderSnapshot>("recorderStart");
+  return await request<NativeRecorderSnapshot>("recorderStart");
 }
 
 export async function pauseNativeRecording() {
-  return await nativeRequest<NativeRecorderSnapshot>("recorderPause");
+  return await request<NativeRecorderSnapshot>("recorderPause");
 }
 
 export async function resumeNativeRecording() {
-  return await nativeRequest<NativeRecorderSnapshot>("recorderResume");
+  return await request<NativeRecorderSnapshot>("recorderResume");
 }
 
 export async function readNativeRecordingState() {
-  return await nativeRequest<NativeRecorderSnapshot>("recorderState");
+  return await request<NativeRecorderSnapshot>("recorderState");
 }
 
 /** Ends a take and drops it. Used when the modal closes mid-recording. */
 export async function discardNativeRecording() {
-  await nativeRequest<{ status: string }>("recorderDiscard");
+  await request<{ status: string }>("recorderDiscard");
 }
 
 /**
@@ -78,7 +96,7 @@ export async function discardNativeRecording() {
 export async function stopNativeRecording(
   onProgress?: (fraction: number) => void,
 ): Promise<{ file: File; durationSeconds: number }> {
-  const stopped = await nativeRequest<{
+  const stopped = await request<{
     fileName: string;
     mimeType: string;
     size: number;
@@ -89,7 +107,7 @@ export async function stopNativeRecording(
   let offset = 0;
 
   while (offset < stopped.size) {
-    const chunk = await nativeRequest<{ data: string; length: number }>("recorderRead", {
+    const chunk = await request<{ data: string; length: number }>("recorderRead", {
       offset,
       length: Math.min(CHUNK_BYTES, stopped.size - offset),
     });

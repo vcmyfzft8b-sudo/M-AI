@@ -568,13 +568,11 @@ export function NoteSourceModal({
     }
 
     const paused = snapshot.state === "paused";
+    const seconds = Math.floor(snapshot.elapsed);
     nativeSyncRef.current = { elapsed: snapshot.elapsed, at: Date.now(), paused };
+    elapsedRef.current = seconds;
     setIsPaused(paused);
-    setElapsedSeconds(() => {
-      const seconds = Math.floor(snapshot.elapsed);
-      elapsedRef.current = seconds;
-      return seconds;
-    });
+    setElapsedSeconds(seconds);
   }, []);
 
   /** Draws the clock from the last reading and the wall clock since. */
@@ -590,13 +588,11 @@ export function NoteSourceModal({
         return;
       }
 
-      setElapsedSeconds(() => {
-        const seconds = Math.floor(
-          sync.paused ? sync.elapsed : sync.elapsed + (Date.now() - sync.at) / 1000,
-        );
-        elapsedRef.current = seconds;
-        return seconds;
-      });
+      const seconds = Math.floor(
+        sync.paused ? sync.elapsed : sync.elapsed + (Date.now() - sync.at) / 1000,
+      );
+      elapsedRef.current = seconds;
+      setElapsedSeconds(seconds);
     }, 250);
   }, []);
 

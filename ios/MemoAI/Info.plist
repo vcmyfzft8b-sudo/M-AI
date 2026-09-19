@@ -14,17 +14,19 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
-	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
 			<string>eu.memoai.memo.auth</string>
 			<key>CFBundleURLSchemes</key>
-			<array><string>eu.memoai.memo.auth</string></array>
+			<array>
+				<string>eu.memoai.memo.auth</string>
+			</array>
 		</dict>
 	</array>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
@@ -34,23 +36,20 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>NSSupportsLiveActivities</key>
-	<true/>
-	<key>UIBackgroundModes</key>
-	<array>
-		<!-- Lectures are recorded natively so capture survives the screen
-		     locking; without this the session ends the moment iOS suspends
-		     the app and the recording is silently truncated. -->
-		<string>audio</string>
-	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Scan study materials and attach photos to your notes.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Record lectures and speak with your Memo voice tutor.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save mindmap images exported from your notes to your photo library.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UISupportedInterfaceOrientations</key>

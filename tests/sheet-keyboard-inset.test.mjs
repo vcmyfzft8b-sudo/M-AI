@@ -246,6 +246,31 @@ test("scrolling a field into view does not subtract the keyboard twice", () => {
   );
 });
 
+/*
+ * The clearance is a floor, not a mark to hit. A field further than 12pt above
+ * the keys is where the person left it; only one the keys would come within
+ * 12pt of is moved, and only far enough. Forcing every field down to the
+ * clearance was tried on the flashcard editor and takes the sheet's header and
+ * its whole card list under the keyboard with it.
+ */
+test("a focused field is lifted clear of the keys and never pulled down to them", () => {
+  const inset = readFileSync(
+    fileURLToPath(new URL("../src/components/keyboard-inset.tsx", import.meta.url)),
+    "utf8",
+  );
+
+  assert.match(
+    inset,
+    /Math\.max\(liftFrom, reachable\)/,
+    "the scroll may only grow: shrinking it drags the field towards the keyboard",
+  );
+  assert.match(
+    inset,
+    /lift\(eased\)/,
+    "and it rides the keyboard's own curve rather than landing after it",
+  );
+});
+
 test("no phone sheet is capped against a viewport that ignores the keyboard", () => {
   for (const sheet of SHEETS) {
     const caps = rulesFor(sheet).flatMap((rule) => maxHeights(rule.body));

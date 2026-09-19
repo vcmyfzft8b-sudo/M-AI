@@ -20665,3 +20665,60 @@
     display: none;
   }
 }
+
+/* ===========================================================================
+   Capture sheet on desktop — spacing
+   ---------------------------------------------------------------------------
+   The record screen stacks more than any other mode: the ready card, "record
+   again", the off-screen guide and the actions. Its rhythm came out uneven
+   because `space-y-4` hangs its margins on DOM siblings while this body
+   reorders two of them — "Record again" and the guide row ended up flush
+   against each other, with 16px above one and 40px below the other. A gap on
+   the container is independent of `order`, so every row gets the same air, and
+   the sheet is given the width to use it.
+
+   Desktop only. The phone layout is the artboard's and already has its own
+   gap, and the app runs that layout at every size.
+   ========================================================================= */
+
+@media (min-width: 1100px) {
+  .note-source-modal-stack {
+    width: 39rem;
+  }
+
+  .note-source-modal {
+    padding: 2rem 2.1rem 1.9rem;
+  }
+
+  .note-source-modal .note-source-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+  }
+
+  /* The rows carry margins of their own — `space-y-4` above, sixteen pixels
+     below — which landed unevenly once `order` moved two of them. Clearing
+     both leaves the container's gap as the only thing between any two rows. */
+  .note-source-modal .note-source-modal-body > :not([hidden]) {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  /* The footer keeps a little more air than the rows it closes. */
+  .note-source-modal .note-source-modal-body > .memo-modal-actions {
+    margin-top: 0.5rem;
+  }
+
+  /* The orb's own column: room under the clock, and around the control that
+     sits beneath the hint. */
+  .note-source-modal .memo-record {
+    gap: 1.45rem;
+    padding: 1.4rem 0 0.9rem;
+  }
+
+  .note-source-modal .memo-record-pause {
+    height: 3rem;
+    margin-top: 0.6rem;
+    padding: 0 1.4rem;
+  }
+}

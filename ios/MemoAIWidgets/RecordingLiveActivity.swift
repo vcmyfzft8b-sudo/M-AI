@@ -13,10 +13,18 @@ struct RecordingLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RecordingActivityAttributes.self) { context in
             LockScreenBanner(context: context)
+                // The brand lockup is drawn in Memo's own near-black on a pale
+                // sticker outline. Left on the system's translucent Lock Screen
+                // material it is dark on dark, so the banner brings Memo's
+                // canvas with it and reads the same at night as in daylight.
+                .activityBackgroundTint(.memoCanvas)
+                .activitySystemActionForegroundColor(.memoInk)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    MemoMark(size: 36)
+                    // The island's own background is always black, so here the
+                    // mark goes on its own and the name is drawn as text.
+                    MemoMark(size: 32)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     Clock(state: context.state)
@@ -35,9 +43,6 @@ struct RecordingLiveActivity: Widget {
             } compactTrailing: {
                 Clock(state: context.state)
                     .font(.caption.weight(.semibold))
-                    // Without a ceiling the compact region keeps growing as the
-                    // clock rolls past an hour and crowds out everything else.
-                    .frame(maxWidth: 52)
             } minimal: {
                 RecordingDot(isPaused: context.state.isPaused)
             }
@@ -49,19 +54,29 @@ struct RecordingLiveActivity: Widget {
 private struct LockScreenBanner: View {
     let context: ActivityViewContext<RecordingActivityAttributes>
 
+    private static let lockupHeight: CGFloat = 38
+    /// memo-lockup.png is 480 × 148.
+    private static let lockupAspect: CGFloat = 480 / 148
+
     var body: some View {
-        HStack(spacing: 12) {
-            MemoMark(size: 42)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(context.attributes.title)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                // One asset: the brain and the "Memo AI" wordmark together, the
+                // same lockup the web app signs its pages with. Both dimensions
+                // are given: a resizable image with only a height still asks
+                // for every point of width going, which left the clock adrift
+                // in the middle of the banner instead of against its edge.
+                Image("MemoLockup")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: Self.lockupHeight * Self.lockupAspect, height: Self.lockupHeight)
+                    .accessibilityLabel(context.attributes.title)
                 StatusLine(state: context.state)
             }
             Spacer(minLength: 8)
             Clock(state: context.state)
                 .font(.system(.title, design: .rounded).weight(.semibold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(Color.memoInk)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -76,7 +91,7 @@ private struct StatusLine: View {
             RecordingDot(isPaused: state.isPaused)
             Text(state.status)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.memoInk.opacity(0.65))
                 .lineLimit(1)
         }
     }
@@ -87,7 +102,7 @@ private struct RecordingDot: View {
 
     var body: some View {
         Circle()
-            .fill(isPaused ? Color.secondary : Color.red)
+            .fill(isPaused ? Color.memoInk.opacity(0.4) : Color.red)
             .frame(width: 8, height: 8)
     }
 }
@@ -96,6 +111,15 @@ private struct RecordingDot: View {
 private struct Clock: View {
     let state: RecordingActivityAttributes.ContentState
 
+    /// The end of the range a running clock is laid out for.
+    ///
+    /// `Text(timerInterval:)` reserves room for the widest value its range can
+    /// reach, so `distantFuture` made the clock claim most of the banner and
+    /// then render as "1:--" once the text it had sized for no longer fitted.
+    /// Nine hours bounds that at seven characters, far past both the three-hour
+    /// upload limit and the eight hours the system gives an activity.
+    private static let horizon: TimeInterval = 9 * 60 * 60
+
     var body: some View {
         Group {
             if state.isPaused {
@@ -103,12 +127,18 @@ private struct Clock: View {
             } else {
                 // `startedAt` is `now - elapsed`, recomputed on every resume, so
                 // the running count never includes time spent paused.
-                Text(timerInterval: state.startedAt...Date.distantFuture, countsDown: false)
+                Text(
+                    timerInterval: state.startedAt...state.startedAt.addingTimeInterval(Self.horizon),
+                    countsDown: false)
             }
         }
         .monospacedDigit()
         .lineLimit(1)
         .minimumScaleFactor(0.7)
+        // The box is sized for the longest value the range can reach, so the
+        // digits are laid out from its right edge: the clock then grows
+        // leftwards past the hour instead of shunting itself sideways.
+        .multilineTextAlignment(.trailing)
     }
 
     /// Matches the running clock's own shape: m:ss until an hour, h:mm:ss after.
@@ -130,4 +160,11 @@ private struct MemoMark: View {
             .aspectRatio(contentMode: .fit)
             .frame(width: size, height: size)
     }
+}
+
+private extension Color {
+    /// Memo's page background and body colour, so the banner looks like the app
+    /// rather than like a system notification.
+    static let memoCanvas = Color(red: 0.945, green: 0.945, blue: 0.961)
+    static let memoInk = Color(red: 0.118, green: 0.098, blue: 0.180)
 }

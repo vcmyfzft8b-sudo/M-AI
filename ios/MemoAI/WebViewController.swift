@@ -288,6 +288,13 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        // A recording belongs to the capture modal, and a page load takes the
+        // modal with it — including the reload this controller performs after a
+        // web content process crash. Left running, the recorder would hold the
+        // microphone and a Lock Screen clock for a draft that no longer exists,
+        // and the next attempt to record would be refused as "already
+        // recording". Client-side route changes do not come through here.
+        recorder.discard()
         if !loadingCover.isHidden || webView.isHidden {
             loadingCover.isHidden = false
             overlay.isHidden = false

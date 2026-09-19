@@ -742,14 +742,34 @@
   to { opacity: 1; }
 }
 
-@keyframes memo-rec-pulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(0.9); opacity: 0.72; }
+/*
+ * The recording orb: a coral disc that breathes, with two ripples leaving it
+ * half a cycle apart so something is always moving outward. The old orb shrank
+ * to 0.9 and dropped to 72% opacity twice a second, which read as a warning
+ * light rather than as a microphone listening — and on the phone, where the
+ * artboard wanted a still orb, it was switched off altogether and the screen
+ * had no sign of life on it at all.
+ *
+ * Transform and opacity only. This runs for the length of a lecture, and an
+ * animation that touched layout or paint would be a decoration charged to the
+ * battery.
+ */
+@keyframes memo-rec-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
 }
 
-@keyframes memo-rec-ring {
-  0% { transform: scale(0.92); opacity: 0.55; }
-  100% { transform: scale(1.35); opacity: 0; }
+@keyframes memo-rec-ripple {
+  0% { transform: scale(1); opacity: 0.5; }
+  70% { opacity: 0; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+/* Each bar runs at its own speed, so the row reads as a level meter rather
+   than as a row of metronomes. */
+@keyframes memo-rec-level {
+  0%, 100% { transform: scaleY(0.24); }
+  50% { transform: scaleY(1); }
 }
 
 @keyframes memo-rec-bar {
@@ -6530,14 +6550,39 @@
   color: var(--muted-2);
 }
 
-.memo-record-wave {
-  width: min(14rem, 100%);
-  color: #ff3b30;
+.memo-record-level {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.3rem;
+  height: 1.9rem;
 }
 
-.memo-record-orb.paused .core,
-.memo-record-orb.paused .ring {
-  animation-play-state: paused;
+.memo-record-level span {
+  width: 0.26rem;
+  height: 100%;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--coral);
+  transform: scaleY(0.24);
+  transform-origin: center;
+  animation: memo-rec-level 1.15s ease-in-out infinite;
+  transition: transform 300ms ease, opacity 300ms ease;
+}
+
+.memo-record-level span:nth-child(1) { animation-duration: 1.4s; animation-delay: -0.9s; }
+.memo-record-level span:nth-child(2) { animation-duration: 1s; animation-delay: -0.35s; }
+.memo-record-level span:nth-child(3) { animation-duration: 1.25s; animation-delay: -0.6s; }
+.memo-record-level span:nth-child(4) { animation-duration: 0.9s; animation-delay: -0.15s; }
+.memo-record-level span:nth-child(5) { animation-duration: 1.3s; animation-delay: -0.75s; }
+
+/* Paused settles rather than freezing: `animation-play-state: paused` stopped
+   the orb wherever the frame happened to fall, which looked like a rendering
+   fault as often as it looked deliberate. */
+.memo-record-level.paused span {
+  animation: none;
+  transform: scaleY(0.18);
+  opacity: 0.45;
 }
 
 /* record modal */
@@ -6557,29 +6602,54 @@
   height: 9rem;
 }
 
-.memo-record-orb .ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  background: rgba(255, 59, 48, 0.16);
-  animation: memo-rec-ring 1.8s ease-out infinite;
-}
-
-.memo-record-orb .halo {
-  position: absolute;
-  width: 7rem;
-  height: 7rem;
-  border-radius: 999px;
-  background: rgba(255, 59, 48, 0.14);
-}
-
+/* Both ripples start at the core's size; the halo is the same ripple, half a
+   cycle behind. They are the only two elements in the orb besides the core, so
+   the markup does not change. */
+.memo-record-orb .ring,
+.memo-record-orb .halo,
 .memo-record-orb .core {
   width: 5.2rem;
   height: 5.2rem;
   border-radius: 999px;
-  background: #ff3b30;
-  box-shadow: 0 12px 30px rgba(255, 59, 48, 0.32);
-  animation: memo-rec-pulse 1.2s ease-in-out infinite;
+}
+
+.memo-record-orb .ring,
+.memo-record-orb .halo {
+  position: absolute;
+  background: rgba(244, 95, 90, 0.26);
+  opacity: 0;
+  animation: memo-rec-ripple 2.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+
+.memo-record-orb .halo {
+  animation-delay: -1.4s;
+}
+
+.memo-record-orb .core {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--coral);
+  color: #fff;
+  box-shadow: 0 10px 26px rgba(244, 95, 90, 0.34);
+  animation: memo-rec-breathe 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  transition: transform 320ms ease, box-shadow 320ms ease, filter 320ms ease;
+}
+
+.memo-record-orb-mic {
+  font-size: 2.1rem;
+}
+
+.memo-record-orb.paused .ring,
+.memo-record-orb.paused .halo {
+  animation: none;
+}
+
+.memo-record-orb.paused .core {
+  animation: none;
+  filter: saturate(0.5);
+  box-shadow: 0 6px 16px rgba(244, 95, 90, 0.18);
 }
 
 .memo-record-clock {
@@ -7531,10 +7601,6 @@
     font-size: 1.02rem;
   }
 
-  /* The desktop orb is a plain red disc; the mic is the phone artboard's. */
-  .memo-record-orb-mic {
-    display: none;
-  }
 }
 
 .note-source-modal .memo-modal-actions {
@@ -8226,6 +8292,28 @@
 @media (prefers-reduced-motion: reduce) {
   .memo-offer-timer {
     animation: none;
+  }
+
+  /* The orb still has to say "listening" without moving: the ripple holds at
+     its widest, faintly, and the level meter holds part way up. */
+  .memo-record-orb .core,
+  .memo-record-orb .ring,
+  .memo-record-orb .halo,
+  .memo-record-level span {
+    animation: none;
+  }
+
+  .memo-record-orb .ring {
+    transform: scale(1.5);
+    opacity: 0.35;
+  }
+
+  .memo-record-orb .halo {
+    display: none;
+  }
+
+  .memo-record-level span {
+    transform: scaleY(0.5);
   }
 }
 
@@ -12618,38 +12706,24 @@
   }
 
   /*
-   * The recording orb, at the artboard's proportions: one coral ring around a
-   * coral core with a mic in it. Production draws a red core, no mic, and a
-   * second halo between them. The wave and the pause control stay — the
-   * artboard has neither, but they are what makes a recording screen usable.
+   * The recording orb, at the artboard's proportions: a coral core with a mic
+   * in it, ringed in coral. The artboard draws it still; a screen a student
+   * leaves running for an hour needs to show that it is still listening, so
+   * the ripples and the level meter under the clock stay, as does the pause
+   * control the artboard has no counterpart for.
    */
   .memo-record {
     gap: 1.4rem;
     padding: 3.5rem 0 0;
   }
 
-  /* The artboard's orb is two still circles. The pulse and the halo are the
-     old modal's; the running clock and the live waveform already say that
-     something is being recorded. */
-  .memo-record-orb .ring {
-    background: rgba(244, 95, 90, 0.14);
-    animation: none;
-  }
-
-  .memo-record-orb .halo {
-    display: none;
-  }
-
+  /* The phone's orb is drawn larger than the desktop one. Everything else —
+     the coral, the breath, the ripples — is the shared rule's. */
+  .memo-record-orb .ring,
+  .memo-record-orb .halo,
   .memo-record-orb .core {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     width: 6.4rem;
     height: 6.4rem;
-    background: var(--coral);
-    color: #fff;
-    box-shadow: none;
-    animation: none;
   }
 
   .memo-record-orb-mic {

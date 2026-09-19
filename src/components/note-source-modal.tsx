@@ -383,7 +383,6 @@ export function NoteSourceModal({
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [visualizerStream, setVisualizerStream] = useState<MediaStream | null>(null);
   const [showAudioImportGuide, setShowAudioImportGuide] = useState(false);
   const [sourceSheetDragOffset, setSourceSheetDragOffset] = useState(0);
 
@@ -620,7 +619,6 @@ export function NoteSourceModal({
       void discardNativeRecording().catch(() => null);
     }
 
-    setVisualizerStream(null);
     chunksRef.current = [];
     elapsedRef.current = 0;
     clearAudioSource();
@@ -851,7 +849,6 @@ export function NoteSourceModal({
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      setVisualizerStream(stream);
       chunksRef.current = [];
 
       const recorder = new MediaRecorder(
@@ -890,7 +887,6 @@ export function NoteSourceModal({
           streamRef.current.getTracks().forEach((track) => track.stop());
           streamRef.current = null;
         }
-        setVisualizerStream(null);
         setIsPaused(false);
       };
 
@@ -952,7 +948,6 @@ export function NoteSourceModal({
     recorderRef.current = null;
     setIsRecording(false);
     setIsPaused(false);
-    setVisualizerStream(null);
     if (timerRef.current) {
       window.clearInterval(timerRef.current);
       timerRef.current = null;
@@ -2286,13 +2281,7 @@ export function NoteSourceModal({
                           </span>
                           {/* The real input level, rather than the artboard's
                               decorative bars. */}
-                          {isRecording ? (
-                            <LiveAudioWave
-                              stream={visualizerStream}
-                              active={!isPaused}
-                              className="memo-record-wave"
-                            />
-                          ) : null}
+                          {isRecording ? <LiveAudioWave active={!isPaused} /> : null}
                           <span className="memo-record-hint">
                             {!isRecording
                               ? t("capture.recordHintIdle")

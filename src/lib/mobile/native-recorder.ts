@@ -110,7 +110,10 @@ export async function stopNativeRecording(
     type: stopped.mimeType,
   });
 
-  return { file, durationSeconds: stopped.elapsed };
+  // Never zero. A duration the page cannot vouch for sends the upload path off
+  // to read the container's own metadata, and a blob <audio> element in this
+  // web view can stall there without ever erroring.
+  return { file, durationSeconds: Math.max(stopped.elapsed, 1) };
 }
 
 function decodeChunk(data: string) {

@@ -267,6 +267,30 @@ test("the keyboard's own measurement is still published for them to read", () =>
     /--memo-keyboard-up/,
     "and whether the keys are up, which `:focus` answers too early on dismissal",
   );
+
+  /*
+   * The dismissal is the one movement the page has to draw itself: raising the
+   * keyboard arrives as a stream of viewport updates and is tracked, but
+   * putting it away arrives as a single update delivered after the animation
+   * has finished. Sample-only, the sheet sits still for a quarter of a second
+   * and then drops in one frame. Deleting this as "an imitation curve" puts
+   * that jump straight back.
+   */
+  assert.match(
+    inset,
+    /KEYBOARD_HIDE_MS\s*=\s*250/,
+    "the dismissal is drawn over UIKit's own duration",
+  );
+  assert.match(
+    inset,
+    /KEYBOARD_HIDE_CURVE\s*=\s*\[0\.38, 0\.7, 0\.125, 1\]/,
+    "and on UIKit's own curve, or it will not read as the keyboard's movement",
+  );
+  assert.match(
+    inset,
+    /requestAnimationFrame/,
+    "stepped per frame rather than handed to a CSS transition on padding",
+  );
   assert.match(css, /--memo-vv:\s*var\(--memo-viewport, 100dvh\)/);
   assert.match(css, /--memo-sheet-max:\s*calc\(var\(--memo-vv\) \+ var\(--memo-kb\) - 54px\)/);
 });

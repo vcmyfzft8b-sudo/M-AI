@@ -1,5 +1,4 @@
 "retry" = "Try again";
-"loading" = "Opening Memo…";
 "connectionFailed" = "Memo could not connect. Check your connection and try again.";
 "actionFailed" = "This action could not be completed. Please try again.";
 "ok" = "OK";

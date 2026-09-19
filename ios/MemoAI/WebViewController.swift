@@ -88,7 +88,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         memoLocale = locale
         recorder.statusText = (text("recording"), text("recordingPaused"))
         retry.setTitle(text("retry"), for: .normal)
-        if !overlay.isHidden { message.text = text(retry.isHidden ? "loading" : "connectionFailed") }
+        if !overlay.isHidden, !retry.isHidden { message.text = text("connectionFailed") }
     }
 
     override func viewDidLoad() {
@@ -297,10 +297,16 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         recorder.discard()
         if !loadingCover.isHidden || webView.isHidden {
             loadingCover.isHidden = false
-            overlay.isHidden = false
-            spinner.startAnimating()
-            // No wrong-language flash before the first country lookup returns.
-            message.text = memoLocale == nil ? nil : text("loading")
+            /*
+             * The mark on its own while it loads — no spinner, no caption. The
+             * launch image is the same mark in the same place, so the app comes
+             * up as one still frame rather than a logo that sprouts a status
+             * line a moment later. The stack below it is for `showFailure`,
+             * which is the only thing that has something to say.
+             */
+            overlay.isHidden = true
+            spinner.stopAnimating()
+            message.text = nil
             retry.isHidden = true
         }
         timeout?.cancel()

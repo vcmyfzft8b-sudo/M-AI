@@ -111,15 +111,31 @@ export function KeyboardInset() {
     let upFrom = 0;
     let upTo = 0;
     let upStart = 0;
-    /** `visualViewport.height` with nothing focused — the bar's control. */
-    let restingHeight = 0;
     let barPublished = "";
     /**
-     * The visible viewport plus the inset — the height the page would have if
-     * the keyboard were not there. Sampled from events rather than per frame:
-     * it is invariant through the keyboard's own movement, which is the only
-     * thing `write` is called sixty times a second for, and reading it there
-     * would mean a layout flush every one of those frames.
+     * Whether Safari's accessory bar is over the page for this keyboard, which
+     * is a question about this keyboard and asked again for the next one — the
+     * same field can be panned for one sheet and not the next.
+     */
+    let barOverlaps = false;
+    /**
+     * The page's own height — the foot of the page, which is where the inset is
+     * measured from, and so the height a sheet may fill.
+     *
+     * Read off the same box as the inset rather than added up from window
+     * metrics, because the two must agree: `viewport + inset` is what every
+     * capped sheet is sized against, and the design rests on that sum staying
+     * put while the keys move. Built as `visualViewport.height + inset` it does
+     * not. Mobile Safari answers a keyboard by scrolling the page up as well as
+     * shrinking it, and the scroll is taken out of both terms — once from the
+     * page, which is that much shorter, and once from the inset, which
+     * subtracts `offsetTop`. Measured on an iPhone 17, the flashcard editor:
+     * a 55px scroll took 110px off the sum, the sheet's cap went 660 → 550 and
+     * the sheet's top edge dropped 61pt the moment the keyboard appeared —
+     * against a wrapper, on the same page, whose sheet does not move at all.
+     *
+     * Re-read every frame, off the same rect the inset comes from, so the two
+     * can never disagree — see `follow`, where one rect read answers both.
      */
     let fullHeight = 0;
     /** When the current field took focus, for the accessory bar's wait. */
@@ -164,13 +180,13 @@ export function KeyboardInset() {
       "position:fixed;left:0;bottom:0;width:0;height:0;visibility:hidden;pointer-events:none";
     document.body.appendChild(ground);
 
-    const rawInset = () =>
+    /** The foot of the page, in the coordinates the page is laid out in. */
+    const groundLine = () => ground.getBoundingClientRect().bottom;
+
+    const rawInset = (line = groundLine()) =>
       Math.max(
         0,
-        Math.round(
-          ground.getBoundingClientRect().bottom -
-            (viewport.offsetTop + viewport.height),
-        ),
+        Math.round(line - (viewport.offsetTop + viewport.height)),
       );
 
     /**
@@ -204,8 +220,8 @@ export function KeyboardInset() {
       }
     };
 
-    const measure = () => {
-      const raw = rawInset();
+    const measure = (line = groundLine()) => {
+      const raw = rawInset(line);
 
       if (raw === 0 || sawKeyboard) {
         return raw;
@@ -476,30 +492,64 @@ export function KeyboardInset() {
     /*
      * Safari's form accessory bar — the strip of arrows and Done above the keys.
      *
-     * It is reserved only when it is genuinely covering the page, and that is
-     * something to measure rather than assume. With the software keyboard up,
-     * `visualViewport` stops above the bar and a `position: fixed` foot lands
-     * on the keyboard's top edge, so reserving anything for it takes a strip
-     * out of the sheet for nothing — and the scrollport, which ends where that
-     * strip begins, then slices the field you are typing into in half.
+     * It is drawn on top of the page and `visualViewport` says nothing about
+     * it, so the sheet's ground has to leave room or the bar lands across the
+     * field below the one you are typing in — measured on an iPhone 17, the
+     * flashcard editor: the ground began on the keyboard's own edge at 579 and
+     * the bar sat over the answer field from 507.
      *
-     * The bar does come down on the page in the one case where nothing else
-     * moved: a hardware keyboard attached, where iOS draws the bar on its own
-     * and the viewport stays exactly where it was. That is what this answers,
-     * and the only way to tell it from an ordinary keyboard that has not been
-     * reported yet is to wait out the keyboard's own animation first — which
-     * is why it is asked again on a timer rather than decided at focus.
+     * With one exception, and it is the whole reason this is measured rather
+     * than assumed. When Safari answers a keyboard by *panning* — collapsing
+     * the layout viewport onto the strip you can see rather than leaving the
+     * page its full height — the bar is already outside that strip, and the
+     * page's own foot is on the keyboard's top edge with nothing to spare. The
+     * inset says which: panned, a foot at `bottom: 0` is on the keys and the
+     * inset is 0. Reserving the bar there takes 55px out of the sheet for
+     * nothing, and since the ground is a border and a scrollport ends where its
+     * border begins, it cuts the focused field in half.
+     *
+     * A fraction rather than a flag, so the reserve crosses over on the
+     * keyboard's own curve along with the ground it is added to; a bar that
+     * simply appeared would step the ground 55px in one frame.
      */
+    const barValue = () => {
+      if (root.hasAttribute("data-native")) {
+        return 0;
+      }
+
+      if (isTyping()) {
+        if (published > 0) {
+          barOverlaps = true;
+        } else if (viewport.offsetTop > 0) {
+          // Panned: the visible strip already stops above the bar.
+          barOverlaps = false;
+        } else if (
+          focusedAt > 0 &&
+          performance.now() - focusedAt >= KEYBOARD_MS
+        ) {
+          /*
+           * Nothing has moved at all a whole keyboard animation after focus, so
+           * this is a hardware keyboard and iOS is drawing the bar on its own.
+           * There is no ramp to ride — nothing else is moving either — so the
+           * reserve is simply there, and gone again when the field is let go.
+           */
+          return 1;
+        }
+      }
+
+      /*
+       * Held through the dismissal rather than dropped at `focusout`. The keys
+       * take a quarter of a second to leave and the bar leaves with them, so an
+       * answer that went to 0 the moment focus did would take 55px out of the
+       * ground in one frame at the start of a movement that is supposed to be
+       * still. `upPublished` is already that quarter second, ramping the other
+       * way.
+       */
+      return barOverlaps ? upPublished : 0;
+    };
+
     const publishBar = () => {
-      const settled = restingHeight > 0 ? restingHeight : viewport.height;
-      const overlaps =
-        isTyping() &&
-        published === 0 &&
-        focusedAt > 0 &&
-        performance.now() - focusedAt >= KEYBOARD_MS &&
-        viewport.offsetTop < 8 &&
-        viewport.height >= settled - 8;
-      const next = overlaps ? "1" : "0";
+      const next = `${Math.round(barValue() * 1000) / 1000}`;
 
       if (next !== barPublished) {
         barPublished = next;
@@ -543,10 +593,21 @@ export function KeyboardInset() {
 
     function follow(now: number) {
       frameId += 1;
+      /*
+       * Re-read per frame, off the same rect the inset comes from, because the
+       * page's own height moves while the keyboard does: Safari gives its
+       * bottom bar back partway through the dismissal, and a cap still sized
+       * against the shorter page leaves a bottom-anchored sheet 92px down the
+       * screen until the next viewport event arrives to correct it. Measured at
+       * 60fps on an iPhone 17: three frames of the sheet sliding down and one
+       * frame snapping back.
+       */
+      const line = groundLine();
+      fullHeight = Math.round(line);
       const stillGliding = glideStart > 0;
       const moved = stillGliding
         ? settle(now)
-        : write(idle() ? 0 : clamp(measure()));
+        : write(idle() ? 0 : clamp(measure(line)));
       const ramping = stepUp(now);
 
       syncClearance();
@@ -603,8 +664,9 @@ export function KeyboardInset() {
     };
 
     const track = () => {
-      const raw = measure();
-      fullHeight = viewport.height + rawInset();
+      const line = groundLine();
+      const raw = measure(line);
+      fullHeight = Math.round(line);
       const step = raw - published;
 
       /*
@@ -665,10 +727,6 @@ export function KeyboardInset() {
 
       write(idle() ? 0 : clamp(raw));
 
-      if (!isTyping() && !glideStart && raw === 0) {
-        restingHeight = viewport.height;
-      }
-
       publishBar();
 
       if (!frame) {
@@ -706,9 +764,8 @@ export function KeyboardInset() {
       }, 0);
     };
 
-    fullHeight = viewport.height + rawInset();
+    fullHeight = Math.round(groundLine());
     write(measure());
-    restingHeight = viewport.height;
     writeUp(isTyping() ? 1 : 0);
     publishBar();
     viewport.addEventListener("resize", track);

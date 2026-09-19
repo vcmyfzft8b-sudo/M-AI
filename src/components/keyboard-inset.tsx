@@ -3,15 +3,16 @@
 import { useEffect } from "react";
 
 /**
- * How long iOS takes to put the keyboard away, and the shape of that movement.
+ * How long iOS takes to move the keyboard, and the shape of that movement.
  *
  * UIKit animates the keyboard with its own curve — `UIViewAnimationCurve(7)`,
  * the private one it reserves for this — over a quarter of a second. These are
- * that animation written as CSS, and they are only ever used for the dismissal:
- * see `settle` for why the page has to draw that one itself.
+ * that animation written as CSS, and two things are drawn on them: the
+ * dismissal, which iOS will not describe (see `settle`), and the clearance,
+ * which no platform describes because it is ours (see `rampUp`).
  */
-const KEYBOARD_HIDE_MS = 250;
-const KEYBOARD_HIDE_CURVE = [0.38, 0.7, 0.125, 1] as const;
+const KEYBOARD_MS = 250;
+const KEYBOARD_CURVE = [0.38, 0.7, 0.125, 1] as const;
 
 /**
  * A step this big did not come from the keyboard moving — it came from iOS
@@ -22,7 +23,7 @@ const JUMP_PX = 40;
 
 /** `cubic-bezier(a, b, c, d)` evaluated at `t`, closely enough for one frame. */
 function ease(t: number) {
-  const [x1, y1, x2, y2] = KEYBOARD_HIDE_CURVE;
+  const [x1, y1, x2, y2] = KEYBOARD_CURVE;
   const bezier = (a: number, b: number, u: number) =>
     3 * a * (1 - u) * (1 - u) * u + 3 * b * (1 - u) * u * u + u * u * u;
 
@@ -50,12 +51,13 @@ function ease(t: number) {
  * The whole redesign layer is written against that variable — sheets pad their
  * feet past it, screens end at it, and every sheet's ground runs behind it.
  *
- * `visualViewport` shrinks by exactly the keyboard's height, which is the
- * design's own measurement:
+ * The inset is the answer to one question — how much of something anchored to
+ * the bottom of the page is the keyboard covering — and it is read off a box
+ * pinned there rather than reconstructed from window metrics:
  *
- *     kb = innerHeight - visualViewport.height - visualViewport.offsetTop
+ *     kb = footOfThePage.bottom - (visualViewport.offsetTop + height)
  *
- * `offsetTop` is in there because iOS scrolls the visual viewport within the
+ * `offsetTop` is in there because WebKit scrolls the visual viewport within the
  * layout viewport when a field near the bottom is focused; without it the
  * inset reads short by however far it scrolled.
  *
@@ -86,7 +88,9 @@ export function KeyboardInset() {
     }
 
     const root = document.documentElement;
-    let previous = "";
+    let previousInset = -1;
+    let previousHeight = -1;
+    let previousTop = -1;
     let published = 0;
     /** +1 while the keys are coming up, -1 while they are going away, 0 at rest. */
     let direction = 0;
@@ -96,9 +100,109 @@ export function KeyboardInset() {
     let glideFrom = 0;
     let glideTo = 0;
     let glideStart = 0;
+    /** The clearance ramp: how far the foot has crossed over, and to where. */
+    let upPublished = 0;
+    let upFrom = 0;
+    let upTo = 0;
+    let upStart = 0;
+    /** `visualViewport.height` with nothing focused — the bar's control. */
+    let restingHeight = 0;
+    let barPublished = "";
+    /** When the current field took focus, for the accessory bar's wait. */
+    let focusedAt = 0;
+    let barTimer = 0;
+    /**
+     * The very first keyboard of a page load is held back one frame.
+     *
+     * WebKit shrinks the visual viewport before it has finished with the layout
+     * viewport, so for a frame the page is still its full height with only the
+     * top of it visible and the ground measures a whole keyboard that is about
+     * to turn out not to be there — 310px on one frame and 0 on the next,
+     * measured on an iPhone 17 in Safari. Where the keyboard is real the second
+     * frame simply agrees and nothing is lost but a frame of it.
+     *
+     * The wrapper is excused: it is a WKWebView we configure ourselves, its
+     * layout viewport never moves, and there is no reason to spend a frame
+     * asking.
+     */
+    let sawKeyboard = root.hasAttribute("data-native");
+    /** Frame counter, and the frame the held rise was first seen on. */
+    let frameId = 1;
+    let heldFrame = 0;
+    /*
+     * A foot pinned to the bottom edge, so the keyboard can be measured against
+     * the thing that actually needs the answer.
+     *
+     * Everything the phone layer does with `--memo-kb` comes down to one
+     * question: how much of something anchored to the bottom of the page is the
+     * keyboard covering? That is a geometric fact about this browser's layout,
+     * and it can be read off a box rather than reconstructed from window
+     * metrics — which is what the old `innerHeight - height - offsetTop` was
+     * doing, and which tears. WebKit updates the three of them on different
+     * frames, and the subtraction between a new value and two stale ones is a
+     * keyboard that is not there.
+     *
+     * `visibility: hidden` still lays out, so the box costs nothing to paint.
+     */
+    const ground = document.createElement("div");
+    ground.setAttribute("aria-hidden", "true");
+    ground.style.cssText =
+      "position:fixed;left:0;bottom:0;width:0;height:0;visibility:hidden;pointer-events:none";
+    document.body.appendChild(ground);
 
-    const measure = () =>
-      Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop));
+    const rawInset = () =>
+      Math.max(
+        0,
+        Math.round(
+          ground.getBoundingClientRect().bottom -
+            (viewport.offsetTop + viewport.height),
+        ),
+      );
+
+    /**
+     * Turn the clearance on once the ground is on its way, and not before.
+     *
+     * Focus is not the moment the keyboard moves: iOS reports the first
+     * viewport change 124ms after `focusin` — measured on an iPhone 17 — and a
+     * clearance ramping through that window tightens the foot by 54pt against
+     * a ground that is still flat, so the sheet drops that far before it rises.
+     *
+     * `offsetTop` is the other way it can begin. Mobile Safari sometimes pans
+     * the page out from under the keyboard instead of leaving it behind them,
+     * and then the ground is legitimately 0 for as long as the keys are up and
+     * there is nothing else to wait for. Which of the two it does is a question
+     * about this moment and not about this browser: the same session panned for
+     * one sheet and not for the next, and deciding it once left the sheet that
+     * disagreed sitting underneath the keyboard.
+     */
+    const syncClearance = (rising = false) => {
+      if (!isTyping()) {
+        return;
+      }
+
+      if (rising || glideStart > 0 || published > 0 || viewport.offsetTop > 0) {
+        rampUp(1);
+      }
+    };
+
+    const measure = () => {
+      const raw = rawInset();
+
+      if (raw === 0 || sawKeyboard) {
+        return raw;
+      }
+
+      // Counted in frames rather than calls: this runs from the viewport
+      // listener as well as the loop, and two calls in one frame would spend
+      // the wait without any of it having passed.
+      if (!heldFrame || heldFrame === frameId) {
+        heldFrame = heldFrame || frameId;
+        return 0;
+      }
+
+      sawKeyboard = true;
+      return raw;
+    };
 
     /**
      * Nothing focused and nothing being drawn: there is no keyboard, whatever
@@ -134,98 +238,195 @@ export function KeyboardInset() {
        * after the keyboard had gone and shifted every fixed screen by it.
        */
       const top = idle() ? 0 : Math.max(0, Math.round(viewport.offsetTop));
-      const next = `${inset}/${height}/${top}`;
+      published = inset;
 
-      if (next === previous) {
-        return false;
+      /*
+       * One property at a time. Through the keyboard's movement the inset
+       * changes every frame and the other two do not, and writing all three
+       * anyway invalidates style for the whole document sixty times a second
+       * to say nothing has changed — which is frames the movement could have
+       * had instead.
+       */
+      let moved = false;
+
+      if (inset !== previousInset) {
+        previousInset = inset;
+        moved = true;
+        root.style.setProperty("--memo-keyboard", `${inset}px`);
       }
 
-      previous = next;
-      published = inset;
-      root.style.setProperty("--memo-keyboard", `${inset}px`);
-      root.style.setProperty("--memo-viewport", `${height}px`);
-      root.style.setProperty("--memo-viewport-top", `${top}px`);
-      return true;
+      if (height !== previousHeight) {
+        previousHeight = height;
+        moved = true;
+        root.style.setProperty("--memo-viewport", `${height}px`);
+      }
+
+      if (top !== previousTop) {
+        previousTop = top;
+        moved = true;
+        root.style.setProperty("--memo-viewport-top", `${top}px`);
+      }
+
+      return moved;
     };
 
     /*
      * Whether to leave a field its clearance above the keys.
      *
-     * Focus alone said yes the instant you tapped the field and no the instant
-     * you left it — so the clearance vanished in one step while the keys were
-     * still halfway down. It stays on until the movement has finished too.
+     * A fraction rather than a flag, because the two states it picks between
+     * are different heights: a foot at rest clears the home indicator, a foot
+     * under the keyboard clears the keys by 12pt, and the first is much the
+     * larger. Switched in one frame, that difference arrives as a hop — the
+     * box slides all the way down and then jumps back up by it. Ramped across
+     * the keyboard's own curve, the two paddings cross over while the keyboard
+     * is still travelling and the foot lands once.
      *
-     * Focus has to be part of it because the inset cannot carry this alone:
-     * mobile Safari shrinks the layout viewport to sit above the keys, so there
-     * the inset is legitimately 0 the whole time the keyboard is up.
+     * Focus is what starts the ramp, because the inset cannot: mobile Safari
+     * puts the page's bottom edge *on* the keyboard rather than behind it, so
+     * there the inset is legitimately 0 the whole time the keys are up and
+     * nothing in the measurement ever moves. That is also why the ramp is here
+     * rather than left to a CSS transition on the foot: the foot is padding on
+     * a scrolling box, and transitioning it reflows the scrollport every frame.
      */
-    const publishUp = (blend?: number) => {
-      /*
-       * A fraction, not a flag, because the two states it picks between are
-       * different heights: a foot at rest clears the home indicator, a foot
-       * under the keyboard clears the keys by 12pt, and the first is much the
-       * larger. Switched at the end of a dismissal, that difference arrived in
-       * one frame — the box slid all the way down and then hopped back up by
-       * it. Blended across the same curve as the movement, the two paddings
-       * cross over while the sheet is still travelling and it lands once.
-       */
-      const up = blend ?? (isTyping() || direction !== 0 || published > 0 ? 1 : 0);
-      root.style.setProperty("--memo-keyboard-up", `${up}`);
+    const writeUp = (value: number) => {
+      const next = Math.round(value * 1000) / 1000;
+
+      if (next === upPublished) {
+        return false;
+      }
+
+      upPublished = next;
+      root.style.setProperty("--memo-keyboard-up", `${next}`);
+      return true;
+    };
+
+    /** Start (or redirect) the clearance ramp towards `to`, on UIKit's curve. */
+    const rampUp = (to: number) => {
+      if (upTo === to && (upStart > 0 || upPublished === to)) {
+        return;
+      }
+
+      upFrom = upPublished;
+      upTo = to;
+      upStart = performance.now();
+
+      if (!frame) {
+        frame = requestAnimationFrame(follow);
+      }
+    };
+
+    /** Advances the ramp one frame. Returns whether it is still running. */
+    const stepUp = (now: number) => {
+      if (!upStart) {
+        return false;
+      }
+
+      const t = Math.min(1, (now - upStart) / KEYBOARD_MS);
+      writeUp(upFrom + (upTo - upFrom) * ease(t));
+
+      if (t >= 1) {
+        upStart = 0;
+        return false;
+      }
+
+      return true;
+    };
+
+    /*
+     * Safari's form accessory bar — the strip of arrows and Done above the keys.
+     *
+     * It is reserved only when it is genuinely covering the page, and that is
+     * something to measure rather than assume. With the software keyboard up,
+     * `visualViewport` stops above the bar and a `position: fixed` foot lands
+     * on the keyboard's top edge, so reserving anything for it takes a strip
+     * out of the sheet for nothing — and the scrollport, which ends where that
+     * strip begins, then slices the field you are typing into in half.
+     *
+     * The bar does come down on the page in the one case where nothing else
+     * moved: a hardware keyboard attached, where iOS draws the bar on its own
+     * and the viewport stays exactly where it was. That is what this answers,
+     * and the only way to tell it from an ordinary keyboard that has not been
+     * reported yet is to wait out the keyboard's own animation first — which
+     * is why it is asked again on a timer rather than decided at focus.
+     */
+    const publishBar = () => {
+      const settled = restingHeight > 0 ? restingHeight : viewport.height;
+      const overlaps =
+        isTyping() &&
+        published === 0 &&
+        focusedAt > 0 &&
+        performance.now() - focusedAt >= KEYBOARD_MS &&
+        viewport.offsetTop < 8 &&
+        viewport.height >= settled - 8;
+      const next = overlaps ? "1" : "0";
+
+      if (next !== barPublished) {
+        barPublished = next;
+        root.style.setProperty("--memo-keyboard-bar", next);
+      }
     };
 
     /**
-     * The dismissal, drawn here because iOS will not describe it.
+     * The movement, drawn here for the parts iOS will not describe.
      *
-     * Raising the keyboard arrives as a stream of viewport updates, so the
-     * sheet is driven by the keyboard's own movement and tracks it exactly.
-     * Putting it away arrives as a single update, delivered when the animation
-     * has already finished — so a sheet that only follows the data sits still
-     * for a quarter of a second and then drops in one frame, which is the jump.
+     * Where the keyboard arrives as a stream of viewport updates the sheet is
+     * driven by the keyboard's own movement and tracks it exactly, and none of
+     * this runs. But iOS also delivers a whole keyboard in one update — always
+     * for the dismissal, which it reports once the animation has already
+     * finished, and for the rise too wherever it does not stream it. A sheet
+     * that only follows the data then moves the entire inset in one frame,
+     * which is the jump.
      *
-     * There is nothing to sample, so the page reproduces the motion instead:
-     * UIKit's own duration and curve, stepped every frame. It is the one place
-     * in here that animates rather than measures, and only because the
-     * alternative is not animating at all.
+     * There is nothing to sample in that case, so the page reproduces the
+     * motion instead: UIKit's own duration and curve, stepped every frame. It
+     * is the one place in here that animates rather than measures, and only
+     * because the alternative is not animating at all. Readings that land while
+     * it runs correct its destination without restarting it, so a stream that
+     * begins with one large step still ends up exactly where the keys are.
      */
     const settle = (now: number) => {
-      const t = Math.min(1, (now - glideStart) / KEYBOARD_HIDE_MS);
+      const t = Math.min(1, (now - glideStart) / KEYBOARD_MS);
       const eased = ease(t);
-      const moved = write(Math.round(glideFrom + (glideTo - glideFrom) * eased));
+      const moved = write(
+        Math.round(glideFrom + (glideTo - glideFrom) * eased),
+      );
 
       if (t < 1) {
-        // Fades out with the keys when they are leaving; full while they arrive.
-        publishUp(glideTo === 0 ? 1 - eased : 1);
         return true;
       }
 
       glideStart = 0;
       direction = 0;
-      publishUp();
       return moved;
     };
 
-    const follow = (now: number) => {
+    function follow(now: number) {
+      frameId += 1;
       const stillGliding = glideStart > 0;
-      const moved = stillGliding ? settle(now) : write(idle() ? 0 : clamp(measure()));
+      const moved = stillGliding
+        ? settle(now)
+        : write(idle() ? 0 : clamp(measure()));
+      const ramping = stepUp(now);
 
-      if (stillGliding) {
-        frame = glideStart > 0 ? requestAnimationFrame(follow) : 0;
+      syncClearance();
+      publishBar();
+
+      if (stillGliding || glideStart > 0) {
+        frame = requestAnimationFrame(follow);
         return;
       }
 
       settled = moved ? 0 : settled + 1;
 
-      if (settled < 5) {
+      if (settled < 5 || ramping) {
         // ~5 frames of stillness is the keyboard having arrived, not a pause.
         frame = requestAnimationFrame(follow);
-        publishUp();
         return;
       }
 
       frame = 0;
       direction = 0;
-      publishUp();
-    };
+    }
 
     /*
      * The two halves of the measurement do not land on the same frame. While
@@ -248,7 +449,12 @@ export function KeyboardInset() {
       glideTo = to;
       glideStart = performance.now();
       direction = Math.sign(to - published);
-      publishUp();
+
+      // Same instant, same duration, same curve as the ground it belongs to.
+      if (to > 0) {
+        rampUp(1);
+        upStart = glideStart;
+      }
 
       if (!frame) {
         frame = requestAnimationFrame(follow);
@@ -259,13 +465,53 @@ export function KeyboardInset() {
       const raw = measure();
       const step = raw - published;
 
+      /*
+       * The clearance sets off with the ground, never before it.
+       *
+       * Focus is not the moment the keyboard moves: iOS reports the first
+       * viewport change 124ms after `focusin` — measured on an iPhone 17 —
+       * and a clearance already ramping through that window tightens the foot
+       * by 54pt against a ground that is still flat, so the sheet drops that
+       * far before it rises. Waiting for the ground means the two cross over
+       * on the same clock and the foot only ever moves one way.
+       *
+       * A browser that pans is the exception, because there the ground never
+       * moves at all and there would be nothing to wait for.
+       */
+      syncClearance(raw > 0);
+
+      if (isTyping() && !focusedAt) {
+        focusedAt = performance.now();
+        barTimer = window.setTimeout(publishBar, KEYBOARD_MS + 32);
+      }
+
       if (glideStart) {
-        // Already drawing one; let it finish rather than restart from here.
+        /*
+         * Already drawing one. Later readings correct where it is going rather
+         * than restarting it — same clock, same curve, new destination — so a
+         * keyboard that turns out to be taller than the first report said still
+         * arrives on time. Only ever further along the way it was already
+         * going: the readings wobble on the way down, and following that is
+         * what made the box jump down and up again.
+         */
+        if (Math.sign(raw - glideTo) === Math.sign(glideTo - glideFrom)) {
+          glideTo = raw;
+        }
+
         return;
       }
 
-      if (Math.abs(step) >= JUMP_PX && !isTyping()) {
-        // Reported in one piece: draw it rather than snap to it.
+      if (Math.abs(step) >= JUMP_PX) {
+        /*
+         * Reported in one piece: draw it rather than snap to it.
+         *
+         * Both ways. Putting the keyboard away always arrives like this, after
+         * the fact — but iOS hands the *rise* over in one piece too wherever it
+         * does not stream it (the simulator, measured: 874 to 566 between one
+         * frame and the next), and a sheet that only follows the data jumps the
+         * whole 308px in a frame while the keys are still sliding up. Drawn on
+         * UIKit's own duration and curve it goes up with them.
+         */
         glide(raw);
         return;
       }
@@ -276,7 +522,12 @@ export function KeyboardInset() {
       }
 
       write(idle() ? 0 : clamp(raw));
-      publishUp();
+
+      if (!isTyping() && !glideStart && raw === 0) {
+        restingHeight = viewport.height;
+      }
+
+      publishBar();
 
       if (!frame) {
         frame = requestAnimationFrame(follow);
@@ -298,14 +549,24 @@ export function KeyboardInset() {
      */
     const onFocusOut = () => {
       window.setTimeout(() => {
-        if (!isTyping() && published > 0 && !glideStart) {
+        if (isTyping()) {
+          return;
+        }
+
+        focusedAt = 0;
+        window.clearTimeout(barTimer);
+        rampUp(0);
+
+        if (published > 0 && !glideStart) {
           glide(0);
         }
       }, 0);
     };
 
     write(measure());
-    publishUp();
+    restingHeight = viewport.height;
+    writeUp(isTyping() ? 1 : 0);
+    publishBar();
     viewport.addEventListener("resize", track);
     viewport.addEventListener("scroll", track);
     document.addEventListener("focusin", track);
@@ -316,11 +577,15 @@ export function KeyboardInset() {
         cancelAnimationFrame(frame);
       }
 
+      window.clearTimeout(barTimer);
+
+      ground.remove();
       viewport.removeEventListener("resize", track);
       viewport.removeEventListener("scroll", track);
       document.removeEventListener("focusin", track);
       document.removeEventListener("focusout", onFocusOut);
       root.style.removeProperty("--memo-keyboard-up");
+      root.style.removeProperty("--memo-keyboard-bar");
       root.style.removeProperty("--memo-keyboard");
       root.style.removeProperty("--memo-viewport");
       root.style.removeProperty("--memo-viewport-top");

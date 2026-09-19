@@ -246,6 +246,48 @@ test("scrolling a field into view does not subtract the keyboard twice", () => {
   );
 });
 
+/*
+ * The clearance is a floor, not a mark to hit. A field further than 12pt above
+ * the keys is where the person left it; only one the keys would come within
+ * 12pt of is moved, and only far enough. Forcing every field down to the
+ * clearance was tried on the flashcard editor and takes the sheet's header and
+ * its whole card list under the keyboard with it.
+ */
+test("a focused field is lifted clear of the keys and never pulled down to them", () => {
+  const inset = readFileSync(
+    fileURLToPath(new URL("../src/components/keyboard-inset.tsx", import.meta.url)),
+    "utf8",
+  );
+
+  assert.match(
+    inset,
+    /Math\.max\(liftFrom, reachable\)/,
+    "the scroll may only grow: shrinking it drags the field towards the keyboard",
+  );
+  assert.match(
+    inset,
+    /lift\(eased\)/,
+    "and it rides the keyboard's own curve rather than landing after it",
+  );
+});
+
+/*
+ * The stage a flashcard stands in is `flex: 1` under a cap, so on a short
+ * screen it is handed less than the card's floor — and a card that insists on
+ * its floor does not shrink, it overflows, straight over the answer row
+ * underneath. Measured in Safari, where the browser's chrome costs 160px of
+ * screen: a 272px stage with a 320px card in it, the card's bottom edge at 584
+ * and the review buttons starting at 572. The wrapper never showed it, because
+ * 874px of screen leaves the stage its full 352.
+ */
+test("a flashcard cannot be taller than the stage it stands in", () => {
+  assert.match(
+    css,
+    /lecture-flashcard-face \{\s*min-height: min\(20rem, 100%\)/,
+    "the card's floor has to yield to the room the stage actually has",
+  );
+});
+
 test("no phone sheet is capped against a viewport that ignores the keyboard", () => {
   for (const sheet of SHEETS) {
     const caps = rulesFor(sheet).flatMap((rule) => maxHeights(rule.body));

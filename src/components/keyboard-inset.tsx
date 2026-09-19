@@ -21,6 +21,12 @@ const KEYBOARD_CURVE = [0.38, 0.7, 0.125, 1] as const;
  */
 const JUMP_PX = 40;
 
+/**
+ * How far below a control its own skin may reach before the thing being
+ * measured is no longer the control but the section it sits in.
+ */
+const HUG_PX = 28;
+
 /** `cubic-bezier(a, b, c, d)` evaluated at `t`, closely enough for one frame. */
 function ease(t: number) {
   const [x1, y1, x2, y2] = KEYBOARD_CURVE;
@@ -189,6 +195,11 @@ export function KeyboardInset() {
       }
 
       if (rising || glideStart > 0 || published > 0 || viewport.offsetTop > 0) {
+        if (!upStart && upPublished !== 1) {
+          scroller = scrollerFor(document.activeElement as HTMLElement | null);
+          liftFrom = scroller?.scrollTop ?? 0;
+        }
+
         rampUp(1);
       }
     };
@@ -349,6 +360,17 @@ export function KeyboardInset() {
       const eased = ease(t);
       writeUp(upFrom + (upTo - upFrom) * eased);
 
+      /*
+       * Only on the way up. Going down the scrollport is growing, so the field
+       * gains room without anything having to move — and blending back towards
+       * `liftFrom` would put the first frame of the dismissal at the scroll the
+       * field had before it was ever focused, which is the whole lift undone in
+       * one frame and then re-done slowly.
+       */
+      if (upTo === 1) {
+        lift(eased);
+      }
+
       if (t >= 1) {
         upStart = 0;
         return false;
@@ -357,6 +379,99 @@ export function KeyboardInset() {
       return true;
     };
 
+
+    /** The scroller the focused field is in, and where its scroll started. */
+    let scroller: HTMLElement | null = null;
+    let liftFrom = 0;
+
+    const scrollerFor = (node: HTMLElement | null) => {
+      for (let el = node?.parentElement; el; el = el.parentElement) {
+        const style = getComputedStyle(el);
+
+        if (
+          /(auto|scroll)/.test(style.overflowY) &&
+          el.scrollHeight > el.clientHeight + 1
+        ) {
+          return el;
+        }
+      }
+
+      return null;
+    };
+
+    /**
+     * Lifts a focused field the keyboard is about to crowd, and only then.
+     *
+     * The clearance is a floor, not a mark to hit: a field already further than
+     * 12pt above the keys is where the person put it and stays there, and only
+     * a field the keys would come within 12pt of is moved, and only far enough.
+     * Hence the clamp at `liftFrom` — the scroll can grow, which carries a
+     * field up and away from the keyboard, and can never shrink, which would
+     * drag one down towards it and take the sheet's own header and list with it.
+     *
+     * The browser does this much on its own, but only once it has noticed, and
+     * by then the keyboard has finished: measured on the flashcard editor,
+     * 101px of scroll delivered a frame after everything else had settled,
+     * which reads as a second jump. Stepped on the same curve as the rest of
+     * the movement, the field rides up with the keys instead.
+     *
+     * The target moves under it as it goes, because the ground is a border and
+     * every pixel of keyboard takes a pixel off `clientHeight`, so it is asked
+     * again each frame rather than worked out once.
+     */
+    /**
+     * The box a person would say the field *is*.
+     *
+     * Our fields are rarely the control itself: a search box is an `input`
+     * inside a padded pill, and the pill is what has the rounded edge and the
+     * background. The control's own box stops short of it — 12pt short, in the
+     * flashcard editor's search — so a clearance measured to the control put
+     * the pill's bottom edge flat against the keyboard with nothing between
+     * them, and the 12pt was real but invisible.
+     *
+     * Walked outwards while each ancestor still hugs the control, which is
+     * what a skin does and what a section or a card does not.
+     */
+    const skinOf = (field: HTMLElement, stop: HTMLElement) => {
+      const inner = field.getBoundingClientRect();
+      let box = inner;
+
+      for (let el = field.parentElement; el && el !== stop; el = el.parentElement) {
+        const rect = el.getBoundingClientRect();
+
+        if (rect.bottom - inner.bottom > HUG_PX || rect.bottom < box.bottom) {
+          break;
+        }
+
+        box = rect;
+      }
+
+      return box;
+    };
+
+    const lift = (eased: number) => {
+      const field = document.activeElement as HTMLElement | null;
+
+      if (!scroller || !field || !scroller.contains(field)) {
+        return;
+      }
+
+      const box = scroller.getBoundingClientRect();
+      const rect = skinOf(field, scroller);
+      const clearance =
+        parseFloat(getComputedStyle(scroller).paddingBottom) || 0;
+      const wanted =
+        scroller.scrollTop +
+        rect.bottom -
+        (box.top + scroller.clientHeight - clearance);
+      const reachable = Math.min(
+        wanted,
+        scroller.scrollHeight - scroller.clientHeight,
+      );
+      const target = Math.max(liftFrom, reachable);
+
+      scroller.scrollTop = liftFrom + (target - liftFrom) * eased;
+    };
 
     /*
      * Safari's form accessory bar — the strip of arrows and Done above the keys.
@@ -581,6 +696,7 @@ export function KeyboardInset() {
         }
 
         focusedAt = 0;
+        scroller = null;
         window.clearTimeout(barTimer);
         rampUp(0);
 

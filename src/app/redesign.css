@@ -10468,10 +10468,25 @@
     margin-top: 2.2rem;
   }
 
+  /*
+   * `min()` and not a bare floor, because a floor is a promise the stage cannot
+   * always keep. The stage is `flex: 1` under a cap, so on a short screen it is
+   * handed less than 20rem — and a card that insists on 20rem anyway does not
+   * shrink, it *overflows*, straight over the answer row underneath it.
+   * Measured in Safari, where the browser's own chrome costs 160px of screen:
+   * a 272px stage with a 320px card in it, its bottom edge at 584 and the
+   * review buttons starting at 572. The wrapper never showed it because 874px
+   * of screen leaves the stage its full 352.
+   *
+   * Yielding to `100%` costs nothing where the room exists — the card is
+   * `height: 100%` and the stage is already capped at 22rem, so on the wrapper
+   * this is the same 352px card it was — and everywhere else it is the
+   * difference between a shorter card and a card sitting on the buttons.
+   */
   .memo-note-screen:not([data-note-tab="notes"]) .memo-panel .lecture-flashcard,
   .memo-note-screen:not([data-note-tab="notes"]) .memo-panel .lecture-flashcard-rotator,
   .memo-note-screen:not([data-note-tab="notes"]) .memo-panel .lecture-flashcard-face {
-    min-height: 20rem;
+    min-height: min(20rem, 100%);
   }
 
   /*

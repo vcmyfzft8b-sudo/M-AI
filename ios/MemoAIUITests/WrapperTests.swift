@@ -493,6 +493,11 @@ final class WrapperTests: XCTestCase {
             snap("L1 No recording control")
             return XCTFail("The capture sheet must offer recording")
         }
+        // The app records with the screen off, so the guide that tells learners
+        // to use another recorder and upload the file afterwards must not be on
+        // this screen. It is still right in a browser, and still shown there.
+        XCTAssertFalse(webButton("record with the screen off", "snemaš z ugasnjenim").exists,
+                       "The app does not need the record-with-the-screen-off guide")
         snap("L1 Before recording")
         for _ in 0..<4 where start.exists {
             start.tap()
@@ -517,6 +522,9 @@ final class WrapperTests: XCTestCase {
             return XCTFail("The clock must run once recording starts")
         }
         XCTAssertTrue(webButton("Pause", "Začasno ustavi").exists, "A running recording offers a pause")
+        XCTAssertTrue(app.webViews.staticTexts.matching(
+            either("you can lock your phone", "telefon lahko ugasneš")).firstMatch.exists,
+            "The app's hint says the phone can be locked")
         snap("L2 Recording")
 
         // Away long enough that a page-side timer would visibly fall behind.

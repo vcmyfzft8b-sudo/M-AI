@@ -396,6 +396,17 @@
 
 .memo,
 .memo-portal {
+  /*
+   * The coral call to action's glow, in one place so every one of them carries
+   * the same light.
+   *
+   * Close under the button on purpose. A shadow cannot escape an ancestor that
+   * clips, and most of these sit in sheets that scroll — so the further it hung
+   * below the button, the more of it was sliced off square at the scrollport's
+   * edge instead of fading out. It used to range from `0 4px 16px` to
+   * `0 14px 30px` depending on which button you had found.
+   */
+  --memo-coral-glow: 0 4px 16px rgba(244, 95, 90, 0.3);
   --bg: #f1f1f5;
   /*
    * A panel recessed inside a card. The design only ever nests these on a
@@ -5078,7 +5089,7 @@
 .memo-new-folder-cta.memo-new-folder-cta:not(:disabled),
 .note-source-modal .ios-primary-button.ios-primary-button:not(:disabled) {
   border: var(--btn-border-width) solid var(--btn-border-filled);
-  box-shadow: 0 12px 24px rgba(244, 95, 90, 0.24);
+  box-shadow: var(--memo-coral-glow);
 }
 
 .memo-sheet-danger.memo-sheet-danger,
@@ -6835,7 +6846,7 @@
   cursor: pointer;
   font-size: 1.05rem;
   font-weight: 750;
-  box-shadow: 0 10px 24px rgba(244, 95, 90, 0.28);
+  box-shadow: var(--memo-coral-glow);
 }
 
 .memo-button-coral:disabled {
@@ -7616,7 +7627,7 @@
   font-family: inherit;
   font-size: 1.05rem;
   font-weight: 750;
-  box-shadow: 0 10px 24px rgba(244, 95, 90, 0.28);
+  box-shadow: var(--memo-coral-glow);
 }
 
 .note-source-modal .ios-primary-button:disabled {
@@ -8406,7 +8417,7 @@
   font-weight: 750;
   background: var(--coral);
   color: #ffffff;
-  box-shadow: 0 12px 24px rgba(244, 95, 90, 0.26);
+  box-shadow: var(--memo-coral-glow);
   /* No opacity fade: WebKit crossfades it while the label changes to
      "Spinning…", so both labels showed at once — first seen in the iOS app,
      then in Safari on the web. The button snaps to its waiting look instead. */
@@ -8603,7 +8614,7 @@
   border-radius: 20px;
   background: var(--coral);
   color: #ffffff;
-  box-shadow: 0 14px 30px rgba(244, 95, 90, 0.35);
+  box-shadow: var(--memo-coral-glow);
   cursor: pointer;
   font-size: 1.15rem;
   font-weight: 750;
@@ -10307,7 +10318,7 @@
     border-radius: 999px;
     background: var(--coral);
     color: #fff;
-    box-shadow: 0 12px 24px rgba(244, 95, 90, 0.24);
+    box-shadow: var(--memo-coral-glow);
     cursor: pointer;
   }
 
@@ -11282,7 +11293,7 @@
     height: 3.3rem;
     background: var(--coral);
     color: #fff;
-    box-shadow: 0 10px 22px rgba(244, 95, 90, 0.24);
+    box-shadow: var(--memo-coral-glow);
   }
 
   /*
@@ -11822,6 +11833,17 @@
     display: flex;
     justify-content: center;
     margin-top: 1.4rem;
+    /*
+     * Room for the button's glow inside the scroller.
+     *
+     * A shadow cannot escape an ancestor that clips, and the sheet around this
+     * scrolls — so with the button flush against the end of the content the
+     * glow was sliced off square at the scrollport's edge instead of fading
+     * out. Padding here is part of what scrolls, so the glow always has
+     * somewhere to land. Margin would not do: a last child's bottom margin is
+     * not reliably part of the scrollable extent.
+     */
+    padding-bottom: 1.25rem;
   }
 
   /*
@@ -12103,7 +12125,7 @@
      * below the button to be clipped by the sheet that holds it, which read as
      * the glow being cut off square rather than fading out.
      */
-    box-shadow: 0 6px 18px rgba(244, 95, 90, 0.28);
+    box-shadow: var(--memo-coral-glow);
   }
 
   /* Centred title with the confirm pinned right — the artboard's header row. */
@@ -12788,7 +12810,7 @@
     height: 3.7rem;
     border-radius: 999px;
     background: var(--coral);
-    box-shadow: 0 12px 24px rgba(244, 95, 90, 0.26);
+    box-shadow: var(--memo-coral-glow);
     font-size: 1.12rem;
     font-weight: 750;
     letter-spacing: -0.02em;
@@ -13138,7 +13160,7 @@
     border-radius: 999px;
     background: var(--coral);
     color: #fff;
-    box-shadow: 0 12px 24px rgba(244, 95, 90, 0.24);
+    box-shadow: var(--memo-coral-glow);
     cursor: pointer;
     font-size: 1.12rem;
     font-weight: 700;
@@ -13235,7 +13257,9 @@
     border-radius: 999px;
     background: var(--coral);
     color: #fff;
-    box-shadow: 0 12px 26px rgba(244, 95, 90, 0.28);
+    /* Close under the button rather than trailing well below it: the further
+       it hangs, the more of it a clipping ancestor takes. */
+    box-shadow: var(--memo-coral-glow);
     cursor: pointer;
     font-size: 1.15rem;
     font-weight: 700;

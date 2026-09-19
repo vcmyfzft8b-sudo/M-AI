@@ -645,6 +645,7 @@ export const sl = {
   "capture.recordHintIdle": "Pritisni Začni snemanje, ko se predavanje začne.",
   "capture.recordPaused": "Snemanje je začasno ustavljeno",
   "capture.recordActive": "Snemanje poteka – zapisek nastane, ko ustaviš.",
+  "capture.recordLockScreenHint": "Snemanje poteka – telefon lahko ugasneš, snemanje teče naprej.",
   "capture.recordAgain": "Posnemi znova",
   "capture.resumeRecording": "Nadaljuj snemanje",
   "capture.pauseRecording": "Začasno ustavi",

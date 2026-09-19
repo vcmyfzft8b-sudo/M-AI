@@ -24,6 +24,11 @@ plist(app/'Info.plist', {
  # this string iOS terminates the app when a user picks it.
  'NSPhotoLibraryAddUsageDescription':'Save mindmap images exported from your notes to your photo library.',
  'ITSAppUsesNonExemptEncryption':False,
+ # Lectures are recorded natively so capture survives the screen locking;
+ # without the audio background mode the session ends the moment iOS suspends
+ # the app and the recording is silently truncated.
+ 'UIBackgroundModes':['audio'],
+ 'NSSupportsLiveActivities':True,
  'NSAppTransportSecurity':{'NSAllowsLocalNetworking':True}
 })
 # Includes data collected through the embedded app and backend, not just Swift.
@@ -49,11 +54,11 @@ for theme,channels in [('light',(241,241,245)),('dark',(18,18,20))]:
 write(assets/'Canvas.colorset/Contents.json',json.dumps({'colors':colors,'info':{'author':'xcode','version':1}},indent=2)+'\n')
 # All UI copy is catalogued. English is the development fallback; the PWA keeps its five locales.
 strings={
- 'en':{'retry':'Try again','loading':'Opening Memo…','connectionFailed':'Memo could not connect. Check your connection and try again.','actionFailed':'This action could not be completed. Please try again.','ok':'OK'},
- 'sl':{'retry':'Poskusi znova','loading':'Odpiranje Mema…','connectionFailed':'Memo se ni mogel povezati. Preveri povezavo in poskusi znova.','actionFailed':'Dejanja ni bilo mogoče dokončati. Poskusi znova.','ok':'V redu'},
- 'hr':{'retry':'Pokušaj ponovno','loading':'Otvaranje Mema…','connectionFailed':'Memo se nije mogao povezati. Provjeri vezu i pokušaj ponovno.','actionFailed':'Radnju nije bilo moguće dovršiti. Pokušaj ponovno.','ok':'U redu'},
- 'bs':{'retry':'Pokušaj ponovo','loading':'Otvaranje Mema…','connectionFailed':'Memo se nije mogao povezati. Provjeri vezu i pokušaj ponovo.','actionFailed':'Radnju nije bilo moguće dovršiti. Pokušaj ponovo.','ok':'U redu'},
- 'sr':{'retry':'Pokušaj ponovo','loading':'Otvaranje Mema…','connectionFailed':'Memo nije mogao da se poveže. Proveri vezu i pokušaj ponovo.','actionFailed':'Radnja nije mogla da se završi. Pokušaj ponovo.','ok':'U redu'}}
+ 'en':{'retry':'Try again','loading':'Opening Memo…','connectionFailed':'Memo could not connect. Check your connection and try again.','actionFailed':'This action could not be completed. Please try again.','ok':'OK','recording':'Recording lecture','recordingPaused':'Paused'},
+ 'sl':{'retry':'Poskusi znova','loading':'Odpiranje Mema…','connectionFailed':'Memo se ni mogel povezati. Preveri povezavo in poskusi znova.','actionFailed':'Dejanja ni bilo mogoče dokončati. Poskusi znova.','ok':'V redu','recording':'Snemanje predavanja','recordingPaused':'Zaustavljeno'},
+ 'hr':{'retry':'Pokušaj ponovno','loading':'Otvaranje Mema…','connectionFailed':'Memo se nije mogao povezati. Provjeri vezu i pokušaj ponovno.','actionFailed':'Radnju nije bilo moguće dovršiti. Pokušaj ponovno.','ok':'U redu','recording':'Snimanje predavanja','recordingPaused':'Pauzirano'},
+ 'bs':{'retry':'Pokušaj ponovo','loading':'Otvaranje Mema…','connectionFailed':'Memo se nije mogao povezati. Provjeri vezu i pokušaj ponovo.','actionFailed':'Radnju nije bilo moguće dovršiti. Pokušaj ponovo.','ok':'U redu','recording':'Snimanje predavanja','recordingPaused':'Pauzirano'},
+ 'sr':{'retry':'Pokušaj ponovo','loading':'Otvaranje Mema…','connectionFailed':'Memo nije mogao da se poveže. Proveri vezu i pokušaj ponovo.','actionFailed':'Radnja nije mogla da se završi. Pokušaj ponovo.','ok':'U redu','recording':'Snimanje predavanja','recordingPaused':'Pauzirano'}}
 for locale,table in strings.items():
  write(app/f'{locale}.lproj/Localizable.strings','\n'.join(f'{json.dumps(k)} = {json.dumps(v,ensure_ascii=False)};' for k,v in table.items())+'\n')
 permissions = {
@@ -66,18 +71,32 @@ permissions = {
 for locale, (camera, microphone, photoLibraryAdd) in permissions.items():
  table = {'NSCameraUsageDescription': camera, 'NSMicrophoneUsageDescription': microphone, 'NSPhotoLibraryAddUsageDescription': photoLibraryAdd}
  write(app/f'{locale}.lproj/InfoPlist.strings','\n'.join(f'{json.dumps(k)} = {json.dumps(v,ensure_ascii=False)};' for k,v in table.items())+'\n')
+# The Lock Screen recording banner is drawn by a WidgetKit extension; the app
+# only starts and updates the activity. Its brand images are checked in beside
+# this manifest, as the app's are.
+widget=root/'RecordingLiveActivity'
+plist(widget/'Info.plist', {
+ 'CFBundleDisplayName':'Memo AI','CFBundleIdentifier':'$(PRODUCT_BUNDLE_IDENTIFIER)',
+ 'CFBundleExecutable':'$(EXECUTABLE_NAME)','CFBundleName':'$(PRODUCT_NAME)',
+ 'CFBundlePackageType':'$(PRODUCT_BUNDLE_PACKAGE_TYPE)',
+ 'CFBundleShortVersionString':'$(MARKETING_VERSION)','CFBundleVersion':'$(CURRENT_PROJECT_VERSION)',
+ 'NSExtension':{'NSExtensionPointIdentifier':'com.apple.widgetkit-extension'}})
+write(widget/'Assets.xcassets/Contents.json',json.dumps({'info':{'author':'xcode','version':1}},indent=2)+'\n')
+for name,filename in [('MemoMark','mark.png'),('MemoLockup','lockup.png')]:
+ write(widget/f'Assets.xcassets/{name}.imageset/Contents.json',json.dumps({'images':[{'filename':filename,'idiom':'universal'}],'info':{'author':'xcode','version':1}},indent=2)+'\n')
+
 # Stable IDs make regeneration diffable. File-system synchronized groups include new Swift/resources.
 project='''// !$*UTF8*$!
 {
  archiveVersion = 1; classes = {}; objectVersion = 77;
  objects = {
- A00000000000000000000001 = { isa = PBXProject; attributes = { BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 2650; TargetAttributes = { A00000000000000000000002 = { CreatedOnToolsVersion = 26.5; }; }; }; buildConfigurationList = A00000000000000000000010; compatibilityVersion = "Xcode 16.0"; developmentRegion = en; knownRegions = (en, Base, sl, hr, bs, sr); mainGroup = A00000000000000000000003; preferredProjectObjectVersion = 77; productRefGroup = A00000000000000000000004; projectDirPath = ""; projectRoot = ""; targets = (A00000000000000000000002, A00000000000000000000020); };
- A00000000000000000000002 = { isa = PBXNativeTarget; buildConfigurationList = A00000000000000000000011; buildPhases = (A00000000000000000000007, A00000000000000000000008, A00000000000000000000009); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (A00000000000000000000005); name = MemoAI; productName = MemoAI; productReference = A00000000000000000000006; productType = "com.apple.product-type.application"; };
- A00000000000000000000003 = { isa = PBXGroup; children = (A00000000000000000000005, A00000000000000000000021, A00000000000000000000019, A00000000000000000000004); sourceTree = "<group>"; };
- A00000000000000000000004 = { isa = PBXGroup; children = (A00000000000000000000006, A00000000000000000000022); name = Products; sourceTree = "<group>"; };
+ A00000000000000000000001 = { isa = PBXProject; attributes = { BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 2650; TargetAttributes = { A00000000000000000000002 = { CreatedOnToolsVersion = 26.5; }; }; }; buildConfigurationList = A00000000000000000000010; compatibilityVersion = "Xcode 16.0"; developmentRegion = en; knownRegions = (en, Base, sl, hr, bs, sr); mainGroup = A00000000000000000000003; preferredProjectObjectVersion = 77; productRefGroup = A00000000000000000000004; projectDirPath = ""; projectRoot = ""; targets = (A00000000000000000000002, A00000000000000000000031, A00000000000000000000020); };
+ A00000000000000000000002 = { isa = PBXNativeTarget; buildConfigurationList = A00000000000000000000011; buildPhases = (A00000000000000000000007, A00000000000000000000008, A00000000000000000000009, A00000000000000000000042); buildRules = (); dependencies = (A00000000000000000000040); fileSystemSynchronizedGroups = (A00000000000000000000005); name = MemoAI; productName = MemoAI; productReference = A00000000000000000000006; productType = "com.apple.product-type.application"; };
+ A00000000000000000000003 = { isa = PBXGroup; children = (A00000000000000000000005, A00000000000000000000032, A00000000000000000000046, A00000000000000000000021, A00000000000000000000019, A00000000000000000000049, A00000000000000000000050, A00000000000000000000004); sourceTree = "<group>"; };
+ A00000000000000000000004 = { isa = PBXGroup; children = (A00000000000000000000006, A00000000000000000000033, A00000000000000000000022); name = Products; sourceTree = "<group>"; };
  A00000000000000000000005 = { isa = PBXFileSystemSynchronizedRootGroup; exceptions = (A00000000000000000000018); path = MemoAI; sourceTree = "<group>"; };
  A00000000000000000000006 = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MemoAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
- A00000000000000000000007 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+ A00000000000000000000007 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000047); runOnlyForDeploymentPostprocessing = 0; };
  A00000000000000000000008 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
  A00000000000000000000009 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
  A00000000000000000000010 = { isa = XCConfigurationList; buildConfigurations = (A00000000000000000000012, A00000000000000000000013); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
@@ -99,6 +118,26 @@ project='''// !$*UTF8*$!
  A00000000000000000000028 = { isa = XCBuildConfiguration; buildSettings = { PRODUCT_BUNDLE_IDENTIFIER = eu.memoai.memo.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; GENERATE_INFOPLIST_FILE = YES; TEST_TARGET_NAME = MemoAI; TARGETED_DEVICE_FAMILY = "1,2"; CODE_SIGN_STYLE = Automatic; }; name = Release; };
  A00000000000000000000029 = { isa = PBXTargetDependency; target = A00000000000000000000002; targetProxy = A00000000000000000000030; };
  A00000000000000000000030 = { isa = PBXContainerItemProxy; containerPortal = A00000000000000000000001; proxyType = 1; remoteGlobalIDString = A00000000000000000000002; remoteInfo = MemoAI; };
+ A00000000000000000000031 = { isa = PBXNativeTarget; buildConfigurationList = A00000000000000000000037; buildPhases = (A00000000000000000000034, A00000000000000000000035, A00000000000000000000036); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (A00000000000000000000032); name = RecordingLiveActivity; productName = RecordingLiveActivity; productReference = A00000000000000000000033; productType = "com.apple.product-type.app-extension"; };
+ A00000000000000000000032 = { isa = PBXFileSystemSynchronizedRootGroup; exceptions = (A00000000000000000000044); path = RecordingLiveActivity; sourceTree = "<group>"; };
+ A00000000000000000000033 = { isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RecordingLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+ A00000000000000000000034 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000048); runOnlyForDeploymentPostprocessing = 0; };
+ A00000000000000000000035 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+ A00000000000000000000036 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+ A00000000000000000000037 = { isa = XCConfigurationList; buildConfigurations = (A00000000000000000000038, A00000000000000000000039); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+ A00000000000000000000038 = { isa = XCBuildConfiguration; baseConfigurationReference = A00000000000000000000050; buildSettings = { PRODUCT_NAME = "$(TARGET_NAME)"; INFOPLIST_FILE = RecordingLiveActivity/Info.plist; GENERATE_INFOPLIST_FILE = NO; CODE_SIGN_STYLE = Automatic; SKIP_INSTALL = YES; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_EMIT_LOC_STRINGS = YES; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"; }; name = Debug; };
+ A00000000000000000000039 = { isa = XCBuildConfiguration; baseConfigurationReference = A00000000000000000000050; buildSettings = { PRODUCT_NAME = "$(TARGET_NAME)"; INFOPLIST_FILE = RecordingLiveActivity/Info.plist; GENERATE_INFOPLIST_FILE = NO; CODE_SIGN_STYLE = Automatic; SKIP_INSTALL = YES; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_EMIT_LOC_STRINGS = YES; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"; }; name = Release; };
+ A00000000000000000000040 = { isa = PBXTargetDependency; target = A00000000000000000000031; targetProxy = A00000000000000000000041; };
+ A00000000000000000000041 = { isa = PBXContainerItemProxy; containerPortal = A00000000000000000000001; proxyType = 1; remoteGlobalIDString = A00000000000000000000031; remoteInfo = RecordingLiveActivity; };
+ A00000000000000000000042 = { isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (A00000000000000000000043); name = "Embed Foundation Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+ A00000000000000000000043 = { isa = PBXBuildFile; fileRef = A00000000000000000000033; settings = { ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+ A00000000000000000000044 = { isa = PBXFileSystemSynchronizedBuildFileExceptionSet; membershipExceptions = (Info.plist); target = A00000000000000000000031; };
+ A00000000000000000000045 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingActivityAttributes.swift; sourceTree = "<group>"; };
+ A00000000000000000000046 = { isa = PBXGroup; children = (A00000000000000000000045); path = Shared; sourceTree = "<group>"; };
+ A00000000000000000000047 = { isa = PBXBuildFile; fileRef = A00000000000000000000045; };
+ A00000000000000000000048 = { isa = PBXBuildFile; fileRef = A00000000000000000000045; };
+ A00000000000000000000049 = { isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Version.xcconfig; sourceTree = "<group>"; };
+ A00000000000000000000050 = { isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Widgets.xcconfig; sourceTree = "<group>"; };
  }; rootObject = A00000000000000000000001;
 }
 '''

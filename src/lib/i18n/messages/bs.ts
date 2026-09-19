@@ -629,6 +629,7 @@ export const bs: Messages = {
   "capture.recordHintIdle": "Pritisni Počni snimanje kada predavanje počne.",
   "capture.recordPaused": "Snimanje je pauzirano",
   "capture.recordActive": "Snimanje je u toku – bilješka nastaje kada zaustaviš.",
+  "capture.recordLockScreenHint": "Snimanje je u toku – možeš zaključati telefon, snimanje se nastavlja.",
   "capture.recordAgain": "Snimi ponovo",
   "capture.resumeRecording": "Nastavi snimanje",
   "capture.pauseRecording": "Pauziraj",

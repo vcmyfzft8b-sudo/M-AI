@@ -25,7 +25,7 @@ const server = createServer((request, response) => {
   <button onclick="const a=document.createElement('a');a.href=window.URL.createObjectURL(new Blob(['Synthetic blob export'],{type:'text/plain'}));a.download='Memo-blob.txt';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>window.URL.revokeObjectURL(a.href),1000);">Export blob</button>
   <a href="/page-two">Next screen</a><input aria-label="Note title" placeholder="Note title">
   ${["sl", "hr", "bs", "sr", "en"].map(value => `<button onclick="document.cookie='memo-locale=${value};path=/;max-age=3600';document.documentElement.lang='${value}'">Language ${value}</button>`).join("")}
-  <script>window.addEventListener('unhandledrejection',e=>document.getElementById('bridge').textContent='Promise error: '+e.reason);window.addEventListener('error',e=>document.getElementById('bridge').textContent='Script error: '+e.message);document.getElementById('bridge').textContent=window.memoNative?.version===1?'Native bridge ready':'Missing bridge';</script></body></html>`);
+  <script>window.addEventListener('unhandledrejection',e=>document.getElementById('bridge').textContent='Promise error: '+e.reason);window.addEventListener('error',e=>document.getElementById('bridge').textContent='Script error: '+e.message);document.getElementById('bridge').textContent=(window.memoNative?.version??0)>=1?'Native bridge ready':'Missing bridge';</script></body></html>`);
 });
 server.listen(0, "127.0.0.1", () => {
   const { port } = server.address();

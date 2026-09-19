@@ -56,6 +56,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private let store = Store()
     private let appleSignIn = AppleSignIn()
     private let googleSignIn = GoogleSignIn()
+    private let recorder = LectureRecorder()
     private let overlay = UIStackView()
     private let loadingCover = UIView()
     private let spinner = UIActivityIndicatorView(style: .medium)
@@ -85,12 +86,20 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             .lowercased().split(separator: "-").first.map(String.init) ?? ""
         guard ["sl", "hr", "bs", "sr", "en"].contains(locale) else { return }
         memoLocale = locale
+        recorder.statusText = (text("recording"), text("recordingPaused"))
         retry.setTitle(text("retry"), for: .normal)
         if !overlay.isHidden { message.text = text(retry.isHidden ? "loading" : "connectionFailed") }
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        // A take the page never collected cannot be recovered — the draft it
+        // belonged to is the page's — and a banner outlives the process that
+        // started it, so a crash mid-lecture would leave a clock running on the
+        // Lock Screen with nothing behind it.
+        LectureRecorder.removeOrphanedRecordings()
+        LectureRecorder.dismissStaleActivities()
+        recorder.statusText = (text("recording"), text("recordingPaused"))
         setMemoTheme(UserDefaults.standard.string(forKey: themePreferenceKey) ?? "system")
         view.backgroundColor = UIColor(named: "Canvas")
         let config = WKWebViewConfiguration()
@@ -103,7 +112,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             (() => {
               if (!\(AppConfiguration.trustedOriginsJSON).includes(location.origin)) return;
               Object.defineProperty(window, 'memoNative', { value: Object.freeze({
-                version: 1,
+                // 2 adds the native lecture recorder. The page is deployed
+                // independently of the binary, so it has to ask before calling
+                // a command an installed older build would reject.
+                version: 2,
                 request: (command, payload = {}) => window.webkit.messageHandlers.memoNative.postMessage({command, ...payload})
               }) });
               // WebKit does not consistently promote blob anchor clicks to
@@ -276,6 +288,13 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        // A recording belongs to the capture modal, and a page load takes the
+        // modal with it — including the reload this controller performs after a
+        // web content process crash. Left running, the recorder would hold the
+        // microphone and a Lock Screen clock for a draft that no longer exists,
+        // and the next attempt to record would be refused as "already
+        // recording". Client-side route changes do not come through here.
+        recorder.discard()
         if !loadingCover.isHidden || webView.isHidden {
             loadingCover.isHidden = false
             overlay.isHidden = false
@@ -421,6 +440,21 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                     guard let theme = body["theme"] as? String else { throw Store.StoreError.unavailable }
                     setMemoTheme(theme)
                     replyHandler(["status": "updated"], nil)
+                // Lecture capture. The page owns the draft and the upload;
+                // everything here is the microphone and the Lock Screen banner,
+                // which a suspended web content process cannot hold on to.
+                case "recorderStart": replyHandler(try await recorder.start(), nil)
+                case "recorderPause": replyHandler(try recorder.pause(), nil)
+                case "recorderResume": replyHandler(try recorder.resume(), nil)
+                case "recorderState": replyHandler(recorder.snapshot(), nil)
+                case "recorderStop": replyHandler(try recorder.stop(), nil)
+                case "recorderRead":
+                    guard let offset = body["offset"] as? Int, let length = body["length"] as? Int
+                    else { throw Store.StoreError.unavailable }
+                    replyHandler(try recorder.read(offset: offset, length: length), nil)
+                case "recorderDiscard":
+                    recorder.discard()
+                    replyHandler(["status": "discarded"], nil)
                 case "products": replyHandler(try await store.products(), nil)
                 case "pendingProduct": replyHandler(["productId": store.pendingProductID as Any? ?? NSNull()], nil)
                 case "purchase":

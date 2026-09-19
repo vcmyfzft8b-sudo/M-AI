@@ -9723,17 +9723,21 @@
     /*
      * Safari's form accessory bar — the ∧ ∨ Done strip above the keys.
      *
-     * `visualViewport` does not count it. With the keys up it reports that
-     * strip as visible page, so the measured inset stops short of it and the
-     * bar comes down on whatever is at the foot of a sheet: on the flashcard
-     * editor it covered half the "Add card" button. Measured on an iPhone 17 —
-     * the bar is 46pt with a 9pt gap under it.
+     * Reserved only when it is actually covering the page, which is a thing to
+     * measure and not to assume. With the software keyboard up `visualViewport`
+     * stops *above* the bar, so a sheet on the bottom edge already ends on the
+     * keyboard's top edge and a reserve here takes a strip out of the sheet for
+     * nothing. Worse than nothing: the ground is a border, the scrollport ends
+     * where the border begins, and 55px of phantom border cut the field you
+     * were typing into in half — measured on an iPhone 17 in Safari, field at
+     * 321..378 with the scrollport ending at 349.
      *
-     * Zero by default, because the wrapper turns the bar off outright
-     * (`MemoWebView` answers nil for `inputAccessoryView`) and no other
-     * platform draws one. The override below is scoped to iOS on the web, and
-     * folded through `--memo-kb-up` so it is only there while a field has
-     * focus — which is the only time the bar exists.
+     * The bar does come down on the page when a hardware keyboard is attached
+     * and iOS draws it on its own with nothing else moving. `KeyboardInset`
+     * tests for exactly that — focused, and the viewport still where it was at
+     * rest — and answers 1 only then. Zero on the wrapper regardless, which
+     * turns the bar off outright (`MemoWebView` answers nil for
+     * `inputAccessoryView`), and on every platform that draws no bar at all.
      */
     --memo-kb-bar: 0px;
     /*
@@ -9770,7 +9774,7 @@
   /* `-webkit-touch-callout` is iOS WebKit; `[data-native]` is our wrapper. */
   @supports (-webkit-touch-callout: none) {
     html:not([data-native]) :is(.memo, .memo-portal) {
-      --memo-kb-bar: calc(var(--memo-kb-up) * 3.45rem);
+      --memo-kb-bar: calc(var(--memo-keyboard-bar, 0) * 3.45rem);
     }
   }
 

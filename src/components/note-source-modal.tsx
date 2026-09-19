@@ -740,47 +740,6 @@ export function NoteSourceModal({
     }
   }, [open, resetState]);
 
-  /*
-   * Re-reads the app's own count while a native take runs.
-   *
-   * Two things this page cannot see make its clock wrong on its own: it stops
-   * running altogether while iOS has the app suspended, and the recorder can be
-   * paused behind its back by a call or by another app taking the microphone.
-   * Coming back to the foreground is the moment that matters most, so the
-   * reading is taken then as well as on a slow interval.
-   */
-  useEffect(() => {
-    if (!nativeRecorder || !isRecording) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const sync = () => {
-      if (document.visibilityState !== "visible") {
-        return;
-      }
-
-      void readNativeRecordingState()
-        .then((snapshot) => {
-          if (!cancelled) {
-            applyNativeSnapshot(snapshot);
-          }
-        })
-        .catch(() => null);
-    };
-
-    const interval = window.setInterval(sync, 2000);
-    document.addEventListener("visibilitychange", sync);
-    sync();
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", sync);
-    };
-  }, [applyNativeSnapshot, isRecording, nativeRecorder]);
-
   useEffect(() => {
     return () => {
       if (audioSource?.previewUrl) {
@@ -992,6 +951,64 @@ export function NoteSourceModal({
       }, 1000);
     }
   }, [applyNativeSnapshot]);
+
+  /*
+   * Re-reads the app's own count while a native take runs.
+   *
+   * Three things this page cannot see make it wrong on its own: it stops
+   * running altogether while iOS has the app suspended, the recorder can be
+   * paused behind its back by a call or by another app taking the microphone,
+   * and the audio server restarting ends a take without asking. Coming back to
+   * the foreground is the moment that matters most, so the reading is taken
+   * then as well as on a slow interval.
+   *
+   * Declared after `stopRecording` on purpose: a dependency array is read
+   * during render, and naming a `const` declared further down would throw.
+   */
+  useEffect(() => {
+    if (!nativeRecorder || !isRecording) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const sync = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      void readNativeRecordingState()
+        .then((snapshot) => {
+          if (cancelled) {
+            return;
+          }
+
+          if (snapshot.state !== "idle") {
+            applyNativeSnapshot(snapshot);
+            return;
+          }
+
+          // The app stopped recording without being asked. Whatever reached
+          // disk is still there, so finish the take and hand the learner the
+          // minutes they did get, rather than leave a clock running over
+          // nothing until they press stop themselves.
+          if (nativeSyncRef.current) {
+            void stopRecording();
+          }
+        })
+        .catch(() => null);
+    };
+
+    const interval = window.setInterval(sync, 2000);
+    document.addEventListener("visibilitychange", sync);
+    sync();
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [applyNativeSnapshot, isRecording, nativeRecorder, stopRecording]);
 
   const requestClose = useCallback(() => {
     sourceSheetDragStartYRef.current = null;

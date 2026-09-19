@@ -33,8 +33,31 @@ final class LectureRecorder: NSObject, AVAudioRecorderDelegate {
 
     private(set) var state: State = .idle
     private var recorder: AVAudioRecorder?
-    private var file: URL?
+    /// The take on disk. Everything that belongs to one recording is tied to
+    /// this one property, so a second take cannot inherit any of it.
+    private var file: URL? {
+        didSet {
+            guard oldValue != file else { return }
+            // The read handle belongs to whichever file it was opened on. A
+            // take the page never finished collecting leaves one open, and
+            // without this the next recording would be read through it — and
+            // hand back the previous lecture.
+            try? handle?.close()
+            handle = nil
+            // An abandoned take is not coming back: the draft it belonged to is
+            // the page's, and it went with the modal. Hours of audio should not
+            // sit on the phone until the next launch sweeps it.
+            if let previous = oldValue { try? FileManager.default.removeItem(at: previous) }
+        }
+    }
     private var handle: FileHandle?
+    /// True between `start` being asked for and the recorder actually running.
+    /// The permission prompt holds that open for seconds on a first run, and a
+    /// second request arriving inside it must not start a second recorder.
+    private var starting = false
+    /// The length of the take, for the case where the recorder is gone before
+    /// it can be asked: the audio server restarting takes it with no warning.
+    private var lastElapsed: TimeInterval = 0
     /// True between an interruption beginning and the user (or the system)
     /// resuming. The page shows the same paused UI either way, but only a
     /// user-requested pause may be resumed by a user-requested resume.
@@ -59,7 +82,9 @@ final class LectureRecorder: NSObject, AVAudioRecorderDelegate {
     // MARK: - Recording
 
     func start() async throws -> [String: Any] {
-        guard state == .idle else { throw BridgeFailure(reason: "already recording") }
+        guard state == .idle, !starting else { throw BridgeFailure(reason: "already recording") }
+        starting = true
+        defer { starting = false }
         guard await Self.requestPermission() else { throw BridgeFailure(reason: "microphone denied") }
 
         let session = AVAudioSession.sharedInstance()
@@ -88,6 +113,7 @@ final class LectureRecorder: NSObject, AVAudioRecorderDelegate {
 
         file = url
         interrupted = false
+        lastElapsed = 0
         state = .recording
         startActivity()
         return snapshot()
@@ -96,6 +122,7 @@ final class LectureRecorder: NSObject, AVAudioRecorderDelegate {
     func pause() throws -> [String: Any] {
         guard state == .recording, let recorder else { throw BridgeFailure(reason: "not recording") }
         recorder.pause()
+        lastElapsed = recorder.currentTime
         state = .paused
         interrupted = false
         updateActivity()
@@ -117,11 +144,15 @@ final class LectureRecorder: NSObject, AVAudioRecorderDelegate {
     /// Finalizes the file and reports what the page has to collect. The audio
     /// stays on disk until `discard`, which the page calls once it holds every
     /// chunk.
+    /// Works on a take the recorder has already abandoned — the audio server
+    /// restarting ends one without being asked — so the audio that reached disk
+    /// is still handed over rather than thrown away with the recorder.
     func stop() throws -> [String: Any] {
-        guard state != .idle, let recorder, let file else { throw BridgeFailure(reason: "not recording") }
-        let elapsed = recorder.currentTime
-        recorder.stop()
-        self.recorder = nil
+        guard let file else { throw BridgeFailure(reason: "not recording") }
+        let elapsed = recorder?.currentTime ?? lastElapsed
+        recorder?.stop()
+        recorder = nil
+        lastElapsed = elapsed
         state = .idle
         interrupted = false
         endActivity()
@@ -168,9 +199,7 @@ final class LectureRecorder: NSObject, AVAudioRecorderDelegate {
         }
         state = .idle
         interrupted = false
-        try? handle?.close()
-        handle = nil
-        if let file { try? FileManager.default.removeItem(at: file) }
+        // Closing the handle and deleting the audio is `file`'s own business.
         file = nil
     }
 
@@ -218,6 +247,7 @@ final class LectureRecorder: NSObject, AVAudioRecorderDelegate {
     /// reached disk is kept — the page can still collect it — but the take ends.
     @objc private func handleMediaServicesReset() {
         guard state != .idle else { return }
+        lastElapsed = recorder?.currentTime ?? lastElapsed
         recorder?.stop()
         recorder = nil
         state = .idle

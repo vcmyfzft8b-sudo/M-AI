@@ -112,8 +112,13 @@ export default async function LegalPage({
               <MarkdownRenderer content={body} />
             </div>
 
-            <h2 className="memo-legal-more-heading">{t("legal.otherDocuments")}</h2>
-            <nav className="memo-legal-more" aria-label={t("legal.otherDocuments")}>
+            {/* Named by the heading rather than by a repeat of it: an aria-label
+                saying the same words made a screen reader announce "Other
+                documents" twice, once for the landmark and once for the h2. */}
+            <h2 id="legal-other-documents" className="memo-legal-more-heading">
+              {t("legal.otherDocuments")}
+            </h2>
+            <nav className="memo-legal-more" aria-labelledby="legal-other-documents">
               {others.map((other) => (
                 <Link key={other.slug} href={`/legal/${other.slug}`} className="memo-settings-row">
                   <span className="memo-settings-copy">

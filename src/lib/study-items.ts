@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import { isWorkAbortedError } from "@/lib/abort-context";
 import { generateStructuredObject } from "@/lib/ai/json";
+import { linkDuplicateItems } from "@/lib/ai/decisions";
+import { jevDecisionOptions } from "@/lib/ai/decisions-server";
 import {
   countWords,
   MAX_ITEMS_PER_EXTRACTION_WINDOW,
@@ -117,6 +119,40 @@ const DUPLICATE_JUDGE_MAX_ITEMS = 300;
  */
 const DUPLICATE_JUDGE_MAX_BATCHES = 6;
 
+/**
+ * The decision model's verdicts, or null to mean "use the model we already pay".
+ *
+ * `linkDuplicateItems` is written to return null on every failure it knows about, and this catch
+ * exists for the ones it does not. It matters more than it looks: the caller's own catch degrades
+ * to "no duplicates found" and checkpoints that, so a throw leaking out of here would not fall
+ * back to GLM — it would silently ship a deck with every near-duplicate still in it, and pin that
+ * verdict for every retry of the same lecture.
+ *
+ * Returning null instead puts the run on exactly the path it takes in production today.
+ */
+async function tryLinkDuplicateItems(
+  items: Array<{ claim: string }>,
+  usageContext: StudyUsageContext | undefined,
+) {
+  try {
+    const decided = await linkDuplicateItems(
+      { items: items.map((item) => ({ claim: item.claim })) },
+      jevDecisionOptions({ ...(usageContext ?? {}), stage: "item_dedupe" }),
+    );
+
+    return decided?.value ?? null;
+  } catch (error) {
+    // A cancelled run is not a Jev failure and must keep unwinding.
+    if (isWorkAbortedError(error)) {
+      throw error;
+    }
+
+    console.warn("[item-dedupe] decision model unavailable; using the writer", error);
+
+    return null;
+  }
+}
+
 async function judgeCollapseDuplicateItemBatch<TItem extends IndexedKnowledgeItem>(
   items: TItem[],
   usageContext: StudyUsageContext | undefined,
@@ -143,15 +179,34 @@ async function judgeCollapseDuplicateItemBatch<TItem extends IndexedKnowledgeIte
       stage: "item_dedupe",
       cacheKey,
       schema: duplicateVerdictSchema,
-      generate: () =>
-        generateStructuredObject({
+      generate: async () => {
+        /*
+         * The decision model first, when it is switched on.
+         *
+         * This judge is a Choice over the list — "which earlier item does this restate, or none"
+         * — and asking a writer to answer it costs what writing costs. GLM emits ~1,196 output
+         * and ~487 reasoning tokens per batch to produce what amounts to 300 integers, at 20-60
+         * tokens a second; that is the 30-80 seconds this step spends, and it spends them with a
+         * learner waiting on the practice-test attempt route.
+         *
+         * Null covers every way Jev can be unavailable, and the call below is what ran before
+         * this existed, so the worst case here is exactly last week's behaviour.
+         */
+        const decided = await tryLinkDuplicateItems(items, usageContext);
+
+        if (decided) {
+          return { verdicts: decided };
+        }
+
+        return generateStructuredObject({
           schema: duplicateVerdictSchema,
           maxOutputTokens: Math.min(16_000, items.length * 16 + 600),
           stage: "note_extract",
           instructions: DUPLICATE_JUDGE_INSTRUCTIONS,
           input,
           usageContext: { ...(usageContext ?? {}), stage: "item_dedupe" },
-        }),
+        });
+      },
     });
   } catch (error) {
     // A budget abort is not a judge failure to degrade around — the run is being cancelled.

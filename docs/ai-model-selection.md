@@ -219,3 +219,55 @@ and joining the segments with blank lines. **Truncate by whole paragraphs**: sli
 flattens the blank lines the windower splits on, which turns a 4,000-word source into one
 unsplittable chunk and makes every model look 40 points worse than it is. That mistake was made
 here and nearly reported as a product defect.
+
+## Decision models: TypeSafe Jev, evaluated 2026-09-19 and not adopted
+
+Jev is a "System One" model. It cannot write: it takes one shared state plus a bag of typed
+questions — pick one, score on a rubric, yes/no — and answers all of them in a single forward
+pass, with output tokens unbilled. On paper it is the right shape for every decision in this
+product that is currently made by a writer: how important a fact is, whether it restates another,
+whether a question stands on its own, whether an answer earned a marking point.
+
+It was benchmarked against GLM 5.3 Flash on identical inputs, then wired into the duplicate judge
+and run end to end against staging. **It was removed again.** Two findings, in order of weight.
+
+**It never won on quality.** Across the note fixtures, measured against the same ground truth:
+importance ranking 1.000 to 1.000; duplicate detection 100% recall for both, with one false
+positive from GLM and none from Jev; answer marking in full agreement; both refused an answer that
+instructed the marker to award full marks. The whole advantage was latency — 3-11x, and real.
+
+**The request shape does not survive a production batch.** Every Choice question carries its own
+answer space, so asking "which earlier item does this restate" ships descriptions of all *i*
+preceding items with item *i* — n(n-1)/2 option descriptions in one request, about 45,000 for the
+300-item batch `judgeCollapseDuplicateItems` actually receives. Measured against the live gateway
+with realistic claim text: 41 items is 88KB and answers in 1.5s, 64 items is 210KB and answers,
+100 items is 504KB and is rejected with a 400, and between 64 and 90 the service stops answering.
+The first real note put through it on staging extracted 65 items, took the 400 and fell back to
+GLM correctly — a feature that helps short lectures and quietly does nothing for long ones, when
+long ones are the entire reason that step exists.
+
+Nothing cheap rescues it. Index-only option labels (the state already carries every claim,
+numbered) cut a 64-item request from 210KB to 42KB and still fail by 150. Batching fewer questions
+per request bounds each payload but re-sends and re-bills the state every time, turning one
+300-item dedupe into twelve requests and roughly $0.02 against GLM's $0.0008 — dearer than the
+model it replaces, for a judgment that measured level with it. Capping how far back a question may
+look bounds both and buys the saving by giving up exactly the cross-list restatements the
+mechanical pass already cannot see.
+
+Other measurements worth keeping, all from the Vercel AI Gateway on paid credits:
+
+- **Reliability.** A transient 503 on roughly one request in ten, at any pacing — 9/10 succeeded
+  with no gap, at 500ms and at 1500ms alike. Anything built on this needs retries.
+- **Batch ceiling.** Eight trials each: 25, 50 and 100 questions never failed; 150 failed once;
+  250 failed six times in eight; 300 seven. A request barely slows as questions are added, then
+  starts failing outright.
+- **Price.** $0.042 per million input tokens, output unbilled.
+- **Separating scoring from writing did not fix inflation.** The extractor's 1-5 importance rating
+  is known to be inflated (see `note-prompts.ts`), and the hypothesis was that a rater with no
+  stake in the writing would use the scale better. It does not: Jev put 67% of facts in the top
+  two levels against GLM's 63%. Both rank perfectly; neither spreads.
+
+**If this is revisited**, the shape that would fit is a different question — let the cheap lexical
+pass propose candidate pairs and ask a boolean per candidate. That is linear in practice and plays
+to what the model is good at. It is a different feature with different ground truth, and it needs
+its own measurement before anybody writes it. Do not re-wire the Choice-over-the-whole-list form.

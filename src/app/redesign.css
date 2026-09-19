@@ -9364,31 +9364,79 @@
   .memo-portal {
     /* `KeyboardInset` publishes the measured height on the document element;
        the fallback keeps every calc() honest before it has run and on any
-       browser without `visualViewport`. */
+       browser without `visualViewport`.
+
+       It reads 0 in mobile Safari, correctly: Safari shrinks the layout
+       viewport to the space above the keys, so a sheet on the bottom edge is
+       already clear of them and has nothing to pad past. That is also why no
+       sheet is capped in `dvh` any more — `dvh` does not shrink with the
+       keyboard, so a sheet measured against it was allowed to be taller than
+       the viewport it sits in and hung its header off the top of the screen.
+       `100%` is the containing block, which is that viewport in every case. */
     --memo-kb: var(--memo-keyboard, 0px);
+    /*
+     * What is actually on screen, and how far down it starts. Mobile Safari
+     * pans the visual viewport inside a layout viewport it never shrinks, so
+     * neither `dvh` nor `%` can answer either question — both measure the taller
+     * screen you cannot see. `KeyboardInset` measures them; the fallbacks are
+     * the old behaviour, for the first paint and for anything without
+     * `visualViewport`.
+     */
+    --memo-vv: var(--memo-viewport, 100dvh);
+    --memo-vv-top: var(--memo-viewport-top, 0px);
+    /*
+     * How tall a bottom sheet may be: from the bottom edge it is anchored to,
+     * up to 54px below the top of the visible area. The keyboard inset is added
+     * back because that much of the sheet is deliberately behind the keys — it
+     * is padding, not content, and clamping it away would crush the content
+     * instead.
+     */
+    --memo-sheet-max: calc(var(--memo-vv) + var(--memo-kb) - 54px);
     --memo-safe-top: env(safe-area-inset-top, 0px);
     --memo-safe-bottom: env(safe-area-inset-bottom, 0px);
+    /*
+     * What every bottom sheet pads its content by, so the keys clear it.
+     *
+     * A sheet stays anchored to the bottom edge and pads rather than rises, so
+     * the keyboard slides over the sheet's own surface. Ending the sheet on
+     * top of the keys instead drew its bottom edge across the middle of the
+     * screen with the page showing through beside it, which reads as a sheet
+     * cut in half rather than one the keyboard is overlapping.
+     *
+     * The home indicator's strip is only worth clearing while the keyboard is
+     * down — the keys cover it themselves — so `max()` drops it rather than
+     * adding it on top, and the gap above the keyboard stays whatever padding
+     * the sheet already asked for.
+     */
+    --memo-kb-pad: max(var(--memo-safe-bottom), var(--memo-kb));
+    /*
+     * The home indicator's strip, but only while the keys are not already
+     * covering it.
+     *
+     * A foot that sits *inside* something which has itself made room for the
+     * keyboard — a composer in a sheet, the dock on a screen — must not add the
+     * indicator's inset again on top of it. Doing so left the chat composer
+     * floating a thumb's width above the keys with nothing in the gap.
+     */
+    --memo-kb-gap: max(0px, var(--memo-safe-bottom) - var(--memo-kb));
+    /* Scrolling a focused field into view has to stop short of the keys: the
+       sheet's scrollport now runs on behind them. */
+    --memo-kb-scroll: calc(var(--memo-kb) + 1.1rem);
   }
 
   /*
-   * Sheets that live inside a full-screen wrapper are pinned to the bottom of
-   * *that*, so subtracting the keyboard from their own height is not enough —
-   * the wrapper has to end above the keys or the sheet stays behind them.
+   * A note for the next person who reaches for `--memo-kb` here: wrappers and
+   * scrims stay the full viewport, always, and the keyboard is read once per
+   * sheet — in that sheet's own foot padding, never as its bottom edge.
    *
-   * `.study-manager-backdrop` is deliberately not in this list. It is the only
-   * one of these that is both the scrim and the sheet's parent, and its
-   * `backdrop-filter` makes it the containing block for the fixed sheet inside
-   * it — so ending the scrim above the keys subtracted `--memo-kb` a second
-   * time, and the edit sheet sat a whole keyboard's height above the keyboard
-   * with its header pushed off the top of the screen. The scrim stays the full
-   * viewport and the sheet alone reads the inset.
+   * `.library-folder-modal-overlay` is why. It paints a `backdrop-filter`,
+   * which makes it the containing block for the fixed sheet inside it, so
+   * ending the overlay above the keys subtracted the inset a second time: the
+   * "Nova mapa" sheet came to rest a whole keyboard's height above the
+   * keyboard with its header off the top of the screen. `.note-source-modal-wrap`
+   * and `.ios-sheet-wrap` wrap sheets that are `position: fixed` in their own
+   * right, so moving those wrappers was never doing anything for them either.
    */
-  .note-source-modal-wrap,
-  .library-folder-modal-overlay,
-  .memo-portal .ios-sheet-wrap {
-    bottom: var(--memo-kb);
-  }
-
 
   .memo-only-desktop {
     display: none !important;
@@ -9432,7 +9480,7 @@
 
   .memo-screen {
     position: fixed;
-    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     background: var(--bg);
@@ -9872,7 +9920,7 @@
 
   .memo-m-homebar {
     position: absolute;
-    inset: auto 1.15rem calc(1.9rem + var(--memo-safe-bottom)) 1.15rem;
+    inset: auto 1.15rem calc(1.9rem + var(--memo-kb-gap)) 1.15rem;
     z-index: 4;
     display: flex;
     align-items: center;
@@ -9931,7 +9979,7 @@
 
   .memo-home-screen {
     position: fixed;
-    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     background: var(--bg);
@@ -9965,12 +10013,13 @@
     top: auto;
     left: 0;
     right: 0;
-    bottom: var(--memo-kb);
+    bottom: 0;
     transform: translateY(0);
     width: auto;
-    max-height: calc(100dvh - var(--memo-kb) - 54px);
+    max-height: var(--memo-sheet-max);
     overflow-y: auto;
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
+    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -10291,7 +10340,7 @@
 
   .memo-dock {
     position: absolute;
-    inset: auto 1.15rem calc(1.6rem + var(--memo-safe-bottom)) 1.15rem;
+    inset: auto 1.15rem calc(1.6rem + var(--memo-kb-gap)) 1.15rem;
     z-index: 4;
     display: flex;
     align-items: center;
@@ -10554,7 +10603,7 @@
 
   .memo-note-screen {
     position: fixed;
-    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     background: var(--bg);
@@ -10605,7 +10654,7 @@
   }
 
   .memo-note-chat-sheet .memo-chat-foot {
-    padding: 0 1.15rem calc(1.6rem + var(--memo-safe-bottom));
+    padding: 0 1.15rem calc(1.6rem + var(--memo-kb-gap));
   }
 
   .memo-m-chat-title {
@@ -10660,9 +10709,9 @@
 
   .memo-quiz-sheet {
     position: fixed;
-    inset: auto 0 var(--memo-kb) 0;
+    inset: auto 0 0 0;
     z-index: 6;
-    padding: 1.2rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    padding: 1.2rem 1.15rem calc(2rem + var(--memo-kb-pad));
     border-radius: 30px 30px 0 0;
     background: var(--surface);
     box-shadow: var(--shadow-lg);
@@ -10707,7 +10756,7 @@
 
   .memo-sub-chatbar {
     position: absolute;
-    inset: auto 1.15rem calc(1.6rem + var(--memo-safe-bottom)) 1.15rem;
+    inset: auto 1.15rem calc(1.6rem + var(--memo-kb-gap)) 1.15rem;
     display: flex;
     align-items: center;
     gap: 0.6rem;
@@ -10786,8 +10835,8 @@
 
   .memo-sheet-full.memo-wheel-sheet,
   .memo-sheet-full.memo-offer-sheet {
-    top: calc(3.5rem + var(--memo-safe-top));
-    bottom: var(--memo-kb);
+    top: calc(var(--memo-vv-top) + 3.5rem + var(--memo-safe-top));
+    bottom: 0;
     left: 0;
     transform: translateY(0);
     width: auto;
@@ -10797,7 +10846,7 @@
 
   .memo-settings-screen {
     position: fixed;
-    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -10976,14 +11025,15 @@
     top: auto;
     left: 0;
     right: 0;
-    bottom: var(--memo-kb);
+    bottom: 0;
     transform: translateY(0);
     width: auto;
-    max-height: calc(100dvh - var(--memo-kb) - 54px);
+    max-height: var(--memo-sheet-max);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     border-radius: 34px 34px 0 0;
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
     background: var(--bg);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
@@ -11005,7 +11055,7 @@
 
   .memo-support-screen {
     position: fixed;
-    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -11175,8 +11225,8 @@
   }
 
   .note-source-modal {
-    max-height: calc(100dvh - 54px - var(--memo-kb));
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    max-height: var(--memo-sheet-max);
+    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
     border-radius: 34px 34px 0 0;
     --panel-paint: var(--bg);
     background: var(--panel-paint);
@@ -11409,9 +11459,9 @@
    */
   .memo-action-sheet {
     position: fixed;
-    inset: auto 0 var(--memo-kb, 0px) 0;
+    inset: auto 0 0 0;
     z-index: 128;
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -11476,15 +11526,16 @@
   /* The folder picker is a bottom sheet on the phone. */
   .library-folder-mobile-sheet {
     position: fixed;
-    inset: auto 0 var(--memo-kb) 0;
+    inset: auto 0 0 0;
     z-index: 126;
     /* Production lays this out as a gapped grid; the design stacks it with
        its own margins, and the gap was adding 16px above the header. */
     display: block;
     gap: 0;
-    max-height: calc(100dvh - var(--memo-kb) - 54px);
+    max-height: var(--memo-sheet-max);
     overflow-y: auto;
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
+    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
     border: 0;
     border-radius: 34px 34px 0 0;
     background: var(--bg);
@@ -11577,9 +11628,20 @@
        pins top *and* bottom, which stretched the sheet down the whole screen
        and left the field floating in the middle of it. */
     position: fixed;
-    inset: auto 0 var(--memo-kb) 0;
-    max-height: calc(100dvh - var(--memo-kb) - 54px);
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    inset: auto 0 0 0;
+    max-height: var(--memo-sheet-max);
+    /*
+     * The sheet scrolls, not the field's row. Production hangs the scroll on
+     * the body, which is the only child here allowed to shrink — so when the
+     * cap bites, every fixed-size part keeps its height and the body collapses,
+     * taking the name field with it. On a short screen you were left looking at
+     * a folder mark and a hint with nothing to type into. Scrolling the whole
+     * sheet is what every other sheet in the app does.
+     */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
+    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -11591,9 +11653,9 @@
   }
 
   .library-folder-modal-body {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     min-height: 0;
-    overflow-y: auto;
+    overflow-y: visible;
   }
 
   /*
@@ -11769,25 +11831,37 @@
     top: auto;
     left: 0;
     right: 0;
-    bottom: var(--memo-kb);
+    bottom: 0;
     transform: none;
     width: auto;
-    max-height: calc(100dvh - var(--memo-kb) - 54px);
+    max-height: var(--memo-sheet-max);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     /*
      * Where anything scrolls a field into view — WebKit clearing the keyboard,
      * or the sheet's own correction — it stops this far short of the edge. Without
      * it the focused field lands flush against the top, which under a 34px
-     * rounded corner means half of it is cut off.
+     * rounded corner means half of it is cut off. At the foot it stops short of
+     * the keys, which the scrollport now runs on behind.
      */
-    scroll-padding: 1.1rem 0;
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     padding: 0.6rem 1.15rem
       calc(2rem + max(0px, var(--memo-safe-bottom) - var(--memo-kb)));
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /*
+   * Alone among these sheets this one is a grid that scrolls itself, and a
+   * scrolling grid's own bottom padding is not reliably part of what it can
+   * scroll to. So the keys' clearance rides on the last row's margin, which
+   * always is: without it the last deck of a long list comes to rest behind
+   * the keyboard with no way to scroll it out.
+   */
+  .study-manager-sheet > :last-child {
+    margin-bottom: var(--memo-kb);
   }
 
   .study-manager-drag-handle {
@@ -11823,14 +11897,20 @@
     opacity: 0;
   }
 
+  /* Already on the bottom edge; it only ever needed the keys' own padding. */
+  .note-read-usage-mobile-sheet {
+    padding-bottom: calc(2rem + var(--memo-kb-pad));
+  }
+
   .memo-sheet {
     position: fixed;
-    inset: auto 0 var(--memo-kb) 0;
+    inset: auto 0 0 0;
     z-index: 106;
-    padding: 0.6rem 1.15rem calc(2rem + var(--memo-safe-bottom));
-    max-height: calc(100dvh - var(--memo-kb) - 54px);
+    padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
+    max-height: var(--memo-sheet-max);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     border-radius: 34px 34px 0 0;
     background: var(--bg);
     box-shadow: var(--shadow-lg);
@@ -11855,10 +11935,14 @@
 
   .memo-sheet-full {
     position: fixed;
-    inset: calc(54px + var(--memo-safe-top)) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + 54px + var(--memo-safe-top)) 0 0 0;
     z-index: 106;
     display: flex;
     flex-direction: column;
+    /* The keys eat into the column rather than the sheet's height, so the
+       composer at its foot rides up with them and the surface carries on
+       behind them. */
+    padding-bottom: var(--memo-kb);
     border-radius: 34px 34px 0 0;
     box-shadow: var(--shadow-lg);
     overflow: hidden;
@@ -12125,7 +12209,7 @@
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 1rem 1.15rem calc(2.5rem + var(--memo-safe-bottom));
+    padding: 1rem 1.15rem calc(2.5rem + var(--memo-kb-gap));
   }
 
   .memo-sheet-h1 {
@@ -12373,7 +12457,7 @@
 
   .memo-m-chat-foot {
     position: relative;
-    padding: 0 1.15rem calc(1.6rem + var(--memo-safe-bottom));
+    padding: 0 1.15rem calc(1.6rem + var(--memo-kb-gap));
   }
 
   .memo-m-chat-composer {
@@ -12470,7 +12554,7 @@
     display: flex;
     flex-direction: column;
     gap: 1.1rem;
-    padding: 1rem 1.15rem calc(2rem + var(--memo-safe-bottom));
+    padding: 1rem 1.15rem calc(2rem + var(--memo-kb-gap));
   }
 
   .memo-capture-head {
@@ -12703,16 +12787,16 @@
    * specificity to land.
    */
   .note-source-modal.mobile-draggable-sheet {
-    /* Full screen, but stopping above the keyboard — the design gives its
-       capture screen the same inset it gives every other shell. */
-    inset: 0 0 var(--memo-kb) 0;
+    /* Full screen; the keyboard comes out of the padding rather than the
+       inset, so the sheet's ground runs on behind the keys. */
+    inset: 0 0 0 0;
     /* Header, then the body that takes what is left. */
     grid-template-rows: auto minmax(0, 1fr);
     gap: 0;
     /* The artboard starts its header 0.5rem below the status bar; edge to
        edge that is the safe area, whichever is larger. */
     padding: max(0.5rem, env(safe-area-inset-top)) 1.15rem
-      calc(env(safe-area-inset-bottom) + 1.25rem);
+      calc(1.25rem + var(--memo-kb-pad));
     border: 0;
     border-radius: 0;
     --panel-paint: var(--bg);
@@ -18115,7 +18199,8 @@
   /*
    * On the phone the study screen is a sheet, the way every other panel in this
    * app is a sheet: full width, off the bottom edge, rounded at the top, and
-   * sitting on `--memo-kb` so the keyboard pushes it up rather than covering it.
+   * padding its content clear of the keys with `--memo-kb-pad` so the keyboard
+   * slides over it rather than covering what you are typing into.
    */
   .memo-palace-sheet {
     place-items: end center;
@@ -18125,8 +18210,9 @@
 
   .memo-palace-sheet-inner {
     width: 100%;
-    max-height: calc(100% - 4rem);
-    padding: 0.6rem 1.15rem calc(1.4rem + var(--memo-safe-bottom));
+    max-height: calc(var(--memo-vv) + var(--memo-kb) - 4rem);
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
+    padding: 0.6rem 1.15rem calc(1.4rem + var(--memo-kb-pad));
     border-radius: 34px 34px 0 0;
     background: var(--surface);
     box-shadow: var(--shadow-lg);
@@ -18134,11 +18220,12 @@
 
   .memo-palace-panel {
     position: fixed;
-    inset: auto 0 var(--memo-kb) 0;
+    inset: auto 0 0 0;
     translate: none;
     width: 100%;
-    max-height: calc(100% - 7rem);
-    padding: 1.1rem 1.15rem calc(1.5rem + var(--memo-safe-bottom));
+    max-height: calc(var(--memo-vv) + var(--memo-kb) - 7rem);
+    scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
+    padding: 1.1rem 1.15rem calc(1.5rem + var(--memo-kb-pad));
     border-radius: 30px 30px 0 0;
     --panel-paint: var(--surface);
     background: var(--panel-paint);
@@ -19446,9 +19533,9 @@
 
 @media (max-width: 1099px) and (max-height: 540px) {
   .memo-palace-panel {
-    max-height: calc(100dvh - var(--memo-kb) - 1rem);
+    max-height: calc(var(--memo-vv) + var(--memo-kb) - 1rem);
     padding-top: 0.35rem;
-    padding-bottom: calc(0.6rem + var(--memo-safe-bottom));
+    padding-bottom: calc(0.6rem + var(--memo-kb-pad));
     gap: 0.35rem;
   }
   .memo-palace-panel.card { --palace-card-height: clamp(5rem, calc(100dvh - 13.5rem), 10rem); }
@@ -19710,8 +19797,17 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  /*
+   * A foot of 2.5rem against a head of 1rem is the resting proportion — the
+   * card sits a little above centre on a full screen, which is where a sign-in
+   * card belongs. With the keyboard up there is no room to spend on that: the
+   * extra 1.5rem, and the home indicator's inset with it, went into the gap
+   * between the card and the keys and left the card visibly bottom-heavy. Both
+   * are inside the `max()`, so they are gone the moment the keys cover that
+   * strip and the card centres evenly in what is left.
+   */
   padding: 1rem 1.15rem
-    calc(2.5rem + max(0px, var(--memo-safe-bottom, 0px) - var(--memo-kb, 0px)));
+    calc(1rem + max(0px, 1.5rem + var(--memo-safe-bottom, 0px) - var(--memo-kb, 0px)));
 }
 
 .memo-auth-stage > :first-child {
@@ -20228,7 +20324,13 @@
   html[data-native] .memo-m-homebar,
   html[data-native] .memo-dock,
   html[data-native] .memo-sub-chatbar {
-    inset: auto 1.15rem calc(0.15rem + var(--memo-safe-bottom)) 1.15rem;
+    /*
+     * The `max()` is for the keyboard. Resting on the home indicator this comes
+     * out at the indicator's inset, as it should; with the keys up the inset is
+     * gone (they cover that strip) and 0.15rem alone would tuck the bar right
+     * against the keyboard, so the floor is what it sits on instead.
+     */
+    inset: auto 1.15rem max(0.9rem, calc(0.15rem + var(--memo-kb-gap))) 1.15rem;
   }
 
   /* The note screen runs under the home indicator: the 7rem the scroller keeps

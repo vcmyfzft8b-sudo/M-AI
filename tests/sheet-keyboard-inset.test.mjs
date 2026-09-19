@@ -363,6 +363,42 @@ test("the editor sheet keeps its top edge rather than a height", () => {
   );
 });
 
+/*
+ * A chat log that was resting on its composer has to stay there when the
+ * keyboard takes its height away, or you tap the field to answer and the
+ * message you were answering is behind the keys.
+ *
+ * Hung off `visualViewport`'s resize it works in Safari and not in the wrapper,
+ * and the difference is how the two report a keyboard. The log gives up its
+ * height over the quarter second the inset is drawn in; Safari reports the
+ * keyboard in pieces through that window, so a restick per report ends up at
+ * the bottom, while the wrapper reports the whole thing once and does it before
+ * any of the drawing — so the single restick lands on a log that is still its
+ * full height and does nothing. Measured on an iPhone 17 with sixteen messages:
+ * the last four ended up behind the composer.
+ *
+ * The log's own size is the honest signal, and it is the same on both.
+ */
+test("a chat log follows its own height, not the viewport's", () => {
+  for (const file of ["lecture-workspace.tsx", "library-chat.tsx"]) {
+    const source = readFileSync(
+      fileURLToPath(new URL(`../src/components/${file}`, import.meta.url)),
+      "utf8",
+    );
+
+    assert.match(
+      source,
+      /new ResizeObserver\([\s\S]{0,200}(?:stick\(\)|scrollTop = [\s\S]{0,40}scrollHeight)/,
+      `${file} no longer sticks its chat log when the keyboard shortens it`,
+    );
+    assert.doesNotMatch(
+      source,
+      /visualViewport[\s\S]{0,200}addEventListener\("resize", (?:re)?stick\)/,
+      `${file} resticks on a viewport event, which the wrapper delivers too early`,
+    );
+  }
+});
+
 test("the keyboard's own measurement is still published for them to read", () => {
   const inset = readFileSync(
     fileURLToPath(new URL("../src/components/keyboard-inset.tsx", import.meta.url)),

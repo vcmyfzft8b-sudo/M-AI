@@ -6321,6 +6321,176 @@
   font-weight: 750;
 }
 
+/* --- public legal documents ----------------------------------------------- */
+
+/*
+ * /legal/[slug] — the terms, the privacy policy and the refund policy.
+ *
+ * The document itself is the help reader above, unchanged. What this block adds
+ * is the chrome the app shell would otherwise supply, because these three
+ * routes deliberately sit outside it: a brand row, a way back, and — below the
+ * breakpoint — the same fixed frame every other phone screen uses, which is
+ * what keeps the top row clear of the iOS status bar.
+ */
+.memo-legal-screen {
+  animation: memo-fade-in 0.18s ease-out;
+}
+
+.memo-legal-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: calc(1.2rem + var(--memo-safe-top, 0px)) 1.6rem 0;
+}
+
+.memo-legal-brand {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.memo-legal-brand .brand-logo-mark {
+  --lockup-h: 2.6rem;
+}
+
+/*
+ * The way back. A labelled pill where there is room for a label, and the app's
+ * round icon button on the phone — where every other screen's back control is
+ * a bare arrow, and a pill in the corner would be the one thing on the page
+ * that did not come from the app.
+ */
+.memo-legal-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 0 0 auto;
+  height: 3rem;
+  padding: 0 1.2rem;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 650;
+  transition: box-shadow 0.16s ease;
+}
+
+.memo-legal-back:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-legal-back .msym {
+  font-size: 1.2rem;
+}
+
+.memo-legal-page {
+  margin: 0 auto;
+  padding: 1.6rem 1.6rem 4rem;
+}
+
+/*
+ * A legal document is 24 numbered sections rather than the handful an in-app
+ * answer runs to, so its headings get a hairline above them: without one the
+ * card reads as a single unbroken wall and there is nothing to scan for. The
+ * opening standfirst keeps the help reader's lead-paragraph treatment.
+ */
+.memo-legal-body > .markdown > p:first-child {
+  margin-bottom: 1.4rem;
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+.memo-legal-body h2 {
+  margin-top: 2.2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.memo-legal-body h2:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.memo-legal-body > .markdown > *:last-child {
+  margin-bottom: 0;
+}
+
+.memo-legal-more-heading {
+  margin: 2rem 0 0.7rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.memo-legal-more {
+  display: grid;
+  gap: 0.85rem;
+}
+
+/* The cross-links are one-line rows, so they do not need the settings row's
+   full two-line height. */
+.memo-legal-more .memo-settings-row {
+  min-height: 4.2rem;
+}
+
+/*
+ * Statutory fine print, and the note that a translated document is a
+ * translation. Both have to stay on the page, and neither should read as a
+ * clause of the document above: they sit outside the card, at the size the app
+ * gives every other aside.
+ */
+.memo-legal-fineprint {
+  margin-top: 2rem;
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+/*
+ * The shared markdown renderer wraps its output in Tailwind's `text-sm
+ * text-stone-700`, which would otherwise hand the fine print a fixed size and
+ * a light-mode ink that is all but invisible on the dark page. Both are reset
+ * here, on the wrapper and on the paragraphs it emits.
+ */
+.memo-legal-fineprint .markdown,
+.memo-legal-fineprint .markdown p {
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.memo-legal-fineprint .markdown p {
+  margin: 0;
+}
+
+.memo-legal-fineprint .markdown p + p {
+  margin-top: 0.6rem;
+}
+
+/* Reads as one continuous run of small text — no bold lead-in, no link
+   styling. */
+.memo-legal-fineprint strong {
+  font-weight: inherit;
+}
+
+.memo-legal-fineprint a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.memo-legal-prevailing {
+  margin: 0.9rem 0 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.memo-legal-copyright {
+  margin: 2rem 0 0;
+  color: var(--muted-2);
+  font-size: 0.9rem;
+}
+
 /* --- settings screen ------------------------------------------------------ */
 
 .memo-settings-screen {
@@ -10845,6 +11015,112 @@
   .memo-support-screen .memo-page {
     max-width: none;
     padding: 0 1.15rem calc(2.5rem + var(--memo-safe-bottom));
+  }
+
+  /* The frame below is fixed, so the wrapper holds no flow content at all.
+     Pinning it to the viewport the way `.memo-shell` is pinned stops the
+     document behind the frame from becoming a second, empty scroller. */
+  .memo-legal {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  /*
+   * A public legal document, on the phone: the same fixed frame the in-app
+   * reader uses. `--memo-safe-top` is the whole point of it in the iOS
+   * wrapper — the web view runs edge to edge there, and the row that used to
+   * sit at `top: 0` was drawn underneath the status bar and cut in half by it.
+   */
+  .memo-legal-screen {
+    position: fixed;
+    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  /* Floating, like the library's own top row: the brand and the way back stay
+     put while the document passes behind them and fades out at the scroller's
+     mask, instead of scrolling away with it. */
+  .memo-legal-topbar {
+    position: absolute;
+    top: 0.5rem;
+    left: 1.15rem;
+    right: 1.15rem;
+    z-index: 5;
+    padding: 0;
+    /* The row is only its two controls; the text behind it stays reachable. */
+    pointer-events: none;
+  }
+
+  .memo-legal-topbar > * {
+    pointer-events: auto;
+  }
+
+  .memo-legal-brand .brand-logo-mark {
+    --lockup-h: 3.1rem;
+  }
+
+  .memo-legal-back {
+    width: 3.1rem;
+    height: 3.1rem;
+    padding: 0;
+    justify-content: center;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+
+  .memo-legal-back .msym {
+    font-size: 1.6rem;
+  }
+
+  /* Round and unlabelled at this width, but the name still has to reach a
+     screen reader — so the label is hidden rather than removed, on the same
+     clip-rect as `.memo-visually-hidden`. It cannot simply wear that class:
+     above the breakpoint the same label is the pill's visible text. */
+  .memo-legal-back-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .memo-legal-screen .memo-page {
+    max-width: none;
+    padding: 0 1.15rem calc(2.5rem + var(--memo-safe-bottom));
+  }
+
+  /* The in-app reader's back arrow has the top row to itself, so its title can
+     start right under it. Here the row also carries the lockup, and a title
+     tucked straight under the artwork reads as part of it — so the document
+     starts a little lower. */
+  .memo-legal-screen .memo-screen-scroll {
+    padding-top: 5.25rem;
+    /* And the fade runs a little further down than the shared one, so a line of
+       the document is fully gone by the time it reaches the foot of the lockup
+       rather than showing through the artwork's transparent background. */
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 2.6rem,
+      #000 4.5rem
+    );
+    mask-image: linear-gradient(to bottom, transparent 0, transparent 2.6rem, #000 4.5rem);
+  }
+
+  .memo-legal-screen .memo-article-title {
+    font-size: 1.6rem;
+  }
+
+  .memo-legal-more-heading {
+    font-size: 1.2rem;
+    font-weight: 750;
   }
 
   /* The way back floats over the screen, so the title has the row to itself

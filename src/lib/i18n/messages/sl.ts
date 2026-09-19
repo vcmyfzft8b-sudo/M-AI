@@ -1235,6 +1235,7 @@ export const sl = {
   "help.category.recording": "Snemanje in zapiski",
   "help.category.account": "Račun in dostop",
   "legal.prevailingNotice": "To besedilo je prevod. V primeru razhajanj velja slovenska različica.",
+  "legal.otherDocuments": "Drugi dokumenti",
 
   /* ---- Lecture failure messages (rendered from the stored failure code) ---- */
   "failure.private_network_link": "Ta povezava kaže na zasebno omrežje, zato je ne moremo odpreti. Prilepi javno dostopno povezavo.",

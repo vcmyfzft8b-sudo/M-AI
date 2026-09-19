@@ -51,9 +51,13 @@ export function ChatMarkdown({
            * A link in a chat answer is a model's suggestion, not ours. It opens
            * away from the app and carries no referrer or ranking signal.
            * react-markdown already refuses javascript: and data: hrefs.
+           *
+           * The two attributes are named rather than spread: react-markdown also
+           * hands a component its own AST node, and React warns about that as an
+           * unknown prop the moment it reaches a DOM element.
            */
-          a: ({ children, ...props }) => (
-            <a {...props} target="_blank" rel="noreferrer nofollow">
+          a: ({ children, href, title }) => (
+            <a href={href} title={title} target="_blank" rel="noreferrer nofollow">
               {children}
             </a>
           ),

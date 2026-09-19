@@ -223,6 +223,13 @@ test("a failed GLM call falls back to the pre-switch Gemini, routed through the 
   assert.equal(resolveStageFallbackModel("note_write"), "or/google/gemini-3.7-flash");
   assert.equal(resolveStageFallbackModel("note_extract"), null);
   assert.equal(resolveStageFallbackModel("note_outline"), null);
+  /*
+   * Chat names its own fallback for a reason worth keeping: on a preview, where every answer is
+   * the fallback, gemini-2.5-flash-lite answered a Slovenian "thank you" by repeating its
+   * previous answer in English. 3.5-flash-lite is the model already trusted with the spoken
+   * tutor's prose and with checking GLM's Slovenian.
+   */
+  assert.equal(resolveStageFallbackModel("chat"), "or/google/gemini-3.5-flash-lite");
 });
 
 test("GLM gets a shorter leash than Gemini so its fallback fits the same invocation", () => {

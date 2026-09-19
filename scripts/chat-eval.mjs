@@ -33,7 +33,7 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 import { chatAnswerSchema } from "../src/lib/ai/schemas.ts";
-import { resolveStageModelConfig } from "../src/lib/ai/model-config.ts";
+import { resolveStageModelConfig, supportsThinkingLevel } from "../src/lib/ai/model-config.ts";
 import { countWords, generate, GRADER_MODEL, ledger, loadEnv } from "./lib/eval-runtime.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -86,10 +86,23 @@ const QUESTIONS = {
       offMaterial: true,
     },
     {
+      /*
+       * Sent with a conversation behind it, because that is where this turn goes wrong: with
+       * two answered questions in the history, a weak model reads "thanks" as another turn to
+       * be answered and repeats the last one verbatim.
+       */
       id: "thanks",
       text: "Hvala, super razlaga!",
-      expect: "is a short acknowledgement",
+      expect: "acknowledges the thanks briefly and does not repeat the previous answer",
       closing: "none",
+      conversation: [
+        { role: "user", content: "Katere so plasti modela OSI?" },
+        {
+          role: "assistant",
+          content:
+            "Model OSI ima sedem plasti: fizična, povezavna, omrežna, transportna, sejna, predstavitvena in aplikacijska.",
+        },
+      ],
     },
     {
       id: "language-switch",
@@ -177,7 +190,7 @@ async function askOnce({ fixture, question, model, thinkingLevel, providerSort }
     input: JSON.stringify(
       {
         question: question.text,
-        conversation: [],
+        conversation: question.conversation ?? [],
         learner: LEARNER,
         noteTitle: fixture.title,
         summary: null,
@@ -226,9 +239,16 @@ const config = resolveStageModelConfig({
   fallbackModel: process.env.GEMINI_TEXT_MODEL ?? "gemini-2.5-flash-lite",
 });
 const model = modelOverride ?? config.model;
+/*
+ * A model that cannot think is not sent a thinking level — the Gemini API rejects the whole
+ * call with a 400 rather than ignoring it, which is why production guards the same way
+ * (json.ts). It matters here because --model is how the fallback tier gets measured, and the
+ * fallback tier is exactly where the older models live.
+ */
+const thinkingLevel = supportsThinkingLevel(model) ? config.thinkingLevel : null;
 
 console.log(
-  `chat-eval · model ${model} · thinking ${config.thinkingLevel} · sort ${config.providerSort ?? "throughput"}` +
+  `chat-eval · model ${model} · thinking ${thinkingLevel ?? "n/a"} · sort ${config.providerSort ?? "throughput"}` +
     `${promptModule ? ` · prompt ${promptModule}` : ""}\n`,
 );
 
@@ -241,7 +261,7 @@ for (const fixture of fixtures) {
         fixture,
         question,
         model,
-        thinkingLevel: config.thinkingLevel,
+        thinkingLevel,
         providerSort: config.providerSort,
       });
       const verdict = await grade({ fixture, question, answer: text });

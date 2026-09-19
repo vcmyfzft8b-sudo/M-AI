@@ -431,8 +431,38 @@ export function isGeminiModel(model: string) {
  * primary's gateway shares its outages.
  */
 export function resolveStageFallbackModel(stage: AiStage): string | null {
-  return stage === "note_write" ? "or/google/gemini-3.7-flash" : null;
+  return STAGE_FALLBACK_MODELS[stage] ?? null;
 }
+
+/*
+ * The two stages that may not inherit GEMINI_TEXT_MODEL as their fallback.
+ *
+ * `note_write` is the older of the two: the 2026-08-23 measurement showed models separate
+ * hardest there.
+ *
+ * `chat` was added on 2026-09-19, after watching the fallback tier answer for itself on a
+ * preview deployment (which has no OPENROUTER_API_KEY, so every chat answer there IS the
+ * fallback). Asked "Hvala, super razlaga!" at the end of a Slovenian conversation,
+ * gemini-2.5-flash-lite repeated its previous answer — in English. Measured against the same
+ * prompt and fixture, twelve answers each (scripts/chat-eval.mjs --model=...):
+ *
+ *   model                   right language   opens with the answer   did what was asked   warm
+ *   gemini-2.5-flash-lite            83%              83%                    75%           25%
+ *   gemini-3.5-flash-lite           100%             100%                   100%           83%
+ *
+ * That is the same model that already writes what the spoken tutor says out loud and checks
+ * GLM's Slovenian (TUTOR_VOICE_MODEL, LANGUAGE_CHECK_MODEL) — it is trusted with
+ * learner-facing prose in this product precisely because it gets these things right. It costs
+ * $0.3/$2.5 per million against $0.1/$0.4, on a tier that only runs when the primary has
+ * already failed, for an answer of a couple of hundred tokens.
+ *
+ * This matters more now than it did: the chat stage's own 60s leash (STAGE_TIMEOUT_MS) means a
+ * struggling primary reaches this tier sooner and more often than it used to.
+ */
+const STAGE_FALLBACK_MODELS: Partial<Record<AiStage, string>> = {
+  note_write: "or/google/gemini-3.7-flash",
+  chat: "or/google/gemini-3.5-flash-lite",
+};
 
 /**
  * Whether a failed gateway call should be retried against the direct provider.

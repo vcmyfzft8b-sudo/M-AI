@@ -49,33 +49,132 @@ export function KeyboardInset() {
 
     const root = document.documentElement;
     let previous = "";
+    let published = 0;
+    /** +1 while the keys are coming up, -1 while they are going away, 0 at rest. */
+    let direction = 0;
+
+    const measure = () =>
+      Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop));
+
+    const isTyping = () => {
+      const active = document.activeElement;
+
+      return (
+        active instanceof HTMLElement &&
+        (active.isContentEditable ||
+          active instanceof HTMLInputElement ||
+          active instanceof HTMLTextAreaElement ||
+          active instanceof HTMLSelectElement)
+      );
+    };
 
     const sync = () => {
-      const inset = Math.max(
-        0,
-        Math.round(window.innerHeight - viewport.height - viewport.offsetTop),
-      );
+      const raw = measure();
+      /*
+       * The two halves of the measurement do not land on the same frame. While
+       * the keyboard retracts, `height` can have grown back before `offsetTop`
+       * has returned to zero, and the subtraction between them dips and
+       * recovers — which the sheet followed faithfully, jumping down and up
+       * again. A keyboard only travels one way at a time, so once a direction
+       * is set the reading is held to it and the wobble never reaches the page.
+       */
+      const inset =
+        direction > 0 ? Math.max(published, raw) : direction < 0 ? Math.min(published, raw) : raw;
       const height = Math.round(viewport.height);
       const top = Math.max(0, Math.round(viewport.offsetTop));
       const next = `${inset}/${height}/${top}`;
 
       if (next === previous) {
-        return;
+        return false;
       }
 
       previous = next;
+      published = inset;
       root.style.setProperty("--memo-keyboard", `${inset}px`);
       root.style.setProperty("--memo-viewport", `${height}px`);
       root.style.setProperty("--memo-viewport-top", `${top}px`);
+      return true;
+    };
+
+    /*
+     * Whether to leave a field its clearance above the keys.
+     *
+     * Focus alone said yes the instant you tapped the field and no the instant
+     * you left it — so on the way out the clearance vanished in one step while
+     * the keys were still halfway down the screen, which is the jump you saw.
+     * It stays on until the viewport has finished moving as well.
+     *
+     * Focus has to be part of it because the inset cannot carry this on its
+     * own: mobile Safari shrinks the layout viewport to sit above the keys, so
+     * there the inset is legitimately 0 the whole time the keyboard is up.
+     */
+    const publishUp = () => {
+      const up = isTyping() || direction !== 0 || published > 0 ? 1 : 0;
+      root.style.setProperty("--memo-keyboard-up", `${up}`);
+    };
+
+    /*
+     * iOS reports the viewport while the keyboard animates, but not on every
+     * frame — so a sheet driven straight off those events moves in steps. A
+     * CSS transition was the first answer and the wrong one: it cannot know the
+     * keyboard's duration or curve, so it lagged behind the keys on the way up
+     * and carried on after they had gone on the way down, and it animated
+     * padding, which lays the sheet out again every frame.
+     *
+     * Sampling the viewport each frame instead means the sheet is driven by the
+     * keyboard's own movement rather than an imitation of it: it tracks exactly,
+     * at whatever the display refreshes at. The loop runs only while the number
+     * is still moving and stops once it has held for a few frames, so it costs
+     * nothing at rest.
+     */
+    let frame = 0;
+    let settled = 0;
+
+    const follow = () => {
+      const moved = sync();
+      settled = moved ? 0 : settled + 1;
+
+      if (settled < 5) {
+        // ~5 frames of stillness is the keyboard having arrived, not a pause.
+        frame = requestAnimationFrame(follow);
+        publishUp();
+        return;
+      }
+
+      frame = 0;
+      direction = 0;
+      publishUp();
+    };
+
+    const track = () => {
+      if (!frame) {
+        // Which way this run is going, decided once and held for its duration.
+        direction = Math.sign(measure() - published);
+        settled = 0;
+        frame = requestAnimationFrame(follow);
+      }
+
+      sync();
+      publishUp();
     };
 
     sync();
-    viewport.addEventListener("resize", sync);
-    viewport.addEventListener("scroll", sync);
+    publishUp();
+    viewport.addEventListener("resize", track);
+    viewport.addEventListener("scroll", track);
+    document.addEventListener("focusin", track);
+    document.addEventListener("focusout", track);
 
     return () => {
-      viewport.removeEventListener("resize", sync);
-      viewport.removeEventListener("scroll", sync);
+      if (frame) {
+        cancelAnimationFrame(frame);
+      }
+
+      viewport.removeEventListener("resize", track);
+      viewport.removeEventListener("scroll", track);
+      document.removeEventListener("focusin", track);
+      document.removeEventListener("focusout", track);
+      root.style.removeProperty("--memo-keyboard-up");
       root.style.removeProperty("--memo-keyboard");
       root.style.removeProperty("--memo-viewport");
       root.style.removeProperty("--memo-viewport-top");

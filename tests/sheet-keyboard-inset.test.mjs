@@ -164,6 +164,16 @@ test("every sheet leaves the same gap between a focused field and the keys", () 
     /-webkit-touch-callout: none[\s\S]{0,200}--memo-kb-bar:\s*calc\(var\(--memo-kb-up\)/,
     "iOS on the web is the only place the accessory bar is reserved, and only while focused",
   );
+  assert.match(
+    css,
+    /--memo-kb-up:\s*var\(--memo-keyboard-up, 0\)/,
+    "the clearance follows the measured keyboard, not `:focus` stepping on and off",
+  );
+  assert.doesNotMatch(
+    css,
+    /:has\([^)]*:focus\)[\s\S]{0,120}--memo-kb-up/,
+    "reading focus directly is what made the clearance vanish mid-dismissal",
+  );
 
   for (const sheet of SHEETS) {
     const feet = rulesFor(sheet)
@@ -251,6 +261,11 @@ test("the keyboard's own measurement is still published for them to read", () =>
     inset,
     /--memo-viewport-top/,
     "so does the pan offset, or Safari draws fixed sheets above the screen",
+  );
+  assert.match(
+    inset,
+    /--memo-keyboard-up/,
+    "and whether the keys are up, which `:focus` answers too early on dismissal",
   );
   assert.match(css, /--memo-vv:\s*var\(--memo-viewport, 100dvh\)/);
   assert.match(css, /--memo-sheet-max:\s*calc\(var\(--memo-vv\) \+ var\(--memo-kb\) - 54px\)/);

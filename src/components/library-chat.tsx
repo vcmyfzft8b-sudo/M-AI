@@ -93,6 +93,31 @@ export function LibraryChat({
     }
   }, [messages, isTyping, streamingAnswer, open]);
 
+  /*
+   * And again whenever the keyboard resizes the log under it. The effect above
+   * only runs when the conversation changes, and the keyboard changes nothing
+   * about the conversation — it just takes half the log away, leaving the last
+   * message stranded behind the composer.
+   */
+  useEffect(() => {
+    const viewport = window.visualViewport;
+
+    if (!viewport || !open) {
+      return;
+    }
+
+    const stick = () => {
+      const node = logRef.current;
+
+      if (node) {
+        node.scrollTop = node.scrollHeight;
+      }
+    };
+
+    viewport.addEventListener("resize", stick);
+    return () => viewport.removeEventListener("resize", stick);
+  }, [open]);
+
   useEffect(() => {
     if (!isScopeMenuOpen) {
       return;

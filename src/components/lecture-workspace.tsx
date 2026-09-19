@@ -1801,9 +1801,26 @@ export function LectureWorkspace({
     observer.observe(log, { childList: true, subtree: true, characterData: true });
     log.addEventListener("scroll", handleScroll, { passive: true });
 
+    /*
+     * The keyboard shortens the log without moving what is in it, so the line
+     * that was resting on the composer ends up behind it — you tap the field to
+     * answer and the message you were answering is gone. Nothing changes in the
+     * DOM when that happens, so the observer above never fires; the viewport is
+     * the only thing that moved.
+     */
+    const viewport = window.visualViewport;
+    const restick = () => {
+      if (pinned) {
+        stick();
+      }
+    };
+
+    viewport?.addEventListener("resize", restick);
+
     return () => {
       observer.disconnect();
       log.removeEventListener("scroll", handleScroll);
+      viewport?.removeEventListener("resize", restick);
     };
   }, [chatLogNode]);
 

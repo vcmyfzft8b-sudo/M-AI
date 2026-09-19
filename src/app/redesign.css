@@ -396,6 +396,17 @@
 
 .memo,
 .memo-portal {
+  /*
+   * The coral call to action's glow, in one place so every one of them carries
+   * the same light.
+   *
+   * Close under the button on purpose. A shadow cannot escape an ancestor that
+   * clips, and most of these sit in sheets that scroll — so the further it hung
+   * below the button, the more of it was sliced off square at the scrollport's
+   * edge instead of fading out. It used to range from `0 4px 16px` to
+   * `0 14px 30px` depending on which button you had found.
+   */
+  --memo-coral-glow: 0 4px 16px rgba(244, 95, 90, 0.3);
   --bg: #f1f1f5;
   /*
    * A panel recessed inside a card. The design only ever nests these on a
@@ -5066,17 +5077,19 @@
    down the file, and this block is the definition, not a correction.
    ------------------------------------------------------------------------ */
 
-/* Colour fills. The glow is the coral call to action's alone. */
-.memo-sheet-coral.memo-sheet-coral,
-.memo-button-coral.memo-button-coral,
-.memo-wheel-cta.memo-wheel-cta,
-.memo-offer-cta.memo-offer-cta,
-.memo-paywall-cta.memo-paywall-cta,
-.memo-subscribe-cta.memo-subscribe-cta,
-.memo-new-folder-cta.memo-new-folder-cta,
-.note-source-modal .ios-primary-button.ios-primary-button {
+/* Colour fills. The glow is the coral call to action's alone — and only while
+   it is actually coral: `:disabled` greys these, and the glow left behind put a
+   red halo under a grey button. */
+.memo-sheet-coral.memo-sheet-coral:not(:disabled),
+.memo-button-coral.memo-button-coral:not(:disabled),
+.memo-wheel-cta.memo-wheel-cta:not(:disabled),
+.memo-offer-cta.memo-offer-cta:not(:disabled),
+.memo-paywall-cta.memo-paywall-cta:not(:disabled),
+.memo-subscribe-cta.memo-subscribe-cta:not(:disabled),
+.memo-new-folder-cta.memo-new-folder-cta:not(:disabled),
+.note-source-modal .ios-primary-button.ios-primary-button:not(:disabled) {
   border: var(--btn-border-width) solid var(--btn-border-filled);
-  box-shadow: 0 12px 24px rgba(244, 95, 90, 0.24);
+  box-shadow: var(--memo-coral-glow);
 }
 
 .memo-sheet-danger.memo-sheet-danger,
@@ -6833,7 +6846,7 @@
   cursor: pointer;
   font-size: 1.05rem;
   font-weight: 750;
-  box-shadow: 0 10px 24px rgba(244, 95, 90, 0.28);
+  box-shadow: var(--memo-coral-glow);
 }
 
 .memo-button-coral:disabled {
@@ -7614,7 +7627,7 @@
   font-family: inherit;
   font-size: 1.05rem;
   font-weight: 750;
-  box-shadow: 0 10px 24px rgba(244, 95, 90, 0.28);
+  box-shadow: var(--memo-coral-glow);
 }
 
 .note-source-modal .ios-primary-button:disabled {
@@ -8404,7 +8417,7 @@
   font-weight: 750;
   background: var(--coral);
   color: #ffffff;
-  box-shadow: 0 12px 24px rgba(244, 95, 90, 0.26);
+  box-shadow: var(--memo-coral-glow);
   /* No opacity fade: WebKit crossfades it while the label changes to
      "Spinning…", so both labels showed at once — first seen in the iOS app,
      then in Safari on the web. The button snaps to its waiting look instead. */
@@ -8601,7 +8614,7 @@
   border-radius: 20px;
   background: var(--coral);
   color: #ffffff;
-  box-shadow: 0 14px 30px rgba(244, 95, 90, 0.35);
+  box-shadow: var(--memo-coral-glow);
   cursor: pointer;
   font-size: 1.15rem;
   font-weight: 750;
@@ -9741,16 +9754,17 @@
      * Multiplied rather than branched on, because CSS has no branch: a foot is
      * `down x resting + up x clearance`, and exactly one of the two is 1.
      */
-    --memo-kb-up: 0;
+    /*
+     * Published by `KeyboardInset`, not read from `:focus` here. Focus turns
+     * off the instant you leave the field, which took the clearance away in one
+     * step while the keys were still halfway down; the measured version holds
+     * it until the viewport has finished moving too.
+     */
+    --memo-kb-up: var(--memo-keyboard-up, 0);
     --memo-kb-down: calc(1 - var(--memo-kb-up));
     /* Scrolling a focused field into view has to stop short of the keys: the
        sheet's scrollport now runs on behind them. */
     --memo-kb-scroll: calc(var(--memo-kb-ground) + 1.1rem);
-  }
-
-  html:has(:is(input, textarea, select, [contenteditable]):focus)
-    :is(.memo, .memo-portal) {
-    --memo-kb-up: 1;
   }
 
   /* `-webkit-touch-callout` is iOS WebKit; `[data-native]` is our wrapper. */
@@ -10304,7 +10318,7 @@
     border-radius: 999px;
     background: var(--coral);
     color: #fff;
-    box-shadow: 0 12px 24px rgba(244, 95, 90, 0.24);
+    box-shadow: var(--memo-coral-glow);
     cursor: pointer;
   }
 
@@ -10375,9 +10389,6 @@
     /* The strip the keyboard overlaps. Outside the padding box, so the
        sheet's scrollport still stops at the keys. */
     border-bottom: var(--memo-kb-ground) solid var(--memo-sheet-paint);
-    transition:
-      padding-bottom 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-bottom-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
   .memo-dialog .memo-grab {
@@ -11088,9 +11099,6 @@
     /* The strip the keyboard overlaps. Outside the padding box, so the
        sheet's scrollport still stops at the keys. */
     border-bottom: var(--memo-kb-ground) solid var(--memo-sheet-paint);
-    transition:
-      padding-bottom 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-bottom-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
   .memo-quiz-sheet-head {
@@ -11285,7 +11293,7 @@
     height: 3.3rem;
     background: var(--coral);
     color: #fff;
-    box-shadow: 0 10px 22px rgba(244, 95, 90, 0.24);
+    box-shadow: var(--memo-coral-glow);
   }
 
   /*
@@ -11426,9 +11434,6 @@
     /* The strip the keyboard overlaps. Outside the padding box, so the
        sheet's scrollport still stops at the keys. */
     border-bottom: var(--memo-kb-ground) solid var(--memo-sheet-paint);
-    transition:
-      padding-bottom 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-bottom-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
   /* The grabber the design gives every sheet, hidden on the desktop dialog. */
@@ -11633,9 +11638,6 @@
     /* The strip the keyboard overlaps. Outside the padding box, so the
        sheet's scrollport still stops at the keys. */
     border-bottom: var(--memo-kb-ground) solid var(--memo-sheet-paint);
-    transition:
-      padding-bottom 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-bottom-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
   .note-source-modal-drag-handle {
@@ -11831,6 +11833,17 @@
     display: flex;
     justify-content: center;
     margin-top: 1.4rem;
+    /*
+     * Room for the button's glow inside the scroller.
+     *
+     * A shadow cannot escape an ancestor that clips, and the sheet around this
+     * scrolls — so with the button flush against the end of the content the
+     * glow was sliced off square at the scrollport's edge instead of fading
+     * out. Padding here is part of what scrolls, so the glow always has
+     * somewhere to land. Margin would not do: a last child's bottom margin is
+     * not reliably part of the scrollable extent.
+     */
+    padding-bottom: 1.25rem;
   }
 
   /*
@@ -11876,9 +11889,7 @@
     box-shadow: var(--shadow-lg), 0 2.5rem 0 0 var(--memo-sheet-paint);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
     transition:
-      transform 0.42s cubic-bezier(0.32, 1.3, 0.5, 1),
-      padding-bottom 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-bottom-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+      transform 0.42s cubic-bezier(0.32, 1.3, 0.5, 1);
     touch-action: none;
     /* The strip the keyboard overlaps. Outside the padding box, so the
        sheet's scrollport still stops at the keys. */
@@ -11965,9 +11976,6 @@
     /* The strip the keyboard overlaps. Outside the padding box, so the
        sheet's scrollport still stops at the keys. */
     border-bottom: var(--memo-kb-ground) solid var(--memo-sheet-paint);
-    transition:
-      padding-bottom 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-bottom-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
   .library-folder-mobile-sheet-handle {
@@ -12080,9 +12088,6 @@
     /* The strip the keyboard overlaps. Outside the padding box, so the
        sheet's scrollport still stops at the keys. */
     border-bottom: var(--memo-kb-ground) solid var(--memo-sheet-paint);
-    transition:
-      padding-bottom 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-bottom-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
   .library-folder-modal > * {
@@ -12100,15 +12105,27 @@
    * there would be wrong. The class is doubled so this lands whatever the
    * order — several of these declare `border: 0` further down the file.
    */
-  .memo-capture-submit.memo-capture-submit,
-  .memo-new-folder-cta.memo-new-folder-cta,
-  .memo-folder-done.memo-folder-done,
-  .memo-card-row .settings-inline-action,
-  .memo-card-row .billing-portal-button,
-  .memo-card-row .memo-primary-pill,
-  .note-source-modal.mobile-draggable-sheet .memo-modal-actions .ios-primary-button {
+  .memo-capture-submit.memo-capture-submit:not(:disabled),
+  .memo-new-folder-cta.memo-new-folder-cta:not(:disabled),
+  .memo-folder-done.memo-folder-done:not(:disabled),
+  .memo-card-row .settings-inline-action:not(:disabled),
+  .memo-card-row .billing-portal-button:not(:disabled),
+  .memo-card-row .memo-primary-pill:not(:disabled),
+  .note-source-modal.mobile-draggable-sheet
+    .memo-modal-actions
+    .ios-primary-button:not(:disabled) {
     border: var(--btn-border-width) solid var(--btn-border-filled);
-    box-shadow: 0 12px 24px rgba(244, 95, 90, 0.24);
+    /*
+     * The coral glow belongs to the coral, and `:not(:disabled)` is the whole
+     * point of the selector: greyed out, these keep the outline and the shadow
+     * and you get a red halo under a grey button — most visibly on "Done" in
+     * the folder sheet, which is grey until there is a name to save.
+     *
+     * Tucked closer in than it was, too. At `0 12px 24px` it hung far enough
+     * below the button to be clipped by the sheet that holds it, which read as
+     * the glow being cut off square rather than fading out.
+     */
+    box-shadow: var(--memo-coral-glow);
   }
 
   /* Centred title with the confirm pinned right — the artboard's header row. */
@@ -12225,6 +12242,9 @@
     color: var(--muted);
     opacity: 0.6;
     cursor: default;
+    /* Belt and braces against anything else lighting it coral from behind. */
+    border-color: transparent;
+    box-shadow: none;
   }
 
   .memo-folder-hint {
@@ -12295,9 +12315,6 @@
     /* The strip the keyboard overlaps. Outside the padding box, so the
        sheet's scrollport still stops at the keys. */
     border-bottom: var(--memo-kb-ground) solid var(--memo-sheet-paint);
-    transition:
-      padding-bottom 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-bottom-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
   .study-manager-drag-handle {
@@ -12343,9 +12360,6 @@
        sheet's scrollport still stops at the keys. */
     border-bottom: var(--memo-kb-ground) solid var(--memo-sheet-paint);
     box-shadow: 0 2.5rem 0 0 var(--bg);
-    transition:
-      padding-bottom 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-bottom-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
   .memo-sheet {
@@ -12368,9 +12382,7 @@
     touch-action: none;
     transform: translateY(0);
     transition:
-      transform 0.42s cubic-bezier(0.32, 1.3, 0.5, 1),
-      padding-bottom 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-bottom-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+      transform 0.42s cubic-bezier(0.32, 1.3, 0.5, 1);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
     /* The strip the keyboard overlaps. Outside the padding box, so the
        sheet's scrollport still stops at the keys. */
@@ -12408,9 +12420,7 @@
     background: var(--memo-sheet-paint);
     transform: translateY(0);
     transition:
-      transform 0.42s cubic-bezier(0.32, 1.3, 0.5, 1),
-      padding-bottom 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-bottom-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+      transform 0.42s cubic-bezier(0.32, 1.3, 0.5, 1);
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
@@ -12800,7 +12810,7 @@
     height: 3.7rem;
     border-radius: 999px;
     background: var(--coral);
-    box-shadow: 0 12px 24px rgba(244, 95, 90, 0.26);
+    box-shadow: var(--memo-coral-glow);
     font-size: 1.12rem;
     font-weight: 750;
     letter-spacing: -0.02em;
@@ -13150,7 +13160,7 @@
     border-radius: 999px;
     background: var(--coral);
     color: #fff;
-    box-shadow: 0 12px 24px rgba(244, 95, 90, 0.24);
+    box-shadow: var(--memo-coral-glow);
     cursor: pointer;
     font-size: 1.12rem;
     font-weight: 700;
@@ -13247,7 +13257,9 @@
     border-radius: 999px;
     background: var(--coral);
     color: #fff;
-    box-shadow: 0 12px 26px rgba(244, 95, 90, 0.28);
+    /* Close under the button rather than trailing well below it: the further
+       it hangs, the more of it a clipping ancestor takes. */
+    box-shadow: var(--memo-coral-glow);
     cursor: pointer;
     font-size: 1.15rem;
     font-weight: 700;
@@ -13284,9 +13296,6 @@
     /* The strip the keyboard overlaps. Outside the padding box, so the
        sheet's scrollport still stops at the keys. */
     border-bottom: var(--memo-kb-ground) solid var(--memo-sheet-paint);
-    transition:
-      padding-bottom 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-bottom-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
   .note-source-modal.mobile-draggable-sheet .note-source-modal-drag-handle {
@@ -18695,9 +18704,6 @@
     /* The strip the keyboard overlaps. Outside the padding box, so the
        sheet's scrollport still stops at the keys. */
     border-bottom: var(--memo-kb-ground) solid var(--memo-sheet-paint);
-    transition:
-      padding-bottom 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-bottom-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
   .memo-palace-panel {
@@ -18721,9 +18727,6 @@
     /* The strip the keyboard overlaps. Outside the padding box, so the
        sheet's scrollport still stops at the keys. */
     border-bottom: var(--memo-kb-ground) solid var(--memo-sheet-paint);
-    transition:
-      padding-bottom 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-bottom-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
   /* The way out moves to the top corner: the bottom left is where the thumb
@@ -20037,9 +20040,6 @@
        sheet's scrollport still stops at the keys. */
     border-bottom: var(--memo-kb-ground) solid var(--memo-sheet-paint);
     box-shadow: 0 2.5rem 0 0 var(--bg);
-    transition:
-      padding-bottom 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      border-bottom-width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
   .memo-palace-panel.card { --palace-card-height: clamp(5rem, calc(100dvh - 13.5rem), 10rem); }
   .memo-palace-panel .lecture-flashcard,

@@ -46,9 +46,24 @@ function linkTags(source) {
   return [...source.matchAll(/<Link(?=[\s/>])[^>]*>/g)].map((match) => match[0]);
 }
 
-/** True for an href the app's own router owns — not `#anchor`, not an absolute URL. */
-function hasInAppHref(tag) {
-  return /href=(?:"\/(?!\/)|\{`\/(?!\/)|\{"\/(?!\/))/.test(tag);
+/**
+ * True unless the href is *provably* somewhere this app's router does not own.
+ *
+ * Deliberately the wrong way round. An earlier version of this looked for a
+ * literal `href="/…"`, which cannot see `<Link href={item.href}>` — and that is
+ * exactly the shape the landing menu's legal links had. A variable href is the
+ * case that most needs checking, so anything but a literal hash, a full URL or
+ * a `mailto:`/`tel:` counts.
+ */
+function looksInApp(tag) {
+  const literal = tag.match(/href="([^"]*)"/)?.[1] ?? tag.match(/href=\{"([^"]*)"\}/)?.[1];
+
+  if (literal === undefined) {
+    // Dynamic, or a template literal — assume it navigates in-app.
+    return !/href=\{`(?:https?:|mailto:|tel:|#)/.test(tag);
+  }
+
+  return !/^(?:#|[a-z][a-z0-9+.-]*:|\/\/)/i.test(literal);
 }
 
 test("no in-app <Link> is left without navigation feedback", () => {
@@ -66,7 +81,7 @@ test("no in-app <Link> is left without navigation feedback", () => {
     }
 
     for (const tag of linkTags(source)) {
-      if (hasInAppHref(tag)) {
+      if (looksInApp(tag)) {
         offenders.push(`${path}: ${tag.replace(/\s+/g, " ").slice(0, 90)}`);
       }
     }

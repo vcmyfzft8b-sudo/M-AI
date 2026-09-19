@@ -237,7 +237,20 @@ export function VoiceUsageSheet({
                 {buyingCredits ? t("tutor.paywall.creditsPending") : t("tutor.paywall.creditsCta")}
               </button>
             ) : (
-              <InstantLink className="memo-tutor-start" href="/app/settings">
+              /*
+               * Closing on the way out is what makes the tap visible. Settings
+               * has a loading skeleton, and the overlay that stands in for it
+               * is drawn inside the shell content at z-index 90 — under this
+               * sheet, which sits at 1190. Without the dismiss the skeleton
+               * paints behind the sheet and nothing appears to happen until
+               * the route commits. The sheet is leaving anyway: the effect
+               * above closes it when this screen unmounts.
+               */
+              <InstantLink
+                className="memo-tutor-start"
+                href="/app/settings"
+                onClick={() => sheet.dismiss()}
+              >
                 {t("tutor.paywall.trialCta")}
               </InstantLink>
             )}

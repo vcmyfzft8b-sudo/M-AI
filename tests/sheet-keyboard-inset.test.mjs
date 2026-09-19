@@ -132,6 +132,38 @@ test("scrims and sheet wrappers stay the full viewport", () => {
   }
 });
 
+/** Any `max-height` declared in a rule body. */
+function maxHeights(body) {
+  return [...body.matchAll(/max-height:([^;]*);/g)].map((m) => m[1].trim());
+}
+
+test("no phone sheet is capped against a viewport that ignores the keyboard", () => {
+  for (const sheet of SHEETS) {
+    const caps = rulesFor(sheet).flatMap((rule) => maxHeights(rule.body));
+
+    for (const cap of caps) {
+      /*
+       * `dvh` answers for browser chrome, not for the keys, and mobile Safari
+       * never shrinks the layout viewport `%` resolves against — so a sheet
+       * measured in either was allowed to be taller than the screen you can
+       * see, and hung its header off the top. The measured viewport is the
+       * only honest answer.
+       */
+      assert.ok(
+        !/dvh/.test(cap),
+        `.${sheet} is capped in dvh (${cap}), which does not shrink with the keyboard`,
+      );
+    }
+
+    if (caps.length > 0) {
+      assert.ok(
+        caps.some((cap) => /--memo-sheet-max|--memo-vv\b/.test(cap)),
+        `.${sheet} is capped without the measured viewport: ${caps.join(" | ")}`,
+      );
+    }
+  }
+});
+
 test("the keyboard's own measurement is still published for them to read", () => {
   const inset = readFileSync(
     fileURLToPath(new URL("../src/components/keyboard-inset.tsx", import.meta.url)),
@@ -145,5 +177,17 @@ test("the keyboard's own measurement is still published for them to read", () =>
     "the measurement has to answer for WebKit panning the visual viewport",
   );
   assert.match(css, /--memo-kb:\s*var\(--memo-keyboard, 0px\)/);
+  assert.match(
+    inset,
+    /--memo-viewport/,
+    "the visible viewport has to be published: no CSS unit reports it",
+  );
+  assert.match(
+    inset,
+    /--memo-viewport-top/,
+    "so does the pan offset, or Safari draws fixed sheets above the screen",
+  );
   assert.match(css, /--memo-kb-pad:\s*max\(var\(--memo-safe-bottom\), var\(--memo-kb\)\)/);
+  assert.match(css, /--memo-vv:\s*var\(--memo-viewport, 100dvh\)/);
+  assert.match(css, /--memo-sheet-max:\s*calc\(var\(--memo-vv\) \+ var\(--memo-kb\) - 54px\)/);
 });

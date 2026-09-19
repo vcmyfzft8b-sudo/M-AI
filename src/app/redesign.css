@@ -9194,8 +9194,34 @@
   .memo-portal {
     /* `KeyboardInset` publishes the measured height on the document element;
        the fallback keeps every calc() honest before it has run and on any
-       browser without `visualViewport`. */
+       browser without `visualViewport`.
+
+       It reads 0 in mobile Safari, correctly: Safari shrinks the layout
+       viewport to the space above the keys, so a sheet on the bottom edge is
+       already clear of them and has nothing to pad past. That is also why no
+       sheet is capped in `dvh` any more — `dvh` does not shrink with the
+       keyboard, so a sheet measured against it was allowed to be taller than
+       the viewport it sits in and hung its header off the top of the screen.
+       `100%` is the containing block, which is that viewport in every case. */
     --memo-kb: var(--memo-keyboard, 0px);
+    /*
+     * What is actually on screen, and how far down it starts. Mobile Safari
+     * pans the visual viewport inside a layout viewport it never shrinks, so
+     * neither `dvh` nor `%` can answer either question — both measure the taller
+     * screen you cannot see. `KeyboardInset` measures them; the fallbacks are
+     * the old behaviour, for the first paint and for anything without
+     * `visualViewport`.
+     */
+    --memo-vv: var(--memo-viewport, 100dvh);
+    --memo-vv-top: var(--memo-viewport-top, 0px);
+    /*
+     * How tall a bottom sheet may be: from the bottom edge it is anchored to,
+     * up to 54px below the top of the visible area. The keyboard inset is added
+     * back because that much of the sheet is deliberately behind the keys — it
+     * is padding, not content, and clamping it away would crush the content
+     * instead.
+     */
+    --memo-sheet-max: calc(var(--memo-vv) + var(--memo-kb) - 54px);
     --memo-safe-top: env(safe-area-inset-top, 0px);
     --memo-safe-bottom: env(safe-area-inset-bottom, 0px);
     /*
@@ -9284,7 +9310,7 @@
 
   .memo-screen {
     position: fixed;
-    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     background: var(--bg);
@@ -9783,7 +9809,7 @@
 
   .memo-home-screen {
     position: fixed;
-    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     background: var(--bg);
@@ -9820,7 +9846,7 @@
     bottom: 0;
     transform: translateY(0);
     width: auto;
-    max-height: calc(100dvh - 54px);
+    max-height: var(--memo-sheet-max);
     overflow-y: auto;
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
@@ -10407,7 +10433,7 @@
 
   .memo-note-screen {
     position: fixed;
-    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     background: var(--bg);
@@ -10639,7 +10665,7 @@
 
   .memo-sheet-full.memo-wheel-sheet,
   .memo-sheet-full.memo-offer-sheet {
-    top: calc(3.5rem + var(--memo-safe-top));
+    top: calc(var(--memo-vv-top) + 3.5rem + var(--memo-safe-top));
     bottom: 0;
     left: 0;
     transform: translateY(0);
@@ -10650,7 +10676,7 @@
 
   .memo-settings-screen {
     position: fixed;
-    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -10832,7 +10858,7 @@
     bottom: 0;
     transform: translateY(0);
     width: auto;
-    max-height: calc(100dvh - 54px);
+    max-height: var(--memo-sheet-max);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
@@ -10859,7 +10885,7 @@
 
   .memo-support-screen {
     position: fixed;
-    inset: var(--memo-safe-top) 0 var(--memo-kb) 0;
+    inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb) 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -10923,7 +10949,7 @@
   }
 
   .note-source-modal {
-    max-height: calc(100dvh - 54px);
+    max-height: var(--memo-sheet-max);
     padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
     border-radius: 34px 34px 0 0;
     --panel-paint: var(--bg);
@@ -11230,7 +11256,7 @@
        its own margins, and the gap was adding 16px above the header. */
     display: block;
     gap: 0;
-    max-height: calc(100dvh - 54px);
+    max-height: var(--memo-sheet-max);
     overflow-y: auto;
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
@@ -11327,7 +11353,17 @@
        and left the field floating in the middle of it. */
     position: fixed;
     inset: auto 0 0 0;
-    max-height: calc(100dvh - 54px);
+    max-height: var(--memo-sheet-max);
+    /*
+     * The sheet scrolls, not the field's row. Production hangs the scroll on
+     * the body, which is the only child here allowed to shrink — so when the
+     * cap bites, every fixed-size part keeps its height and the body collapses,
+     * taking the name field with it. On a short screen you were left looking at
+     * a folder mark and a hint with nothing to type into. Scrolling the whole
+     * sheet is what every other sheet in the app does.
+     */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
     border-radius: 34px 34px 0 0;
@@ -11341,9 +11377,9 @@
   }
 
   .library-folder-modal-body {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     min-height: 0;
-    overflow-y: auto;
+    overflow-y: visible;
   }
 
   /*
@@ -11522,7 +11558,7 @@
     bottom: 0;
     transform: none;
     width: auto;
-    max-height: calc(100dvh - 54px);
+    max-height: var(--memo-sheet-max);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     /*
@@ -11595,7 +11631,7 @@
     inset: auto 0 0 0;
     z-index: 106;
     padding: 0.6rem 1.15rem calc(2rem + var(--memo-kb-pad));
-    max-height: calc(100dvh - 54px);
+    max-height: var(--memo-sheet-max);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
@@ -11623,7 +11659,7 @@
 
   .memo-sheet-full {
     position: fixed;
-    inset: calc(54px + var(--memo-safe-top)) 0 0 0;
+    inset: calc(var(--memo-vv-top) + 54px + var(--memo-safe-top)) 0 0 0;
     z-index: 106;
     display: flex;
     flex-direction: column;
@@ -17898,7 +17934,7 @@
 
   .memo-palace-sheet-inner {
     width: 100%;
-    max-height: calc(100% - 4rem);
+    max-height: calc(var(--memo-vv) + var(--memo-kb) - 4rem);
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     padding: 0.6rem 1.15rem calc(1.4rem + var(--memo-kb-pad));
     border-radius: 34px 34px 0 0;
@@ -17911,7 +17947,7 @@
     inset: auto 0 0 0;
     translate: none;
     width: 100%;
-    max-height: calc(100% - 7rem);
+    max-height: calc(var(--memo-vv) + var(--memo-kb) - 7rem);
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     padding: 1.1rem 1.15rem calc(1.5rem + var(--memo-kb-pad));
     border-radius: 30px 30px 0 0;
@@ -19221,7 +19257,7 @@
 
 @media (max-width: 1099px) and (max-height: 540px) {
   .memo-palace-panel {
-    max-height: calc(100dvh - 1rem);
+    max-height: calc(var(--memo-vv) + var(--memo-kb) - 1rem);
     padding-top: 0.35rem;
     padding-bottom: calc(0.6rem + var(--memo-kb-pad));
     gap: 0.35rem;

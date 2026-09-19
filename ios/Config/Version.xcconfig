@@ -1,4 +1,4 @@
 // Shared by the app and its widget extension: the App Store rejects a bundled
 // extension whose version does not match the app that contains it.
 MARKETING_VERSION = 1.0.0
-CURRENT_PROJECT_VERSION = 2
+CURRENT_PROJECT_VERSION = 4

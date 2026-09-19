@@ -1012,7 +1012,18 @@
  */
 .navigation-progress-bar {
   position: fixed;
-  top: 0;
+  /*
+   * Not `0`: the iOS wrapper's web view runs edge to edge, so the viewport's
+   * top is the physical top of the screen, and a 3px bar there is drawn behind
+   * the status bar and inside the corner radius — measured on the simulator,
+   * it lands above the clock and is all but invisible. The inset puts it at the
+   * top of the app's own content instead. It is zero in browsers and in the
+   * installed web app, which do not get `viewport-fit=cover`, so the bar stays
+   * flush with the top of the page there. `env()` rather than `--memo-safe-top`
+   * because that variable is only defined below the 1100px breakpoint, and the
+   * iPad runs the wide layout with a status bar all the same.
+   */
+  top: env(safe-area-inset-top, 0px);
   left: 0;
   /* Above every sheet, dialog and toast in the app — the phone reaches this
      path from inside them (the note chat's "Nadgradi" sits under a scrim at

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { InstantLink } from "@/components/instant-link";
 import { AuthScreen } from "@/components/auth-screen";
 import { getTranslations } from "@/lib/i18n/server";
 
@@ -15,7 +15,7 @@ export default async function AccountDeletedPage({ searchParams }: { searchParam
         {t("native.appleDisconnectCopy")}{" "}
         <a href="https://support.apple.com/en-us/102571">{t("native.appleDisconnectLink")}</a>
       </p> : null}
-      <Link className="memo-button-coral" href="/auth/continue">{t("auth.signIn")}</Link>
+      <InstantLink className="memo-button-coral" href="/auth/continue">{t("auth.signIn")}</InstantLink>
     </div>
   </AuthScreen>;
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useT } from "@/components/i18n-provider";
+import { InstantLink } from "@/components/instant-link";
 
 export function AppleBillingTerms({ busy, onRestore }: { busy: boolean; onRestore: () => void }) {
   const t = useT();
@@ -13,8 +13,8 @@ export function AppleBillingTerms({ busy, onRestore }: { busy: boolean; onRestor
     <p>{t("native.renewalShort")}</p>
     <div>
       <button type="button" disabled={busy} onClick={onRestore}>{t("native.restore")}</button>
-      <Link href="/legal/terms-of-use">{t("legal.termsInline")}</Link>
-      <Link href="/legal/privacy-policy">{t("legal.privacyInline")}</Link>
+      <InstantLink href="/legal/terms-of-use">{t("legal.termsInline")}</InstantLink>
+      <InstantLink href="/legal/privacy-policy">{t("legal.privacyInline")}</InstantLink>
     </div>
   </div>;
 }

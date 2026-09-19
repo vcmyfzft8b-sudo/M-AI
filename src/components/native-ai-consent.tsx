@@ -1,9 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useState } from "react";
 import { useT } from "@/components/i18n-provider";
+import { InstantLink } from "@/components/instant-link";
 import { Msym } from "@/components/msym";
 
 /**
@@ -41,7 +41,7 @@ export function NativeAIConsent() {
 
       <p className="memo-auth-note">
         {t("native.aiControl")}{" "}
-        <Link href="/legal/privacy-policy" className="memo-auth-inline-link">{t("legal.privacyInline")}</Link>
+        <InstantLink href="/legal/privacy-policy" className="memo-auth-inline-link">{t("legal.privacyInline")}</InstantLink>
       </p>
 
       <div className="memo-auth-actions">
@@ -76,14 +76,14 @@ export function NativeAIConsent() {
           </button>
         </form>
 
-        <Link
+        <InstantLink
           href="/app/settings"
           className="memo-auth-ghost"
           aria-disabled={pending !== null}
           onClick={event => { if (pending) event.preventDefault(); }}
         >
           {t("nav.settings")}
-        </Link>
+        </InstantLink>
       </div>
 
       {error ? <p role="status" className="memo-auth-note error">{error}</p> : null}

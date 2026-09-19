@@ -2,6 +2,11 @@
 
 import type { MouseEvent, ReactNode } from "react";
 
+import {
+  shouldHandleLinkNavigation,
+  useNavigationFeedback,
+} from "@/components/navigation-loading";
+
 /**
  * The way out of a public legal document.
  *
@@ -16,6 +21,12 @@ import type { MouseEvent, ReactNode } from "react";
  * the click handler rather than in render or an effect: it only has an answer
  * on the client, and asking for it at the moment of the click is also the only
  * moment the answer is current.
+ *
+ * Going back is instant — the browser has the previous page — but the fallback
+ * is a whole new document, so that branch is routed through the app's
+ * navigation feedback instead: the progress bar paints in the click frame,
+ * which is the only sign the tap landed inside the iOS wrapper, where there is
+ * no browser chrome to show one.
  */
 export function LegalBackLink({
   href,
@@ -26,23 +37,25 @@ export function LegalBackLink({
   className?: string;
   children: ReactNode;
 }) {
+  const navigationFeedback = useNavigationFeedback();
+
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
     // Anything the browser would open elsewhere (or has already handled) is
     // not this navigation and must keep the link's own href.
-    if (
-      event.defaultPrevented ||
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey ||
-      window.history.length <= 1
-    ) {
+    if (!shouldHandleLinkNavigation(event)) {
       return;
     }
 
-    event.preventDefault();
-    window.history.back();
+    if (window.history.length > 1) {
+      event.preventDefault();
+      window.history.back();
+      return;
+    }
+
+    if (navigationFeedback) {
+      event.preventDefault();
+      navigationFeedback.navigateWithFeedback(href);
+    }
   }
 
   return (

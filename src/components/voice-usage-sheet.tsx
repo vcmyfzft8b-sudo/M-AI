@@ -4,6 +4,7 @@ import { useNativeIOS } from "@/lib/mobile/client";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { InstantLink } from "@/components/instant-link";
 import { useT } from "@/components/i18n-provider";
 import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
@@ -236,9 +237,9 @@ export function VoiceUsageSheet({
                 {buyingCredits ? t("tutor.paywall.creditsPending") : t("tutor.paywall.creditsCta")}
               </button>
             ) : (
-              <a className="memo-tutor-start" href="/app/settings">
+              <InstantLink className="memo-tutor-start" href="/app/settings">
                 {t("tutor.paywall.trialCta")}
-              </a>
+              </InstantLink>
             )}
           </div>
         </>

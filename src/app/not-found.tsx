@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { ErrorScreen } from "@/components/error-screen";
+import { InstantLink } from "@/components/instant-link";
 import { getTranslations } from "@/lib/i18n/server";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -19,9 +19,9 @@ export default async function NotFound() {
       title={t("error.notFound.title")}
       description={t("error.notFound.copy")}
       actions={
-        <Link href="/" className="error-screen-primary">
+        <InstantLink href="/" className="error-screen-primary">
           {t("error.backHome")}
-        </Link>
+        </InstantLink>
       }
     />
   );

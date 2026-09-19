@@ -9685,6 +9685,19 @@
      * instead.
      */
     --memo-sheet-max: calc(var(--memo-vv) + var(--memo-kb) - 54px);
+    /*
+     * The same 54px, from the other end.
+     *
+     * A sheet that fills the screen is better written as the edge it keeps
+     * than as a height it may not exceed. The two agree at rest, and only one
+     * of them survives mobile Safari: the page's own height moves while the
+     * keyboard does — the URL bar goes as the keys arrive — so a height
+     * measured against it moves too, and a sheet anchored to the bottom edge
+     * shows that as its top edge sliding. Measured at 60fps on an iPhone 17,
+     * the quiz editor: the page lost 131px for six frames and the sheet's top
+     * fell with it and climbed back. Pinned to the top instead, it cannot.
+     */
+    --memo-sheet-peek: 54px;
     --memo-safe-top: env(safe-area-inset-top, 0px);
     --memo-safe-bottom: env(safe-area-inset-bottom, 0px);
     /*
@@ -12312,13 +12325,19 @@
    * than leaving a strip of dead sheet resting on the keys.
    */
   .study-manager-sheet {
-    top: auto;
+    /*
+     * Anchored to both edges rather than capped from the bottom, so the header
+     * and the close button cannot move at all — which is what the wrapper does,
+     * where the same sheet measures 54..874 with the keys down and with them up.
+     */
+    top: var(--memo-sheet-peek);
     left: 0;
     right: 0;
     bottom: 0;
     transform: none;
     width: auto;
-    max-height: var(--memo-sheet-max);
+    height: auto;
+    max-height: none;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     /*

@@ -309,6 +309,16 @@ test("no phone sheet is capped against a viewport that ignores the keyboard", ()
       );
     }
 
+    /*
+     * `none` is the phone layer taking the cap off — a sheet that holds its top
+     * edge instead, which is the other way of saying the same thing and the one
+     * that does not move when the page's height does. It answers the question
+     * this test asks, so it ends it.
+     */
+    if (caps.includes("none")) {
+      continue;
+    }
+
     if (caps.length > 0) {
       assert.ok(
         caps.some((cap) => /--memo-sheet-max|--memo-vv\b/.test(cap)),
@@ -316,6 +326,41 @@ test("no phone sheet is capped against a viewport that ignores the keyboard", ()
       );
     }
   }
+});
+
+/*
+ * A sheet that fills the screen keeps its top edge rather than a height.
+ *
+ * The two say the same thing at rest and only one of them survives mobile
+ * Safari: the page's own height moves while the keyboard does — its URL bar
+ * goes as the keys arrive — so a height measured against the page moves too,
+ * and a sheet anchored to the bottom edge shows that as its top edge sliding.
+ * Measured at 60fps on an iPhone 17, the quiz editor's fourth option: the page
+ * lost 131px for six frames, the sheet fell with it and climbed back, and the
+ * whole movement read as a jump. Pinned to the top it cannot: the edge is a
+ * constant and only the bottom, which the keyboard covers anyway, moves.
+ *
+ * The wrapper's sheet has always measured 54..874 with the keys down and with
+ * them up; this is that, written down.
+ */
+test("the editor sheet keeps its top edge rather than a height", () => {
+  const phone = rulesFor("study-manager-sheet").map((rule) => rule.body).join("\n");
+
+  assert.match(
+    phone,
+    /top:\s*var\(--memo-sheet-peek\)/,
+    "the sheet holds an edge, not a cap measured against a page that moves",
+  );
+  assert.match(
+    phone,
+    /max-height:\s*none/,
+    "and the cap goes with it, or the two of them argue",
+  );
+  assert.match(
+    css,
+    /--memo-sheet-peek:\s*54px/,
+    "the peek is the same 54px the cap used to subtract",
+  );
 });
 
 test("the keyboard's own measurement is still published for them to read", () => {

@@ -165,12 +165,15 @@ test("every sheet leaves the same gap between a focused field and the keys", () 
     "iOS on the web is the only place the accessory bar is reserved",
   );
   /*
-   * And only when it is actually covering something. With the software keyboard
-   * up `visualViewport` stops above the bar, so a sheet on the bottom edge
-   * already ends on the keyboard's top edge — and because the ground is a
-   * border, and a scrollport ends where its border begins, a reserve there took
-   * 55px out of the scrollport and cut the focused field in half. Measured on
-   * an iPhone 17 in Safari: field at 321..378, scrollport ending at 349.
+   * And only when it is actually covering something, which is not the same as
+   * "whenever a field has focus". Safari answers a keyboard one of two ways,
+   * and the bar is outside the visible strip in one of them — see `barValue` in
+   * `KeyboardInset`, which is the one place that can tell them apart, because
+   * telling them apart takes the measurement. Reserving it in CSS for every
+   * focus reserves it in the case where it is already gone, and because the
+   * ground is a border, and a scrollport ends where its border begins, that
+   * takes 55px out of the scrollport and cuts the focused field in half —
+   * measured on an iPhone 17 in Safari: field at 321..378, scrollport at 349.
    */
   assert.doesNotMatch(
     css,
@@ -439,4 +442,65 @@ test("the keyboard's own measurement is still published for them to read", () =>
   );
   assert.match(css, /--memo-vv:\s*var\(--memo-viewport, 100dvh\)/);
   assert.match(css, /--memo-sheet-max:\s*calc\(var\(--memo-vv\) \+ var\(--memo-kb\) - 54px\)/);
+
+  /*
+   * And the other half of that sum is read off the same box as the inset.
+   * Built as `visualViewport.height + rawInset()` it is short by Safari's own
+   * scroll twice over — once because the page is that much shorter, and once
+   * because the inset subtracts `offsetTop` — so the sum is not invariant at
+   * all. Measured on an iPhone 17, the flashcard editor: a 55px scroll took
+   * 110px off it, the sheet's cap went 660 to 550, and the sheet's top edge
+   * dropped 61pt the moment the keys appeared. The wrapper's sheet, on the same
+   * page, does not move at all: 54 before, 54 after.
+   */
+  assert.match(
+    inset,
+    /fullHeight = Math\.round\(line\)/,
+    "the page's height is the foot of the page, not the visible strip plus the inset",
+  );
+  assert.doesNotMatch(
+    inset,
+    /fullHeight = viewport\.height \+ rawInset/,
+    "adding the inset back subtracts Safari's pan a second time",
+  );
+});
+
+/*
+ * Safari's form accessory bar — the ∧ ∨ Done strip — is drawn over the page and
+ * `visualViewport` says nothing about it, except in the one case where Safari
+ * pans: there the layout viewport is collapsed onto the strip you can see, the
+ * page's own foot is on the keyboard's top edge, and the inset reads 0.
+ *
+ * Both halves have cost a sheet. Reserved always, it cut the focused field in
+ * half in the panned case. Reserved never, the bar sat across the answer field
+ * in the other: measured on an iPhone 17, the flashcard editor with the ground
+ * beginning on the keyboard's own edge at 579 and the bar over the sheet from
+ * 507.
+ */
+test("the accessory bar is reserved in the case that has one, and only there", () => {
+  const inset = readFileSync(
+    fileURLToPath(new URL("../src/components/keyboard-inset.tsx", import.meta.url)),
+    "utf8",
+  );
+
+  assert.match(
+    inset,
+    /const barValue[\s\S]{0,900}viewport\.offsetTop > 0[\s\S]{0,160}barOverlaps = false;/,
+    "panned, the visible strip already stops above the bar and a reserve is a cut",
+  );
+  assert.match(
+    inset,
+    /const barValue[\s\S]{0,200}data-native/,
+    "the wrapper answers nil for `inputAccessoryView`; it has no bar to reserve",
+  );
+  /*
+   * A fraction rather than a flag, so the reserve crosses over on the keyboard's
+   * own curve with the ground it is added to. Switched on at focus it steps the
+   * ground 55px in one frame, 124ms before the keys begin to move.
+   */
+  assert.match(
+    inset,
+    /const barValue[\s\S]{0,1400}return barOverlaps \? upPublished : 0;/,
+    "the reserve rides the same ramp as the clearance it is added to",
+  );
 });

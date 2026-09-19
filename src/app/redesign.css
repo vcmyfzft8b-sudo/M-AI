@@ -9723,20 +9723,15 @@
     /*
      * Safari's form accessory bar — the ∧ ∨ Done strip above the keys.
      *
-     * Reserved only when it is actually covering the page, which is a thing to
-     * measure and not to assume. With the software keyboard up `visualViewport`
-     * stops *above* the bar, so a sheet on the bottom edge already ends on the
-     * keyboard's top edge and a reserve here takes a strip out of the sheet for
-     * nothing. Worse than nothing: the ground is a border, the scrollport ends
-     * where the border begins, and 55px of phantom border cut the field you
-     * were typing into in half — measured on an iPhone 17 in Safari, field at
-     * 321..378 with the scrollport ending at 349.
+     * Reserved when it is actually covering the page, which is a thing to
+     * measure and not to assume — `KeyboardInset.barValue` is where that is
+     * decided, and the two cases it tells apart are written out there. It is
+     * drawn over the page whenever Safari leaves the page its height, and
+     * already outside the visible strip whenever Safari pans instead.
      *
-     * The bar does come down on the page when a hardware keyboard is attached
-     * and iOS draws it on its own with nothing else moving. `KeyboardInset`
-     * tests for exactly that — focused, and the viewport still where it was at
-     * rest — and answers 1 only then. Zero on the wrapper regardless, which
-     * turns the bar off outright (`MemoWebView` answers nil for
+     * A fraction rather than a flag, so it crosses over on the keyboard's own
+     * curve with the ground it is added to. Zero on the wrapper, which turns
+     * the bar off outright (`MemoWebView` answers nil for
      * `inputAccessoryView`), and on every platform that draws no bar at all.
      */
     --memo-kb-bar: 0px;

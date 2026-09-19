@@ -161,8 +161,21 @@ test("every sheet leaves the same gap between a focused field and the keys", () 
   );
   assert.match(
     css,
-    /-webkit-touch-callout: none[\s\S]{0,200}--memo-kb-bar:\s*calc\(var\(--memo-kb-up\)/,
-    "iOS on the web is the only place the accessory bar is reserved, and only while focused",
+    /-webkit-touch-callout: none[\s\S]{0,400}--memo-kb-bar:\s*calc\(var\(--memo-keyboard-bar, 0\)/,
+    "iOS on the web is the only place the accessory bar is reserved",
+  );
+  /*
+   * And only when it is actually covering something. With the software keyboard
+   * up `visualViewport` stops above the bar, so a sheet on the bottom edge
+   * already ends on the keyboard's top edge — and because the ground is a
+   * border, and a scrollport ends where its border begins, a reserve there took
+   * 55px out of the scrollport and cut the focused field in half. Measured on
+   * an iPhone 17 in Safari: field at 321..378, scrollport ending at 349.
+   */
+  assert.doesNotMatch(
+    css,
+    /--memo-kb-bar:\s*calc\(var\(--memo-kb-up\)/,
+    "reserving the bar for every focus is what sliced the field in half in Safari",
   );
   assert.match(
     css,
@@ -251,6 +264,23 @@ test("the keyboard's own measurement is still published for them to read", () =>
     /viewport\.offsetTop/,
     "the measurement has to answer for WebKit panning the visual viewport",
   );
+  /*
+   * Read off a box pinned to the bottom edge rather than rebuilt from window
+   * metrics. `innerHeight - height - offsetTop` tears: WebKit updates the three
+   * on different frames, and a fresh value minus two stale ones is a whole
+   * keyboard that is not there — 310px of ground on one frame and 0 on the
+   * next, measured in Safari on an iPhone 17.
+   */
+  assert.match(
+    inset,
+    /position:fixed[^"]*bottom:0/,
+    "the inset is measured against a foot pinned to the bottom of the page",
+  );
+  assert.doesNotMatch(
+    inset,
+    /window\.innerHeight - viewport\.height/,
+    "the window-metric subtraction tears across frames; that is why it went",
+  );
   assert.match(css, /--memo-kb:\s*var\(--memo-keyboard, 0px\)/);
   assert.match(
     inset,
@@ -278,18 +308,35 @@ test("the keyboard's own measurement is still published for them to read", () =>
    */
   assert.match(
     inset,
-    /KEYBOARD_HIDE_MS\s*=\s*250/,
+    /KEYBOARD_MS\s*=\s*250/,
     "the dismissal is drawn over UIKit's own duration",
   );
   assert.match(
     inset,
-    /KEYBOARD_HIDE_CURVE\s*=\s*\[0\.38, 0\.7, 0\.125, 1\]/,
+    /KEYBOARD_CURVE\s*=\s*\[0\.38, 0\.7, 0\.125, 1\]/,
     "and on UIKit's own curve, or it will not read as the keyboard's movement",
   );
   assert.match(
     inset,
     /requestAnimationFrame/,
     "stepped per frame rather than handed to a CSS transition on padding",
+  );
+  /*
+   * The clearance is ramped on that same curve, in both directions and on every
+   * platform. Stepped, it swaps a resting foot for a 12pt one in a single
+   * frame — which is a hop of the difference between them, and on mobile
+   * Safari, where the inset is 0 the whole time the keys are up, it is the only
+   * thing that moves at all.
+   */
+  assert.match(
+    inset,
+    /const rampUp = \(to: number\)/,
+    "the clearance ramps rather than stepping",
+  );
+  assert.match(
+    inset,
+    /upFrom \+ \(upTo - upFrom\) \* ease\(t\)/,
+    "and it ramps on the keyboard's curve, not linearly",
   );
   assert.match(css, /--memo-vv:\s*var\(--memo-viewport, 100dvh\)/);
   assert.match(css, /--memo-sheet-max:\s*calc\(var\(--memo-vv\) \+ var\(--memo-kb\) - 54px\)/);

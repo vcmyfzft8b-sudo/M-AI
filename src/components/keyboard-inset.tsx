@@ -100,6 +100,19 @@ export function KeyboardInset() {
     const measure = () =>
       Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop));
 
+    /**
+     * Nothing focused and nothing being drawn: there is no keyboard, whatever
+     * the arithmetic says this frame.
+     *
+     * This is what stops the tail wobble. The two halves of the measurement do
+     * not settle together, so for a few frames after the keys have gone the
+     * subtraction still produces a number — and the box, having just arrived at
+     * the bottom, bounced back up and down again on its way to nothing. There
+     * is no field to type into, so the answer is 0 and there is nothing to
+     * interpolate towards.
+     */
+    const idle = () => !glideStart && !isTyping();
+
     const isTyping = () => {
       const active = document.activeElement;
 
@@ -114,7 +127,13 @@ export function KeyboardInset() {
 
     const write = (inset: number) => {
       const height = Math.round(viewport.height);
-      const top = Math.max(0, Math.round(viewport.offsetTop));
+      /*
+       * At rest the page is not panned, whatever the last reading said. iOS
+       * pans the visual viewport to clear the keys and unwinds it afterwards,
+       * and the unwinding is reported in pieces — so a stale `offsetTop` landed
+       * after the keyboard had gone and shifted every fixed screen by it.
+       */
+      const top = idle() ? 0 : Math.max(0, Math.round(viewport.offsetTop));
       const next = `${inset}/${height}/${top}`;
 
       if (next === previous) {
@@ -140,8 +159,17 @@ export function KeyboardInset() {
      * mobile Safari shrinks the layout viewport to sit above the keys, so there
      * the inset is legitimately 0 the whole time the keyboard is up.
      */
-    const publishUp = () => {
-      const up = isTyping() || direction !== 0 || published > 0 ? 1 : 0;
+    const publishUp = (blend?: number) => {
+      /*
+       * A fraction, not a flag, because the two states it picks between are
+       * different heights: a foot at rest clears the home indicator, a foot
+       * under the keyboard clears the keys by 12pt, and the first is much the
+       * larger. Switched at the end of a dismissal, that difference arrived in
+       * one frame — the box slid all the way down and then hopped back up by
+       * it. Blended across the same curve as the movement, the two paddings
+       * cross over while the sheet is still travelling and it lands once.
+       */
+      const up = blend ?? (isTyping() || direction !== 0 || published > 0 ? 1 : 0);
       root.style.setProperty("--memo-keyboard-up", `${up}`);
     };
 
@@ -161,10 +189,12 @@ export function KeyboardInset() {
      */
     const settle = (now: number) => {
       const t = Math.min(1, (now - glideStart) / KEYBOARD_HIDE_MS);
-      const moved = write(Math.round(glideFrom + (glideTo - glideFrom) * ease(t)));
+      const eased = ease(t);
+      const moved = write(Math.round(glideFrom + (glideTo - glideFrom) * eased));
 
       if (t < 1) {
-        publishUp();
+        // Fades out with the keys when they are leaving; full while they arrive.
+        publishUp(glideTo === 0 ? 1 - eased : 1);
         return true;
       }
 
@@ -176,7 +206,7 @@ export function KeyboardInset() {
 
     const follow = (now: number) => {
       const stillGliding = glideStart > 0;
-      const moved = stillGliding ? settle(now) : write(clamp(measure()));
+      const moved = stillGliding ? settle(now) : write(idle() ? 0 : clamp(measure()));
 
       if (stillGliding) {
         frame = glideStart > 0 ? requestAnimationFrame(follow) : 0;
@@ -245,7 +275,7 @@ export function KeyboardInset() {
         settled = 0;
       }
 
-      write(clamp(raw));
+      write(idle() ? 0 : clamp(raw));
       publishUp();
 
       if (!frame) {

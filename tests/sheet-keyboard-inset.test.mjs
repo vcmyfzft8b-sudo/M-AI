@@ -225,6 +225,27 @@ test("every sheet leaves the same gap between a focused field and the keys", () 
   }
 });
 
+/*
+ * The ground is a border, and a scrollport ends where its border begins — so
+ * the scrollport's own bottom edge is already the top of the keyboard. Scroll
+ * padding that adds the keyboard again counts it twice, and the scroller drags
+ * the focused field a whole keyboard further up than it needs to: measured on
+ * the flashcard editor, 101px of scroll delivered after the keyboard had
+ * already finished, as a jump of its own.
+ */
+test("scrolling a field into view does not subtract the keyboard twice", () => {
+  assert.match(
+    css,
+    /--memo-kb-scroll:\s*var\(--memo-kb-clear\)/,
+    "a field the sheet scrolls to should land at the clearance, like every foot",
+  );
+  assert.doesNotMatch(
+    css,
+    /--memo-kb-scroll:[^;]*--memo-kb-ground/,
+    "the scrollport already stops at the keys; adding them again over-scrolls",
+  );
+});
+
 test("no phone sheet is capped against a viewport that ignores the keyboard", () => {
   for (const sheet of SHEETS) {
     const caps = rulesFor(sheet).flatMap((rule) => maxHeights(rule.body));
@@ -335,7 +356,7 @@ test("the keyboard's own measurement is still published for them to read", () =>
   );
   assert.match(
     inset,
-    /upFrom \+ \(upTo - upFrom\) \* ease\(t\)/,
+    /const eased = ease\(t\);[\s\S]{0,120}upFrom \+ \(upTo - upFrom\) \* eased/,
     "and it ramps on the keyboard's curve, not linearly",
   );
   /*
@@ -359,6 +380,20 @@ test("the keyboard's own measurement is still published for them to read", () =>
     inset,
     /let pans\b/,
     "the regime is a question about this moment, not a flag about this page",
+  );
+  /*
+   * A sheet's cap is `viewport + inset`, and that sum is invariant — the
+   * keyboard takes exactly as much off the visible viewport as it adds to the
+   * strip behind it. The browser reports the shrunken viewport in one frame
+   * while the inset is drawn over a quarter of a second, so publishing the
+   * viewport raw made the cap collapse by a whole keyboard and spring back.
+   * Sheets short enough never to be capped never showed it; the flashcard
+   * editor dropped 308px and bounced, measured on an iPhone 17.
+   */
+  assert.match(
+    inset,
+    /fullHeight - inset/,
+    "the published viewport moves in step with the drawn inset, not ahead of it",
   );
   assert.match(css, /--memo-vv:\s*var\(--memo-viewport, 100dvh\)/);
   assert.match(css, /--memo-sheet-max:\s*calc\(var\(--memo-vv\) \+ var\(--memo-kb\) - 54px\)/);

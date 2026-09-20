@@ -2291,6 +2291,14 @@ export function LectureWorkspace({
   }, [refreshLectureDetail]);
 
   async function handleStudyCreate() {
+    /*
+     * The quiet refusal rather than the red panel the catch below would draw.
+     * Every other way of meeting the limit in this app says it the same way.
+     */
+    if (blockedOffline("generate")) {
+      return;
+    }
+
     setStudyError(null);
     setIsAwaitingStudyGeneration(true);
     setIsRegeneratingStudy(true);
@@ -2316,6 +2324,14 @@ export function LectureWorkspace({
   }
 
   async function handleQuizCreate() {
+    /*
+     * The quiet refusal rather than the red panel the catch below would draw.
+     * Every other way of meeting the limit in this app says it the same way.
+     */
+    if (blockedOffline("generate")) {
+      return;
+    }
+
     setStudyError(null);
     setIsAwaitingQuizGeneration(true);
     setIsRegeneratingQuiz(true);
@@ -2341,6 +2357,10 @@ export function LectureWorkspace({
   }
 
   async function handlePracticeTestStart() {
+    if (blockedOffline("generate")) {
+      return;
+    }
+
     setStudyError(null);
     setIsAwaitingPracticeTestGeneration(true);
     setIsStartingPracticeTest(true);
@@ -2830,7 +2850,7 @@ export function LectureWorkspace({
      * a question into the log that nothing can answer.
      */
     if (isOffline) {
-      setChatError(t("offline.feature.chat.body"));
+      setChatError(t("offline.feature.chat.title"));
       return;
     }
 
@@ -4010,7 +4030,7 @@ export function LectureWorkspace({
           ) : chatError ? (
             <p className="memo-chat-status danger">{chatError}</p>
           ) : isOffline ? (
-            <p className="memo-chat-status">{t("offline.feature.chat.body")}</p>
+            <p className="memo-chat-status">{t("offline.feature.chat.title")}</p>
           ) : detail.lecture.status !== "ready" ? (
             <p className="memo-chat-status">{t("chat.status.notReady")}</p>
           ) : chatLimitReached ? (
@@ -5547,7 +5567,7 @@ export function LectureWorkspace({
           {detail.audioUrl && isOffline ? (
             <p className="memo-offline-inline">
               <Msym name="wifi_off" size="1.05rem" fill={false} weight={500} />
-              {t("offline.feature.audio.body")}
+              {t("offline.feature.audio.title")}
             </p>
           ) : detail.audioUrl ? (
             <RecordingPlayer key={detail.audioUrl} src={detail.audioUrl} />

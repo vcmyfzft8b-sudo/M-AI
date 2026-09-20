@@ -751,6 +751,16 @@ export function LectureMindmap({
     </div>
   );
 
+  /*
+   * Before the load error, not after. Offline the fetch is refused by the
+   * offline stub, and that refusal is an `Error` like any other — so this
+   * returned a red danger panel where every other tab was showing the quiet
+   * offline notice. Being offline is not this tab failing.
+   */
+  if (isOffline && !doc) {
+    return <OfflineFeatureNotice feature="generate" />;
+  }
+
   if (loadError) {
     return <p className="danger-panel lecture-inline-note">{loadError}</p>;
   }
@@ -787,14 +797,6 @@ export function LectureMindmap({
         bodyCopy={state === null ? "" : t("mindmap.generatingBody")}
       />
     );
-  }
-
-  /*
-   * Offline with nothing cached: there is no map to draw and none can be made,
-   * so the panel says that rather than offering a button that cannot work.
-   */
-  if (isOffline && !doc) {
-    return <OfflineFeatureNotice feature="generate" />;
   }
 
   /* Everything below is the map's absence, in its several flavours. */

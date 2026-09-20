@@ -184,7 +184,7 @@ export function LibraryChat({
      */
     if (isOffline) {
       setDraft("");
-      setError(t("offline.feature.chat.body"));
+      setError(t("offline.feature.chat.title"));
       return;
     }
 

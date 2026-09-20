@@ -25,8 +25,10 @@ import { useT } from "@/components/i18n-provider";
 import { InstantLink } from "@/components/instant-link";
 import { LectureWorkspaceLoading } from "@/components/lecture-loading";
 import { LectureWorkspace } from "@/components/lecture-workspace";
+import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
-import { OfflineProvider, useOffline } from "@/components/offline/offline-provider";
+import { useOfflineRecheck } from "@/components/offline/offline-notice";
+import { OfflineProvider } from "@/components/offline/offline-provider";
 import { useIsHydrated } from "@/components/viewport-portal";
 import { resolveOfflineRoute, type OfflineRoute } from "@/lib/offline/paths";
 import {
@@ -50,14 +52,28 @@ type Resolved =
  */
 function OfflineUnavailable({ route }: { route: OfflineRoute }) {
   const t = useT();
-  const { recheck } = useOffline();
-  const [checking, setChecking] = useState(false);
+  const { checking, check } = useOfflineRecheck();
+  /*
+   * Leaving offline is a document navigation — the service worker answers it
+   * from the cache, but the page stays on screen until the new one paints, and
+   * without this the tap looked ignored for that whole beat.
+   */
+  const [leaving, setLeaving] = useState(false);
   const isMissingNote = route.kind === "lecture";
   const offersHome = isMissingNote || (route.kind === "unavailable" && route.backToHome);
 
+  /*
+   * Portalled onto the body, and that is not decoration. This variant is the
+   * whole screen and centres itself against the viewport, which `position:
+   * fixed` only does when no ancestor has made itself the containing block —
+   * and inside the shell one of them does: measured, the block landed at 39%
+   * of the screen rather than halfway. `MemoPortal` mounts outside the shell
+   * and carries the token block with it, so `--bg` and the safe-area insets
+   * still resolve out there.
+   */
   return (
-    <main className="home-dashboard pb-8">
-      <div className="memo-offline-note" role="status">
+    <MemoPortal>
+      <div className="memo-offline-note screen" role="status">
         <span className="memo-offline-note-icon" aria-hidden="true">
           <Msym name="wifi_off" size="1.2rem" fill={false} weight={500} />
         </span>
@@ -72,26 +88,33 @@ function OfflineUnavailable({ route }: { route: OfflineRoute }) {
           className="memo-offline-note-action"
           disabled={checking}
           onClick={() => {
-            setChecking(true);
-            void recheck().then((online) => {
+            void check().then((online) => {
               if (online) {
                 window.location.reload();
-                return;
               }
-
-              setChecking(false);
             });
           }}
         >
+          {checking ? (
+            <Msym name="progress_activity" className="memo-spin" size="1.05rem" />
+          ) : null}
           {t(checking ? "offline.checking" : "offline.checkAgain")}
         </button>
         {offersHome ? (
-          <InstantLink href="/app" className="memo-offline-note-link">
+          <InstantLink
+            href="/app"
+            className={`memo-offline-note-link ${leaving ? "busy" : ""}`.trim()}
+            aria-busy={leaving || undefined}
+            onClick={() => setLeaving(true)}
+          >
+            {leaving ? (
+              <Msym name="progress_activity" className="memo-spin" size="1.05rem" />
+            ) : null}
             {t("offline.backToNotes")}
           </InstantLink>
         ) : null}
       </div>
-    </main>
+    </MemoPortal>
   );
 }
 

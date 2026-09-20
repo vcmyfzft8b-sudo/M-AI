@@ -584,7 +584,7 @@ export const en: Messages = {
   "offline.checking": "Checking...",
   "offline.checkAgain": "Check again",
   "offline.backToNotes": "Back to my notes",
-  "offline.requestBlocked": "No connection. This needs the internet.",
+  "offline.requestBlocked": "This needs a connection.",
   "offline.screen.title": "You are offline",
   "offline.screen.body": "This screen needs the internet. Your saved notes are still here to read.",
   "offline.note.missingTitle": "This note is not saved for offline",

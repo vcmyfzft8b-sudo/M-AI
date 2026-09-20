@@ -313,3 +313,71 @@ test("the shell is fetched without the session cookie", () => {
     "it is served to whoever opens the app next, so it must carry nobody's data",
   );
 });
+
+/*
+ * The optimiser keys on width and quality as well as the source, so a screen
+ * asking for a size no other screen asks for misses even though the picture is
+ * right there. That is what put a broken-image frame in the middle of the
+ * memory palace, whose mascot is 110px wide and nothing else's is.
+ */
+test("a picture is found at another size when its own size was never cached", async () => {
+  const worker = loadWorker({
+    fetchImpl: async () => {
+      throw new TypeError("Load failed");
+    },
+  });
+  const cache = await worker.caches.open("memo-static-v1");
+  await cache.put(`${ORIGIN}/_next/image?url=%2Fmemo-mascot.png&w=640&q=75`, {
+    status: 200,
+    mascot: true,
+    vary: true,
+  });
+
+  const answer = await handleFetch(worker, {
+    url: `${ORIGIN}/_next/image?url=%2Fmemo-mascot.png&w=256&q=75`,
+    method: "GET",
+    mode: "no-cors",
+  });
+
+  assert.equal(answer.mascot, true, "a larger copy scaled down beats a broken image");
+});
+
+test("a picture served straight out of public/ is cached too", async () => {
+  const worker = loadWorker({
+    fetchImpl: async () => {
+      throw new TypeError("Load failed");
+    },
+  });
+  const cache = await worker.caches.open("memo-static-v1");
+  await cache.put(`${ORIGIN}/memo-mascot.png`, { status: 200, raw: true });
+
+  const answer = await handleFetch(worker, {
+    url: `${ORIGIN}/memo-mascot.png`,
+    method: "GET",
+    mode: "no-cors",
+  });
+
+  assert.equal(answer.raw, true, "the palace loads this one as a raw file for its minimap");
+});
+
+test("the pictures the app draws itself with are never trimmed away", async () => {
+  const worker = loadWorker();
+  const cache = await worker.caches.open("memo-static-v1");
+  await cache.put(`${ORIGIN}/memo-mascot.png`, { status: 200 });
+  await cache.put(`${ORIGIN}/memo-lockup.png`, { status: 200 });
+
+  for (let index = 0; index < 200; index += 1) {
+    await cache.put(`${ORIGIN}/notes/photo-${index}.png`, { status: 200 });
+  }
+
+  const waits = [];
+  worker.listeners.get("message")({
+    data: { type: "cache-build", urls: [] },
+    waitUntil: (value) => waits.push(value),
+  });
+  await Promise.all(waits);
+
+  const kept = (await cache.keys()).map((entry) => entry.url);
+  assert.ok(kept.includes(`${ORIGIN}/memo-mascot.png`));
+  assert.ok(kept.includes(`${ORIGIN}/memo-lockup.png`));
+});

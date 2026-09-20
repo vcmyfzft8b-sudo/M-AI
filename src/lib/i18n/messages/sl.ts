@@ -607,7 +607,7 @@ export const sl = {
   "offline.checking": "Preverjam...",
   "offline.checkAgain": "Preveri znova",
   "offline.backToNotes": "Nazaj na moje zapiske",
-  "offline.requestBlocked": "Ni povezave. Za to potrebuješ internet.",
+  "offline.requestBlocked": "Za to potrebuješ povezavo.",
   "offline.screen.title": "Nisi povezan",
   "offline.screen.body": "Ta zaslon potrebuje internet. Shranjeni zapiski so še vedno tu za branje.",
   "offline.note.missingTitle": "Ta zapisek ni shranjen za brez povezave",

@@ -18,6 +18,33 @@ export function stripUnstorableCharacters(value: string) {
 }
 
 /**
+ * Cut a string to a length without splitting an astral character in half.
+ *
+ * `slice` counts UTF-16 units, and an emoji is two of them. A cut that lands
+ * between the halves leaves a lone surrogate — precisely the character
+ * `stripUnstorableCharacters` exists to remove, recreated after the value has
+ * already been sanitized. One of those anywhere in a batch fails the whole
+ * insert with "invalid input syntax for type json", which is how a single
+ * emoji in one flashcard took down an entire deck three times on the same
+ * document.
+ *
+ * Note the pairing with `UNSTORABLE_CHARACTERS`, whose `u` flag deliberately
+ * leaves *paired* surrogates alone: valid emoji are meant to survive
+ * sanitization, so the truncation that follows has to keep them whole.
+ */
+export function truncateForDatabase(value: string, maxLength: number) {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  const cut = value.slice(0, maxLength);
+  const lastUnit = cut.charCodeAt(cut.length - 1);
+  const endsOnHighSurrogate = lastUnit >= 0xd800 && lastUnit <= 0xdbff;
+
+  return endsOnHighSurrogate ? cut.slice(0, -1) : cut;
+}
+
+/**
  * Deep-clean a value on its way into a `jsonb` column. Strings and object keys are stripped;
  * everything else is passed through unchanged.
  */

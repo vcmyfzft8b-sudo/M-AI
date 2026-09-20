@@ -247,9 +247,9 @@ export async function processStoredScanLecture(
           throw new Error(updateError.message);
         }
 
-        // Queued by the status write itself (migration 0053); this only asks
-        // for it to go out now instead of on the hourly sweep.
-        flushPushNotifications();
+        // Queued by the status write itself (migration 0053); this sends it
+        // now instead of on the hourly sweep. Awaited — see the note there.
+        await flushPushNotifications();
 
         return { needsNotesGeneration: false };
       }

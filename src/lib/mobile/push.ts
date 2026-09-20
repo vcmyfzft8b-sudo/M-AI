@@ -231,10 +231,22 @@ export async function deliverPendingPushNotifications(limit = 50) {
 }
 
 /**
- * Fire-and-forget for callers that have just finished a note and should not
- * wait on, or fail because of, a push.
+ * Drains the queue for a caller that has just finished a note.
+ *
+ * Awaited, and deliberately so. This was a floating promise, which on a
+ * serverless function is not background work at all: the instance is frozen
+ * the moment it answers, and the send simply never happens. Measured in
+ * production — two notes settled, the trigger queued both, and neither was
+ * ever claimed. Every notification would have waited for the hourly sweep,
+ * which for "your notes are ready" is most of the way to not having the
+ * feature, and close enough to the one-hour expiry to start losing them.
+ *
+ * It still never throws. A finished note is finished whether or not a phone
+ * can be reached, and the sweep is there for whatever this misses.
  */
-export function flushPushNotifications() {
+export async function flushPushNotifications() {
   if (!applePushConfigured()) return;
-  void deliverPendingPushNotifications().catch(() => { /* The sweep will retry. */ });
+  try {
+    await deliverPendingPushNotifications();
+  } catch { /* The hourly sweep will retry. */ }
 }

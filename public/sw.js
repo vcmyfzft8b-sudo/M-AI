@@ -32,7 +32,16 @@ const SHELL_URL = "/offline";
 const SHELL_CACHE_KEY = "/__memo_offline_shell";
 const SHELL_META_KEY = "/__memo_offline_shell_meta";
 
-/** Re-fetch the shell at most this often, and whenever the language changes. */
+/**
+ * The backstop on how long a cached shell may be trusted.
+ *
+ * It is a backstop and not the mechanism: what actually invalidates the shell
+ * is the build it was cut from changing, because a deploy is the only thing
+ * that makes it wrong. Left to an age alone, a shell cached at nine in the
+ * morning went on being served all day — so every screen reached with no
+ * connection was yesterday's app, while the same screens online were current.
+ * That is exactly the bug this constant used to be.
+ */
 const SHELL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /**
@@ -205,7 +214,7 @@ self.addEventListener("message", (event) => {
   const data = event.data || {};
 
   if (data.type === "cache-shell") {
-    event.waitUntil(cacheOfflineShell(data.locale, data.strings, data.fonts));
+    event.waitUntil(cacheOfflineShell(data.locale, data.strings, data.fonts, data.build));
     return;
   }
 
@@ -346,7 +355,7 @@ async function trimCache(cache, currentBuildUrls) {
  * one language, so a reader who switches gets a fresh copy rather than an
  * offline app that speaks the language they left.
  */
-async function cacheOfflineShell(locale, strings, fonts) {
+async function cacheOfflineShell(locale, strings, fonts, build) {
   const cache = await caches.open(CACHE);
 
   /*
@@ -380,9 +389,15 @@ async function cacheOfflineShell(locale, strings, fonts) {
 
   const meta = await readShellMeta(cache);
 
+  /*
+   * `meta.build` is the page's own runtime chunk, whose name carries a content
+   * hash — so it changes on every deploy and on no other occasion. A shell cut
+   * from a different build is stale no matter how recently it was fetched.
+   */
   if (
     meta &&
     meta.locale === locale &&
+    meta.build === build &&
     Date.now() - meta.cachedAt < SHELL_MAX_AGE_MS &&
     (await cache.match(SHELL_CACHE_KEY))
   ) {
@@ -419,7 +434,9 @@ async function cacheOfflineShell(locale, strings, fonts) {
   }));
   await cache.put(
     SHELL_META_KEY,
-    new Response(JSON.stringify({ locale, cachedAt: Date.now(), strings: strings || null })),
+    new Response(
+      JSON.stringify({ locale, build: build || null, cachedAt: Date.now(), strings: strings || null }),
+    ),
   );
 
   await Promise.all(
@@ -524,6 +541,18 @@ self.addEventListener("activate", (event) => {
 
       const names = await caches.keys();
       await Promise.all(names.filter((name) => name !== CACHE).map((name) => caches.delete(name)));
+
+      /*
+       * A new worker means this file changed, which means a deploy — and the
+       * shell it cached belongs to the deploy before it. Dropping it here is
+       * what gets an app that is already out there unstuck on its next online
+       * launch, rather than on whatever launch happens to fall after the age
+       * limit. The page hands over a fresh one moments later.
+       */
+      const cache = await caches.open(CACHE);
+      await cache.delete(SHELL_CACHE_KEY).catch(() => {});
+      await cache.delete(SHELL_META_KEY).catch(() => {});
+
       await self.clients.claim();
     })(),
   );

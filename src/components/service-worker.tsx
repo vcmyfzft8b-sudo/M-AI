@@ -36,64 +36,88 @@ export function ServiceWorkerRegistration() {
       return;
     }
 
+    /*
+     * The same handover, run again whenever a different worker takes control.
+     *
+     * On the launch after a deploy there are two of them for a moment — the
+     * one that was already installed, and the new one skipping the queue — and
+     * `ready` can hand back either. Tell only the outgoing one and the deploy's
+     * fresh shell waits for the launch after this, which is how a stale offline
+     * app survived a release. Registered before the first send so the change
+     * cannot slip between them.
+     */
+    const handOver = async () => {
+      const worker = (await navigator.serviceWorker.ready).active;
+
+      if (!worker) {
+        return;
+      }
+
+      const resources = performance
+        .getEntriesByType("resource")
+        .map((entry) => entry.name);
+      /* Build output, and the optimiser's copies of the app's own pictures. */
+      const urls = resources.filter(
+        (name) =>
+          name.includes("/_next/static/") || name.includes("/_next/image?"),
+      );
+
+      if (urls.length > 0) {
+        worker.postMessage({ type: "cache-build", urls });
+      }
+
+      /*
+       * And the icon font, for the same reason and with the same problem:
+       * a worker does not control the page that registers it, so the launch
+       * that installs it fetches the font around it. Every glyph in this app
+       * is a ligature, so a cold offline launch without it is captioned with
+       * the names of its own icons — "arrow_back" where the arrow goes.
+       */
+      const fonts = resources.filter((name) =>
+        /^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(name),
+      );
+
+      /*
+       * The runtime chunk, whose filename carries a content hash: it is on
+       * every page and its name changes on every deploy and on nothing
+       * else. The worker keeps it beside the shell and re-fetches when the
+       * two disagree — without it a cached shell outlived its own build and
+       * every offline screen was the previous deploy's.
+       */
+      const build = resources.find((name) =>
+        /\/_next\/static\/chunks\/webpack-[^/]+\.js$/.test(name),
+      );
+
+      /*
+       * And the offline shell, which the worker fetches for itself — this page
+       * is not it. The language goes with the request because the shell is
+       * server-rendered in one, and so do the three strings of the worker's
+       * own last-resort page, which is plain HTML built in the worker and has
+       * no other way to reach a catalogue.
+       */
+      worker.postMessage({
+        type: "cache-shell",
+        build,
+        fonts,
+        locale,
+        strings: {
+          title: t("offline.screen.title"),
+          body: t("offline.screen.body"),
+          retry: t("common.retry"),
+        },
+      });
+    };
+
     // After load, so registering never competes with the first paint it exists
     // to protect.
     const register = () => {
+      navigator.serviceWorker.addEventListener(
+        "controllerchange",
+        () => void handOver(),
+      );
       navigator.serviceWorker
         .register("/sw.js")
-        .then(async () => {
-          /*
-           * Hand the worker the build files this page just used. It cannot
-           * catch them itself: it does not control the page that registers it,
-           * so on this launch every asset is fetched around it. Without this
-           * the next launch opens an empty cache and the white frame it exists
-           * to remove is still there.
-           */
-          const worker = (await navigator.serviceWorker.ready).active;
-
-          if (!worker) {
-            return;
-          }
-
-          const resources = performance.getEntriesByType("resource").map((entry) => entry.name);
-          /* Build output, and the optimiser's copies of the app's own pictures. */
-          const urls = resources.filter(
-            (name) => name.includes("/_next/static/") || name.includes("/_next/image?"),
-          );
-
-          if (urls.length > 0) {
-            worker.postMessage({ type: "cache-build", urls });
-          }
-
-          /*
-           * And the icon font, for the same reason and with the same problem:
-           * a worker does not control the page that registers it, so the launch
-           * that installs it fetches the font around it. Every glyph in this app
-           * is a ligature, so a cold offline launch without it is captioned with
-           * the names of its own icons — "arrow_back" where the arrow goes.
-           */
-          const fonts = resources.filter((name) =>
-            /^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(name),
-          );
-
-          /*
-           * And the offline shell, which the worker fetches for itself — this
-           * page is not it. The language goes with the request because the
-           * shell is server-rendered in one, and so do the three strings of
-           * the worker's own last-resort page, which is plain HTML built in
-           * the worker and has no other way to reach a catalogue.
-           */
-          worker.postMessage({
-            type: "cache-shell",
-            fonts,
-            locale,
-            strings: {
-              title: t("offline.screen.title"),
-              body: t("offline.screen.body"),
-              retry: t("common.retry"),
-            },
-          });
-        })
+        .then(handOver)
         .catch(() => {});
     };
 

@@ -381,3 +381,68 @@ test("the pictures the app draws itself with are never trimmed away", async () =
   assert.ok(kept.includes(`${ORIGIN}/memo-mascot.png`));
   assert.ok(kept.includes(`${ORIGIN}/memo-lockup.png`));
 });
+
+/*
+ * The shell is the entry point for every screen reached with no connection, so
+ * a stale one means the whole offline app is the previous deploy — which is
+ * what shipped: a shell cached in the morning was still being served that
+ * evening, while the same screens online were current. Age alone cannot see a
+ * deploy; the build token can.
+ */
+test("a shell cut from a different build is replaced, however recently it was cached", async () => {
+  let fetched = 0;
+  const worker = loadWorker({
+    fetchImpl: async () => {
+      fetched += 1;
+      return {
+        status: 200,
+        type: "basic",
+        redirected: false,
+        clone: () => ({ text: async () => "<html></html>" }),
+        headers: new Map(),
+      };
+    },
+  });
+  const cache = await worker.caches.open("memo-static-v1");
+  await cache.put("/__memo_offline_shell", { status: 200 });
+  await cache.put("/__memo_offline_shell_meta", {
+    status: 200,
+    json: async () => ({ locale: "sl", build: "webpack-OLD.js", cachedAt: Date.now() }),
+  });
+
+  const send = async (build) => {
+    const waits = [];
+    worker.listeners.get("message")({
+      data: { type: "cache-shell", locale: "sl", build, fonts: [] },
+      waitUntil: (value) => waits.push(value),
+    });
+    await Promise.all(waits);
+  };
+
+  await send("webpack-OLD.js");
+  assert.equal(fetched, 0, "same build, cached minutes ago: nothing to do");
+
+  await send("webpack-NEW.js");
+  assert.ok(fetched > 0, "a new build must refetch the shell even though it is fresh");
+});
+
+/*
+ * And for apps already out there carrying a stale shell: a new worker means
+ * this file changed, which means a deploy, so the shell it cached belongs to
+ * the deploy before it.
+ */
+test("activating a new worker drops the shell the old one cached", async () => {
+  const worker = loadWorker();
+  const cache = await worker.caches.open("memo-static-v1");
+  await cache.put("/__memo_offline_shell", { status: 200, stale: true });
+  await cache.put("/__memo_offline_shell_meta", { status: 200 });
+  await cache.put(`${ORIGIN}/_next/static/chunks/keep.js`, { status: 200 });
+
+  const waits = [];
+  worker.listeners.get("activate")({ waitUntil: (value) => waits.push(value) });
+  await Promise.all(waits);
+
+  const kept = (await cache.keys()).map((entry) => entry.url);
+  assert.ok(!kept.some((url) => url.includes("__memo_offline_shell")), "both shell entries go");
+  assert.ok(kept.some((url) => url.endsWith("keep.js")), "the build cache is untouched");
+});

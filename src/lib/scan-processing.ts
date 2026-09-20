@@ -1,6 +1,7 @@
 import "server-only";
 
 import { MAX_SCAN_IMAGE_BYTES, STORAGE_BUCKET } from "@/lib/constants";
+import { flushPushNotifications } from "@/lib/mobile/push";
 import { LectureNoLongerExistsError } from "@/lib/lecture-processing-errors";
 import { extractTextFromImage, prepareLectureFromTextSource } from "@/lib/manual-lectures";
 import {
@@ -245,6 +246,10 @@ export async function processStoredScanLecture(
         if (updateError) {
           throw new Error(updateError.message);
         }
+
+        // Queued by the status write itself (migration 0053); this only asks
+        // for it to go out now instead of on the hourly sweep.
+        flushPushNotifications();
 
         return { needsNotesGeneration: false };
       }

@@ -32,6 +32,7 @@ import {
   attachDocumentImagesToNotes,
   getStoredDocumentImagesFromMetadata,
 } from "@/lib/document-note-media";
+import { flushPushNotifications } from "@/lib/mobile/push";
 import { captureBackgroundError } from "@/lib/monitoring";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
 import { withNoteEnrichmentStage } from "@/lib/note-enrichment-status";
@@ -1936,6 +1937,12 @@ export async function createLectureFromTextSource(params: {
     if (!updatedLecture) {
       await requireActiveLecture(lectureId);
     }
+
+    // The status write above has already queued the notification (migration
+    // 0053). This only asks for it to go out now rather than on the hourly
+    // sweep, and it deliberately neither waits nor throws: a finished note is
+    // finished whether or not a phone can be reached.
+    flushPushNotifications();
 
     return lectureId;
   } catch (error) {

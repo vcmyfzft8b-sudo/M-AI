@@ -2161,4 +2161,16 @@ export const sl = {
   "native.giftHelp": "Memo trenutno ne omogoča podarjanja naročnine v App Store. Vsaka oseba naj uporablja svoj račun Memo in svoj račun Apple. Spletnih darilnih ali promocijskih kod ni mogoče uporabiti pri nakupu v App Store.",
   "native.micDenied": "Memo potrebuje dostop do mikrofona. Dovoli ga v Nastavitvah iOS → Memo AI → Mikrofon.",
   "native.appleDisconnectLink": "Oglej si navodila Apple",
+
+  // Potisna obvestila. Besedilo vidi bralec na zaklenjenem zaslonu, zato je
+  // kratko in brez imena aplikacije: to iOS izpiše sam.
+  "push.noteReady.title": "Zapiski so pripravljeni",
+  "push.noteReady.body": "{title} te čaka za učenje.",
+  "push.noteFailed.title": "Zapiskov nismo dokončali",
+  "push.noteFailed.body": "Odpri Memo in poskusi {title} znova.",
+  "push.untitledNote": "Tvoj zapisek",
+  "push.enableTitle": "Naj ti sporočimo, ko bo končano?",
+  "push.enableBody": "Zapiski nastajajo nekaj minut. Telefon lahko odložiš — obvestili te bomo, ko bodo pripravljeni.",
+  "push.enableAllow": "Obvesti me",
+  "push.enableSkip": "Ne, hvala",
 };

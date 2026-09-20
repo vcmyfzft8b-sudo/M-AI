@@ -59,6 +59,7 @@ import { createPortal } from "react-dom";
 
 import { LecturePodcast } from "@/components/lecture-podcast";
 import { StudyGenerationNotice } from "@/components/generation-notice";
+import { PushPrompt } from "@/components/push-prompt";
 import { LectureMindmap } from "@/components/lecture-mindmap";
 import { LecturePalace } from "@/components/lecture-palace";
 import { palacePreparation } from "@/lib/palace/preparation";
@@ -6189,6 +6190,9 @@ export function LectureWorkspace({
   return (
     <>
       {navigationOverlay}
+      {/* The one moment asking for notifications makes sense: a note is being
+          made and the reader is watching it happen. */}
+      <PushPrompt active={detail.lecture.status !== "ready" && detail.lecture.status !== "failed"} />
       <div className="memo-note-screen" data-note-tab={activeTabId}>
         {/* Phone chrome: back, the note's emoji, and the actions menu. */}
         <div className="memo-m-navbar memo-only-mobile flex">

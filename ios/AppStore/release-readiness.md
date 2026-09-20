@@ -1,4 +1,68 @@
-# iOS release readiness — 18 September 2026 update
+# iOS release readiness — 20 September 2026 update
+
+## 20 September 2026 — App Review compliance sweep
+
+A full pass over the wrapper, the project configuration and the App Store
+Connect record against Apple's review requirements. What the sweep changed:
+
+| Item | Before | Now |
+| --- | --- | --- |
+| Privacy manifest, required-reason APIs | Declared `NSPrivacyAccessedAPICategoryUserDefaults` only. `LectureRecorder.stop()` calls `FileManager.attributesOfItem(atPath:)` for the take's byte count, which is on Apple's required-reason list whatever attribute is read — an undeclared use comes back as **ITMS-91053** after upload. | `NSPrivacyAccessedAPICategoryFileTimestamp` declared with reason `C617.1` (metadata of a file in the app's own container). Verified in the built bundle's `PrivacyInfo.xcprivacy`. |
+| Recordings and iCloud backup | The `Recordings` folder sat in Application Support with no backup flag, so a take waiting to upload — up to ~43 MB for a three-hour lecture — would go into the user's iCloud backup, against Apple's data-storage guidelines. | The folder is created with `isExcludedFromBackup`. |
+
+Verified unchanged and correct (no action needed):
+
+- **3.1.1 / 3.1.3(b):** no Stripe path is reachable under the native user
+  agent. `/api/billing/*` navigations are cancelled in the wrapper, the
+  Stripe checkout and billing hosts are refused even on a user tap, and all
+  60 `tests/mobile-*.test.mjs` guards pass.
+- **3.1.2:** the paywall states the plan, period and price from StoreKit's own
+  `displayPrice`, carries "Renews automatically until cancelled in your Apple
+  subscription settings", and has Restore purchases, terms of use and privacy
+  policy next to the buy button. Settings also has Restore and Manage Apple
+  subscriptions. The App Store description repeats the full renewal wording.
+- **4.8:** Sign in with Apple is offered alongside Google and e-mail, and
+  account deletion revokes the Apple grant (`revokeAppleAccountGrants`).
+- **5.1.1(v):** account deletion is in Settings, in-app, and the sheet says
+  deletion does not cancel an Apple subscription.
+- **5.1.1 / 5.1.2:** microphone, camera and photo-library purpose strings are
+  present and localized into all five shipped languages; the AI-processing
+  consent gate is explicit and withdrawable.
+- **2.1 / 2.3:** icon is 1024×1024 with no alpha; launch screen present;
+  `ITSAppUsesNonExemptEncryption=false`; `audio` background mode is genuinely
+  used by the recorder and the session is deactivated on stop; the privacy
+  manifest, all five `.lproj` folders and the Live Activity extension are in
+  the built bundle; `xcodebuild`'s `-validate-for-store` pass succeeds.
+- App Store Connect record: age rating answered (4+), categories set
+  (Education / Productivity), support, marketing and privacy-policy URLs all
+  answer 200, review contact and demo account saved, review notes describe the
+  code sign-in, the purchases and the deletion path, all four subscriptions at
+  group level 1 and READY_TO_SUBMIT with review screenshots COMPLETE.
+
+Still open, and not fixable from here:
+
+1. **App Privacy questionnaire** — still unanswered, and there is no API for
+   it. Derive it from `ios/MemoAI/PrivacyInfo.xcprivacy`; never "Data Not
+   Collected".
+2. **Attach the four subscriptions to version 1.0** — browser only.
+3. **Content Rights declaration** is `null` on the app record. It must be
+   answered before the version can be submitted, and it is the account
+   holder's declaration to make.
+4. **Version 1.0 still has build 1 attached.** Builds 2–4 are uploaded and
+   VALID; `CURRENT_PROJECT_VERSION` is 5 and has not been archived. Build 1
+   predates the native recorder, the Lock Screen banner and offline mode, so
+   it is the wrong binary to submit and also understates the app's native
+   surface against guideline 4.2.
+5. **Device checks** (microphone, tutor, Sandbox purchase lifecycle, restore,
+   Manage Apple subscriptions, locked-screen recording) are still unrun.
+
+Prices: Apple bills every customer in their own storefront currency. The
+subscriptions are 19.99 / 129.99 in each territory checked, which is **€19.99
+and €129.99 in Slovenia, Croatia and Germany** and $19.99 / $129.99 on the US
+storefront. There is no setting that shows euros to a US buyer; the only lever
+is restricting availability to euro territories. Dollar prices seen while
+testing come from the simulator's US storefront, which is a known gotcha —
+`ios/MemoAIUITests/Offers.storekit` is already pinned to `_storefront: SVN`.
 
 ## 18 September 2026
 

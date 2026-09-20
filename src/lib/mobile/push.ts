@@ -16,6 +16,18 @@ import { applePushConfigured, sendApplePush, type PushEnvironment } from "@/lib/
 
 const DEVICE_LIMIT = 10;
 
+/**
+ * How late a notification may be and still be worth sending.
+ *
+ * "Your notes are ready" is only true-feeling while it is news. An hour covers
+ * every ordinary delay — a failed send, a missed flush, the hourly sweep — and
+ * excludes the case that would otherwise be embarrassing: the trigger queues
+ * rows whether or not APNs is configured, so the day the key is first
+ * installed there may be weeks of settled notes sitting in the queue. Without
+ * this, turning the feature on would buzz every user once per old note.
+ */
+const STALE_AFTER_MS = 60 * 60 * 1000;
+
 export type PushKind = "note_ready" | "note_failed";
 
 function asLocale(value: string | null | undefined): Locale {
@@ -110,13 +122,25 @@ export async function deliverPendingPushNotifications(limit = 50) {
   if (!applePushConfigured()) return result;
 
   const supabase = createSupabaseServiceRoleClient();
+  const horizon = new Date(Date.now() - STALE_AFTER_MS).toISOString();
+
+  // Anything past the horizon is retired unsent, in one statement, before the
+  // sending starts. It is not a failure and it is not worth a row-by-row pass:
+  // the notification simply expired.
+  await supabase
+    .from("push_queue")
+    .update({ sent_at: new Date().toISOString(), last_error: "expired" } as never)
+    .is("sent_at", null)
+    .lt("created_at", horizon);
+
   const { data: pending } = await supabase
     .from("push_queue")
     .select("id, user_id, lecture_id, kind, attempts")
     .is("sent_at", null)
-    // Six attempts over an hourly sweep is most of a day of retrying. Past
-    // that the notification is stale enough that delivering it is worse than
-    // not: nobody wants to hear a note finished yesterday.
+    .gt("created_at", horizon)
+    // Six attempts over an hourly sweep is more retrying than an hour's
+    // horizon can use; the cap is there for a row that somehow keeps failing
+    // fast, so it cannot spin.
     .lt("attempts", 6)
     .order("created_at", { ascending: true })
     .limit(limit)

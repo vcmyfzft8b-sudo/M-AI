@@ -43,6 +43,7 @@ function fakeSupabase(resolve) {
       eq(column, value) { state.filters.push(["eq", column, value]); return self; },
       is(column, value) { state.filters.push(["is", column, value]); return self; },
       lt(column, value) { state.filters.push(["lt", column, value]); return self; },
+      gt(column, value) { state.filters.push(["gt", column, value]); return self; },
       order() { return self; },
       limit() { return self; },
       returns() { return self; },
@@ -87,12 +88,19 @@ function loadPush({ resolve, send }) {
   return { push: context.exports, sent, log };
 }
 
+/** Writes aimed at a single queue row, as opposed to the time-bounded expiry sweep. */
+function rowWrites(log) {
+  return log.filter((entry) => entry.table === "push_queue" && entry.verb === "update"
+    && entry.filters.some(([op, name]) => op === "eq" && name === "id"));
+}
+
 const PENDING_ROW = { id: "row-1", user_id: "user-1", lecture_id: LECTURE, kind: "note_ready", attempts: 0 };
 
 /** Answers the four queries a single successful delivery makes. */
 function standardResolve(overrides = {}) {
   return (state) => {
     if (state.table === "push_queue" && state.verb === "select") return { data: overrides.pending ?? [PENDING_ROW] };
+    if (state.table === "push_queue" && state.verb === "update" && !state.single) return { data: null };
     if (state.table === "push_queue" && state.verb === "update" && state.single) {
       return { data: overrides.claim === null ? null : { id: "row-1" } };
     }
@@ -117,7 +125,7 @@ test("a finished note is sent to the device, in the device's own language", asyn
   // The tap has to be able to find the note again.
   assert.deepEqual({ ...loaded.sent[0].alert.data }, { lectureId: LECTURE });
 
-  const marked = loaded.log.find((entry) => entry.table === "push_queue" && entry.verb === "update" && entry.payload?.sent_at);
+  const marked = rowWrites(loaded.log).find((entry) => entry.payload?.sent_at);
   assert.ok(marked, "the row is marked sent");
 });
 
@@ -153,7 +161,7 @@ test("a dead token is disabled, and the row is not left pending forever", async 
   // Every device was dead, so there is nobody left to tell: retire, not retry.
   assert.equal(outcome.skipped, 1);
   assert.equal(outcome.failed, 0);
-  const marked = loaded.log.find((entry) => entry.table === "push_queue" && entry.payload?.sent_at);
+  const marked = rowWrites(loaded.log).find((entry) => entry.payload?.sent_at);
   assert.equal(marked.payload.last_error, "no live device");
 });
 
@@ -174,7 +182,7 @@ test("a transient failure leaves the row pending for the next sweep", async () =
   });
   const outcome = await loaded.push.deliverPendingPushNotifications();
   assert.equal(outcome.failed, 1);
-  const writes = loaded.log.filter((entry) => entry.table === "push_queue" && entry.verb === "update");
+  const writes = rowWrites(loaded.log);
   // The claim, then the error — and never a `sent_at`, which would retire it.
   assert.ok(writes.every((entry) => !entry.payload?.sent_at));
   assert.equal(writes.at(-1).payload.last_error, "HTTP 503");
@@ -193,7 +201,7 @@ test("a row another worker already claimed is left alone", async () => {
 test("the claim is a compare-and-swap on the attempt count", async () => {
   const loaded = loadPush({ resolve: standardResolve(), send: () => ({ status: "sent", environment: "production" }) });
   await loaded.push.deliverPendingPushNotifications();
-  const claim = loaded.log.find((entry) => entry.table === "push_queue" && entry.verb === "update" && entry.single);
+  const claim = rowWrites(loaded.log).find((entry) => entry.single);
   assert.equal(claim.payload.attempts, 1);
   assert.deepEqual(claim.filters, [["eq", "id", "row-1"], ["eq", "attempts", 0]]);
 });
@@ -362,4 +370,23 @@ test("every language can describe a finished and a failed note", () => {
     assert.match(catalogue["push.noteReady.body"], /\{title\}/, `${name} drops the note title`);
     assert.match(catalogue["push.noteFailed.body"], /\{title\}/, `${name} drops the note title`);
   }
+});
+
+test("a notification nobody could be told about in an hour expires instead of arriving late", async () => {
+  const loaded = loadPush({ resolve: standardResolve(), send: () => ({ status: "sent", environment: "production" }) });
+  await loaded.push.deliverPendingPushNotifications();
+
+  // The sweep runs before anything is claimed, and it is bounded by time
+  // rather than by row, so enabling push on a backlog cannot buzz a phone
+  // once per note finished last month.
+  const expiry = loaded.log.find((entry) => entry.table === "push_queue" && entry.payload?.last_error === "expired");
+  assert.ok(expiry, "stale rows are retired");
+  assert.ok(expiry.payload.sent_at, "and retired as settled, not left pending");
+  const [verb, column] = expiry.filters.find(([, name]) => name === "created_at") ?? [];
+  assert.equal(verb, "lt");
+  assert.equal(column, "created_at");
+
+  // And the read for live work only looks forward of the same horizon.
+  const read = loaded.log.find((entry) => entry.table === "push_queue" && entry.verb === "select");
+  assert.ok(read.filters.some(([op, name]) => op === "gt" && name === "created_at"), "the send skips stale rows too");
 });

@@ -1,4 +1,14 @@
-# Memo AI iOS — handoff for the next agent (updated 18 September 2026)
+# Memo AI iOS — handoff for the next agent (updated 20 September 2026)
+
+> **20 September, compliance sweep.** The wrapper was audited end to end
+> against Apple's review requirements; see the top of
+> `ios/AppStore/release-readiness.md`. Two real gaps were found and fixed in
+> the binary (the privacy manifest was missing the file-timestamp
+> required-reason declaration, which would have produced ITMS-91053; lecture
+> takes were not excluded from iCloud backup). Everything else in the list
+> below still stands, plus one item it did not have: the app record's
+> **Content Rights declaration is `null`** and must be answered before the
+> version can be submitted.
 
 Read this before `docs/ios-app.md` (setup reference) and `ios/AppStore/release-readiness.md` (evidence log).
 

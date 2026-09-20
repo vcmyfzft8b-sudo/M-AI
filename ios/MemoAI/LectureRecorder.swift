@@ -301,8 +301,16 @@ final class LectureRecorder: NSObject, AVAudioRecorderDelegate {
     private static func directory() throws -> URL {
         let base = try FileManager.default.url(
             for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        let directory = base.appendingPathComponent("Recordings", isDirectory: true)
+        var directory = base.appendingPathComponent("Recordings", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        // Apple's data-storage guidelines: only what the user would want kept
+        // may be backed up. A take here is working data on its way to the
+        // server — deleted as soon as the page has collected it, and swept on
+        // the next launch if it never was — so hours of audio have no business
+        // in a user's iCloud backup.
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? directory.setResourceValues(values)
         return directory
     }
 

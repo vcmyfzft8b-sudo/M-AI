@@ -12,6 +12,22 @@
 				<string>CA92.1</string>
 			</array>
 		</dict>
+		<!--
+		  `FileManager.attributesOfItem(atPath:)` is on Apple's required-reason
+		  list, whichever attribute is actually read. The recorder reads one:
+		  the byte count of the finished take, so the page knows how many
+		  chunks to collect. The file is the app's own, inside the app
+		  container, which is exactly what C617.1 covers. Undeclared, the
+		  upload comes back with ITMS-91053.
+		-->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
 	</array>
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>

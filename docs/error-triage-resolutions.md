@@ -976,11 +976,19 @@ Two candidate triggers remain, and they need opposite responses:
    notes, that possibility has to be excluded before anything is papered over. Nothing in this one
    event proves or disproves it.
 
-Do not ship the `useIsHydrated` guard until (2) is ruled out. **The cheapest way to rule it out** is
-to check whether any production HTML document response for `/app` ever carries a cacheable
-`cache-control` or an edge `x-vercel-cache: HIT`, and to read the `x-pathname`/`x-matched-path`
-headers on a few real `/app` navigations. If `/app` is uncacheable at the edge, (1) is the answer
-and the guard is correct and narrow — it only changes behaviour in the case that is already broken.
+**(2) is most of the way to being ruled out, but not all of it.** A production `GET /app` under an
+iOS Safari user agent answers `cache-control: private, no-cache, no-store, max-age=0,
+must-revalidate` with `x-vercel-cache: MISS`, `x-matched-path: /app` and
+`vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch`. So the
+edge is not holding `/app` documents and is keyed on the RSC headers. **The caveat is that this is
+the unauthenticated response** — a 307 to `/` — so it shows the headers the route sets, not the
+headers on the signed-in HTML the learner actually received. Repeating it with a session cookie
+would close the question; `PREVIEW_TEST_EMAIL` was not available to the run that wrote this.
+
+On that evidence (1) is the likelier trigger, and the `useIsHydrated` guard is correct and narrow —
+it only changes behaviour in the case that is already broken, because whenever `initialPathname`
+and `usePathname()` agree it renders exactly what it renders today. It is still not worth shipping
+blind: it would be unverifiable against this failure, since nothing here reproduces it.
 
 ### For future runs
 

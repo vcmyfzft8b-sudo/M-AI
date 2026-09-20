@@ -424,9 +424,12 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                 webView.load(URLRequest(url: AppConfiguration.origin.appendingPathComponent("auth/continue")))
                 return
             }
+            // The marketing page has no place in the app. It is rewritten to
+            // the same entry point the app launches on, which sorts a resumed
+            // session, a fresh install and a signed-out return between them.
             if url.path == "/" {
                 decisionHandler(.cancel)
-                webView.load(URLRequest(url: AppConfiguration.origin.appendingPathComponent("auth/continue")))
+                webView.load(URLRequest(url: AppConfiguration.startURL))
                 return
             }
             if url.path.hasPrefix("/api/billing/") { decisionHandler(.cancel); return }

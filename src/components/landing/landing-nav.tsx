@@ -118,7 +118,7 @@ export function LandingNav() {
           <span className="landing-v2-nav-desktop-only">
             <LandingLanguagePicker />
           </span>
-          <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-nav landing-cta-light">
+          <LandingLoadingLink href="/onboarding" className="landing-cta landing-cta-nav landing-cta-light">
             {t("landing.cta.tryFree")}
           </LandingLoadingLink>
           <button
@@ -182,7 +182,7 @@ export function LandingNav() {
             <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-dark">
               {t("landing.cta.signIn")}
             </LandingLoadingLink>
-            <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-light">
+            <LandingLoadingLink href="/onboarding" className="landing-cta landing-cta-hero landing-cta-light">
               {t("landing.cta.tryFree")}
             </LandingLoadingLink>
           </div>

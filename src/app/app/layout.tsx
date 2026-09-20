@@ -10,12 +10,26 @@ import { getViewerAppState } from "@/lib/billing";
 import { PREVIEW_AUTH_BYPASS_USER_ID, requireUser } from "@/lib/auth";
 import { readActiveTestPersona } from "@/lib/test-persona-server";
 import { isNativeUserAgent } from "@/lib/mobile/runtime";
+import { claimPendingOnboarding } from "@/lib/onboarding-anonymous";
 
 export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  /*
+   * Before anything reads the profile, and deliberately not inside the
+   * `Promise.all` below.
+   *
+   * Someone who answered the survey on their way in has those answers sitting
+   * in a cookie, not on their profile, and `getViewerAppState` is memoised for
+   * the whole request — so a claim made after it, anywhere, would be invisible
+   * to the render that has to decide whether to ask the survey again. Costs a
+   * cookie lookup and nothing else on the requests that have no claim to make,
+   * which is almost all of them.
+   */
+  await claimPendingOnboarding();
+
   const [user, appState, headerStore] = await Promise.all([
     requireUser(),
     getViewerAppState(),

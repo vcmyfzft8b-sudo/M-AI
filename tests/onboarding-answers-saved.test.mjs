@@ -31,6 +31,27 @@ import {
 } from "../src/lib/onboarding-options.ts";
 import { LOCALES } from "../src/lib/i18n/locales.ts";
 import { en } from "../src/lib/i18n/messages/en.ts";
+import {
+  onboardingSubmissionSchema,
+} from "../src/lib/onboarding-submission.ts";
+
+/**
+ * A minimal submission the schema accepts, so a test can change one field and
+ * ask whether that field alone is the reason it was refused.
+ */
+function submission(overrides = {}) {
+  return {
+    educationLevel: "high_school",
+    currentAverageGrade: "3,5",
+    targetGrade: "4,5",
+    studyGoal: "Boljse ocene.",
+    ...overrides,
+  };
+}
+
+function accepts(value) {
+  return onboardingSubmissionSchema.safeParse(value).success;
+}
 
 /**
  * Every answer the survey can give has somewhere to land.
@@ -71,23 +92,33 @@ test("each answer is validated against the list the survey actually renders", ()
    * makes that unrepresentable, and this is the test that keeps it that way.
    */
   const pairings = [
-    ["heardFrom", "HEARD_FROM_VALUES", "SOURCE_OPTIONS"],
-    ["audience", "AUDIENCE_VALUES", "AUDIENCE_OPTIONS"],
-    ["role", "ROLE_VALUES", "ROLE_OPTIONS"],
-    ["schoolLevel", "SCHOOL_LEVEL_VALUES", null],
-    ["schoolYear", "SCHOOL_YEAR_VALUES", null],
-    ["subject", "SUBJECT_VALUES", "SUBJECT_OPTIONS"],
-    ["motivation", "MOTIVATION_VALUES", "MOTIVATION_OPTIONS"],
-    ["feature", "FEATURE_VALUES", "FEATURE_OPTIONS"],
-    ["classFocus", "CLASS_FOCUS_VALUES", "CLASS_FOCUS_OPTIONS"],
-    ["dailyGoal", "DAILY_GOAL_VALUES", "DAILY_GOAL_OPTIONS"],
+    ["heardFrom", "HEARD_FROM_VALUES", "SOURCE_OPTIONS", HEARD_FROM_VALUES],
+    ["audience", "AUDIENCE_VALUES", "AUDIENCE_OPTIONS", AUDIENCE_VALUES],
+    ["role", "ROLE_VALUES", "ROLE_OPTIONS", ROLE_VALUES],
+    ["schoolLevel", "SCHOOL_LEVEL_VALUES", null, SCHOOL_LEVEL_VALUES],
+    ["schoolYear", "SCHOOL_YEAR_VALUES", null, SCHOOL_YEAR_VALUES],
+    ["subject", "SUBJECT_VALUES", "SUBJECT_OPTIONS", SUBJECT_VALUES],
+    ["motivation", "MOTIVATION_VALUES", "MOTIVATION_OPTIONS", MOTIVATION_VALUES],
+    ["feature", "FEATURE_VALUES", "FEATURE_OPTIONS", FEATURE_VALUES],
+    ["classFocus", "CLASS_FOCUS_VALUES", "CLASS_FOCUS_OPTIONS", CLASS_FOCUS_VALUES],
+    ["dailyGoal", "DAILY_GOAL_VALUES", "DAILY_GOAL_OPTIONS", DAILY_GOAL_VALUES],
   ];
 
-  for (const [answer, tuple, list] of pairings) {
-    assert.match(
-      ROUTE,
-      new RegExp(`${answer}: z\\.enum\\(${tuple}\\)`),
-      `the route does not validate "${answer}" against ${tuple}`,
+  for (const [answer, , list, accepted] of pairings) {
+    // Put every accepted value through the validator itself rather than
+    // reading the route's source for a `z.enum` that may not live there any
+    // more — it is shared with the anonymous route now — and, more to the
+    // point, so the test fails when the schema stops accepting a value rather
+    // than when somebody reformats the line that declares it.
+    for (const value of accepted) {
+      assert.ok(
+        accepts(submission({ answers: { [answer]: value } })),
+        `"${answer}" does not accept ${value}, which the survey offers`,
+      );
+    }
+    assert.ok(
+      !accepts(submission({ answers: { [answer]: "not-an-option" } })),
+      `"${answer}" accepts a value that is not on any list`,
     );
 
     if (list) {
@@ -154,12 +185,6 @@ test("every school and year the survey can reach is a value the endpoint accepts
 });
 
 test("every school maps to an education level the endpoint accepts", () => {
-  // The literal union the route declares for `educationLevel`.
-  const accepted = ROUTE.match(/educationLevel: z\.enum\(\[([^\]]+)\]\)/)[1]
-    .split(",")
-    .map((entry) => entry.trim().replace(/^"|"$/g, ""))
-    .filter(Boolean);
-
   const schools = [
     ...values(ELEMENTARY_SCHOOL_OPTIONS),
     ...values(HIGH_SCHOOL_OPTIONS),
@@ -170,24 +195,31 @@ test("every school maps to an education level the endpoint accepts", () => {
 
   for (const school of schools) {
     assert.ok(
-      accepted.includes(mapEducationLevel(school)),
-      `${school || "(unanswered)"} -> ${mapEducationLevel(school)}`,
+      accepts(submission({ educationLevel: mapEducationLevel(school) })),
+      `${school || "(unanswered)"} -> ${mapEducationLevel(school)} is not accepted`,
     );
   }
 });
 
 test("the grade steppers stay inside the range the endpoint allows", () => {
-  // `gradeSchema` on the route: z.number().min(1).max(10).
-  const min = Number(ROUTE.match(/const gradeSchema = z\.number\(\)\.min\((\d+)\)/)[1]);
-  const max = Number(ROUTE.match(/const gradeSchema = z\.number\(\)\.min\(\d+\)\.max\((\d+)\)/)[1]);
-
+  // Asked of the validator rather than of its source: every stepper's own
+  // floor and ceiling is offered to it, and has to come back accepted.
   for (const school of ["", "elementary_school", "high_school", "university", "college"]) {
     const bounds = gradeBounds(school);
-    assert.ok(bounds.min >= min, `${school}: floor ${bounds.min} below ${min}`);
-    assert.ok(bounds.max <= max, `${school}: ceiling ${bounds.max} above ${max}`);
+    // `step` is a stride, not a grade, so it is not one of the values offered.
+    for (const name of ["min", "max", "current", "target"]) {
+      assert.ok(
+        accepts(submission({ answers: { currentAverageGrade: bounds[name], targetGrade: bounds[name] } })),
+        `${school || "(unanswered)"}: ${name} of ${bounds[name]} is outside what the endpoint allows`,
+      );
+    }
     assert.ok(bounds.current >= bounds.min && bounds.current <= bounds.max, `${school}: default`);
     assert.ok(bounds.target >= bounds.min && bounds.target <= bounds.max, `${school}: target`);
   }
+
+  // And the range is bounded at all, in both directions.
+  assert.ok(!accepts(submission({ answers: { currentAverageGrade: 0 } })), "no floor");
+  assert.ok(!accepts(submission({ answers: { currentAverageGrade: 11 } })), "no ceiling");
 });
 
 test("the survey sends every answer it collects", () => {
@@ -209,7 +241,14 @@ test("the survey sends every answer it collects", () => {
 });
 
 test("the study goal cannot exceed the length the endpoint accepts", () => {
-  const limit = Number(ROUTE.match(/studyGoal: z\.string\(\)\.trim\(\)\.min\(1\)\.max\((\d+)\)/)[1]);
+  const limit = onboardingSubmissionSchema.shape.studyGoal.maxLength;
+  assert.ok(limit > 0, "the study goal has no declared ceiling");
+
+  // The ceiling is real...
+  assert.ok(accepts(submission({ studyGoal: "x".repeat(limit) })), `${limit} refused`);
+  assert.ok(!accepts(submission({ studyGoal: "x".repeat(limit + 1) })), `${limit + 1} accepted`);
+  // ...and the survey trims to exactly it, rather than to a number of its own
+  // that would quietly start losing whole surveys if either side moved.
   assert.match(FLOW, new RegExp(`\\.slice\\(0, ${limit}\\)`));
 });
 
@@ -269,9 +308,11 @@ test("a saved profile is complete enough to count as onboarded", () => {
     );
   }
 
-  // The three the survey sends as text can never arrive empty.
+  // The three the survey sends as text can never arrive empty — asked of the
+  // validator, which is what actually decides it.
   for (const field of ["currentAverageGrade", "targetGrade", "studyGoal"]) {
-    assert.match(ROUTE, new RegExp(`${field}: z\\.string\\(\\)\\.trim\\(\\)\\.min\\(1\\)`), field);
+    assert.ok(!accepts(submission({ [field]: "" })), `"${field}" may arrive empty`);
+    assert.ok(!accepts(submission({ [field]: "   " })), `"${field}" may arrive blank`);
   }
 });
 

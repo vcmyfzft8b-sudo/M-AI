@@ -773,6 +773,8 @@ export const en: Messages = {
   /* ---- Onboarding survey ---- */
   "onboarding.error.saveFailed": "Your answers could not be saved.",
   "onboarding.previousStep": "Previous step",
+  // Only the bar carries the position now, so it has to say so out loud.
+  "onboarding.progressLabel": "Setup progress",
   "onboarding.nextStep": "Next step",
   "onboarding.showStep": "Show step {index}",
   "onboarding.homeScreenSteps": "Home Screen steps",

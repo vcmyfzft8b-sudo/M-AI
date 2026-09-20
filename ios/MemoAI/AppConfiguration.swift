@@ -44,9 +44,17 @@ enum AppConfiguration {
     }()
     static let productIDs = ["eu.memoai.premium.monthly", "eu.memoai.premium.yearly",
                              "eu.memoai.premium.trial.monthly", "eu.memoai.premium.trial.yearly"]
-    // The auth page resumes an existing session into /app. A fresh install must
-    // open sign-in directly, without relying on a marketing-page redirect.
-    static var startURL: URL { origin.appendingPathComponent("auth/continue") }
+    /**
+     Where the app opens.
+
+     `/onboarding` rather than `/auth/continue`, because it is the one entry
+     point that knows what to do with everybody: a resumed session goes
+     straight through to the app, a fresh install gets the survey, and a
+     returning reader who signed out gets sign-in rather than twenty-three
+     questions they have already answered. The page decides — the wrapper has
+     no way to know which of the three it is holding.
+     */
+    static var startURL: URL { origin.appendingPathComponent("onboarding") }
     // Both production hosts are internal — a link to the canonical domain, or a
     // redirect arriving from it, must not be treated as leaving the app.
     // Preview builds trust only their explicitly selected origin.

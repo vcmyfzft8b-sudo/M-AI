@@ -253,3 +253,37 @@ test("the app opens on the entry point that can sort all three arrivals", () => 
   // to the wrapper; only the page can tell them apart.
   assert.match(CONFIG, /static var startURL: URL \{ origin\.appendingPathComponent\("onboarding"\) \}/);
 });
+
+test("the last button answers the press immediately, and only once", () => {
+  const flow = readFileSync(new URL("../src/components/onboarding-flow.tsx", import.meta.url), "utf8");
+
+  // Leaving the survey is a route change plus a refresh. Without a state the
+  // button sits there looking dead for as long as that takes, and a second
+  // press lands on it.
+  assert.match(flow, /const \[finishing, setFinishing\] = useState\(false\)/);
+  assert.match(flow, /if \(finishing\) return;\s*\n\s*setFinishing\(true\);/);
+
+  // Disabled and marked busy while it runs...
+  assert.match(flow, /disabled=\{v\.ctaDisabled \|\| v\.finishing\} aria-busy=\{v\.finishing\}/);
+  assert.match(flow, /v\.finishing \? <span[^>]*className="memo-spin"/);
+  // ...and the keyboard cannot get a second press in either, since Enter goes
+  // through the same call to action.
+  assert.match(flow, /enabled: showCta && !ctaDisabled && !finishing/);
+});
+
+test("the first step can go back to the landing page, but only where there is one", () => {
+  const flow = readFileSync(new URL("../src/components/onboarding-flow.tsx", import.meta.url), "utf8");
+  const page = readFileSync(new URL("../src/app/onboarding/page.tsx", import.meta.url), "utf8");
+
+  // Pressing "Try it for €0" used to be a one-way door: the arrow was simply
+  // dead on step one, so there was no way back to the page you came from.
+  assert.match(flow, /backDisabled: index === 0 && !backHref/);
+  assert.match(flow, /if \(index === 0\) \{ if \(backHref\) router\.push\(backHref\); return; \}/);
+
+  // The app has no landing page — the wrapper rewrites `/` to this very
+  // screen — so an arrow pointing there would be a loop. Decided on the
+  // server, where the user agent is already known, rather than sniffed in the
+  // browser where it would be a hydration mismatch.
+  assert.match(page, /backHref=\{native \? undefined : "\/"\}/);
+  assert.match(page, /isNativeUserAgent\(\(await headers\(\)\)\.get\("user-agent"\)\)/);
+});

@@ -467,6 +467,25 @@ export class TutorSpeechOutput {
       reject = rejectInner;
     });
 
+    /*
+     * Nothing is waiting on this yet, and the turn can fail before anything is.
+     *
+     * `speak` hands the promise back at the top of the turn and the caller only reaches
+     * `await turn.finished` once the writer has stopped writing, seconds later. A socket
+     * Soniox hangs up on mid-sentence rejects it in between, while it still has no handler,
+     * so the browser calls that an unhandled rejection — and Sentry's global handler gets
+     * the error first. That capture wins: `captureException` marks the error object as seen,
+     * so the tutor's own report, the one carrying the lecture, the stage and the phase, is
+     * dropped as a repeat of it. What we are left with is an untagged `handled: no` copy of
+     * a failure the walkthrough does handle, filed under the socket's own stack rather than
+     * under the stage it broke in — MEMOAI-WEB-48 and MEMOAI-WEB-40 both arrived that way.
+     *
+     * Claiming the rejection here costs nothing. `await turn.finished` still rejects, the
+     * red box and the pause are unchanged, and the report that reaches us is the one that
+     * says what broke.
+     */
+    void finished.catch(() => {});
+
     const turn: ActiveTurn = {
       id,
       streamId: null,

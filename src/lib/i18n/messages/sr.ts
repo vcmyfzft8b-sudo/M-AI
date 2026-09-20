@@ -781,6 +781,8 @@ export const sr: Messages = {
   /* ---- Onboarding survey ---- */
   "onboarding.error.saveFailed": "Odgovore nije bilo moguće sačuvati.",
   "onboarding.previousStep": "Prethodni korak",
+  // Only the bar carries the position now, so it has to say so out loud.
+  "onboarding.progressLabel": "Napredak podešavanja",
   "onboarding.nextStep": "Sledeći korak",
   "onboarding.showStep": "Prikaži korak {index}",
   "onboarding.homeScreenSteps": "Koraci za Home Screen",

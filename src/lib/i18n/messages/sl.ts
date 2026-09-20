@@ -798,6 +798,8 @@ export const sl = {
   /* ---- Onboarding survey ---- */
   "onboarding.error.saveFailed": "Onboardinga ni bilo mogoče shraniti.",
   "onboarding.previousStep": "Prejšnji korak",
+  // Only the bar carries the position now, so it has to say so out loud.
+  "onboarding.progressLabel": "Napredek nastavitve",
   "onboarding.nextStep": "Naslednji korak",
   "onboarding.showStep": "Prikaži korak {index}",
   "onboarding.homeScreenSteps": "Koraki za Home Screen",

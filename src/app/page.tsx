@@ -122,7 +122,10 @@ export default async function HomePage() {
             </h1>
             <p className="landing-v2-hero-lead">{t("landing.hero.lead")}</p>
             <div className="landing-v2-hero-actions">
-              <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-light">
+              {/* The survey first, sign-in after it: someone who has answered
+                  twenty questions is a great deal more likely to finish
+                  creating the account than someone shown the wall first. */}
+              <LandingLoadingLink href="/onboarding" className="landing-cta landing-cta-hero landing-cta-light">
                 {t("landing.cta.tryFree")}
               </LandingLoadingLink>
               <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-dark">
@@ -187,7 +190,7 @@ export default async function HomePage() {
         <div className="landing-v2-final-cta" data-scroll-reveal="">
           <h2>{t("landing.finalCta.title")}</h2>
           <p className="landing-v2-final-cta-lead">{t("landing.finalCta.lead")}</p>
-          <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-light">
+          <LandingLoadingLink href="/onboarding" className="landing-cta landing-cta-hero landing-cta-light">
             {t("landing.cta.tryFree")}
           </LandingLoadingLink>
           <p className="landing-v2-final-cta-note">{t("landing.finalCta.note")}</p>

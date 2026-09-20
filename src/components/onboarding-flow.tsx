@@ -402,10 +402,19 @@ const INITIAL_STATE: FlowState = {
 export function OnboardingFlow({
   profile,
   demo = false,
+  anonymous = false,
 }: {
   profile?: ProfileRow | null;
   /** The `/creator` copy: the same screens, with nothing written and nowhere to go. */
   demo?: boolean;
+  /**
+   * The survey is being answered before there is an account.
+   *
+   * Identical screens — that is the point, and why this is a flag rather than
+   * a second component: the answers go to the open endpoint instead of the
+   * profile, and the last button opens sign-in instead of the upgrade screen.
+   */
+  anonymous?: boolean;
 }) {
   const { locale, t } = useTranslations();
   const router = useRouter();
@@ -486,17 +495,16 @@ export function OnboardingFlow({
   const kind = step.kind;
 
   /*
-   * The counter and the bar are read against the whole flow, not against the
-   * path the current answers cut out of it.
+   * The bar is read against the whole flow, not against the path the current
+   * answers cut out of it.
    *
-   * Counting the cut path is what the design does, and it means the first
-   * screen promises 17 steps — the length of the path someone who is not a
-   * student walks, because no role has been picked yet — and then rewrites
-   * itself to 23 the moment a student picks one. A total that grows under you
-   * is worse than a total that is generous: this way the number is right from
-   * the first screen, never moves, and always ends on 23 / 23 at 100%. A
-   * branch that skips steps shows up as the numerator jumping forward, which
-   * is what skipping questions should look like.
+   * Measuring the cut path is what the design does, and it means the bar
+   * jumps backwards: the first screen sizes itself against the 17 steps
+   * someone who is not a student walks, because no role has been picked yet,
+   * and then restates itself against 23 the moment a student picks one.
+   * Against the whole flow the bar only ever moves forward, and always ends
+   * full. A branch that skips steps shows up as a longer jump, which is what
+   * skipping questions should look like.
    */
   const shownIndex = Math.max(0, STEPS.findIndex((s) => s.id === state.stepId));
 
@@ -552,7 +560,7 @@ export function OnboardingFlow({
       : findLabel(ROLE_OPTIONS, current.role, t).toLowerCase();
 
     try {
-      const response = await fetch("/api/profile/onboarding", {
+      const response = await fetch(anonymous ? "/api/onboarding/anonymous" : "/api/profile/onboarding", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -601,7 +609,7 @@ export function OnboardingFlow({
     } finally {
       saving.current = false;
     }
-  }, [demo, gradeTouched, locale, t]);
+  }, [anonymous, demo, gradeTouched, locale, t]);
 
   /*
    * The last screen is reached when two things have both happened: the ring has
@@ -1227,9 +1235,14 @@ export function OnboardingFlow({
    * onto the half that comes next. `mapAppHrefForClient` is what makes the demo
    * walk the same journey — it rewrites the destination to `/creator/start`,
    * where the same upgrade screen is mounted against demo props.
+   *
+   * Answered anonymously, the same button opens sign-in instead. `/app/start`
+   * is still where it ends up — that is where `/auth/continue` sends everyone —
+   * and the answers are waiting there, claimed out of the cookie by the time
+   * the page decides which half to show.
    */
   const finish = () => {
-    router.push(mapAppHrefForClient("/app/start"));
+    router.push(anonymous ? "/auth/continue" : mapAppHrefForClient("/app/start"));
     router.refresh();
   };
 
@@ -1243,7 +1256,6 @@ export function OnboardingFlow({
     fade: state.fade,
     shift: state.shift,
     progressPct: Math.round((shownIndex / (STEPS.length - 1)) * 100),
-    stepLabel: `${shownIndex + 1} / ${STEPS.length}`,
     title: step.qk ? c[step.qk] : "",
     subtitle: step.sk ? c[step.sk] : "",
     gridCols: step.cols || "1fr",
@@ -1471,12 +1483,11 @@ export function OnboardingFlow({
       <div aria-hidden="true" style={{ position: "absolute", inset: "-10%", gridArea: "1 / 1 / 3 / 2", pointerEvents: "none", backgroundImage: "radial-gradient(58% 44% at 18% 10%, var(--mesh-lift) 0%, transparent 68%), radial-gradient(48% 38% at 84% 20%, var(--mesh-sink) 0%, transparent 64%), radial-gradient(54% 40% at 32% 44%, var(--mesh-lift) 0%, transparent 66%), radial-gradient(64% 46% at 90% 60%, var(--mesh-sink) 0%, transparent 62%), radial-gradient(50% 42% at 8% 76%, var(--mesh-lift) 0%, transparent 66%), radial-gradient(60% 44% at 64% 94%, var(--mesh-sink) 0%, transparent 64%)", opacity: "var(--mesh-opacity, 1)", animation: "memo-aurora 40s ease-in-out infinite" }}></div>
       <header style={{ position: "relative", zIndex: "2", gridRow: "1", display: "flex", alignItems: "center", gap: "0.85rem", padding: "max(0.7rem, env(safe-area-inset-top)) clamp(1rem, 4vw, 2rem) clamp(0.5rem, 1.4vh, 0.9rem)" }}>
       <button type="button" onClick={v.back} aria-label={t("onboarding.previousStep")} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "2.4rem", height: "2.4rem", flex: "0 0 auto", padding: "0", border: "0", borderRadius: "999px", background: "var(--line-soft)", color: "var(--text)", fontSize: "1.35rem", lineHeight: "1", cursor: "pointer", transition: "transform 160ms cubic-bezier(0.2,0.8,0.2,1), background-color 160ms ease, opacity 200ms ease" }} data-back={v.backState} disabled={v.backDisabled} className="memo-ob-fx-1"><span aria-hidden="true" style={{ display: "block", width: "0.55rem", height: "0.55rem", marginLeft: "0.16rem", borderLeft: "2px solid currentColor", borderBottom: "2px solid currentColor", borderRadius: "1px", transform: "rotate(45deg)" }}></span></button>
-      <div style={{ flex: "1 1 auto", minWidth: "0", height: "0.4rem", borderRadius: "999px", background: "var(--track)", overflow: "hidden" }}>
+      <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={v.progressPct} aria-label={t("onboarding.progressLabel")} style={{ flex: "1 1 auto", minWidth: "0", height: "0.4rem", borderRadius: "999px", background: "var(--track)", overflow: "hidden" }}>
       <div style={{ height: "100%", borderRadius: "999px", transition: "width 480ms cubic-bezier(0.2,0.85,0.2,1)", position: "relative", overflow: "hidden", width: `${v.progressPct}%`, background: v.accent }}>
       <div aria-hidden="true" style={{ position: "absolute", inset: "0", width: "40%", background: "linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.55), rgba(255,255,255,0))", animation: "memo-shimmer 2.4s ease-in-out infinite" }}></div>
       </div>
       </div>
-      <span style={{ flex: "0 0 auto", fontSize: "0.82rem", fontWeight: "700", letterSpacing: "0.02em", color: "var(--muted)", fontVariantNumeric: "tabular-nums" }}>{v.stepLabel}</span>
       </header>
       <div style={{ position: "relative", zIndex: "2", gridRow: "2", minHeight: "0", overflow: "hidden", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: "clamp(1.5rem, 5vw, 4rem)", padding: "clamp(0.4rem, 1.4vh, 1.6rem) clamp(1rem, 4vw, 2rem) clamp(4.4rem, 12vh, 5.6rem)" }}>
       {v.wide ? (<>

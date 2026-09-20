@@ -1939,10 +1939,10 @@ export async function createLectureFromTextSource(params: {
     }
 
     // The status write above has already queued the notification (migration
-    // 0053). This only asks for it to go out now rather than on the hourly
-    // sweep, and it deliberately neither waits nor throws: a finished note is
-    // finished whether or not a phone can be reached.
-    flushPushNotifications();
+    // 0053). This sends it now rather than on the hourly sweep. Awaited,
+    // because a promise left floating here is never finished: this runs on a
+    // serverless function, which is frozen as soon as it answers.
+    await flushPushNotifications();
 
     return lectureId;
   } catch (error) {

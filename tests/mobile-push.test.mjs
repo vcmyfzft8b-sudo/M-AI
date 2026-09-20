@@ -390,3 +390,29 @@ test("a notification nobody could be told about in an hour expires instead of ar
   const read = loaded.log.find((entry) => entry.table === "push_queue" && entry.verb === "select");
   assert.ok(read.filters.some(([op, name]) => op === "gt" && name === "created_at"), "the send skips stale rows too");
 });
+
+test("the flush is awaited, because a floating promise on serverless never runs", () => {
+  // Measured in production: two notes settled, the trigger queued both, and
+  // neither was ever claimed — the instance had already been frozen. Every
+  // notification then waits for the hourly sweep, which is both far too slow
+  // for "your notes are ready" and close enough to the one-hour expiry to
+  // start dropping them outright.
+  const source = readFileSync(new URL("../src/lib/mobile/push.ts", import.meta.url), "utf8");
+  assert.match(source, /export async function flushPushNotifications/);
+  assert.doesNotMatch(source, /void deliverPendingPushNotifications/, "the flush is fired and forgotten again");
+
+  for (const path of ["../src/lib/manual-lectures.ts", "../src/lib/scan-processing.ts"]) {
+    const caller = readFileSync(new URL(path, import.meta.url), "utf8");
+    assert.match(caller, /await flushPushNotifications\(\)/, `${path} does not await the flush`);
+  }
+});
+
+test("a finished note is still finished when the push cannot be sent", async () => {
+  // The whole reason it was fired and forgotten was that a note must not fail
+  // because a phone is unreachable. Awaiting it must not give that up.
+  const loaded = loadPush({
+    resolve: () => { throw new Error("database unreachable"); },
+    send: () => ({ status: "sent", environment: "production" }),
+  });
+  await loaded.push.flushPushNotifications();
+});

@@ -90,6 +90,22 @@ function setOfflineNow(value: boolean) {
   offlineNow = value;
 }
 
+/*
+ * The same mirror for the other half of the answer: whether this document is
+ * the cached shell. The navigation path needs it for every tap, connection or
+ * no connection, because the shell has to be left through the document even
+ * once the network is back — see `needsDocumentNavigation`.
+ */
+let shellNow = false;
+
+export function isShellNow() {
+  return shellNow;
+}
+
+function setShellNow(value: boolean) {
+  shellNow = value;
+}
+
 function transport() {
   return realFetch ?? fetch;
 }
@@ -185,6 +201,7 @@ export function OfflineProvider({
    * both can be reached before any effect in this tree has run.
    */
   setOfflineNow(isOffline);
+  setShellNow(isShell);
   installOfflineFetch(t);
 
   const recheck = useCallback(async () => {

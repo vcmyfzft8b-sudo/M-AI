@@ -416,3 +416,22 @@ test("a finished note is still finished when the push cannot be sent", async () 
   });
   await loaded.push.flushPushNotifications();
 });
+
+test("the permission sheet closes on the press, whichever way it is answered", () => {
+  const prompt = readFileSync(new URL("../src/components/push-prompt.tsx", import.meta.url), "utf8");
+
+  // `useSheet` reads its lock through a ref updated only in an effect, so
+  // unlocking and dismissing in one tick dismisses against the previous
+  // render's lock and the sheet refuses to close — leaving it behind the iOS
+  // alert, and unrecoverable, because iOS never prompts a second time.
+  assert.doesNotMatch(prompt, /useSheet\(close, \{ locked/, "the sheet is locked while the request runs");
+  assert.match(prompt, /useSheet\(close\)/);
+
+  // Dismissed before the native call, not after it.
+  const allow = prompt.slice(prompt.indexOf("function allow()"), prompt.indexOf("if (!open)"));
+  assert.ok(
+    allow.indexOf("sheet.dismiss()") < allow.indexOf("enablePushNotifications"),
+    "the sheet still waits for the round trip before closing",
+  );
+  assert.doesNotMatch(allow, /await nativeRequest/, "the press is blocked on the reply again");
+});

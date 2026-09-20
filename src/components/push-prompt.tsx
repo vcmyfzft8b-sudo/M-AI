@@ -56,7 +56,19 @@ export function PushPrompt({ active }: { active: boolean }) {
   const [pending, setPending] = useState(false);
 
   const close = useCallback(() => setOpen(false), []);
-  const sheet = useSheet(close, { locked: pending });
+  /*
+   * Deliberately not `locked` while the request runs.
+   *
+   * `useSheet` reads its lock through a ref that is only updated in an effect,
+   * so clearing the flag and dismissing in the same tick dismisses against the
+   * *previous* render's lock — the sheet refuses, and sits there behind the
+   * iOS alert looking like a button that did nothing. Pressing again does
+   * nothing either, because by then iOS has an answer on file and there is no
+   * second prompt to show. Nothing here needs the lock: both buttons guard
+   * themselves, and a reader who swipes the sheet away mid-request has
+   * answered it just as clearly.
+   */
+  const sheet = useSheet(close);
 
   useEffect(() => {
     if (!active || !available() || alreadyAsked()) return;
@@ -76,19 +88,22 @@ export function PushPrompt({ active }: { active: boolean }) {
     return () => { cancelled = true; };
   }, [active]);
 
-  async function allow() {
+  function allow() {
     if (pending) return;
     setPending(true);
-    try {
-      await nativeRequest("enablePushNotifications");
-    } catch {
-      // Declined at the iOS prompt, or the token could not be registered.
-      // Either way the sheet has said its piece and closes; there is no
-      // second ask to offer.
-    } finally {
-      setPending(false);
-      sheet.dismiss();
-    }
+    /*
+     * Closed on the press, not on the reply.
+     *
+     * iOS puts its own permission alert over the screen the instant this is
+     * called, and that alert is the question now — whichever way it is
+     * answered, this sheet has said its piece. Waiting for the round trip
+     * before closing means coming back from the alert to a sheet still
+     * sitting there, which is the one thing it must not do.
+     */
+    sheet.dismiss();
+    // Allowed or declined, there is no second ask to offer and nothing here
+    // to report: iOS owns the answer from this point.
+    void nativeRequest("enablePushNotifications").catch(() => {});
   }
 
   if (!open) return null;

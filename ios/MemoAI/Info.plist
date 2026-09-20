@@ -31,6 +31,22 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!--
+	  App-bound domains. WKWebView runs a service worker only for a domain
+	  listed here, with `limitsNavigationsToAppBoundDomains` set on the
+	  configuration — without both, `navigator.serviceWorker.register` is
+	  never even attempted and the app has no offline mode at all. Measured:
+	  with this absent the web view requested `/sw.js` zero times.
+
+	  `localhost` is for development, where the app is pointed at a local
+	  build over TLS (see AppConfiguration). Production never navigates there.
+	-->
+	<key>WKAppBoundDomains</key>
+	<array>
+		<string>memoai.eu</string>
+		<string>www.memoai.eu</string>
+		<string>localhost</string>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

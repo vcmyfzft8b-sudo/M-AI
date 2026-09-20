@@ -237,17 +237,25 @@ test("the canvas, the app background and the launch screens are the same colours
 });
 
 /**
- * The service worker exists for the white frame between the launch screen and
- * the app: iOS holds its launch image until first paint, first paint waits on
- * render-blocking CSS, and a document that has painted nothing is white.
- * Keeping the build's assets in the cache is what removes the wait.
+ * The service worker exists for two things: the white frame between the launch
+ * screen and the app — iOS holds its launch image until first paint, first
+ * paint waits on render-blocking CSS, and a document that has painted nothing
+ * is white — and having anything at all to show with no connection.
  *
- * What it must never do is cache a page. Memo's HTML is per-account, so a
- * cached navigation is one person's notes handed to whoever opens the app
- * next. The scope is content-hashed build output, where a changed file is a
- * changed URL and a stale hit is impossible.
+ * What it must never do is cache a page that carries an account's notes. Memo's
+ * HTML is per-account, so a cached navigation is one person's library handed to
+ * whoever opens the app next.
+ *
+ * Offline support did not relax that. It added one page with *nobody's* data in
+ * it — `/offline`, the app shell, which draws every screen from a per-account
+ * store in the browser — fetched without the session cookie and stored under a
+ * key of its own. That is the only HTML this worker is allowed to keep, and the
+ * assertions below are what hold the line now that "no HTML at all" no longer
+ * states it. The worker is also run for real in
+ * tests/offline-service-worker.test.mjs, which proves a served page is not
+ * stored rather than reading the source for it.
  */
-test("the service worker caches build output and nothing else", () => {
+test("the service worker caches build output, and no page but the shell", () => {
   const sw = readSource("public/sw.js");
 
   assert.match(
@@ -256,28 +264,50 @@ test("the service worker caches build output and nothing else", () => {
     "the cacheable test must be the content-hashed build directory",
   );
 
-  // Anything that could carry account data, or change behind a stable URL.
-  for (const forbidden of ["/api/", "text/html"]) {
+  assert.ok(
+    !sw.includes("/api/"),
+    "the service worker mentions /api/; an account's data must never be stored here",
+  );
+
+  /*
+   * The shell is the single exception, and only on these terms: fetched with
+   * no credentials, so the server cannot answer it with anything personal, and
+   * dropped if it redirected — a redirect means it was not the shell.
+   */
+  assert.match(
+    sw,
+    /fetch\(SHELL_URL, \{ credentials: "omit"/,
+    "the shell must be fetched without the session cookie",
+  );
+  assert.match(sw, /if \(response\.redirected\) \{\s*return;/, "a redirect is not the shell");
+
+  const htmlWrites = [...sw.matchAll(/cache\.put\(\s*([A-Za-z_$][\w$]*)/g)].map(
+    (match) => match[1],
+  );
+
+  for (const target of htmlWrites) {
     assert.ok(
-      !sw.includes(forbidden),
-      `the service worker mentions ${forbidden}; it must not cache pages or API replies`,
+      ["SHELL_CACHE_KEY", "SHELL_META_KEY", "storageKey", "href", "request", "url"].includes(
+        target,
+      ),
+      `cache.put(${target}) is new; check it cannot be a page`,
     );
   }
 
   /*
    * Navigations are answered — that is how the preloaded response gets used —
-   * but the branch that answers them must never reach a cache. A page is one
-   * account's notes; storing one would hand them to whoever opens the app next.
+   * and the network answer is never written anywhere. Offline the branch reads
+   * the shell back, so it may *match* a cache; it must not put one.
    */
   const navigateBranch = sw.slice(
     sw.indexOf('request.mode === "navigate"'),
-    sw.indexOf("if (!isCacheable(url))"),
+    sw.indexOf("if (isOptimisedImage(url))"),
   );
 
   assert.ok(navigateBranch.length > 0, "the navigation branch has moved; re-check this assertion");
   assert.ok(
-    !navigateBranch.includes("cache"),
-    "the navigation branch touches a cache; pages must never be stored",
+    !navigateBranch.includes("cache.put"),
+    "the navigation branch writes to a cache; pages must never be stored",
   );
 
   assert.match(sw, /request\.method !== "GET"/, "only GETs may be served from cache");

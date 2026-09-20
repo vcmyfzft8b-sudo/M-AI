@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { LectureWorkspace } from "@/components/lecture-workspace";
+import { OfflineLectureCapture } from "@/components/offline/offline-capture";
 import { requireUser } from "@/lib/auth";
 import { getPaywallPath, getViewerAppState } from "@/lib/billing";
 import { ensureUserOwnsLecture, getLectureDetailForUser } from "@/lib/lectures";
@@ -47,11 +48,20 @@ export default async function LecturePage({
   }
 
   return (
-    <LectureWorkspace
-      initialDetail={detail}
-      hasPaidAccess={Boolean(appState?.hasPaidAccess)}
-      trialLectureId={appState?.trialLectureId ?? null}
-      initialTrialChatMessagesRemaining={appState?.trialChatMessagesRemaining ?? 5}
-    />
+    <>
+      {/* Saves this note for reading with no connection. See offline-capture.tsx. */}
+      <OfflineLectureCapture
+        userId={user.id}
+        detail={detail}
+        hasPaidAccess={Boolean(appState?.hasPaidAccess)}
+        trialLectureId={appState?.trialLectureId ?? null}
+      />
+      <LectureWorkspace
+        initialDetail={detail}
+        hasPaidAccess={Boolean(appState?.hasPaidAccess)}
+        trialLectureId={appState?.trialLectureId ?? null}
+        initialTrialChatMessagesRemaining={appState?.trialChatMessagesRemaining ?? 5}
+      />
+    </>
   );
 }

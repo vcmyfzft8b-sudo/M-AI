@@ -7,6 +7,7 @@ import { useT } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
 import { useInstantNavigation } from "@/components/navigation-loading";
+import { useIsOffline } from "@/components/offline/offline-provider";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
@@ -54,6 +55,7 @@ export function LibraryChat({
   hasPaidAccess: boolean;
 }) {
   const t = useT();
+  const isOffline = useIsOffline();
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
   const logRef = useRef<HTMLDivElement | null>(null);
   const scopeRef = useRef<HTMLDivElement | null>(null);
@@ -172,6 +174,17 @@ export function LibraryChat({
     const question = (preset ?? draft).trim();
 
     if (!question || isTyping) {
+      return;
+    }
+
+    /*
+     * The answer comes from the model, so there is nothing to give offline.
+     * Said here rather than let the request fail: the message otherwise lands
+     * in the log as a question the chat simply never answered.
+     */
+    if (isOffline) {
+      setDraft("");
+      setError(t("offline.feature.chat.body"));
       return;
     }
 

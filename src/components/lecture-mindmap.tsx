@@ -7,12 +7,15 @@ import { StudyGenerationNotice } from "@/components/generation-notice";
 import { useT } from "@/components/i18n-provider";
 import { MemoPortal } from "@/components/memo-portal";
 import { Emoji, Msym } from "@/components/msym";
+import { OfflineFeatureNotice } from "@/components/offline/offline-notice";
+import { useIsOffline } from "@/components/offline/offline-provider";
 import {
   MindmapCanvas,
   type MindmapCanvasHandle,
   type MindmapView,
 } from "@/components/mindmap-canvas";
 import { parseApiResponse, redirectToBillingIfNeeded } from "@/lib/billing-client";
+import { saveOfflineMindmap } from "@/lib/offline/snapshot";
 import type { StudyAssetStatus } from "@/lib/database.types";
 import {
   flattenMindmap,
@@ -101,6 +104,7 @@ export function LectureMindmap({
   lectureReady: boolean;
 }) {
   const t = useT();
+  const isOffline = useIsOffline();
   const router = useRouter();
   const canvasRef = useRef<MindmapCanvasHandle | null>(null);
 
@@ -170,6 +174,18 @@ export function LectureMindmap({
   const load = useCallback(async () => {
     const response = await fetch(`/api/lectures/${lectureId}/mindmap`, { cache: "no-store" });
     const payload = await parseApiResponse<MindmapResponse>(response, t);
+
+    /*
+     * The map is the one part of a note that does not travel with it: the note
+     * screen is handed its whole detail by the server, and this is fetched when
+     * the tab is opened. So it is cached here, on the way past, and the offline
+     * stub answers this same request from that copy — a map looked at once is
+     * a map that is there with no connection.
+     */
+    if (payload.status === "ready") {
+      void saveOfflineMindmap({ lectureId, payload });
+    }
+
     const previous = stateRef.current;
     const next: MindmapState = {
       status: payload.status,
@@ -771,6 +787,14 @@ export function LectureMindmap({
         bodyCopy={state === null ? "" : t("mindmap.generatingBody")}
       />
     );
+  }
+
+  /*
+   * Offline with nothing cached: there is no map to draw and none can be made,
+   * so the panel says that rather than offering a button that cannot work.
+   */
+  if (isOffline && !doc) {
+    return <OfflineFeatureNotice feature="generate" />;
   }
 
   /* Everything below is the map's absence, in its several flavours. */

@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 
 import { HomeDashboard } from "@/components/home-dashboard";
+import { OfflineHomeCapture } from "@/components/offline/offline-capture";
 import { getViewerAppState } from "@/lib/billing";
 import { getDiscountWheelState } from "@/lib/discount-wheel";
 import { requireUser } from "@/lib/auth";
@@ -46,7 +47,9 @@ export default async function AppHomePage({
   // never opened the guide, on any device, which is exactly who the dot is for.
   const installGuideSeen = Boolean(appState?.profile?.install_guide_seen_at);
   const host =
-    process.env.NODE_ENV === "production" ? "" : (await headers()).get("host") ?? "";
+    process.env.NODE_ENV === "production"
+      ? ""
+      : ((await headers()).get("host") ?? "");
   const showDevDashboard =
     process.env.NODE_ENV !== "production" &&
     (host.startsWith("localhost:") ||
@@ -55,16 +58,28 @@ export default async function AppHomePage({
   await searchParams;
 
   return (
-    <HomeDashboard
-      lectures={lectures}
-      folders={folders}
-      userId={user.id}
-      canCreateNotes={Boolean(appState?.onboardingComplete && appState?.canCreateNotes)}
-      hasPaidAccess={Boolean(appState?.hasPaidAccess)}
-      trialLectureId={appState?.trialLectureId ?? null}
-      canSpinWheel={wheel ? wheel.canSpin && !wheel.spunToday : null}
-      installGuideSeen={installGuideSeen}
-      showDevDashboard={showDevDashboard}
-    />
+    <>
+      {/* Keeps the offline copy of the library in step with what is on screen. */}
+      <OfflineHomeCapture
+        userId={user.id}
+        lectures={lectures}
+        folders={folders}
+        hasPaidAccess={Boolean(appState?.hasPaidAccess)}
+        trialLectureId={appState?.trialLectureId ?? null}
+      />
+      <HomeDashboard
+        lectures={lectures}
+        folders={folders}
+        userId={user.id}
+        canCreateNotes={Boolean(
+          appState?.onboardingComplete && appState?.canCreateNotes,
+        )}
+        hasPaidAccess={Boolean(appState?.hasPaidAccess)}
+        trialLectureId={appState?.trialLectureId ?? null}
+        canSpinWheel={wheel ? wheel.canSpin && !wheel.spunToday : null}
+        installGuideSeen={installGuideSeen}
+        showDevDashboard={showDevDashboard}
+      />
+    </>
   );
 }

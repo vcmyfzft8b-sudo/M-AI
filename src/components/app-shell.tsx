@@ -11,6 +11,7 @@ import { InstantLink } from "@/components/instant-link";
 import { LectureChatLoading } from "@/components/lecture-loading";
 import { Msym } from "@/components/msym";
 import { useNavigationFeedback } from "@/components/navigation-loading";
+import { useIsOffline } from "@/components/offline/offline-provider";
 import { useChipRowWheelScroll } from "@/components/use-wheel-to-horizontal";
 import {
   BRAND_LOCKUP_HEIGHT,
@@ -47,6 +48,7 @@ export function AppShell({
 }) {
   const t = useT();
   const demoBasePath = useCreatorDemoBasePath();
+  const isOffline = useIsOffline();
   const clientPathname = usePathname();
   const router = useRouter();
 
@@ -174,7 +176,9 @@ export function AppShell({
               </InstantLink>
 
               <div className="memo-header-actions">
-                {hasPaidAccess ? null : (
+                {/* Nothing can be bought with no connection, and the screen
+                    this opens cannot be loaded either. */}
+                {hasPaidAccess || isOffline ? null : (
                   <InstantLink
                     href="/app/start"
                     className="memo-subscribe-cta"

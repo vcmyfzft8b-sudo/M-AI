@@ -7260,11 +7260,167 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
-  animation: memo-pop-in 0.22s ease-out both;
+  /*
+   * Its own entrance rather than `memo-pop-in`, which ends on `transform: none`
+   * — and `transform` is what centres this. Under the shared keyframe the toast
+   * arrived centred and then, as the animation settled, slid half its own width
+   * to the right and stayed there. Same trap as `memo-pop-in-centred` below,
+   * one axis instead of two.
+   */
+  animation: memo-toast-in 0.22s ease-out both;
+}
+
+@keyframes memo-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
 }
 
 .memo-toast .msym {
   font-size: 1.25rem;
+}
+
+/*
+ * The quiet toast: a surface with a hairline rather than the solid ink capsule.
+ * Ink is how this app confirms something happened; explaining why a button did
+ * nothing is the opposite errand and should not land with the same weight.
+ */
+.memo-toast.subtle {
+  align-items: flex-start;
+  /*
+   * Above the screen's own bottom chrome — the home bar on the library, the
+   * dock on a note — rather than the confirming toast's 2.2rem, which lands
+   * underneath both. Measured against `.memo-dock`, the taller of the two.
+   */
+  bottom: calc(6.6rem + var(--memo-safe-bottom, 0px));
+  width: max-content;
+  max-width: min(24rem, calc(100vw - 2.4rem));
+  padding: 0.7rem 1rem;
+  /*
+   * A rectangle, not a capsule: this one carries a sentence rather than three
+   * words, and a 999px radius around two or three lines of text draws a blob.
+   */
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 550;
+  line-height: 1.4;
+  text-align: left;
+  text-wrap: pretty;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+}
+
+.memo-toast.subtle .msym {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: 0.1rem;
+  color: var(--muted);
+  font-size: 1.1rem;
+}
+
+/*
+ * Offline states.
+ *
+ * There is no standing "you are offline" chrome anywhere in this app, and that
+ * is the design: being offline is not a thing to be told about, it is a thing
+ * to find out at the one moment it matters — the tab that needs a live voice,
+ * the button that needs a server. So the whole vocabulary is three small
+ * pieces, each shown only at that moment.
+ *
+ * All three are deliberately quieter than their nearest neighbour in the app.
+ * The panel state is not `memo-study-empty`, whose orb announces an absence
+ * worth acting on; the toast is not the solid capsule that confirms something
+ * done. Nothing here is news, so nothing here shouts.
+ */
+.memo-offline-note {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  max-width: 26rem;
+  margin: 0 auto;
+  padding: 3.2rem 1rem;
+  text-align: center;
+  animation: memo-pop-in 0.24s ease-out both;
+}
+
+.memo-offline-note-icon {
+  display: grid;
+  place-items: center;
+  width: 2.9rem;
+  height: 2.9rem;
+  margin-bottom: 0.3rem;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+}
+
+.memo-offline-note-title {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  text-wrap: pretty;
+}
+
+.memo-offline-note-copy {
+  margin: 0;
+  max-width: 22rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.memo-offline-note-action,
+.memo-offline-note-link {
+  margin-top: 0.35rem;
+  padding: 0.2rem 0.3rem;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 0.22em;
+}
+
+.memo-offline-note-action:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/*
+ * The same message where a whole panel would be too much: in place of the
+ * recording's player above a transcript that is still perfectly readable.
+ */
+.memo-offline-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1.1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 16px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 550;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.memo-offline-inline .msym {
+  flex: 0 0 auto;
 }
 
 /* folder modals */
@@ -20867,6 +21023,17 @@
 
 .memo-toast {
   bottom: calc(2.2rem + var(--memo-safe-bottom, 0px));
+}
+
+/*
+ * Scoped, unlike its neighbours here, because the value genuinely differs
+ * rather than only gaining the inset: in the wrapper the phone's bottom bars
+ * sit on the home indicator instead of above a browser bar, so what this has to
+ * clear is more than a safe area lower. An unscoped rule would move the toast
+ * on the web too, where there is nothing to make room for.
+ */
+html[data-native] .memo-toast.subtle {
+  bottom: calc(4.6rem + var(--memo-safe-bottom, 0px));
 }
 
 @media (max-width: 1099px) {

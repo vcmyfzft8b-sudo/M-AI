@@ -8,8 +8,18 @@ enum AppConfiguration {
            let url = URL(string: value),
            url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
            (url.path.isEmpty || url.path == "/"),
+           /*
+            * `https` is accepted for localhost as well as for previews, and it
+            * is not redundant: a service worker only runs in a secure context,
+            * and WKWebView does not extend that courtesy to `http://localhost`
+            * the way browsers do — it registers nothing at all. Offline mode is
+            * a service worker, so plain `http` cannot exercise it. Serve the
+            * local build over TLS and trust the certificate in the simulator
+            * (`xcrun simctl keychain <udid> add-root-cert`); see docs/ios-app.md.
+            */
            (url.scheme == "https" && url.host?.hasSuffix(".vercel.app") == true
-            || url.scheme == "http" && ["localhost", "127.0.0.1"].contains(url.host ?? "")) {
+            || ["https", "http"].contains(url.scheme ?? "")
+               && ["localhost", "127.0.0.1"].contains(url.host ?? "")) {
             return url
         }
         #endif
@@ -29,6 +39,18 @@ enum AppConfiguration {
         String(data: try! JSONEncoder().encode(trustedOrigins.map {
             $0.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         }), encoding: .utf8)!
+    }
+
+    /**
+     Whether every trusted origin is in `WKAppBoundDomains`.
+
+     Only then may the web view opt into the app-bound restriction, which is
+     what lets a service worker run — and so what makes offline mode possible.
+     A Vercel preview's host is generated per deployment and cannot be in a
+     static list, so a preview build stays unrestricted and has no worker.
+     */
+    static var isAppBound: Bool {
+        trustedOrigins.allSatisfy { ["memoai.eu", "www.memoai.eu", "localhost"].contains($0.host ?? "") }
     }
 
     static func isInternal(_ url: URL) -> Bool {

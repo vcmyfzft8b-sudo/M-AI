@@ -21,6 +21,50 @@ Read this before `docs/ios-app.md` (setup reference) and `ios/AppStore/release-r
 - Since PR #426 the e-mail steps carry the back arrow on both platforms, the auth card cannot overflow at large text sizes, and the AI-consent gate is an auth card with loading states.
 - **Lectures now record with the phone locked.** Capture is native (`ios/MemoAI/LectureRecorder.swift`, `audio` background mode) and a Live Activity shows the Memo lockup and a running clock on the Lock Screen. This adds the project's **first app extension**, `RecordingLiveActivity`, on the already-registered identifier `eu.memoai.memo.RecordingLiveActivity` — nothing to register at Apple, but the archive now needs a distribution profile for it as well as for the app, and the next build must be uploaded before the locked-screen check below can be done on a device. See "Lecture recording and the Lock Screen banner" in `docs/ios-app.md`.
 
+## Note notifications (added 20 September 2026)
+
+The app can now tell a reader their note is finished after they have put the
+phone down. Everything is built and tested except the one piece Apple will not
+let anything but a human create.
+
+**What you have to do, once:** Apple Developer portal → Certificates,
+Identifiers & Profiles → **Keys** → **+** → name it `Memo push` → tick **Apple
+Push Notifications service (APNs)** → Continue → Register → **Download**. Apple
+allows that download exactly once. Put the `.p8` in
+`~/.config/memoai/apple/` and note the 10-character Key ID from the filename.
+There is no App Store Connect API for this — `/v1/keys` and every neighbouring
+path 404, and `POST /v1/certificates` accepts eighteen certificate types, none
+of them APNs. The Push Notifications capability on the App ID *was* automatable
+and is already enabled.
+
+**Then set in Vercel production** (and staging, to exercise it on a preview):
+
+| Variable | Value |
+| --- | --- |
+| `APPLE_PUSH_ENABLED` | `true` |
+| `APPLE_PUSH_KEY_ID` | the 10-character Key ID |
+| `APPLE_PUSH_PRIVATE_KEY` | the `.p8` contents, newlines as `\n` |
+| `APPLE_PUSH_TEAM_ID` | optional; falls back to `APPLE_SIGN_IN_TEAM_ID` |
+
+Every native path stays behind `APPLE_PUSH_ENABLED`, which defaults off, so a
+deployment without the key behaves exactly as before: the endpoint answers 503,
+the queue is never read, and the prompt never appears.
+
+**How it works.** A database trigger (migration `0053`) writes a `push_queue`
+row whenever a lecture's status settles to `ready` or `failed` — a trigger
+rather than a call site, for the same reason `mark_trial_consumed_on_ready` is
+one: `ready` is written from three places today and will be written from more.
+`deliverPendingPushNotifications()` drains the queue, and is called by the
+pipeline that just finished a note as well as hourly by `/api/cron/push-queue`
+as a net. The app asks for permission at the only moment the question answers
+itself — while a note is generating and the reader is watching the progress —
+because iOS grants exactly one prompt per install.
+
+**Still to check on a device** once the key is in: the prompt appears on a
+first note, the token reaches `push_devices`, locking the phone and waiting out
+a note produces a banner, tapping it opens that note, and signing out removes
+the row so the next account on that phone is not notified.
+
 ## Remaining work, in order
 
 1. **Merge PR #421** (the account holder decides), confirm production serves it (`/auth/password` → 404; `/auth/continue` has no header logo under either user agent), then re-check the review sign-in on production: Continue with email → `apple-review@memoai.eu` → the code from `~/.config/memoai/apple/review-account.env` → home with the Plant Life Cycle note.

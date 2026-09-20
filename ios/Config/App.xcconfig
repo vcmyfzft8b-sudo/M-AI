@@ -1,5 +1,10 @@
 #include "Version.xcconfig"
 PRODUCT_BUNDLE_IDENTIFIER = eu.memoai.memo
+// A debug build registers against Apple's sandbox APNs and a release build
+// against production. Getting this wrong does not fail the build: it fails
+// silently at the first send, with Apple answering BadDeviceToken.
+APS_ENVIRONMENT = production
+APS_ENVIRONMENT[config=Debug] = development
 CODE_SIGN_ENTITLEMENTS = Config/MemoAI.entitlements
 // Set DEVELOPMENT_TEAM in Local.xcconfig (ignored) or Xcode Signing & Capabilities.
 #include? "Local.xcconfig"

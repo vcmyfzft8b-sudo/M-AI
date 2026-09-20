@@ -57,6 +57,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private let appleSignIn = AppleSignIn()
     private let googleSignIn = GoogleSignIn()
     private let recorder = LectureRecorder()
+    private let push: PushNotifications
     private let overlay = UIStackView()
     private let loadingCover = UIView()
     private let message = UILabel()
@@ -66,6 +67,13 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private var checkingAppleCredential = false
     private var memoLocale: String?
     private let themePreferenceKey = "memo.pwa.theme"
+
+    init(push: PushNotifications) {
+        self.push = push
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     private func setMemoTheme(_ value: String) {
         guard ["system", "light", "dark"].contains(value) else { return }
@@ -130,10 +138,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             (() => {
               if (!\(AppConfiguration.trustedOriginsJSON).includes(location.origin)) return;
               Object.defineProperty(window, 'memoNative', { value: Object.freeze({
-                // 2 adds the native lecture recorder. The page is deployed
+                // 3 adds remote notifications. The page is deployed
                 // independently of the binary, so it has to ask before calling
                 // a command an installed older build would reject.
-                version: 2,
+                version: 3,
                 request: (command, payload = {}) => window.webkit.messageHandlers.memoNative.postMessage({command, ...payload})
               }) });
               // WebKit does not consistently promote blob anchor clicks to
@@ -209,6 +217,19 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         }
         store.showPurchaseIntent = { [weak self] in
             self?.webView.load(URLRequest(url: AppConfiguration.origin.appendingPathComponent("app/start")))
+        }
+        push.openNote = { [weak self] lecture in
+            // A notification only ever carries a lecture id this app was told
+            // about, but it arrives from outside the web view, so it is built
+            // into a path here rather than interpolated into a URL string.
+            guard let self, let id = UUID(uuidString: lecture) else { return }
+            self.webView.load(URLRequest(url: AppConfiguration.origin
+                .appendingPathComponent("app/lectures").appendingPathComponent(id.uuidString.lowercased())))
+        }
+        push.tokenChanged = { [weak self] token in
+            // Apple reissues tokens unprompted — a restore, an OS upgrade — and
+            // the old one stops working the moment it does.
+            Task { await self?.savePushToken(token) }
         }
         NotificationCenter.default.addObserver(self, selector: #selector(resume), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(checkAppleCredential), name: ASAuthorizationAppleIDProvider.credentialRevokedNotification, object: nil)
@@ -352,6 +373,11 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         webView.isHidden = false
         loadingCover.isHidden = true
         resume()
+        // A settled page is the only dependable sign that a sign-in finished,
+        // and the token has to be attached to whoever is signed in *now*. Does
+        // nothing when notifications were never allowed, and the post is
+        // harmless when nobody is signed in: the route answers 401 and stops.
+        Task { if let token = await push.refresh() { await savePushToken(token) } }
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
@@ -388,6 +414,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             }
             if url.path == "/auth/logout" || url.path == "/auth/account-deleted" {
                 AppleSignIn.setCurrentUser(nil)
+                // Before the page navigates away, while it can still make the
+                // call: a token left pointing at the account that is leaving
+                // would notify them on a phone someone else is now signed into.
+                Task { await forgetPushToken() }
             }
             if ["/auth/google", "/auth/apple"].contains(url.path) {
                 decisionHandler(.cancel)
@@ -507,6 +537,17 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                 case "recorderDiscard":
                     recorder.discard()
                     replyHandler(["status": "discarded"], nil)
+                // Remote notifications. The page asks at the moment the wait
+                // becomes real — just after a note starts generating — rather
+                // than at launch, where the question means nothing yet.
+                case "pushStatus": replyHandler(await push.settingsSnapshot(), nil)
+                case "enablePushNotifications":
+                    let token = try await push.enable()
+                    guard await savePushToken(token) else { throw BridgeFailure(reason: "token not saved") }
+                    replyHandler(["status": "enabled"], nil)
+                case "disablePushNotifications":
+                    await forgetPushToken()
+                    replyHandler(["status": "disabled"], nil)
                 case "products": replyHandler(try await store.products(), nil)
                 case "pendingProduct": replyHandler(["productId": store.pendingProductID as Any? ?? NSNull()], nil)
                 case "purchase":
@@ -536,6 +577,34 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                 replyHandler(nil, reason.map { "\(text("actionFailed")) [\($0)]" } ?? text("actionFailed"))
             }
         }
+    }
+
+    /// Hands the device token to the server as the signed-in user. Returns
+    /// false rather than throwing: a failure here is worth reporting to the
+    /// page, but it is never worth interrupting what the reader was doing.
+    @discardableResult
+    private func savePushToken(_ token: String) async -> Bool {
+        do {
+            _ = try await api(path: "/api/mobile/push-token", body: [
+                "token": token,
+                "environment": PushNotifications.environment,
+                "locale": memoLocale ?? "en",
+            ])
+            return true
+        } catch { return false }
+    }
+
+    /// Sign-out, and account deletion. The token has to stop pointing at the
+    /// account that is leaving before the next person signs in on this phone.
+    private func forgetPushToken() async {
+        guard let token = push.currentToken else { return }
+        _ = try? await webView.callAsyncJavaScript("""
+            await fetch('/api/mobile/push-token', {
+              method: 'DELETE', credentials: 'same-origin',
+              headers: {'content-type': 'application/json'},
+              body: JSON.stringify({token})
+            });
+            """, arguments: ["token": token], in: nil, contentWorld: .page)
     }
 
     private func api(path: String, body: [String: String]? = nil) async throws -> [String: Any] {

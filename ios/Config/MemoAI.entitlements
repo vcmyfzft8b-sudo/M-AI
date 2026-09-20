@@ -2,6 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>aps-environment</key>
+	<!--
+	  Which APNs environment this build's device tokens belong to. Debug builds
+	  get sandbox tokens and release builds — TestFlight and the App Store
+	  alike — get production ones, so the value follows the configuration
+	  rather than being pinned to either (see APS_ENVIRONMENT in App.xcconfig).
+	-->
+	<string>$(APS_ENVIRONMENT)</string>
 	<key>com.apple.developer.applesignin</key>
 	<array>
 		<string>Default</string>

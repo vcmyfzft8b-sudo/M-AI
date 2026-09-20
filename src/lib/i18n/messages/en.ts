@@ -2126,4 +2126,16 @@ export const en: Messages = {
   "native.giftHelp": "Memo does not currently offer a way to gift an App Store subscription. Each person should use their own Memo account and Apple Account. Website gift or promotional codes cannot be applied to an App Store purchase.",
   "native.micDenied": "Memo needs microphone access. Allow it in iOS Settings → Memo AI → Microphone.",
   "native.appleDisconnectLink": "See Apple’s instructions",
+
+  // Push notifications. The reader sees this on a locked screen, so it is
+  // short and does not name the app: iOS prints that itself.
+  "push.noteReady.title": "Your notes are ready",
+  "push.noteReady.body": "{title} is ready to study.",
+  "push.noteFailed.title": "We couldn’t finish your notes",
+  "push.noteFailed.body": "Open Memo to try {title} again.",
+  "push.untitledNote": "Your note",
+  "push.enableTitle": "Shall we tell you when it’s done?",
+  "push.enableBody": "Notes take a few minutes. Put the phone down — we’ll let you know the moment they’re ready.",
+  "push.enableAllow": "Notify me",
+  "push.enableSkip": "No thanks",
 };

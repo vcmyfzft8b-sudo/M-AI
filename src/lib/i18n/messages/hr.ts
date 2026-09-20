@@ -2139,4 +2139,16 @@ export const hr: Messages = {
   "native.giftHelp": "Memo trenutačno ne omogućuje darivanje pretplate u App Storeu. Svaka osoba treba koristiti vlastiti Memo račun i Apple račun. Darovni ili promotivni kodovi za web-stranicu ne mogu se primijeniti na kupnju u App Storeu.",
   "native.micDenied": "Memo treba pristup mikrofonu. Dopusti ga u Postavkama iOS-a → Memo AI → Mikrofon.",
   "native.appleDisconnectLink": "Pogledaj upute Applea",
+
+  // Push obavijesti. Čitatelj ih vidi na zaključanom zaslonu, pa su kratke i
+  // ne spominju ime aplikacije: to iOS ispisuje sam.
+  "push.noteReady.title": "Bilješke su spremne",
+  "push.noteReady.body": "{title} te čeka za učenje.",
+  "push.noteFailed.title": "Nismo uspjeli dovršiti bilješke",
+  "push.noteFailed.body": "Otvori Memo i pokušaj {title} ponovno.",
+  "push.untitledNote": "Tvoja bilješka",
+  "push.enableTitle": "Da ti javimo kad bude gotovo?",
+  "push.enableBody": "Bilješke nastaju nekoliko minuta. Slobodno odloži telefon — javit ćemo ti čim budu spremne.",
+  "push.enableAllow": "Javi mi",
+  "push.enableSkip": "Ne, hvala",
 };

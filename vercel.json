@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/stalled-lectures",
       "schedule": "25 * * * *"
+    },
+    {
+      "path": "/api/cron/push-queue",
+      "schedule": "35 * * * *"
     }
   ]
 }

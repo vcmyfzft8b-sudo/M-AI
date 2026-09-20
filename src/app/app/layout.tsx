@@ -5,6 +5,7 @@ import { WindowFileDropGuard } from "@/components/window-file-drop-guard";
 import { AppShell } from "@/components/app-shell";
 import { ImpersonationBannerSlot } from "@/components/impersonation-banner-slot";
 import { NavigationFeedbackProvider } from "@/components/navigation-loading";
+import { OfflineProvider } from "@/components/offline/offline-provider";
 import { getViewerAppState } from "@/lib/billing";
 import { PREVIEW_AUTH_BYPASS_USER_ID, requireUser } from "@/lib/auth";
 import { readActiveTestPersona } from "@/lib/test-persona-server";
@@ -64,14 +65,23 @@ export default async function AppLayout({
 
   return (
     <NavigationFeedbackProvider>
-      <WindowFileDropGuard />
-      <AppShell
-        hasPaidAccess={Boolean(appState?.hasPaidAccess)}
-        initialPathname={pathname}
-      >
-        {children}
-      </AppShell>
-      <ImpersonationBannerSlot />
+      {/*
+        * Connectivity is owned above the shell rather than by each screen, for
+        * two reasons: the fetch stub that answers `/api` from the offline
+        * snapshot has to be installed before any child can make a request, and
+        * every screen under here — the library, a note, the banner — has to
+        * agree about whether there is a connection.
+        */}
+      <OfflineProvider>
+        <WindowFileDropGuard />
+        <AppShell
+          hasPaidAccess={Boolean(appState?.hasPaidAccess)}
+          initialPathname={pathname}
+        >
+          {children}
+        </AppShell>
+        <ImpersonationBannerSlot />
+      </OfflineProvider>
     </NavigationFeedbackProvider>
   );
 }

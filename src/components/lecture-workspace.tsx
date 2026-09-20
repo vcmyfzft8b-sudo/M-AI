@@ -18,6 +18,7 @@ import { NoteReadAloud } from "@/components/note-read-aloud";
 import { NoteSpeedReader } from "@/components/note-speed-reader";
 import { StudyCompletionCard } from "@/components/study-completion-card";
 import { MemoPortal } from "@/components/memo-portal";
+import { OfflineFeatureNotice, useOfflineGuard } from "@/components/offline/offline-notice";
 import { RecordingPlayer } from "@/components/recording-player";
 import {
   getApiErrorMessage,
@@ -1215,6 +1216,13 @@ export function LectureWorkspace({
   const { navigateWithFeedback, overlay: navigationOverlay, navigatingTo } = useInstantNavigation();
   const notePathname = usePathname();
   const isCreatorDemo = useIsCreatorDemo();
+  /*
+   * With no connection the note itself, its cards, its quiz, its test, its
+   * transcript and its map are all here — they came with the snapshot. What is
+   * not here is anything the model has to make or speak on the spot, and the
+   * controls for those say so rather than failing. See `offline-notice.tsx`.
+   */
+  const { isOffline, blockedOffline, offlineToast } = useOfflineGuard();
   const [detail, setDetail] = useState(initialDetail);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("notes");
   const [question, setQuestion] = useState("");
@@ -1550,8 +1558,17 @@ export function LectureWorkspace({
     });
     const canUsePageLifecycleTransport = payloadBlob.size <= STUDY_SESSION_KEEPALIVE_MAX_BYTES;
 
+    /*
+     * `sendBeacon` is the page-lifecycle transport, and it is the one request in
+     * this file the offline stub cannot see: it does not go through `fetch`, so
+     * with no connection it is accepted by the browser, quietly dropped, and
+     * then marked as persisted here — which is the one way study done offline
+     * could be lost for good. Offline the write takes the ordinary path, where
+     * it is queued and replayed.
+     */
     if (
       options?.preferBeacon &&
+      !isOffline &&
       canUsePageLifecycleTransport &&
       typeof navigator !== "undefined" &&
       typeof navigator.sendBeacon === "function"
@@ -1604,7 +1621,7 @@ export function LectureWorkspace({
       });
 
     studySessionWriteInFlightRef.current = writeRequest;
-  }, [detail.lecture.id]);
+  }, [detail.lecture.id, isOffline]);
 
   useEffect(() => {
     const nextDetail = mergeLectureDetailWithStoredStudySession(initialDetail);
@@ -2252,6 +2269,10 @@ export function LectureWorkspace({
   ]);
 
   async function handleRetry() {
+    if (blockedOffline("generate")) {
+      return;
+    }
+
     setIsRetrying(true);
     const response = await fetch(`/api/lectures/${detail.lecture.id}/retry`, {
       method: "POST",
@@ -2800,6 +2821,16 @@ export function LectureWorkspace({
     const draft = (override ?? question).trim();
 
     if (!draft || chatLimitReached) {
+      return;
+    }
+
+    /*
+     * Belt and braces with the closed composer above: the suggestion chips and
+     * the keyboard both reach this directly, and neither should be able to put
+     * a question into the log that nothing can answer.
+     */
+    if (isOffline) {
+      setChatError(t("offline.feature.chat.body"));
       return;
     }
 
@@ -3861,8 +3892,14 @@ export function LectureWorkspace({
    * and a sheet on the phone, so the body is shared and only the frame differs.
    */
   function renderChatBody() {
+    /*
+     * Offline the field is closed rather than left open to swallow a question:
+     * the answer comes from the model, and a message that sits in the log
+     * unanswered is worse than a composer that plainly cannot be used. The
+     * conversation so far came with the snapshot and stays readable above it.
+     */
     const composerDisabled =
-      detail.lecture.status !== "ready" || isSending || chatLimitReached;
+      detail.lecture.status !== "ready" || isSending || chatLimitReached || isOffline;
     // Nothing to send yet, and a microphone to offer instead.
     const showChatMic = dictation.supported && !question.trim() && !isSending;
 
@@ -3972,6 +4009,8 @@ export function LectureWorkspace({
             <p className="memo-chat-status">{t("chat.status.transcribing")}</p>
           ) : chatError ? (
             <p className="memo-chat-status danger">{chatError}</p>
+          ) : isOffline ? (
+            <p className="memo-chat-status">{t("offline.feature.chat.body")}</p>
           ) : detail.lecture.status !== "ready" ? (
             <p className="memo-chat-status">{t("chat.status.notReady")}</p>
           ) : chatLimitReached ? (
@@ -3992,6 +4031,25 @@ export function LectureWorkspace({
   }
 
   function renderPanel() {
+    /*
+     * The three tabs that are a live service rather than a stored artefact: a
+     * conversation with the tutor, an episode that is synthesised on request,
+     * and — once its materials have to be made — the town. Each is given the
+     * whole panel to explain itself, because a screen that opened and then
+     * failed at the first button is the thing this replaces.
+     */
+    if (isOffline && activeTab === "tutor") {
+      return <OfflineFeatureNotice feature="tutor" />;
+    }
+
+    if (isOffline && activeTab === "podcast") {
+      return <OfflineFeatureNotice feature="podcast" />;
+    }
+
+    if (isOffline && activeTab === "palace" && !palaceMaterials.ready) {
+      return <OfflineFeatureNotice feature="generate" />;
+    }
+
     if (activeTab === "podcast") {
       return (
         <LecturePodcast
@@ -4108,7 +4166,14 @@ export function LectureWorkspace({
           type="button"
           className="memo-annotate-icon"
           onMouseDown={(event) => event.preventDefault()}
-          onClick={() => notePhotoInputRef.current?.click()}
+          onClick={() => {
+            /* Before the picker, so the refusal is not a file chosen and then lost. */
+            if (blockedOffline("edit")) {
+              return;
+            }
+
+            notePhotoInputRef.current?.click();
+          }}
           disabled={isSavingNoteDoc || !selectedNoteBlockId}
           aria-label={t("note.annotate.photo")}
           title={t("note.annotate.photo")}
@@ -5474,7 +5539,17 @@ export function LectureWorkspace({
         <div className="memo-transcript">
           {/* The redesign puts the recording's player above the transcript
               rather than on a tab of its own. */}
-          {detail.audioUrl ? (
+          {/*
+            * The recording lives in the account's storage behind a URL signed
+            * for the hour, so offline there is nothing to play — but the
+            * transcript underneath it is the note's own text and reads fine.
+            */}
+          {detail.audioUrl && isOffline ? (
+            <p className="memo-offline-inline">
+              <Msym name="wifi_off" size="1.05rem" fill={false} weight={500} />
+              {t("offline.feature.audio.body")}
+            </p>
+          ) : detail.audioUrl ? (
             <RecordingPlayer key={detail.audioUrl} src={detail.audioUrl} />
           ) : null}
 
@@ -6241,6 +6316,7 @@ export function LectureWorkspace({
 
       {chatPanel}
       {noteActionSheets}
+      {offlineToast}
     </>
   );
 }

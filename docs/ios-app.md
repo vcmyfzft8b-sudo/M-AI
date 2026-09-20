@@ -228,9 +228,13 @@ Notes on behaviour worth knowing:
 - A call or another app taking the microphone pauses the recorder; the page shows it as paused and the user can resume. Paused time is not recorded.
 - A page load abandons a recording in progress, and any take left by a previous launch is deleted at startup: the draft it belonged to goes with the page.
 
+### Offline
+
+The app opens and reads with no connection. Everything about it is shared with the web app and documented in [docs/offline.md](/docs/offline.md); the two things that are the wrapper's own are `WKAppBoundDomains` in `Info.plist` and `limitsNavigationsToAppBoundDomains` on the web view — WKWebView runs a service worker only for an app-bound domain, and with either half missing the page never even attempts to register one. Both are off for a Vercel preview, whose host changes with every deployment and so cannot be in a static list, so **offline mode cannot be checked on a preview**: use production, or a local production build served over TLS as that document describes.
+
 ### Product and review limits
 
-Recording is native and continues with the phone locked; the tutor still relies on WKWebView and must be tested on a physical phone. The app requires a network connection. Generated blob sharing has a 32 MiB cap. Extra voice-credit consumables are not offered in iOS. The account deletion screen explains that Apple subscriptions must be cancelled separately through Apple's subscription controls.
+Recording is native and continues with the phone locked; the tutor still relies on WKWebView and must be tested on a physical phone. The app reads with no connection — the library, every note that has been opened and its study material — and refuses only what has to be made or spoken on the spot; see [docs/offline.md](/docs/offline.md), which also covers the two wrapper settings that make it possible (`WKAppBoundDomains` and `limitsNavigationsToAppBoundDomains`, without which WKWebView runs no service worker at all) and how to check it on a simulator. Generated blob sharing has a 32 MiB cap. Extra voice-credit consumables are not offered in iOS. The account deletion screen explains that Apple subscriptions must be cancelled separately through Apple's subscription controls.
 
 The native AI consent gate discloses Google Gemini, Soniox, OpenRouter and its model providers before the study screens open. Withdrawal stops subsequent normal app use; it does not cancel an already running job. The local legal catalogues now disclose OpenRouter and Apple transaction verification, distinguish web billing from App Store billing, and direct Apple cancellation/refund requests to Apple in all five languages. These updates still require deployment with this branch.
 

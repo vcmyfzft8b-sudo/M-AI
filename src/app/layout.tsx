@@ -120,6 +120,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "unfold_more",
   "warning",
   "wifi",
+  "wifi_off",
 ].join(",");
 
 const MATERIAL_SYMBOLS_HREF =

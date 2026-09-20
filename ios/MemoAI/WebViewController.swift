@@ -104,6 +104,25 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         view.backgroundColor = UIColor(named: "Canvas")
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
+        /*
+         * Offline mode is a service worker, and WKWebView will only run one for
+         * a domain listed in `WKAppBoundDomains` *and* only when the web view
+         * opts into that restriction here. Without both halves the page's
+         * `navigator.serviceWorker.register` never fires — measured: zero
+         * requests for `/sw.js` — and the app has nothing cached to open with
+         * no connection.
+         *
+         * The restriction it buys is one this wrapper already imposes on
+         * itself: the web view may navigate only to Memo. Every external link
+         * is already handed to the system browser, and both native sign-ins run
+         * in `ASWebAuthenticationSession`, outside this view.
+         *
+         * Off for a Vercel preview, whose host changes with every deployment
+         * and so cannot be in a static list: a preview would otherwise refuse
+         * to load at all. Previews are for layout and flow; offline mode is
+         * checked against production or a local TLS build.
+         */
+        config.limitsNavigationsToAppBoundDomains = AppConfiguration.isAppBound
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = [.video]
         config.applicationNameForUserAgent = "MemoAI-iOS/1.0"

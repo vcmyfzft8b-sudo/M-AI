@@ -435,3 +435,20 @@ test("the permission sheet closes on the press, whichever way it is answered", (
   );
   assert.doesNotMatch(allow, /await nativeRequest/, "the press is blocked on the reply again");
 });
+
+test("delivery does not depend on a call site being reached", () => {
+  // The enqueue lives in a trigger precisely so no path can forget it. Sending
+  // needed the same guarantee: in production the trigger queued every
+  // notification and the inline flush never ran for them, so nothing went out
+  // until the sweep. The sweep is therefore the mechanism, not the net.
+  const vercel = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
+  const cron = vercel.crons.find((entry) => entry.path.startsWith("/api/cron/push-queue"));
+  assert.ok(cron, "nothing drains the queue on a schedule");
+  assert.equal(cron.schedule, "* * * * *", "the drain is too rare to be the delivery path");
+});
+
+test("two drains racing cannot send the same notification twice", () => {
+  // Every minute means a slow run can still be going when the next starts.
+  const source = readFileSync(new URL("../src/lib/mobile/push.ts", import.meta.url), "utf8");
+  assert.match(source, /\.eq\("attempts", row\.attempts\)/, "the claim is not a compare-and-swap");
+});

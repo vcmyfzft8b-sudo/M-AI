@@ -19,7 +19,7 @@
     },
     {
       "path": "/api/cron/push-queue",
-      "schedule": "35 * * * *"
+      "schedule": "* * * * *"
     }
   ]
 }

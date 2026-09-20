@@ -91,7 +91,10 @@ test("a real partial cancels a loading answer; only its endpoint requests a new 
   const request = deferred(); h.state.request = () => request.promise;
   await h.start();
   const opening = h.calls.find(c => c.kind === "opening");
+  h.state.input.handlers.onPartial("Wait");
+  await h.tick(700);
   h.state.input.handlers.onPartial("Wait, explain");
+  await settle();
   assert.equal(opening.signal.aborted, true);
   assert.equal(h.tutor.phaseRef.current, "listening");
   assert.equal(h.calls.filter(c => c.kind === "answer").length, 0);
@@ -117,9 +120,25 @@ test("noise and speaker echo neither interrupt nor ask for an answer", async () 
   assert.equal(h.tutor.phaseRef.current, "speaking");
 });
 
-test("the first recognized learner partial starts the short interruption fade before endpointing", async () => {
+test("a learner talking over the tutor takes the floor, but not on the first instant", async () => {
   const h = sessionHarness(); await h.start();
+  const stops = h.state.output.stops.length;
+
+  // One word is where a person starts and where a room full of stray voices
+  // also starts, so the tutor carries on for a moment rather than cutting out
+  // mid-syllable.
   h.state.input.handlers.onPartial("Wait");
+  await settle();
+  assert.equal(h.state.output.stops.length, stops, "stopped on the first word");
+  assert.equal(h.tutor.phaseRef.current, "speaking");
+
+  // They keep going, so it really is an interruption.
+  await h.tick(300);
+  h.state.input.handlers.onPartial("Wait but why");
+  await h.tick(400);
+  h.state.input.handlers.onPartial("Wait but why does that");
+  await settle();
+
   assert.equal(h.state.output.stops.at(-1)?.fadeOut, true);
   assert.equal(h.tutor.phaseRef.current, "listening");
   assert.equal(h.calls.filter(c => c.kind === "answer").length, 0);
@@ -186,6 +205,10 @@ test("a silent explain-back still advances after its original 16-second window",
 test("a stable question prepares silently and only its confirmed endpoint can speak", async () => {
   const h = sessionHarness(); await h.start();
   const before = h.audio.length;
+  // Under the four-word threshold, so this one takes the floor without also
+  // preparing a reply the test would then count twice.
+  h.state.input.handlers.onPartial("Why does");
+  await h.tick(700);
   h.state.input.handlers.onPartial("Why does calcium trigger release");
   await h.tick(300);
   assert.equal(h.calls.filter(c => c.kind === "answer").length, 1);

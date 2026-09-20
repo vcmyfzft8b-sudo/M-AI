@@ -88,8 +88,23 @@ export function sessionHarness({ source } = {}) {
       return response.result ?? { speech: "An answer.", handBack: true, awaitingExplanation: false };
     } },
   };
+  /*
+   * One clock, not two.
+   *
+   * The harness has always driven `setTimeout` from `now`, but left `Date.now`
+   * reading the wall clock — so any code that schedules with one and measures
+   * with the other was being tested against two clocks that disagreed by
+   * however long the test took. The barge-in gate measures how long somebody
+   * has been talking, which is exactly that shape, so it made the disagreement
+   * impossible to ignore.
+   */
+  const HarnessDate = function (...args) { return new Date(...args); };
+  HarnessDate.now = () => now;
+  HarnessDate.prototype = Date.prototype;
+
   const context = {
     exports: {}, require: (name) => stubs[name] ?? {}, window,
+    Date: HarnessDate,
     AbortController, DOMException, TypeError, console,
     document: { visibilityState: "visible" },
     fetch: async (url, options) => {

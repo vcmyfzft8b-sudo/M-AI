@@ -18,6 +18,7 @@ import {
   type NoteTtsVoice,
 } from "@/lib/note-tts-settings";
 import {
+  BargeInGate,
   judgeHeard,
   LevelEnvelope,
   SpeechTextBuffer,
@@ -306,6 +307,13 @@ export function LectureTutor({
    * that wakes up no longer holding it simply stops.
    */
   const floorTokenRef = useRef(0);
+  /**
+   * How much of somebody talking over the tutor has been heard so far.
+   *
+   * The policy is in `turn-audio.ts` with the rest of the interruption rules;
+   * this only carries its state across partials.
+   */
+  const bargeInRef = useRef(new BargeInGate());
   const preparedReplyRef = useRef(new PreparedTutorReply<Response>());
 
   const setPhaseNow = useCallback((next: TutorPhase) => {
@@ -1245,6 +1253,7 @@ export function LectureTutor({
    * The learner has taken the floor. Stop, and record only what they heard.
    */
   const commitInterruption = useCallback(() => {
+    bargeInRef.current.reset();
     floorTokenRef.current += 1;
     clearTimer(followUpTimerRef);
     turnAbortRef.current?.abort();
@@ -1457,12 +1466,23 @@ export function LectureTutor({
             return;
           }
           if (whoSpoke(text) !== "learner") {
+            // Echo and noise must never accumulate towards taking the floor.
+            bargeInRef.current.reset();
             return;
           }
 
-          // A reply still loading must yield on the first real word too.
+          /*
+           * A reply still loading must yield too — but neither yields on the
+           * first word any more. A room is full of single words addressed to
+           * nobody, and every one of them used to stop the lesson dead; and
+           * even when it is the learner, a person carries on for a moment
+           * rather than cutting out mid-syllable. `BargeInGate` holds the floor
+           * until somebody has kept talking long enough to mean it.
+           */
           if (phaseRef.current === "speaking" || phaseRef.current === "thinking") {
-            commitInterruption();
+            if (bargeInRef.current.consider(Date.now(), text, "learner") === "interrupt") {
+              commitInterruption();
+            }
           }
 
           setHeard({ text: latestHeardSentence(text, language), settled: false });

@@ -359,6 +359,25 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let main = action.targetFrame?.isMainFrame ?? true
         if !main { decisionHandler(url.scheme == "https" || url.scheme == "about" ? .allow : .cancel); return }
         if AppConfiguration.isInternal(url) {
+            /*
+             * Never navigate the apex, even though it is trusted. It answers
+             * with a redirect to `www`, so online this only costs a round trip —
+             * but a service worker belongs to one origin, and the app's is
+             * `www`'s. A main-frame navigation to the apex with no connection
+             * lands where nothing can intercept it, and the reader gets the
+             * native "could not connect" screen with a cached library sitting
+             * behind it. Rewritten here rather than only at the start URL,
+             * because a link inside the app can name the canonical domain too.
+             */
+            if url.host == AppConfiguration.productionApex.host, main,
+               var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+                parts.host = AppConfiguration.productionOrigin.host
+                if let canonical = parts.url {
+                    decisionHandler(.cancel)
+                    webView.load(URLRequest(url: canonical))
+                    return
+                }
+            }
             if url.path == "/auth/logout" || url.path == "/auth/account-deleted" {
                 AppleSignIn.setCurrentUser(nil)
             }

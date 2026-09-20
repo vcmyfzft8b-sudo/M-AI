@@ -336,7 +336,7 @@ test("Enter presses the call to action wherever there is one", () => {
   assert.doesNotMatch(handler, /active\.kind === "loading"/);
 
   // One definition of "pressable", shared by the button and the keyboard.
-  assert.match(FLOW, /ctaRef\.current = \{ press: pressCta, enabled: showCta && !ctaDisabled \}/);
+  assert.match(FLOW, /ctaRef\.current = \{ press: pressCta, enabled: showCta && !ctaDisabled && !finishing \}/);
   assert.match(FLOW, /next: pressCta,/);
 
   // Typing in the practice test's answer box is still typing.

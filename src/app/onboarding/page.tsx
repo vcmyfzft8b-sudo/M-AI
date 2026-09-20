@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { OnboardingFlow } from "@/components/onboarding-flow";
 import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import { getViewerCheckoutState } from "@/lib/billing";
 import { hasSeenOnboarding } from "@/lib/onboarding-anonymous";
+import { isNativeUserAgent } from "@/lib/mobile/runtime";
 import { hasPublicSupabaseEnv } from "@/lib/public-env";
 
 /**
@@ -50,9 +52,14 @@ export default async function OnboardingPage() {
 
   if (await hasSeenOnboarding()) redirect("/auth/continue");
 
+  // The arrow goes back to the landing page they pressed "Try it for €0" on.
+  // The app has no landing page — the wrapper rewrites `/` to this screen — so
+  // there it stays where it was, which is off.
+  const native = isNativeUserAgent((await headers()).get("user-agent"));
+
   return (
     <main className="app-start-shell">
-      <OnboardingFlow anonymous />
+      <OnboardingFlow anonymous backHref={native ? undefined : "/"} />
     </main>
   );
 }

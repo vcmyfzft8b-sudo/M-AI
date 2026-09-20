@@ -403,6 +403,7 @@ export function OnboardingFlow({
   profile,
   demo = false,
   anonymous = false,
+  backHref,
 }: {
   profile?: ProfileRow | null;
   /** The `/creator` copy: the same screens, with nothing written and nowhere to go. */
@@ -415,6 +416,17 @@ export function OnboardingFlow({
    * profile, and the last button opens sign-in instead of the upgrade screen.
    */
   anonymous?: boolean;
+  /**
+   * Where the back arrow goes from the very first step.
+   *
+   * Only the landing page, and only on the web: someone who pressed "Try it
+   * for €0" to get here has to be able to change their mind, and before this
+   * the arrow was simply dead on step one. Decided by the server rather than
+   * sniffed here, because the app has no landing page to return to — the
+   * wrapper rewrites `/` back to this very screen, so an arrow pointing there
+   * would be a loop.
+   */
+  backHref?: string;
 }) {
   const { locale, t } = useTranslations();
   const router = useRouter();
@@ -428,6 +440,15 @@ export function OnboardingFlow({
       targetGrade: Number.parseFloat(profile?.target_grade?.replace(",", ".") ?? "") || 4.5,
     },
   }));
+  /**
+   * The last button has been pressed and the next screen is on its way.
+   *
+   * Navigation here is a route change plus a refresh, which on a cold cache is
+   * long enough for a second press to land — and long enough for the button to
+   * look broken if it says nothing. It is never unset: the only way out of
+   * this screen is away from it.
+   */
+  const [finishing, setFinishing] = useState(false);
   const [gradeTouched, setGradeTouched] = useState({
     currentAverageGrade: false,
     targetGrade: false,
@@ -1242,11 +1263,13 @@ export function OnboardingFlow({
    * the page decides which half to show.
    */
   const finish = () => {
+    if (finishing) return;
+    setFinishing(true);
     router.push(anonymous ? "/auth/continue" : mapAppHrefForClient("/app/start"));
     router.refresh();
   };
 
-  ctaRef.current = { press: pressCta, enabled: showCta && !ctaDisabled };
+  ctaRef.current = { press: pressCta, enabled: showCta && !ctaDisabled && !finishing };
 
   const v = {
     accent: ACCENT,
@@ -1460,15 +1483,16 @@ export function OnboardingFlow({
     loadingRows: loaderRows,
 
     next: pressCta,
-    back: () => go(-1),
-    backDisabled: index === 0,
-    backState: index === 0 ? "off" : "on",
+    back: () => { if (index === 0) { if (backHref) router.push(backHref); return; } go(-1); },
+    backDisabled: index === 0 && !backHref,
+    backState: index === 0 && !backHref ? "off" : "on",
     /* Single-select steps advance on tap, so a Continue button would be a
        second control for something already done. Only the steps with nothing
        to pick keep one. */
     showCta,
     ctaLabel: kind === "loading" ? t("common.retry") : ctaLabels[kind] ?? c.ctaContinue,
     ctaDisabled,
+    finishing,
     ctaOpacity: ctaDisabled ? 0.45 : 1,
     ctaBg: "var(--ink)",
     ctaColor: "var(--on-ink)",
@@ -1891,7 +1915,7 @@ export function OnboardingFlow({
       </main>
       <footer style={{ position: "fixed", left: "0", right: "0", bottom: "0", zIndex: "6", boxSizing: "border-box", background: "linear-gradient(to top, var(--bg) 62%, transparent)", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.55rem", padding: "clamp(0.5rem, 1.4vh, 0.9rem) clamp(1rem, 4vw, 2rem) max(0.8rem, env(safe-area-inset-bottom))" }}>
       {v.showCta ? (<>
-      <button type="button" onClick={v.next} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", width: "100%", maxWidth: "34rem", minHeight: "clamp(2.9rem, 7vh, 3.5rem)", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "clamp(0.95rem, 2.2vh, 1.06rem)", fontWeight: "800", letterSpacing: "-0.01em", cursor: "pointer", transition: "transform 170ms cubic-bezier(0.2,0.85,0.2,1), opacity 200ms ease, box-shadow 240ms ease", background: v.ctaBg, color: v.ctaColor, boxShadow: v.ctaGlow, opacity: v.ctaOpacity }} disabled={v.ctaDisabled} className="memo-ob-fx-8">{v.ctaLabel}</button>
+      <button type="button" onClick={v.next} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", width: "100%", maxWidth: "34rem", minHeight: "clamp(2.9rem, 7vh, 3.5rem)", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "clamp(0.95rem, 2.2vh, 1.06rem)", fontWeight: "800", letterSpacing: "-0.01em", cursor: "pointer", transition: "transform 170ms cubic-bezier(0.2,0.85,0.2,1), opacity 200ms ease, box-shadow 240ms ease", background: v.ctaBg, color: v.ctaColor, boxShadow: v.ctaGlow, opacity: v.ctaOpacity }} disabled={v.ctaDisabled || v.finishing} aria-busy={v.finishing} className="memo-ob-fx-8">{v.finishing ? <span aria-hidden="true" className="memo-spin" style={{ width: "1.05rem", height: "1.05rem", flex: "0 0 auto", boxSizing: "border-box", borderRadius: "999px", border: "2px solid currentColor", borderTopColor: "transparent" }} /> : null}<span className="memo-ob-cta-label">{v.ctaLabel}</span></button>
       </>) : null}
       <span style={{ fontSize: "0.76rem", fontWeight: "650", color: "var(--muted-2)", textAlign: "center" }}>{v.footNote}</span>
       </footer>

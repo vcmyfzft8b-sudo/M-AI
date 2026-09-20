@@ -132,21 +132,26 @@ test("the paywall CTA wraps its label", () => {
 });
 
 /*
- * The survey's own button no longer needs wrapping, and this is why.
+ * The survey's button used to need no wrapper, because it never gained a
+ * sibling: its label was the button's only child, so there was nothing to
+ * insert before and nothing that could throw. That was a stronger guarantee
+ * than a wrapper — and it lasted exactly as long as the button had no loading
+ * state.
  *
- * The throw needs two things in one parent: a label React holds as a host
- * sibling, and something conditional that gets inserted before it. The
- * redesigned survey's call to action never gains a sibling — no spinner, no
- * icon, nothing that appears partway through — so its label is the button's
- * only child and there is nothing to insert before. That is a stronger
- * guarantee than a wrapper, but only while it holds, so it is asserted.
+ * The last screen's call to action now grows a spinner while it navigates, so
+ * the button is back in the shape that throws: a conditional element placed
+ * before a label. The remedy is the one the two tests above demonstrate — wrap
+ * the label, because Chrome re-parents text nodes and never elements — and it
+ * is the same one the paywall CTA uses.
  */
-test("the survey CTA has nothing that could be inserted beside its label", () => {
+test("the survey CTA wraps its label, because it now gains a spinner", () => {
   const source = readSource("src/components/onboarding-flow.tsx");
   const cta = source.slice(source.indexOf("{v.showCta ?"), source.indexOf("{v.footNote}"));
 
-  assert.match(cta, /disabled=\{v\.ctaDisabled\}[^>]*>\{v\.ctaLabel\}<\/button>/);
-  assert.doesNotMatch(cta, /<svg|Loader2|animate-spin/);
+  // The label is an element's child, not a bare text node in the button.
+  assert.match(cta, /<span className="memo-ob-cta-label">\{v\.ctaLabel\}<\/span><\/button>/);
+  // And the spinner really is the conditional sibling this protects against.
+  assert.match(cta, /v\.finishing \? <span[^>]*className="memo-spin"/);
 });
 
 /**

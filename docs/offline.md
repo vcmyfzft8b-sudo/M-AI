@@ -96,6 +96,14 @@ optional:
 - **A secure origin.** WKWebView does not extend secure-context status to
   `http://localhost` the way browsers do, so a plain local dev server cannot
   exercise offline mode at all.
+- **The origin the app opens must be the origin the worker is on.** `memoai.eu`
+  307s to `www.memoai.eu`, so the app always *ended up* on `www` — by redirect,
+  which nothing cared about until now. A worker belongs to exactly one origin,
+  so a cold launch with no connection asking for the apex lands where nothing is
+  registered and nothing can intercept: the native "could not connect" screen,
+  with the whole cached library sitting behind it. `AppConfiguration` opens
+  `www` directly, and a main-frame navigation to the apex is rewritten rather
+  than followed.
 
 ### Checking it on a simulator
 

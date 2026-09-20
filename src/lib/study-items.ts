@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import { isWorkAbortedError } from "@/lib/abort-context";
+import { truncateForDatabase } from "@/lib/database-text";
 import { generateStructuredObject } from "@/lib/ai/json";
 import {
   countWords,
@@ -126,7 +127,9 @@ async function judgeCollapseDuplicateItemBatch<TItem extends IndexedKnowledgeIte
     return items;
   }
 
-  const input = items.map((item, index) => `${index}. ${item.claim.slice(0, 130)}`).join("\n");
+  // Safe truncation here too: this one is bound for a prompt rather than a
+  // column, and a lone surrogate cannot be UTF-8 encoded onto the wire either.
+  const input = items.map((item, index) => `${index}. ${truncateForDatabase(item.claim, 130)}`).join("\n");
   // Checkpointed so a retried generation reaches the same verdicts: the outline checkpoint is
   // keyed by the item list this judge produces, and a fresh (nondeterministic) judgment on every
   // attempt would quietly invalidate it.
@@ -430,7 +433,7 @@ function buildQuoteFromUnit(unit: SourceUnit | undefined, claim: string) {
   const source = unit?.text ?? claim;
   const normalized = source.replace(/\s+/g, " ").trim();
 
-  return normalized.slice(0, 180);
+  return truncateForDatabase(normalized, 180);
 }
 
 function buildItemCitation(item: UnitKnowledgeItem, unitByIndex: Map<number, SourceUnit>) {

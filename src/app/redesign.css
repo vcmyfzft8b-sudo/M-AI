@@ -7469,8 +7469,10 @@
 .memo-offline-note-action:disabled,
 .memo-offline-note-link.busy {
   cursor: default;
-  opacity: 0.6;
   pointer-events: none;
+  /* No underline under a turning glyph: while it waits, this is a spinner and
+     not a link, and the rule drawn beneath it was the odd part. */
+  text-decoration: none;
 }
 
 .memo-offline-note-action .msym,

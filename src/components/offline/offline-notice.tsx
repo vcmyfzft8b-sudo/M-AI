@@ -94,12 +94,17 @@ export function OfflineFeatureNotice({ feature }: { feature: OfflineFeature }) {
         type="button"
         className="memo-offline-note-action"
         disabled={checking}
+        aria-label={checking ? t("offline.checking") : undefined}
         onClick={() => void check()}
       >
+        {/* While it runs, the spinner *is* the button: a label swapped under a
+            turning glyph, both underlined because this is a text link, was more
+            going on than a wait this short deserves. */}
         {checking ? (
           <Msym name="progress_activity" className="memo-spin" size="1.05rem" />
-        ) : null}
-        {t(checking ? "offline.checking" : "offline.checkAgain")}
+        ) : (
+          t("offline.checkAgain")
+        )}
       </button>
     </div>
   );

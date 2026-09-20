@@ -87,6 +87,7 @@ function OfflineUnavailable({ route }: { route: OfflineRoute }) {
           type="button"
           className="memo-offline-note-action"
           disabled={checking}
+          aria-label={checking ? t("offline.checking") : undefined}
           onClick={() => {
             void check().then((online) => {
               if (online) {
@@ -97,20 +98,23 @@ function OfflineUnavailable({ route }: { route: OfflineRoute }) {
         >
           {checking ? (
             <Msym name="progress_activity" className="memo-spin" size="1.05rem" />
-          ) : null}
-          {t(checking ? "offline.checking" : "offline.checkAgain")}
+          ) : (
+            t("offline.checkAgain")
+          )}
         </button>
         {offersHome ? (
           <InstantLink
             href="/app"
             className={`memo-offline-note-link ${leaving ? "busy" : ""}`.trim()}
             aria-busy={leaving || undefined}
+            aria-label={leaving ? t("offline.backToNotes") : undefined}
             onClick={() => setLeaving(true)}
           >
             {leaving ? (
               <Msym name="progress_activity" className="memo-spin" size="1.05rem" />
-            ) : null}
-            {t("offline.backToNotes")}
+            ) : (
+              t("offline.backToNotes")
+            )}
           </InstantLink>
         ) : null}
       </div>

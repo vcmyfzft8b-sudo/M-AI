@@ -233,16 +233,19 @@ export async function deliverPendingPushNotifications(limit = 50) {
 /**
  * Drains the queue for a caller that has just finished a note.
  *
- * Awaited, and deliberately so. This was a floating promise, which on a
- * serverless function is not background work at all: the instance is frozen
- * the moment it answers, and the send simply never happens. Measured in
- * production — two notes settled, the trigger queued both, and neither was
- * ever claimed. Every notification would have waited for the hourly sweep,
- * which for "your notes are ready" is most of the way to not having the
- * feature, and close enough to the one-hour expiry to start losing them.
+ * An optimisation, not the delivery mechanism. It was written as one, and
+ * production showed why that does not hold: notes settled, the trigger queued
+ * every notification, and this never ran for them — first because it was a
+ * floating promise on a function that freezes when it answers, and then,
+ * once awaited, for whichever call site is not reached on those paths.
  *
- * It still never throws. A finished note is finished whether or not a phone
- * can be reached, and the sweep is there for whatever this misses.
+ * Rather than keep hunting call sites — the exact fragility the enqueue avoids
+ * by living in a trigger — `/api/cron/push-queue` now drains every minute and
+ * is what delivery actually depends on. This stays because when it does fire
+ * it makes the notification instant instead of up to a minute late.
+ *
+ * It never throws. A finished note is finished whether or not a phone can be
+ * reached.
  */
 export async function flushPushNotifications() {
   if (!applePushConfigured()) return;

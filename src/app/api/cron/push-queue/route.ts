@@ -4,16 +4,25 @@ import { deliverPendingPushNotifications } from "@/lib/mobile/push";
 import { captureRouteError } from "@/lib/monitoring";
 
 /**
- * The safety net under note notifications.
+ * How note notifications actually get delivered.
  *
- * The queue is normally drained the moment a note settles, by the pipeline run
- * that settled it. This exists for the runs that do not get that far: a
- * function that times out between the database commit and the flush, an APNs
- * outage, a note settled by the stall sweep rather than by its own pipeline.
+ * This started as an hourly net under an inline flush, on the assumption that
+ * the pipeline run which settles a note is also the thing that sends its
+ * notification. Production disagreed: notes settled, the trigger queued every
+ * one of them, and the inline flush did not run — so nothing went out until
+ * the net swept an hour later, which for "your notes are ready" is most of the
+ * way to not having the feature.
  *
- * Hourly, which is the wrong cadence for a notification and the right one for
- * a net — anything it catches is already late, and the queue drops attempts
- * that have aged past usefulness rather than delivering yesterday's news.
+ * Chasing which call site failed to fire would have been chasing the same
+ * fragility the enqueue already avoids by living in a trigger. So the roles
+ * are swapped: the trigger guarantees that a notification is *owed*, this
+ * guarantees that it is *sent*, and the inline flush is left in place as an
+ * optimisation that makes the common case instant rather than as the thing
+ * delivery depends on.
+ *
+ * Every minute. The claim is a compare-and-swap, so a run overlapping the
+ * previous one cannot send anything twice, and a sweep with an empty queue is
+ * one indexed query.
  */
 
 export const runtime = "nodejs";

@@ -18,7 +18,25 @@ import { MemoPortal } from "@/components/memo-portal";
 import { useOffline } from "@/components/offline/offline-provider";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 
-/** The note tabs and actions that cannot be answered from a cached copy. */
+/**
+ * The note tabs and actions that cannot be answered from a cached copy.
+ *
+ * Each has exactly two strings: a short line naming what needs the connection,
+ * used wherever the app has room for one line — the toast, the row that stands
+ * in for the recording's player, the caption under the closed chat field — and
+ * a body that explains, used only where a whole panel is given over to it.
+ */
+/**
+ * The floor on how long a "checking" state stays up.
+ *
+ * The check is often instant — with the interface reporting no connection at
+ * all there is nothing to probe, so it answers in the same tick — and a
+ * spinner that appears and vanishes inside one frame is a tap that looks
+ * ignored. Long enough to be seen, short enough that a real check is not held
+ * up behind it.
+ */
+const MIN_FEEDBACK_MS = 550;
+
 export type OfflineFeature =
   | "chat"
   | "tutor"
@@ -63,8 +81,7 @@ const FEATURE_BODIES: Record<OfflineFeature, MessageKey> = {
  */
 export function OfflineFeatureNotice({ feature }: { feature: OfflineFeature }) {
   const t = useT();
-  const { recheck } = useOffline();
-  const [checking, setChecking] = useState(false);
+  const { checking, check } = useOfflineRecheck();
 
   return (
     <div className="memo-offline-note" role="status">
@@ -77,11 +94,11 @@ export function OfflineFeatureNotice({ feature }: { feature: OfflineFeature }) {
         type="button"
         className="memo-offline-note-action"
         disabled={checking}
-        onClick={() => {
-          setChecking(true);
-          void recheck().finally(() => setChecking(false));
-        }}
+        onClick={() => void check()}
       >
+        {checking ? (
+          <Msym name="progress_activity" className="memo-spin" size="1.05rem" />
+        ) : null}
         {t(checking ? "offline.checking" : "offline.checkAgain")}
       </button>
     </div>
@@ -96,6 +113,10 @@ export function OfflineFeatureNotice({ feature }: { feature: OfflineFeature }) {
  * The app's toast shape in a quieter skin. A solid black capsule is what this
  * product uses to confirm something done; being told why a button did nothing
  * is not that, and it should not arrive with the same weight.
+ *
+ * It says the same short line the panel state leads with, rather than the
+ * panel's explanation: one phrase per feature, everywhere it appears, so the
+ * app never has two ways of saying the same thing.
  */
 export function OfflineToast({ feature, onDone }: { feature: OfflineFeature; onDone: () => void }) {
   const t = useT();
@@ -110,7 +131,7 @@ export function OfflineToast({ feature, onDone }: { feature: OfflineFeature; onD
     <MemoPortal>
       <div className="memo-toast subtle" role="status">
         <Msym name="wifi_off" size="1.1rem" fill={false} weight={500} />
-        <span>{t(FEATURE_BODIES[feature])}</span>
+        <span>{t(FEATURE_TITLES[feature])}</span>
       </div>
     </MemoPortal>
   );
@@ -120,6 +141,29 @@ export function OfflineToast({ feature, onDone }: { feature: OfflineFeature; onD
  * A hook for the many controls whose whole offline behaviour is "say why, then
  * do nothing". Returns a guard to call first and the toast to render.
  */
+/**
+ * Rechecks the connection, and keeps the caller's busy state up long enough to
+ * be seen. Shared so the tab notice and the full screen behave identically.
+ */
+export function useOfflineRecheck() {
+  const { recheck } = useOffline();
+  const [checking, setChecking] = useState(false);
+
+  const check = useCallback(async () => {
+    setChecking(true);
+
+    const [online] = await Promise.all([
+      recheck(),
+      new Promise((resolve) => window.setTimeout(resolve, MIN_FEEDBACK_MS)),
+    ]);
+
+    setChecking(false);
+    return online;
+  }, [recheck]);
+
+  return { checking, check };
+}
+
 export function useOfflineGuard() {
   const isOffline = useOffline().isOffline;
   const [blocked, setBlocked] = useState<OfflineFeature | null>(null);

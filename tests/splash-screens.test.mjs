@@ -299,12 +299,19 @@ test("the service worker caches build output, and no page but the shell", () => 
    * and the network answer is never written anywhere. Offline the branch reads
    * the shell back, so it may *match* a cache; it must not put one.
    */
-  const navigateBranch = sw.slice(
-    sw.indexOf('request.mode === "navigate"'),
-    sw.indexOf("if (isOptimisedImage(url))"),
-  );
+  /*
+   * Bounded by the URL parse that follows it, rather than by the next branch's
+   * condition: those conditions get widened, and an `indexOf` that misses
+   * returns -1, which silently slices to the end of the file and passes or
+   * fails for the wrong reason.
+   */
+  const navigateStart = sw.indexOf('request.mode === "navigate"');
+  const navigateEnd = sw.indexOf("let url;", navigateStart);
 
-  assert.ok(navigateBranch.length > 0, "the navigation branch has moved; re-check this assertion");
+  assert.ok(navigateStart > -1, "the navigation branch has moved; re-check this assertion");
+  assert.ok(navigateEnd > navigateStart, "the URL parse no longer follows the navigation branch");
+
+  const navigateBranch = sw.slice(navigateStart, navigateEnd);
   assert.ok(
     !navigateBranch.includes("cache.put"),
     "the navigation branch writes to a cache; pages must never be stored",

@@ -53,6 +53,46 @@ const SIGNED_STORAGE_MARKER = "/storage/v1/object/sign/";
  */
 const FONT_ORIGINS = ["https://fonts.googleapis.com", "https://fonts.gstatic.com"];
 
+/**
+ * The two pictures the app draws of itself. Kept with the shell rather than
+ * waited for, because neither is requested by every screen: the memory palace
+ * loads the mascot as a raw file for its minimap, and the palace is exactly the
+ * kind of screen somebody opens for the first time on a train.
+ */
+const BRAND_ASSETS = ["/memo-mascot.png", "/memo-lockup.png"];
+
+/**
+ * Any cached size of the picture this URL asks for.
+ *
+ * Only ever reached with no connection, and only after the exact URL has
+ * missed — online the optimiser answers properly and nothing here runs. A
+ * larger copy scaled down is the right trade against a broken image.
+ */
+async function matchAnySize(cache, url) {
+  const source = url.searchParams.get("url");
+
+  if (!source) {
+    return undefined;
+  }
+
+  for (const request of await cache.keys()) {
+    const cached = new URL(request.url);
+
+    if (isOptimisedImage(cached) && cached.searchParams.get("url") === source) {
+      return cache.match(request, { ignoreVary: true });
+    }
+  }
+
+  return undefined;
+}
+
+/** A picture served straight out of `public/`, rather than through the optimiser. */
+function isStaticImage(url) {
+  return (
+    url.origin === self.location.origin && /\.(png|jpe?g|webp|svg|avif|ico)$/i.test(url.pathname)
+  );
+}
+
 function isFontRequest(url) {
   return FONT_ORIGINS.includes(url.origin);
 }
@@ -254,7 +294,9 @@ async function trimCache(cache, currentBuildUrls) {
 
     if (url.pathname.startsWith("/_next/static/")) {
       build.push(request);
-    } else if (storageCacheKey(url) || isOptimisedImage(url)) {
+    } else if (BRAND_ASSETS.includes(url.pathname)) {
+      /* Kept with the shell: the app draws itself with these. */
+    } else if (storageCacheKey(url) || isOptimisedImage(url) || isStaticImage(url)) {
       photos.push(request);
     }
     /* The two shell entries and the icon font are never trimmed. */
@@ -327,6 +369,14 @@ async function cacheOfflineShell(locale, strings, fonts) {
         .map((url) => cacheFont(cache, url).catch(() => {})),
     );
   }
+
+  await Promise.all(
+    BRAND_ASSETS.map(async (path) => {
+      if (!(await cache.match(path))) {
+        await cache.add(path).catch(() => {});
+      }
+    }),
+  );
 
   const meta = await readShellMeta(cache);
 
@@ -540,7 +590,7 @@ self.addEventListener("fetch", (event) => {
    * header of the first screen — and revalidating keeps a replaced image from
    * being stuck forever behind a URL that never changes.
    */
-  if (isOptimisedImage(url)) {
+  if (isOptimisedImage(url) || isStaticImage(url)) {
     event.respondWith(
       (async () => {
         const cache = await caches.open(CACHE);
@@ -573,8 +623,22 @@ self.addEventListener("fetch", (event) => {
 
         const response = await refresh;
 
-        // Nothing cached and nothing reachable: let the image fail as it would.
-        return response ?? Response.error();
+        if (response) {
+          return response;
+        }
+
+        /*
+         * Nothing cached under this exact URL and nothing reachable. Before
+         * giving up, any other size of the same picture will do: the optimiser
+         * keys on width and quality as well as the source, so a screen asking
+         * for a size no other screen has asked for gets a miss even though the
+         * picture itself is right here. That is what put a broken-image frame
+         * in the middle of the memory palace, whose mascot is 110px wide and
+         * nothing else's is.
+         */
+        const alternative = await matchAnySize(cache, url);
+
+        return alternative ?? Response.error();
       })(),
     );
 

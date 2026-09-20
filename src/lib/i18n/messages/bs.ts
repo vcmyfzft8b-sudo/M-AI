@@ -591,7 +591,7 @@ export const bs: Messages = {
   "offline.checking": "Provjeravam...",
   "offline.checkAgain": "Provjeri ponovo",
   "offline.backToNotes": "Nazad na moje bilješke",
-  "offline.requestBlocked": "Nema veze. Za ovo je potreban internet.",
+  "offline.requestBlocked": "Za ovo je potrebna veza.",
   "offline.screen.title": "Nisi povezan",
   "offline.screen.body": "Ovaj ekran treba internet. Sačuvane bilješke su i dalje tu za čitanje.",
   "offline.note.missingTitle": "Ova bilješka nije sačuvana za rad bez veze",

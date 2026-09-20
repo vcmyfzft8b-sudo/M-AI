@@ -84,3 +84,28 @@ test("every app-bound host the wrapper can open is in the plist", () => {
     );
   }
 });
+
+/*
+ * The launch screen is the mark alone, held still on the app's own canvas —
+ * the same mark, in the same place, as the launch image iOS shows before the
+ * process is running, so the handover between the two is invisible. A throbber
+ * underneath it was the one thing on screen that moved, and it announced
+ * "loading" over a screen whose whole job is to look like the app has opened.
+ */
+test("the launch screen has no spinner on it", () => {
+  assert.doesNotMatch(
+    controller,
+    /UIActivityIndicatorView|startAnimating/,
+    "the launch is the mark alone; nothing on it may move",
+  );
+});
+
+test("the failure stack starts hidden, so nothing shows under the mark while it loads", () => {
+  const build = controller.slice(
+    controller.indexOf("private func buildOverlay()"),
+    controller.indexOf("@objc private func reload()"),
+  );
+
+  assert.ok(build.length > 0, "buildOverlay has moved; re-check this assertion");
+  assert.match(build, /overlay\.isHidden = true/);
+});

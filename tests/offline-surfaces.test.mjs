@@ -114,3 +114,61 @@ test("only a finished note is cached", () => {
     /detail\.lecture\.status !== "ready"/,
   );
 });
+
+/*
+ * One phrase per feature, everywhere. The app had two ways of saying the same
+ * thing — a red danger panel on the mind map, a quiet notice on every other
+ * tab, and a toast carrying a whole paragraph — which is what made being
+ * offline feel like a fault on some screens and a state on others.
+ */
+test("wherever there is room for one line, it is the feature's own short line", () => {
+  const notice = read("src/components/offline/offline-notice.tsx");
+
+  assert.match(
+    notice,
+    /<span>\{t\(FEATURE_TITLES\[feature\]\)\}<\/span>/,
+    "the toast says the short line, not the panel's explanation",
+  );
+
+  for (const file of [
+    "src/components/lecture-workspace.tsx",
+    "src/components/library-chat.tsx",
+  ]) {
+    assert.doesNotMatch(
+      read(file),
+      /offline\.feature\.\w+\.body/,
+      `${file} must use the short line; the body belongs to the panel state`,
+    );
+  }
+});
+
+test("the mind map answers offline before it answers with an error", () => {
+  const mindmap = read("src/components/lecture-mindmap.tsx");
+  const offline = mindmap.indexOf("if (isOffline && !doc)");
+  const error = mindmap.indexOf("if (loadError)");
+
+  assert.ok(offline > -1 && error > -1);
+  assert.ok(
+    offline < error,
+    "the offline stub refuses with an Error like any other; checked second, it draws a red panel",
+  );
+});
+
+test("nothing that needs the model is refused with a red panel", () => {
+  const workspace = read("src/components/lecture-workspace.tsx");
+
+  for (const handler of [
+    "handleStudyCreate",
+    "handleQuizCreate",
+    "handlePracticeTestStart",
+    "handleRetry",
+  ]) {
+    const start = workspace.indexOf(`function ${handler}(`);
+    assert.ok(start > -1, handler);
+    assert.match(
+      workspace.slice(start, start + 400),
+      /blockedOffline\("generate"\)/,
+      `${handler} must refuse quietly rather than fail into setStudyError`,
+    );
+  }
+});

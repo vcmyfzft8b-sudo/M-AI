@@ -59,7 +59,6 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private let recorder = LectureRecorder()
     private let overlay = UIStackView()
     private let loadingCover = UIView()
-    private let spinner = UIActivityIndicatorView(style: .medium)
     private let message = UILabel()
     private let retry = UIButton(type: .system)
     private var timeout: Task<Void, Never>?
@@ -262,8 +261,20 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         retry.accessibilityIdentifier = "retry"
         retry.addTarget(self, action: #selector(reload), for: .touchUpInside)
         retry.isHidden = true
-        spinner.startAnimating()
-        [spinner, message, retry].forEach(overlay.addArrangedSubview)
+        /*
+         * No spinner, at any point. The launch is meant to be the mark alone,
+         * held still on the app's own canvas — the same mark, in the same
+         * place, as the launch image iOS shows before the process is even
+         * running, so the handover between the two is invisible. A throbber
+         * underneath it broke that: it was the one thing on screen that moved,
+         * and it announced "loading" over a screen whose whole job is to look
+         * like the app has already opened.
+         *
+         * This stack exists for `showFailure`, which is the only thing here
+         * that has something to say, so it starts hidden.
+         */
+        overlay.isHidden = true
+        [message, retry].forEach(overlay.addArrangedSubview)
         loadingCover.addSubview(overlay)
         NSLayoutConstraint.activate([
             overlay.centerXAnchor.constraint(equalTo: view.centerXAnchor),
@@ -301,7 +312,6 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         webView.isHidden = true
         loadingCover.isHidden = false
         overlay.isHidden = false
-        spinner.stopAnimating()
         message.text = text("connectionFailed")
         retry.isHidden = false
     }
@@ -324,7 +334,6 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
              * which is the only thing that has something to say.
              */
             overlay.isHidden = true
-            spinner.stopAnimating()
             message.text = nil
             retry.isHidden = true
         }
@@ -339,7 +348,6 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         timeout?.cancel()
-        spinner.stopAnimating()
         overlay.isHidden = true
         webView.isHidden = false
         loadingCover.isHidden = true

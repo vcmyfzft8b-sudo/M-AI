@@ -7292,7 +7292,6 @@
  * nothing is the opposite errand and should not land with the same weight.
  */
 .memo-toast.subtle {
-  align-items: flex-start;
   /*
    * Above the screen's own bottom chrome — the home bar on the library, the
    * dock on a note — rather than the confirming toast's 2.2rem, which lands
@@ -7300,30 +7299,48 @@
    */
   bottom: calc(6.6rem + var(--memo-safe-bottom, 0px));
   width: max-content;
-  max-width: min(24rem, calc(100vw - 2.4rem));
-  padding: 0.7rem 1rem;
+  max-width: calc(100vw - 2.4rem);
+  padding: 0.62rem 1.05rem;
   /*
-   * A rectangle, not a capsule: this one carries a sentence rather than three
-   * words, and a 999px radius around two or three lines of text draws a blob.
+   * The app's own selected-accent treatment, not a new one: a full-strength
+   * hairline in the tint, a 16% oklch mix of it into the surface, and the
+   * glyph in the tint itself. That is exactly what a chosen note tab
+   * (`.memo-tab.active`) and a chosen podcast format (`.memo-podcast-show.active`)
+   * wear, so this pill reads as part of the same family rather than as a
+   * notification bolted on.
+   *
+   * The hue is the brand coral — `--coral` is
+   * `linear-gradient(135deg, #ff6d68, #f45f5a)` and this is its lighter stop,
+   * so it is Memo's own colour, one step up in lightness from the button it
+   * usually appears beside. Mixing into `--surface` rather than stating the
+   * fill outright is what makes one rule cover both appearances: pale coral on
+   * white, a deep warm one on the near-black.
    */
-  border-radius: 18px;
-  border: 1px solid var(--line);
-  background: var(--surface);
+  --memo-offline-tint: #ff6d68;
+  border: 1px solid var(--memo-offline-tint);
+  background: color-mix(in oklch, var(--memo-offline-tint) 16%, var(--surface));
   color: var(--text);
-  font-size: 0.88rem;
-  font-weight: 550;
-  line-height: 1.4;
-  text-align: left;
-  text-wrap: pretty;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+}
+
+/*
+ * One line, so the capsule stays a capsule. The message is the same short
+ * phrase the panel state leads with — long enough to name what needs the
+ * connection, short enough that it never wraps into a blob.
+ */
+.memo-toast.subtle > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .memo-toast.subtle .msym {
   flex: 0 0 auto;
-  align-self: flex-start;
-  margin-top: 0.1rem;
-  color: var(--muted);
-  font-size: 1.1rem;
+  color: var(--memo-offline-tint);
+  font-size: 1.05rem;
 }
 
 /*
@@ -7342,13 +7359,55 @@
  */
 .memo-offline-note {
   display: grid;
+  /*
+   * Centred in the space it is given rather than hung from the top. This is
+   * the whole content of whatever screen it appears on — a tab with nothing to
+   * show, a note that was never saved — so a small block of text pinned under
+   * the chrome with the rest of the screen empty below it reads as the page
+   * having failed to finish loading.
+   */
+  align-content: center;
   justify-items: center;
   gap: 0.5rem;
+  /*
+   * Enough of the screen to sit in the middle of what is left after the note's
+   * own chrome — the bar and the pill row above, the dock below. The full-page
+   * version overrides this with the viewport itself; see `.screen` below.
+   */
+  min-height: 58dvh;
   max-width: 26rem;
   margin: 0 auto;
-  padding: 3.2rem 1rem;
+  padding: 1.5rem 1rem;
   text-align: center;
   animation: memo-pop-in 0.24s ease-out both;
+}
+
+/*
+ * The version that *is* the page — a note that was never saved, a screen with
+ * no offline form — rather than the contents of a tab. Nothing else is on
+ * screen, so it takes the viewport and centres in it properly.
+ */
+.memo-offline-note.screen {
+  /*
+   * Pinned to the viewport rather than sized by it. A `min-height` centres
+   * within the panel's own box, which starts wherever the page's padding put
+   * it — and in the wrapper that padding is the status bar's, so the block
+   * came out a third of the way down instead of halfway. Nothing else is on
+   * this screen, so taking it out of flow costs nothing and it lands in the
+   * middle of the space the reader can actually see, on every device.
+   */
+  position: fixed;
+  inset: var(--memo-safe-top, 0px) 0 var(--memo-safe-bottom, 0px) 0;
+  z-index: 80;
+  min-height: 0;
+  max-width: none;
+  padding: 1.5rem;
+  /* It covers the route's own skeleton, which is behind it and never arrives. */
+  background: var(--bg);
+}
+
+.memo-offline-note.screen > * {
+  max-width: 26rem;
 }
 
 .memo-offline-note-icon {
@@ -7395,9 +7454,29 @@
   text-underline-offset: 0.22em;
 }
 
-.memo-offline-note-action:disabled {
+/*
+ * Both of these are a tap that goes somewhere — a probe over the network, or a
+ * document navigation the worker answers from the cache. Neither is instant,
+ * and a plain text link that does nothing visible for half a second reads as a
+ * link that did not register. The glyph sits inline so the label does not move.
+ */
+.memo-offline-note-action,
+.memo-offline-note-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.memo-offline-note-action:disabled,
+.memo-offline-note-link.busy {
   cursor: default;
   opacity: 0.6;
+  pointer-events: none;
+}
+
+.memo-offline-note-action .msym,
+.memo-offline-note-link .msym {
+  color: var(--muted);
 }
 
 /*

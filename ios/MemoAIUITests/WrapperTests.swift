@@ -1,6 +1,95 @@
 import XCTest
 
 final class WrapperTests: XCTestCase {
+    /// Walk the same anonymous onboarding as a fresh PWA install before login.
+    /// The working-adult route avoids school-only questions; demo steps keep
+    /// their ordinary Continue action instead of bypassing the survey cookie.
+    @MainActor private func completeAnonymousOnboarding(_ app: XCUIApplication) {
+        let start = app.webViews.buttons["Get started"].firstMatch
+        guard start.waitForExistence(timeout: 10) || app.webViews.otherElements["Setup progress"].firstMatch.exists else { return }
+        let choices = ["Instagram Reels", "For me", "Working", "Learn 10× faster", "Audio notes", "No, just help me in general", "Casual — 10 min / day"]
+        let deadline = Date().addingTimeInterval(180)
+        var capturedWaitingState = false
+        while Date() < deadline {
+            if app.webViews.buttons["Continue with email"].firstMatch.exists { return }
+            XCTAssertFalse(app.webViews.staticTexts["Your answers could not be saved."].firstMatch.exists,
+                           "Anonymous onboarding must save successfully before sign-in")
+            let cta = ["Get started", "Make my first note", "Continue"].map {
+                app.webViews.buttons.matching(NSPredicate(format: "label == %@", $0)).firstMatch
+            }
+            // WebKit exposes aria-pressed options as switches, not buttons.
+            let options = choices.map {
+                app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", $0)).firstMatch
+            }
+            let action = (cta + options).first { $0.exists && $0.isEnabled && $0.isHittable }
+            if let action {
+                let shot = XCTAttachment(screenshot: app.screenshot())
+                shot.name = "PWA onboarding — \(action.label)"
+                shot.lifetime = .keepAlways
+                add(shot)
+                action.tap()
+            }
+            else if !capturedWaitingState {
+                let hierarchy = XCTAttachment(string: app.debugDescription)
+                hierarchy.name = "Onboarding waiting state"
+                hierarchy.lifetime = .keepAlways
+                add(hierarchy)
+                capturedWaitingState = true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(2))
+        }
+        XCTFail("Anonymous onboarding must finish at sign-in")
+    }
+
+    @MainActor private func dismissInitialOffer(_ app: XCUIApplication) {
+        let close = app.webViews.buttons.matching(NSPredicate(
+            format: "label == %@ OR label == %@", "Close the subscription offer", "Zapri ponudbo naročnine")).firstMatch
+        if close.waitForExistence(timeout: 8) {
+            for _ in 0..<4 where close.exists {
+                close.tap()
+                RunLoop.current.run(until: Date().addingTimeInterval(2))
+            }
+        }
+    }
+
+    // Opt-in account switch for the dedicated staging simulator. This signs in
+    // through the real email-code flow; it does not fabricate an entitlement.
+    @MainActor func testPreviewPrepareStudyAccount() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let preview = env["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              let email = env["MEMO_QA_EMAIL"], let code = env["MEMO_QA_CODE"] else {
+            throw XCTSkip("Requires a staging Preview and its synthetic review account")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        passConsentGate(app)
+        dismissInitialOffer(app)
+        let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+        if settings.waitForExistence(timeout: 15) {
+            settings.tap()
+            let signOut = app.webViews.buttons["Sign out"].firstMatch
+            XCTAssertTrue(signOut.waitForExistence(timeout: 15))
+            for _ in 0..<5 where !signOut.isHittable { app.webViews.firstMatch.swipeUp() }
+            signOut.tap()
+            XCTAssertTrue(app.webViews.staticTexts["Sign out?"].waitForExistence(timeout: 10))
+            let signOutButtons = app.webViews.buttons.matching(identifier: "Sign out")
+            signOutButtons.element(boundBy: signOutButtons.count - 1).tap()
+        }
+        completeAnonymousOnboarding(app)
+        XCTAssertTrue(app.webViews.buttons["Continue with Google"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.webViews.buttons["Continue with Apple"].firstMatch.exists)
+        XCTAssertTrue(signInWithCode(app, email: email, code: code), "The staging review account must sign in")
+        dismissInitialOffer(app)
+        XCTAssertTrue(app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "New note")).firstMatch.waitForExistence(timeout: 30))
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Staging study account signed in"
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
     /// A signed-in synthetic account that withdrew AI permission meets the
     /// consent gate at launch; allow it again (retrying until React hydrates).
     @MainActor private func passConsentGate(_ app: XCUIApplication) {
@@ -8,7 +97,9 @@ final class WrapperTests: XCTestCase {
         let home = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "New note")).firstMatch
         // Wait for whichever page follows the launch cover: home, or the gate.
         let deadline = Date().addingTimeInterval(45)
-        while Date() < deadline, !allow.exists, !home.exists {
+        while Date() < deadline, !allow.exists, !home.exists,
+              !app.webViews.otherElements["Setup progress"].firstMatch.exists,
+              !app.webViews.buttons["Continue with email"].firstMatch.exists {
             RunLoop.current.run(until: Date().addingTimeInterval(1))
         }
         guard allow.exists else { return }
@@ -96,6 +187,7 @@ final class WrapperTests: XCTestCase {
         app.launchEnvironment["MEMO_IOS_URL"] = preview
         app.launch()
         passConsentGate(app)
+        dismissInitialOffer(app)
         continueAfterFailure = false
         func snap(_ name: String) {
             let shot = XCTAttachment(screenshot: app.screenshot())
@@ -273,6 +365,84 @@ final class WrapperTests: XCTestCase {
         confirm.tap()
         XCTAssertTrue(newNote.waitForExistence(timeout: 60), "Deleting the note must return home")
         snap("11 Home after deletion")
+    }
+
+    // Loads real App Store products with no StoreKit fixture. This deliberately
+    // stops before checkout; a displayed button is not a verified purchase.
+    @MainActor func testPreviewRealSubscriptionCatalogue() throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires a staging Preview and signed-in synthetic account")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        let close = app.webViews.buttons["Close the subscription offer"].firstMatch
+        if !close.waitForExistence(timeout: 30) {
+            let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+            XCTAssertTrue(settings.waitForExistence(timeout: 20))
+            settings.tap()
+            let choose = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Choose a plan")).firstMatch
+            XCTAssertTrue(choose.waitForExistence(timeout: 15))
+            for _ in 0..<5 where !choose.isHittable { app.webViews.firstMatch.swipeUp() }
+            choose.tap()
+        }
+        // Eligible accounts show the trial CTA after the native catalogue loads.
+        let payment = app.webViews.buttons.matching(NSPredicate(
+            format: "label IN %@", ["Continue to payment", "Start the 3-day free trial"]
+        )).firstMatch
+        let ready = NSPredicate { _, _ in payment.exists && payment.isEnabled }
+        let result = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: nil)], timeout: 60)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Real StoreKit subscription catalogue"
+        shot.lifetime = .keepAlways
+        add(shot)
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "StoreKit paywall accessibility"
+        hierarchy.lifetime = .keepAlways
+        add(hierarchy)
+        XCTAssertEqual(result, .completed, "Real StoreKit prices must load before checkout is enabled")
+        if close.exists { close.tap() }
+    }
+
+    // Real storefront prices must reach the wheel and both discounted plans.
+    // This consumes only the synthetic account's daily spin, never a purchase.
+    @MainActor func testPreviewWheelShowsRealHalfOffPrices() throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires a staging Preview and eligible synthetic account")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        dismissInitialOffer(app)
+        let promo = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "You got a discount!")).firstMatch
+        XCTAssertTrue(promo.waitForExistence(timeout: 30))
+        promo.tap()
+        let claim = app.webViews.buttons["Claim the discount"].firstMatch
+        let spin = app.webViews.buttons["Spin the wheel"].firstMatch
+        if spin.waitForExistence(timeout: 10), spin.isEnabled { spin.tap() }
+        XCTAssertTrue(claim.waitForExistence(timeout: 30))
+        func snap(_ name: String) {
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = name
+            shot.lifetime = .keepAlways
+            add(shot)
+        }
+        snap("Wheel with real Apple introductory prices")
+        claim.tap()
+        let yearly = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "64.99", "129.99")).firstMatch
+        let monthly = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "9.99", "19.99")).firstMatch
+        XCTAssertTrue(yearly.waitForExistence(timeout: 20), "US Sandbox yearly offer must show 64.99 then 129.99")
+        XCTAssertTrue(monthly.exists, "US Sandbox monthly offer must show 9.99 then 19.99")
+        yearly.tap()
+        snap("Apple yearly half-off offer")
+        monthly.tap()
+        snap("Apple monthly half-off offer")
+        XCTAssertTrue(app.webViews.buttons["Continue"].firstMatch.isEnabled)
+        app.webViews.buttons["Close the offer"].firstMatch.tap()
     }
 
     // Visual review of the edge-to-edge layout on a staging Preview with a
@@ -903,6 +1073,8 @@ final class WrapperTests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["MEMO_IOS_URL"] = preview
         app.launch()
+        passConsentGate(app)
+        dismissInitialOffer(app)
         continueAfterFailure = false
         let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 30))

@@ -187,7 +187,7 @@ npm run ios:open
 5. Alternatively put `DEVELOPMENT_TEAM = YOURTEAMID` in ignored `ios/Config/Local.xcconfig`. Never commit private signing material.
 6. Select your connected iPhone and run. Enable Developer Mode on the phone if Xcode asks.
 
-Debug builds can set `MEMO_IOS_URL` in **Edit Scheme → Run → Arguments → Environment Variables** to `https://your-preview.vercel.app`. Only localhost/127.0.0.1 HTTP or Vercel HTTPS origins are accepted. Omit the path; the app opens `/auth/continue`, which resumes an existing session or shows login. Release builds always use `https://memoai.eu`.
+Debug builds can set `MEMO_IOS_URL` in **Edit Scheme → Run → Arguments → Environment Variables** to `https://your-preview.vercel.app`. Only localhost/127.0.0.1 HTTP or Vercel HTTPS origins are accepted. Set the build setting `MEMO_APP_BOUND_HOST` to the same hostname (without scheme or path), for example `xcodebuild … MEMO_APP_BOUND_HOST=your-preview.vercel.app`. This includes the Preview in `WKAppBoundDomains`; changing only the runtime URL blocks the JavaScript/native bridge. Rebuild after changing hosts. Omit the URL path; the app opens `/onboarding`, which resumes a session or follows the shared PWA onboarding/sign-in flow. Release builds always use the production origin.
 
 The project and manifest generator is `python3 scripts/ios/create-project.py`; generated files and brand assets are checked in. Keep changes to generated configuration in that script as well. Version/build numbers live in `ios/Config/App.xcconfig`.
 
@@ -230,7 +230,11 @@ Notes on behaviour worth knowing:
 
 ### Offline
 
-The app opens and reads with no connection. Everything about it is shared with the web app and documented in [docs/offline.md](/docs/offline.md); the two things that are the wrapper's own are `WKAppBoundDomains` in `Info.plist` and `limitsNavigationsToAppBoundDomains` on the web view — WKWebView runs a service worker only for an app-bound domain, and with either half missing the page never even attempts to register one. Both are off for a Vercel preview, whose host changes with every deployment and so cannot be in a static list, so **offline mode cannot be checked on a preview**: use production, or a local production build served over TLS as that document describes.
+The app opens and reads with no connection. Everything about it is shared with the web app and documented in [docs/offline.md](/docs/offline.md); the two things that are the wrapper's own are `WKAppBoundDomains` in `Info.plist` and `limitsNavigationsToAppBoundDomains` on the web view — WKWebView runs a service worker only for an app-bound domain, and with either half missing the page never even attempts to register one. Preview builds must include their hostname through the `MEMO_APP_BOUND_HOST` build setting, matching `MEMO_IOS_URL`. The wrapper reads the built plist and enables app-bound navigation for that origin. Merely turning off the navigation restriction does not restore JavaScript/native bridge access on unlisted domains. Use a stable Preview alias and rebuild if its hostname changes. Local offline checks still require TLS as described in that document.
+
+### Haptic feedback
+
+The iOS wrapper adds light feedback to real button/link taps and selection feedback to toggles, tabs and plan choices. Delegation handles controls added during PWA navigation without changing the web UI. Disabled controls, scripted clicks, typing and scrolling do not trigger feedback; native calls are limited to one per 100 ms while the app is active. `Haptics.swift` uses UIKit feedback generators and the existing trusted-origin bridge. Physical strength must be checked on an iPhone; Simulator cannot reproduce it.
 
 ### Product and review limits
 

@@ -46,6 +46,7 @@
 		<string>memoai.eu</string>
 		<string>www.memoai.eu</string>
 		<string>localhost</string>
+		<string>$(MEMO_APP_BOUND_HOST)</string>
 	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>

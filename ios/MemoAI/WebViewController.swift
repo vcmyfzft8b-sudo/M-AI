@@ -57,6 +57,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private let appleSignIn = AppleSignIn()
     private let googleSignIn = GoogleSignIn()
     private let recorder = LectureRecorder()
+    private let haptics = Haptics()
     private let push: PushNotifications
     private let overlay = UIStackView()
     private let loadingCover = UIView()
@@ -124,10 +125,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
          * is already handed to the system browser, and both native sign-ins run
          * in `ASWebAuthenticationSession`, outside this view.
          *
-         * Off for a Vercel preview, whose host changes with every deployment
-         * and so cannot be in a static list: a preview would otherwise refuse
-         * to load at all. Previews are for layout and flow; offline mode is
-         * checked against production or a local TLS build.
+         * Preview builds include their selected host via MEMO_APP_BOUND_HOST.
+         * The same restriction must be enabled there for the native bridge
+         * and service worker to behave as they do in the release app.
          */
         config.limitsNavigationsToAppBoundDomains = AppConfiguration.isAppBound
         config.allowsInlineMediaPlayback = true
@@ -144,6 +144,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                 version: 3,
                 request: (command, payload = {}) => window.webkit.messageHandlers.memoNative.postMessage({command, ...payload})
               }) });
+              \(Haptics.script)
               // WebKit does not consistently promote blob anchor clicks to
               // WKDownload. Move generated exports through the same native sheet.
               document.addEventListener('click', async event => {
@@ -476,6 +477,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         Task {
             do {
                 switch command {
+                case "haptic":
+                    if let kind = body["kind"] as? String { haptics.play(kind) }
+                    replyHandler(["status": "done"], nil)
                 case "signInWithGoogle":
                     guard let window = view.window else { throw Store.StoreError.unavailable }
                     let challenge = try await api(path: "/api/mobile/google-auth")

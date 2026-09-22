@@ -1,4 +1,97 @@
-# iOS release readiness — 20 September 2026 update
+# 22 September 2026 — current verification
+
+This section supersedes the older portal status below. **Not yet ready to
+submit:** current end-to-end purchase and physical-device checks remain open.
+
+- Integrated `origin/main` at `2603764d` into `codex/ios-app-wrapper` at
+  `6256fed1`; their product trees matched. The branch Preview
+  `https://memo-1nyjrhksm-nace-valencics-projects.vercel.app` is READY and uses
+  the shared staging Supabase project. The user confirmed that fresh iOS
+  installs must match the PWA: onboarding first, then sign-in.
+- Native simulator build passed; 126 focused mobile tests and all 1,552 web
+  tests passed. These checks do not prove real Apple authentication or billing.
+- App Store Connect API confirms version 1.0 is READY_FOR_REVIEW in an
+  **unsubmitted draft**, with VALID build **1.0.0 (6)** attached and manual
+  release selected. Draft `b7aa39c6-3b7a-4e6c-a0c5-75dc3c54d2be` contains the
+  app version, all four subscription versions and their subscription group.
+  Its `submittedDate` is null. All 16 uploaded screenshots are COMPLETE;
+  review credentials, contact and metadata are present. Content Rights is
+  populated (`DOES_NOT_USE_THIRD_PARTY_CONTENT`).
+- Fixed Apple's missing app-download price by configuring a free download
+  with Slovenia as the base territory. Verified EUR subscription prices:
+  19.99 monthly / 129.99 yearly, first-period offers 9.99 / 64.99, and
+  THREE_DAYS free trials on both trial products. Review notes now explain
+  onboarding before sign-in. Do not interpret the draft's READY_FOR_REVIEW
+  status as proof of end-to-end testing or Apple approval.
+- The signed-in App Privacy page was inspected in Arc: **Published**, with
+  the policy URL `https://memoai.eu/legal/privacy-policy` and 15 declared data
+  types. It is no longer an unanswered questionnaire. This observation does
+  not replace checking the declarations against the implemented data flows.
+- Traced the Preview's unavailable-subscriptions message to WebKit error 14:
+  its host was absent from `WKAppBoundDomains`, blocking JavaScript/native
+  bridge access even with the navigation restriction disabled. Native StoreKit
+  returned all four products correctly. Added the build-time `MEMO_APP_BOUND_HOST`
+  setting and derive app-bound navigation from the built plist. With the Preview
+  host included, the iPhone displays real prices and the three-day trial CTA.
+  The real-catalogue and settings tests now pass on iPhone. The wheel test also
+  passes: spin, claim, select yearly and monthly, and verify 64.99 → 129.99 and
+  9.99 → 19.99 in the offer cards with checkout enabled. Its US Sandbox storefront
+  correctly shows dollars. Real purchase completion
+  and lifecycle tests remain open; catalogue loading is not purchase validation.
+- Inspected Business in App Store Connect: Paid Apps Agreement, EUR bank
+  account, W-8BEN, foreign-status certificate, DSA and DAC7 all show **Active**.
+  All four subscriptions have localizations and availability in 175 territories,
+  including Slovenia and the US; the exact app bundle has In-App Purchase,
+  Sign in with Apple and Push Notifications capabilities enabled.
+- Apple's 15 September email confirms receipt of the Small Business Program
+  enrollment. No approval email was found; the 15% rate is not yet confirmed.
+- The updated account-switch test walks the real anonymous onboarding. It
+  reached the final save and exposed missing staging schema:
+  `public.onboarding_responses` returns REST 404 while `profiles` returns 200.
+  The UI showed "Your answers could not be saved"; the test failed before
+  staging was synchronized. The rerun passed: anonymous onboarding saves,
+  Google and Apple buttons are present, and the synthetic account signs in
+  by email code and reaches the home screen. Screenshots are retained in
+  `review-sep22-onboarding-passed-attachments`.
+  The production start route remains `/onboarding` as requested.
+- Staging synchronization used a clean migration snapshot of fetched
+  `origin/main` at `714fd9be` (same migration files as this branch). Dry run
+  listed 0051–0054. 0051 applied; 0052 stopped because `mobile_oauth_handoffs`
+  already existed without its migration-history entry. Verified the table was
+  empty, its schema/functions/indexes matched main and no foreign keys or
+  policies depended on it. Replayed the unchanged released 0052 SQL atomically
+  after recreating those empty objects, then recorded that actual execution.
+  The normal CLI subsequently applied 0053/0054. REST now verifies the
+  onboarding table exists; Auth, REST and Storage return 200. No history-only
+  repair, production migration or unmerged SQL was run. The other active Memo
+  task was notified before and after synchronization.
+- The account holder connected and unlocked their iPhone 16. Real onboarding,
+  email-code sign-in, settings scrolling and light/dark/system theme selection
+  passed on the phone as well as the simulator. The developer image mounts;
+  the UI-test runner was signed using the existing authorized App Store Connect
+  key because Xcode's local account session was unavailable.
+  Device authentication, locked-screen recording and Sandbox lifecycle checks
+  still require this device. Do not use another person's paired phone.
+- The real staging photo study flow passed: upload, note generation, flashcards,
+  quiz, mindmap, native image sharing, chat response, read-aloud playback controls,
+  and note deletion. Retained screenshots were visually checked, including the
+  actual chat answer. Audio audibility and long playback were not verified.
+- Added wrapper-only light tap and selection haptics, with trusted-event,
+  disabled-control, foreground and rate-limit guards. Build **7** is installed
+  on the phone; its settings click-through passes. Four native regression tests
+  also pass: keyboard, document export, blob export and native error text across
+  all five languages and relaunches. Physical vibration strength needs human
+  perception; the simulator cannot verify it. Build 7 archived and uploaded
+  successfully; Apple is processing it. The unsubmitted draft still has build 6
+  until the new build is valid and can be attached. The final 17 origin/billing
+  guard tests pass. A gallery of 36 screenshots is retained at
+  `ios/build/review-sep22-screenshots.md`.
+
+Evidence is in ignored `ios/build/review-sep22-*` artifacts. The primary local
+`main` was clean and matched fetched `origin/main` at `2603764d` when checked;
+this alone does not verify the live production deployment.
+
+# Earlier release-readiness evidence
 
 ## 20 September 2026 — App Review compliance sweep
 

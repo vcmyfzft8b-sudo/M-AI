@@ -1,14 +1,37 @@
-# Memo AI iOS — handoff for the next agent (updated 20 September 2026)
+# Memo AI iOS — release handoff (updated 22 September 2026)
 
-> **20 September, compliance sweep.** The wrapper was audited end to end
-> against Apple's review requirements; see the top of
-> `ios/AppStore/release-readiness.md`. Two real gaps were found and fixed in
-> the binary (the privacy manifest was missing the file-timestamp
-> required-reason declaration, which would have produced ITMS-91053; lecture
-> takes were not excluded from iCloud backup). Everything else in the list
-> below still stands, plus one item it did not have: the app record's
-> **Content Rights declaration is `null`** and must be answered before the
-> version can be submitted.
+Current evidence is at the top of `ios/AppStore/release-readiness.md`.
+
+- The user confirmed **PWA onboarding first**, then Google/Apple/email sign-in.
+- App Privacy is published. Content Rights is populated. Build **1.0.0 (6)**
+  is attached. The download price is free.
+- Draft submission `b7aa39c6-3b7a-4e6c-a0c5-75dc3c54d2be` contains version
+  1.0, all four subscriptions and their group. **It is not submitted.**
+- Slovenia prices are verified: €19.99 / €129.99, first-period offers
+  €9.99 / €64.99, and three-day trials on the trial products.
+- Staging was missing migrations 0051–0054. It now has all four released
+  migrations, with Auth, REST and Storage health checks passing. 0052's
+  existing empty objects were replayed atomically using the unchanged released
+  SQL before recording its real execution; no migration repair or production
+  migration was used.
+- Real onboarding and email-code sign-in passed after staging synchronization;
+  both Google and Apple buttons are present. The photo study workflow passed,
+  including notes, flashcards, quiz, mindmap/export, chat and deletion. Physical
+  iPhone onboarding, email login and settings tests also pass.
+- Build 7 adds wrapper-only haptics and is installed on the iPhone. Its Release
+  archive uploaded successfully and is processing; the draft still has build 6.
+- Device tests pass for real Apple product loading, three-day trial display,
+  the wheel and both half-off offer cards, and settings/theme controls.
+- Preview catalogue loading is fixed: the Preview host must be included with
+  `MEMO_APP_BOUND_HOST` at build time so WebKit allows the native bridge.
+- Current release gates: complete Google/Apple authentication and Sandbox lifecycle checks on the account
+  holder's iPhone. Business agreement, bank, tax and EU compliance are all Active.
+- Do not control Arc: the user needs to use the Mac uninterrupted. Use APIs
+  and the dedicated `Memo wrapper QA` simulator. Ask for a limited UI handoff
+  only if a remaining Apple setting cannot be handled in the background.
+
+The dated evidence below is historical; the current section above supersedes
+its build, privacy, migration and PR status.
 
 Read this before `docs/ios-app.md` (setup reference) and `ios/AppStore/release-readiness.md` (evidence log).
 
@@ -67,13 +90,23 @@ the row so the next account on that phone is not notified.
 
 ## Remaining work, in order
 
-1. **Merge PR #421** (the account holder decides), confirm production serves it (`/auth/password` → 404; `/auth/continue` has no header logo under either user agent), then re-check the review sign-in on production: Continue with email → `apple-review@memoai.eu` → the code from `~/.config/memoai/apple/review-account.env` → home with the Plant Life Cycle note.
-2. **Device checks on the TestFlight build** (account holder's iPhone; not possible in the simulator): Google and Apple sign-in complete and resume after relaunch (the Apple one already created account `0d3e5149-…` on 17 September, consented and onboarded); recording (start, lock the phone for several minutes, unlock, stop — the clock and the note's duration must both include the locked time, and the Lock Screen banner must count up throughout) and the tutor (microphone, interruptions); Sandbox purchases with the Slovenian Sandbox tester on the device-QA account `ios-device-qa@memoai.eu` (same fixed code): trial monthly/yearly, the wheel's discounted products, same-account restore, wrong-account restore, cancel and expiry; Settings → Manage Apple subscriptions; account deletion of a synthetic account (Apple grant revoked, storage erased by the hourly cron at :40). Fix what fails, bump `CURRENT_PROJECT_VERSION`, re-archive and re-upload (commands below), re-attach the new build to version 1.0.
-3. **Privacy questionnaire** in App Store Connect (no API for it; account holder signed in in the Browser pane): derive from `ios/MemoAI/PrivacyInfo.xcprivacy` — name, e-mail, user id, purchase history, audio, photos/videos, other user content, customer support, product interaction, other usage data, crash/performance/other diagnostics, coarse location; all linked to the user, none used for tracking; purposes app functionality and analytics. Never "Data Not Collected".
-4. **Attach the four subscriptions to version 1.0** on the version page (the "In-App Purchases and Subscriptions" section; there is no API for the attachment). They are READY_TO_SUBMIT already.
-5. **Submit for review** with manual release, then watch Sentry and `vercel logs --search "api/mobile"` for `/api/mobile/*` errors. After the first approved build, retry turning **Streamlined Purchasing** off.
-6. **Business status to confirm, not assume:** Small Business Program (submitted, no decision e-mail yet), EU trader declaration (In Review). Do not claim the 15 % commission until Apple confirms.
-7. Rotate the Supabase Apple client secret before **16 March 2027** (`node scripts/apple/web-client-secret.mjs eu.memoai.web`).
+1. Re-run real Preview onboarding and the synthetic study workflow; no production
+   accounts or data in Preview. Finish settings, recording, offline and keyboard
+   checks on the dedicated simulator and retain screenshots.
+2. On the account holder's connected iPhone, verify native Google and Apple sign-in,
+   microphone/tutor, recording while locked, Sandbox purchases, restore, expiry,
+   cancellation, Apple subscription management and synthetic-account deletion.
+   Authentication must be completed by the account holder when required.
+3. Review the final screenshots and privacy declarations against the final app.
+   If native code changes after build 6, bump both targets' shared build number,
+   archive/upload a new build and replace the draft's attached build.
+4. Submit the assembled draft only after release gates pass and submission is
+   authorized. Keep manual release selected. Apple's READY_FOR_REVIEW status
+   does not mean tests passed or the app is approved.
+5. Small Business Program enrollment receipt is confirmed by Apple's 15 September
+   email; approval and the 15% rate remain unconfirmed. EU trader status is Active.
+6. Rotate the Supabase Apple client secret before **16 March 2027**
+   (`node scripts/apple/web-client-secret.mjs eu.memoai.web`).
 
 ## The separation contract (do not break it)
 

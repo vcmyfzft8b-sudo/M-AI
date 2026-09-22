@@ -1,5 +1,7 @@
 #include "Version.xcconfig"
 PRODUCT_BUNDLE_IDENTIFIER = eu.memoai.memo
+// Debug preview builds override this with the host in MEMO_IOS_URL.
+MEMO_APP_BOUND_HOST = localhost
 // A debug build registers against Apple's sandbox APNs and a release build
 // against production. Getting this wrong does not fail the build: it fails
 // silently at the first send, with Apple answering BadDeviceToken.

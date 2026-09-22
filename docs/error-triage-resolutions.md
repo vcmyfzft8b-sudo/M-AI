@@ -894,112 +894,106 @@ the top of this file). Deleting a seeded account while its browser session is st
 clearest case — prefer closing the page before deleting the user, and read the `os` / `browser` tags
 before believing a preview event describes a learner.
 
-## Open — a note page hydrated under the home page's address, and the whole document was discarded
+## Open — a note layout was rebuilt under the home page's address
 
-**This is not a resolved incident, and it is not the resumed-offer hydration bug.** It is recorded
-so the next run recognises this occurrence of the catch-all hydration id, does not re-derive the
-mechanism from the replay, and does not put a guard in the app shell before the question at the
-bottom of this entry has been answered.
+This incident remains unresolved. It is a separate occurrence of the catch-all hydration
+fingerprint previously used by the resumed-offer bug. Preserve the observations below so a future
+investigation can start from the replay without treating a proposed trigger as established fact.
 
-- **Sentry:** `MEMOAI-WEB-7`, issue `113442418` — the same catch-all fingerprint as the 2026-09-03
-  resumed-offer entry above, which is why it needs triaging on its own evidence
-- **Route:** `/app` (client-side, no Vercel counterpart — nothing 5xx'd; the Vercel scan for this
-  window returned zero groups)
-- **Normalized message:** `Hydration Error` — React error #418, subtitle "Hydration failed - the
-  server rendered HTML didn't match the client."
-- **Event:** `2026-09-20T20:52:32.873Z`, `environment: production`, release
-  `2603764dacec1c7343c260c83d7f7b96046d83f7` — which was the **running** production release
-  (deployment `dpl_7E4ziUNnPBMuJ2E5iieXUKgmZ84W`, ready `2026-09-20T15:26:34Z`), so this is not a
-  dead error a deploy has already fixed
-- **Device:** Mobile Safari 18.7.5 on iOS 18.7, iPhone, viewport 390×663, `lang="sl-SI"`,
-  timezone Europe/Ljubljana
+- **Sentry:** `MEMOAI-WEB-7`, issue `113442418`
+- **Route:** `/app`; the Vercel scan for the original window returned zero groups
+- **Message:** `Hydration Error`, React error #418
+- **Event:** `2026-09-20T20:52:32.873Z`, production, event
+  `c34a41f53f474106bc4213915386d8d7`
+- **Release:** `2603764dacec1c7343c260c83d7f7b96046d83f7`, the release serving production at
+  the event time; deployment `dpl_7E4ziUNnPBMuJ2E5iieXUKgmZ84W` was ready at
+  `2026-09-20T15:26:34Z`
+- **Device:** Mobile Safari 18.7.5 on iOS 18.7, iPhone, viewport 390×663, `lang="sl-SI"`
 - **Replay:** `612e72365e7f440eb96920a7e3e238cd`
-- **Status:** `needs-human`. Not reproduced, and deliberately not fixed (triage rule 8).
+- **Status:** `needs-human`; the original trigger has not been reproduced and this entry changes
+  no application behavior
 
-### What the replay actually shows
+### What the replay shows
 
-Sentry's hydration detector records only a URL — no React diff, no stack, no evidence data — so the
-mechanism had to be read out of the rrweb stream. It is legible there, and worth not repeating:
+The event's hydration breadcrumb contains a URL, with no React mismatch diff or application stack.
+The rrweb recording provides these observations, rechecked against Sentry on 2026-09-22:
 
-- `1789937552807` — full DOM snapshot, 66ms before the error. `<body>` holds `<div hidden>`,
-  `div.memo-launch`, `div.memo.memo-shell` and `<div hidden id="S:0">`. Inside the shell:
-  **`div.memo-grid.note.with-chat`** with `aside.memo-rail.collapsed`,
-  `main.memo-main.app-shell-content` and `div.memo-chat-slot`; the `S:0` streaming slot holds
-  `div.memo-note-screen`. **This is a note page's server HTML** — `/app/lectures/:id`, not `/app`.
-- `1789937552787` — the rrweb meta event already records `href: https://www.memoai.eu/app`, and
-  Sentry's first navigation breadcrumb reads `{from: "/app", to: "/app"}`. **The address bar said
-  `/app` before the SDK even initialised**, while the document in it was the note page's.
-- `1789937552851` — a `navigation.push` to `https://www.memoai.eu/app`, with **no `ui.click`
-  before it**. The first click in the whole replay is 3 seconds later.
-- `1789937552873` — the hydration error.
-- `1789937552885` — one mutation: **71 nodes removed, 132 added**. Every child of `<head>` and
-  every child of `<body>`. React discarded and rebuilt the entire document.
+- `1789937552787`: the meta event records `href: https://www.memoai.eu/app`.
+- `1789937552807`: the full DOM snapshot, 66ms before the error, contains
+  `div.memo-grid.note.with-chat`, `aside.memo-rail.collapsed`, and `div.memo-chat-slot`.
+  It also contains `div.memo-note-screen`, including in the `S:0` streaming slot. This is
+  consistent with a note layout; the snapshot alone does not establish the original HTTP
+  request URL or prove that no script had already changed the DOM.
+- `1789937552850`: the first navigation breadcrumb records `{from: "/app", to: "/app"}`.
+  A performance span at `1789937552851` is labeled `navigation.push` for the same URL.
+  There is no earlier recorded click. The span does not identify the caller or explain why
+  the note layout was present before recording began.
+- `1789937552873`: the `replay.hydrate-error` breadcrumb.
+- `1789937552885`: one mutation removes 71 nodes and adds 132, replacing the children of
+  both `<head>` and `<body>`. The rebuilt main still contains `div.memo-note-screen`.
 
-### The mismatch is `AppShell`'s own output, and nothing else
+The shell changes visible across that mutation are:
 
-Comparing the rebuilt tree against the snapshot, the page content is **identical** — the rebuilt
-`main.memo-main.app-shell-content` still contains `div.memo-note-screen`, with its
-`div.memo-m-navbar`. What changed is only what `src/components/app-shell.tsx` derives from
-`pathname`:
-
-| | server HTML | first client pass |
+| Shell element | Snapshot before error | Rebuilt tree |
 | --- | --- | --- |
 | grid | `memo-grid note with-chat` | `memo-grid home` |
 | rail | `memo-rail collapsed` | `memo-rail` |
-| chat | `div.memo-chat-slot` present | absent |
+| chat slot | present | absent |
 
-`AppShell` takes `const pathname = unmapDemoPathname(clientPathname ?? initialPathname, ...)`
-(`src/components/app-shell.tsx:69`), where `initialPathname` is the `x-pathname` request header the
-server rendered from (`src/lib/supabase/middleware.ts:50`, always the real request path) and
-`clientPathname` is `usePathname()`. The server built the note layout; the hydrating pass read
-`/app` from the router and built the home layout; `isNote`, `isHome`, the chat slot and the rail's
-collapsed state all flipped, and React took the only recovery it has.
+The note screen remains in the main area, but this does not prove that every descendant or
+attribute is identical, or that the shell was the only hydration mismatch.
 
-### Why no fix was opened
+### What the code supports
 
-The explosion is explained. **The trigger is not**: nothing here says why a note page's document was
-being hydrated under `/app`. There was no click, and no `router.push` in `src/` fires on its own at
-load — `home-dashboard.tsx:1195` and `:1509` are `replace`, not `push`, and
-`navigation-loading.tsx:351` needs a tap. `public/sw.js` is not the culprit either: its `fetch`
-handler never caches or replays a navigation (`public/sw.js:578`), it only falls back to
-`SHELL_CACHE_KEY` when the network throws, and the reader here was plainly online — they browsed
-two notes and created one over the next five minutes.
+At the event's release, `src/components/app-shell.tsx` derives its route using
+`unmapDemoPathname(clientPathname ?? initialPathname, ...)`. `clientPathname` comes from
+`usePathname()`; `initialPathname` comes from the request's `x-pathname` header, which
+`src/lib/supabase/middleware.ts` sets from `request.nextUrl.pathname`.
 
-Two candidate triggers remain, and they need opposite responses:
+A note pathname on one render and `/app` on another can explain the observed grid, rail and chat
+changes. The replay does not expose those values during server rendering or the first client
+render, so this is a supported explanation rather than a reproduced root cause.
 
-1. **The client moved the URL before hydration finished** (a soft navigation, a bfcache/tab restore
-   on iOS). Then the app shell is genuinely at fault for trusting `usePathname()` on the pass that
-   must match the server, and the fix is the one PR #319 already used on this file family: render
-   `initialPathname` until `useIsHydrated()` is true.
-2. **The server or an edge cache answered `/app` with another route's document.** Then a guard in
-   `AppShell` would *hide* a cache-correctness bug — and since these documents carry one account's
-   notes, that possibility has to be excluded before anything is papered over. Nothing in this one
-   event proves or disproves it.
+`public/sw.js` sends navigations to the network or navigation preload and does not cache
+signed-in page responses. If the request throws, it can return the cached `/offline` shell,
+fetched with credentials omitted. The later successful browsing in this replay does not exclude
+a transient failure during the initial load. No evidence here establishes that the fallback
+ran or that it produced the observed note layout.
 
-**(2) is most of the way to being ruled out, but not all of it.** A production `GET /app` under an
-iOS Safari user agent answers `cache-control: private, no-cache, no-store, max-age=0,
-must-revalidate` with `x-vercel-cache: MISS`, `x-matched-path: /app` and
-`vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch`. So the
-edge is not holding `/app` documents and is keyed on the RSC headers. **The caveat is that this is
-the unauthenticated response** — a 307 to `/` — so it shows the headers the route sets, not the
-headers on the signed-in HTML the learner actually received. Repeating it with a session cookie
-would close the question; `PREVIEW_TEST_EMAIL` was not available to the run that wrote this.
+### Remaining hypotheses and verification
 
-On that evidence (1) is the likelier trigger, and the `useIsHydrated` guard is correct and narrow —
-it only changes behaviour in the case that is already broken, because whenever `initialPathname`
-and `usePathname()` agree it renders exactly what it renders today. It is still not worth shipping
-blind: it would be unverifiable against this failure, since nothing here reproduces it.
+Possible triggers include a client URL/router transition before hydration, restoration of browser
+state, or delivery of a document inconsistent with its URL. These are hypotheses, not an exhaustive
+list. There is no evidence in this event of another account's data being exposed.
+
+The original investigation requested production `/app` without authentication and observed a
+307 redirect with `cache-control: private, no-cache, no-store, max-age=0, must-revalidate`,
+`x-vercel-cache: MISS`, and `Vary` on RSC routing headers. Those headers describe that redirect;
+they do not establish the headers or cache behavior of the signed-in HTML at the incident time.
+
+A follow-up should capture the signed-in document's requested URL, response headers and route
+markers together with the initial client pathname, navigation timing and service-worker state.
+Check direct home and note loads, back/forward restoration, and a failed initial request followed
+by recovery in an isolated test environment. Repeated `no-store`/`MISS` responses would support
+correct behavior in those requests, but a single successful check cannot rule out an intermittent
+routing or cache problem. Investigate any unexpected cache hit or wrong-route document on its own
+evidence; a hit alone does not demonstrate cross-account disclosure.
+
+Rendering `initialPathname` until hydration is complete is a candidate mitigation, inspired by
+PR #319's hydration gating in `home-dashboard.tsx` and `viewport-portal.tsx`. It has not been
+validated for this incident. Before proposing it, reproduce the mismatch and check subsequent
+client navigation and shared-layout reuse, where the initial request pathname can be stale.
 
 ### For future runs
 
-**This is the catch-all id, so weigh a new event on its own replay.** The 2026-09-03 entry's
-resumed-offer cause is closed; this one is a different bug wearing the same fingerprint, and a third
-is likely. The rrweb reading above is the recipe: find the type-2 snapshot, find the type-3 mutation
-within ~20ms of the `replay.hydrate-error` breadcrumb, and compare the removed subtree against the
-added one. The detector itself will never tell you more than a URL.
+Assess each new event under this catch-all issue using its own release and replay. The
+2026-09-03 resumed-offer resolution does not close this occurrence. To inspect the recording,
+compare the type-2 snapshot with the type-3 mutation near the `replay.hydrate-error` breadcrumb;
+normalize timestamps because performance spans can use seconds while DOM events use milliseconds.
 
-**Do not reproduce this one against production.** As the 2026-09-03 entry warns, a seeded hydration
-error files a real event under this id and the scan reads it back as fresh evidence next run.
+Do not deliberately seed a hydration failure against production: it would create an event under
+this same fingerprint and contaminate the next scan. Use synthetic data in local or Preview
+reproductions, and keep this incident open until a fix is verified against a demonstrated trigger.
 
 ## 2026-09-18 — Production could not read a Sandbox App Store notification
 

@@ -69,7 +69,8 @@
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
-	<!-- Portrait-only on iPad requires opting out of split-view resizing. -->
+	<!-- Keep the portrait scene in iPad compatibility mode. iPadOS windowed
+	     mode can still scale its presentation and show system resize controls. -->
 	<key>UIRequiresFullScreen</key>
 	<true/>
 	<key>UISupportedInterfaceOrientations</key>

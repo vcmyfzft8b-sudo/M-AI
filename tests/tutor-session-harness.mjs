@@ -39,6 +39,9 @@ export function sessionHarness({ source } = {}) {
     socketOpen: true, open: async () => { state.socketOpen = true; },
     sessionCalls: 0,
     sessionResponse: null,
+    usageReports: [],
+    microphoneStops: 0,
+    requestMicrophone: async () => ({ getTracks: () => [{ stop: () => { state.microphoneStops += 1; } }] }),
   };
   const window = {
     setTimeout: (fn, delay) => { const id = ++timerId; timers.set(id, { fn, at: now + delay }); return id; },
@@ -48,7 +51,8 @@ export function sessionHarness({ source } = {}) {
   class SpeechOutputError extends Error {}
   class Input {
     constructor(_config, handlers) { state.input = this; this.handlers = handlers; }
-    async start() {} resetUtterance() {} close() {} stopListening() {}
+    async start(stream) { this.stream = stream; }
+    resetUtterance() {} close() { this.stream?.getTracks().forEach(track => track.stop()); this.stream = null; } stopListening() {}
   }
   class Output {
     room = "";
@@ -79,7 +83,7 @@ export function sessionHarness({ source } = {}) {
     "@/lib/tutor/heard-line": heardLine,
     "@/lib/tutor/prepared-reply": preparation.exports,
     "@/lib/tutor/spoken-so-far": spokenSoFar,
-    "@/lib/tutor/speech-input": { TutorSpeechInput: Input, SpeechInputError: class extends Error {} },
+    "@/lib/tutor/speech-input": { TutorSpeechInput: Input, SpeechInputError: class extends Error {}, requestTutorMicrophone: () => state.requestMicrophone() },
     "@/lib/tutor/speech-output": { TutorSpeechOutput: Output, SpeechOutputError },
     "@/lib/tutor/report": { reportTutorFailure: (error) => errors.push(error), resetTutorFailureReports() {} },
     // No credentials expiry, so no renewal alarm: these tests are about turn-taking, and a
@@ -118,7 +122,10 @@ export function sessionHarness({ source } = {}) {
           realtime: { tts: {}, stt: {} },
         }) };
       }
-      if (url.endsWith("/usage")) return { ok: true };
+      if (url.endsWith("/usage")) {
+        if (options?.body) state.usageReports.push(JSON.parse(options.body));
+        return { ok: true, json: async () => ({}) };
+      }
       const call = { ...JSON.parse(options.body), signal: options.signal, at: now };
       calls.push(call);
       return state.request(call);

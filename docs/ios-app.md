@@ -70,6 +70,14 @@ The follow-up privacy manifest declares UserDefaults reason `CA92.1` for the app
 
 Memo uses a root WKWebView without an address bar, browser tabs or navigation toolbar. Its background fills the app window while content respects the iPhone camera/status area and home indicator. Link previews are disabled; deliberate external website links open in the system browser instead of an embedded Safari sheet. Google authentication and Apple billing retain their required system interfaces. The branch Preview now sets `VERCEL_PREVIEW_FEEDBACK_ENABLED=0` so Vercel’s review toolbar cannot overlay the app during review. The new deployment is ready. Native Debug build and the actual Preview simulator settings/theme/scroll test passed. Visually verified the toolbar is absent on home and settings. Fresh screenshots: `ios/build/screenshots/12-full-screen-home.png`, `13-full-screen-settings-light.png`, `14-full-screen-settings-dark.png`, and `15-full-screen-settings-apple.png`. The passing result bundle is `ios/build/browser-free-final.xcresult`. The UI test ran successfully while direct Mac control remained locked. A fresh distribution archive/export must include the browser-control changes before any upload.
 
+The current wrapper locks its scene to portrait on iPhone and iPad. This is
+separate from iPadOS window management: in iPadOS 26 Windowed Apps and Stage
+Manager, Apple can show a resize handle and scale the scene even when
+`UIRequiresFullScreen` is true. The handle is visible in the current build 9
+iPad capture. That key prevents classic Split View on older iPadOS; it does
+not guarantee exclusive full screen on modern iPadOS. See
+[Apple's UIRequiresFullScreen documentation](https://developer.apple.com/documentation/BundleResources/Information-Property-List/UIRequiresFullScreen).
+
 ### Language selection — same policy as the PWA
 
 On the first online launch, the website’s existing IP-country lookup selects Slovenian for SI, Croatian for HR, Bosnian for BA and Serbian (Latin script) for RS. All other or unknown countries use English. The wrapper does not request GPS or replace this with the iPhone language/region. The first server-rendered login page uses the detected language and saves the regular `memo-locale` cookie in WKWebView’s persistent storage.

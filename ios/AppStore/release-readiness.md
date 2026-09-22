@@ -22,6 +22,11 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   answers and final screenshots with the release implementation.
 - Resolve the optional discount-code request without weakening transaction
   ownership checks. Equivalent Stripe codes are not implemented on Apple.
+- Account for the iPadOS windowing limit: portrait layout is verified, but
+  `UIRequiresFullScreen` cannot force exclusive full-screen presentation in
+  iPadOS 26 Windowed Apps or Stage Manager. The system can show a resize handle
+  and scale the app. Do not claim that these system controls are browser chrome
+  or that the app can suppress them.
 - Obtain production merge/release authorization, verify the deployed web app
   with the signed Release binary, and complete TestFlight checks before review
   submission. Build 9 is uploaded and the review draft exists; neither is a
@@ -32,6 +37,32 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- Real tutor startup testing exposed an allowance bug: the first synthetic
+  session reserved its 60-second allowance before WebKit's microphone prompt
+  was answered. No explanation played; after the test terminated, the abandoned
+  grant settled for all 60 seconds. Evidence:
+  `review-sep22-live-tutor.xcresult`, the microphone-prompt capture, and
+  `review-sep22-live-tutor-grants.json`. The second run had no remaining
+  allowance and also failed; neither is a successful tutor session.
+  Startup now resolves microphone permission before requesting the plan or
+  speech credentials, reuses the acquired stream, and releases it on refusal
+  or cancellation. A late grant returned after cancellation is settled at zero.
+  All 213 tutor tests, TypeScript and focused lint pass. Real native retesting
+  on the updated Preview remains pending; the used account was not reset.
+- At 16:07 CEST, finished visually inspecting all 16 screenshot files fetched
+  from Apple's actual uploaded asset URLs: six 6.7-inch, six 6.5-inch and four
+  12.9-inch iPad images, all delivery state COMPLETE. The images show the PWA
+  home, study tools and paywall without browser or Preview-feedback chrome.
+  The paywall states USD 19.99/month and USD 129.99/year with a three-day trial;
+  this is an English/US storefront capture, not evidence of Slovenian currency.
+  Existing live-catalogue evidence separately verifies the EUR prices.
+  Audit: `review-sep22-screenshot-audit.json`; inspected files and dimensions:
+  `review-sep22-uploaded-assets/manifest.json`. The iPad images include the
+  operating system's resize handle, also present in the build 9 capture
+  `review-sep22-current-ipad.png`. Apple's documented windowing behavior:
+  https://developer.apple.com/documentation/BundleResources/Information-Property-List/UIRequiresFullScreen.
+  These older store images were inspected for visible problems; this does not
+  prove every displayed screen exactly matches a future final Release build.
 - Integrated `origin/main` at `2603764d` into `codex/ios-app-wrapper` at
   `6256fed1`; their product trees matched. The branch Preview
   `https://memo-1nyjrhksm-nace-valencics-projects.vercel.app` is READY and uses
@@ -154,7 +185,9 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
   15 September, but no approval email. The reduced commission is unconfirmed.
 - Latest user requirement: the wrapper is portrait-only on iPhone and iPad.
   Both plist orientation arrays, the app delegate and the root controller now
-  restrict orientation to portrait. iPad opts out of split-view resizing.
+  restrict orientation to portrait. iPad requests compatibility mode, which
+  prevents classic Split View on older iPadOS; current iPadOS can still scale
+  its presentation in a system-managed window (see the limit above).
   Build 9 Simulator tests pass on both devices, including launch while sideways,
   both landscape directions and upside-down rotation; the PWA viewport stays
   vertical. Build 9 uploaded successfully, is VALID and is attached to the

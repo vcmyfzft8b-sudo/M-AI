@@ -919,6 +919,56 @@ final class WrapperTests: XCTestCase {
         keepStudyScreenshot("Transcript from the imported audio lecture", app: app)
     }
 
+    @MainActor func testPreviewLiveTutorSessionControls() throws {
+        guard ProcessInfo.processInfo.environment["MEMO_QA_LIVE_TUTOR"] == "1" else {
+            throw XCTSkip("Requires an explicitly enabled real staging tutor session")
+        }
+        let app = try openPreviewStudyNote(title: "Introduction to Electric Circuits")
+        defer { app.terminate() }
+        openStudyTab("Tutor", in: app)
+        let start = app.webViews.buttons["Start"].firstMatch
+        XCTAssertTrue(start.waitForExistence(timeout: 30))
+        keepStudyScreenshot("Live tutor before starting", app: app)
+        start.tap()
+        let explaining = app.webViews.staticTexts["Explaining"].firstMatch
+        let connectionDeadline = Date().addingTimeInterval(120)
+        while Date() < connectionDeadline && !explaining.exists {
+            // WebKit asks after remote credentials arrive, which can be later
+            // than the app's initial Start tap on older builds. Handle the real
+            // system prompt whenever it appears, including before credentials.
+            let permission = app.alerts.buttons["Allow"].firstMatch
+            if permission.exists {
+                let permissionDelay = min(40, max(0, Double(ProcessInfo.processInfo.environment["MEMO_QA_MIC_PERMISSION_DELAY"] ?? "0") ?? 0))
+                if permissionDelay > 0 {
+                    keepStudyScreenshot("Microphone permission before reserving tutor time", app: app)
+                    RunLoop.current.run(until: Date().addingTimeInterval(permissionDelay))
+                }
+                permission.tap()
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
+        }
+        XCTAssertTrue(explaining.exists, "Real tutor output must start after connection")
+        let pause = app.webViews.buttons["Pause"].firstMatch
+        XCTAssertTrue(pause.waitForExistence(timeout: 10))
+        keepStudyScreenshot("Live tutor explaining the imported lecture", app: app)
+        pause.tap()
+        let paused = app.webViews.staticTexts["Paused"].firstMatch
+        XCTAssertTrue(paused.waitForExistence(timeout: 10))
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        XCTAssertTrue(paused.exists, "The tutor must stay paused")
+        let resume = app.webViews.buttons["Continue"].firstMatch
+        XCTAssertTrue(resume.isEnabled)
+        keepStudyScreenshot("Live tutor paused", app: app)
+        resume.tap()
+        XCTAssertTrue(explaining.waitForExistence(timeout: 45), "Resuming must restart actual tutor output")
+        let end = app.webViews.buttons["End"].firstMatch
+        XCTAssertTrue(end.waitForExistence(timeout: 10))
+        end.tap()
+        XCTAssertTrue(start.waitForExistence(timeout: 15), "Ending must return the tutor to its idle controls")
+        XCTAssertFalse(pause.exists)
+        keepStudyScreenshot("Live tutor ended", app: app)
+    }
+
     @MainActor func testPreviewSourceAudioPlayback() throws {
         guard ProcessInfo.processInfo.environment["MEMO_QA_AUDIO"] == "memo-qa-electric-circuits-audio" else {
             throw XCTSkip("Requires the retained synthetic audio lecture")

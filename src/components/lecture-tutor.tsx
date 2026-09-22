@@ -26,6 +26,7 @@ import {
 } from "@/lib/tutor/turn-audio";
 import {
   SpeechInputError,
+  requestTutorMicrophone,
   TutorSpeechInput,
 } from "@/lib/tutor/speech-input";
 import { clearsHeardLine, latestHeardSentence, showsHeardLine, type TutorPhase } from "@/lib/tutor/heard-line";
@@ -318,6 +319,7 @@ export function LectureTutor({
    */
   const bargeInRef = useRef(new BargeInGate());
   const preparedReplyRef = useRef(new PreparedTutorReply<Response>());
+  const pendingMicrophoneRef = useRef<MediaStream | null>(null);
 
   const setPhaseNow = useCallback((next: TutorPhase) => {
     phaseRef.current = next;
@@ -388,6 +390,8 @@ export function LectureTutor({
     outputRef.current = null;
     inputRef.current?.close();
     inputRef.current = null;
+    pendingMicrophoneRef.current?.getTracks().forEach((track) => track.stop());
+    pendingMicrophoneRef.current = null;
   }, [stopPreview]);
 
   /*
@@ -1301,7 +1305,7 @@ export function LectureTutor({
   }, [scheduleFollowUp, setPhaseNow]);
 
   const startSession = useCallback(async () => {
-    if (Date.now() < retryStartAtRef.current) {
+    if (phaseRef.current === "preparing" || Date.now() < retryStartAtRef.current) {
       return;
     }
 
@@ -1330,370 +1334,415 @@ export function LectureTutor({
     const runId = runIdRef.current;
     planRef.current = null;
 
-    /*
-     * The running order is fetched here and never awaited here. It is the slowest
-     * part of starting by a wide margin, and nothing before the first word needs
-     * it: the greeting is written from the note, and the first turn that does need
-     * a plan waits on this promise long after it has resolved. A failure is
-     * swallowed to null rather than thrown, because it must not reject into an
-     * unhandled rejection while the tutor is happily talking; the turn that awaits
-     * it reports the failure then.
-     */
-    planPromiseRef.current = fetch(`/api/lectures/${lectureId}/tutor/plan`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    })
-      .then(async (response) => {
+    // Permission can remain unanswered indefinitely. Do not mint expiring
+    // speech credentials or reserve the learner's time until it is resolved.
+    let preparedMicrophone: MediaStream | null = null;
+    let microphoneError: unknown = null;
+    try {
+      preparedMicrophone = await requestTutorMicrophone();
+    } catch (caught) {
+      microphoneError = caught;
+    }
+    if (runId !== runIdRef.current) {
+      preparedMicrophone?.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    pendingMicrophoneRef.current = preparedMicrophone;
+
+    try {
+
+      /*
+       * The running order is fetched here and never awaited here. It is the slowest
+       * part of starting by a wide margin, and nothing before the first word needs
+       * it: the greeting is written from the note, and the first turn that does need
+       * a plan waits on this promise long after it has resolved. A failure is
+       * swallowed to null rather than thrown, because it must not reject into an
+       * unhandled rejection while the tutor is happily talking; the turn that awaits
+       * it reports the failure then.
+       */
+      planPromiseRef.current = fetch(`/api/lectures/${lectureId}/tutor/plan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+        .then(async (response) => {
+          const payload = (await response.json().catch(() => null)) as
+            | { plan?: TutorPlan; error?: string }
+            | null;
+
+          if (!response.ok || !payload?.plan) {
+            throw new Error(payload?.error ?? t("tutor.error.startFailed"));
+          }
+
+          if (runId === runIdRef.current) {
+            planRef.current = payload.plan;
+            /*
+             * The greeting has been playing for most of a minute by now with nothing under it
+             * saying what is being walked through, because until this lands there is nothing
+             * to say. This is the first moment there is.
+             */
+            showTopic(topicIndexRef.current);
+          }
+
+          return payload.plan;
+        })
+        .catch((caught: unknown) => {
+          console.error("[tutor] the running order could not be written", caught);
+
+          return null;
+        });
+
+      let session: TutorSessionResponse;
+
+      try {
+        const response = await fetch(`/api/lectures/${lectureId}/tutor/session`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ voice }),
+        });
         const payload = (await response.json().catch(() => null)) as
-          | { plan?: TutorPlan; error?: string }
+          | (TutorSessionResponse & { error?: string; retryAfterSeconds?: number })
           | null;
 
-        if (!response.ok || !payload?.plan) {
+        if (runId !== runIdRef.current) {
+          if (payload?.grantId) {
+            void fetch(`/api/lectures/${lectureId}/tutor/usage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ grantId: payload.grantId, secondsUsed: 0 }),
+              keepalive: true,
+            }).catch(() => {});
+          }
+          return;
+        }
+
+        if (response.status === 402) {
+          /*
+           * Not an error: they are out of time. Which wall they hit decides what is offered —
+           * a plan if they have never had one, an hour if today's allowance is simply spent.
+           */
+          const refusal = payload as unknown as { code?: TutorBlock; usage?: TutorUsage } | null;
+
+          if (refusal?.usage) {
+            setUsage(refusal.usage);
+          }
+
+          setBlocked(refusal?.code ?? "tutor_credits_needed");
+          setPhaseNow("idle");
+
+          return;
+        }
+
+        if (response.status === 429) {
+          const retryAfter = Number(payload?.retryAfterSeconds ?? response.headers.get("Retry-After"));
+          const waitSeconds = Number.isFinite(retryAfter) && retryAfter > 0
+            ? Math.min(Math.ceil(retryAfter), 3600)
+            : 300;
+          const retryAt = Date.now() + waitSeconds * 1000;
+
+          retryStartAtRef.current = retryAt;
+          setRetryStartAt(retryAt);
+          clearTimer(retryStartTimerRef);
+          retryStartTimerRef.current = window.setTimeout(() => {
+            retryStartAtRef.current = 0;
+            setRetryStartAt(0);
+            setError(null);
+            retryStartTimerRef.current = null;
+          }, waitSeconds * 1000);
+          runIdRef.current += 1;
+          planPromiseRef.current = null;
+          setError(t("tutor.error.rateLimited", { count: Math.ceil(waitSeconds / 60) }));
+          setPhaseNow("idle");
+
+          return;
+        }
+
+        if (!response.ok || !payload?.realtime) {
           throw new Error(payload?.error ?? t("tutor.error.startFailed"));
         }
 
-        if (runId === runIdRef.current) {
-          planRef.current = payload.plan;
-          /*
-           * The greeting has been playing for most of a minute by now with nothing under it
-           * saying what is being walked through, because until this lands there is nothing
-           * to say. This is the first moment there is.
-           */
-          showTopic(topicIndexRef.current);
+        session = payload;
+        grantIdRef.current = payload.grantId;
+        spentSecondsRef.current = 0;
+        setBlocked(null);
+        setUsage(payload.usage);
+        adoptCredentialsRef.current(payload);
+      } catch (caught) {
+        if (runId !== runIdRef.current) {
+          return;
         }
 
-        return payload.plan;
-      })
-      .catch((caught: unknown) => {
-        console.error("[tutor] the running order could not be written", caught);
-
-        return null;
-      });
-
-    let session: TutorSessionResponse;
-
-    try {
-      const response = await fetch(`/api/lectures/${lectureId}/tutor/session`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voice }),
-      });
-      const payload = (await response.json().catch(() => null)) as
-        | (TutorSessionResponse & { error?: string; retryAfterSeconds?: number })
-        | null;
-
-      if (response.status === 402) {
-        /*
-         * Not an error: they are out of time. Which wall they hit decides what is offered —
-         * a plan if they have never had one, an hour if today's allowance is simply spent.
-         */
-        const refusal = payload as unknown as { code?: TutorBlock; usage?: TutorUsage } | null;
-
-        if (refusal?.usage) {
-          setUsage(refusal.usage);
-        }
-
-        setBlocked(refusal?.code ?? "tutor_credits_needed");
+        reportTutorFailure(caught, { lectureId, stage: "session" });
+        setError(
+          isTransportFailure(caught)
+            ? t("tutor.error.connection")
+            : caught instanceof Error
+              ? caught.message
+              : t("tutor.error.startFailed"),
+        );
         setPhaseNow("idle");
 
         return;
       }
 
-      if (response.status === 429) {
-        const retryAfter = Number(payload?.retryAfterSeconds ?? response.headers.get("Retry-After"));
-        const waitSeconds = Number.isFinite(retryAfter) && retryAfter > 0
-          ? Math.min(Math.ceil(retryAfter), 3600)
-          : 300;
-        const retryAt = Date.now() + waitSeconds * 1000;
-
-        retryStartAtRef.current = retryAt;
-        setRetryStartAt(retryAt);
-        clearTimer(retryStartTimerRef);
-        retryStartTimerRef.current = window.setTimeout(() => {
-          retryStartAtRef.current = 0;
-          setRetryStartAt(0);
-          setError(null);
-          retryStartTimerRef.current = null;
-        }, waitSeconds * 1000);
-        runIdRef.current += 1;
-        planPromiseRef.current = null;
-        setError(t("tutor.error.rateLimited", { count: Math.ceil(waitSeconds / 60) }));
-        setPhaseNow("idle");
-
-        return;
-      }
-
-      if (!response.ok || !payload?.realtime) {
-        throw new Error(payload?.error ?? t("tutor.error.startFailed"));
-      }
-
-      session = payload;
-      grantIdRef.current = payload.grantId;
-      spentSecondsRef.current = 0;
-      setBlocked(null);
-      setUsage(payload.usage);
-      adoptCredentialsRef.current(payload);
-    } catch (caught) {
       if (runId !== runIdRef.current) {
         return;
       }
 
-      reportTutorFailure(caught, { lectureId, stage: "session" });
-      setError(
-        isTransportFailure(caught)
-          ? t("tutor.error.connection")
-          : caught instanceof Error
-            ? caught.message
-            : t("tutor.error.startFailed"),
-      );
-      setPhaseNow("idle");
-
-      return;
-    }
-
-    if (runId !== runIdRef.current) {
-      return;
-    }
-
-    const output = new TutorSpeechOutput(
-      {
-        url: session.realtime.tts.url,
-        apiKey: session.realtime.tts.apiKey,
-        model: session.realtime.tts.model,
-        voice: session.realtime.tts.voice,
-        language: session.language,
-      },
-      {
-        onError: (speechError: SpeechOutputError) => {
-          reportTutorFailure(speechError, {
-            lectureId,
-            stage: "speech",
-            code: speechError.code,
-            phase: phaseRef.current,
-          });
-          setError(
-            /*
-             * Soniox caps how many voices an account can have going at once, and
-             * the fourth listener gets a 429 rather than a wait. That is a
-             * "come back in a minute", not a fault of theirs.
-             */
-            speechError.code === "429" || /concurren/i.test(speechError.message)
-              ? t("tutor.error.busy")
-              : t("tutor.error.connection"),
-          );
-          setPhaseNow("paused");
+      const output = new TutorSpeechOutput(
+        {
+          url: session.realtime.tts.url,
+          apiKey: session.realtime.tts.apiKey,
+          model: session.realtime.tts.model,
+          voice: session.realtime.tts.voice,
+          language: session.language,
         },
-      },
-    );
+        {
+          onError: (speechError: SpeechOutputError) => {
+            reportTutorFailure(speechError, {
+              lectureId,
+              stage: "speech",
+              code: speechError.code,
+              phase: phaseRef.current,
+            });
+            setError(
+              /*
+               * Soniox caps how many voices an account can have going at once, and
+               * the fourth listener gets a 429 rather than a wait. That is a
+               * "come back in a minute", not a fault of theirs.
+               */
+              speechError.code === "429" || /concurren/i.test(speechError.message)
+                ? t("tutor.error.busy")
+                : t("tutor.error.connection"),
+            );
+            setPhaseNow("paused");
+          },
+        },
+      );
 
-    const input = new TutorSpeechInput(
-      {
-        url: session.realtime.stt.url,
-        apiKey: session.realtime.stt.apiKey,
-        model: session.realtime.stt.model,
-        /* The note's language leads; the learner may still ask in another one. */
-        languages: [session.language],
-      },
-      {
-        onPartial: (text) => {
-          if (
-            phaseRef.current === "paused" || phaseRef.current === "finished" ||
-            phaseRef.current === "idle" || phaseRef.current === "preparing"
-          ) {
-            return;
-          }
-          if (whoSpoke(text) !== "learner") {
-            // Echo and noise must never accumulate towards taking the floor.
-            bargeInRef.current.reset();
-            return;
-          }
+      const input = new TutorSpeechInput(
+        {
+          url: session.realtime.stt.url,
+          apiKey: session.realtime.stt.apiKey,
+          model: session.realtime.stt.model,
+          /* The note's language leads; the learner may still ask in another one. */
+          languages: [session.language],
+        },
+        {
+          onPartial: (text) => {
+            if (
+              phaseRef.current === "paused" || phaseRef.current === "finished" ||
+              phaseRef.current === "idle" || phaseRef.current === "preparing"
+            ) {
+              return;
+            }
+            if (whoSpoke(text) !== "learner") {
+              // Echo and noise must never accumulate towards taking the floor.
+              bargeInRef.current.reset();
+              return;
+            }
 
-          /*
-           * A reply still loading must yield too — but neither yields on the
-           * first word any more. A room is full of single words addressed to
-           * nobody, and every one of them used to stop the lesson dead; and
-           * even when it is the learner, a person carries on for a moment
-           * rather than cutting out mid-syllable. `BargeInGate` holds the floor
-           * until somebody has kept talking long enough to mean it.
-           */
-          if (phaseRef.current === "speaking" || phaseRef.current === "thinking") {
-            if (bargeInRef.current.consider(Date.now(), text, "learner") === "interrupt") {
+            /*
+             * A reply still loading must yield too — but neither yields on the
+             * first word any more. A room is full of single words addressed to
+             * nobody, and every one of them used to stop the lesson dead; and
+             * even when it is the learner, a person carries on for a moment
+             * rather than cutting out mid-syllable. `BargeInGate` holds the floor
+             * until somebody has kept talking long enough to mean it.
+             */
+            if (phaseRef.current === "speaking" || phaseRef.current === "thinking") {
+              if (bargeInRef.current.consider(Date.now(), text, "learner") === "interrupt") {
+                commitInterruption();
+              }
+            }
+
+            setHeard({ text: latestHeardSentence(text, language), settled: false });
+
+            // Prepare silently after a stable multiword partial. No speech is created
+            // until endpointing confirms these exact words; revisions discard it.
+            if (!awaitingExplanationRef.current && text.length <= 1000 && (text.match(/\p{Letter}+/gu)?.length ?? 0) >= 4) {
+              const kind = awaitingExplanationRef.current ? "feedback" : "answer";
+              const index = topicIndexRef.current;
+              const body = JSON.stringify({
+                kind, topicIndex: index, plan: planRef.current, question: text,
+                history: [...historyRef.current, { role: "learner", content: text }].slice(-12),
+              });
+              preparedReplyRef.current.update(preparedReplyKey(kind, index, text), (signal) =>
+                fetch(`/api/lectures/${lectureId}/tutor/turn`, {
+                  method: "POST", headers: { "Content-Type": "application/json" }, signal, body,
+                }),
+              );
+            } else {
+              preparedReplyRef.current.discard();
+            }
+
+            // A silence timer is measured from the learner's latest words, not
+            // from when we asked. Preserve its action (including explain-back).
+            const followUp = followUpRef.current;
+            if (phaseRef.current === "listening" && followUp) {
+              scheduleFollowUp(
+                followUp.action,
+                Math.max(
+                  followUp.delay,
+                  awaitingExplanationRef.current ? EXPLAIN_BACK_SILENCE_MS : FOLLOW_UP_SILENCE_MS,
+                ),
+              );
+            }
+          },
+          onUtterance: (text) => {
+            if (
+              phaseRef.current === "paused" || phaseRef.current === "finished" ||
+              phaseRef.current === "idle" || phaseRef.current === "preparing"
+            ) {
+              return;
+            }
+
+            if (whoSpoke(text) !== "learner") {
+              return;
+            }
+
+            /*
+             * "Thinking" counts as the tutor holding the floor. Without this, speaking during
+             * the gap before a turn starts left its request running into a stream nobody was
+             * listening to, and paid for a turn that was never heard.
+             */
+            if (phaseRef.current === "speaking" || phaseRef.current === "thinking") {
               commitInterruption();
             }
-          }
 
-          setHeard({ text: latestHeardSentence(text, language), settled: false });
+            clearTimer(followUpTimerRef);
+            setHeard({ text: latestHeardSentence(text, language), settled: true });
+            historyRef.current.push({ role: "learner", content: text });
 
-          // Prepare silently after a stable multiword partial. No speech is created
-          // until endpointing confirms these exact words; revisions discard it.
-          if (!awaitingExplanationRef.current && text.length <= 1000 && (text.match(/\p{Letter}+/gu)?.length ?? 0) >= 4) {
+            /*
+             * If the tutor had asked them to explain the idea back, this is that attempt —
+             * it needs marking, not answering. Anything else is a question.
+             */
             const kind = awaitingExplanationRef.current ? "feedback" : "answer";
-            const index = topicIndexRef.current;
-            const body = JSON.stringify({
-              kind, topicIndex: index, plan: planRef.current, question: text,
-              history: [...historyRef.current, { role: "learner", content: text }].slice(-12),
+            awaitingExplanationRef.current = false;
+            void runTurnRef.current(kind, { question: text });
+          },
+          onError: (inputError: SpeechInputError) => {
+            /*
+             * A page on its way into the background takes its sockets with it. The pause
+             * that follows closes the recognizer on purpose, but the order the browser
+             * chooses is its own — so a death that arrives first is still the screen lock,
+             * not a fault, and the learner must not come back to a red box about it.
+             */
+            if (document.visibilityState === "hidden") {
+              return;
+            }
+
+            reportTutorFailure(inputError, {
+              lectureId,
+              stage: "recognizer",
+              code: inputError.reason,
+              phase: phaseRef.current,
             });
-            preparedReplyRef.current.update(preparedReplyKey(kind, index, text), (signal) =>
-              fetch(`/api/lectures/${lectureId}/tutor/turn`, {
-                method: "POST", headers: { "Content-Type": "application/json" }, signal, body,
-              }),
-            );
-          } else {
-            preparedReplyRef.current.discard();
-          }
 
-          // A silence timer is measured from the learner's latest words, not
-          // from when we asked. Preserve its action (including explain-back).
-          const followUp = followUpRef.current;
-          if (phaseRef.current === "listening" && followUp) {
-            scheduleFollowUp(
-              followUp.action,
-              Math.max(
-                followUp.delay,
-                awaitingExplanationRef.current ? EXPLAIN_BACK_SILENCE_MS : FOLLOW_UP_SILENCE_MS,
-              ),
-            );
-          }
+            if (inputError.reason === "busy") {
+              /*
+               * Every realtime stream in the organisation is taken. The walkthrough still
+               * works — this costs only the ability to cut in by speaking — so it is said
+               * as a wait rather than as a breakage, and nothing is paused.
+               */
+              setCanListen(false);
+              setError(t("tutor.error.listeningBusy"));
+            } else if (inputError.reason === "connection") {
+              /*
+               * The recognizer is gone and nothing reopens it on its own, so the one thing
+               * this screen promises — cut in whenever you like — is a promise it can no
+               * longer keep. Said in the same words as a microphone that was never granted,
+               * because from the learner's side it is the same thing. Pausing and continuing,
+               * or going over a topic again, asks for one back.
+               */
+              setCanListen(false);
+              setError(t("tutor.error.connection"));
+            }
+          },
         },
-        onUtterance: (text) => {
-          if (
-            phaseRef.current === "paused" || phaseRef.current === "finished" ||
-            phaseRef.current === "idle" || phaseRef.current === "preparing"
-          ) {
-            return;
-          }
+      );
 
-          if (whoSpoke(text) !== "learner") {
-            return;
-          }
+      try {
+        await output.connect();
+        await output.resumeAudio();
+      } catch (caught) {
+        output.close();
+        input.close();
 
-          /*
-           * "Thinking" counts as the tutor holding the floor. Without this, speaking during
-           * the gap before a turn starts left its request running into a stream nobody was
-           * listening to, and paid for a turn that was never heard.
-           */
-          if (phaseRef.current === "speaking" || phaseRef.current === "thinking") {
-            commitInterruption();
-          }
+        /*
+         * The slice goes straight back. It was reserved before the keys were minted, so a
+         * session that never got a voice at all would otherwise cost the learner half an
+         * hour of their allowance for nothing — and the likeliest reason to be here is that
+         * every speech stream in the organisation was taken, which is not their doing.
+         */
+        settleGrant();
 
-          clearTimer(followUpTimerRef);
-          setHeard({ text: latestHeardSentence(text, language), settled: true });
-          historyRef.current.push({ role: "learner", content: text });
+        if (runId !== runIdRef.current) {
+          return;
+        }
 
-          /*
-           * If the tutor had asked them to explain the idea back, this is that attempt —
-           * it needs marking, not answering. Anything else is a question.
-           */
-          const kind = awaitingExplanationRef.current ? "feedback" : "answer";
-          awaitingExplanationRef.current = false;
-          void runTurnRef.current(kind, { question: text });
-        },
-        onError: (inputError: SpeechInputError) => {
-          /*
-           * A page on its way into the background takes its sockets with it. The pause
-           * that follows closes the recognizer on purpose, but the order the browser
-           * chooses is its own — so a death that arrives first is still the screen lock,
-           * not a fault, and the learner must not come back to a red box about it.
-           */
-          if (document.visibilityState === "hidden") {
-            return;
-          }
+        reportTutorFailure(caught, { lectureId, stage: "session", phase: "connect" });
+        setError(
+          caught instanceof SpeechOutputError &&
+            (caught.code === "429" || /concurren/i.test(caught.message))
+            ? t("tutor.error.busy")
+            : t("tutor.error.connection"),
+        );
+        setPhaseNow("idle");
 
-          reportTutorFailure(inputError, {
-            lectureId,
-            stage: "recognizer",
-            code: inputError.reason,
-            phase: phaseRef.current,
-          });
-
-          if (inputError.reason === "busy") {
-            /*
-             * Every realtime stream in the organisation is taken. The walkthrough still
-             * works — this costs only the ability to cut in by speaking — so it is said
-             * as a wait rather than as a breakage, and nothing is paused.
-             */
-            setCanListen(false);
-            setError(t("tutor.error.listeningBusy"));
-          } else if (inputError.reason === "connection") {
-            /*
-             * The recognizer is gone and nothing reopens it on its own, so the one thing
-             * this screen promises — cut in whenever you like — is a promise it can no
-             * longer keep. Said in the same words as a microphone that was never granted,
-             * because from the learner's side it is the same thing. Pausing and continuing,
-             * or going over a topic again, asks for one back.
-             */
-            setCanListen(false);
-            setError(t("tutor.error.connection"));
-          }
-        },
-      },
-    );
-
-    try {
-      await output.connect();
-      await output.resumeAudio();
-    } catch (caught) {
-      output.close();
-      input.close();
-
-      /*
-       * The slice goes straight back. It was reserved before the keys were minted, so a
-       * session that never got a voice at all would otherwise cost the learner half an
-       * hour of their allowance for nothing — and the likeliest reason to be here is that
-       * every speech stream in the organisation was taken, which is not their doing.
-       */
-      settleGrant();
-
-      if (runId !== runIdRef.current) {
         return;
       }
 
-      reportTutorFailure(caught, { lectureId, stage: "session", phase: "connect" });
-      setError(
-        caught instanceof SpeechOutputError &&
-          (caught.code === "429" || /concurren/i.test(caught.message))
-          ? t("tutor.error.busy")
-          : t("tutor.error.connection"),
-      );
-      setPhaseNow("idle");
+      if (runId !== runIdRef.current) {
+        output.close();
+        input.close();
+        return;
+      }
 
-      return;
+      /*
+       * The microphone is what makes this a conversation, but it is not what makes it useful.
+       * Somebody who declines the permission — or is on a device with no input at all — still
+       * gets the whole walkthrough, explained, with the controls to pause and move through it;
+       * they just cannot cut in by speaking. Refusing to start at all would be throwing away
+       * the nine tenths of the feature that still work.
+       */
+      let listening = true;
+
+      try {
+        if (microphoneError) throw microphoneError;
+        const microphone = preparedMicrophone;
+        preparedMicrophone = null;
+        if (pendingMicrophoneRef.current === microphone) pendingMicrophoneRef.current = null;
+        await input.start(microphone ?? undefined);
+      } catch (caught) {
+        listening = false;
+        input.close();
+
+        setError(
+          caught instanceof SpeechInputError && caught.reason === "denied"
+            ? t(native ? "native.micDenied" : "tutor.error.micDenied")
+            : t("tutor.error.micUnavailable"),
+        );
+      }
+
+      if (runId !== runIdRef.current) {
+        output.close();
+        input.close();
+
+        return;
+      }
+
+      outputRef.current = output;
+      inputRef.current = listening ? input : null;
+      setCanListen(listening);
+
+      void runTurnRef.current("opening", { index: 0 });
+    } finally {
+      if (preparedMicrophone && pendingMicrophoneRef.current === preparedMicrophone) {
+        preparedMicrophone.getTracks().forEach((track) => track.stop());
+        pendingMicrophoneRef.current = null;
+      }
     }
-
-    /*
-     * The microphone is what makes this a conversation, but it is not what makes it useful.
-     * Somebody who declines the permission — or is on a device with no input at all — still
-     * gets the whole walkthrough, explained, with the controls to pause and move through it;
-     * they just cannot cut in by speaking. Refusing to start at all would be throwing away
-     * the nine tenths of the feature that still work.
-     */
-    let listening = true;
-
-    try {
-      await input.start();
-    } catch (caught) {
-      listening = false;
-      input.close();
-
-      setError(
-        caught instanceof SpeechInputError && caught.reason === "denied"
-          ? t(native ? "native.micDenied" : "tutor.error.micDenied")
-          : t("tutor.error.micUnavailable"),
-      );
-    }
-
-    if (runId !== runIdRef.current) {
-      output.close();
-      input.close();
-
-      return;
-    }
-
-    outputRef.current = output;
-    inputRef.current = listening ? input : null;
-    setCanListen(listening);
-
-    void runTurnRef.current("opening", { index: 0 });
   }, [
     closePicker,
     commitInterruption,

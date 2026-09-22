@@ -69,7 +69,10 @@ try {
     const errors = [], documents = [];
     page.setDefaultTimeout(45000);
     page.on("pageerror", e => errors.push(e.message));
-    page.on("request", r => { if (r.resourceType() === "document") documents.push(r.url()); });
+    page.on("request", r => {
+      // Vercel's Preview toolbar loads its own document in an iframe.
+      if (r.resourceType() === "document" && r.frame() === page.mainFrame()) documents.push(r.url());
+    });
     await page.goto(new URL(`/creator${note}`, base).href, { waitUntil: "domcontentloaded", timeout: 120000 });
     await page.locator(".memo-note-screen").waitFor();
     await page.waitForTimeout(700);

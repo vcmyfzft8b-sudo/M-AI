@@ -413,11 +413,17 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                 }
             }
             if url.path == "/auth/logout" || url.path == "/auth/account-deleted" {
-                AppleSignIn.setCurrentUser(nil)
                 // Before the page navigates away, while it can still make the
                 // call: a token left pointing at the account that is leaving
                 // would notify them on a phone someone else is now signed into.
-                Task { await forgetPushToken() }
+                // Letting the navigation proceed immediately cancels the WebView's
+                // DELETE request before it can remove the token.
+                Task {
+                    await forgetPushToken()
+                    AppleSignIn.setCurrentUser(nil)
+                    decisionHandler(.allow)
+                }
+                return
             }
             if ["/auth/google", "/auth/apple"].contains(url.path) {
                 decisionHandler(.cancel)
@@ -602,11 +608,17 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private func forgetPushToken() async {
         guard let token = push.currentToken else { return }
         _ = try? await webView.callAsyncJavaScript("""
-            await fetch('/api/mobile/push-token', {
-              method: 'DELETE', credentials: 'same-origin',
-              headers: {'content-type': 'application/json'},
-              body: JSON.stringify({token})
-            });
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 3000);
+            try {
+              await fetch('/api/mobile/push-token', {
+                method: 'DELETE', credentials: 'same-origin',
+                headers: {'content-type': 'application/json'},
+                body: JSON.stringify({token}), signal: controller.signal
+              });
+            } finally {
+              clearTimeout(timeout);
+            }
             """, arguments: ["token": token], in: nil, contentWorld: .page)
     }
 

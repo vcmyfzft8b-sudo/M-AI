@@ -254,9 +254,12 @@ function hasMarkdownOrSentenceSyntax(value: string) {
 }
 
 function getMathSignalCount(value: string) {
+  // Greek commands are case-sensitive: \Omega is the ohm symbol, not \omega.
+  // Omitting capital/variant names made normalizeDelimitedMath strip valid
+  // delimiters and store raw commands such as "ohms (\Omega)" in study notes.
   return (
     value.match(
-      /[=<>≤≥≠≈+\-*/^_{}∑∫√]|\\(?:begin|frac|dfrac|tfrac|sqrt|text|sum|prod|int|lim|sin|cos|tan|log|ln|exp|min|max|alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|rho|sigma|tau|omega|le|ge|ne|approx|infty|pm|mp|cdot|times)\b/g,
+      /[=<>≤≥≠≈+\-*/^_{}∑∫√]|\\(?:begin|frac|dfrac|tfrac|sqrt|text|sum|prod|int|lim|sin|cos|tan|log|ln|exp|min|max|alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|varkappa|lambda|mu|nu|xi|omicron|pi|varpi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega|le|ge|ne|approx|infty|pm|mp|cdot|times)\b/g,
     ) ?? []
   ).length;
 }

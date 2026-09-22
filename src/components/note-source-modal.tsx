@@ -505,6 +505,7 @@ export function NoteSourceModal({
   const replaceAudioSource = useCallback(async (nextSource: AudioSource) => {
     let preparedSource = nextSource;
     let originalPreviewUrlToRevoke: string | null = null;
+    setBusyLabel(t("audio.upload.normalising"));
 
     try {
       // Every limit is checked inside prepareAudioSourceForUpload, against the file we would
@@ -513,7 +514,7 @@ export function NoteSourceModal({
       const prepared = await prepareAudioSourceForUpload({
         file: nextSource.file,
         knownDurationSeconds: nextSource.durationSeconds,
-        onStageChange: setBusyLabel,
+        onStageChange: (key) => setBusyLabel(t(key)),
       });
 
       if (prepared.compressed) {

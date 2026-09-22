@@ -1,66 +1,60 @@
-# Memo AI iOS — release handoff (updated 22 September 2026)
+# Memo AI iOS — release handoff (updated 23 September 2026)
 
-Current evidence is at the top of `ios/AppStore/release-readiness.md`.
+The current evidence and unresolved gates are in
+[release-readiness.md](release-readiness.md). **Not ready for App Review submission.**
 
-- The user confirmed **PWA onboarding first**, then Google/Apple/email sign-in.
-- App Privacy is published. Content Rights is populated. Build **1.0.0 (9)**
-  is attached. The download price is free.
-- Draft submission `b7aa39c6-3b7a-4e6c-a0c5-75dc3c54d2be` contains version
-  1.0, all four subscriptions and their group. **It is not submitted.**
-- Slovenia prices are verified: €19.99 / €129.99, first-period offers
-  €9.99 / €64.99, and three-day trials on the trial products.
-- Staging was missing migrations 0051–0054. It now has all four released
-  migrations, with Auth, REST and Storage health checks passing. 0052's
-  existing empty objects were replayed atomically using the unchanged released
-  SQL before recording its real execution; no migration repair or production
-  migration was used.
-- Real onboarding and email-code sign-in passed after staging synchronization;
-  both Google and Apple buttons are present. The photo study workflow passed,
-  including notes, flashcards, quiz, mindmap/export, chat and deletion. Physical
-  iPhone onboarding, email login and settings tests also pass.
-- Build 7 adds wrapper-only haptics and is installed on the iPhone. Build **8** is now VALID and attached to the unsubmitted draft,
-  including the released push-token sign-out fix from `origin/main` at `890e0c0f`.
-  All 139 affected mobile/offline/tutor checks pass. Simulator native recording
-  also passes start/pause/resume/background/stop; physical audio remains open.
-- Additional simulator passes: memory palace generation/movement, speed reader,
-  podcast generation/playback, and iPad onboarding/login/rotated study/settings.
-- Fixed a shared PWA race that allowed duplicate practice-test attempts while
-  the new attempt loaded. 55 practice checks and the real Preview flow pass:
-  one fresh attempt was created and graded, with no duplicate left in progress.
-  Preview `memo-ei25tuep1-nace-valencics-projects.vercel.app` is READY at
-  `12c05d21`, using staging; production has not received this branch fix.
-- Portrait-only is now required on iPhone and iPad. Build 9 rotation checks
-  pass on both simulators. Build 9 is VALID, attached to the unsubmitted draft,
-  and installed on the iPhone. Physical launch was blocked by the locked phone.
-- Synthetic account deletion passed in the UI and blocks access. Final cleanup
-  is due after its three-hour drain, at 17:04:40 local time on 22 September.
-- Build 9 also passes actual note generation from a public web article, on a
-  new synthetic staging account. The completed Water Cycle note is captured
-  in the screenshot gallery; `review-sep22-public-article-final.xcresult` passes.
-- AI-permission withdrawal, persistence after relaunch, and explicit re-consent
-  pass in the actual app (`review-sep22-consent-withdrawal-verified.xcresult`).
-- PDF import through the native Files picker and actual circuit-note generation
-  pass (`review-sep22-pdf-import-picker.xcresult`). The committed PDF fixture
-  and its setup are documented in `docs/ios-app.md`.
-- Integrated released PWA startup/stale-page recovery fix `a6be0d41`. Its unit,
-  type, Preview browser-navigation and actual iOS settings checks pass on
-  Preview `memo-jkf65k6fg-nace-valencics-projects.vercel.app` (`22251866`).
-- Project regeneration now retains the checked-in manifests, entitlements and
-  translations. Isolated output verification passes; build 9 remains unchanged.
-- Device tests pass for real Apple product loading, three-day trial display,
-  the wheel and both half-off offer cards, and settings/theme controls.
-- Preview catalogue loading is fixed: the Preview host must be included with
-  `MEMO_APP_BOUND_HOST` at build time so WebKit allows the native bridge.
-- Current release gates: complete Google/Apple authentication and Sandbox lifecycle checks on the account
-  holder's iPhone. Business agreement, bank, tax and EU compliance are all Active.
-- Do not control Arc: the user needs to use the Mac uninterrupted. Use APIs
-  and the dedicated `Memo wrapper QA` simulator. Ask for a limited UI handoff
-  only if a remaining Apple setting cannot be handled in the background.
+## Current state
 
-The dated evidence below is historical; the current section above supersedes
-its build, privacy, migration and PR status.
+- The wrapper shares the PWA onboarding, study tools, settings and design.
+  Only platform billing, provider authentication and native device functions differ.
+- Release **1.0.0 (11)** is archived, exported and validated by Apple locally.
+  It includes keyboard bridge v4. It has **not been uploaded**. The unsubmitted
+  App Review draft still contains build 9, version 1.0, four subscriptions and
+  their group. Release is manual.
+- The test branch `codex/ios-app-wrapper` is pushed at `a8f29b9d`. Its READY
+  Preview is `https://memo-f3876ro3o-nace-valencics-projects.vercel.app`, using
+  shared staging. The branch's changes are not a production deployment.
+- Actual app coverage includes photo/PDF/Word/slides/web-article note generation,
+  flashcards, quiz/practice, mindmap/export, memory palace, speed reader,
+  podcast/read-aloud, chats, settings, consent and keyboard handling. See the
+  dated evidence for each test's scope; this is not blanket hardware validation.
+- Native Apple and Google sign-in passed on the physical iPhone. A real Sandbox
+  yearly trial purchase, restore and access after restart passed on the
+  synthetic Word account. No entitlement or quota was fabricated.
+- Slovenia products show €19.99/month and €129.99/year; eligible first periods
+  show €9.99 and €64.99. The separate trial products offer three days free.
+- Paid/Free Apps Agreements, bank, tax, EU trader status and DAC7 are Active.
+  All 15 App Privacy types were reconciled and published. Small Business Program
+  enrollment is submitted; approval of the 15% rate is unconfirmed.
+- A second synthetic UI deletion is queued for its unchanged three-hour drain
+  at **04:06:24 CEST on 23 September**. Verify the live waiter's completion and
+  independent Auth, Storage, note and analytics inventory before marking it done.
 
-Read this before `docs/ios-app.md` (setup reference) and `ios/AppStore/release-readiness.md` (evidence log).
+## Remaining release gates
+
+1. Confirm final erasure; test actual Sign in with Apple token revocation.
+2. Finish dedicated Sandbox lifecycle checks: accelerated renewal, expiry,
+   refund/revocation and other products. The new dedicated tester was not created.
+3. Complete physical audio quality, locked-screen/interruption and spoken-tutor
+   checks. UI playback/recording evidence alone does not verify these.
+4. Obtain the owner's third-party Content Rights confirmation, then correct the
+   current `DOES_NOT_USE_THIRD_PARTY_CONTENT` declaration. Imported documents and
+   web pages make that current declaration inaccurate; do not infer licensing.
+5. Resolve matching discount codes without weakening account ownership checks.
+   Current Apple introductory offers work; equivalent code redemption is absent.
+6. Verify final screenshots/metadata and the final production web deployment
+   against the signed release, then TestFlight. Obtain merge/release authorization
+   before changing production, and submit only after these gates pass.
+
+Use CLI/API and isolated simulator/XCTest runs so the owner can use the Mac.
+Do not take over Arc's shared cursor without a necessary, limited handoff.
+Do not promise Apple acceptance or claim the app can suppress iPadOS window controls.
+
+## Historical notes
+
+The sections below are dated history, **not current setup instructions**. They
+include superseded builds, resolved gates and old account requirements. Use the
+current section and `release-readiness.md` to decide the next action.
 
 ## Where things stand (18 September 2026, evening)
 

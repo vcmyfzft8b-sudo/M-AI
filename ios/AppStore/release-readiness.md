@@ -42,6 +42,35 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- Physical iPhone live tutor controls now pass on the current Preview. The real
+  circuit note reached Explaining, stayed Paused, resumed Explaining, and ended
+  back at Start. `review-sep23-iphone-live-tutor-signedin.xcresult` passes one
+  test in 49.9 seconds; four captures are retained in
+  `review-sep23-iphone-tutor-attachments/`. Explaining and Paused were visually
+  inspected. An independent staging read confirms the new 1,800-second grant
+  settled at **12 seconds**, not the entire reservation
+  (`review-sep23-iphone-tutor-grants.json`). This does not verify spoken questions,
+  interruption handling or audible quality. The first run stopped at sign-in
+  before starting a session; the synthetic Word account was then restored
+  through the ordinary email-code UI (`review-sep23-iphone-tutor-signin.xcresult`).
+
+- The build 11 web Preview at `memo-f3876ro3o-nace-valencics-projects.vercel.app`
+  is READY at `a8f29b9d`. Deletion-confirmation layout and sign-in navigation
+  pass there for browser/native user agents in light/dark. All four variants
+  have centered text and no horizontal overflow; the native dark capture was
+  visually inspected. Evidence: `review-sep23-deletion-preview-layout.json`
+  and `review-sep23-deletion-preview-native-dark.png`. The shared keyboard and
+  mobile regression suites also pass all 96 checks.
+- Offer-code feasibility was checked against Apple's current documentation and
+  the installed iOS 26.5 SDK. Its UIKit redemption API accepts a window scene,
+  without account-token options. Apple's newer `presentOfferCodeRedeemSheet`
+  overload taking `RedeemOption` is documented for iOS 27, outside this toolchain.
+  This is not proof of a safe ownership-binding solution for supported OS
+  versions. The current server's verified `appAccountToken` requirement remains
+  intact; no unowned transaction claiming or code redemption was enabled.
+  Sources: [Apple offer codes](https://developer.apple.com/documentation/storekit/supporting-offer-codes-in-your-app)
+  and [UIKit redemption options](https://developer.apple.com/documentation/storekit/appstore/presentoffercoderedeemsheet(from:options:)-89agc).
+
 - Release build **11** includes native keyboard bridge v4 and ProMotion support.
   Archive/export and Apple `altool` validation all pass on 23 September. Local
   package checks verify matching app/widget versions, distribution signature,

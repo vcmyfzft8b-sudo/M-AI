@@ -1888,6 +1888,7 @@ export const sr: Messages = {
   "tutor.error.busy": "Glasovna usluga je trenutno zauzeta. Pokušaj za minut.",
   "tutor.error.listeningBusy": "Sve glasovne linije su zauzete. I dalje možeš da slušaš — prekidanje govorom uskoro će ponovo raditi.",
   "tutor.error.startFailed": "Objašnjenje nije bilo moguće započeti.",
+  "tutor.error.rateLimited": "Previše pokušaja. Pokušaj ponovo za {count} min.",
   "tutor.error.turnFailed": "Objašnjenje nije bilo moguće napraviti.",
   "api.trialOnly.tutor": "Bez plaćenog paketa objašnjenje je dostupno samo za tvoj probni materijal.",
   "api.tutorNotReady": "Objašnjenje je dostupno kada se obrada beleške završi.",

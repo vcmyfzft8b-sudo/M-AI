@@ -10,6 +10,8 @@
 //            -> {since, until, source} on stdout
 //   gate   --vercel F [--sentry F] [--backlog F]
 //            -> {actionable, reason, ...} on stdout
+//   queue  --vercel F [--sentry F] --backlog F --state F --until ISO
+//            [--may-advance true|false] -> records findings for manual triage
 //   commit --state F --until ISO --status ok|failed [--no-advance]
 //            -> rewrites state.json
 //
@@ -28,6 +30,11 @@ function readJson(path, fallback) {
   } catch {
     return fallback
   }
+}
+
+function readRequiredJson(path) {
+  if (!path) throw new Error('Missing required JSON file path')
+  return JSON.parse(readFileSync(path, 'utf8'))
 }
 
 function parseFlags(argv) {
@@ -194,6 +201,91 @@ export function nextState(state, { until, status, noAdvance, now }) {
   }
 }
 
+// When the hosted fixer has no usable credential, the scheduled scan must still
+// preserve every finding and move the cursor after a complete scan. Otherwise
+// the 24-hour log retention eventually turns an authentication outage into an
+// unobservable production interval. A partial scan is recorded but never
+// advances the cursor.
+export function queueScanOnly({ vercel, sentry, backlog, state, until, mayAdvance = true, now }) {
+  const decision = gate({ vercel, sentry, backlog })
+  const entries = (backlog?.entries ?? []).map((entry) => ({ ...entry }))
+  const byFingerprint = new Map(entries.map((entry) => [entry.fingerprint, entry]))
+  const bySentryIssue = new Map(
+    entries.flatMap((entry) => (entry.sentryIssues ?? []).map((id) => [String(id), entry])),
+  )
+  const recordedAt = now ?? new Date().toISOString()
+  const later = (left, right) =>
+    !left || (right && new Date(right) > new Date(left)) ? right : left
+  let queuedVercelGroups = 0
+  let queuedSentryIssues = 0
+
+  for (const group of vercel?.groups ?? []) {
+    if (!decision.freshFingerprints.includes(group.fingerprint)) continue
+    let entry = byFingerprint.get(group.fingerprint)
+    if (!entry) {
+      entry = {
+        fingerprint: group.fingerprint,
+        type: group.type ?? 'vercel',
+        path: group.path ?? null,
+        summary: `${group.type ?? 'error'} ${group.method ?? ''} ${group.path ?? ''}`.trim(),
+        firstSeen: group.firstSeen ?? null,
+        occurrences: group.count ?? 1,
+        sentryIssues: [],
+        prUrl: null,
+        notes: 'Automated fixer disabled; awaiting manual triage.',
+      }
+      entries.push(entry)
+      byFingerprint.set(entry.fingerprint, entry)
+    }
+    entry.status = 'needs-human'
+    entry.lastSeen = later(entry.lastSeen, group.lastSeen)
+    entry.updatedAt = recordedAt
+    queuedVercelGroups += 1
+  }
+
+  for (const issue of [...(sentry?.issues ?? []), ...(sentry?.additional ?? [])]) {
+    if (!decision.freshSentryIssueIds.includes(issue.id)) continue
+    let entry = bySentryIssue.get(String(issue.id)) ?? byFingerprint.get(`sentry:${issue.id}`)
+    if (!entry) {
+      entry = {
+        fingerprint: `sentry:${issue.id}`,
+        type: 'sentry',
+        path: issue.culprit ?? null,
+        summary: `Sentry ${issue.shortId ?? issue.id} at ${issue.culprit ?? 'unknown route'}`,
+        firstSeen: issue.firstSeen ?? null,
+        occurrences: issue.count ?? 1,
+        sentryIssues: [String(issue.id)],
+        prUrl: null,
+        notes: 'Automated fixer disabled; awaiting manual triage.',
+      }
+      entries.push(entry)
+      byFingerprint.set(entry.fingerprint, entry)
+      bySentryIssue.set(String(issue.id), entry)
+    } else if (!(entry.sentryIssues ?? []).includes(String(issue.id))) {
+      entry.sentryIssues = [...(entry.sentryIssues ?? []), String(issue.id)]
+      bySentryIssue.set(String(issue.id), entry)
+    }
+    entry.status = 'needs-human'
+    entry.lastSeen = later(entry.lastSeen, issue.lastSeen)
+    entry.updatedAt = recordedAt
+    queuedSentryIssues += 1
+  }
+
+  const complete = Boolean(vercel && !vercel.lossy && sentry)
+  return {
+    backlog: { ...backlog, entries },
+    state: nextState(state ?? {}, {
+      until,
+      status: complete ? 'ok' : 'failed',
+      noAdvance: !mayAdvance,
+      now: recordedAt,
+    }),
+    complete,
+    queuedVercelGroups,
+    queuedSentryIssues,
+  }
+}
+
 function main(argv) {
   const [subcommand, ...rest] = argv
   const flags = parseFlags(rest)
@@ -239,7 +331,27 @@ function main(argv) {
     return 0
   }
 
-  console.error(`Usage: triage-state.mjs <plan|gate|commit> [flags]`)
+  if (subcommand === 'queue') {
+    const result = queueScanOnly({
+      vercel: readRequiredJson(flags.vercel),
+      sentry: readJson(flags.sentry, null),
+      backlog: readRequiredJson(flags.backlog),
+      state: readRequiredJson(flags.state),
+      until: flags.until,
+      mayAdvance: flags['may-advance'] !== 'false',
+    })
+    writeFileSync(flags.backlog, `${JSON.stringify(result.backlog)}\n`)
+    writeFileSync(flags.state, `${JSON.stringify(result.state, null, 2)}\n`)
+    console.log(JSON.stringify({
+      complete: result.complete,
+      queuedVercelGroups: result.queuedVercelGroups,
+      queuedSentryIssues: result.queuedSentryIssues,
+      cursor: result.state.cursor,
+    }))
+    return 0
+  }
+
+  console.error(`Usage: triage-state.mjs <plan|gate|queue|commit> [flags]`)
   return 2
 }
 

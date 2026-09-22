@@ -7,8 +7,9 @@ name: Error triage
 # merges and never pushes to main.
 # See docs/error-triage-automation.md.
 #
-# The scan runs before `npm ci` and before Claude starts, so a run that finds nothing
-# costs about a minute instead of several. Most runs find nothing.
+# The scan runs before `npm ci` and before Claude starts. While the hosted fixer
+# has no usable credential, TRIAGE_FIXER_ENABLED=false keeps scans and the
+# durable manual backlog running without starting Claude.
 #
 # GitHub only runs scheduled workflows from the default branch, so this file has to
 # be on `main` before the cron fires.
@@ -198,11 +199,38 @@ jobs:
           fi
 
       - name: Install dependencies
-        if: steps.scan.outputs.actionable == 'true'
+        if: steps.scan.outputs.actionable == 'true' && vars.TRIAGE_FIXER_ENABLED != 'false'
         run: npm ci
 
+      - name: Queue findings for manual triage
+        if: steps.scan.outputs.actionable == 'true' && vars.TRIAGE_FIXER_ENABLED == 'false'
+        run: |
+          set -euo pipefail
+          node scripts/triage-state.mjs queue \
+            --vercel /tmp/vercel-report.json \
+            --sentry /tmp/sentry-report.json \
+            --backlog .triage-state/backlog.json \
+            --state .triage-state/state.json \
+            --until "${{ steps.window.outputs.until }}" \
+            --may-advance "${{ steps.window.outputs.may_advance }}" > /tmp/manual-queue.json
+          cat /tmp/manual-queue.json
+          {
+            echo "### Production error scan: manual triage"
+            echo
+            echo "The hosted fixer is disabled. New findings were saved to TRIAGE_BACKLOG for manual review."
+            echo
+            echo "- Vercel groups queued: $(jq -r .queuedVercelGroups /tmp/manual-queue.json)"
+            echo "- Sentry issues queued: $(jq -r .queuedSentryIssues /tmp/manual-queue.json)"
+            echo "- Complete scan: $(jq -r .complete /tmp/manual-queue.json)"
+            echo "- Successful-scan cursor: $(jq -r .cursor /tmp/manual-queue.json)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$(jq -r .complete /tmp/manual-queue.json)" != "true" ]; then
+            echo "::error::Incomplete scan; findings saved but cursor held for retry."
+            exit 1
+          fi
+
       - name: Fix, verify, and open PRs
-        if: steps.scan.outputs.actionable == 'true'
+        if: steps.scan.outputs.actionable == 'true' && vars.TRIAGE_FIXER_ENABLED != 'false'
         uses: anthropics/claude-code-action@v1
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -251,6 +279,8 @@ jobs:
           if [ "$size" -gt 45000 ]; then
             echo "::warning::backlog.json is ${size} bytes, near the 48KB variable cap; pruning is falling behind."
           fi
-          gh variable set TRIAGE_STATE --repo "$GITHUB_REPOSITORY" < .triage-state/state.json
           gh variable set TRIAGE_BACKLOG --repo "$GITHUB_REPOSITORY" < .triage-state/backlog.json
+          # The cursor is last. If the backlog upload fails, the next run must
+          # re-read the same window rather than skip errors it never stored.
+          gh variable set TRIAGE_STATE --repo "$GITHUB_REPOSITORY" < .triage-state/state.json
           echo "Saved triage state to repository variables."

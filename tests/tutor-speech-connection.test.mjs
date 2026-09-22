@@ -64,3 +64,35 @@ test("old teaching words no longer block an interruption but recent speaker echo
   assert.equal(judgeHeard("Calcium", output.spokenIntoRoom()), "tutor", "missing timestamps keep the conservative echo guard");
   output.close();
 });
+
+/*
+ * MEMOAI-WEB-48: the close landed while the writer was still mid-sentence, so `turn.finished`
+ * was rejected before `runTurn` got as far as awaiting it. The walkthrough handled it — it
+ * paused and reported the failure — but Sentry had already taken the orphan rejection and
+ * marked the error as seen, so the tutor's own tagged report was dropped as a repeat.
+ */
+test("a speech connection dropped mid-sentence does not orphan the turn's rejection", async () => {
+  const sockets = installGlobals();
+  const output = new TutorSpeechOutput(config);
+  await output.connect();
+
+  const turn = output.speak();
+  turn.push("Mitohondriji proizvajajo ");
+  await settle();
+  assert.equal(output.turn.segmentOpen, true, "the turn is being fed when the socket goes");
+
+  const orphaned = [];
+  const record = (reason) => orphaned.push(reason);
+  process.on("unhandledRejection", record);
+  sockets[0].close();
+  await settle();
+  process.off("unhandledRejection", record);
+
+  assert.deepEqual(
+    orphaned.map((reason) => reason?.message),
+    [],
+    "the failure belongs to whoever awaits the turn, not to the global handler",
+  );
+  await assert.rejects(turn.finished, /The speech connection closed\./);
+  output.close();
+});

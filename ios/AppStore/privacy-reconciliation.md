@@ -174,3 +174,8 @@ The physical analytics relaunch test also found WebKit restoring an older consen
 cookie. The browser preference record can now veto a stale grant when it contains
 a newer withdrawal. It cannot grant consent or restore a missing/expired cookie.
 The default remains off; a later explicit opt-in supersedes an earlier withdrawal.
+
+Verified on the connected iPhone after the fix: opt-in persisted across relaunch,
+withdrawal persisted across the following relaunch, and QA finished opted out
+(`review-sep23-iphone-analytics-durable.xcresult`). Browser and native user-agent
+Preview checks passed too; no default-on change was made.

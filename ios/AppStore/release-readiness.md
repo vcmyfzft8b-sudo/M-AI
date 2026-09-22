@@ -742,7 +742,8 @@ of Memo or replace the unresolved end-to-end checks above.
 
 - Bridge v4 now supplies UIKit keyboard-layout presentation frames to the shared
   PWA keyboard controller. Library/note chat, search and rename passed on the
-  actual Preview in Simulator (`review-sep23-keyboard-product.xcresult`). All
+  actual Preview in Simulator (`review-sep23-keyboard-product.xcresult`) and on
+  the connected iPhone 16 (`review-sep23-iphone-keyboard-product.xcresult`). All
   composers and sheets retain the shared design and keyboard CSS variables.
 - A local fixture loading the real controller/styles passed three form and
   three chat cycles (`review-sep23-keyboard-motion-idle.xcresult`). Measured
@@ -759,3 +760,8 @@ of Memo or replace the unresolved end-to-end checks above.
 - These changes need the new native binary and matching web deployment. The
   earlier validated release archive does not include them. Existing submission
   gates above remain open; no App Review submission has been made.
+- Final analytics device check passed after the withdrawal fix:
+  `review-sep23-iphone-analytics-durable.xcresult`. Opt-in survived relaunch,
+  withdrawal survived a second relaunch, and the synthetic QA device was left
+  opted out. Both browser/native user-agent checks also passed on the READY
+  `f50fd7e0` Preview. TypeScript, ESLint and 109 focused regression tests passed.

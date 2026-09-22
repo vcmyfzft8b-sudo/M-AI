@@ -2014,7 +2014,9 @@ final class WrapperTests: XCTestCase {
         app.terminate(); app.launch()
         let finalChoice = openChoice()
         XCTAssertEqual(finalChoice.value as? String, "0", "Withdrawal must survive relaunch")
-        if originallyEnabled { finalChoice.tap() }
+        if originallyEnabled && ProcessInfo.processInfo.environment["MEMO_QA_ANALYTICS_RESTORE_OFF"] != "1" {
+            finalChoice.tap()
+        }
     }
 
     @MainActor func testPreviewSettingsRows() throws {

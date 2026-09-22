@@ -717,6 +717,86 @@ final class WrapperTests: XCTestCase {
         keepStudyScreenshot("Account deletion requested in the wrapper", app: app)
     }
 
+    @MainActor func testPreviewStudyNoteFromPublicArticle() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              let link = env["MEMO_QA_PUBLIC_ARTICLE"], URL(string: link)?.scheme == "https" else {
+            throw XCTSkip("Requires a staging Preview and a public test article")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        passConsentGate(app)
+        dismissInitialOffer(app)
+        let newNote = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "New note")).firstMatch
+        XCTAssertTrue(newNote.waitForExistence(timeout: 30))
+        newNote.tap()
+        let source = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "link")).firstMatch
+        XCTAssertTrue(source.waitForExistence(timeout: 15))
+        source.tap()
+        let input = app.webViews.textFields.firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 15))
+        input.tap()
+        input.typeText(link)
+        let create = app.webViews.buttons["Create the note"].firstMatch
+        XCTAssertTrue(create.waitForExistence(timeout: 10))
+        create.tap()
+        XCTAssertTrue(app.webViews.buttons["Notes"].firstMatch.waitForExistence(timeout: 120))
+        let content = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "evaporation")).firstMatch
+        let deadline = Date().addingTimeInterval(300)
+        while Date() < deadline && !content.exists {
+            dismissNotificationNudge(app)
+            XCTAssertFalse(app.webViews.staticTexts["Processing failed"].exists)
+            RunLoop.current.run(until: Date().addingTimeInterval(5))
+        }
+        XCTAssertTrue(content.exists, "The public water-cycle article must become actual note content")
+        dismissNotificationNudge(app)
+        keepStudyScreenshot("Note generated from a public article", app: app)
+    }
+
+    @MainActor func testPreviewWithdrawAndRestoreAIConsent() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              let email = env["MEMO_QA_EMAIL"], email.hasSuffix("@example.com") else {
+            throw XCTSkip("Requires a signed-in synthetic account on staging")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        dismissInitialOffer(app)
+        let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 30))
+        settings.tap()
+        XCTAssertTrue(app.webViews.staticTexts[email].firstMatch.waitForExistence(timeout: 15))
+        let withdraw = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Withdraw AI permission")).firstMatch
+        for _ in 0..<12 {
+            if withdraw.exists && withdraw.isHittable { break }
+            let window = app.windows.firstMatch
+            window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8)).press(
+                forDuration: 0.1,
+                thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)),
+                withVelocity: .slow, thenHoldForDuration: 0.2)
+        }
+        XCTAssertTrue(withdraw.isHittable)
+        withdraw.tap()
+        let confirm = app.webViews.buttons["Withdraw permission"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+        confirm.tap()
+        let allow = app.webViews.buttons["Allow AI processing"].firstMatch
+        XCTAssertTrue(allow.waitForExistence(timeout: 30))
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(allow.waitForExistence(timeout: 30), "Withdrawal must survive relaunch")
+        XCTAssertFalse(app.webViews.buttons["New note"].exists)
+        keepStudyScreenshot("AI permission withdrawn and retained after relaunch", app: app)
+        allow.tap()
+        dismissInitialOffer(app)
+        let newNote = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "New note")).firstMatch
+        XCTAssertTrue(newNote.waitForExistence(timeout: 30), "Explicit permission must restore study access")
+    }
+
     @MainActor func testPreviewRemainsPortraitWhenDeviceRotates() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
               URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
@@ -760,8 +840,7 @@ final class WrapperTests: XCTestCase {
         openStudyTab("Flashcards", in: app)
         XCTAssertTrue(app.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Card ")).firstMatch.waitForExistence(timeout: 15))
         keepStudyScreenshot("iPad flashcards portrait", app: app)
-        // The PWA desktop layout exposes Settings in its navigation rail;
-        // the phone-only Back button is intentionally absent on a wide iPad.
+        // Return home before opening Settings in the portrait layout.
         let back = app.webViews.buttons["Back"].firstMatch
         if back.exists { back.tap() }
         let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch

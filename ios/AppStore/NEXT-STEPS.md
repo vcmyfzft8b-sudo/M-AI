@@ -3,7 +3,7 @@
 Current evidence is at the top of `ios/AppStore/release-readiness.md`.
 
 - The user confirmed **PWA onboarding first**, then Google/Apple/email sign-in.
-- App Privacy is published. Content Rights is populated. Build **1.0.0 (8)**
+- App Privacy is published. Content Rights is populated. Build **1.0.0 (9)**
   is attached. The download price is free.
 - Draft submission `b7aa39c6-3b7a-4e6c-a0c5-75dc3c54d2be` contains version
   1.0, all four subscriptions and their group. **It is not submitted.**
@@ -30,9 +30,15 @@ Current evidence is at the top of `ios/AppStore/release-readiness.md`.
   Preview `memo-ei25tuep1-nace-valencics-projects.vercel.app` is READY at
   `12c05d21`, using staging; production has not received this branch fix.
 - Portrait-only is now required on iPhone and iPad. Build 9 rotation checks
-  pass on both simulators. Build 9 upload/draft replacement is in progress.
+  pass on both simulators. Build 9 is VALID, attached to the unsubmitted draft,
+  and installed on the iPhone. Physical launch was blocked by the locked phone.
 - Synthetic account deletion passed in the UI and blocks access. Final cleanup
   is due after its three-hour drain, at 17:04:40 local time on 22 September.
+- Build 9 also passes actual note generation from a public web article, on a
+  new synthetic staging account. The completed Water Cycle note is captured
+  in the screenshot gallery; `review-sep22-public-article-final.xcresult` passes.
+- AI-permission withdrawal, persistence after relaunch, and explicit re-consent
+  pass in the actual app (`review-sep22-consent-withdrawal-verified.xcresult`).
 - Device tests pass for real Apple product loading, three-day trial display,
   the wheel and both half-off offer cards, and settings/theme controls.
 - Preview catalogue loading is fixed: the Preview host must be included with

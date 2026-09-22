@@ -11,7 +11,7 @@ submit:** current end-to-end purchase and physical-device checks remain open.
 - Native simulator build passed; 126 focused mobile tests and all 1,552 web
   tests passed. These checks do not prove real Apple authentication or billing.
 - App Store Connect API confirms version 1.0 is READY_FOR_REVIEW in an
-  **unsubmitted draft**, with VALID build **1.0.0 (8)** attached and manual
+  **unsubmitted draft**, with VALID build **1.0.0 (9)** attached and manual
   release selected. Draft `b7aa39c6-3b7a-4e6c-a0c5-75dc3c54d2be` contains the
   app version, all four subscription versions and their subscription group.
   Its `submittedDate` is null. All 16 uploaded screenshots are COMPLETE;
@@ -127,7 +127,12 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   restrict orientation to portrait. iPad opts out of split-view resizing.
   Build 9 Simulator tests pass on both devices, including launch while sideways,
   both landscape directions and upside-down rotation; the PWA viewport stays
-  vertical. Build 9 is being uploaded to replace build 8 in the draft.
+  vertical. Build 9 uploaded successfully, is VALID and is attached to the
+  unsubmitted draft (build `71d15309-be70-46f9-8dfd-f3ea5c8d8cbb`, relationship
+  verified through Apple's API). It is installed on the iPhone; the device was
+  locked when launch was attempted, so the new build has not been exercised
+  on physical hardware. The draft still has six READY_FOR_REVIEW items,
+  `submittedDate: null`, and manual release selected.
   Earlier landscape screenshots are historical and no longer describe the app.
 - Actual account deletion passed for the synthetic study account. The UI showed
   the irreversible-deletion/Apple-subscription disclosure, returned the deletion
@@ -136,6 +141,30 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   final erasure remains pending. A task-owned checker waits for that deadline
   before calling the authenticated Preview cleanup route. Preview-only cleanup
   authorization was added to this branch; no production configuration changed.
+- Build 9's actual public-article flow passes on the current staging Preview:
+  New note → Web link → the USGS water-cycle article → generated notes. The
+  UI test verified actual evaporation content, and the retained screenshot
+  shows the completed Water Cycle note. Result:
+  `review-sep22-public-article-final.xcresult` (74.2 seconds, one test, no failures).
+  The initial combined runner ran creation before account setup alphabetically;
+  that harness ordering was corrected before the passing run. No account quota
+  or generated-content rows were modified to obtain this pass.
+- Rechecked the public production terms, privacy and refund URLs: all return
+  HTTP 200 after the canonical host redirect. Terms and privacy contain the
+  correct **Zgoša** address. The consent disclosure names Google Gemini,
+  Soniox, OpenRouter and its model providers, and links to the privacy policy;
+  the published source policy describes those services and account deletion.
+  This is a content/accessibility check, not proof of legal compliance or Apple
+  approval. Apple's current guidelines still require actual working review
+  access, purchase behavior, explicit AI-sharing permission and in-app deletion:
+  https://developer.apple.com/app-store/review/guidelines/.
+- Actual AI-consent withdrawal passes on build 9: Settings → Withdraw AI
+  permission → confirm → consent screen; terminating and relaunching retains
+  the gate. Explicitly allowing processing again restores access to the
+  library. Result: `review-sep22-consent-withdrawal-verified.xcresult`, 36.5
+  seconds, one test, no failures. Initial harness attempts missed the opening
+  offer and the emoji-prefixed row label; selectors/navigation were corrected,
+  without changing the product's consent behavior.
 - The real iPhone Sandbox checkout now reaches Apple’s account/password dialog.
   It has not completed a transaction; the inspection test is explicitly skipped,
   not counted as a purchase pass. The user has been asked to authenticate with

@@ -300,6 +300,18 @@ on Preview `93c30937`; a 40-second permission wait charged no time and the actua
 session settled at nine seconds. It does not verify perceived sound quality or
 a learner interrupting by speaking. Do not reset usage to obtain a pass.
 
+### Library verification
+
+`testPreviewLibrarySearchRenameAndFolders` requires
+`MEMO_QA_LIBRARY_WRITES=1` and a retained synthetic circuit note in the dedicated
+staging account. It exercises search, a saved note rename, folder creation and
+rename, membership changes, relaunch persistence, and deleting a populated
+folder without deleting its note. It restores the note title and removes the
+temporary folder through the real UI. The 22 September run passed on Preview
+`28c57449` in 120 seconds. Phone and desktop folder menus now share their saved
+list, and the phone exposes the existing membership picker through Add lectures.
+These are shared PWA changes; no separate native library UI was introduced.
+
 ## 7. Archive, TestFlight, and submit
 
 1. Ship the tested web/backend branch through the normal local → authorized push → Vercel Preview → authorized merge process. Confirm `memoai.eu` serves these changes. A local build alone does not update the wrapped website.

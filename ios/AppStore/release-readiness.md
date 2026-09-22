@@ -37,6 +37,29 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- The real library workflow passes on READY Preview `28c57449`
+  (`memo-bb8j0rbiz-nace-valencics-projects.vercel.app`,
+  `dpl_zfrUHxm1UD1Ds1Pm92gdShEJtum9`). Phone folder menus previously had no
+  way to edit their note membership; the hidden desktop menu also owned a
+  separate folder list. The shared PWA now has an Add lectures action and one
+  folder list shared by both responsive menus and library chat. Folder
+  selection is persisted on the user's actions, so restoring it cannot erase
+  it during mount. The native test checks matching/nonmatching search, note
+  rename and relaunch, folder creation/rename and relaunch, adding/removing
+  membership, and deleting a populated folder while retaining its note.
+  `review-sep22-library-crud-final.xcresult`: one pass, 120 seconds. The three
+  final screenshots were visually inspected. A separate local browser test
+  against staging passed create/add/reload/remove/delete, and TypeScript,
+  focused lint and 36 related tests passed. Development HMR fetch caching was
+  disabled temporarily for that local run; the config change was removed.
+  The final staging read (`review-sep22-library-rows-after.log`) confirms the
+  circuit note is ready with its original title and no temporary folders or
+  membership rows remain. Earlier harness/runner failures are not pass evidence.
+- The deletion-test account's pre-cleanup storage inventory contains eight
+  objects (3,635,379 bytes): `review-sep22-erasure-storage-before.json`.
+  Its existing erasure worker remains live and is waiting for 17:04:40 CEST;
+  the files have not yet been claimed as erased. The iPhone remained locked
+  at the 16:48 CEST check (`review-sep22-device-lock-latest.json`).
 - Real tutor startup testing exposed an allowance bug: the first synthetic
   session reserved its 60-second allowance before WebKit's microphone prompt
   was answered. No explanation played; after the test terminated, the abandoned

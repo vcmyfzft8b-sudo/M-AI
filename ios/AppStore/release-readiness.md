@@ -60,7 +60,18 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
   focused lint and 125 mobile/TTS regressions pass. Evidence:
   `review-sep23-dock-local-results.json`, `review-sep23-dock-accessibility-types.log`,
   `review-sep23-dock-lint.log`, `review-sep23-dock-tests.log`. Preview and physical
-  iPhone verification of this fix are still pending.
+  iPhone verification were pending at push time. The READY Preview is now
+  `memo-4qmi5o27p-nace-valencics-projects.vercel.app` at `2105262e`. Physical
+  iPhone retesting passes in 42.2 seconds, asserting one accessible Pause
+  control, stable pause, advancing resume and close back to Listen:
+  `review-sep23-iphone-read-aloud-fixed.xcresult`. Its two screenshots were
+  retained; the resumed playback capture was visually inspected. Browser and
+  native-UA Preview checks also pass (`review-sep23-dock-preview-results.json`),
+  including actual advancing audio, pause, resume and close. The first headless
+  Preview run timed out waiting for Pause after an early click; the rerun allows
+  the dock to finish client setup before clicking. The first native test failure
+  from an unsupported XCTest predicate was a harness error, separately fixed
+  before the duplicate-control failure was reproduced and corrected.
 
 - Physical iPhone live tutor controls now pass on the current Preview. The real
   circuit note reached Explaining, stayed Paused, resumed Explaining, and ended

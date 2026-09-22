@@ -41,6 +41,23 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- Release build 10 is archived and exported locally with the current native
+  restore fix and corrected User ID Analytics declaration. Apple `altool`
+  validation returned **VERIFY SUCCEEDED with no errors** at 23:16 CEST on
+  22 September. The exported IPA's signature, app/extension version match,
+  disabled debugging, production APNs entitlement, Apple sign-in entitlement
+  and phone/tablet portrait declarations were checked. Its Release executable
+  contains the production origins and omits the Debug preview override.
+  Evidence: `review-sep22-build10-archive.log`, `review-sep22-build10-export.log`,
+  `review-sep22-build10-verification.json` and
+  `review-sep22-build10-apple-validation.json` in `ios/build/`. Package:
+  `ios/build/export-release-10/MemoAI.ipa`, SHA-256
+  `b0b5009a03edc3bde547c2aa7243ed04e665c910e0e710254b275e19723cb2e8`.
+  Build 10 has **not** been uploaded or submitted. Package validation does not
+  verify the live web deployment, authentication, purchases or App Review
+  acceptance; those gates above remain open. The native fix's Preview
+  `4dbd97a3` is READY at `memo-f93dsa8b4-nace-valencics-projects.vercel.app`
+  (`dpl_7SaVmwZgAyXxUnx535DsGZecsStb`).
 - StoreKit reconciliation now checks both unfinished purchases and current
   entitlements even if an earlier delivery fails. Previously, the first
   rejected transaction prevented later purchases from reaching the server.

@@ -77,6 +77,11 @@ focused lint and `plutil` validation passed. No production merge was performed.
 - Build and upload a release containing the corrected manifest after the
   remaining release gates are resolved.
 
+Build 10 now contains the corrected manifest and passed local signature checks
+and Apple's package validation on 22 September at 23:16 CEST. It is exported at
+`ios/build/export-release-10/MemoAI.ipa`; it has not been uploaded. The published
+portal purposes and the final production deployment still need verification.
+
 Sources checked 22 September:
 [Apple privacy details](https://developer.apple.com/app-store/app-privacy-details/)
 and [App Review guideline 2.5.14](https://developer.apple.com/app-store/review/guidelines/#software-requirements).

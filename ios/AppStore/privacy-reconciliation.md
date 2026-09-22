@@ -53,6 +53,15 @@ Local artifacts in `ios/build/`:
 Five erasure regression tests cover the drain, account isolation, analytics
 failure/retry, Apple revocation failure, storage failure and post-Auth retry.
 
+The same isolation/cascade test also passed through the actual deployed Preview
+`/api/cron/account-erasure` at 17:10:53 CEST, using its authenticated cron route:
+`review-sep22-erasure-preview-integration.json`. Commit `bc816773` was READY at
+`https://memo-12fux1759-nace-valencics-projects.vercel.app`, deployment
+`dpl_Fx9BA4J61YhnbtxkjaQZzw2fJfEg`. The endpoint deleted one synthetic account,
+reported zero failures, removed its owned session and both types of page view,
+and preserved the unrelated fixture until explicit fixture cleanup. TypeScript,
+focused lint and `plutil` validation passed. No production merge was performed.
+
 ## Still required
 
 - Correct the five privacy-policy translations in `src/lib/help/`: their

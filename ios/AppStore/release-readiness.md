@@ -66,6 +66,9 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
   Five regression tests and an isolated staging integration pass, including
   anonymous-view cascade and preservation of unrelated records. The known
   original fixture's remaining analytics were removed by their captured IDs.
+  At 17:10:53 CEST, the same test passed through the authenticated cron endpoint
+  on READY Preview `bc816773` (`memo-12fux1759-nace-valencics-projects.vercel.app`,
+  `dpl_Fx9BA4J61YhnbtxkjaQZzw2fJfEg`), with one deletion and zero failures.
   See `privacy-reconciliation.md` for evidence and limits. Session replay is
   also disabled, and the native User ID declaration now includes Analytics.
 - Real tutor startup testing exposed an allowance bug: the first synthetic

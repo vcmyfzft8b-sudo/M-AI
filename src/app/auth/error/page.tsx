@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { InstantLink } from "@/components/instant-link";
 import { AuthScreen } from "@/components/auth-screen";
 import { Msym } from "@/components/msym";
 import { getTranslations } from "@/lib/i18n/server";
@@ -31,9 +30,9 @@ export default async function AuthErrorPage({
         {/* One door: `/auth/continue` offers signing in and signing up
             together, so a second button here would only be the same page
             under a different name. */}
-        <Link href="/auth/continue" className="memo-button-coral memo-auth-submit">
+        <InstantLink href="/auth/continue" className="memo-button-coral memo-auth-submit">
           {t("auth.error.backToLogin")}
-        </Link>
+        </InstantLink>
       </div>
     </AuthScreen>
   );

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter_Tight } from "next/font/google";
 import Image from "next/image";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { LandingFaq } from "@/components/landing/landing-faq";
@@ -12,6 +11,7 @@ import { LandingTryCallout } from "@/components/landing/landing-try-callout";
 import { LandingTutorDemo } from "@/components/landing/landing-tutor-demo";
 import { LandingUserCount } from "@/components/landing/landing-user-count";
 import { MemoAppPreview } from "@/components/landing/memo-app-preview";
+import { InstantLink } from "@/components/instant-link";
 import { LandingLoadingLink } from "@/components/landing-loading-link";
 import { LandingScrollReveal } from "@/components/landing-scroll-reveal";
 import { getOptionalUser } from "@/lib/auth";
@@ -122,7 +122,10 @@ export default async function HomePage() {
             </h1>
             <p className="landing-v2-hero-lead">{t("landing.hero.lead")}</p>
             <div className="landing-v2-hero-actions">
-              <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-light">
+              {/* The survey first, sign-in after it: someone who has answered
+                  twenty questions is a great deal more likely to finish
+                  creating the account than someone shown the wall first. */}
+              <LandingLoadingLink href="/onboarding" className="landing-cta landing-cta-hero landing-cta-light">
                 {t("landing.cta.tryFree")}
               </LandingLoadingLink>
               <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-dark">
@@ -187,7 +190,7 @@ export default async function HomePage() {
         <div className="landing-v2-final-cta" data-scroll-reveal="">
           <h2>{t("landing.finalCta.title")}</h2>
           <p className="landing-v2-final-cta-lead">{t("landing.finalCta.lead")}</p>
-          <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-light">
+          <LandingLoadingLink href="/onboarding" className="landing-cta landing-cta-hero landing-cta-light">
             {t("landing.cta.tryFree")}
           </LandingLoadingLink>
           <p className="landing-v2-final-cta-note">{t("landing.finalCta.note")}</p>
@@ -217,9 +220,9 @@ export default async function HomePage() {
             <div className="landing-v2-footer-group">
               <h2>{t("landing.footer.support")}</h2>
               <a href={`mailto:${BRAND_SUPPORT_EMAIL}`}>{BRAND_SUPPORT_EMAIL}</a>
-              <Link href="/legal/terms-of-use">{t("landing.footer.terms")}</Link>
-              <Link href="/legal/privacy-policy">{t("landing.footer.privacy")}</Link>
-              <Link href="/legal/refund-policy">{t("landing.footer.refunds")}</Link>
+              <InstantLink href="/legal/terms-of-use">{t("landing.footer.terms")}</InstantLink>
+              <InstantLink href="/legal/privacy-policy">{t("landing.footer.privacy")}</InstantLink>
+              <InstantLink href="/legal/refund-policy">{t("landing.footer.refunds")}</InstantLink>
             </div>
           </nav>
         </div>

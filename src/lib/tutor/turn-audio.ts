@@ -371,6 +371,112 @@ export function judgeHeard(heard: string, tutorSpokenTail: string, language = ""
 }
 
 /**
+ * How long somebody has to keep talking before the tutor gives them the floor.
+ *
+ * It used to hand over on the first word, which is the wrong instinct twice over.
+ * A room is full of single words that are not addressed to anybody — someone
+ * agreeing across the table, a name called down a corridor, a phrase off a
+ * television — and every one of them stopped the lesson dead. And even when it
+ * really is the learner, stopping on the instant is not what a person does: you
+ * carry on for a moment while the other voice establishes that it means to keep
+ * going.
+ *
+ * Six hundred milliseconds is roughly that moment. Long enough that a stray word
+ * has finished and gone before it expires, short enough that a learner who means
+ * to cut in does not have to say it twice.
+ */
+const BARGE_IN_HOLD_MS = 600;
+
+/**
+ * A single word can still take the floor, but it has to persist for twice as long.
+ *
+ * "Stop", "wait" and "why" are real interruptions and all of them are one word, so
+ * a rule counting only words would refuse the most urgent thing a learner can say.
+ * A word the recognizer is still reporting 1.2 seconds later is a word somebody
+ * actually said into the microphone, not a blip off the room.
+ */
+const BARGE_IN_LONE_WORD_HOLD_MS = BARGE_IN_HOLD_MS * 2;
+
+/** Two words inside the window is an utterance rather than a noise. */
+const BARGE_IN_MIN_WORDS = 2;
+
+/**
+ * Silence long enough to say the speaker was not addressing the tutor after all.
+ *
+ * Without this a word heard once would sit as a half-made interruption forever,
+ * and the next unrelated word minutes later would complete it.
+ */
+const BARGE_IN_ABANDON_MS = 1_500;
+
+export type BargeInDecision =
+  /** Not the learner, or not yet enough of them. The tutor keeps talking. */
+  | "hold"
+  /** Somebody is genuinely talking over the tutor. Hand the floor across. */
+  | "interrupt";
+
+/**
+ * Whether what the microphone is hearing has earned the floor yet.
+ *
+ * Deliberately a rule rather than a timer inside the component: the component
+ * already learned this lesson with the heard line, where three copies of a rule
+ * became three different rules. Everything it needs is passed in, so the whole
+ * policy can be exercised by a test with a fake clock and no audio at all.
+ *
+ * Feed it every partial the recognizer produces while the tutor holds the floor.
+ * It is the caller's job to have judged the speaker first — echo and noise never
+ * reach here, and telling it about them is what clears a half-made interruption.
+ */
+export class BargeInGate {
+  private startedAt: number | null = null;
+  private lastAt = 0;
+  private firstHeard = "";
+
+  /** Nobody is trying to interrupt any more: a new turn, or the floor changing hands. */
+  reset() {
+    this.startedAt = null;
+    this.lastAt = 0;
+    this.firstHeard = "";
+  }
+
+  /**
+   * `speaker` is what `judgeHeard` made of this partial. Anything but the learner
+   * abandons whatever was building: the tutor's own echo must never accumulate
+   * towards an interruption, and neither should a noise that happens to land
+   * between two of the learner's words.
+   */
+  consider(now: number, heard: string, speaker: HeardSpeaker): BargeInDecision {
+    if (speaker !== "learner") {
+      this.reset();
+      return "hold";
+    }
+
+    // A gap this long means the last thing heard was not the start of anything.
+    if (this.startedAt !== null && now - this.lastAt > BARGE_IN_ABANDON_MS) {
+      this.reset();
+    }
+
+    if (this.startedAt === null) {
+      this.startedAt = now;
+      this.firstHeard = heard;
+    }
+
+    this.lastAt = now;
+
+    const held = now - this.startedAt;
+    const words = allWords(heard).filter(isWord).length;
+    // Growth matters as much as the count: a recognizer repeating one word it is
+    // unsure about is not somebody continuing to speak.
+    const grew = heard.length > this.firstHeard.length;
+
+    if (words >= BARGE_IN_MIN_WORDS && grew && held >= BARGE_IN_HOLD_MS) {
+      return "interrupt";
+    }
+
+    return held >= BARGE_IN_LONE_WORD_HOLD_MS && words >= 1 ? "interrupt" : "hold";
+  }
+}
+
+/**
  * The loudness of one frame of microphone audio, for the ring around the sphere.
  *
  * Plain RMS. This used to be one output of a filter bank that split every frame

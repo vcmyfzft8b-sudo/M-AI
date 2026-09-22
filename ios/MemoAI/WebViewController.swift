@@ -2,6 +2,53 @@ import UIKit
 import WebKit
 import StoreKit
 import AuthenticationServices
+import ObjectiveC
+
+/// WKWebView shows a browser-style accessory bar (previous/next/done) above
+/// the keyboard for every form field. Memo's sheets already carry their own
+/// controls, so the content view answers `inputAccessoryView` with nil.
+final class MemoWebView: WKWebView, UIScrollViewDelegate {
+    override init(frame: CGRect, configuration: WKWebViewConfiguration) {
+        super.init(frame: frame, configuration: configuration)
+        scrollView.delegate = self
+        hideKeyboardAccessoryBar()
+    }
+
+    /// When the keyboard opens, WebKit scrolls the document to reveal the focused
+    /// field even when the document is not scrollable. Memo's phone screens are
+    /// fixed and already shrink above the keyboard, so that scroll only pushes
+    /// a sheet's header off the top. Keep a non-scrollable document at rest.
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard scrollView.contentSize.height <= scrollView.bounds.height + 1,
+              scrollView.contentOffset.y != 0 || scrollView.contentOffset.x != 0 else { return }
+        scrollView.contentOffset = .zero
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        hideKeyboardAccessoryBar()
+    }
+
+    private func hideKeyboardAccessoryBar() {
+        guard let content = scrollView.subviews.first(where: {
+            String(cString: object_getClassName($0)).hasPrefix("WKContent")
+        }), let base = object_getClass(content) else { return }
+        let name = String(cString: class_getName(base)) + "_MemoNoAccessoryBar"
+        if String(cString: class_getName(base)) == name { return }
+        let selector = #selector(getter: UIResponder.inputAccessoryView)
+        var subclass: AnyClass? = NSClassFromString(name)
+        if subclass == nil, let created = objc_allocateClassPair(base, name, 0),
+           let method = class_getInstanceMethod(UIResponder.self, selector) {
+            let none: @convention(block) (AnyObject) -> UIView? = { _ in nil }
+            class_addMethod(created, selector, imp_implementationWithBlock(none), method_getTypeEncoding(method))
+            objc_registerClassPair(created)
+            subclass = created
+        }
+        if let subclass { object_setClass(content, subclass) }
+    }
+}
 
 @MainActor
 final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandlerWithReply, WKDownloadDelegate {
@@ -9,9 +56,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private let store = Store()
     private let appleSignIn = AppleSignIn()
     private let googleSignIn = GoogleSignIn()
+    private let recorder = LectureRecorder()
+    private let push: PushNotifications
     private let overlay = UIStackView()
     private let loadingCover = UIView()
-    private let spinner = UIActivityIndicatorView(style: .medium)
     private let message = UILabel()
     private let retry = UIButton(type: .system)
     private var timeout: Task<Void, Never>?
@@ -19,6 +67,13 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private var checkingAppleCredential = false
     private var memoLocale: String?
     private let themePreferenceKey = "memo.pwa.theme"
+
+    init(push: PushNotifications) {
+        self.push = push
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     private func setMemoTheme(_ value: String) {
         guard ["system", "light", "dark"].contains(value) else { return }
@@ -38,16 +93,43 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             .lowercased().split(separator: "-").first.map(String.init) ?? ""
         guard ["sl", "hr", "bs", "sr", "en"].contains(locale) else { return }
         memoLocale = locale
+        recorder.statusText = (text("recording"), text("recordingPaused"))
         retry.setTitle(text("retry"), for: .normal)
-        if !overlay.isHidden { message.text = text(retry.isHidden ? "loading" : "connectionFailed") }
+        if !overlay.isHidden, !retry.isHidden { message.text = text("connectionFailed") }
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        // A take the page never collected cannot be recovered — the draft it
+        // belonged to is the page's — and a banner outlives the process that
+        // started it, so a crash mid-lecture would leave a clock running on the
+        // Lock Screen with nothing behind it.
+        LectureRecorder.removeOrphanedRecordings()
+        LectureRecorder.dismissStaleActivities()
+        recorder.statusText = (text("recording"), text("recordingPaused"))
         setMemoTheme(UserDefaults.standard.string(forKey: themePreferenceKey) ?? "system")
         view.backgroundColor = UIColor(named: "Canvas")
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
+        /*
+         * Offline mode is a service worker, and WKWebView will only run one for
+         * a domain listed in `WKAppBoundDomains` *and* only when the web view
+         * opts into that restriction here. Without both halves the page's
+         * `navigator.serviceWorker.register` never fires — measured: zero
+         * requests for `/sw.js` — and the app has nothing cached to open with
+         * no connection.
+         *
+         * The restriction it buys is one this wrapper already imposes on
+         * itself: the web view may navigate only to Memo. Every external link
+         * is already handed to the system browser, and both native sign-ins run
+         * in `ASWebAuthenticationSession`, outside this view.
+         *
+         * Off for a Vercel preview, whose host changes with every deployment
+         * and so cannot be in a static list: a preview would otherwise refuse
+         * to load at all. Previews are for layout and flow; offline mode is
+         * checked against production or a local TLS build.
+         */
+        config.limitsNavigationsToAppBoundDomains = AppConfiguration.isAppBound
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = [.video]
         config.applicationNameForUserAgent = "MemoAI-iOS/1.0"
@@ -56,7 +138,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             (() => {
               if (!\(AppConfiguration.trustedOriginsJSON).includes(location.origin)) return;
               Object.defineProperty(window, 'memoNative', { value: Object.freeze({
-                version: 1,
+                // 3 adds remote notifications. The page is deployed
+                // independently of the binary, so it has to ask before calling
+                // a command an installed older build would reject.
+                version: 3,
                 request: (command, payload = {}) => window.webkit.messageHandlers.memoNative.postMessage({command, ...payload})
               }) });
               // WebKit does not consistently promote blob anchor clicks to
@@ -82,6 +167,13 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         config.userContentController.addUserScript(WKUserScript(source: """
             (() => {
               if (!\(AppConfiguration.trustedOriginsJSON).includes(location.origin)) return;
+              // The web view runs edge to edge. The site serves viewport-fit=cover to
+              // this user agent; older deployments did not, and without it the page
+              // lays out under the status bar with zero safe-area insets.
+              const viewport = document.querySelector('meta[name="viewport"]');
+              if (viewport && !/viewport-fit\\s*=\\s*cover/.test(viewport.content)) {
+                viewport.content = viewport.content.replace(/,?\\s*viewport-fit\\s*=\\s*\\w+/, '') + ', viewport-fit=cover';
+              }
               const sync = () => {
                 window.memoNative.request('setLocale', {locale: document.documentElement.lang}).catch(() => {});
                 window.memoNative.request('setTheme', {theme: document.documentElement.dataset.theme || 'system'}).catch(() => {});
@@ -90,7 +182,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
               new MutationObserver(sync).observe(document.documentElement, {attributes: true, attributeFilter: ['lang', 'data-theme']});
             })();
             """, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
-        webView = WKWebView(frame: .zero, configuration: config)
+        webView = MemoWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.isOpaque = false
@@ -98,8 +190,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         webView.isHidden = true
         webView.backgroundColor = UIColor(named: "Canvas")
         webView.scrollView.backgroundColor = UIColor(named: "Canvas")
-        // The web app owns its single scroller. Safe-area layout is supplied once,
-        // by this native container; the page's env(safe-area-inset-*) then stays zero.
+        // The web app owns its single scroller and, like the installed PWA, the
+        // safe areas: the page is served with viewport-fit=cover for this user
+        // agent and lays out with env(safe-area-inset-*). Insetting the web view
+        // instead left light native bands above and below every dimmed sheet.
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.showsVerticalScrollIndicator = false
         webView.scrollView.showsHorizontalScrollIndicator = false
@@ -111,10 +205,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         webView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(webView)
         NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-            webView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor)
+            webView.topAnchor.constraint(equalTo: view.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
         buildOverlay()
         store.deliver = { [weak self] jws in
@@ -123,6 +217,19 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         }
         store.showPurchaseIntent = { [weak self] in
             self?.webView.load(URLRequest(url: AppConfiguration.origin.appendingPathComponent("app/start")))
+        }
+        push.openNote = { [weak self] lecture in
+            // A notification only ever carries a lecture id this app was told
+            // about, but it arrives from outside the web view, so it is built
+            // into a path here rather than interpolated into a URL string.
+            guard let self, let id = UUID(uuidString: lecture) else { return }
+            self.webView.load(URLRequest(url: AppConfiguration.origin
+                .appendingPathComponent("app/lectures").appendingPathComponent(id.uuidString.lowercased())))
+        }
+        push.tokenChanged = { [weak self] token in
+            // Apple reissues tokens unprompted — a restore, an OS upgrade — and
+            // the old one stops working the moment it does.
+            Task { await self?.savePushToken(token) }
         }
         NotificationCenter.default.addObserver(self, selector: #selector(resume), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(checkAppleCredential), name: ASAuthorizationAppleIDProvider.credentialRevokedNotification, object: nil)
@@ -175,8 +282,20 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         retry.accessibilityIdentifier = "retry"
         retry.addTarget(self, action: #selector(reload), for: .touchUpInside)
         retry.isHidden = true
-        spinner.startAnimating()
-        [spinner, message, retry].forEach(overlay.addArrangedSubview)
+        /*
+         * No spinner, at any point. The launch is meant to be the mark alone,
+         * held still on the app's own canvas — the same mark, in the same
+         * place, as the launch image iOS shows before the process is even
+         * running, so the handover between the two is invisible. A throbber
+         * underneath it broke that: it was the one thing on screen that moved,
+         * and it announced "loading" over a screen whose whole job is to look
+         * like the app has already opened.
+         *
+         * This stack exists for `showFailure`, which is the only thing here
+         * that has something to say, so it starts hidden.
+         */
+        overlay.isHidden = true
+        [message, retry].forEach(overlay.addArrangedSubview)
         loadingCover.addSubview(overlay)
         NSLayoutConstraint.activate([
             overlay.centerXAnchor.constraint(equalTo: view.centerXAnchor),
@@ -214,18 +333,29 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         webView.isHidden = true
         loadingCover.isHidden = false
         overlay.isHidden = false
-        spinner.stopAnimating()
         message.text = text("connectionFailed")
         retry.isHidden = false
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        // A recording belongs to the capture modal, and a page load takes the
+        // modal with it — including the reload this controller performs after a
+        // web content process crash. Left running, the recorder would hold the
+        // microphone and a Lock Screen clock for a draft that no longer exists,
+        // and the next attempt to record would be refused as "already
+        // recording". Client-side route changes do not come through here.
+        recorder.discard()
         if !loadingCover.isHidden || webView.isHidden {
             loadingCover.isHidden = false
-            overlay.isHidden = false
-            spinner.startAnimating()
-            // No wrong-language flash before the first country lookup returns.
-            message.text = memoLocale == nil ? nil : text("loading")
+            /*
+             * The mark on its own while it loads — no spinner, no caption. The
+             * launch image is the same mark in the same place, so the app comes
+             * up as one still frame rather than a logo that sprouts a status
+             * line a moment later. The stack below it is for `showFailure`,
+             * which is the only thing that has something to say.
+             */
+            overlay.isHidden = true
+            message.text = nil
             retry.isHidden = true
         }
         timeout?.cancel()
@@ -239,11 +369,15 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         timeout?.cancel()
-        spinner.stopAnimating()
         overlay.isHidden = true
         webView.isHidden = false
         loadingCover.isHidden = true
         resume()
+        // A settled page is the only dependable sign that a sign-in finished,
+        // and the token has to be attached to whoever is signed in *now*. Does
+        // nothing when notifications were never allowed, and the post is
+        // harmless when nobody is signed in: the route answers 401 and stops.
+        Task { if let token = await push.refresh() { await savePushToken(token) } }
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
@@ -259,17 +393,43 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let main = action.targetFrame?.isMainFrame ?? true
         if !main { decisionHandler(url.scheme == "https" || url.scheme == "about" ? .allow : .cancel); return }
         if AppConfiguration.isInternal(url) {
+            /*
+             * Never navigate the apex, even though it is trusted. It answers
+             * with a redirect to `www`, so online this only costs a round trip —
+             * but a service worker belongs to one origin, and the app's is
+             * `www`'s. A main-frame navigation to the apex with no connection
+             * lands where nothing can intercept it, and the reader gets the
+             * native "could not connect" screen with a cached library sitting
+             * behind it. Rewritten here rather than only at the start URL,
+             * because a link inside the app can name the canonical domain too.
+             */
+            if url.host == AppConfiguration.productionApex.host, main,
+               var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+                parts.host = AppConfiguration.productionOrigin.host
+                if let canonical = parts.url {
+                    decisionHandler(.cancel)
+                    webView.load(URLRequest(url: canonical))
+                    return
+                }
+            }
             if url.path == "/auth/logout" || url.path == "/auth/account-deleted" {
                 AppleSignIn.setCurrentUser(nil)
+                // Before the page navigates away, while it can still make the
+                // call: a token left pointing at the account that is leaving
+                // would notify them on a phone someone else is now signed into.
+                Task { await forgetPushToken() }
             }
             if ["/auth/google", "/auth/apple"].contains(url.path) {
                 decisionHandler(.cancel)
                 webView.load(URLRequest(url: AppConfiguration.origin.appendingPathComponent("auth/continue")))
                 return
             }
+            // The marketing page has no place in the app. It is rewritten to
+            // the same entry point the app launches on, which sorts a resumed
+            // session, a fresh install and a signed-out return between them.
             if url.path == "/" {
                 decisionHandler(.cancel)
-                webView.load(URLRequest(url: AppConfiguration.origin.appendingPathComponent("auth/continue")))
+                webView.load(URLRequest(url: AppConfiguration.startURL))
                 return
             }
             if url.path.hasPrefix("/api/billing/") { decisionHandler(.cancel); return }
@@ -281,12 +441,15 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             decisionHandler(.download)
         } else {
             decisionHandler(.cancel)
+            // Mail and phone hand-offs cannot reach a checkout; the PWA starts
+            // them from scripts (Settings → Share Memo), so accept every type.
+            if ["mailto", "tel"].contains(url.scheme ?? "") { UIApplication.shared.open(url); return }
             // No redirects, scripts or popups can send users to external checkout.
-            guard action.navigationType == .linkActivated,
+            guard action.navigationType == .linkActivated, url.scheme == "https",
                   !["checkout.stripe.com", "billing.stripe.com"].contains(url.host ?? "") else { return }
             // Memo stays in its full-screen web view. User-selected external
             // websites belong in the system browser, not an in-app browser sheet.
-            if ["https", "mailto", "tel"].contains(url.scheme ?? "") { UIApplication.shared.open(url) }
+            UIApplication.shared.open(url)
         }
     }
 
@@ -362,6 +525,32 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                     guard let theme = body["theme"] as? String else { throw Store.StoreError.unavailable }
                     setMemoTheme(theme)
                     replyHandler(["status": "updated"], nil)
+                // Lecture capture. The page owns the draft and the upload;
+                // everything here is the microphone and the Lock Screen banner,
+                // which a suspended web content process cannot hold on to.
+                case "recorderStart": replyHandler(try await recorder.start(), nil)
+                case "recorderPause": replyHandler(try recorder.pause(), nil)
+                case "recorderResume": replyHandler(try recorder.resume(), nil)
+                case "recorderState": replyHandler(recorder.snapshot(), nil)
+                case "recorderStop": replyHandler(try recorder.stop(), nil)
+                case "recorderRead":
+                    guard let offset = body["offset"] as? Int, let length = body["length"] as? Int
+                    else { throw Store.StoreError.unavailable }
+                    replyHandler(try recorder.read(offset: offset, length: length), nil)
+                case "recorderDiscard":
+                    recorder.discard()
+                    replyHandler(["status": "discarded"], nil)
+                // Remote notifications. The page asks at the moment the wait
+                // becomes real — just after a note starts generating — rather
+                // than at launch, where the question means nothing yet.
+                case "pushStatus": replyHandler(await push.settingsSnapshot(), nil)
+                case "enablePushNotifications":
+                    let token = try await push.enable()
+                    guard await savePushToken(token) else { throw BridgeFailure(reason: "token not saved") }
+                    replyHandler(["status": "enabled"], nil)
+                case "disablePushNotifications":
+                    await forgetPushToken()
+                    replyHandler(["status": "disabled"], nil)
                 case "products": replyHandler(try await store.products(), nil)
                 case "pendingProduct": replyHandler(["productId": store.pendingProductID as Any? ?? NSNull()], nil)
                 case "purchase":
@@ -381,8 +570,44 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                     replyHandler(["status": "done"], nil)
                 default: replyHandler(nil, "Unsupported request")
                 }
-            } catch { replyHandler(nil, text("actionFailed")) }
+            } catch {
+                // A reason travels with the generic text so the page can show
+                // what actually failed; the web copy stays the headline.
+                let reason: String?
+                if let failure = error as? BridgeFailure { reason = failure.reason }
+                else if let message = (error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String { reason = message }
+                else { reason = nil }
+                replyHandler(nil, reason.map { "\(text("actionFailed")) [\($0)]" } ?? text("actionFailed"))
+            }
         }
+    }
+
+    /// Hands the device token to the server as the signed-in user. Returns
+    /// false rather than throwing: a failure here is worth reporting to the
+    /// page, but it is never worth interrupting what the reader was doing.
+    @discardableResult
+    private func savePushToken(_ token: String) async -> Bool {
+        do {
+            _ = try await api(path: "/api/mobile/push-token", body: [
+                "token": token,
+                "environment": PushNotifications.environment,
+                "locale": memoLocale ?? "en",
+            ])
+            return true
+        } catch { return false }
+    }
+
+    /// Sign-out, and account deletion. The token has to stop pointing at the
+    /// account that is leaving before the next person signs in on this phone.
+    private func forgetPushToken() async {
+        guard let token = push.currentToken else { return }
+        _ = try? await webView.callAsyncJavaScript("""
+            await fetch('/api/mobile/push-token', {
+              method: 'DELETE', credentials: 'same-origin',
+              headers: {'content-type': 'application/json'},
+              body: JSON.stringify({token})
+            });
+            """, arguments: ["token": token], in: nil, contentWorld: .page)
     }
 
     private func api(path: String, body: [String: String]? = nil) async throws -> [String: Any] {
@@ -393,7 +618,11 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
               headers: {'content-type': 'application/json'},
               body: body === null ? undefined : JSON.stringify(body)
             });
-            if (!response.ok) throw new Error('Request failed');
+            if (!response.ok) {
+              let detail = '';
+              try { detail = (await response.json()).error || ''; } catch {}
+              throw new Error('server ' + response.status + (detail ? ': ' + detail : ''));
+            }
             return await response.json();
             """, arguments: ["path": path, "body": body as Any? ?? NSNull()], in: nil, contentWorld: .page)
         guard let result = value as? [String: Any] else { throw Store.StoreError.unavailable }

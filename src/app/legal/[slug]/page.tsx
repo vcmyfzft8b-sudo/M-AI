@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BrandLogo } from "@/components/brand-logo";
+import { InstantLink } from "@/components/instant-link";
+import { LegalBackLink } from "@/components/legal-back-link";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
+import { Msym } from "@/components/msym";
 import { BRAND_NAME, SEO_BRAND_NAME } from "@/lib/brand";
 import { getHelpArticle, splitArticleFinePrint } from "@/lib/help-center";
 import { SOURCE_LOCALE, type Locale } from "@/lib/i18n/locales";
@@ -49,6 +51,22 @@ export async function generateMetadata({
   };
 }
 
+/**
+ * A legal document on the app's own chrome rather than the landing page's.
+ *
+ * These pages are read inside the product far more often than from the
+ * marketing site — from the sign-in card, from the iOS consent screen, from
+ * Settings — and the landing bar they used to wear was a different design
+ * altogether: a black CTA pill and a marketing lockup on a page that is
+ * otherwise a help article. This is the same screen the in-app reader draws
+ * (see `SupportArticleScreen`): the floating top row, one scroller, the title,
+ * and the document in a card.
+ *
+ * It matters twice over in the iOS wrapper, whose web view runs edge to edge.
+ * The landing bar was pinned to `top: 0` with no inset, so the lockup and the
+ * CTA were drawn underneath the status bar and sliced in half by it. The phone
+ * frame below reads `--memo-safe-top`, exactly as every other screen does.
+ */
 export default async function LegalPage({
   params,
 }: {
@@ -64,62 +82,80 @@ export default async function LegalPage({
 
   const content = article.content.replace(/^# .+\n+/, "");
   const { body, finePrint } = splitArticleFinePrint(content);
+  const others = otherLegalArticles(article.slug, locale);
 
   return (
-    <main className="landing-shell landing-public-page">
-      <header className="landing-public-nav">
-        <Link href="/" className="landing-public-brand" aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}>
-          <BrandLogo subtitle="" priority />
-        </Link>
-        <nav className="landing-public-links" aria-label={t("nav.main")}>
-          <Link href="/" className="landing-public-nav-cta">
-            {t("error.backHome")}
-          </Link>
-        </nav>
-      </header>
-
-      <article className="legal-page">
-        <h1 className="legal-page-title">{article.title}</h1>
-        <div className="legal-page-body markdown">
-          <MarkdownRenderer content={body} />
+    /*
+     * The `.memo` wrapper is not the screen: below the breakpoint the screen is
+     * a fixed frame that starts under the status bar, and something has to
+     * paint the strip above it — so the wrapper stays in normal flow and owns
+     * the page background, exactly as the app shell does for every other
+     * screen.
+     */
+    <main className="memo memo-legal">
+      <div className="memo-legal-screen">
+        <div className="memo-legal-topbar">
+          <InstantLink href="/" className="memo-legal-brand" aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}>
+            <BrandLogo subtitle="" priority />
+          </InstantLink>
+          <LegalBackLink href="/" className="memo-legal-back">
+            <Msym name="arrow_back" fill={false} weight={500} />
+            <span className="memo-legal-back-label">{t("common.back")}</span>
+          </LegalBackLink>
         </div>
-      </article>
 
-      <footer className="landing-public-footer">
-        <div className="landing-public-footer-bottom">
-          <p>
-            © {new Date().getFullYear()} {SEO_BRAND_NAME}
-          </p>
-          <p className="landing-public-footer-legal-links">
-            {otherLegalArticles(article.slug, locale).map((other) => (
-              <Link key={other.slug} href={`/legal/${other.slug}`}>
-                {other.title}
-              </Link>
-            ))}
-          </p>
+        <div className="memo-screen-scroll">
+          <article className="memo-page memo-legal-page">
+            <h1 className="memo-article-title">{article.title}</h1>
+
+            <div className="memo-help-intro memo-article-body memo-legal-body">
+              <MarkdownRenderer content={body} />
+            </div>
+
+            {/* Named by the heading rather than by a repeat of it: an aria-label
+                saying the same words made a screen reader announce "Other
+                documents" twice, once for the landmark and once for the h2. */}
+            <h2 id="legal-other-documents" className="memo-legal-more-heading">
+              {t("legal.otherDocuments")}
+            </h2>
+            <nav className="memo-legal-more" aria-labelledby="legal-other-documents">
+              {others.map((other) => (
+                <InstantLink key={other.slug} href={`/legal/${other.slug}`} className="memo-settings-row">
+                  <span className="memo-settings-copy">
+                    <span className="memo-settings-title">{other.title}</span>
+                  </span>
+                  <Msym name="chevron_right" fill={false} weight={400} />
+                </InstantLink>
+              ))}
+            </nav>
+
+            {/*
+              * Below the document, and only on a translation: these were drafted
+              * in Slovenian, and a translated clause that reads slightly
+              * differently must not be the one a dispute turns on. Saying so is
+              * ordinary practice for multilingual terms and is what makes the
+              * translations safe to publish.
+              */}
+            {finePrint || locale !== SOURCE_LOCALE ? (
+              <aside className="memo-legal-fineprint">
+                {finePrint ? <MarkdownRenderer content={finePrint} /> : null}
+                {locale === SOURCE_LOCALE ? null : (
+                  <p className="memo-legal-prevailing">{t("legal.prevailingNotice")}</p>
+                )}
+              </aside>
+            ) : null}
+
+            <p className="memo-legal-copyright">
+              © {new Date().getFullYear()} {SEO_BRAND_NAME}
+            </p>
+          </article>
         </div>
-      </footer>
-
-      {/*
-        * Below the fine print, and only on a translation: these documents were
-        * drafted in Slovenian, and a translated clause that reads slightly
-        * differently must not be the one a dispute turns on. Saying so is
-        * ordinary practice for multilingual terms and is what makes the
-        * translations safe to publish.
-        */}
-      {finePrint || locale !== SOURCE_LOCALE ? (
-        <aside className="legal-page-fineprint markdown">
-          {finePrint ? <MarkdownRenderer content={finePrint} /> : null}
-          {locale === SOURCE_LOCALE ? null : (
-            <p className="legal-page-prevailing">{t("legal.prevailingNotice")}</p>
-          )}
-        </aside>
-      ) : null}
+      </div>
     </main>
   );
 }
 
-/** Every public legal document except the one being read, for the footer cross-links. */
+/** Every public legal document except the one being read, for the cross-links. */
 function otherLegalArticles(currentSlug: string, locale: Locale) {
   return PUBLIC_LEGAL_SLUGS.filter((slug) => slug !== currentSlug)
     .map((slug) => getHelpArticle(slug, locale))

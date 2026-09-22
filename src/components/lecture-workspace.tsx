@@ -18,6 +18,7 @@ import { NoteReadAloud } from "@/components/note-read-aloud";
 import { NoteSpeedReader } from "@/components/note-speed-reader";
 import { StudyCompletionCard } from "@/components/study-completion-card";
 import { MemoPortal } from "@/components/memo-portal";
+import { OfflineFeatureNotice, useOfflineGuard } from "@/components/offline/offline-notice";
 import { RecordingPlayer } from "@/components/recording-player";
 import {
   getApiErrorMessage,
@@ -58,15 +59,18 @@ import { createPortal } from "react-dom";
 
 import { LecturePodcast } from "@/components/lecture-podcast";
 import { StudyGenerationNotice } from "@/components/generation-notice";
+import { PushPrompt } from "@/components/push-prompt";
 import { LectureMindmap } from "@/components/lecture-mindmap";
 import { LecturePalace } from "@/components/lecture-palace";
 import { palacePreparation } from "@/lib/palace/preparation";
 import { StudyQuizQuestion, StudyPracticeQuestion } from "@/components/study-question";
 import { StudyFlashcard } from "@/components/study-flashcard";
 import { LectureTutor } from "@/components/lecture-tutor";
+import { ChatMarkdown } from "@/components/chat-markdown";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
-import { readChatStream } from "@/lib/chat-stream-client";
+import { requestChatAnswer } from "@/lib/chat-stream-client";
+import { getRequestErrorMessage } from "@/lib/request-error-message";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { usePathname, useRouter } from "next/navigation";
 import type {
@@ -226,12 +230,6 @@ type StudySessionSnapshot = {
 };
 
 const STUDY_SESSION_STORAGE_KEY_PREFIX = "lecture-study-session:";
-/*
- * The one error whose text is decided here rather than by the server: an
- * aborted `fetch` never reached one. Resolved through the caller's `t` so it
- * arrives in the reader's language like every other failure on this screen.
- */
-const NETWORK_REQUEST_ERROR_KEY = "error.network" satisfies MessageKey;
 const FAST_DETAIL_POLL_INTERVAL_MS = 5000;
 const MIN_DETAIL_REFRESH_INTERVAL_MS = 3000;
 const STUDY_SESSION_SAVE_DEBOUNCE_MS = 5000;
@@ -249,26 +247,6 @@ const KEYBOARD_SETTLE_MS = 300;
 
 function ignoreBackgroundRequestError() {
   return null;
-}
-
-function isInterruptedFetchError(error: unknown) {
-  if (typeof DOMException !== "undefined" && error instanceof DOMException) {
-    return error.name === "AbortError" || error.name === "NetworkError";
-  }
-
-  return error instanceof TypeError && /failed to fetch|load failed|network/i.test(error.message);
-}
-
-function getRequestErrorMessage(
-  error: unknown,
-  fallback: string,
-  t: Translate<MessageKey>,
-) {
-  if (isInterruptedFetchError(error)) {
-    return t(NETWORK_REQUEST_ERROR_KEY);
-  }
-
-  return error instanceof Error ? error.message : fallback;
 }
 
 /**
@@ -1187,9 +1165,18 @@ function sanitizePracticeTestSessionState(
 function ChatBubble({ message }: { message: ChatMessageWithCitations }) {
   const assistant = message.role === "assistant";
 
+  /*
+   * Only the tutor's side is markdown. What the learner typed is shown exactly
+   * as they typed it — an asterisk in their question is an asterisk, not the
+   * start of emphasis, and their own line breaks are kept by `pre-wrap`.
+   */
   return (
     <div className={assistant ? "memo-bubble-bot" : "memo-bubble-user"}>
-      <p className="memo-bubble-copy">{message.content}</p>
+      {assistant ? (
+        <ChatMarkdown content={message.content} />
+      ) : (
+        <p className="memo-bubble-copy">{message.content}</p>
+      )}
     </div>
   );
 }
@@ -1230,6 +1217,13 @@ export function LectureWorkspace({
   const { navigateWithFeedback, overlay: navigationOverlay, navigatingTo } = useInstantNavigation();
   const notePathname = usePathname();
   const isCreatorDemo = useIsCreatorDemo();
+  /*
+   * With no connection the note itself, its cards, its quiz, its test, its
+   * transcript and its map are all here — they came with the snapshot. What is
+   * not here is anything the model has to make or speak on the spot, and the
+   * controls for those say so rather than failing. See `offline-notice.tsx`.
+   */
+  const { isOffline, blockedOffline, offlineToast } = useOfflineGuard();
   const [detail, setDetail] = useState(initialDetail);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("notes");
   const [question, setQuestion] = useState("");
@@ -1565,8 +1559,17 @@ export function LectureWorkspace({
     });
     const canUsePageLifecycleTransport = payloadBlob.size <= STUDY_SESSION_KEEPALIVE_MAX_BYTES;
 
+    /*
+     * `sendBeacon` is the page-lifecycle transport, and it is the one request in
+     * this file the offline stub cannot see: it does not go through `fetch`, so
+     * with no connection it is accepted by the browser, quietly dropped, and
+     * then marked as persisted here — which is the one way study done offline
+     * could be lost for good. Offline the write takes the ordinary path, where
+     * it is queued and replayed.
+     */
     if (
       options?.preferBeacon &&
+      !isOffline &&
       canUsePageLifecycleTransport &&
       typeof navigator !== "undefined" &&
       typeof navigator.sendBeacon === "function"
@@ -1619,7 +1622,7 @@ export function LectureWorkspace({
       });
 
     studySessionWriteInFlightRef.current = writeRequest;
-  }, [detail.lecture.id]);
+  }, [detail.lecture.id, isOffline]);
 
   useEffect(() => {
     const nextDetail = mergeLectureDetailWithStoredStudySession(initialDetail);
@@ -1816,8 +1819,34 @@ export function LectureWorkspace({
     observer.observe(log, { childList: true, subtree: true, characterData: true });
     log.addEventListener("scroll", handleScroll, { passive: true });
 
+    /*
+     * The keyboard shortens the log without moving what is in it, so the line
+     * that was resting on the composer ends up behind it — you tap the field to
+     * answer and the message you were answering is gone. Nothing changes in the
+     * DOM when that happens, so the observer above never fires.
+     *
+     * Watched as a size rather than as a viewport event, because the log does
+     * not lose its height when the viewport does. The keyboard's inset is drawn
+     * over a quarter of a second and the log gives up its height along with it,
+     * while `visualViewport` reports the whole thing once — and in the wrapper
+     * it reports it *before* any of that has been drawn, so the one restick it
+     * triggers lands on a log that is still its full height and does nothing.
+     * Measured on an iPhone 17 with sixteen messages in the log: the last four
+     * ended up behind the composer, where the same chat in Safari — which
+     * reports the keyboard in pieces, and so resticks all the way down — keeps
+     * them. A size observer answers every frame of the shrink on both.
+     */
+    const sizes = new ResizeObserver(() => {
+      if (pinned) {
+        stick();
+      }
+    });
+
+    sizes.observe(log);
+
     return () => {
       observer.disconnect();
+      sizes.disconnect();
       log.removeEventListener("scroll", handleScroll);
     };
   }, [chatLogNode]);
@@ -2241,6 +2270,10 @@ export function LectureWorkspace({
   ]);
 
   async function handleRetry() {
+    if (blockedOffline("generate")) {
+      return;
+    }
+
     setIsRetrying(true);
     const response = await fetch(`/api/lectures/${detail.lecture.id}/retry`, {
       method: "POST",
@@ -2259,6 +2292,14 @@ export function LectureWorkspace({
   }, [refreshLectureDetail]);
 
   async function handleStudyCreate() {
+    /*
+     * The quiet refusal rather than the red panel the catch below would draw.
+     * Every other way of meeting the limit in this app says it the same way.
+     */
+    if (blockedOffline("generate")) {
+      return;
+    }
+
     setStudyError(null);
     setIsAwaitingStudyGeneration(true);
     setIsRegeneratingStudy(true);
@@ -2284,6 +2325,14 @@ export function LectureWorkspace({
   }
 
   async function handleQuizCreate() {
+    /*
+     * The quiet refusal rather than the red panel the catch below would draw.
+     * Every other way of meeting the limit in this app says it the same way.
+     */
+    if (blockedOffline("generate")) {
+      return;
+    }
+
     setStudyError(null);
     setIsAwaitingQuizGeneration(true);
     setIsRegeneratingQuiz(true);
@@ -2309,6 +2358,10 @@ export function LectureWorkspace({
   }
 
   async function handlePracticeTestStart() {
+    if (blockedOffline("generate")) {
+      return;
+    }
+
     setStudyError(null);
     setIsAwaitingPracticeTestGeneration(true);
     setIsStartingPracticeTest(true);
@@ -2792,6 +2845,16 @@ export function LectureWorkspace({
       return;
     }
 
+    /*
+     * Belt and braces with the closed composer above: the suggestion chips and
+     * the keyboard both reach this directly, and neither should be able to put
+     * a question into the log that nothing can answer.
+     */
+    if (isOffline) {
+      setChatError(t("offline.feature.chat.title"));
+      return;
+    }
+
     const tempUserMessage: ChatMessageWithCitations = {
       id: `temp-user-${Date.now()}`,
       lecture_id: detail.lecture.id,
@@ -2811,40 +2874,37 @@ export function LectureWorkspace({
     const currentQuestion = draft;
     setQuestion("");
 
-    let response: Response;
-    let payload: ChatResponse | null = null;
-    try {
-      response = await fetch(`/api/lectures/${detail.lecture.id}/chat/stream`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          question: currentQuestion,
-          sourceLanguageAction,
-        }),
-      });
-
-      /*
-       * A refusal — the trial limit, a lecture still processing — comes back as
-       * ordinary JSON before the stream begins, so both shapes are handled: an
-       * event stream is read frame by frame, anything else is parsed as before.
-       */
-      payload = response.headers.get("Content-Type")?.includes("text/event-stream")
-        ? await readChatStream<ChatResponse>(
-            response,
-            (text) => setStreamingAnswer((current) => current + text),
-            t,
-          )
-        : ((await response.json().catch(() => null)) as ChatResponse | null);
-    } catch (error) {
-      setChatError(getRequestErrorMessage(error, t("chat.error.answerFailed"), t));
+    /*
+     * Whatever goes wrong from here, the learner does not lose what they typed:
+     * the question goes back into the composer so sending it again is one tap,
+     * and the unanswered bubble is taken out of the log so the conversation the
+     * tutor reads next time has no dangling question in it.
+     */
+    function restoreUnansweredQuestion() {
+      setQuestion((current) => (current.trim() ? current : currentQuestion));
       setDetail((current) => ({
         ...current,
         chatMessages: current.chatMessages.filter(
           (message) => message.id !== tempUserMessage.id,
         ),
       }));
+    }
+
+    let response: Response;
+    let payload: ChatResponse | null = null;
+    try {
+      ({ response, payload } = await requestChatAnswer<ChatResponse>({
+        url: `/api/lectures/${detail.lecture.id}/chat/stream`,
+        body: { question: currentQuestion, sourceLanguageAction },
+        onDelta: (text) => setStreamingAnswer((current) => current + text),
+        // A second attempt starts from a blank bubble: half of one answer
+        // followed by all of another would read as gibberish.
+        onAttemptStart: () => setStreamingAnswer(""),
+        t,
+      }));
+    } catch (error) {
+      setChatError(getRequestErrorMessage(error, t("chat.error.answerFailed"), t));
+      restoreUnansweredQuestion();
       return;
     } finally {
       setIsSending(false);
@@ -2859,24 +2919,14 @@ export function LectureWorkspace({
         setChatError(getApiErrorMessage(payload, t("chat.error.answerFailed")));
       }
 
-      setDetail((current) => ({
-        ...current,
-        chatMessages: current.chatMessages.filter(
-          (message) => message.id !== tempUserMessage.id,
-        ),
-      }));
+      restoreUnansweredQuestion();
       return;
     }
 
     const chatAnswer = payload?.answer;
     if (!chatAnswer) {
       setChatError(t("chat.error.answerFailed"));
-      setDetail((current) => ({
-        ...current,
-        chatMessages: current.chatMessages.filter(
-          (message) => message.id !== tempUserMessage.id,
-        ),
-      }));
+      restoreUnansweredQuestion();
       return;
     }
 
@@ -3863,8 +3913,14 @@ export function LectureWorkspace({
    * and a sheet on the phone, so the body is shared and only the frame differs.
    */
   function renderChatBody() {
+    /*
+     * Offline the field is closed rather than left open to swallow a question:
+     * the answer comes from the model, and a message that sits in the log
+     * unanswered is worse than a composer that plainly cannot be used. The
+     * conversation so far came with the snapshot and stays readable above it.
+     */
     const composerDisabled =
-      detail.lecture.status !== "ready" || isSending || chatLimitReached;
+      detail.lecture.status !== "ready" || isSending || chatLimitReached || isOffline;
     // Nothing to send yet, and a microphone to offer instead.
     const showChatMic = dictation.supported && !question.trim() && !isSending;
 
@@ -3890,10 +3946,7 @@ export function LectureWorkspace({
               placeholder only shows before the first token arrives. */}
           {streamingAnswer ? (
             <div className="memo-bubble-bot streaming">
-              <p className="memo-bubble-copy">
-                {streamingAnswer}
-                <span className="memo-caret" aria-hidden="true" />
-              </p>
+              <ChatMarkdown content={streamingAnswer} streaming />
             </div>
           ) : isSending ? (
             <TypingDots />
@@ -3977,6 +4030,8 @@ export function LectureWorkspace({
             <p className="memo-chat-status">{t("chat.status.transcribing")}</p>
           ) : chatError ? (
             <p className="memo-chat-status danger">{chatError}</p>
+          ) : isOffline ? (
+            <p className="memo-chat-status">{t("offline.feature.chat.title")}</p>
           ) : detail.lecture.status !== "ready" ? (
             <p className="memo-chat-status">{t("chat.status.notReady")}</p>
           ) : chatLimitReached ? (
@@ -3997,6 +4052,25 @@ export function LectureWorkspace({
   }
 
   function renderPanel() {
+    /*
+     * The three tabs that are a live service rather than a stored artefact: a
+     * conversation with the tutor, an episode that is synthesised on request,
+     * and — once its materials have to be made — the town. Each is given the
+     * whole panel to explain itself, because a screen that opened and then
+     * failed at the first button is the thing this replaces.
+     */
+    if (isOffline && activeTab === "tutor") {
+      return <OfflineFeatureNotice feature="tutor" />;
+    }
+
+    if (isOffline && activeTab === "podcast") {
+      return <OfflineFeatureNotice feature="podcast" />;
+    }
+
+    if (isOffline && activeTab === "palace" && !palaceMaterials.ready) {
+      return <OfflineFeatureNotice feature="generate" />;
+    }
+
     if (activeTab === "podcast") {
       return (
         <LecturePodcast
@@ -4113,7 +4187,14 @@ export function LectureWorkspace({
           type="button"
           className="memo-annotate-icon"
           onMouseDown={(event) => event.preventDefault()}
-          onClick={() => notePhotoInputRef.current?.click()}
+          onClick={() => {
+            /* Before the picker, so the refusal is not a file chosen and then lost. */
+            if (blockedOffline("edit")) {
+              return;
+            }
+
+            notePhotoInputRef.current?.click();
+          }}
           disabled={isSavingNoteDoc || !selectedNoteBlockId}
           aria-label={t("note.annotate.photo")}
           title={t("note.annotate.photo")}
@@ -5479,7 +5560,17 @@ export function LectureWorkspace({
         <div className="memo-transcript">
           {/* The redesign puts the recording's player above the transcript
               rather than on a tab of its own. */}
-          {detail.audioUrl ? (
+          {/*
+            * The recording lives in the account's storage behind a URL signed
+            * for the hour, so offline there is nothing to play — but the
+            * transcript underneath it is the note's own text and reads fine.
+            */}
+          {detail.audioUrl && isOffline ? (
+            <p className="memo-offline-inline">
+              <Msym name="wifi_off" size="1.05rem" fill={false} weight={500} />
+              {t("offline.feature.audio.title")}
+            </p>
+          ) : detail.audioUrl ? (
             <RecordingPlayer key={detail.audioUrl} src={detail.audioUrl} />
           ) : null}
 
@@ -6099,6 +6190,9 @@ export function LectureWorkspace({
   return (
     <>
       {navigationOverlay}
+      {/* The one moment asking for notifications makes sense: a note is being
+          made and the reader is watching it happen. */}
+      <PushPrompt active={detail.lecture.status !== "ready" && detail.lecture.status !== "failed"} />
       <div className="memo-note-screen" data-note-tab={activeTabId}>
         {/* Phone chrome: back, the note's emoji, and the actions menu. */}
         <div className="memo-m-navbar memo-only-mobile flex">
@@ -6246,6 +6340,7 @@ export function LectureWorkspace({
 
       {chatPanel}
       {noteActionSheets}
+      {offlineToast}
     </>
   );
 }

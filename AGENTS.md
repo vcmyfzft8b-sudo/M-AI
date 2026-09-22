@@ -28,6 +28,38 @@
 - Merge to `main` only after the branch has been checked locally and in its Vercel preview deployment.
 - After an authorized merge, synchronize local `main` as above and verify the production deployment separately. Report the local/GitHub commit IDs and deployment status accurately; a successful Git sync alone does not prove that Vercel has deployed the commit. See [docs/development-workflow.md](docs/development-workflow.md) for commands and conflict handling.
 
+## Web And iOS App Parity
+
+The iOS app (`ios/`) is a WKWebView wrapper around the same web app, so **every change to the
+web app is a change to the iOS app**. Do not ship a feature, redesign, copy change or UI/UX fix
+to one and not the other: build it once in `src/`, then check it under both user agents.
+
+- **Same product on both.** New features, design changes, layout and flow updates apply to the
+  browser and to the app alike. The app must never fall behind the web (or the other way round);
+  if a change cannot work in the app yet, say so in the PR rather than hiding it from one side.
+- **The only deliberate differences are the platform ones**, and they are switched by the
+  `MemoAI-iOS` user agent, never by anything the client can claim:
+  - **Billing.** Browsers buy through Stripe Checkout and manage plans in the Stripe portal. The
+    app buys through StoreKit (`useAppleBilling`, verified by `/api/mobile/transactions`) and
+    manages plans through Apple. Browsers never see Apple billing, restore or Apple terms; the app
+    never sees Stripe, a checkout link, a portal link or a Stripe price. The web wheel awards a
+    Stripe coupon; the app's wheel shows Apple's introductory offer. Both are once a day.
+  - **Sign-in.** Google and Apple use native flows in the app (`/api/mobile/google-auth`,
+    `/api/mobile/apple-auth`) and Supabase OAuth on the web. E-mail sign-in is by code on both;
+    there is no password screen. App Review's synthetic accounts use a fixed code
+    (`APP_REVIEW_ACCOUNT_EMAILS` / `APP_REVIEW_LOGIN_CODE`).
+  - **Chrome.** The app has no landing page, no back arrow on sign-in, no install guide, and lays
+    out edge to edge under `--memo-safe-top/bottom` (`html[data-native]`). Anything fixed near a
+    screen edge needs the inset. Support articles lead with App Store instructions in the app.
+- **How to check.** Run `tests/mobile-*.test.mjs` (they fail if Stripe leaks into the app or
+  Apple into the web), and for anything touching billing, login, the home dock or a sheet, load
+  the preview with both user agents (`curl -A "... MemoAI-iOS/1.0"` is enough for server output;
+  the simulator against the preview for layout — see `docs/ios-app.md`).
+- **Prices.** Web prices live in `src/lib/billing.ts` (EUR). Apple prices live in App Store
+  Connect and reach the app through StoreKit; the paywall never hardcodes them. Keep the two
+  aligned when either changes (Apple has no exact €20/€130 points, so the app shows the nearest:
+  €19.99/€129.99, and $19.99/$129.99 with $9.99/$64.99 first periods in the US storefront).
+
 ## Vercel Preview Rule
 
 - Every pushed branch should be expected to get its own Vercel preview deployment when the GitHub repo is connected to Vercel.

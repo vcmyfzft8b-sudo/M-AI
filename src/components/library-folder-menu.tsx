@@ -14,6 +14,7 @@ import { EmojiIcon } from "@/components/emoji-icon";
 import { useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
+import { useOfflineGuard } from "@/components/offline/offline-notice";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
 import { formatCalendarDate, formatClockTime } from "@/lib/utils";
@@ -142,6 +143,12 @@ export function LibraryFolderMenu({
 }) {
   const { locale, t } = useTranslations();
   const isCreatorDemo = useIsCreatorDemo();
+  /*
+   * Folders live on the account, so every one of these writes is a request.
+   * Each handler below returns silently when the server refuses, which offline
+   * would mean a button that quietly does nothing — the guard says why instead.
+   */
+  const { blockedOffline, offlineToast } = useOfflineGuard();
   const shellRef = useRef<HTMLDivElement | null>(null);
 
   /**
@@ -454,7 +461,7 @@ export function LibraryFolderMenu({
   async function handleCreateFolder() {
     const trimmedName = folderName.trim();
 
-    if (!trimmedName || isCreatingFolder) {
+    if (!trimmedName || isCreatingFolder || blockedOffline("edit")) {
       return;
     }
 
@@ -506,7 +513,7 @@ export function LibraryFolderMenu({
   }
 
   async function handleSaveFolder() {
-    if (!editingFolderId || isFolderEditBusy) {
+    if (!editingFolderId || isFolderEditBusy || blockedOffline("edit")) {
       return;
     }
 
@@ -554,7 +561,7 @@ export function LibraryFolderMenu({
   }
 
   async function handleDeleteFolder(folderId: string) {
-    if (isFolderEditBusy) {
+    if (isFolderEditBusy || blockedOffline("edit")) {
       return;
     }
 
@@ -1246,6 +1253,8 @@ export function LibraryFolderMenu({
           </div>
         </MemoPortal>
       ) : null}
+
+      {offlineToast}
     </div>
   );
 }

@@ -1,2 +1,3 @@
 "NSCameraUsageDescription" = "Skeniraj materijale za učenje i priloži fotografije beleškama.";
 "NSMicrophoneUsageDescription" = "Snimaj predavanja i razgovaraj sa glasovnim tutorom Memo.";
+"NSPhotoLibraryAddUsageDescription" = "Sačuvaj slike mentalnih mapa izvezene iz beleški u svoju biblioteku fotografija.";

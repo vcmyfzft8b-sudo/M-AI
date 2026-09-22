@@ -11,6 +11,8 @@ function cleanup() {
   fixture.kill();
   if (simulator) {
     try { execFileSync("xcrun", ["simctl", "shutdown", simulator], { stdio: "ignore" }); } catch { /* Already shut down. */ }
+    // Each run creates its own device; leaving them behind costs ~1 GB apiece.
+    try { execFileSync("xcrun", ["simctl", "delete", simulator], { stdio: "ignore" }); } catch { /* Already deleted. */ }
   }
 }
 process.on("SIGINT", () => { cleanup(); process.exit(130); });

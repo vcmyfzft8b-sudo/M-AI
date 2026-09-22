@@ -15,6 +15,7 @@ import {
   sanitizeUserInput,
 } from "@/lib/validation";
 import { tr } from "@/lib/i18n/server";
+import { isReviewAccount } from "@/lib/review-login";
 
 const EMAIL_AUTH_MINUTE_LIMIT_SECONDS = 60;
 const EMAIL_AUTH_HOURLY_LIMIT = 10;
@@ -201,7 +202,10 @@ export async function POST(request: NextRequest) {
 
   const { supabase, applyCookies } = await createSupabaseRouteHandlerClient();
 
-  const { error } = await supabase.auth.signInWithOtp({
+  // A review account has a fixed code and no mailbox behind it; the page it
+  // lands on is the same, so the reviewer types the code from the review
+  // notes where everybody else types the mailed one.
+  const { error } = isReviewAccount(normalizedEmail) ? { error: null } : await supabase.auth.signInWithOtp({
     email: normalizedEmail,
     options: {
       shouldCreateUser: parsed.data.mode === "signup",

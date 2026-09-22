@@ -1168,6 +1168,227 @@
   background: var(--tint);
 }
 
+/* Survey breakdown: one card per question, bars scaled to the top answer. */
+.admin-breakdown-group {
+  margin-top: 1.5rem;
+}
+
+.admin-breakdown-group:first-of-type {
+  margin-top: 0.5rem;
+}
+
+.admin-breakdown-group-head {
+  margin-bottom: 0.75rem;
+}
+
+.admin-breakdown-group-title {
+  margin: 0 0 0.125rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+/* Column flow rather than a grid: the cards vary a lot in height (the
+   school-year list is nineteen rows, the audience three), and a grid row is
+   as tall as its tallest card, which left most of the page empty. */
+.admin-breakdown-grid {
+  columns: 22rem;
+  column-gap: 0.875rem;
+}
+
+.admin-breakdown-card {
+  padding: 0.8125rem 0.9375rem;
+  border: 1px solid var(--separator);
+  border-radius: 0.75rem;
+  min-width: 0;
+  margin-bottom: 0.875rem;
+  break-inside: avoid;
+}
+
+.admin-breakdown-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.admin-breakdown-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.admin-breakdown-meta,
+.admin-breakdown-hint,
+.admin-breakdown-empty {
+  color: var(--secondary-label);
+  font-size: 0.75rem;
+}
+
+.admin-breakdown-meta {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-breakdown-hint {
+  margin: 0.25rem 0 0;
+}
+
+.admin-breakdown-empty {
+  margin: 0.625rem 0 0;
+}
+
+/* The donut's five slice colours, stepped for each surface. Validated as a
+   categorical set in both modes; anything past the fifth answer folds into
+   the neutral "other" slice rather than taking a sixth hue. */
+.admin-shell {
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
+  --viz-5: #e87ba4;
+  --viz-other: #b0b0b5;
+  --viz-surface: #ffffff;
+}
+
+:root[data-theme="dark"] .admin-shell {
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-4: #c98500;
+  --viz-5: #d55181;
+  --viz-other: #636366;
+  --viz-surface: #1c1c1e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .admin-shell,
+  :root[data-theme="system"] .admin-shell {
+    --viz-1: #3987e5;
+    --viz-2: #d95926;
+    --viz-3: #199e70;
+    --viz-4: #c98500;
+    --viz-5: #d55181;
+    --viz-other: #636366;
+    --viz-surface: #1c1c1e;
+  }
+}
+
+.admin-breakdown-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.admin-donut {
+  flex: none;
+}
+
+.admin-donut-slice[data-series="0"] { stroke: var(--viz-1); }
+.admin-donut-slice[data-series="1"] { stroke: var(--viz-2); }
+.admin-donut-slice[data-series="2"] { stroke: var(--viz-3); }
+.admin-donut-slice[data-series="3"] { stroke: var(--viz-4); }
+.admin-donut-slice[data-series="4"] { stroke: var(--viz-5); }
+.admin-donut-slice[data-series="other"] { stroke: var(--viz-other); }
+
+.admin-donut-slice:hover {
+  opacity: 0.8;
+}
+
+.admin-donut-gap {
+  stroke: var(--viz-surface);
+  stroke-width: 2;
+}
+
+.admin-donut-total {
+  fill: currentColor;
+  font-size: 1.125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-swatch {
+  display: inline-block;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 3px;
+  background: var(--viz-other);
+}
+
+.admin-swatch[data-series="0"] { background: var(--viz-1); }
+.admin-swatch[data-series="1"] { background: var(--viz-2); }
+.admin-swatch[data-series="2"] { background: var(--viz-3); }
+.admin-swatch[data-series="3"] { background: var(--viz-4); }
+.admin-swatch[data-series="4"] { background: var(--viz-5); }
+
+.admin-swatch[data-series="none"] {
+  background: transparent;
+  border: 1px solid var(--separator);
+}
+
+.admin-breakdown-rows {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-breakdown-row {
+  display: grid;
+  grid-template-columns: 0.625rem minmax(0, 1fr) 2.75rem 2.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3125rem 0;
+  border-bottom: 1px solid var(--separator);
+  font-size: 0.8125rem;
+}
+
+/* Beside the donut the label column is narrow, so a long answer wraps to a
+   second line rather than losing its end to an ellipsis. */
+.admin-breakdown-body .admin-breakdown-label {
+  white-space: normal;
+  line-height: 1.25;
+}
+
+@media (max-width: 480px) {
+  .admin-breakdown-body {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .admin-breakdown-rows {
+    width: 100%;
+  }
+}
+
+.admin-breakdown-row:last-child {
+  border-bottom: none;
+}
+
+.admin-breakdown-row[data-empty="true"] .admin-breakdown-label {
+  color: var(--tertiary-label, var(--secondary-label));
+}
+
+.admin-breakdown-label {
+  color: var(--secondary-label);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-breakdown-share {
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-breakdown-count {
+  color: var(--secondary-label);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+}
+
 .admin-toolbar {
   display: flex;
   flex-wrap: wrap;

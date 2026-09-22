@@ -38,6 +38,7 @@ import {
   useInstantNavigation,
 } from "@/components/navigation-loading";
 import { MemoPortal } from "@/components/memo-portal";
+import { useOfflineGuard } from "@/components/offline/offline-notice";
 import { useIsHydrated } from "@/components/viewport-portal";
 import { useCollapsingHeader } from "@/components/use-collapsing-header";
 import { sheetClass, useSheet } from "@/components/use-sheet";
@@ -950,6 +951,12 @@ export function HomeDashboard({
     overlay: dashboardNavigationOverlay,
   } = useInstantNavigation();
   const searchParams = useSearchParams();
+  /*
+   * Making a note, renaming one and deleting one all end at a request that
+   * cannot be made with no connection. Rather than let them fail, each says so
+   * — see `offline-notice.tsx` — and the library stays readable behind it.
+   */
+  const { isOffline, blockedOffline, offlineToast } = useOfflineGuard();
   const homeHref = useAppHref("/app");
   // The upgrade screen exists on the demo too; `/app/start` would walk out of it.
   const startHref = useAppHref("/app/start");
@@ -1253,6 +1260,15 @@ export function HomeDashboard({
   }, [animateCloseMobileCreateMenu, isMobileCreateMenuOpen]);
 
   function openQuickAction(mode: NoteSourceMode) {
+    /*
+     * Before the entitlement check, not after: offline the upgrade screen is
+     * just as unreachable as the capture sheet, so sending somebody there
+     * would answer "you cannot make a note" with a screen that cannot load.
+     */
+    if (blockedOffline("create")) {
+      return;
+    }
+
     if (!canCreateNotes) {
       navigateDashboardWithFeedback(startHref);
       return;
@@ -1262,6 +1278,11 @@ export function HomeDashboard({
   }
 
   function openRenameModal(lecture: AppLectureListItem) {
+    if (blockedOffline("edit")) {
+      setOpenMenuLectureId(null);
+      return;
+    }
+
     flushSync(() => {
       setOpenMenuLectureId(null);
       setDashboardActionError(null);
@@ -1284,6 +1305,11 @@ export function HomeDashboard({
   }
 
   function openDeleteModal(lecture: AppLectureListItem) {
+    if (blockedOffline("edit")) {
+      setOpenMenuLectureId(null);
+      return;
+    }
+
     setOpenMenuLectureId(null);
     setDashboardActionError(null);
     setDeleteTarget(lecture);
@@ -1584,9 +1610,19 @@ export function HomeDashboard({
    * The wheel is on offer while the server says there is a spin left and this
    * session has not already used it. `hasClaimedDiscount` is what covers the
    * gap between spinning and the server catching up.
+   *
+   * The app adds one more condition — StoreKit must report an eligible
+   * half-price offer — but it never drops the daily limit: a spin in the app
+   * is recorded on the same profile column as a spin on the web, so the wheel
+   * comes back tomorrow on both, not after every relaunch.
    */
-  const wheelAvailable = (native ? nativeHalfOffAvailable : canSpinWheel === true) && !hasClaimedDiscount;
-  const showDiscountPromo = !hasPaidAccess && wheelAvailable && inLibraryView;
+  const wheelAvailable = canSpinWheel === true && (!native || nativeHalfOffAvailable) && !hasClaimedDiscount;
+  /*
+   * Both promo cards lead somewhere that needs a connection — a spin the server
+   * records, or a checkout — so offline the slot simply stays empty. Better
+   * than a card that opens onto a screen that cannot load.
+   */
+  const showDiscountPromo = !hasPaidAccess && wheelAvailable && inLibraryView && !isOffline;
   /*
    * ...and whenever it is not on offer, the slot keeps an ordinary way to buy.
    *
@@ -1600,7 +1636,7 @@ export function HomeDashboard({
    * cards do not flash into each other on load.
    */
   const showUpgradePromo =
-    !hasPaidAccess && canSpinWheel !== null && !wheelAvailable && inLibraryView;
+    !hasPaidAccess && canSpinWheel !== null && !wheelAvailable && inLibraryView && !isOffline;
   /*
    * Which card the slot holds when the home screen is arrived at, which is
    * always the library view — so this is deliberately not `showDiscountPromo`:
@@ -1889,7 +1925,13 @@ export function HomeDashboard({
             type="button"
             aria-label={t("library.chatFab")}
             className="memo-m-chat-fab"
-            onClick={() => setIsLibraryChatOpen(true)}
+            onClick={() => {
+              if (blockedOffline("chat")) {
+                return;
+              }
+
+              setIsLibraryChatOpen(true);
+            }}
           >
             <Msym name="chat_bubble" size="1.6rem" fill={false} weight={500} />
           </button>
@@ -1902,6 +1944,10 @@ export function HomeDashboard({
               }
             }}
             onClick={() => {
+              if (blockedOffline("create")) {
+                return;
+              }
+
               if (!canCreateNotes) {
                 navigateDashboardWithFeedback(startHref);
                 return;
@@ -1924,6 +1970,8 @@ export function HomeDashboard({
         onOpenChange={setIsLibraryChatOpen}
         hasPaidAccess={hasPaidAccess}
       />
+
+      {offlineToast}
 
       {activeModal ? (
         <DeferredNoteSourceModal

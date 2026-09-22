@@ -60,7 +60,7 @@ function subscribeToInstallGuideSeen(onStoreChange: () => void) {
   return () => window.removeEventListener(INSTALL_GUIDE_SEEN_EVENT, onStoreChange);
 }
 
-type ConfirmKind = "logout" | "delete" | "share";
+type ConfirmKind = "logout" | "delete" | "share" | "withdraw";
 
 type SettingsRow = {
   id: string;
@@ -311,6 +311,12 @@ export function SettingsScreen({
       body: t("settings.share.body", { brand: BRAND_NAME }),
       cta: t("settings.share.cta"),
     },
+    withdraw: {
+      emoji: "🔒",
+      title: t("native.aiWithdrawTitle"),
+      body: t("native.aiWithdrawBody"),
+      cta: t("native.aiWithdrawConfirm"),
+    },
   };
 
   async function runConfirm() {
@@ -329,6 +335,25 @@ export function SettingsScreen({
     if (isDemo && (kind === "logout" || kind === "delete")) {
       confirmSheet.dismiss();
       showToast(t(kind === "logout" ? "settings.demo.noLogout" : "settings.demo.noDelete"));
+      return;
+    }
+
+    // Withdrawing AI permission ends normal use of the app until it is allowed
+    // again, so it is confirmed like signing out rather than acted on at a tap.
+    if (native && kind === "withdraw") {
+      setIsLoggingOut(true);
+      try {
+        const response = await fetch("/api/mobile/consent", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ allow: false }),
+        });
+        if (!response.ok) throw new Error();
+        window.location.assign("/app/consent");
+      } catch {
+        setIsLoggingOut(false);
+        confirmSheet.dismiss();
+        showToast(t("native.verifyFailed"));
+      }
       return;
     }
 
@@ -523,7 +548,7 @@ export function SettingsScreen({
                   choice, which none of the plain rows above do. */}
               <LanguageSettingsRow />
               {rows.map(renderRow)}
-              {native && !isDemo ? <NativeAccountActions showManage={!appleSubscription} /> : null}
+              {native && !isDemo ? <NativeAccountActions showManage={!appleSubscription} onWithdraw={() => setConfirm("withdraw")} /> : null}
               {accountRows.map(renderRow)}
             </div>
 

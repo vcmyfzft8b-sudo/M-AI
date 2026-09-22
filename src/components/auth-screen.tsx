@@ -1,10 +1,8 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { AuthBackLink } from "@/components/auth-back-link";
-import { BrandLogo } from "@/components/brand-logo";
-import { BRAND_NAME } from "@/lib/brand";
-import { getTranslations } from "@/lib/i18n/server";
+import { headers } from "next/headers";
+import { isNativeUserAgent } from "@/lib/mobile/runtime";
 
 /**
  * The frame every auth screen sits in: the header row, then a centred stage.
@@ -13,33 +11,32 @@ import { getTranslations } from "@/lib/i18n/server";
  * 1100px breakpoint is not a layout change here. The same header and the same
  * `min(100%, 28rem)` card serve every width; only type and padding step up.
  *
- * The back control leads the row and the lockup trails it on the phone, because
- * the thing you might press belongs where a thumb already is. On desktop the
- * two lead the row together.
+ * The header carries only the back control: the card below already shows the
+ * mascot, so a second brand mark in the corner said nothing twice.
+ *
+ * Where the arrow leads is the page's call. The chooser's default is the
+ * landing page, which the iOS app does not have (the wrapper opens sign-in
+ * directly and rewrites "/" back to it), so there the app draws an empty band
+ * that keeps the card at the same height. A page that names a target — the
+ * e-mail steps go back to the chooser — gets the arrow on both platforms, and
+ * `back={false}` removes it where there is nothing to go back to.
  */
 export async function AuthScreen({
   backHref = "/",
+  back,
   children,
 }: {
   backHref?: string;
+  back?: boolean;
   children: ReactNode;
 }) {
-  const { t } = await getTranslations();
+  const native = isNativeUserAgent((await headers()).get("user-agent"));
+  const showBack = back ?? (native ? backHref !== "/" : true);
 
   return (
     <main className="memo memo-auth">
       <header className="memo-auth-header">
-        <AuthBackLink href={backHref} />
-
-        <Link
-          href="/"
-          className="memo-auth-lockup"
-          aria-label={t("nav.homeBrand", { brand: BRAND_NAME })}
-        >
-          <BrandLogo compact priority />
-        </Link>
-
-        <span className="memo-auth-header-gap" aria-hidden="true" />
+        {showBack ? <AuthBackLink href={backHref} /> : <span className="memo-auth-header-gap" aria-hidden="true" />}
       </header>
 
       <div className="memo-auth-stage">{children}</div>

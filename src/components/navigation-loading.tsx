@@ -19,6 +19,7 @@ import { SettingsLoading } from "@/components/settings-loading";
 import { SupportArticleLoading, SupportIndexLoading } from "@/components/support-loading";
 import { useCreatorDemoBasePath } from "@/components/creator-demo/creator-demo-context";
 import { getVisibleAppHeaderBottom, getVisibleAppSidebarRight } from "@/lib/app-header-offset";
+import { isOfflineNow } from "@/components/offline/offline-provider";
 import { mapAppHref, unmapDemoPathname } from "@/lib/creator-demo/paths";
 
 /**
@@ -304,9 +305,37 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
     const targetPathname = getPathnameFromHref(href);
 
     // Same page (e.g. only the query changes): nothing is going to be replaced,
-    // so an overlay would only flash over content that stays put.
+    // so an overlay would only flash over content that stays put — and offline
+    // a document navigation here would reload the screen the reader is on.
     if (disabled || targetPathname === currentPathname) {
       router.push(href);
+      return;
+    }
+
+    /*
+     * With no connection, every link in the app goes through the document
+     * rather than through the router.
+     *
+     * A client-side navigation fetches the destination's payload from the
+     * server, which offline is a request that cannot be made — the router has
+     * no way to render a route it has never seen, and the tap would end in a
+     * failed transition. A full navigation is a request the service worker can
+     * answer: it hands back the cached shell under the address that was asked
+     * for, and the shell draws that screen from the snapshot in this browser.
+     *
+     * Every asset it needs is already cached, so this is not the slow path it
+     * would be online — and the demo is excluded because its whole library
+     * lives in memory, which a document navigation would throw away.
+     */
+    if (
+      isOfflineNow() &&
+      !demoBasePath &&
+      href.startsWith("/") &&
+      // Nothing to answer the document request without a worker in front of it.
+      typeof navigator !== "undefined" &&
+      navigator.serviceWorker?.controller
+    ) {
+      window.location.assign(href);
       return;
     }
 

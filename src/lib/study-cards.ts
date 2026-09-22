@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import { generateStructuredObject } from "@/lib/ai/json";
+import { truncateForDatabase } from "@/lib/database-text";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
 import { isHighQualityFlashcard } from "@/lib/study-quality";
 import type {
@@ -77,7 +78,7 @@ function normalizeCard(card: CoverageCardDraft): CoverageCardDraft {
   return {
     ...card,
     front: normalizeCardText(card.front),
-    back: (normalizedBack.length >= 12 ? normalizedBack : `${normalizedBack}.`).slice(0, 260).trim(),
+    back: truncateForDatabase(normalizedBack.length >= 12 ? normalizedBack : `${normalizedBack}.`, 260).trim(),
     hint: card.hint ? normalizeCardText(card.hint) : null,
   };
 }
@@ -115,7 +116,7 @@ function buildFallbackQuote(text: string) {
   const normalized = normalizeCardText(text);
 
   if (normalized.length >= 3) {
-    return normalized.slice(0, 180);
+    return truncateForDatabase(normalized, 180);
   }
 
   return "Source excerpt";
@@ -145,7 +146,7 @@ function normalizeCitations(params: {
       idx: citation.idx,
       startMs: citation.startMs,
       endMs: citation.endMs,
-      quote: normalizedQuote.length >= 3 ? normalizedQuote.slice(0, 180) : fallbackQuote,
+      quote: normalizedQuote.length >= 3 ? truncateForDatabase(normalizedQuote, 180) : fallbackQuote,
     };
   });
 }

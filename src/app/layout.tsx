@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { getImageProps } from "next/image";
 import { headers } from "next/headers";
 import { NativeProvider } from "@/components/native-provider";
 import { isNativeUserAgent } from "@/lib/mobile/runtime";
@@ -8,10 +9,17 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { I18nProvider } from "@/components/i18n-provider";
 import { KeyboardInset } from "@/components/keyboard-inset";
 import { LaunchScreen } from "@/components/launch-screen";
+import { NavigationFeedbackProvider } from "@/components/navigation-loading";
 import { ServiceWorkerRegistration } from "@/components/service-worker";
 import { ThemeController } from "@/components/theme-controller";
 import { VisitTracker } from "@/components/visit-tracker";
-import { SEO_BRAND_NAME, SEO_SITE_URL } from "@/lib/brand";
+import {
+  BRAND_LOCKUP_HEIGHT,
+  BRAND_LOCKUP_SRC,
+  BRAND_LOCKUP_WIDTH,
+  SEO_BRAND_NAME,
+  SEO_SITE_URL,
+} from "@/lib/brand";
 import { LOCALE_BCP47, LOCALE_OG_TAG } from "@/lib/i18n/locales";
 import { getMessages } from "@/lib/i18n/messages";
 import { getLocale, getTranslations } from "@/lib/i18n/server";
@@ -112,6 +120,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "unfold_more",
   "warning",
   "wifi",
+  "wifi_off",
 ].join(",");
 
 const MATERIAL_SYMBOLS_HREF =
@@ -127,6 +136,20 @@ const MATERIAL_SYMBOLS_HREF =
 const APPLE_STARTUP_IMAGES = splashScreens();
 
 /**
+ * The two brand images every screen reaches for — the lockup in the home
+ * topbar, paywall and offer, and the mascot on the sign-in cards and in the
+ * wheel's hub. Sheets such as the wheel mount on a tap, so an image that only
+ * starts loading then fills in a beat after the sheet has opened; on a cold
+ * app launch the same happens to the home topbar. Preloading the exact
+ * candidates `next/image` will request (same optimiser URL, same sizes) means
+ * the sheet opens with its images already in the cache.
+ */
+const PRELOADED_IMAGES = [
+  getImageProps({ src: BRAND_LOCKUP_SRC, alt: "", width: BRAND_LOCKUP_WIDTH, height: BRAND_LOCKUP_HEIGHT }).props,
+  getImageProps({ src: "/memo-mascot.png", alt: "", width: 320, height: 288 }).props,
+];
+
+/**
  * The colour the installed app's own chrome takes on Android — its title bar
  * and, together with the CSS canvas above, what Chrome may draw the launch
  * screen on. The manifest can only carry one `background_color`, so a media
@@ -136,12 +159,23 @@ const APPLE_STARTUP_IMAGES = splashScreens();
  * drawn on. iOS ignores the tag outright (measured in #178), so it costs
  * nothing there and is the whole mechanism on Android.
  */
-export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f1f1f5" },
-    { media: "(prefers-color-scheme: dark)", color: "#121214" },
-  ],
-};
+export async function generateViewport(): Promise<Viewport> {
+  const native = isNativeUserAgent((await headers()).get("user-agent"));
+
+  return {
+    themeColor: [
+      { media: "(prefers-color-scheme: light)", color: "#f1f1f5" },
+      { media: "(prefers-color-scheme: dark)", color: "#121214" },
+    ],
+    /*
+     * The iOS wrapper's web view runs edge to edge, so the page must draw under
+     * the status bar and home indicator and lay out with env(safe-area-inset-*)
+     * — the `--memo-safe-*` variables the redesign already uses. Browsers and the
+     * installed PWA keep the default, where those insets are zero.
+     */
+    ...(native ? { viewportFit: "cover" as const } : {}),
+  };
+}
 
 /**
  * Title, description and Open Graph in the language this visitor is being
@@ -225,7 +259,7 @@ export default async function RootLayout({
   const native = isNativeUserAgent((await headers()).get("user-agent"));
 
   return (
-    <html lang={LOCALE_BCP47[locale]} suppressHydrationWarning>
+    <html lang={LOCALE_BCP47[locale]} data-native={native ? "ios" : undefined} suppressHydrationWarning>
       <head>
         {/*
           * iOS will not use an `apple-touch-startup-image` unless the page also
@@ -244,6 +278,16 @@ export default async function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link rel="stylesheet" href={MATERIAL_SYMBOLS_HREF} />
+        {PRELOADED_IMAGES.map((image) => (
+          <link
+            key={image.src}
+            rel="preload"
+            as="image"
+            href={image.src}
+            imageSrcSet={image.srcSet}
+            imageSizes={image.sizes}
+          />
+        ))}
         {APPLE_STARTUP_IMAGES.map((screen) => (
           <link
             key={screen.media}
@@ -307,7 +351,21 @@ export default async function RootLayout({
           <ThemeController />
           <ServiceWorkerRegistration />
           <KeyboardInset />
-          {children}
+          {/*
+            * Navigation feedback for every route, not just the two layouts
+            * that used to carry it. `InstantLink` shows nothing at all without
+            * a provider above it — it stays an ordinary link rather than delay
+            * a push for a skeleton nobody will render — so a tap anywhere
+            * outside /app and /creator (a legal document, an auth screen, the
+            * landing footer) had no sign it had landed until the server
+            * answered.
+            *
+            * /app and /creator keep their own providers inside this one. The
+            * nearest one wins, so nothing about those trees changes, and the
+            * creator demo's has to stay where it is: it reads the demo base
+            * path from a context that only exists inside that layout.
+            */}
+          <NavigationFeedbackProvider>{children}</NavigationFeedbackProvider>
           <VisitTracker />
           </NativeProvider>
         </I18nProvider>

@@ -74,10 +74,13 @@ test("an ineligible Apple account sees no promised trial or free checkout", () =
   const html = paywall(true, trial.map(({ trialDays, ...product }) => product));
   assert.doesNotMatch(html, /Nothing to pay today|Start the 3-day free trial|3 days free/);
   assert.match(html, /Billed yearly: £124.99/);
+  // The reassurance line under the plans names the App Store, never Stripe.
+  assert.doesNotMatch(html, /Stripe/);
+  assert.match(html, /Secure payment through the App Store/);
 });
 test("missing StoreKit products cannot show Stripe prices as Apple prices", () => {
   const html = paywall(true, []);
-  assert.doesNotMatch(html, /€20|€130|Nothing to pay today/);
+  assert.doesNotMatch(html, /€20|€130|Nothing to pay today|Stripe/);
   assert.match(html, /disabled=""/);
 });
 test("Apple wheel offer keeps the PWA sheet and uses actual first-period prices", () => {
@@ -98,6 +101,11 @@ test("Apple wheel offer keeps the PWA sheet and uses actual first-period prices"
   }
   assert.match(ios, /€64.99, then €129.99/);
   assert.match(ios, /€9.99/);
-  assert.doesNotMatch(ios, /memo-native-paywall|role="timer"|Close the offer and it is gone/);
+  assert.doesNotMatch(ios, /memo-native-paywall/);
+  // The same sheet on both, countdown included: the app records its spin on
+  // the same profile column, so the deadline it shows is the server's.
+  assert.match(ios, /role="timer"/);
   assert.match(web, /role="timer"/);
+  assert.match(ios, /Close the offer and it is gone/);
+  assert.match(web, /Close the offer and it is gone/);
 });

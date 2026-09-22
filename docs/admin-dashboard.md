@@ -39,7 +39,7 @@ written server-side with the service role after the allowlist check.
 | `/admin/creators/[id]` | One creator: their accounts, every post, and the Memo AI decision per post |
 | `/admin/sales` | Revenue, MRR, trial pipeline and projections, revenue by discount code |
 | `/admin/visitors` | Visits, page views, who is online, top pages, referrers, countries, devices |
-| `/admin/users` | Every account, plan and subscription status, searchable; open any account with **View as user** |
+| `/admin/users` | Every account, plan and subscription status, searchable; the onboarding survey broken down per question; open any account with **View as user** |
 | `/admin/settings` | Admin allowlist, Memo AI detection rules, collection status |
 
 Every page has a Today / 7 days / 30 days / This month / All time switch, and
@@ -62,6 +62,45 @@ A dashboard left open refreshes itself, on a cadence set per source in
 Refreshing pauses while the tab is hidden and catches up on return, so a
 dashboard left open in a background tab does not spend Stripe and Vercel calls
 all day for nobody to read.
+
+"Online now" on the overview keeps itself current on its own: the tile polls a
+server action for the count every minute rather than the page re-rendering
+itself. Before that the overview re-ran every read it has — every Supabase
+query and the Stripe summary — sixty times an hour to move one integer.
+
+### Why a page loads quickly
+
+Every page issues its reads in one batch. The overview used to wait on nine
+round trips one after another (the earliest data day, then the creator list,
+then the deltas, then lifetime totals, then follower snapshots, and so on);
+it now waits on two, the admin check and the batch. Reads that several panels
+share — the review count the layout badge and the overview banner both show,
+the online list that the traffic summary and the tile both want — are wrapped
+in React's `cache`, so one request runs each of them once.
+
+Stripe is the slow dependency, and it is slow in proportion to page size: a
+page of a hundred invoices takes six to ten seconds to come back, a page of
+twenty-five about one and a half. So the invoice scan is sliced into one-week
+`created` windows, fetched a few at a time (Stripe caps concurrent requests
+per endpoint), and each window is cached on its own. A window whose invoices
+are older than Stripe's longest payment retry is final and kept for a week;
+only the recent windows follow the fifteen-minute beat. A stale entry is
+served as it is and refreshed in the background, so the only request that
+ever waits on Stripe is the very first one after a deploy.
+
+### Why saving is quick
+
+The forms answer as soon as the row is written. None of the creator, account,
+video or rule actions revalidate the page from inside the action — that made
+Next re-render the whole page before "Saved." could appear. The form shows
+"Saving…" the moment the button is pressed, and once the answer is back it
+refreshes the page in a transition, so the current screen stays usable while
+the fresh data streams in behind it. Work that is slow and not needed for the
+answer — fetching a new account's follower count from TikTok, re-checking
+every video after a rule or account-mode change — runs after the response has
+gone out, and the form refreshes once more a few seconds later to pick the
+result up. The message says so ("Follower counts are being fetched") so
+nobody reads a blank card as a failure.
 
 ## Viewing the app as a user
 
@@ -429,6 +468,36 @@ multiplied across every creator.
 
 If Stripe is unreachable the rest of the dashboard still renders; only the
 revenue panels show as unavailable.
+
+## Onboarding answers
+
+The Users page breaks down everything the onboarding survey collects, for
+the accounts that finished onboarding in the selected window. Each question
+is a card: every option the survey offers, the share of respondents who chose
+it and the raw count. Percentages are of everyone who answered *that*
+question — the survey branches, so the school-type question is only asked of
+pupils and students and the field-of-study question only of university
+students — and the card says how many that was.
+
+The questions are grouped as who they are (role, school, year, field, who the
+account is for, how they found us), what they are after (motivation, whether
+they are studying for something specific, the daily goal, the marking scale,
+and the current and target grades bucketed to the survey's own steps), what
+drew them in (the one feature they picked), and the older questions: the age
+range an earlier revision of the survey asked, and the education level every
+account carries as a derived summary even from before the survey existed.
+Above the cards, tiles give the number who finished onboarding, how many of
+them went through the survey proper, and the average current-to-target grade
+per marking scale with the share aiming higher than they are now.
+
+The pivot happens in Postgres (`admin_onboarding_breakdown` and
+`admin_onboarding_grades`, migration 0051), one row per question and answer.
+Doing it in the app would mean either thirteen queries or fetching every
+profile, and PostgREST caps a plain select at a thousand rows, which would
+silently under-count. The English labels for the stored values live in
+`src/lib/admin/onboarding-questions.ts`; a test holds that every value the
+survey can store has one, and a value it does not know (from an older
+revision of the survey) is shown under its raw value rather than dropped.
 
 ## Setup
 

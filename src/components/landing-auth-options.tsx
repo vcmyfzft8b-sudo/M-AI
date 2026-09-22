@@ -63,6 +63,83 @@ export function LandingAuthOptions(props: {
   const [notice, setNotice] = useState("");
   const emailHref = `/auth/email-entry?mode=${props.mode ?? "signup"}&next=${encodeURIComponent(props.next)}`;
 
+  /*
+   * The wrapper replies to a failed native sign-in with its localised
+   * "action failed" text plus, in brackets, the step that failed (the
+   * provider's error, a rejected callback, a server status). The headline is
+   * ours; the bracketed detail is kept so a failure can be reported exactly.
+   */
+  function signInFailure(error: unknown) {
+    const detail = error instanceof Error ? /\[(.+)\]\s*$/.exec(error.message)?.[1] : undefined;
+    return detail ? `${t("native.signInFailed")} (${detail})` : t("native.signInFailed");
+  }
+
+  /*
+   * The other way the app's Google sign-in can finish.
+   *
+   * The sign-in sheet is supposed to hand the code back by navigating to the
+   * app's own scheme, and on some phones that navigation never arrives: the
+   * page the provider returns to is reached every time, the sheet simply sits
+   * there, and nothing completes. That page also writes the code down for this
+   * cookie jar, so this asks for it. Whichever route answers first signs in;
+   * the note is single use, so the other finds nothing left.
+   */
+  async function collectGoogleSession(flow: { done: boolean }) {
+    const deadline = Date.now() + 3 * 60 * 1000;
+
+    while (!flow.done && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 1200));
+
+      if (flow.done) {
+        return "stopped";
+      }
+
+      try {
+        const response = await fetch("/api/mobile/google-auth?poll=1", { cache: "no-store" });
+
+        if (!response.ok) {
+          continue;
+        }
+
+        const body = (await response.json()) as { status?: string };
+
+        if (body.status === "signedIn" || body.status === "failed") {
+          return body.status;
+        }
+      } catch {
+        // A dropped request while the sheet is open is not an answer.
+      }
+    }
+
+    return "stopped";
+  }
+
+  async function signInWithGoogle() {
+    const flow = { done: false };
+    let thrown: unknown = null;
+    const sheet = nativeRequest<{ status: string }>("signInWithGoogle")
+      .then(result => (result.status === "signedIn" ? "signedIn" : "stopped"))
+      .catch(error => { thrown = error; return "stopped"; });
+
+    try {
+      const outcome = await Promise.race([sheet, collectGoogleSession(flow)]);
+
+      if (outcome === "signedIn") {
+        window.location.assign(props.next);
+        return;
+      }
+
+      // "stopped" with nothing thrown is the sheet being closed by hand, which
+      // needs no explaining.
+      if (outcome === "failed" || thrown) {
+        setNotice(signInFailure(thrown));
+      }
+    } finally {
+      flow.done = true;
+      setPendingTarget(null);
+    }
+  }
+
   function isPending(target: Exclude<PendingTarget, null>) {
     return pendingTarget === target;
   }
@@ -79,9 +156,7 @@ export function LandingAuthOptions(props: {
             event.preventDefault();
             if (pendingTarget) return;
             setPendingTarget("google"); setNotice("");
-            void nativeRequest<{ status: string }>("signInWithGoogle").then(result => {
-              if (result.status === "signedIn") window.location.assign(props.next);
-            }).catch(() => setNotice(t("native.verifyFailed"))).finally(() => setPendingTarget(null));
+            void signInWithGoogle();
           }}
         >
           <input type="hidden" name="next" value={props.next} />
@@ -109,7 +184,7 @@ export function LandingAuthOptions(props: {
             setPendingTarget("apple"); setNotice("");
             void nativeRequest<{ status: string }>("signInWithApple").then(result => {
               if (result.status === "signedIn") window.location.assign(props.next);
-            }).catch(() => setNotice(t("native.verifyFailed"))).finally(() => setPendingTarget(null));
+            }).catch(error => setNotice(signInFailure(error))).finally(() => setPendingTarget(null));
           }}
         >
           <input type="hidden" name="next" value={props.next} />

@@ -15,6 +15,7 @@ import { createPortal } from "react-dom";
 import { useT } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
+import { useOfflineGuard } from "@/components/offline/offline-notice";
 import { useAnnotateWidth } from "@/components/use-annotate-width";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
@@ -1469,6 +1470,7 @@ export function NoteReadAloud({
   onDeleteMedia?: (mediaId: string) => void;
 }) {
   const t = useT();
+  const { isOffline, blockedOffline, offlineToast } = useOfflineGuard();
   const document = useMemo(() => parseNoteTtsDocument(content), [content]);
   const chunks = useMemo(() => buildNoteTtsChunks(document), [document]);
   const mediaById = useMemo(() => new Map(noteMedia.map((media) => [media.id, media])), [noteMedia]);
@@ -1932,6 +1934,18 @@ export function NoteReadAloud({
 
     let cancelled = false;
 
+    /*
+     * Nothing to ask offline, and nothing to say about it either: the voice is
+     * synthesised on request, the dock's own button explains itself when it is
+     * pressed, and a red "listening is unavailable" over a note that reads
+     * perfectly well would be the only thing wrong with the screen.
+     */
+    if (isOffline) {
+      setError(null);
+      setIsLoadingStatus(false);
+      return;
+    }
+
     async function loadStatus() {
       setIsLoadingStatus(true);
 
@@ -1981,7 +1995,15 @@ export function NoteReadAloud({
     return () => {
       cancelled = true;
     };
-  }, [chunks.length, document.words.length, hasHydratedSettings, lectureId, selectedVoice, t]);
+  }, [
+    chunks.length,
+    document.words.length,
+    hasHydratedSettings,
+    isOffline,
+    lectureId,
+    selectedVoice,
+    t,
+  ]);
 
   useEffect(() => {
     setPlaybackRate(getStoredPlaybackRate());
@@ -2833,6 +2855,15 @@ export function NoteReadAloud({
       return;
     }
 
+    /*
+     * The voice is synthesised per chunk as the reading runs, so there is
+     * nothing cached to play with no connection — not even the part already
+     * heard, which is streamed rather than kept. Pausing is always allowed.
+     */
+    if (!isPlaying && blockedOffline("readAloud")) {
+      return;
+    }
+
     if (isPlaying) {
       playbackRequestIdRef.current += 1;
       audio.pause();
@@ -2904,6 +2935,7 @@ export function NoteReadAloud({
   }, [
     activeChunk,
     activeChunkIndex,
+    blockedOffline,
     chunks.length,
     document.words.length,
     isFetchingChunk,
@@ -3220,6 +3252,7 @@ export function NoteReadAloud({
         />
       </div>
       {dockContainer ? null : <div className="memo-dock">{renderNoteDock()}</div>}
+      {offlineToast}
     </>
   );
 }

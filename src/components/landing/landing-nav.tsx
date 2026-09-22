@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { useT } from "@/components/i18n-provider";
 import { LandingLoadingLink } from "@/components/landing-loading-link";
+import { InstantLink } from "@/components/instant-link";
 import { LandingLanguagePicker } from "@/components/language-picker";
 import { Msym } from "@/components/msym";
 import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, BRAND_SUPPORT_EMAIL, SEO_BRAND_NAME } from "@/lib/brand";
@@ -117,7 +118,7 @@ export function LandingNav() {
           <span className="landing-v2-nav-desktop-only">
             <LandingLanguagePicker />
           </span>
-          <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-nav landing-cta-light">
+          <LandingLoadingLink href="/onboarding" className="landing-cta landing-cta-nav landing-cta-light">
             {t("landing.cta.tryFree")}
           </LandingLoadingLink>
           <button
@@ -169,9 +170,9 @@ export function LandingNav() {
           <nav className="landing-v2-menu-fine" aria-label={t("landing.footer.support")}>
             <a href={`mailto:${BRAND_SUPPORT_EMAIL}`}>{BRAND_SUPPORT_EMAIL}</a>
             {MENU_LEGAL.map((item) => (
-              <Link key={item.href} href={item.href}>
+              <InstantLink key={item.href} href={item.href}>
                 {t(item.labelKey)}
-              </Link>
+              </InstantLink>
             ))}
           </nav>
 
@@ -181,7 +182,7 @@ export function LandingNav() {
             <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-dark">
               {t("landing.cta.signIn")}
             </LandingLoadingLink>
-            <LandingLoadingLink href="/auth/continue" className="landing-cta landing-cta-hero landing-cta-light">
+            <LandingLoadingLink href="/onboarding" className="landing-cta landing-cta-hero landing-cta-light">
               {t("landing.cta.tryFree")}
             </LandingLoadingLink>
           </div>

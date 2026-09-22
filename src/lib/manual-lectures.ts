@@ -32,6 +32,7 @@ import {
   attachDocumentImagesToNotes,
   getStoredDocumentImagesFromMetadata,
 } from "@/lib/document-note-media";
+import { flushPushNotifications } from "@/lib/mobile/push";
 import { captureBackgroundError } from "@/lib/monitoring";
 import { generateNotesFromTranscript } from "@/lib/note-generation";
 import { withNoteEnrichmentStage } from "@/lib/note-enrichment-status";
@@ -1936,6 +1937,12 @@ export async function createLectureFromTextSource(params: {
     if (!updatedLecture) {
       await requireActiveLecture(lectureId);
     }
+
+    // The status write above has already queued the notification (migration
+    // 0053). This sends it now rather than on the hourly sweep. Awaited,
+    // because a promise left floating here is never finished: this runs on a
+    // serverless function, which is frozen as soon as it answers.
+    await flushPushNotifications();
 
     return lectureId;
   } catch (error) {

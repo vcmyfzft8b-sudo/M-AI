@@ -666,3 +666,298 @@ them as tags would make the next occurrence diagnosable; and nothing reconnects 
 is safe as it stands but is the obvious next step, and doing it needs backoff plus care that
 `restoreListening` reserves a paid slice, so that a flapping link cannot storm `/tutor/session`.
 The same question is open on `sentry:145277359`.
+
+## 2026-09-15 — A 32 kHz device was offered a sample rate Soniox does not generate
+
+- **Sentry:** `MEMOAI-WEB-3Z` (issue `147248110`, the handled speech failure) and `MEMOAI-WEB-40`
+  (issue `147248129`, the unhandled rejection `failTurn` makes of the same refusal). One defect on
+  two fingerprints; both ids must stay in the backlog or the gate reopens whichever is missing.
+- **Route:** `/app/lectures/:id` (client-side; the `POST /api/lectures/<id>/tutor/report` beside it
+  is the browser reporting the failure and returns 200, so there is no Vercel counterpart)
+- **Operation:** opening the tutor's speech stream — `tutorStage: speech`, phases `speaking` and
+  `opening`, `sonioxCode: 400`
+- **Normalized message:** `SpeechOutputError: Invalid audio format: unsupported audio_sample_rate
+  <n> for format '<value>', allowed: [<n>, <n>, <n>, <n>, <n>]`
+- **Historical events:** `2026-09-15T17:32:34.128Z` to `2026-09-15T17:32:47.295Z`, release
+  `11586e79`, one learner, one session on iPhone / iOS 18.7
+- **Resolution:** [PR #412](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/412), merge commit
+  `222b738208` (fix commit `42a150a`)
+- **Production cutoff:** deployment `dpl_Gd82zd91EpaLr7221Kf7z1B1rWaQ` was ready at
+  `2026-09-15T22:09:22.707Z`
+- **Regression test:** `tests/tutor-speech-sample-rate.test.mjs`
+
+`connect()` took `AudioContext.sampleRate` verbatim and `openSegment` announced every stream with
+it, but Soniox generates only `[8000, 16000, 24000, 44100, 48000]`. This device's audio route ran at
+32000, so every turn was refused before any audio existed and the tutor could not speak at all. The
+fix asks for the nearest supported rate instead (`src/lib/tutor/speech-output.ts`); the graph
+resamples, and a device already on the list is untouched. The test announces 32000 on `main` and
+24000 with the fix.
+
+This is **not** the stale-stream family (#342 / #357 / #396), which names a dead stream id — this
+names a rate, and is refused before a stream exists.
+
+### The 22:04–22:35 preview session is this fix being verified, not three new errors
+
+PR #412 was driven through a full tutor walkthrough on its own preview deployment
+(`memo-er3zexq1r`, release `42a150a`, the branch head) between `2026-09-15T22:04:33Z` and
+`2026-09-15T22:35:17Z`, minutes before it merged. That one browser session produced three Sentry
+issues, all tagged `environment: preview`, and none of them is production evidence:
+
+- `147007726` — `SpeechInputError: The recognizer connection closed.` at `22:13:22Z`. Already
+  covered by the 2026-09-14 entry above, which records that this message still fires after PR #407
+  by design. Its last **production** occurrence remains `2026-09-15T17:25:13Z`.
+- `147291870` — `Error: Not authorised.` at `22:06:32Z`, `tutorStage: turn`.
+- `147295082` — `Error: Not authorised.` at `22:35:16Z`, `tutorStage: renewal`.
+
+The two `Not authorised.` issues are new, and are **not** the defect #412 fixed. They are not
+written off as verification noise either — see the section below, which is an open question rather
+than a resolution.
+
+## 2026-09-08 — A preview's timer assertion came from outside the bundle
+
+**Not a resolution.** Like the 2026-09-05 entry, this records how to recognise an issue that never
+happened in production, so each triage run does not re-investigate it.
+
+- **Sentry:** `MEMOAI-WEB-3N`, issue `145742465`
+- **Route:** `/creator/lectures/:id`
+- **Normalized message:** `Cannot clear timer: timer created with requestAnimationFrame() but
+  cleared with clearTimeout()`
+- **Events:** three, `2026-09-08T15:28:35Z` to `2026-09-08T15:30:27Z`, all `environment: preview`
+- **Status:** not production evidence; no fix, no branch.
+
+Every marker says one browser session against one preview deployment, not a learner:
+
+- `environment: preview`, `url: https://memo-xzeh5b93i-nace-valencics-projects.vercel.app/creator/lectures/demo-note-anatomija`
+  — a `*.vercel.app` host and the seeded demo note, not `www.memoai.eu` and not real material
+- `release: 46c754af70e58abe96025fd2f962c82bafcfb604`, the head of `codex/quiz-feedback-overflow`,
+  pushed at `2026-09-08T15:22Z`. All three events land in the six minutes after that push.
+- `Safari 26.6` on `Mac OS X`, three events inside two minutes, and nothing since
+
+**The message is not ours and not our dependencies'.** It appears nowhere in `src/` and nowhere in
+`node_modules/`, so it cannot have been thrown by code we ship. `mechanism:
+auto.browser.global_handlers.onunhandledrejection` means Sentry's global handler caught it from the
+page, which includes anything a browser extension or the browser's own instrumentation injects into
+it. That is the likeliest source on a developer's Safari.
+
+Treat a recurrence as real only if it carries `environment: production` and a `www.memoai.eu` url.
+
+## 2026-09-10 — A Sentry performance detector, not an error
+
+**Not a resolution**, and not a defect. This one is a shape of Sentry issue the scan cannot tell
+apart from an exception, recorded so a run does not try to fix a measurement.
+
+- **Sentry:** `MEMOAI-WEB-3R`, issue `146277430`
+- **Route:** `POST /api/inngest`
+- **Title:** `Consecutive HTTP`
+- **Event:** `2026-09-10T18:45:31Z`, one occurrence, `environment: production`, release
+  `078990e4dbf304dba802764633a7c5777d49f9de`
+- **Status:** out of scope; no fix, no branch.
+
+The issue's `issueType` is `performance_consecutive_http`, its `issueCategory` is `http_client`, and
+its `level` is `info`. It carries no exception and no stack trace — it is Sentry's span detector
+observing that one transaction made several HTTP calls in sequence. Nothing failed: no 5xx, no
+timeout, no uncaught exception, which is the whole of what this triage covers.
+
+`scripts/sentry-error-scan.mjs` asks for `is:unresolved` and gets performance issues alongside
+errors. An actual Inngest failure arrives as an exception with a stack trace and `level: error`.
+
+**Since PR #417 the gate does this on its own**, so a detector no longer wakes a run: the scan
+carries `issueType` and `issueCategory` through, and `gate()` sets aside any issue whose `issueType`
+begins with `performance_`, naming it in `ignoredSentryIssueIds` rather than dropping it silently.
+Judge by that prefix rather than by `issueCategory`, which is what an earlier draft of this entry
+suggested: `replay_hydration_error` carries `issueCategory: frontend`, so a rule of "category is not
+`error`" would have quietly suppressed a real client-side defect. The same class recurred as
+`147678291` on 2026-09-17, and each detection files a **new** issue id, which is why backlogging one
+never stopped the next and the fix had to be by class.
+
+## Open — the landing page's call-stack overflow has no frame to attribute it to
+
+**This is not a resolved incident.** It is recorded so the next run recognises the id, and does not
+open a speculative patch to a page it cannot reproduce a failure on.
+
+- **Sentry:** `MEMOAI-WEB-1P`, issue `122566057`
+- **Route:** `/`, the marketing landing page
+- **Normalized message:** `RangeError: Maximum call stack size exceeded.`
+- **Events:** 54 between `2026-05-25T16:49:24Z` and `2026-09-09T07:26:40Z`, `environment: production`
+- **Status:** `needs-human`. Not reproduced, and deliberately not fixed (triage rule 8).
+
+**Why it is not actionable as it stands.** Only one of the 54 events is still inside Sentry's
+retention window, and its stack is a single frame with no filename and no function — `line 198` of
+nothing. There is no source file, no symbol and no in-app frame, so there is nothing to read and
+nothing to guard. The breadcrumbs before it are all healthy: `/api/track` 200, two `?_rsc=` prefetches
+200, an analytics `POST` 200.
+
+**What the one retained event does say.** `os: iOS 18.7.8`, `browser: Google 375.1.776343893` — the
+Google app's in-app WebView, not Safari and not Chrome proper. The trailing period in `Maximum call
+stack size exceeded.` is WebKit's wording. `mechanism: auto.browser.global_handlers.onerror`,
+`handled: no`, `userCount: 0` across all 54 events, which is what anonymous landing traffic looks
+like. An unbounded recursion in an in-app browser's injected script produces exactly this signature:
+a global `onerror` with no attributable frame.
+
+**What would make it actionable.** Any one of: a second event carrying a real stack frame; a
+reproduction of the landing page in an iOS in-app WebView; or source maps resolving that frame. A
+run that gets one of those should triage it on that evidence rather than on this entry. Until then,
+do not add a recursion guard to landing-page code chosen by guesswork — 54 events over three and a
+half months with zero identified users does not justify changing a page that is otherwise healthy.
+
+## Open — a tutor turn answered 401 mid-walkthrough in production, once, and was never explained
+
+**This is not a resolved incident.** It is recorded here so the next automated run recognises the
+issue ids, does not open a speculative patch to the authentication path, and does not have to
+re-derive the mechanism from scratch.
+
+**Read the correction at the end of this entry first.** The two preview events that prompted it
+turned out to be an artefact of how that verification session was cleaned up, which leaves a single
+production event as the whole of the evidence.
+
+- **Sentry:** `MEMOAI-WEB-41` (issue `147291870`) and `MEMOAI-WEB-42` (issue `147295082`)
+- **Route:** `POST /api/lectures/<id>/tutor/turn`, `.../tutor/report`, `.../tutor/session`
+- **Normalized message:** `Error: Not authorised.` — the `en` rendering of `api.unauthorized`
+- **Events:** `2026-09-15T22:06:32Z` (`tutorStage: turn`) and `2026-09-15T22:35:16Z`
+  (`tutorStage: renewal`), both `environment: preview` on release `42a150a`
+- **Status:** `needs-human`. Not reproduced, and deliberately not fixed (triage rule 8).
+
+What the breadcrumbs of the preview session show, in order: `POST .../tutor/session` 200 at
+`22:05:13`, `POST .../tutor/plan` 200 at `22:05:14`, `POST .../tutor/turn` 200 at `22:05:21`,
+`POST .../tutor/turn` 200 at `22:06:01` — and then `POST .../tutor/turn` **401** at `22:06:32`,
+`POST .../tutor/report` **401** at `22:13:22`, and `POST .../tutor/session` **401** at `22:35:16`.
+Between them, the unauthenticated `POST /api/track` keeps answering 200 once a minute for the full
+twenty-nine minutes. So the session did not merely blink: it stopped authenticating partway through
+a walkthrough and never came back, while the page stayed open and the tab kept running.
+
+**This has happened in production once already, and was never explained.** Issue `145514494`,
+`2026-09-07T14:21:55Z`, Mobile Safari on iOS: `POST .../tutor/turn` answered 401 about 1.7s after
+`/tutor/plan` and `/tutor/session` had both answered 200 on the same session. Same route, same
+message, same shape. It is still `needs-human` in the backlog.
+
+**The one code path that can produce exactly this.** Three things are true at once:
+
+1. `src/lib/supabase/middleware.ts:66` returns early for any path under `/api/`, *before* the
+   Supabase client is created at line 80 — so an API request never gets its session refreshed or
+   its cookies rewritten.
+2. `createSupabaseServerClient`'s `setAll` is an empty function
+   (`src/lib/supabase/server.ts:26-28`), documented as a deliberate no-op whose writes are
+   "handled in middleware" — which, per (1), is not true for `/api/`. The route-handler variant
+   that *can* write cookies is used only by `/auth/*` and the admin impersonation route.
+3. All three tutor routes use the non-writing client — `turn/route.ts:74`, `report/route.ts:38`,
+   `session/route.ts:38` — and each returns 401 at the line below it on `!user` and nothing else
+   (rate limiting returns 429, billing returns 402).
+
+When an API request arrives with an expired access token, `auth.getUser()` refreshes it. Supabase
+rotates the refresh token and consumes the old one; the new pair is handed to `setAll`, which drops
+it on the floor. The browser is left holding a refresh token that has already been spent, so once
+its reuse interval lapses the session is gone — and because middleware only repairs sessions on
+page requests, a tab that never navigates again (a tutor walkthrough) can never recover.
+
+**That mechanism is consistent with both events, but is not proven.** Confirming it needs the one
+thing neither event carries: whether the access token had actually expired at `22:06:32`, which
+means the session's issue time or the Supabase auth logs. Do not treat it as established without
+that. A clock-skewed client makes it likelier, and this codebase has already met one — see the
+2026-09-13 entry, where a learner's clock ran 273s slow.
+
+**Why no fix was pushed.** The repair is small to describe — let middleware refresh before it
+short-circuits `/api/`, keeping the `VERIFIED_PAGE_USER_HEADER` deletion — but it changes
+authentication for all 49 API routes that use this client and adds a `getUser()` round trip to
+every API request. Automated triage had no `PREVIEW_TEST_EMAIL` / `PREVIEW_TEST_PASSWORD`, so it
+could not drive an authenticated preview to verify any of it. An unverified change to the auth path
+is not something an unattended run should merge toward production.
+
+### Correction — the two preview 401s were the test account being deleted, not an auth failure
+
+Added on review, from knowledge the automated run did not have. The 22:04–22:35 preview session was
+a manual verification of PR #412, driven from a Claude Code browser pane — which is why both events
+are tagged `Mac OS X` / `Chrome 148` rather than the iPhone the fix was about. That session ran on a
+disposable staging account, and **the account was deleted as cleanup while the tab was still open**,
+moments before #412 merged at `22:07:06Z`.
+
+That accounts for both events without any token rotation:
+
+- `147291870` at `22:06:32Z` (`tutorStage: turn`) — the open tab's next turn, after the user row it
+  was authenticated as had been removed. Deleting the auth user cascades and invalidates its
+  sessions immediately, and every tutor route answers `401` on `!user`.
+- `147295082` at `22:35:16Z` (`tutorStage: renewal`) — the same tab twenty-nine minutes later, when
+  its credential-renewal alarm fired against the same deleted account.
+
+The pattern fits the deletion better than it fits an expired refresh token: there are exactly two
+events, one at the moment of deletion and one when a timer next fired, rather than the cluster a
+tab retrying against a broken session would produce.
+
+**What survives this correction:** issue `145514494` — `2026-09-07T14:21:55Z`, Mobile Safari on
+iOS 18.7, `environment: production`, a real learner, no test interference. That event is genuine and
+still unexplained, and the `setAll` no-op mechanism above remains the best available account of it.
+But it is **one** event, not three. Weigh any change to the authentication path against that, and
+treat a second production occurrence as the evidence that is actually missing.
+
+**For future runs:** a verification session's own cleanup can manufacture errors that look like
+defects, exactly as a verification session can re-provoke the bug being fixed (see the preamble at
+the top of this file). Deleting a seeded account while its browser session is still open is the
+clearest case — prefer closing the page before deleting the user, and read the `os` / `browser` tags
+before believing a preview event describes a learner.
+
+## 2026-09-18 — Production could not read a Sandbox App Store notification
+
+- **Vercel fingerprints:** `server_error:POST /api/mobile/notifications:` and the same route with
+  the `[DEP0169] DeprecationWarning: url.parse()` line, which is Node warning about a dependency on
+  the same request and says nothing about the failure
+- **Sentry:** none, and that is the second half of the defect — the route's `catch { }` bound no
+  error and reported nothing, so the only trace of this anywhere was the error-rate chart
+- **Route:** `POST /api/mobile/notifications` — Apple's App Store Server Notifications V2 webhook
+- **Operation:** verifying a notification whose payload is signed for the Sandbox environment
+- **Normalized message:** none. A 503 with an empty body and an empty `traceId`
+- **Historical events:** `2026-09-18T16:37:11.536Z` (Apple's sandbox test notification, which Apple
+  itself recorded as `UNSUCCESSFUL_HTTP_RESPONSE_CODE`), `16:42:52.237Z`, `16:42:53Z`, `16:42:54Z`
+  on deployment `dpl_7U9wTrwZTKpGrsb2gCaoxk9FXyte`, and `19:11:54.230Z` on
+  `dpl_A4ZpymeFB2eXVrWSQBKbT9twZ8po`. One succeeded in between, at `16:45:43.934Z`, because
+  `APPLE_SANDBOX_REVIEW_USER_IDS` had by then reached a running deployment
+- **Resolution:** [PR #425](https://github.com/vcmyfzft8b-sudo/Memo-AI/pull/425)
+- **Production cutoff:** merge commit `ab4fd2b795724724a0ebef740054bc9f8b69a3f8`, deployment
+  `dpl_9ogeUKsTrBfScBzDcRjDiuMfsB5n`, ready and holding the production alias at
+  `2026-09-18T22:24:00Z`. Verified at `2026-09-18T22:25:05.836Z`: Apple's sandbox test notification
+  was requested against production and Apple recorded the attempt as `SUCCESS`, with the matching
+  `200` in the Vercel record for that deployment
+- **Regression test:** `tests/mobile-apple-notifications.test.mjs` — the first test fails on the
+  release that produced these 503s
+
+Apple delivers Sandbox notifications to the **production** server URL: its own connectivity test,
+and every TestFlight and App Review purchase event. `verifyAppleNotification`
+(`src/lib/mobile/apple.ts`) fell back to the sandbox verifier only when
+`APPLE_SANDBOX_REVIEW_USER_IDS` was set, and that variable is an allowlist of accounts permitted to
+hold a sandbox entitlement — an authorization list, standing in for a decoding capability. With it
+unset, or simply not yet on the running deployment, production could not read a sandbox payload at
+all. Apple resends anything but a 200 at 1, 12, 24, 48 and 72 hours, so one refused notification
+buys three days of 5xx. PR #425 separates the two: production always tries the sandbox verifier,
+and the allowlist keeps its real job in `verifyTransaction`, which still refuses a sandbox
+transaction whose `appAccountToken` is not on it.
+
+The route now also classifies the failure. Apple reads only the status, so 503 means "send it
+again" and is right for a database fault, a revocation check that could not run, or an Apple
+outage. Only a payload that is positively somebody else's is acknowledged with a 200 and reported
+as a warning instead: a bundle id or app id that is not ours, an environment neither verifier
+matched, a certificate chain that is not three certs long, or a sandbox account nobody allowlisted.
+`appleNotificationRetryable` decides this from the Apple library's own `VerificationStatus`, never
+from the text of a message.
+
+**`VERIFICATION_FAILURE` and `FAILURE` deliberately stay retryable**, though both sound terminal.
+`VERIFICATION_FAILURE` is the catch-all wrapper around the whole of `verifyJWT`, and it is also
+what a chain that does not meet our pinned roots throws — so an Apple root rotation we had not
+picked up would throw it for *every* notification. `FAILURE` is mostly an OCSP verdict: a responder
+we cannot parse, or a response gone stale. Acknowledging either would quietly discard real billing
+notifications during an outage we could still recover from. The cost of the other choice is five
+log lines for a genuinely forged payload, which is the trade worth taking.
+
+One consequence to know about rather than discover. In production with
+`APPLE_SANDBOX_REVIEW_USER_IDS` unset, a real sandbox *purchase* notification is now acknowledged
+rather than retried, because that configuration accepts no sandbox entitlement from anybody. If the
+variable is unset only briefly — a deploy that has not landed yet, which is exactly how this
+incident started — that purchase is dropped instead of arriving on Apple's next attempt. It costs a
+TestFlight or App Review tester one restore, never a paying customer: a production transaction
+verifies on the first attempt and never touches this path. The event is now a warning in Sentry
+rather than silence, which is the part that was actually missing.
+
+**Do not read a future 503 here as this bug returning.** This one is silent by construction; every
+failure after PR #425 carries a Sentry event tagged `apple_notification_retry` (503) or
+`apple_notification_rejected` (200). A 503 with no Sentry event beside it on a release at or after
+the merge would mean the route never ran — a platform fault, not this. A recurrence of *this*
+defect would show as `apple_notification_rejected` with `VerificationException INVALID_ENVIRONMENT`
+on a Sandbox payload, and the first thing to check then is whether `appleEnvironment()` still
+returns `PRODUCTION` for the deployment that answered.

@@ -1,0 +1,104 @@
+# Memo AI iOS — handoff for the next agent (updated 20 September 2026)
+
+> **20 September, compliance sweep.** The wrapper was audited end to end
+> against Apple's review requirements; see the top of
+> `ios/AppStore/release-readiness.md`. Two real gaps were found and fixed in
+> the binary (the privacy manifest was missing the file-timestamp
+> required-reason declaration, which would have produced ITMS-91053; lecture
+> takes were not excluded from iCloud backup). Everything else in the list
+> below still stands, plus one item it did not have: the app record's
+> **Content Rights declaration is `null`** and must be answered before the
+> version can be submitted.
+
+Read this before `docs/ios-app.md` (setup reference) and `ios/AppStore/release-readiness.md` (evidence log).
+
+## Where things stand (18 September 2026, evening)
+
+- `main` runs the wrapper-aware web app; the iOS project is in `ios/`. **PR #421** (`fix/ios-web-parity-auth-wheel`) is open and must be merged before submission: it removes the password screen (the review notes already describe the code flow it introduces), drops the auth header logo, fixes the wheel button crossfade, makes the app's wheel once a day, preloads the brand images, and stops the app's paywall naming Stripe while StoreKit loads.
+- Production is configured (Apple flags, keys, Supabase Apple provider, `APPLE_SANDBOX_REVIEW_USER_IDS` = review account + device-QA account + the account holder's Apple-created account, `APP_REVIEW_ACCOUNT_EMAILS` / `APP_REVIEW_LOGIN_CODE`). Apple's Sandbox test notification reaches `https://www.memoai.eu/api/mobile/notifications` (SUCCESS on 18 September).
+- App Store Connect, done through the API on 18 September: all four subscriptions at **group level 1** and **READY_TO_SUBMIT** (review screenshot on each); USD prices $19.99 / $129.99 with first-period offers $9.99 / $64.99 (Apple has no $20 / $130 points; other storefronts keep Apple's equalised prices; Slovenia €19.99 / €129.99, €9.99 / €64.99); age rating answered (no flagged content, no web access, no UGC); screenshots uploaded for iPhone 6.9" (`APP_IPHONE_67`, 6 shots), 6.5" (6) and iPad 13" (4) from the review account's synthetic "Plant Life Cycle" note; review contact, demo account (`apple-review@memoai.eu` + fixed code) and review notes saved; build **1.0.0 (1)** attached to version 1.0 (manual release).
+- **Build 1.0.0 (2)** (uploaded 19 September, VALID, in the internal TestFlight group) adds sign-in failure reasons: a failed Google/Apple sign-in shows "Sign-in could not be completed" plus, in brackets, the failing step (provider error, callback mismatch, browser error, or server status). It also makes the Google browser session ephemeral (no "wants to use supabase.co" prompt). The account holder's native Google sign-in failed twice on 18 September after choosing the account, with no callback POST reaching `/api/mobile/google-auth`; the bracketed reason from build 2 is the next clue. Nothing has been submitted for App Review; the account holder wants to test more first.
+- Since PR #426 the e-mail steps carry the back arrow on both platforms, the auth card cannot overflow at large text sizes, and the AI-consent gate is an auth card with loading states.
+- **Lectures now record with the phone locked.** Capture is native (`ios/MemoAI/LectureRecorder.swift`, `audio` background mode) and a Live Activity shows the Memo lockup and a running clock on the Lock Screen. This adds the project's **first app extension**, `RecordingLiveActivity`, on the already-registered identifier `eu.memoai.memo.RecordingLiveActivity` — nothing to register at Apple, but the archive now needs a distribution profile for it as well as for the app, and the next build must be uploaded before the locked-screen check below can be done on a device. See "Lecture recording and the Lock Screen banner" in `docs/ios-app.md`.
+
+## Note notifications (added 20 September 2026)
+
+The app can now tell a reader their note is finished after they have put the
+phone down. Everything is built and tested except the one piece Apple will not
+let anything but a human create.
+
+**What you have to do, once:** Apple Developer portal → Certificates,
+Identifiers & Profiles → **Keys** → **+** → name it `Memo push` → tick **Apple
+Push Notifications service (APNs)** → Continue → Register → **Download**. Apple
+allows that download exactly once. Put the `.p8` in
+`~/.config/memoai/apple/` and note the 10-character Key ID from the filename.
+There is no App Store Connect API for this — `/v1/keys` and every neighbouring
+path 404, and `POST /v1/certificates` accepts eighteen certificate types, none
+of them APNs. The Push Notifications capability on the App ID *was* automatable
+and is already enabled.
+
+**Then set in Vercel production** (and staging, to exercise it on a preview):
+
+| Variable | Value |
+| --- | --- |
+| `APPLE_PUSH_ENABLED` | `true` |
+| `APPLE_PUSH_KEY_ID` | the 10-character Key ID |
+| `APPLE_PUSH_PRIVATE_KEY` | the `.p8` contents, newlines as `\n` |
+| `APPLE_PUSH_TEAM_ID` | optional; falls back to `APPLE_SIGN_IN_TEAM_ID` |
+
+Every native path stays behind `APPLE_PUSH_ENABLED`, which defaults off, so a
+deployment without the key behaves exactly as before: the endpoint answers 503,
+the queue is never read, and the prompt never appears.
+
+**How it works.** A database trigger (migration `0053`) writes a `push_queue`
+row whenever a lecture's status settles to `ready` or `failed` — a trigger
+rather than a call site, for the same reason `mark_trial_consumed_on_ready` is
+one: `ready` is written from three places today and will be written from more.
+`deliverPendingPushNotifications()` drains the queue, and is called by the
+pipeline that just finished a note as well as hourly by `/api/cron/push-queue`
+as a net. The app asks for permission at the only moment the question answers
+itself — while a note is generating and the reader is watching the progress —
+because iOS grants exactly one prompt per install.
+
+**Still to check on a device** once the key is in: the prompt appears on a
+first note, the token reaches `push_devices`, locking the phone and waiting out
+a note produces a banner, tapping it opens that note, and signing out removes
+the row so the next account on that phone is not notified.
+
+## Remaining work, in order
+
+1. **Merge PR #421** (the account holder decides), confirm production serves it (`/auth/password` → 404; `/auth/continue` has no header logo under either user agent), then re-check the review sign-in on production: Continue with email → `apple-review@memoai.eu` → the code from `~/.config/memoai/apple/review-account.env` → home with the Plant Life Cycle note.
+2. **Device checks on the TestFlight build** (account holder's iPhone; not possible in the simulator): Google and Apple sign-in complete and resume after relaunch (the Apple one already created account `0d3e5149-…` on 17 September, consented and onboarded); recording (start, lock the phone for several minutes, unlock, stop — the clock and the note's duration must both include the locked time, and the Lock Screen banner must count up throughout) and the tutor (microphone, interruptions); Sandbox purchases with the Slovenian Sandbox tester on the device-QA account `ios-device-qa@memoai.eu` (same fixed code): trial monthly/yearly, the wheel's discounted products, same-account restore, wrong-account restore, cancel and expiry; Settings → Manage Apple subscriptions; account deletion of a synthetic account (Apple grant revoked, storage erased by the hourly cron at :40). Fix what fails, bump `CURRENT_PROJECT_VERSION`, re-archive and re-upload (commands below), re-attach the new build to version 1.0.
+3. **Privacy questionnaire** in App Store Connect (no API for it; account holder signed in in the Browser pane): derive from `ios/MemoAI/PrivacyInfo.xcprivacy` — name, e-mail, user id, purchase history, audio, photos/videos, other user content, customer support, product interaction, other usage data, crash/performance/other diagnostics, coarse location; all linked to the user, none used for tracking; purposes app functionality and analytics. Never "Data Not Collected".
+4. **Attach the four subscriptions to version 1.0** on the version page (the "In-App Purchases and Subscriptions" section; there is no API for the attachment). They are READY_TO_SUBMIT already.
+5. **Submit for review** with manual release, then watch Sentry and `vercel logs --search "api/mobile"` for `/api/mobile/*` errors. After the first approved build, retry turning **Streamlined Purchasing** off.
+6. **Business status to confirm, not assume:** Small Business Program (submitted, no decision e-mail yet), EU trader declaration (In Review). Do not claim the 15 % commission until Apple confirms.
+7. Rotate the Supabase Apple client secret before **16 March 2027** (`node scripts/apple/web-client-secret.mjs eu.memoai.web`).
+
+## The separation contract (do not break it)
+
+The web app must behave exactly as before for browsers; the app must never show Stripe.
+
+- **Detection:** the wrapper sets the user agent suffix `MemoAI-iOS/1.0`. Server code uses `isNativeUserAgent()` (`src/lib/mobile/runtime.ts`); client code uses `useNativeIOS()` / `isNativeIOS()` (`src/lib/mobile/client.ts`); CSS uses `html[data-native]`, set by the root layout only for that user agent. Presentation only: never authorize by user agent.
+- **Billing:** `/api/billing/checkout`, `/api/billing/portal`, `/api/billing/tutor-credits` return `403 native_purchase_required` to the app; the app's paywalls call StoreKit through `useAppleBilling` and the server verifies transactions in `/api/mobile/transactions`. Browsers never see `useAppleBilling`, "Restore purchases", "Manage Apple subscriptions" or the Apple terms line. An Apple subscriber who logs in on the web has paid access (`hasPaidAccess` includes the Apple entitlement) and sees an Apple management link instead of the Stripe portal — that is intended.
+- **Sign-in:** Google inside the app goes through `ASWebAuthenticationSession` and `/api/mobile/google-auth`; Apple inside the app uses the native ID token via `/api/mobile/apple-auth`; the web uses Supabase OAuth for both. The web Apple button is gated by `APPLE_WEB_SIGN_IN_ENABLED`. E-mail sign-in is by code on both, with no password screen; the review and QA accounts in `APP_REVIEW_ACCOUNT_EMAILS` accept the fixed `APP_REVIEW_LOGIN_CODE` and are never mailed.
+- **Parity:** everything else is the same product on both — see "Web And iOS App Parity" in `AGENTS.md`. The wheel is once a day on both (the app records its spin on the same profile column).
+- **Guards:** `tests/mobile-billing-guards.test.mjs`, `tests/mobile-paywall-parity.test.mjs`, `tests/mobile-auth-options.test.mjs` and the rest of `tests/mobile-*.test.mjs` fail if a Stripe path opens for the app or an Apple path leaks to the web. Keep them green. New web features that touch billing, login, the install guide or the home dock must be checked with both user agents (`curl -A "... MemoAI-iOS/1.0"` against a preview is enough).
+- **Safe-by-default flags:** every native path is also behind an env flag that defaults off, so a preview without the flags behaves like the plain web app.
+
+## Commands and tooling
+
+- Archive: `xcodebuild -project ios/MemoAI.xcodeproj -scheme MemoAI -configuration Release -destination generic/platform=iOS -derivedDataPath ios/build-archive -archivePath ios/build/MemoAI-release.xcarchive -allowProvisioningUpdates archive`
+- Export (cloud signing needs the **Admin** key; an App Manager key fails with "Cloud signing permission error"): `xcodebuild -exportArchive -archivePath ios/build/MemoAI-release.xcarchive -exportOptionsPlist ios/Config/ExportOptions.plist -exportPath ios/build/export-release -allowProvisioningUpdates -authenticationKeyPath ~/.config/memoai/apple/AuthKey_M2VD53GP68.p8 -authenticationKeyID M2VD53GP68 -authenticationKeyIssuerID 6715f045-a181-4ad1-b072-5824a5bf1220`
+- Validate / upload: `xcrun altool --validate-app|--upload-app -f ios/build/export-release/MemoAI.ipa -t ios --apiKey M2VD53GP68 --apiIssuer 6715f045-a181-4ad1-b072-5824a5bf1220` (altool reads the key from `~/.appstoreconnect/private_keys/`, symlinked).
+- Builds and any App Store Connect API call: `node scripts/apple/asc-builds.mjs`, `node scripts/apple/asc-api.mjs GET /v1/...`. The API also moves group levels (`PATCH /v1/subscriptions/{id}` with `groupLevel`), sets prices (`POST /v1/subscriptionPrices`, price-point ids from `/pricePoints?filter[territory]=…`, paged), answers the age rating (`PATCH /v1/ageRatingDeclarations/{appInfoId}`, needs `ageAssurance:false`), saves review details and uploads screenshots (upload operations + `uploaded:true` with an MD5).
+- Simulator QA against the staging preview: the ignored "MemoAI Preview QA" scheme, the signed-in simulator and the synthetic account are described in `docs/ios-app.md` and the memory note; run `xcodebuild … -scheme "MemoAI Preview QA" … -only-testing:MemoAIUITests/WrapperTests/<test> test` with the QA simulator UDID.
+- Private material lives only in `~/.config/memoai/apple/` (IAP key, Sign in with Apple key, both API keys, `server.env`, `review-account.env`, `device-qa-account.env`). Never commit it or paste it into chat.
+- Simulator screenshots for the store: `ios/build/screens/` and `ios/build/appstore/` (ignored). Typing into the Simulator: CGEvent unicode typing is broken (every character arrives as `a`); paste via `xcrun simctl pbcopy` + ⌘V, or hardware key codes. Seed a note for a synthetic production account with `POST /api/lectures/manual` then multipart `POST /api/lectures/scan` with `lectureId`.
+
+## Gotchas already paid for
+
+- The apex host `memoai.eu` answers a POST with a 307 to `www`; Apple's notification client will not follow it, so every server URL uses `https://www.memoai.eu/…`.
+- Attaching `Offers.storekit` to the preview scheme stops the app loading under UI tests; the simulator therefore shows the US storefront. Real prices (€19.99 / €129.99) come from App Store Connect and appear on a Slovenian Apple Account.
+- A tap in the UI tests before React hydrates is lost; the preview tests retry.
+- The synthetic account's free note is one-shot; the study-flow test reopens the note it created.

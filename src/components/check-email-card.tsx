@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useT } from "@/components/i18n-provider";
+import { InstantLink } from "@/components/instant-link";
 import { Msym } from "@/components/msym";
 
 function formatCountdown(seconds: number) {
@@ -160,9 +160,9 @@ export function CheckEmailCard(props: {
                 : t("auth.resendNow")}
           </button>
         </form>
-        <Link href="/" className="memo-auth-ghost">
+        <InstantLink href="/auth/continue" className="memo-auth-ghost">
           {t("auth.useAnotherMethod")}
-        </Link>
+        </InstantLink>
       </div>
     </>
   );

@@ -1,0 +1,8 @@
+#include "Version.xcconfig"
+// Apple already has this identifier registered under the team, as
+// "XC eu memoai memo RecordingLiveActivity" — so the extension takes it rather
+// than adding a record. It carries no entitlements of its own; Sign in with
+// Apple belongs to the app alone.
+PRODUCT_BUNDLE_IDENTIFIER = eu.memoai.memo.RecordingLiveActivity
+// Set DEVELOPMENT_TEAM in Local.xcconfig (ignored) or Xcode Signing & Capabilities.
+#include? "Local.xcconfig"

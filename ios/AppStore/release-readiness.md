@@ -1,7 +1,102 @@
-# iOS release readiness — 16 September 2026
+# iOS release readiness — 20 September 2026 update
+
+## 20 September 2026 — App Review compliance sweep
+
+A full pass over the wrapper, the project configuration and the App Store
+Connect record against Apple's review requirements. What the sweep changed:
+
+| Item | Before | Now |
+| --- | --- | --- |
+| Privacy manifest, required-reason APIs | Declared `NSPrivacyAccessedAPICategoryUserDefaults` only. `LectureRecorder.stop()` calls `FileManager.attributesOfItem(atPath:)` for the take's byte count, which is on Apple's required-reason list whatever attribute is read — an undeclared use comes back as **ITMS-91053** after upload. | `NSPrivacyAccessedAPICategoryFileTimestamp` declared with reason `C617.1` (metadata of a file in the app's own container). Verified in the built bundle's `PrivacyInfo.xcprivacy`. |
+| Recordings and iCloud backup | The `Recordings` folder sat in Application Support with no backup flag, so a take waiting to upload — up to ~43 MB for a three-hour lecture — would go into the user's iCloud backup, against Apple's data-storage guidelines. | The folder is created with `isExcludedFromBackup`. |
+
+Verified unchanged and correct (no action needed):
+
+- **3.1.1 / 3.1.3(b):** no Stripe path is reachable under the native user
+  agent. `/api/billing/*` navigations are cancelled in the wrapper, the
+  Stripe checkout and billing hosts are refused even on a user tap, and all
+  60 `tests/mobile-*.test.mjs` guards pass.
+- **3.1.2:** the paywall states the plan, period and price from StoreKit's own
+  `displayPrice`, carries "Renews automatically until cancelled in your Apple
+  subscription settings", and has Restore purchases, terms of use and privacy
+  policy next to the buy button. Settings also has Restore and Manage Apple
+  subscriptions. The App Store description repeats the full renewal wording.
+- **4.8:** Sign in with Apple is offered alongside Google and e-mail, and
+  account deletion revokes the Apple grant (`revokeAppleAccountGrants`).
+- **5.1.1(v):** account deletion is in Settings, in-app, and the sheet says
+  deletion does not cancel an Apple subscription.
+- **5.1.1 / 5.1.2:** microphone, camera and photo-library purpose strings are
+  present and localized into all five shipped languages; the AI-processing
+  consent gate is explicit and withdrawable.
+- **2.1 / 2.3:** icon is 1024×1024 with no alpha; launch screen present;
+  `ITSAppUsesNonExemptEncryption=false`; `audio` background mode is genuinely
+  used by the recorder and the session is deactivated on stop; the privacy
+  manifest, all five `.lproj` folders and the Live Activity extension are in
+  the built bundle; `xcodebuild`'s `-validate-for-store` pass succeeds.
+- App Store Connect record: age rating answered (4+), categories set
+  (Education / Productivity), support, marketing and privacy-policy URLs all
+  answer 200, review contact and demo account saved, review notes describe the
+  code sign-in, the purchases and the deletion path, all four subscriptions at
+  group level 1 and READY_TO_SUBMIT with review screenshots COMPLETE.
+
+Still open, and not fixable from here:
+
+1. **App Privacy questionnaire** — still unanswered, and there is no API for
+   it. Derive it from `ios/MemoAI/PrivacyInfo.xcprivacy`; never "Data Not
+   Collected".
+2. **Attach the four subscriptions to version 1.0** — browser only.
+3. **Content Rights declaration** is `null` on the app record. It must be
+   answered before the version can be submitted, and it is the account
+   holder's declaration to make.
+4. **Version 1.0 still has build 1 attached.** Builds 2–4 are uploaded and
+   VALID; `CURRENT_PROJECT_VERSION` is 5 and has not been archived. Build 1
+   predates the native recorder, the Lock Screen banner and offline mode, so
+   it is the wrong binary to submit and also understates the app's native
+   surface against guideline 4.2.
+5. **Device checks** (microphone, tutor, Sandbox purchase lifecycle, restore,
+   Manage Apple subscriptions, locked-screen recording) are still unrun.
+
+Prices: Apple bills every customer in their own storefront currency. The
+subscriptions are 19.99 / 129.99 in each territory checked, which is **€19.99
+and €129.99 in Slovenia, Croatia and Germany** and $19.99 / $129.99 on the US
+storefront. There is no setting that shows euros to a US buyer; the only lever
+is restricting availability to euro territories. Dollar prices seen while
+testing come from the simulator's US storefront, which is a known gotcha —
+`ios/MemoAIUITests/Offers.storekit` is already pinned to `_storefront: SVN`.
+
+## 18 September 2026
+
+| Check | Result |
+| --- | --- |
+| Review account | `apple-review@memoai.eu` created in production, onboarded, on `APPLE_SANDBOX_REVIEW_USER_IDS`; signs in on production (verified by HTTP) and in the iPhone 17 Pro Max and iPad Pro 13" simulators; holds one generated note ("Plant Life Cycle", synthetic) with flashcards and a quiz. After PR #421 it signs in with the fixed code (`APP_REVIEW_LOGIN_CODE`), verified on the branch preview under the native user agent. |
+| Sandbox server notification | `requestTestNotification` → `https://www.memoai.eu/api/mobile/notifications`: SUCCESS. |
+| App Store Connect | Four subscriptions at level 1, READY_TO_SUBMIT, each with a review screenshot; USD prices aligned ($19.99 / $129.99, offers $9.99 / $64.99) and visible in the simulator paywall; age rating answered; 6 + 6 + 4 screenshots (iPhone 6.9", 6.5", iPad 13") COMPLETE; review contact, demo account and notes saved; build 1.0.0 (1) attached to version 1.0. Privacy questionnaire and the version's subscription attachment still need the account holder in the browser. |
+| Separation contract | Caught on the iPad simulator: the app's paywall showed "Secure payment through Stripe" while StoreKit was still loading. Fixed in PR #421 (`native.securePayment`), guarded by `tests/mobile-paywall-parity.test.mjs`. 48 mobile tests and the full suite (1,365) pass. |
+| Still not verified | Everything that needs the physical iPhone: microphone/tutor, native Google and Apple sign-in round trips, Sandbox purchases, Manage Apple subscriptions, account deletion end to end. |
+
 
 **Not ready for App Review or production activation.** This is the release gate,
 not a claim that compiling or passing the wrapper tests verifies the whole app.
+Everything below the evidence table needs the account holder: Apple portal
+sessions, the connected iPhone, Sandbox credentials, or the production merge.
+
+## Verified today (branch `codex/ios-app-wrapper`, Preview deployments of `d793285a`/`f20e995f`)
+
+| Check | Result |
+| --- | --- |
+| Web suite, TypeScript, ESLint | 1,344 web tests pass (two files need the branch's `jose` and `@apple/app-store-server-library` installed); `tsc --noEmit` and lint clean. |
+| Native fixture suite | `npm run ios:test` passes the six wrapper tests on iPhone and iPad (iOS 26.5). `StoreOfferTests` still fails from the command line with `SKInternalErrorDomain Code=3`; it passes in the Xcode IDE (known Xcode 26.5 limitation). |
+| Real study flow in the wrapper | `testPreviewCreateStudyNoteFromPhoto` **passes end to end** on the staging Preview (evening run): a seeded lesson photo became "The Plant Life Cycle" with highlights in about 80 s; flashcards (11 cards), a 12-question quiz and a mindmap were generated; "Save as image" opened the native share sheet with Copy / Save Image (the reason for the new photo-library string); the chat answered "Summarise the lecture"; read-aloud started playing; the note was deleted and staging holds no lectures for the account afterwards. Right after deletion the home list can still show the note for a moment (client router cache) — cosmetic. Recording, tutor and podcast still need a physical iPhone (microphone) and are not automated. |
+| Sign-in screen in the app | Fresh iPhone 17 Pro Max simulator, signed out: Google, Apple and email all render, the back arrow to the (non-existent) landing page is gone, and a password login with a synthetic staging account reaches the AI-consent gate. |
+| Click-through tour | `testPreviewTour` on the signed-in simulator captured home, search keyboard (no accessory bar), the discount wheel spin and Apple offer sheet, the paywall from home and from New note, the note with every tab (tutor, flashcards, podcast, quiz, mindmap, palace, practice test, speed reader, transcript), the actions/rename/delete sheets, chat, read-aloud and settings (theme, language, help, redeem, privacy, share, feature, plan, restore, manage, withdraw consent, delete account, sign out). Fixes that came out of it: flashcard controls under the chat bar, offer-sheet footer on the home indicator, bars lowered to the home-indicator line, the wheel button's crossfaded label, and WebKit scrolling a sheet's header off the top when the keyboard opens (the web view now keeps a non-scrollable document at rest). |
+| Settings rows | `testPreviewSettingsRows`: Suggest a feature, the settings paywall, Restore purchases (raises Apple's sandbox sign-in prompt on the simulator, as expected), Withdraw AI permission (now behind a confirmation sheet; it used to take effect on a single tap and lock the account out of AI features), Delete account (sheet carries the "does not cancel Apple subscriptions" warning), Sign out and Share Memo all open and dismiss. "Manage Apple subscriptions" opens Apple's own sheet, which on the simulator becomes an Apple Account sign-in; verify it on a device with a Sandbox account. |
+| Edge-to-edge layout | The web view now fills the window; the page is served `viewport-fit=cover` for the native user agent and lays out with `--memo-safe-top/bottom`. Home, paywall, note and settings were reviewed by screenshot; the paywall close button and the native consent/support screens were re-inset after the first review. |
+| App Review guideline audit (web side) | Stripe Checkout, Billing Portal and tutor-credit routes refuse the native user agent before any work (now covered by `tests/mobile-billing-guards.test.mjs`); every paywall, upsell and settings surface routes to StoreKit; existing Stripe subscribers see their plan with a "managed where purchased" line and no portal; account deletion is in-app with the Apple-subscription warning; email login is code-based and never leaves the web view; external links open in Safari; `/support` exists. Remaining copy notes are listed under "Known, accepted" below. |
+| Keyboard and layout polish | WKWebView's previous/next/done bar above the keyboard is removed (the content view answers `inputAccessoryView` with nil; fixture screenshot verified). The wrapper upgrades the viewport meta to `viewport-fit=cover` itself when a page arrives without it, so an app pointed at production before this branch ships still lays out under the status bar correctly. The Apple paywall shows one short renewal line plus restore/terms/privacy links instead of a four-line paragraph, so it lands on one viewport like the web paywall. |
+| Native fixes | `NSPhotoLibraryAddUsageDescription` added in five languages (the share sheet's "Save Image" would otherwise terminate the app); script-started `mailto:`/`tel:` links (Settings → Share Memo) reach the system; the tutor's microphone-denied message points at iOS Settings; the project generator matches the checked-in Info.plist and privacy manifest. |
+| Release archive | A fresh signed Release archive of the final branch state (`ios/build/MemoAI-release.xcarchive`, also copied to `~/Library/Developer/Xcode/Archives/2026-09-16/` so it appears in Xcode's Organizer) builds with the photo-library string, edge-to-edge view, accessory-bar and keyboard fixes. **Command-line export still fails with "No Accounts"** even after the Apple ID was added in Xcode → Settings → Accounts: `xcodebuild -exportArchive` cannot see the account session from this shell, and the only API key on disk is the Sign in with Apple key, not an App Store Connect API key. Export from Organizer (Distribute App → App Store Connect) or create an App Store Connect API key for `-authenticationKeyPath`. |
+
+Previous evidence (screenshots `ios/build/screenshots/01`–`15`, earlier result bundles) still stands; see the sections below.
 
 ## Verified implementation and evidence
 
@@ -25,6 +120,17 @@ Screenshots under `ios/build/screenshots/`: `12-full-screen-home.png`,
 release build connected to production. Test results and artifacts are local and
 ignored by Git.
 
+## Production configuration done on 17 September 2026
+
+- Vercel Production: `APPLE_SIGN_IN_ENABLED`, `NATIVE_GOOGLE_SIGN_IN_ENABLED`, `APPLE_IAP_ENABLED` and `APPLE_WEB_SIGN_IN_ENABLED` are `true`; both Apple private keys and the IAP issuer/key ids are set. Production serves Google, Apple and email on the native login; the web login now also shows Continue with Apple.
+- Production Supabase: Apple provider enabled with client ids `eu.memoai.memo,eu.memoai.web` and a six-month client secret generated on 17 September 2026 (rotate before 16 March 2027 with `scripts/apple/web-client-secret.mjs`); the native Google callback `eu.memoai.memo.auth://google/callback**` is on the redirect allowlist.
+- Apple Developer: Services ID `eu.memoai.web` (Sign in with Apple, primary App ID `eu.memoai.memo`, domains memoai.eu, www.memoai.eu and both Supabase hosts, return URLs both Supabase callbacks).
+- App Store Connect: production and sandbox server-notification URLs are `https://www.memoai.eu/api/mobile/notifications` (the apex host answers a POST with a 307 redirect, so the www host is required).
+- App Store Connect API: access approved; team keys `DL79AMQY5C` (App Manager) and `M2VD53GP68` (Admin, required for cloud-managed distribution signing); issuer `6715f045-a181-4ad1-b072-5824a5bf1220`. Private keys live in `~/.config/memoai/apple/` (a symlink in `~/.appstoreconnect/private_keys/` serves altool). `scripts/apple/asc-builds.mjs` lists builds.
+- **Build 1.0.0 (1) exported with cloud signing, validated (no errors) and uploaded to App Store Connect on 17 September 2026** (delivery `c3d6b52d-00ed-49fd-983f-b6d5c312d8dd`). Export compliance is answered by `ITSAppUsesNonExemptEncryption=false` in Info.plist.
+- Build 1 processed (`VALID`) and is `IN_BETA_TESTING` for the internal TestFlight group **Memo internal** (`c60398fa-…`, access to all builds); the account holder is invited (accept the TestFlight e-mail, then install from the TestFlight app). `scripts/apple/asc-api.mjs` makes ad-hoc App Store Connect API calls.
+- Still open: install from TestFlight and run the device checks (microphone/tutor, native Apple and Google sign-in, Sandbox purchases, Manage Apple subscriptions); a completed web Apple sign-in on a real Apple Account; screenshots, age rating and review notes in App Store Connect; the submission itself.
+
 ## Required before calling the app ready
 
 1. **Real authentication:** complete Google and Apple sign-in on the connected
@@ -47,12 +153,11 @@ ignored by Git.
    Memo account without permitting purchase theft or account reassignment.
    Existing strict `appAccountToken` verification intentionally rejects such
    unassociated transactions.
-5. **Actual study flows:** create a synthetic note through recording, document,
-   text and supported link input; verify generated notes, quizzes, flashcards,
-   mindmap/palace, chat, read-aloud, podcast/tutor, export/share and deletion.
-   Onboarding demonstrations and wrapper fixtures do not prove these flows.
-   Test real microphone/camera, interruptions and audio on the iPhone, and the
-   actual app layout on iPad. Decide/configure Apple purchase support for any
+5. **Actual study flows:** the photo → note → flashcards path is verified in the
+   simulator (see the table above); recording, text and link input, palace,
+   podcast and tutor are not. Onboarding demonstrations and wrapper fixtures do
+   not prove those flows. Test real microphone/camera, interruptions and audio
+   on the iPhone, and the actual app layout on iPad. Decide/configure Apple purchase support for any
    paid voice-credit feature currently hidden from native users.
 6. **Apple metadata:** complete privacy and age-rating questionnaires from the
    deployed implementation; capture the required iPhone/iPad marketing and
@@ -70,14 +175,54 @@ ignored by Git.
    activation, build upload, App Review submission or public release has occurred
    in this task.
 
-## Current operational blocker
+## Production configuration (17 September 2026)
 
-The Mac is locked; the computer-use tool's automatic unlock fails. Xcode UI tests
-can run and capture the simulator independently, but direct Apple portal and
-authentication interaction cannot continue. The previous distribution export
-also returned “No Accounts” / “No signing certificate” while locked. Unlocking
-the Mac with its owner's credentials is required; power and Caffeinate do not
-unlock an existing session. Do not reset credentials or disable the lock.
+- Vercel production holds `APPLE_APP_ID`, `APPLE_BUNDLE_ID`, `APPLE_IAP_*`, `APPLE_SIGN_IN_*` and a fresh `APPLE_AUTH_TOKEN_ENCRYPTION_KEY`; `APPLE_SIGN_IN_ENABLED`, `NATIVE_GOOGLE_SIGN_IN_ENABLED`, `APPLE_IAP_ENABLED` and `APPLE_WEB_SIGN_IN_ENABLED` are `true`. Production was redeployed; the app's login on `memoai.eu` shows Google, Apple and email, the web login gained "Continue with Apple" and is otherwise unchanged.
+- Production Supabase: Apple provider enabled with client IDs `eu.memoai.web,eu.memoai.memo` (the web Services ID first, because Supabase sends the first one to Apple's authorize endpoint) and a six-month client secret from `scripts/apple/web-client-secret.mjs` (rotate before **March 2027**); `eu.memoai.memo.auth://google/callback**` added to the redirect allowlist.
+- Apple Developer: Services ID `eu.memoai.web` ("Memo AI web sign in") with Sign in with Apple, primary App ID `eu.memoai.memo`, domains `memoai.eu`, `www.memoai.eu` and both Supabase hosts, return URLs `https://<project>.supabase.co/auth/v1/callback` for production and staging.
+- Web "Continue with Apple" reaches Apple's sign-in page with `client_id=eu.memoai.web`; completing it with a real Apple Account is the remaining check.
+- Still pending in App Store Connect: the server-notifications URLs (`https://www.memoai.eu/api/mobile/notifications` — the bare domain 307-redirects and Apple does not follow redirects), App Store Connect API access (needed for a command-line export/upload), the four products at one service level, screenshots and review notes.
+
+## Current operational blockers
+
+- **Export needs Xcode's Organizer or an App Store Connect API key.** The
+  Apple ID is signed in to Xcode, but `xcodebuild -exportArchive` from a
+  terminal still reports "No Accounts" / no "iOS Distribution" certificate.
+  The archive is in Organizer; validate and distribute it there, or create an
+  App Store Connect API key (Users and Access → Integrations → App Store
+  Connect API) and pass it with `-authenticationKeyPath`.
+- **Prices in the simulator are Apple's US storefront** ("$17.99", "$119.99")
+  because it has no Apple Account; attaching the local StoreKit configuration
+  to the preview scheme stops the app loading under UI tests, so it stays
+  detached. On a Slovenian Apple Account the cards read €19.99 and €129.99,
+  the App Store Connect prices.
+- **No physical iPhone is connected** (both registered devices show
+  `unavailable`), so microphone recording, the tutor, Apple/Google sign-in
+  completion and Sandbox purchases remain unverified on hardware.
+- **Sign in with Apple in production** depends on `APPLE_SIGN_IN_*` and
+  `APPLE_AUTH_TOKEN_ENCRYPTION_KEY` being set there; if they are missing the
+  Apple button silently disappears while Google stays, which App Review
+  rejects under guideline 4.8. Verify on production before the first upload.
+
+## Known, accepted for the first submission
+
+- Apple prices are Apple's: the plan cards show StoreKit's localized price for
+  the buyer's storefront (€19.99/month and €129.99/year on a Slovenian Apple
+  Account, the nearest Apple price points to the web's €20/€130). The
+  simulator has no Apple Account and shows the US storefront ("$17.99",
+  "$119.99"); that is not a bug in the page and cannot be overridden.
+
+- The in-app terms and refund articles still describe the web channel
+  ("Stripe portal", "pricing page") alongside the App Store instructions they
+  lead with. They are legal text, not purchase calls to action; the how-to
+  articles (redeem a code, gifting) are rewritten for the app.
+- Settings offers "Manage Apple subscriptions" to accounts without an Apple
+  subscription (useful after a purchase that has not been delivered yet); a
+  Stripe subscriber sees it next to the "managed where purchased" line.
+- Tapping a legal link leaves the app shell for the public legal page; swipe
+  back or the logo returns to the app.
+- `testPreviewCreateStudyNoteFromPhoto` spends the synthetic account's one free
+  note; a full re-run needs a fresh synthetic staging account.
 
 ## Sources for Apple-specific behavior
 

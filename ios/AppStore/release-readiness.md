@@ -122,6 +122,20 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   focused ESLint also passes. These changes have not been merged to production.
 - The 22 September email check found the Small Business enrollment receipt of
   15 September, but no approval email. The reduced commission is unconfirmed.
+- Latest user requirement: the wrapper is portrait-only on iPhone and iPad.
+  Both plist orientation arrays, the app delegate and the root controller now
+  restrict orientation to portrait. iPad opts out of split-view resizing.
+  Build 9 Simulator tests pass on both devices, including launch while sideways,
+  both landscape directions and upside-down rotation; the PWA viewport stays
+  vertical. Build 9 is being uploaded to replace build 8 in the draft.
+  Earlier landscape screenshots are historical and no longer describe the app.
+- Actual account deletion passed for the synthetic study account. The UI showed
+  the irreversible-deletion/Apple-subscription disclosure, returned the deletion
+  confirmation and ended access. Staging records the access-block marker and
+  cleanup request. The three-hour drain ends at 17:04:40 Europe/Ljubljana;
+  final erasure remains pending. A task-owned checker waits for that deadline
+  before calling the authenticated Preview cleanup route. Preview-only cleanup
+  authorization was added to this branch; no production configuration changed.
 - The real iPhone Sandbox checkout now reaches Apple’s account/password dialog.
   It has not completed a transaction; the inspection test is explicitly skipped,
   not counted as a purchase pass. The user has been asked to authenticate with

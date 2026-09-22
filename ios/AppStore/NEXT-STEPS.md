@@ -29,6 +29,10 @@ Current evidence is at the top of `ios/AppStore/release-readiness.md`.
   one fresh attempt was created and graded, with no duplicate left in progress.
   Preview `memo-ei25tuep1-nace-valencics-projects.vercel.app` is READY at
   `12c05d21`, using staging; production has not received this branch fix.
+- Portrait-only is now required on iPhone and iPad. Build 9 rotation checks
+  pass on both simulators. Build 9 upload/draft replacement is in progress.
+- Synthetic account deletion passed in the UI and blocks access. Final cleanup
+  is due after its three-hour drain, at 17:04:40 local time on 22 September.
 - Device tests pass for real Apple product loading, three-day trial display,
   the wheel and both half-off offer cards, and settings/theme controls.
 - Preview catalogue loading is fixed: the Preview host must be included with

@@ -681,6 +681,66 @@ final class WrapperTests: XCTestCase {
     // Visual review of the edge-to-edge layout on a staging Preview with a
     // signed-in synthetic account: home, the new-note sheet, a note with its
     // chat and actions sheets, and settings. Screenshots are the evidence.
+    /// Destructive opt-in for the synthetic Preview account only. The server's
+    /// three-hour upload-drain window is verified separately, never shortened.
+    @MainActor func testPreviewDeleteSyntheticStudyAccount() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let preview = env["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              let email = env["MEMO_QA_EMAIL"], email.hasSuffix("@example.com"),
+              env["MEMO_QA_DELETE_ACCOUNT"] == email else {
+            throw XCTSkip("Requires explicit deletion of a synthetic Preview account")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        passConsentGate(app)
+        dismissInitialOffer(app)
+        let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 20))
+        settings.tap()
+        XCTAssertTrue(app.webViews.staticTexts[email].firstMatch.waitForExistence(timeout: 15), "Never delete an unexpected account")
+        let delete = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Delete account")).firstMatch
+        for _ in 0..<12 {
+            if delete.exists && delete.isHittable { break }
+            let from = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+            from.press(forDuration: 0.1, thenDragTo: app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)), withVelocity: .slow, thenHoldForDuration: 0.2)
+        }
+        XCTAssertTrue(delete.isHittable)
+        delete.tap()
+        let confirm = app.webViews.buttons["Delete permanently"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+        keepStudyScreenshot("Account deletion disclosure", app: app)
+        confirm.tap()
+        XCTAssertTrue(app.webViews.staticTexts["Account deletion requested"].firstMatch.waitForExistence(timeout: 30))
+        keepStudyScreenshot("Account deletion requested in the wrapper", app: app)
+    }
+
+    @MainActor func testPreviewRemainsPortraitWhenDeviceRotates() throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires a staging Preview")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.terminate()
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        app.launch()
+        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 30))
+        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight, .portraitUpsideDown, .portrait] {
+            XCUIDevice.shared.orientation = orientation
+            RunLoop.current.run(until: Date().addingTimeInterval(2))
+            let frame = app.windows.firstMatch.frame
+            XCTAssertLessThan(frame.width, frame.height, "Memo must remain portrait after device rotation")
+            let webFrame = app.webViews.firstMatch.frame
+            XCTAssertLessThan(webFrame.width, webFrame.height, "The PWA viewport must also remain portrait")
+        }
+        keepStudyScreenshot(UIDevice.current.userInterfaceIdiom == .pad ? "iPad portrait lock" : "iPhone portrait lock", app: app)
+    }
+
     @MainActor func testPreviewTabletLayouts() throws {
         guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("Dedicated iPad layout check") }
         XCUIDevice.shared.orientation = .portrait
@@ -690,16 +750,16 @@ final class WrapperTests: XCTestCase {
             XCUIDevice.shared.orientation = orientation
             RunLoop.current.run(until: Date().addingTimeInterval(3))
             let frame = app.windows.firstMatch.frame
-            XCTAssertEqual(frame.width > frame.height, orientation.isLandscape)
+            XCTAssertLessThan(frame.width, frame.height, "The app stays portrait even when the device is sideways")
             let notes = app.webViews.buttons["Notes"].firstMatch
             XCTAssertTrue(notes.isHittable)
             XCTAssertGreaterThanOrEqual(notes.frame.minX, frame.minX)
             XCTAssertLessThanOrEqual(notes.frame.maxX, frame.maxX)
-            keepStudyScreenshot(orientation.isLandscape ? "iPad note landscape" : "iPad note portrait", app: app)
+            keepStudyScreenshot(orientation.isLandscape ? "iPad note with device sideways" : "iPad note portrait", app: app)
         }
         openStudyTab("Flashcards", in: app)
         XCTAssertTrue(app.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Card ")).firstMatch.waitForExistence(timeout: 15))
-        keepStudyScreenshot("iPad flashcards landscape", app: app)
+        keepStudyScreenshot("iPad flashcards portrait", app: app)
         // The PWA desktop layout exposes Settings in its navigation rail;
         // the phone-only Back button is intentionally absent on a wide iPad.
         let back = app.webViews.buttons["Back"].firstMatch
@@ -708,7 +768,7 @@ final class WrapperTests: XCTestCase {
         XCTAssertTrue(settings.waitForExistence(timeout: 20))
         settings.tap()
         XCTAssertTrue(app.webViews.switches["Dark"].waitForExistence(timeout: 15))
-        keepStudyScreenshot("iPad settings landscape", app: app)
+        keepStudyScreenshot("iPad settings portrait", app: app)
     }
 
     @MainActor func testPreviewSafeAreaReview() throws {

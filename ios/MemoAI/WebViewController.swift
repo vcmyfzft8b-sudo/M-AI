@@ -52,6 +52,9 @@ final class MemoWebView: WKWebView, UIScrollViewDelegate {
 
 @MainActor
 final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandlerWithReply, WKDownloadDelegate {
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .portrait }
+
     private var webView: WKWebView!
     private let store = Store()
     private let appleSignIn = AppleSignIn()

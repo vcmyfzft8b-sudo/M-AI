@@ -42,6 +42,26 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- Physical iPhone podcast generation/playback now passes with the circuit note:
+  progress advances, Pause stays stopped, and Back 10 seconds seeks backward.
+  `review-sep23-iphone-podcast-controls.xcresult` passes in 60.5 seconds. The first
+  attempt passed playback/pause but XCTest could not operate WebKit's range
+  input through its native scrubber API; the rerun uses the app's real seek
+  button. The server confirms one ready 12-turn episode and generated audio
+  segments (`review-sep23-iphone-audio-server.json`). The playback screenshot
+  was visually inspected; audible quality is still a separate hardware check.
+- A stronger read-aloud test found invisible mobile dock layers exposed duplicate
+  Pause controls to accessibility. Tapping the hidden control's reported center
+  did not pause playback. Inactive idle/player/annotation layers now use `inert`
+  and `aria-hidden`, retaining their visual crossfade and leaving only active
+  controls available to assistive technology and keyboard navigation.
+  Local real-component checks pass for browser/native user agents: one accessible
+  control, stable pause, advancing resume and close back to Listen. TypeScript,
+  focused lint and 125 mobile/TTS regressions pass. Evidence:
+  `review-sep23-dock-local-results.json`, `review-sep23-dock-accessibility-types.log`,
+  `review-sep23-dock-lint.log`, `review-sep23-dock-tests.log`. Preview and physical
+  iPhone verification of this fix are still pending.
+
 - Physical iPhone live tutor controls now pass on the current Preview. The real
   circuit note reached Explaining, stayed Paused, resumed Explaining, and ended
   back at Start. `review-sep23-iphone-live-tutor-signedin.xcresult` passes one

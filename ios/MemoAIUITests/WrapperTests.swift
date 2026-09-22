@@ -531,11 +531,20 @@ final class WrapperTests: XCTestCase {
     }
 
     @MainActor func testPreviewPodcastPlaybackAdvances() throws {
-        let app = try openPreviewStudyNote()
+        let title = ProcessInfo.processInfo.environment["MEMO_QA_NOTE_TITLE"] ?? "Plant Life Cycle"
+        let app = try openPreviewStudyNote(title: title)
+        defer { app.terminate() }
         openStudyTab("Podcast", in: app)
         let make = app.webViews.buttons["Make the episode"].firstMatch
-        XCTAssertTrue(make.waitForExistence(timeout: 15))
-        make.tap()
+        if make.waitForExistence(timeout: 10) {
+            make.tap()
+        } else {
+            // Reuse the same format/length variant when an earlier run already
+            // generated it; the product opens that cached episode.
+            let newEpisode = app.webViews.buttons["New episode"].firstMatch
+            XCTAssertTrue(newEpisode.waitForExistence(timeout: 10))
+            newEpisode.tap()
+        }
         let short = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Short")).firstMatch
         XCTAssertTrue(short.waitForExistence(timeout: 10), "The episode format/length chooser must open")
         if short.exists && short.isHittable { short.tap() }
@@ -555,6 +564,62 @@ final class WrapperTests: XCTestCase {
         XCTAssertNotEqual(String(describing: position.value), initial, "Podcast audio time must advance")
         keepStudyScreenshot("Podcast playing in the wrapper", app: app)
         pause.tap()
+        XCTAssertTrue(play.waitForExistence(timeout: 10))
+        let paused = String(describing: position.value)
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        XCTAssertEqual(String(describing: position.value), paused, "Pausing must stop podcast progress")
+        // WebKit range inputs don't expose XCTest's native scrubber endpoints.
+        // Exercise the player's real seek control instead.
+        app.webViews.buttons["Back 10 seconds"].firstMatch.tap()
+        XCTAssertNotEqual(String(describing: position.value), paused, "Seeking back must change the episode position")
+        keepStudyScreenshot("Podcast paused and sought back", app: app)
+    }
+
+    @MainActor func testPreviewReadAloudPlaybackControls() throws {
+        let app = try openPreviewStudyNote(title: "Introduction to Electric Circuits")
+        defer { app.terminate() }
+        openStudyTab("Notes", in: app)
+        func button(_ name: String, timeout: TimeInterval = 15) -> XCUIElement {
+            let query = app.webViews.buttons.matching(identifier: name)
+            let deadline = Date().addingTimeInterval(timeout)
+            repeat {
+                // Both dock layers stay mounted for their crossfade. Choose
+                // the visible control, without querying unsupported AX keys.
+                if let visible = query.allElementsBoundByIndex.first(where: { $0.isHittable }) {
+                    return visible
+                }
+                RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            } while Date() < deadline
+            XCTFail("No visible \(name) control")
+            return query.firstMatch
+        }
+        let listen = button("Listen")
+        XCTAssertTrue(listen.waitForExistence(timeout: 15))
+        listen.tap()
+        let pause = button("Pause", timeout: 120)
+        XCTAssertTrue(pause.waitForExistence(timeout: 120))
+        XCTAssertEqual(app.webViews.buttons.matching(identifier: "Pause").count, 1,
+                       "Inactive dock layers must not expose duplicate playback controls")
+        let clock = app.webViews.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "^[0-9]{1,2}:[0-9]{2}$")).firstMatch
+        func elapsed() -> Int {
+            guard clock.exists else { return -1 }
+            return clock.label.split(separator: ":").compactMap { Int($0) }.reduce(0) { $0 * 60 + $1 }
+        }
+        let moving = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in elapsed() >= 3 }, object: clock)
+        XCTAssertEqual(XCTWaiter.wait(for: [moving], timeout: 30), .completed)
+        pause.tap()
+        let stopped = elapsed()
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        XCTAssertLessThanOrEqual(abs(elapsed() - stopped), 1, "Pause must stop read-aloud playback")
+        keepStudyScreenshot("Read aloud paused on the iPhone", app: app)
+        let resume = button("Resume")
+        XCTAssertTrue(resume.waitForExistence(timeout: 10))
+        resume.tap()
+        let resumed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in elapsed() >= stopped + 2 }, object: clock)
+        XCTAssertEqual(XCTWaiter.wait(for: [resumed], timeout: 30), .completed)
+        keepStudyScreenshot("Read aloud resumed on the iPhone", app: app)
+        button("Close the reader").tap()
+        XCTAssertTrue(listen.waitForExistence(timeout: 10))
     }
 
     // Loads real App Store products with no StoreKit fixture. This deliberately

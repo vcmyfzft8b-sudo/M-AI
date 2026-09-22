@@ -3123,7 +3123,11 @@ export function NoteReadAloud({
         .filter(Boolean)
         .join(" ")}
     >
-      <div className={`memo-dock-layer memo-dock-idle-layer ${isIdle ? "on" : ""}`.trim()}>
+      <div
+        className={`memo-dock-layer memo-dock-idle-layer ${isIdle ? "on" : ""}`.trim()}
+        aria-hidden={!isIdle}
+        inert={!isIdle}
+      >
         <button
           type="button"
           className="memo-dock-idle"
@@ -3139,7 +3143,11 @@ export function NoteReadAloud({
         </button>
       </div>
 
-      <div className={`memo-dock-layer memo-dock-player ${isReading ? "on" : ""}`.trim()}>
+      <div
+        className={`memo-dock-layer memo-dock-player ${isReading ? "on" : ""}`.trim()}
+        aria-hidden={!isReading}
+        inert={!isReading}
+      >
         <button
           type="button"
           className="memo-dock-play"
@@ -3179,6 +3187,8 @@ export function NoteReadAloud({
       <div
         ref={layerRef}
         className={`memo-dock-layer memo-dock-annotate ${isAnnotating ? "on" : ""}`.trim()}
+        aria-hidden={!isAnnotating}
+        inert={!isAnnotating}
       >
         {annotationToolbar}
       </div>

@@ -1910,6 +1910,7 @@ export const sl = {
   "tutor.error.busy": "Glasovna storitev je trenutno zasedena. Poskusi čez minuto.",
   "tutor.error.listeningBusy": "Vse glasovne linije so zasedene. Poslušaš lahko naprej — prekinjanje z govorom bo spet delovalo čez nekaj časa.",
   "tutor.error.startFailed": "Inštruktorja ni bilo mogoče začeti.",
+  "tutor.error.rateLimited": "Preveč poskusov. Poskusi znova čez {count} min.",
   "tutor.error.turnFailed": "Razlage ni bilo mogoče ustvariti.",
   "api.trialOnly.tutor": "Brez plačljivega paketa je inštruktor na voljo samo za tvoje poskusno gradivo.",
   "api.tutorNotReady": "Inštruktor je na voljo, ko je obdelava zapiska končana.",

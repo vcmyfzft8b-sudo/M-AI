@@ -191,6 +191,9 @@ export function LectureTutor({
 
   const [phase, setPhase] = useState<TutorPhase>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [retryStartAt, setRetryStartAt] = useState(0);
+  const retryStartAtRef = useRef(0);
+  const retryStartTimerRef = useRef<number | null>(null);
   /** False when the microphone was refused or is absent: the walkthrough runs, barge-in does not. */
   const [canListen, setCanListen] = useState(true);
   const [heard, setHeard] = useState<{ text: string; settled: boolean } | null>(null);
@@ -331,6 +334,12 @@ export function LectureTutor({
       ref.current = null;
     }
   };
+
+  useEffect(() => () => {
+    if (retryStartTimerRef.current !== null) {
+      window.clearTimeout(retryStartTimerRef.current);
+    }
+  }, []);
 
   const scheduleFollowUp = useCallback((action: () => void, delay: number) => {
     clearTimer(followUpTimerRef);
@@ -1292,6 +1301,10 @@ export function LectureTutor({
   }, [scheduleFollowUp, setPhaseNow]);
 
   const startSession = useCallback(async () => {
+    if (Date.now() < retryStartAtRef.current) {
+      return;
+    }
+
     /*
      * First, before the network is touched: a voice being auditioned stops the moment
      * Start is pressed. Starting takes a second or two, and a sample still playing
@@ -1366,7 +1379,7 @@ export function LectureTutor({
         body: JSON.stringify({ voice }),
       });
       const payload = (await response.json().catch(() => null)) as
-        | (TutorSessionResponse & { error?: string })
+        | (TutorSessionResponse & { error?: string; retryAfterSeconds?: number })
         | null;
 
       if (response.status === 402) {
@@ -1381,6 +1394,30 @@ export function LectureTutor({
         }
 
         setBlocked(refusal?.code ?? "tutor_credits_needed");
+        setPhaseNow("idle");
+
+        return;
+      }
+
+      if (response.status === 429) {
+        const retryAfter = Number(payload?.retryAfterSeconds ?? response.headers.get("Retry-After"));
+        const waitSeconds = Number.isFinite(retryAfter) && retryAfter > 0
+          ? Math.min(Math.ceil(retryAfter), 3600)
+          : 300;
+        const retryAt = Date.now() + waitSeconds * 1000;
+
+        retryStartAtRef.current = retryAt;
+        setRetryStartAt(retryAt);
+        clearTimer(retryStartTimerRef);
+        retryStartTimerRef.current = window.setTimeout(() => {
+          retryStartAtRef.current = 0;
+          setRetryStartAt(0);
+          setError(null);
+          retryStartTimerRef.current = null;
+        }, waitSeconds * 1000);
+        runIdRef.current += 1;
+        planPromiseRef.current = null;
+        setError(t("tutor.error.rateLimited", { count: Math.ceil(waitSeconds / 60) }));
         setPhaseNow("idle");
 
         return;
@@ -2092,7 +2129,12 @@ export function LectureTutor({
               </MemoPortal>
             ) : null}
 
-            <button type="button" className="memo-tutor-start" onClick={() => void startSession()}>
+            <button
+              type="button"
+              className="memo-tutor-start"
+              disabled={retryStartAt > Date.now()}
+              onClick={() => void startSession()}
+            >
               <Msym name="play_arrow" size="1.3rem" fill weight={500} />
               <span>{t("tutor.start")}</span>
             </button>
@@ -2105,7 +2147,12 @@ export function LectureTutor({
            * offered here rather than left to the pill row, which is the only route today.
            */
           <div className="memo-tutor-actions">
-            <button type="button" className="memo-tutor-start" onClick={() => void startSession()}>
+            <button
+              type="button"
+              className="memo-tutor-start"
+              disabled={retryStartAt > Date.now()}
+              onClick={() => void startSession()}
+            >
               {/* `replay`, not `restart_alt`: that glyph draws its arrowhead detached from
                   the ring, which at this size reads as a broken icon rather than as a
                   circular arrow. */}

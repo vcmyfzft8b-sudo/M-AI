@@ -15090,6 +15090,11 @@
   cursor: pointer;
 }
 
+.memo-tutor-start:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .memo-tutor-actions {
   display: grid;
   gap: 0.5rem;

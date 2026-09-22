@@ -894,11 +894,12 @@ the top of this file). Deleting a seeded account while its browser session is st
 clearest case — prefer closing the page before deleting the user, and read the `os` / `browser` tags
 before believing a preview event describes a learner.
 
-## Open — a note layout was rebuilt under the home page's address
+## 2026-09-22 — Recover a document whose pathname changes before hydration
 
-This incident remains unresolved. It is a separate occurrence of the catch-all hydration
-fingerprint previously used by the resumed-offer bug. Preserve the observations below so a future
-investigation can start from the replay without treating a proposed trigger as established fact.
+The bootstrap pathname mismatch described below is now reproduced and covered by recovery. It is
+a separate occurrence of the catch-all hydration fingerprint previously used by the resumed-offer
+bug. The original browser action that produced the mismatch is still unknown; preserve the replay
+observations without treating any proposed initiating trigger as established fact.
 
 - **Sentry:** `MEMOAI-WEB-7`, issue `113442418`
 - **Route:** `/app`; the Vercel scan for the original window returned zero groups
@@ -910,8 +911,36 @@ investigation can start from the replay without treating a proposed trigger as e
   `2026-09-20T15:29:34.206Z`
 - **Device:** Mobile Safari 18.7.5 on iOS 18.7, iPhone, viewport 390×663, `lang="sl-SI"`
 - **Replay:** `612e72365e7f440eb96920a7e3e238cd`
-- **Status:** `needs-human`; the original trigger has not been reproduced and this entry changes
-  no application behavior
+- **Status:** recovery implemented for the reproduced bootstrap mismatch; verify deployment
+  before marking the matching backlog occurrence fixed. The shared Sentry issue is not a blanket
+  resolution of other hydration causes.
+
+### Reproduction and recovery
+
+Request a synthetic note page, then change the browser URL to the home route before the Next
+bundle starts. Next 16.1.6 seeds the client router's canonical URL from `location.href`, while its
+initial page tree still comes from the note response. This produces the same shell diff and React
+hydration failure as the replay. The original shell and main DOM nodes are discarded.
+
+`useShellPathname` now renders the request pathname on the server and throughout hydration,
+using the existing `useIsHydrated` external-store snapshot. Once hydrated, it follows the live
+router pathname so persistent layouts continue to navigate normally. A first-client-render
+mismatch also schedules one `router.refresh()` after hydration, unless navigation has already
+moved elsewhere. This is necessary: a guard alone prevents the hydration error but leaves a note
+visible under the home URL. Recovery fetches the page for the current URL and preserves the
+existing shell/main DOM nodes. Client-only mounts, including the offline shell, do not recover
+an initial server page; StrictMode effect replay cannot issue duplicate refreshes.
+
+The unit regression renders the actual shell markup and exercises recovery, subsequent route
+changes, onboarding structure, both creator mounts and offline client mounting. The browser
+regression in `scripts/test-shell-hydration.mjs` changes the URL before bootstrap, asserts no
+hydration errors, verifies the original shell/main DOM nodes survive, and checks the destination
+page and ordinary navigation/back/forward. It uses only synthetic creator content; run with
+`MEMO_TEST_URL` set to localhost or a verified staging Preview and a Playwright installation
+(`PLAYWRIGHT_MODULE_PATH` can specify its package path).
+
+This fixes the demonstrated mismatch and stale-page recovery. It does not prove which browser
+transition initiated the historical event, or exclude a separate future cache/routing incident.
 
 ### What the replay shows
 
@@ -980,10 +1009,10 @@ correct behavior in those requests, but a single successful check cannot rule ou
 routing or cache problem. Investigate any unexpected cache hit or wrong-route document on its own
 evidence; a hit alone does not demonstrate cross-account disclosure.
 
-Rendering `initialPathname` until hydration is complete is a candidate mitigation, inspired by
-PR #319's hydration gating in `home-dashboard.tsx` and `viewport-portal.tsx`. It has not been
-validated for this incident. Before proposing it, reproduce the mismatch and check subsequent
-client navigation and shared-layout reuse, where the initial request pathname can be stale.
+The original proposal was to hold `initialPathname` through hydration, following PR #319's
+pattern. The reproduction above showed why that needs the one-time page refresh as well. The
+initial request pathname is deliberately not retained after hydration because shared layouts
+reuse it across later navigation.
 
 ### For future runs
 
@@ -994,7 +1023,8 @@ normalize timestamps because performance spans can use seconds while DOM events 
 
 Do not deliberately seed a hydration failure against production: it would create an event under
 this same fingerprint and contaminate the next scan. Use synthetic data in local or Preview
-reproductions, and keep this incident open until a fix is verified against a demonstrated trigger.
+reproductions. New events after the recovery deployment need fresh evidence; do not suppress the
+catch-all fingerprint on the assumption that this recovery covers every hydration failure.
 
 ## 2026-09-18 — Production could not read a Sandbox App Store notification
 

@@ -5,8 +5,17 @@ Resolved fingerprints and their production cutoffs are recorded in
 that ledger before opening a branch so historical Sentry events do not create duplicate fixes.
 
 Every three hours, a GitHub Actions workflow scans Vercel production logs and Sentry
-issues for actionable errors, fixes **every** one worth fixing, verifies each fix on
-its own Vercel preview deployment, and opens one pull request per fix.
+issues for actionable errors. With a working hosted fixer credential, it fixes **every**
+one worth fixing, verifies each fix on its own Vercel preview deployment, and opens
+one pull request per fix.
+
+When the hosted fixer credential is unavailable, set the repository Actions variable
+`TRIAGE_FIXER_ENABLED` to `false`. The scheduled workflow then keeps scanning,
+records new and regressed findings in `TRIAGE_BACKLOG` as `needs-human`, and lists
+their counts in the run summary. It advances the cursor only after both scans
+complete and the backlog has been saved; a partial scan keeps the cursor for a
+retry. This mode requires a person to investigate and fix the queued errors.
+Set the variable back to `true` after restoring a working fixer credential.
 
 It runs entirely in GitHub's cloud. Your Mac does not need to be on.
 

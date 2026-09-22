@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import { gate, isFresh, nextState, planWindow, resolveInstant } from '../scripts/triage-state.mjs'
+import { gate, isFresh, nextState, planWindow, queueScanOnly, resolveInstant } from '../scripts/triage-state.mjs'
 
 const NOW = Date.parse('2026-08-18T12:00:00.000Z')
 
@@ -305,4 +305,95 @@ test('the plan and gate commands run clean too', () => {
   const gateRun = spawnSync(process.execPath, [script, 'gate'], { encoding: 'utf8' })
   assert.equal(gateRun.status, 0, `stderr: ${gateRun.stderr}`)
   assert.equal(JSON.parse(gateRun.stdout).actionable, false)
+})
+
+test('scan-only mode preserves fresh findings and moves the cursor after complete coverage', () => {
+  const result = queueScanOnly({
+    vercel: { lossy: false, groups: [
+      { fingerprint: 'server_error:GET /api/cron/x:', type: 'server_error', method: 'GET', path: '/api/cron/x', count: 2, firstSeen: '2026-08-18T11:10:00Z', lastSeen: '2026-08-18T11:30:00Z' },
+    ] },
+    sentry: { issues: [], additional: [
+      { id: '123', shortId: 'MEMO-123', culprit: '/app', count: 1, firstSeen: '2026-08-18T11:32:00Z', lastSeen: '2026-08-18T11:32:00Z' },
+      { id: 'perf', issueType: 'performance_consecutive_http', lastSeen: '2026-08-18T11:40:00Z' },
+    ] },
+    backlog: { entries: [] },
+    state: { cursor: '2026-08-18T09:00:00Z' },
+    until: '2026-08-18T12:00:00Z',
+    now: '2026-08-18T12:01:00Z',
+  })
+  assert.equal(result.complete, true)
+  assert.equal(result.state.cursor, '2026-08-18T12:00:00.000Z')
+  assert.equal(result.queuedVercelGroups, 1)
+  assert.equal(result.queuedSentryIssues, 1)
+  assert.deepEqual(result.backlog.entries.map((entry) => entry.fingerprint), [
+    'server_error:GET /api/cron/x:', 'sentry:123',
+  ])
+  assert.ok(result.backlog.entries.every((entry) => entry.status === 'needs-human'))
+  assert.ok(result.backlog.entries.every((entry) => entry.updatedAt === '2026-08-18T12:01:00Z'))
+})
+
+test('a partial scan queues known errors but holds the cursor for a complete retry', () => {
+  const vercel = { lossy: false, groups: [
+    { fingerprint: 'server_error:GET /api/cron/x:', lastSeen: '2026-08-18T11:30:00Z' },
+  ] }
+  const initial = queueScanOnly({
+    vercel, sentry: null, backlog: { entries: [] },
+    state: { cursor: '2026-08-18T09:00:00Z' },
+    until: '2026-08-18T12:00:00Z', now: '2026-08-18T12:01:00Z',
+  })
+  assert.equal(initial.complete, false)
+  assert.equal(initial.state.cursor, '2026-08-18T09:00:00Z')
+  assert.equal(initial.state.lastStatus, 'failed')
+  assert.equal(initial.backlog.entries.length, 1)
+
+  const retry = queueScanOnly({
+    vercel, sentry: { issues: [], additional: [] }, backlog: initial.backlog,
+    state: initial.state, until: '2026-08-18T12:05:00Z', now: '2026-08-18T12:06:00Z',
+  })
+  assert.equal(retry.complete, true)
+  assert.equal(retry.queuedVercelGroups, 0)
+  assert.equal(retry.backlog.entries.length, 1)
+  assert.equal(retry.state.cursor, '2026-08-18T12:05:00.000Z')
+})
+
+test('scan-only mode reopens a fixed fingerprint only after a later occurrence', () => {
+  const backlog = { entries: [{
+    fingerprint: 'sentry:123', sentryIssues: ['123'], status: 'fixed',
+    updatedAt: '2026-08-18T10:00:00Z', notes: 'Fixed by PR #1',
+  }] }
+  const result = queueScanOnly({
+    vercel: { lossy: false, groups: [] },
+    sentry: { issues: [{ id: '123', lastSeen: '2026-08-18T11:00:00Z' }] },
+    backlog, state: {}, until: '2026-08-18T12:00:00Z',
+    mayAdvance: false, now: '2026-08-18T12:01:00Z',
+  })
+  assert.equal(result.backlog.entries.length, 1)
+  assert.equal(result.backlog.entries[0].status, 'needs-human')
+  assert.equal(result.backlog.entries[0].notes, 'Fixed by PR #1')
+  assert.equal(result.state.cursor, null)
+  assert.equal(result.state.lastStatus, 'ok')
+})
+
+test('the workflow queue command writes backlog before the successful cursor', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'triage-queue-'))
+  const vercelFile = join(dir, 'vercel.json')
+  const sentryFile = join(dir, 'sentry.json')
+  const backlogFile = join(dir, 'backlog.json')
+  const stateFile = join(dir, 'state.json')
+  writeFileSync(vercelFile, JSON.stringify({ lossy: false, groups: [{
+    fingerprint: 'server_error:GET /api/x:', lastSeen: '2026-08-18T11:00:00Z',
+  }] }))
+  writeFileSync(sentryFile, JSON.stringify({ issues: [] }))
+  writeFileSync(backlogFile, JSON.stringify({ entries: [] }))
+  writeFileSync(stateFile, JSON.stringify({ cursor: '2026-08-18T09:00:00Z' }))
+  const result = spawnSync(process.execPath, [
+    fileURLToPath(new URL('../scripts/triage-state.mjs', import.meta.url)),
+    'queue', '--vercel', vercelFile, '--sentry', sentryFile,
+    '--backlog', backlogFile, '--state', stateFile,
+    '--until', '2026-08-18T12:00:00Z', '--may-advance', 'true',
+  ], { encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(JSON.parse(result.stdout).complete, true)
+  assert.equal(JSON.parse(readFileSync(backlogFile, 'utf8')).entries.length, 1)
+  assert.equal(JSON.parse(readFileSync(stateFile, 'utf8')).cursor, '2026-08-18T12:00:00.000Z')
 })

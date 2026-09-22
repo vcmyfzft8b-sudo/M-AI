@@ -21,8 +21,9 @@ submit:** current end-to-end purchase and physical-device checks remain open.
 - Obtain the owner's Content Rights confirmation and correct Apple's declaration
   for imported third-party documents/web pages. Reconcile the published privacy
   answers and final screenshots with the release implementation. The new
-  [privacy reconciliation](privacy-reconciliation.md) identifies incomplete
-  analytics/cookie disclosures and the checks still required.
+  [privacy reconciliation](privacy-reconciliation.md) records the analytics
+  opt-in and corrected policy translations, plus the portal-purpose comparison
+  and deployment checks still required.
 - Resolve the optional discount-code request without weakening transaction
   ownership checks. Equivalent Stripe codes are not implemented on Apple.
 - Account for the iPadOS windowing limit: portrait layout is verified, but
@@ -40,6 +41,17 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- Optional analytics is off by default in the shared PWA and iOS Settings.
+  The first-party endpoint requires consent, Vercel analytics/performance scripts
+  start after opt-in, and current-consent callbacks stop later events after
+  withdrawal. The visit cookie is cleared even when an older response arrives
+  late. All five privacy-policy translations now explain the actual data and
+  choice. TypeScript, lint, 24 focused tests, a local browser test and a deployed
+  Slovenian browser test pass. The actual wrapper test on READY Preview
+  `5bcc4427` passes in 51.5 seconds: default off, opt-in, relaunch, withdrawal
+  and another relaunch. Native screenshots were inspected and added to the
+  screenshot gallery. See `privacy-reconciliation.md` for exact evidence,
+  the initial locale-assumption failure, and remaining release limitations.
 - The real library workflow passes on READY Preview `28c57449`
   (`memo-bb8j0rbiz-nace-valencics-projects.vercel.app`,
   `dpl_zfrUHxm1UD1Ds1Pm92gdShEJtum9`). Phone folder menus previously had no

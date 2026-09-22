@@ -288,6 +288,18 @@ Recording is native and continues with the phone locked; the tutor still relies 
 
 The native AI consent gate discloses Google Gemini, Soniox, OpenRouter and its model providers before the study screens open. Withdrawal stops subsequent normal app use; it does not cancel an already running job. The local legal catalogues now disclose OpenRouter and Apple transaction verification, distinguish web billing from App Store billing, and direct Apple cancellation/refund requests to Apple in all five languages. These updates still require deployment with this branch.
 
+### Real tutor startup check
+
+`testPreviewLiveTutorSessionControls` runs against an existing synthetic circuit
+note on staging. Enable `MEMO_QA_LIVE_TUTOR=1` explicitly because it opens a real
+microphone and consumes the account's ordinary tutor allowance. Optional
+`MEMO_QA_MIC_PERMISSION_DELAY=40` leaves the system permission prompt open so a
+read-only staging check can verify that no allowance is reserved yet. The test
+checks explaining, sustained pause, resume and end. Its 22 September run passed
+on Preview `93c30937`; a 40-second permission wait charged no time and the actual
+session settled at nine seconds. It does not verify perceived sound quality or
+a learner interrupting by speaking. Do not reset usage to obtain a pass.
+
 ## 7. Archive, TestFlight, and submit
 
 1. Ship the tested web/backend branch through the normal local → authorized push → Vercel Preview → authorized merge process. Confirm `memoai.eu` serves these changes. A local build alone does not update the wrapped website.

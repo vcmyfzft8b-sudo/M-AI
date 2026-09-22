@@ -47,8 +47,22 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
   Startup now resolves microphone permission before requesting the plan or
   speech credentials, reuses the acquired stream, and releases it on refusal
   or cancellation. A late grant returned after cancellation is settled at zero.
-  All 213 tutor tests, TypeScript and focused lint pass. Real native retesting
-  on the updated Preview remains pending; the used account was not reset.
+  All 213 tutor tests, TypeScript and focused lint pass. The used account was
+  not reset.
+- The real Simulator tutor rerun passes on READY Preview commit `93c30937`
+  (`memo-5pomfc9re-nace-valencics-projects.vercel.app`,
+  `dpl_GdKxVXwWTsUbWd72n3j9M2KHGeQr`). Using the existing Word-import account,
+  the test left the microphone prompt open for 40 seconds. A simultaneous
+  staging read confirmed no grant existed while the prompt was open. After
+  permission, the tutor explained the circuit note, stayed paused, resumed
+  explaining, and ended normally. The grant settled at **9 seconds**, with no
+  charge for the permission wait. Result: `review-sep22-live-tutor-fixed.xcresult`,
+  one pass, 81.5 seconds. Before/after records:
+  `review-sep22-tutor-word-before-permission.json` and
+  `review-sep22-tutor-word-grants.json`. Explaining, pause and end screenshots
+  were visually inspected. This proves connection and session controls;
+  audible quality, spoken questions and barge-in on the physical iPhone still
+  need verification. The phone remained locked at the 16:10 CEST check.
 - At 16:07 CEST, finished visually inspecting all 16 screenshot files fetched
   from Apple's actual uploaded asset URLs: six 6.7-inch, six 6.5-inch and four
   12.9-inch iPad images, all delivery state COMPLETE. The images show the PWA

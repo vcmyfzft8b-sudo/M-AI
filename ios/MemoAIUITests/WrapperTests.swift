@@ -439,7 +439,9 @@ final class WrapperTests: XCTestCase {
     }
 
     @MainActor private func keepStudyScreenshot(_ name: String, app: XCUIApplication) {
-        let shot = XCTAttachment(screenshot: app.screenshot())
+        // Capture the screen after rotation: app.screenshot() can retain its
+        // portrait crop while the iPad's window has rotated to landscape.
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         shot.name = name
         shot.lifetime = .keepAlways
         add(shot)
@@ -479,13 +481,17 @@ final class WrapperTests: XCTestCase {
         var submitted = false
         for index in 0..<30 {
             if index == 0 {
+                // A resumed draft may already mark this question unknown.
+                if !answer.isEnabled {
+                    app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "I don't know")).firstMatch.tap()
+                }
                 answer.tap()
                 answer.typeText("A seed absorbs water and germinates. Roots grow down into the soil, and the shoot grows toward light. Leaves use photosynthesis to support the plant's growth.")
                 app.webViews.firstMatch.swipeUp()
             } else {
                 let unknown = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "I don't know")).firstMatch
                 XCTAssertTrue(unknown.exists)
-                unknown.tap()
+                if answer.isEnabled { unknown.tap() }
             }
             let submit = app.webViews.buttons["Submit the test"].firstMatch
             if submit.exists {

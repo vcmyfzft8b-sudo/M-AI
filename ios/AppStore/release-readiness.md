@@ -110,7 +110,18 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   attempts and reopening the leftover attempt after grading. A synchronous
   lock now covers both the POST and detail refresh. All 55 practice-test checks
   pass, including delayed-refresh, same-render repeat taps and retry coverage.
-  Real Preview verification of the fix remains pending deployment.
+  Real Preview verification also passes on commit `12c05d21`: one fresh
+  attempt was created and graded, with no extra in-progress attempt in staging.
+  The earlier leftover draft was completed through the UI, without deleting
+  or rewriting attempt rows. The iPad screenshot capture now uses the screen
+  to avoid XCTest's stale portrait crop after rotation.
+- Preview `https://memo-ei25tuep1-nace-valencics-projects.vercel.app` is READY
+  (`dpl_FpBMduGqEfMAksx7XP69w5nwVfXM`, `12c05d21`). Its current environment
+  was checked against the shared staging project. Type checking passes after
+  regenerating route types and moving obsolete local generated types aside;
+  focused ESLint also passes. These changes have not been merged to production.
+- The 22 September email check found the Small Business enrollment receipt of
+  15 September, but no approval email. The reduced commission is unconfirmed.
 - The real iPhone Sandbox checkout now reaches Apple’s account/password dialog.
   It has not completed a transaction; the inspection test is explicitly skipped,
   not counted as a purchase pass. The user has been asked to authenticate with

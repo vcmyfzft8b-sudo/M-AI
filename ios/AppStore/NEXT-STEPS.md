@@ -25,8 +25,10 @@ Current evidence is at the top of `ios/AppStore/release-readiness.md`.
 - Additional simulator passes: memory palace generation/movement, speed reader,
   podcast generation/playback, and iPad onboarding/login/rotated study/settings.
 - Fixed a shared PWA race that allowed duplicate practice-test attempts while
-  the new attempt loaded. 55 practice checks pass; deploy the test branch and
-  rerun the actual Preview flow before treating this release gate as closed.
+  the new attempt loaded. 55 practice checks and the real Preview flow pass:
+  one fresh attempt was created and graded, with no duplicate left in progress.
+  Preview `memo-ei25tuep1-nace-valencics-projects.vercel.app` is READY at
+  `12c05d21`, using staging; production has not received this branch fix.
 - Device tests pass for real Apple product loading, three-day trial display,
   the wheel and both half-off offer cards, and settings/theme controls.
 - Preview catalogue loading is fixed: the Preview host must be included with

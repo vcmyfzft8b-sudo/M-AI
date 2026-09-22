@@ -9592,6 +9592,15 @@
   padding-right: 0.2rem;
 }
 
+.memo-folder-contents-sheet.memo-folder-contents-sheet {
+  touch-action: pan-y;
+}
+
+.memo-folder-contents-picker {
+  display: grid;
+  gap: 0.5rem;
+}
+
 .library-folder-lecture-option {
   display: flex;
   align-items: center;

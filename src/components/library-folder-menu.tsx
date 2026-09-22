@@ -131,13 +131,15 @@ function toggleLectureId(currentIds: string[], lectureId: string) {
 export function LibraryFolderMenu({
   lectures,
   userId,
-  initialFolders,
+  folders,
+  onFoldersChange,
   selectedFolderId,
   onSelectFolder,
 }: {
   lectures: AppLectureListItem[];
   userId: string;
-  initialFolders: AppLibraryFolder[];
+  folders: AppLibraryFolder[];
+  onFoldersChange: (folders: AppLibraryFolder[]) => void;
   selectedFolderId: string | null;
   onSelectFolder: (folderId: string | null, lectureIds: string[] | null) => void;
 }) {
@@ -167,7 +169,6 @@ export function LibraryFolderMenu({
   const hasMigratedLocalFoldersRef = useRef(false);
   const [isOpen, setIsOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [folders, setFolders] = useState<LibraryFolder[]>(initialFolders);
   const [folderName, setFolderName] = useState("");
   const [draftLectureIds, setDraftLectureIds] = useState<string[]>([]);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
@@ -178,6 +179,7 @@ export function LibraryFolderMenu({
   const closeFolderActions = useCallback(() => setFolderActionTarget(null), []);
   const folderActionSheet = useSheet(closeFolderActions);
   const [editingName, setEditingName] = useState("");
+  const [isEditingContents, setIsEditingContents] = useState(false);
   const [editingLectureIds, setEditingLectureIds] = useState<string[]>([]);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [isSavingFolder, setIsSavingFolder] = useState(false);
@@ -203,13 +205,10 @@ export function LibraryFolderMenu({
   const isEditModalOpen = editingFolderId !== null;
   const isFolderEditBusy = isSavingFolder || deletingFolderId !== null;
 
-  useEffect(() => {
-    setFolders(initialFolders);
-  }, [initialFolders]);
-
   const resetEditModal = useCallback(() => {
     setEditingFolderId(null);
     setEditingName("");
+    setIsEditingContents(false);
     setEditingLectureIds([]);
     setIsSavingFolder(false);
   }, []);
@@ -241,7 +240,10 @@ export function LibraryFolderMenu({
    */
   const folderSheet = useSheet(closeFolderSheet);
   const createModalSheet = useSheet(closeCreateModal, { locked: isCreatingFolder });
-  const editModalSheet = useSheet(resetEditModal, { locked: isFolderEditBusy });
+  const editModalSheet = useSheet(resetEditModal, {
+    locked: isFolderEditBusy,
+    scrollable: isEditingContents,
+  });
 
   const dismissFolderSheet = folderSheet.dismiss;
   const dismissCreateModal = createModalSheet.dismiss;
@@ -291,14 +293,6 @@ export function LibraryFolderMenu({
 
     onSelectFolder(storedFolder.id, storedFolder.lectureIds);
   }, [liveFolders, onSelectFolder, userId]);
-
-  useEffect(() => {
-    if (!hasRestoredSelectionRef.current) {
-      return;
-    }
-
-    writeStoredSelectedFolderId(userId, selectedFolderId);
-  }, [selectedFolderId, userId]);
 
   useEffect(() => {
     if (!isOpen && !isCreateModalOpen && !isEditModalOpen) {
@@ -410,7 +404,7 @@ export function LibraryFolderMenu({
         return (await response.json()) as { folders: AppLibraryFolder[] };
       })
       .then((payload) => {
-        setFolders(payload.folders);
+        onFoldersChange(payload.folders);
         clearStoredFolders(userId);
 
         if (!storedSelectedFolder) {
@@ -427,6 +421,7 @@ export function LibraryFolderMenu({
           const nextLectureIds = migratedSelectedFolder.lectureIds.filter((lectureId) =>
             lectureIdSet.has(lectureId),
           );
+          writeStoredSelectedFolderId(userId, migratedSelectedFolder.id);
           onSelectFolder(migratedSelectedFolder.id, nextLectureIds);
           return;
         }
@@ -436,7 +431,7 @@ export function LibraryFolderMenu({
       .catch(() => {
         hasMigratedLocalFoldersRef.current = false;
       });
-  }, [isCreatorDemo, lectureIdSet, onSelectFolder, userId]);
+  }, [isCreatorDemo, lectureIdSet, onFoldersChange, onSelectFolder, userId]);
 
   function handleToggleMenu() {
     setIsOpen((currentValue) => !currentValue);
@@ -449,11 +444,13 @@ export function LibraryFolderMenu({
    * it rather than blinking away.
    */
   function handleSelectAllNotes() {
+    writeStoredSelectedFolderId(userId, null);
     onSelectFolder(null, null);
     animateCloseFolderSheet();
   }
 
   function handleSelectFolder(folder: LibraryFolder) {
+    writeStoredSelectedFolderId(userId, folder.id);
     onSelectFolder(folder.id, folder.lectureIds);
     animateCloseFolderSheet();
   }
@@ -487,7 +484,8 @@ export function LibraryFolderMenu({
       const nextFolder = payload.folder;
       const nextFolders = [...folders, nextFolder];
 
-      setFolders(nextFolders);
+      onFoldersChange(nextFolders);
+      writeStoredSelectedFolderId(userId, nextFolder.id);
       onSelectFolder(nextFolder.id, nextFolder.lectureIds);
       setFolderName("");
       setDraftLectureIds([]);
@@ -498,7 +496,7 @@ export function LibraryFolderMenu({
     }
   }
 
-  function startEditingFolder(folder: LibraryFolder) {
+  function startEditingFolder(folder: LibraryFolder, editContents = false) {
     if (isFolderEditBusy) {
       return;
     }
@@ -509,6 +507,7 @@ export function LibraryFolderMenu({
 
     setEditingFolderId(folder.id);
     setEditingName(folder.name);
+    setIsEditingContents(editContents);
     setEditingLectureIds(folder.lectureIds);
   }
 
@@ -546,7 +545,7 @@ export function LibraryFolderMenu({
         folder.id === editingFolderId ? payload.folder : folder,
       );
 
-      setFolders(nextFolders);
+      onFoldersChange(nextFolders);
 
       if (selectedFolderId === editingFolderId) {
         const nextSelectedFolder = nextFolders.find((folder) => folder.id === editingFolderId);
@@ -577,11 +576,12 @@ export function LibraryFolderMenu({
       }
 
       const nextFolders = folders.filter((folder) => folder.id !== folderId);
-      setFolders(nextFolders);
+      onFoldersChange(nextFolders);
       // The confirm sheet is what asked; it leaves once the folder is gone.
       setFolderDeleteTarget(null);
 
       if (selectedFolderId === folderId) {
+        writeStoredSelectedFolderId(userId, null);
         onSelectFolder(null, null);
       }
 
@@ -947,6 +947,18 @@ export function LibraryFolderMenu({
                 onClick={() => {
                   const folder = folderActionTarget;
                   setFolderActionTarget(null);
+                  startEditingFolder(folder, true);
+                }}
+              >
+                <Msym name="folder" size="1.4rem" fill={false} weight={500} />
+                {t("folders.addLectures")}
+              </button>
+              <button
+                type="button"
+                className="memo-action-sheet-item"
+                onClick={() => {
+                  const folder = folderActionTarget;
+                  setFolderActionTarget(null);
                   startEditingFolder(folder);
                 }}
               >
@@ -1048,17 +1060,19 @@ export function LibraryFolderMenu({
           />
           <div
             className={sheetClass(
-              "memo-sheet memo-folder-name-sheet memo-only-mobile",
+              `memo-sheet memo-folder-name-sheet memo-only-mobile${isEditingContents ? " memo-folder-contents-sheet" : ""}`,
               editModalSheet.closing,
             )}
             role="dialog"
             aria-modal="true"
-            aria-label={t("folders.rename")}
+            aria-label={t(isEditingContents ? "folders.addLectures" : "folders.rename")}
             {...editModalSheet.dragProps}
           >
             <div className="memo-grab" data-drag-handle />
             <div className="memo-folder-name-head">
-              <span className="memo-folder-name-title">{t("common.rename")}</span>
+              <span className="memo-folder-name-title">
+                {t(isEditingContents ? "folders.addLectures" : "common.rename")}
+              </span>
               <button
                 type="button"
                 className="memo-folder-done"
@@ -1069,7 +1083,28 @@ export function LibraryFolderMenu({
                 {t("common.done")}
               </button>
             </div>
-            <input
+            {isEditingContents ? (
+              <div className="memo-folder-contents-picker">
+                {lectures.length > 0 ? lectures.map((lecture) => (
+                  <label key={lecture.id} className="library-folder-lecture-option">
+                    <input
+                      type="checkbox"
+                      checked={editingLectureIds.includes(lecture.id)}
+                      disabled={isFolderEditBusy}
+                      onChange={() => setEditingLectureIds((ids) => toggleLectureId(ids, lecture.id))}
+                    />
+                    <span>
+                      <span className="library-folder-lecture-title">
+                        {lecture.title ?? t("note.untitled")}
+                      </span>
+                      <span className="library-folder-lecture-meta">
+                        {formatCreatedAt(lecture.created_at)}
+                      </span>
+                    </span>
+                  </label>
+                )) : <p className="library-folder-empty">{t("folders.emptyLectures")}</p>}
+              </div>
+            ) : <input
               className="memo-folder-name-field"
               value={editingName}
               onChange={(event) => setEditingName(event.target.value)}
@@ -1090,7 +1125,7 @@ export function LibraryFolderMenu({
               maxLength={32}
               aria-label={t("folders.nameLabel")}
               disabled={isFolderEditBusy}
-            />
+            />}
           </div>
 
           <div

@@ -919,6 +919,127 @@ final class WrapperTests: XCTestCase {
         keepStudyScreenshot("Transcript from the imported audio lecture", app: app)
     }
 
+    /// Real library writes against a retained synthetic Preview account.
+    /// Restore the note title and delete the temporary folder through the UI.
+    @MainActor func testPreviewLibrarySearchRenameAndFolders() throws {
+        guard ProcessInfo.processInfo.environment["MEMO_QA_LIBRARY_WRITES"] == "1",
+              let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires opt-in library writes on the dedicated staging account")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        defer { app.terminate() }
+        passConsentGate(app)
+        dismissInitialOffer(app)
+        let original = "Introduction to Electric Circuits"
+        let renamed = "Circuits library QA"
+        func button(_ text: String) -> XCUIElement {
+            app.webViews.buttons.matching(NSPredicate(format: "label == %@", text)).firstMatch
+        }
+        func tap(_ text: String) {
+            let target = button(text)
+            XCTAssertTrue(target.waitForExistence(timeout: 20), text)
+            target.tap()
+        }
+        func replace(_ field: XCUIElement, with text: String) {
+            XCTAssertTrue(field.waitForExistence(timeout: 15))
+            field.tap()
+            let old = field.value as? String ?? ""
+            if !old.isEmpty && old != field.placeholderValue {
+                field.coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.5)).tap()
+                app.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count))
+            }
+            if !text.isEmpty { app.typeText(text) }
+            keepStudyScreenshot("Library field edited to \(text)", app: app)
+        }
+        func noteVisible(_ title: String) -> Bool {
+            button("Actions for \(title)").waitForExistence(timeout: 20)
+        }
+        XCTAssertTrue(noteVisible(original))
+        let search = app.webViews.searchFields["Search notes"].firstMatch
+        replace(search, with: "Electric")
+        XCTAssertTrue(noteVisible(original))
+        replace(search, with: "zzqnonexistentlibrary")
+        XCTAssertTrue(app.webViews.staticTexts["Try a shorter search term."].waitForExistence(timeout: 15))
+        XCTAssertFalse(button("Actions for \(original)").exists)
+        keepStudyScreenshot("Library search with no matches", app: app)
+        replace(search, with: "")
+        app.webViews.staticTexts["My notes"].firstMatch.tap()
+        XCTAssertTrue(noteVisible(original))
+        tap("Actions for \(original)")
+        tap("Rename \(original)")
+        replace(app.webViews.textFields["Note title"].firstMatch, with: renamed)
+        tap("Save title")
+        XCTAssertTrue(noteVisible(renamed))
+        app.terminate()
+        app.launch()
+        dismissInitialOffer(app)
+        XCTAssertTrue(noteVisible(renamed), "Renamed note must survive relaunch")
+        keepStudyScreenshot("Renamed library note persisted", app: app)
+        tap("Actions for \(renamed)")
+        tap("Rename \(renamed)")
+        replace(app.webViews.textFields["Note title"].firstMatch, with: original)
+        tap("Save title")
+        XCTAssertTrue(noteVisible(original))
+
+        let allNotes = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "All notes")).firstMatch
+        XCTAssertTrue(allNotes.waitForExistence(timeout: 15))
+        allNotes.tap()
+        tap("New folder")
+        replace(app.webViews.textFields["Folder name"].firstMatch, with: "Library QA folder")
+        tap("Done")
+        let folderChip = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Library QA folder")).firstMatch
+        XCTAssertTrue(folderChip.waitForExistence(timeout: 20))
+        XCTAssertFalse(button("Actions for \(original)").exists, "New folder starts empty")
+        folderChip.tap()
+        tap("Options for folder Library QA folder")
+        tap("Add lectures")
+        let noteCheckbox = app.webViews.switches.matching(NSPredicate(format: "label CONTAINS %@", original)).firstMatch
+        XCTAssertTrue(noteCheckbox.waitForExistence(timeout: 15))
+        noteCheckbox.tap()
+        keepStudyScreenshot("Add a note to its folder", app: app)
+        tap("Done")
+        XCTAssertTrue(noteVisible(original), "Selected note must appear in the folder")
+        folderChip.tap()
+        tap("Options for folder Library QA folder")
+        tap("Rename folder")
+        replace(app.webViews.textFields["Folder name"].firstMatch, with: "Library QA renamed")
+        tap("Done")
+        app.terminate()
+        app.launch()
+        dismissInitialOffer(app)
+        let renamedChip = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Library QA renamed")).firstMatch
+        XCTAssertTrue(renamedChip.waitForExistence(timeout: 25), "Folder rename and selection must persist")
+        XCTAssertTrue(noteVisible(original), "Folder membership must survive relaunch")
+        keepStudyScreenshot("Renamed folder persisted", app: app)
+        renamedChip.tap()
+        tap("Options for folder Library QA renamed")
+        tap("Add lectures")
+        XCTAssertTrue(noteCheckbox.waitForExistence(timeout: 15))
+        XCTAssertEqual(noteCheckbox.value as? String, "1")
+        noteCheckbox.tap()
+        tap("Done")
+        XCTAssertTrue(button("Actions for \(original)").waitForNonExistence(timeout: 15))
+        renamedChip.tap()
+        tap("Options for folder Library QA renamed")
+        tap("Add lectures")
+        XCTAssertTrue(noteCheckbox.waitForExistence(timeout: 15))
+        XCTAssertEqual(noteCheckbox.value as? String, "0")
+        noteCheckbox.tap()
+        tap("Done")
+        XCTAssertTrue(noteVisible(original))
+        renamedChip.tap()
+        tap("Options for folder Library QA renamed")
+        tap("Delete folder")
+        XCTAssertTrue(app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "The notes in it stay in All notes.")).firstMatch.waitForExistence(timeout: 10))
+        tap("Delete folder")
+        XCTAssertTrue(noteVisible(original), "Deleting a folder must preserve the note")
+        keepStudyScreenshot("Library restored after folder deletion", app: app)
+    }
+
     @MainActor func testPreviewLiveTutorSessionControls() throws {
         guard ProcessInfo.processInfo.environment["MEMO_QA_LIVE_TUTOR"] == "1" else {
             throw XCTSkip("Requires an explicitly enabled real staging tutor session")

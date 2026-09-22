@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 import { AppLayoutProvider } from "@/components/app-layout-context";
 import { useCreatorDemoBasePath } from "@/components/creator-demo/creator-demo-context";
@@ -13,6 +13,7 @@ import { Msym } from "@/components/msym";
 import { useNavigationFeedback } from "@/components/navigation-loading";
 import { useIsOffline } from "@/components/offline/offline-provider";
 import { useChipRowWheelScroll } from "@/components/use-wheel-to-horizontal";
+import { useShellPathname } from "@/components/use-shell-pathname";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -49,7 +50,7 @@ export function AppShell({
   const t = useT();
   const demoBasePath = useCreatorDemoBasePath();
   const isOffline = useIsOffline();
-  const clientPathname = usePathname();
+  const shellPathname = useShellPathname(initialPathname);
   const router = useRouter();
 
   /*
@@ -61,9 +62,7 @@ export function AppShell({
    */
   useChipRowWheelScroll();
 
-  // `usePathname` is null on the very first server-rendered pass in some
-  // contexts, so the header-provided path seeds it.
-  const pathname = unmapDemoPathname(clientPathname ?? initialPathname, demoBasePath);
+  const pathname = unmapDemoPathname(shellPathname, demoBasePath);
 
   // `/app/onboarding` is not a route of its own: it is what `/creator/onboarding`
   // unmaps to, the demo mount of the survey. Both own the whole viewport.

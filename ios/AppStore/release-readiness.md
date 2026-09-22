@@ -42,6 +42,38 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- Release build **11** includes native keyboard bridge v4 and ProMotion support.
+  Archive/export and Apple `altool` validation all pass on 23 September. Local
+  package checks verify matching app/widget versions, distribution signature,
+  disabled debugging, production APNs, Apple sign-in, phone/tablet portrait,
+  production origins, absence of the Debug URL override and the corrected
+  privacy manifest. Evidence: `review-sep23-build11-archive.log`,
+  `review-sep23-build11-export.log`, `review-sep23-build11-verification.json`,
+  `review-sep23-build11-apple-validation.json`. Export:
+  `ios/build/export-release-11/MemoAI.ipa`; SHA-256
+  `9bb6f15dabd09af7b3446c0681496e45739913c126b2501b5cf820582d9c7744`.
+  **Not uploaded or submitted.** The matching production web deployment and
+  TestFlight verification remain required; this supersedes build 10 packaging.
+- A second actual-wrapper deletion run now uses the synthetic Slides account
+  (`ios-slides-20260922@example.com`) on staging. Preparation, real analytics
+  opt-in/relaunch/withdrawal and deletion each pass:
+  `review-sep23-erasure-prepare.xcresult`, `review-sep23-erasure-analytics.xcresult`,
+  `review-sep23-erasure-delete.xcresult` (deletion: one pass, 25.2 seconds).
+  Before deletion there was one note, one 17,011-byte file, two owned analytics
+  sessions and 22 page views. The UI confirms deletion requested; the server
+  independently confirms access blocked and the unmodified cleanup deadline
+  **23 September, 04:06:24 CEST**. The purchased Word QA account remains intact.
+  `review-sep23-wait-erasure.mjs` is running for that deadline against the audited
+  immutable Preview; final cleanup is **pending**, not a pass yet. Captured IDs
+  in `review-sep23-erasure-inventory-before.json` allow checking for orphaned
+  analytics even after their account owner disappears. Queue evidence is in
+  `review-sep23-erasure-inventory-queued.json`.
+- The deletion confirmation screenshot exposed an uncentered Sign in link.
+  Reusing `memo-auth-submit` fixes it in both the PWA and wrapper. Local browser
+  and native-user-agent checks pass in light/dark, with centered text, no
+  horizontal overflow and successful navigation to sign-in. The native-UA
+  screenshot was visually inspected; it is a development capture, not an App
+  Store asset. Focused lint and all 84 `mobile-*.test.mjs` checks pass.
 - On 23 September (00:58 CEST), the signed-in App Store Connect Business page
   shows Paid Apps Agreement, Free Apps Agreement, the Revolut EUR payout account
   ending 4320, W-8BEN, Certificate of Foreign Status, Digital Services Act and

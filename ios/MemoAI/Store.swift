@@ -129,8 +129,10 @@ final class Store {
     }
 
     func reconcile() async throws {
-        for await result in Transaction.unfinished { try await accept(result) }
-        for await result in Transaction.currentEntitlements { try await accept(result) }
+        try await reconcileStoreTransactions(
+            unfinished: Transaction.unfinished,
+            currentEntitlements: Transaction.currentEntitlements
+        ) { try await self.accept($0) }
     }
 
     private func accept(_ result: VerificationResult<Transaction>) async throws {

@@ -41,6 +41,23 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- StoreKit reconciliation now checks both unfinished purchases and current
+  entitlements even if an earlier delivery fails. Previously, the first
+  rejected transaction prevented later purchases from reaching the server.
+  Successful deliveries still finish only after server verification; failures
+  stay unfinished and the first error is reported after both queues are
+  checked. Cancellation propagates immediately. Five Swift regression
+  scenarios pass, the full mobile suite passes (85 tests), and the rebuilt
+  simulator app loads the real Apple catalogue with the three-day trial and
+  renewal prices (`review-sep22-reconciliation-catalogue.xcresult`: one pass,
+  15.6 seconds). Its screenshot was visually inspected. This is queue and
+  catalogue coverage, not a completed Sandbox purchase or restore lifecycle.
+  The same Preview settings page passes with browser and native user agents:
+  Restore purchases appears only in native mode and native Stripe checkout
+  returns 403 (`review-sep22-reconciliation-parity-browser.json`). The first
+  browser assertion incorrectly required an exact accessible name without the
+  existing icon; correcting that test locator resolved the failure. No new
+  buttons or other UI were introduced.
 - Optional analytics is off by default in the shared PWA and iOS Settings.
   The first-party endpoint requires consent, Vercel analytics/performance scripts
   start after opt-in, and current-consent callbacks stop later events after

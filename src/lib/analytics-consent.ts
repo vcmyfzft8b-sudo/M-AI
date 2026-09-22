@@ -14,7 +14,17 @@ export function readAnalyticsConsent() {
   try {
     const value = document.cookie.split(";").map(part => part.trim())
       .find(part => part.startsWith(`${ANALYTICS_COOKIE}=`))?.slice(ANALYTICS_COOKIE.length + 1);
-    return hasAnalyticsConsent(value);
+    if (!hasAnalyticsConsent(value)) return false;
+    // WebKit can restore an older cookie after the app process exits. The
+    // separate preference record may veto that stale grant, but must never
+    // recreate a grant when cookies were cleared, blocked or expired.
+    try {
+      const saved = localStorage.getItem(ANALYTICS_COOKIE);
+      const denied = /^v1\.denied\.(\d{13})$/.exec(saved ?? "");
+      const grantedAt = Number(value?.split(".")[2]);
+      if (denied && Number(denied[1]) >= grantedAt) return false;
+    } catch { /* A readable consent cookie still works without localStorage. */ }
+    return true;
   } catch {
     return false;
   }

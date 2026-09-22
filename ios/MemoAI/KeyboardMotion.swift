@@ -14,6 +14,8 @@ import WebKit
     private var last: [CGFloat] = []
     private var keepAliveUntil: CFTimeInterval = 0
     private var layoutSize: CGSize = .zero
+    private var layoutTop: CGFloat = -1
+    private var lastMovement: CFTimeInterval = 0
     private var keyboardHeight: CGFloat = 0
 
     init(host: UIView, webView: WKWebView) {
@@ -50,14 +52,18 @@ import WebKit
     }
 
     func layoutChanged() {
-        guard let host, host.bounds.size != layoutSize else { return }
+        guard let host else { return }
+        let top = marker.frame.minY
+        guard host.bounds.size != layoutSize || top != layoutTop else { return }
         layoutSize = host.bounds.size
+        layoutTop = top
         refresh()
     }
 
     @objc func refresh() {
         last = []
         keepAliveUntil = CACurrentMediaTime() + 1
+        lastMovement = CACurrentMediaTime()
         guard link == nil else { return }
         let proxy = DisplayTarget()
         proxy.owner = self
@@ -71,7 +77,8 @@ import WebKit
     @objc private func stop() { link?.invalidate(); link = nil; last = [] }
 
     private func sample() {
-        guard let host, let webView, host.window != nil else { stop(); return }
+        guard let host, let webView, host.window != nil,
+              let url = webView.url, AppConfiguration.isInternal(url) else { stop(); return }
         let layer = marker.layer.presentation() ?? marker.layer
         let top = min(host.bounds.maxY, max(host.bounds.minY, layer.frame.minY))
         let endTop = min(host.bounds.maxY, max(host.bounds.minY, marker.frame.minY))
@@ -80,13 +87,14 @@ import WebKit
         let target = max(0, webView.frame.maxY - endTop)
         let extent = min(height, max(keyboardHeight, target))
         let values = [inset, height, target, extent]
-        // Keep sampling while visible, including interactive dismissal, but
-        // don't wake JavaScript when nothing changed. Stop entirely at rest.
-        // Deliver the exact final zero before stopping, including a slow
-        // interactive dismissal that outlasts the notification's animation.
-        if inset == 0 && target == 0 && values == last && !pending && CACurrentMediaTime() > keepAliveUntil { stop(); return }
-        guard !pending, values != last,
-              let url = webView.url, AppConfiguration.isInternal(url) else { return }
+        // Guide constraints cause a layout pass whenever the keyboard moves,
+        // including interactive drags. That wakes layoutChanged(). Sample the
+        // intervening presentation frames, then sleep even if the keys remain
+        // visible. Don't leave a display link running during ordinary typing.
+        let now = CACurrentMediaTime()
+        if values != last { lastMovement = now }
+        if values == last && !pending && now > keepAliveUntil && now - lastMovement > 0.12 { stop(); return }
+        guard !pending, values != last else { return }
         last = values
         pending = true
         webView.evaluateJavaScript("""
@@ -98,7 +106,7 @@ import WebKit
             })();
             """) { [weak self] _, error in
                 self?.pending = false
-                if error != nil { self?.last = [] }
+                if error != nil { self?.stop() }
             }
     }
 

@@ -737,3 +737,25 @@ ignored by Git.
 
 These references guide implementation; they do not establish Apple's approval
 of Memo or replace the unresolved end-to-end checks above.
+
+### 23 September: native keyboard motion and analytics Settings
+
+- Bridge v4 now supplies UIKit keyboard-layout presentation frames to the shared
+  PWA keyboard controller. Library/note chat, search and rename passed on the
+  actual Preview in Simulator (`review-sep23-keyboard-product.xcresult`). All
+  composers and sheets retain the shared design and keyboard CSS variables.
+- A local fixture loading the real controller/styles passed three form and
+  three chat cycles (`review-sep23-keyboard-motion-idle.xcresult`). Measured
+  median/p95 moving-frame intervals were 17 ms; settled footer/composer gaps
+  were 12 pt. Both ended at zero inset. This verifies the simulator cadence,
+  not a claim of measured 120 fps on hardware. ProMotion support is enabled.
+- The sampler sleeps at rest and while backgrounded. An extra delayed study
+  editor scroll is disabled for bridge v4. Browser/older-wrapper fallback stays.
+- Analytics is now a compact Settings row opening the full disclosure sheet.
+  Both user agents, light/dark and desktop layout passed on the Preview. It
+  remains opt-in. A physical relaunch exposed an older cookie overriding a
+  newer withdrawal; the saved withdrawal now vetoes that stale grant, without
+  ever using saved grants to restore missing or expired cookie consent.
+- These changes need the new native binary and matching web deployment. The
+  earlier validated release archive does not include them. Existing submission
+  gates above remain open; no App Review submission has been made.

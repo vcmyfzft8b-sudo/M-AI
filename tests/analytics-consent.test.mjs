@@ -52,3 +52,22 @@ test("cookie names with the same prefix cannot grant consent", () => withBrowser
   cookies.set(ANALYTICS_COOKIE + "-old", `v1.granted.${Date.now()}`);
   assert.equal(readAnalyticsConsent(), false);
 }));
+
+
+test("a durable withdrawal vetoes an older cookie restored by WebKit", () => withBrowser(false, cookies => {
+  const now = Date.now();
+  let saved = `v1.denied.${now}`;
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: { getItem: () => saved } });
+  cookies.set(ANALYTICS_COOKIE, `v1.granted.${now - 1000}`);
+  assert.equal(readAnalyticsConsent(), false);
+  // A later explicit opt-in supersedes the old withdrawal.
+  cookies.set(ANALYTICS_COOKIE, `v1.granted.${now}`);
+  saved = `v1.denied.${now - 1000}`;
+  assert.equal(readAnalyticsConsent(), true);
+  // A saved grant cannot restore consent after cookie deletion or expiry.
+  saved = `v1.granted.${now}`;
+  cookies.delete(ANALYTICS_COOKIE);
+  assert.equal(readAnalyticsConsent(), false);
+  cookies.set(ANALYTICS_COOKIE, `v1.granted.${now - ANALYTICS_MAX_AGE * 1000}`);
+  assert.equal(readAnalyticsConsent(), false);
+}));

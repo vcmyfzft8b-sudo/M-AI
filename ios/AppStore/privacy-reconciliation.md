@@ -169,3 +169,8 @@ native captures have loaded icons and the correct off state.
 
 Consent basis reviewed against the Slovenian Information Commissioner's
 [guidance on analytics cookies](https://www.ip-rs.si/mnenja-gdpr/varovanje-osebnih-podatkov-in-spletni-pi%C5%A1kotki-1669965271).
+
+The physical analytics relaunch test also found WebKit restoring an older consent
+cookie. The browser preference record can now veto a stale grant when it contains
+a newer withdrawal. It cannot grant consent or restore a missing/expired cookie.
+The default remains off; a later explicit opt-in supersedes an earlier withdrawal.

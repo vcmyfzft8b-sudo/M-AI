@@ -205,6 +205,17 @@ The native tests launch their own local synthetic fixture and isolated simulator
 
 The `testPreview*` cases in `WrapperTests` skip unless `MEMO_IOS_URL` names a Vercel Preview; run them through a user scheme (or `TEST_RUNNER_MEMO_IOS_URL`) against a simulator whose app is already signed in with a synthetic staging account. `testPreviewCreateStudyNoteFromPhoto` picks a lesson photo from the simulator library (`swift ios/build/make-study-fixture.swift`, then `xcrun simctl addmedia <udid> ios/build/synthetic-plant-lesson.png`), waits for the note, creates flashcards, a quiz and a mindmap, shares the mindmap PNG through the native sheet, chats, plays read-aloud and deletes the note. It consumes the account's one free note, so a full pass needs a fresh synthetic account. `testPreviewSignInScreenAndCodeLogin` runs on a signed-out simulator with `TEST_RUNNER_MEMO_QA_EMAIL`/`TEST_RUNNER_MEMO_QA_CODE` for a staging account listed in the Preview's `APP_REVIEW_ACCOUNT_EMAILS` (create one with the Supabase admin API against staging only). `testPreviewRecordingSurvivesTheAppLeavingTheScreen` signs itself in with the same two variables, records, sends the app to the home screen for fifteen seconds and checks the clock counted that time and that the finished file is the app's own `.m4a`; it cancels before creating, so the free note is not spent, and it needs the microphone granted first (`xcrun simctl privacy <udid> grant microphone eu.memoai.memo`). `testPreviewSafeAreaReview` only captures screenshots of the edge-to-edge layout for review. The test script uses the dedicated `MemoAIStoreTests` scheme with `ios/MemoAIUITests/Offers.storekit`; the normal `MemoAI` launch/archive scheme has no local StoreKit configuration. Test configuration prices (including €64.99 yearly introductory pricing) are synthetic and do not configure App Store Connect. `StoreOfferTests` exercises real StoreKit product loading, eligible first-period prices and rejection of a stale quote before a purchase starts. Run test commands sequentially because each uses this checkout's `ios/build` and fixture URL resource. Test artifacts and local signing files are ignored.
 
+`testPreviewStudyNoteFromPDF` uses the original synthetic lesson at
+`ios/MemoAIUITests/Fixtures/memo-qa-electric-circuits.pdf`. Place it in the
+dedicated simulator's Files app under **On My iPhone**, sign in to an English
+staging account with an unused free note, and set
+`TEST_RUNNER_MEMO_QA_PDF=memo-qa-electric-circuits`. The test uses the native
+file picker, uploads the PDF and waits for actual generated circuit content.
+It does not inject a generated note or bypass the note allowance. When running
+account preparation in the same suite, select `testPreviewPrepareStudyAccount`
+and `testPreviewResetLanguageToEnglish` before the study test; XCTest orders
+selected methods alphabetically. Keep all fixtures and accounts synthetic.
+
 Required end-to-end checks with synthetic staging data:
 
 - Email OTP sign-up, login, logout, relaunch, consent acceptance/decline/withdrawal, onboarding, and settings/account deletion access.

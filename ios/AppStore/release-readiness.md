@@ -165,6 +165,25 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   seconds, one test, no failures. Initial harness attempts missed the opening
   offer and the emoji-prefixed row label; selectors/navigation were corrected,
   without changing the product's consent behavior.
+- Fetched and integrated the subsequently released PWA startup fix at
+  `origin/main` `a6be0d41` into this task branch (`0c46a612`). It keeps the
+  initial shell consistent with server rendering and recovers stale route
+  content. Its 11 focused hydration tests and TypeScript checking pass.
+  The merged branch still needs its updated Preview/navigation check; no
+  production merge was performed by this task, and build 9's native binary
+  is unchanged by this web-only integration.
+- Actual PDF import also passes on build 9: the native Files picker selected
+  `memo-qa-electric-circuits.pdf`, the PWA uploaded it, and the note workspace
+  displayed generated resistance/circuit content. The original, visually
+  checked synthetic fixture is committed under `ios/MemoAIUITests/Fixtures`.
+  Result: `review-sep22-pdf-import-picker.xcresult`, one test, zero failures,
+  68 seconds. The first runner's account preparation and language reset passed;
+  import initially stopped on an exact `Choose File` selector, corrected to
+  match the system's plural file-picker label. The pass used a new synthetic
+  account's normal unused free note on Preview
+  `memo-1n6o49ce2-nace-valencics-projects.vercel.app` (25c1649b), not the
+  subsequent hydration integration. The branch-only review-email allowlist
+  includes that account; global staging database configuration is unchanged.
 - The real iPhone Sandbox checkout now reaches Apple’s account/password dialog.
   It has not completed a transaction; the inspection test is explicitly skipped,
   not counted as a purchase pass. The user has been asked to authenticate with

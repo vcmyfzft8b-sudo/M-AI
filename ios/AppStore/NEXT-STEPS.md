@@ -39,6 +39,9 @@ Current evidence is at the top of `ios/AppStore/release-readiness.md`.
   in the screenshot gallery; `review-sep22-public-article-final.xcresult` passes.
 - AI-permission withdrawal, persistence after relaunch, and explicit re-consent
   pass in the actual app (`review-sep22-consent-withdrawal-verified.xcresult`).
+- PDF import through the native Files picker and actual circuit-note generation
+  pass (`review-sep22-pdf-import-picker.xcresult`). The committed PDF fixture
+  and its setup are documented in `docs/ios-app.md`.
 - Device tests pass for real Apple product loading, three-day trial display,
   the wheel and both half-off offer cards, and settings/theme controls.
 - Preview catalogue loading is fixed: the Preview host must be included with

@@ -755,6 +755,63 @@ final class WrapperTests: XCTestCase {
         keepStudyScreenshot("Note generated from a public article", app: app)
     }
 
+    @MainActor func testPreviewStudyNoteFromPDF() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              env["MEMO_QA_PDF"] == "memo-qa-electric-circuits" else {
+            throw XCTSkip("Requires staging, an unused synthetic free note and the seeded circuits PDF")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        passConsentGate(app)
+        dismissInitialOffer(app)
+        func button(_ label: String) -> XCUIElement {
+            app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", label)).firstMatch
+        }
+        let newNote = button("New note")
+        XCTAssertTrue(newNote.waitForExistence(timeout: 30))
+        newNote.tap()
+        let documents = button("PDF, document or photo")
+        XCTAssertTrue(documents.waitForExistence(timeout: 15))
+        documents.tap()
+        let choose = button("Choose a file")
+        XCTAssertTrue(choose.waitForExistence(timeout: 15))
+        choose.tap()
+        keepStudyScreenshot("Document source menu", app: app)
+        let files = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Choose File")).firstMatch
+        XCTAssertTrue(files.waitForExistence(timeout: 10))
+        files.tap()
+        let browse = app.buttons["Browse"].firstMatch
+        if browse.waitForExistence(timeout: 5) { browse.tap() }
+        let local = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "On My iPhone")).firstMatch
+        if local.waitForExistence(timeout: 5) { local.tap() }
+        keepStudyScreenshot("Native PDF picker", app: app)
+        let pdf = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "memo-qa-electric-circuits")).firstMatch
+        XCTAssertTrue(pdf.waitForExistence(timeout: 15), "The fixture must be visible in the native Files picker")
+        pdf.tap()
+        let open = app.buttons["Open"].firstMatch
+        if open.waitForExistence(timeout: 3), open.isEnabled { open.tap() }
+        let create = button("Create the note")
+        XCTAssertTrue(create.waitForExistence(timeout: 30))
+        expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: create)
+        waitForExpectations(timeout: 90)
+        keepStudyScreenshot("PDF attached through the native picker", app: app)
+        create.tap()
+        XCTAssertTrue(app.webViews.buttons["Notes"].firstMatch.waitForExistence(timeout: 120))
+        let content = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "resistance")).firstMatch
+        let deadline = Date().addingTimeInterval(420)
+        while Date() < deadline && !content.exists {
+            dismissNotificationNudge(app)
+            XCTAssertFalse(app.webViews.staticTexts["Processing failed"].exists)
+            RunLoop.current.run(until: Date().addingTimeInterval(5))
+        }
+        XCTAssertTrue(content.exists, "The PDF must produce actual electric-circuit notes")
+        dismissNotificationNudge(app)
+        keepStudyScreenshot("Notes generated from the circuits PDF", app: app)
+    }
+
     @MainActor func testPreviewWithdrawAndRestoreAIConsent() throws {
         let env = ProcessInfo.processInfo.environment
         guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,

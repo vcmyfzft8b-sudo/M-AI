@@ -20,9 +20,50 @@ Sources checked 23 September:
 [Apple guideline 5.1.1](https://developer.apple.com/app-store/review/guidelines/#data-collection-and-storage)
 and [Slovenian Information Commissioner, consent to cookies](https://www.ip-rs.si/mnenja-zvop-2/privolitev-v-uporabo-pi%C5%A1kotkov-1711356267).
 
-This is an implementation audit, not confirmation that every published App Store
-answer or legal-policy statement is correct. The portal was previously observed
-as Published with 15 data types; purpose-level answers still need comparison.
+This is an implementation audit, not a legal-policy certification. The 23 September
+portal comparison below supersedes the earlier count-only observation.
+
+## Published portal comparison — 23 September
+
+Inspected App Store Connect's App Privacy page and Product Page Preview Details
+for app `6812409212` in the signed-in Arc session. All 15 declared types were
+compared with `ios/MemoAI/PrivacyInfo.xcprivacy`. The published purposes are:
+
+| Data type | Purposes | Linked to identity | Tracking |
+| --- | --- | --- | --- |
+| Name | App Functionality | Yes | No |
+| Email Address | App Functionality | Yes | No |
+| User ID | App Functionality, Analytics | Yes | No |
+| Device ID | App Functionality | Yes | No |
+| Purchase History | App Functionality | Yes | No |
+| Photos or Videos | App Functionality | Yes | No |
+| Audio Data | App Functionality | Yes | No |
+| Customer Support | App Functionality | Yes | No |
+| Other User Content | App Functionality | Yes | No |
+| Coarse Location | App Functionality, Analytics | Yes | No |
+| Product Interaction | App Functionality, Analytics | Yes | No |
+| Other Usage Data | App Functionality, Analytics | Yes | No |
+| Crash Data | App Functionality, Analytics | Yes | No |
+| Performance Data | App Functionality, Analytics | Yes | No |
+| Other Diagnostic Data | App Functionality, Analytics | Yes | No |
+
+Two discrepancies were corrected and published:
+
+- User ID omitted Analytics. `/api/track` supplies `p_user_id` for signed-in,
+  opted-in visits; the purpose now includes Analytics, matching the manifest.
+- Product Interaction appeared in both linked and unlinked preview categories.
+  Its identity-linkage answer was corrected to Yes. The User ID linkage was
+  also explicitly verified as Yes after adding its purpose. Arc's accessibility
+  radio click focused the option without selecting it; keyboard selection and
+  visual verification were needed before publication.
+
+The final detail preview lists all 15 types under Data Linked to You, with no
+Data Not Linked to You or tracking section. The page reports Published. This
+confirms saved portal answers, not a production deployment or Apple approval.
+Source checks also confirmed account-linked diagnostic IDs in `monitoring.ts`,
+disabled client session replay, and account-bound APNs tokens in the mobile
+push route. The privacy-policy URL remains `https://memoai.eu/legal/privacy-policy`.
+Recheck this table if release data collection changes.
 
 ## Findings and corrections
 
@@ -32,8 +73,8 @@ as Published with 15 data types; purpose-level answers still need comparison.
   raw user agent in the visitor tables. These records are **not exclusively
   anonymous aggregates**: signed-in records are linked to `auth.users`.
 - User ID therefore has Analytics as well as App Functionality in the native
-  privacy manifest. Compare the corresponding published Apple purpose answer
-  before release. Build 9 predates this manifest correction.
+  privacy manifest. The corresponding published Apple purpose answer was
+  corrected on 23 September. Build 9 predates this manifest correction.
 - `src/instrumentation-client.ts` previously enabled masked Sentry session
   replay for errors, without an explicit replay-consent flow or recording
   indicator. Replay integration has been removed and both replay rates set to
@@ -87,10 +128,9 @@ focused lint and `plutil` validation passed. No production merge was performed.
 - Deploy the optional-analytics change to production after release authorization.
   The five policy translations now describe account-linked visits, the visit
   cookie and the Settings choice. See the implementation and test scope below.
-- Compare all 15 published data types, purposes, linkage and tracking answers
-  with the final release, including AI providers, support, purchase records,
-  push tokens, diagnostics and approximate location. A count of 15 does not
-  establish that the answers match.
+- The portal comparison is complete for the current implementation (table above).
+  Confirm the final production release still has the audited data flows, including
+  AI providers, support, purchases, push tokens, diagnostics and coarse location.
 - Verify the final deployed app no longer initializes replay. These source
   changes do not alter an existing production deployment.
 - Actual Apple-auth revocation still needs a real authenticated test identity.
@@ -99,8 +139,8 @@ focused lint and `plutil` validation passed. No production merge was performed.
 
 Build 10 now contains the corrected manifest and passed local signature checks
 and Apple's package validation on 22 September at 23:16 CEST. It is exported at
-`ios/build/export-release-10/MemoAI.ipa`; it has not been uploaded. The published
-portal purposes and the final production deployment still need verification.
+`ios/build/export-release-10/MemoAI.ipa`; it has not been uploaded. Portal purposes
+are now reconciled; the final production deployment still needs verification.
 
 Sources checked 22 September:
 [Apple privacy details](https://developer.apple.com/app-store/app-privacy-details/)

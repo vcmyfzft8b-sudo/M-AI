@@ -1,4 +1,4 @@
-# 22 September 2026 — current verification
+# 23 September 2026 — current verification
 
 This section supersedes the older portal status below. **Not yet ready to
 submit:** current end-to-end purchase and physical-device checks remain open.
@@ -20,11 +20,11 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   corrected analytics cleanup in the final deployed release; actual Apple
   authorization revocation remains part of the authentication gate.
 - Obtain the owner's Content Rights confirmation and correct Apple's declaration
-  for imported third-party documents/web pages. Reconcile the published privacy
-  answers and final screenshots with the release implementation. The new
-  [privacy reconciliation](privacy-reconciliation.md) records the analytics
-  opt-in and corrected policy translations, plus the portal-purpose comparison
-  and deployment checks still required.
+  for imported third-party documents/web pages. Reconcile final screenshots with
+  the release implementation. The [privacy reconciliation](privacy-reconciliation.md)
+  now records the completed comparison of all 15 portal data types and the
+  published User ID purpose/Product Interaction linkage corrections. Verify the
+  final production deployment preserves these audited data flows.
 - Resolve the optional discount-code request without weakening transaction
   ownership checks. Equivalent Stripe codes are not implemented on Apple.
 - Account for the iPadOS windowing limit: portrait layout is verified, but
@@ -42,6 +42,18 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- On 23 September (00:58 CEST), the signed-in App Store Connect Business page
+  shows Paid Apps Agreement, Free Apps Agreement, the Revolut EUR payout account
+  ending 4320, W-8BEN, Certificate of Foreign Status, Digital Services Act and
+  DAC7 all **Active**. This resolves the earlier request to check Business;
+  it does not establish Small Business Program approval.
+- App Privacy's 15 published types, purposes, linkage and tracking were compared
+  with the current native manifest. User ID lacked Analytics, and Product
+  Interaction had an unlinked declaration despite account-linked visit records.
+  Corrected and published both; the final detail preview now lists all 15 under
+  Data Linked to You, with no unlinked or tracking section. See the exact table
+  in `privacy-reconciliation.md`. The review draft still selects build 9 and
+  does not contain the latest native fixes; no review submission was made.
 - The physical iPhone recorder now passes with the genuinely purchased
   entitlement: start, pause (timer stays paused), resume, 15 seconds in the
   background, return with elapsed time preserved, and stop to a 24-second M4A

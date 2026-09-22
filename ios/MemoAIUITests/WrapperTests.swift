@@ -1,6 +1,34 @@
 import XCTest
 
 final class WrapperTests: XCTestCase {
+    @MainActor func testPreviewOpensSystemPhotoPicker() throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires a staging Preview and a synthetic account with an unused note")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        continueAfterFailure = false
+        let newNote = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "New note")).firstMatch
+        XCTAssertTrue(newNote.waitForExistence(timeout: 30))
+        newNote.tap()
+        let documents = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "PDF, document or photo")).firstMatch
+        XCTAssertTrue(documents.waitForExistence(timeout: 15), "The synthetic account must have its unused free note")
+        documents.tap()
+        let choose = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Choose a file")).firstMatch
+        XCTAssertTrue(choose.waitForExistence(timeout: 15))
+        choose.tap()
+        XCTAssertTrue(app.buttons["Photo Library"].waitForExistence(timeout: 10))
+        app.buttons["Photo Library"].tap()
+        XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 10))
+        print(app.debugDescription)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Document source picker"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
     @MainActor func testPreviewHelpUsesAppleBillingInstructions() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
               URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {

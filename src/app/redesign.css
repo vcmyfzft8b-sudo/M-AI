@@ -21317,3 +21317,28 @@ html[data-native] .memo-toast.subtle {
     padding: 0 1.4rem;
   }
 }
+
+
+/* Onboarding has its own palette and sits outside .memo. Its practice answer
+   still follows the shared keyboard measurement, including browser fallback.
+   Keep one scroller and let centering yield when the keyboard leaves less room.
+   No CSS easing here: the controller already supplies each animation frame. */
+.memo-onboarding-v2.memo-onboarding-keyboard {
+  --memo-safe-bottom: env(safe-area-inset-bottom, 0px);
+  bottom: var(--memo-keyboard, 0px);
+}
+
+.memo-onboarding-step-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  justify-content: safe center;
+  scroll-padding-block: 0.75rem;
+}
+
+.memo-onboarding-keyboard-footer {
+  bottom: var(--memo-keyboard, 0px);
+  padding-bottom: calc(
+    (1 - var(--memo-keyboard-up, 0)) * max(0.8rem, var(--memo-safe-bottom, 0px))
+    + var(--memo-keyboard-up, 0) * 0.75rem
+  );
+}

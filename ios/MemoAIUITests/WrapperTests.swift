@@ -5,18 +5,42 @@ final class WrapperTests: XCTestCase {
     /// Walk the same anonymous onboarding as a fresh PWA install before login.
     /// The working-adult route avoids school-only questions; demo steps keep
     /// their ordinary Continue action instead of bypassing the survey cookie.
-    @MainActor private func completeOnboarding(_ app: XCUIApplication) {
+    @MainActor private func completeOnboarding(_ app: XCUIApplication, verifyKeyboard: Bool = false) {
         let start = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Get started", "Začnimo"])).firstMatch
         let progress = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", ["Setup progress", "Napredek nastavitve"])).firstMatch
-        guard start.waitForExistence(timeout: 10) || progress.exists else { return }
+        guard start.waitForExistence(timeout: 10) || progress.exists else {
+            XCTAssertFalse(verifyKeyboard, "This test needs fresh anonymous onboarding")
+            return
+        }
         let choices = ["Instagram Reels", "For me", "Zame", "Working", "Zaposlen/a", "Learn 10× faster", "Učiti se 10x hitreje", "Audio notes", "Audio zapiski", "No, just help me in general", "Ne, pomagaj mi na splošno", "Casual — 10 min / day", "Sproščeno - 10 min / dan"]
         let deadline = Date().addingTimeInterval(180)
         var capturedWaitingState = false
         while Date() < deadline {
             if app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Continue with email", "Nadaljuj z e-pošto", "Close the subscription offer", "Zapri ponudbo naročnine"])).firstMatch.exists
-                || app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "New note", "Nov zapisek")).firstMatch.exists { return }
+                || app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "New note", "Nov zapisek")).firstMatch.exists {
+                XCTAssertFalse(verifyKeyboard, "Onboarding ended before the keyboard check")
+                return
+            }
             XCTAssertFalse(app.webViews.staticTexts["Your answers could not be saved."].firstMatch.exists,
                            "Anonymous onboarding must save successfully before sign-in")
+            if verifyKeyboard, app.webViews.textViews.firstMatch.exists {
+                let answer = app.webViews.textViews.firstMatch
+                answer.tap()
+                XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+                answer.typeText("Synthetic practice answer")
+                let next = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Continue", "Nadaljuj"])).firstMatch
+                RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+                let keyboardTop = app.keyboards.firstMatch.frame.minY
+                XCTAssertLessThanOrEqual(answer.frame.maxY, keyboardTop - 12)
+                XCTAssertTrue(next.isHittable)
+                XCTAssertLessThanOrEqual(next.frame.maxY, keyboardTop - 10)
+                keepStudyScreenshot("Onboarding answer and Continue above keyboard", app: app)
+                next.tap()
+                expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
+                waitForExpectations(timeout: 10)
+                keepStudyScreenshot("Onboarding after keyboard dismissal", app: app)
+                return
+            }
             let cta = ["Get started", "Začnimo", "Make my first note", "Ustvari prvi zapisek", "Continue", "Nadaljuj"].map {
                 app.webViews.buttons.matching(NSPredicate(format: "label == %@", $0)).firstMatch
             }
@@ -1699,6 +1723,33 @@ final class WrapperTests: XCTestCase {
         XCTAssertTrue(webButton("Pause", "Začasno ustavi").waitForExistence(timeout: 10))
         before = try XCTUnwrap(elapsed())
 
+        if env["MEMO_QA_SIRI_INTERRUPTION"] == "1" {
+            // Ask a read-only system question: no call, message, reminder or
+            // settings mutation. Exercise a real competing audio session.
+            XCUIDevice.shared.siriService.activate(voiceRecognitionText: "What time is it?")
+            RunLoop.current.run(until: Date().addingTimeInterval(6))
+            app.activate()
+            XCTAssertGreaterThanOrEqual(try XCTUnwrap(elapsed()), before,
+                                        "A Siri interruption must not discard the take")
+            if resume.waitForExistence(timeout: 5) {
+                let interruptedAt = try XCTUnwrap(elapsed())
+                RunLoop.current.run(until: Date().addingTimeInterval(3))
+                XCTAssertLessThanOrEqual(try XCTUnwrap(elapsed()) - interruptedAt, 1,
+                                        "An interrupted recording must stay paused until resumed")
+                snap("Siri interruption left the recording safely paused")
+                resume.tap()
+            }
+            XCTAssertTrue(webButton("Pause", "Začasno ustavi").waitForExistence(timeout: 10))
+            let restoredAt = try XCTUnwrap(elapsed())
+            let advancing = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                (elapsed() ?? 0) >= restoredAt + 2
+            }, object: app)
+            XCTAssertEqual(XCTWaiter.wait(for: [advancing], timeout: 15), .completed,
+                           "Recording must advance after Siri releases the audio session")
+            snap("Recording recovered after Siri")
+            before = try XCTUnwrap(elapsed())
+        }
+
         // Away long enough that a page-side timer would visibly fall behind.
         let away = 15
         XCUIDevice.shared.press(.home)
@@ -2238,6 +2289,20 @@ final class WrapperTests: XCTestCase {
         continueAfterFailure = false
         XCTAssertTrue(app.webViews.staticTexts["Native bridge ready"].waitForExistence(timeout: 30))
         return app
+    }
+
+    @MainActor func testLocalOnboardingKeyboard() throws {
+        guard let origin = ProcessInfo.processInfo.environment["MEMO_KEYBOARD_QA_URL"],
+              URL(string: origin)?.host == "localhost" else {
+            throw XCTSkip("Requires the task's local Next server")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = origin
+        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        defer { app.terminate() }
+        completeOnboarding(app, verifyKeyboard: true)
     }
 
     /// Runs the shared sheet controller against a real UIKit keyboard. The

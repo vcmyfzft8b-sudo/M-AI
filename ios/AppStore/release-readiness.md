@@ -42,6 +42,27 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- The keyboard coverage audit found onboarding's practice-answer footer still
+  pinned behind the keyboard. It now uses the same shared inset on both PWA
+  and wrapper, with a single scrollable step and a footer that follows each
+  frame without a second CSS animation. The real simulator keyboard test
+  checks typing, visible answer/Continue, then dismissal:
+  `review-sep23-onboarding-keyboard-local.xcresult` (1 pass, 36.4 seconds).
+  Browser fallback geometry also passes at 375 × 667 with a simulated viewport
+  change; this is layout evidence, not a hardware frame-rate measurement.
+  The earlier library/note-chat, search, rename and shared-sheet results still
+  cover those unchanged surfaces. TypeScript, focused lint and 96 mobile/sheet
+  regressions pass. Two initial simulator attempts were harness failures:
+  the filtered Preview scheme selected zero tests, then an origin override
+  containing `/onboarding` was rejected and opened the published page. The
+  final run uses the unfiltered scheme and an origin-only local override.
+- Recording returned from actual Siri on the iPhone and continued advancing;
+  the retained capture shows active recording, not the optional paused branch.
+  The same test then backgrounds the app, returns, stops to an M4A capture and
+  cancels without creating a note. Evidence:
+  `review-sep23-iphone-siri-recording.xcresult` (1 pass, 193.4 seconds).
+  Audible continuity, incoming-call and locked-screen tests remain separate.
+
 - Physical iPhone podcast generation/playback now passes with the circuit note:
   progress advances, Pause stays stopped, and Back 10 seconds seeks backward.
   `review-sep23-iphone-podcast-controls.xcresult` passes in 60.5 seconds. The first

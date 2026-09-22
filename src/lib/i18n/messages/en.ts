@@ -1875,6 +1875,7 @@ export const en: Messages = {
   "tutor.error.busy": "The voice service is busy right now. Try again in a minute.",
   "tutor.error.listeningBusy": "Every voice line is busy. You can still listen — cutting in by speaking will work again shortly.",
   "tutor.error.startFailed": "The walkthrough could not be started.",
+  "tutor.error.rateLimited": "Too many attempts. Try again in {count} min.",
   "tutor.error.turnFailed": "That could not be generated.",
   "api.trialOnly.tutor": "Without a paid plan the tutor is only available for your trial material.",
   "api.tutorNotReady": "The tutor becomes available once the note has finished processing.",

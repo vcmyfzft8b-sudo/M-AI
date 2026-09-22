@@ -2,6 +2,29 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { deferred, PLAN, response, sessionHarness, settle } from "./tutor-session-harness.mjs";
 
+test("a tutor session 429 waits for Retry-After without reporting a defect or calling again", async () => {
+  const h = sessionHarness();
+  h.state.sessionResponse = {
+    ok: false,
+    status: 429,
+    headers: { get: () => "120" },
+    json: async () => ({ error: "Too many requests.", retryAfterSeconds: 120 }),
+  };
+
+  await h.tutor.startSession();
+  assert.equal(h.errors.length, 0);
+  assert.ok(h.state.updates.some((value) => typeof value === "string" && value.includes("tutor.error.rateLimited")));
+  assert.equal(h.state.sessionCalls, 1);
+
+  await h.tutor.startSession();
+  assert.equal(h.state.sessionCalls, 1, "a second tap during the server's wait must stay local");
+
+  await h.tick(120_000);
+  h.state.sessionResponse = null;
+  await h.tutor.startSession();
+  assert.equal(h.state.sessionCalls, 2, "Start is available when the server's wait expires");
+});
+
 for (const kind of ["answer", "feedback"]) {
   test(`${kind} starts while the lesson plan is still pending`, async () => {
     const h = sessionHarness();

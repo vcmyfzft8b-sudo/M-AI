@@ -6,13 +6,13 @@ submit:** current end-to-end purchase and physical-device checks remain open.
 
 ## Remaining submission gates
 
-- Complete Google authentication, provider session recovery and Apple
-  account-deletion revocation. The owner completed Apple sign-in on the physical
-  iPhone on 22 September; staging independently records its native Apple grant
-  at 21:19:09 UTC. Opening a provider sheet alone is only a boundary check.
-- Complete Apple Sandbox purchases, entitlement delivery, restore, renewal,
-  expiry and refund/revocation. Real product prices and a signed TEST notification
-  pass; neither proves a purchased subscription works.
+- Complete Apple account-deletion revocation. Apple and Google sign-in and
+  subsequent session recovery now pass on the physical iPhone against staging;
+  repeat authentication on the final production/TestFlight build before release.
+- Complete accelerated Sandbox renewal, expiry and refund/revocation tests.
+  A real yearly trial purchase, server entitlement delivery, Restore Purchases
+  and access after app restart now pass on the physical iPhone. Other product
+  purchases and the final TestFlight environment remain to be checked.
 - Finish hardware recording/audio/interruptions and the other explicitly listed
   device checks. The portrait lock and email-code/settings walkthrough pass on
   the connected iPhone; perceived haptics and audio quality remain unverified.
@@ -42,12 +42,67 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- The physical iPhone recorder now passes with the genuinely purchased
+  entitlement: start, pause (timer stays paused), resume, 15 seconds in the
+  background, return with elapsed time preserved, and stop to a 24-second M4A
+  ready screen. The capture was then cancelled without creating another note.
+  `review-sep23-iphone-recording-premium.xcresult`: one pass, 190.5 seconds.
+  The final screenshot was visually inspected and the five captures are in
+  `review-sep23-iphone-recording-attachments/`. This confirms the recording UI
+  and background continuity on real hardware; audible quality, a locked-screen
+  capture and telephone/Siri interruptions have not been verified by this run.
+- At 21:58:04 UTC on 22 September, the physical iPhone completed Apple's actual
+  no-charge Sandbox checkout for `eu.memoai.premium.trial.yearly`. The owner
+  confirmed the physical side-button/Face ID step. Apple's sheet displayed
+  three days free followed by **€129.99/year**. Memo returned home and its server
+  persisted a verified, active Sandbox entitlement for the synthetic Word QA
+  account, expiring at 21:58:04 UTC on 23 September. This test-environment expiry
+  is not the production trial duration. Evidence:
+  `review-sep22-iphone-sandbox-confirm.xcresult` (one pass, 146.2 seconds),
+  `review-sep22-billing-purchase-verified.json` and
+  `review-sep22-iphone-purchase-success.png`. The earlier handoff-only run
+  skipped while the Subscribe sheet was still awaiting confirmation.
+- Restore Purchases then passed through the actual Settings row, followed by
+  an app restart with **Apple subscription active** still visible.
+  `review-sep22-iphone-restore-purchased.xcresult`: one pass, 64.2 seconds.
+  The same entitlement was re-verified at 21:59:53 UTC, independently confirmed
+  by `review-sep22-billing-restore-check.json`. All three Settings screenshots
+  are retained in `review-sep22-iphone-restore-attachments/`; the post-relaunch
+  capture was visually inspected. No subscription rows or quota values were
+  fabricated for either test.
+- The new dedicated Sandbox tester has not yet been created. A read-only
+  `/v2/sandboxTesters` check at midnight confirms only the September 16 tester
+  exists (`review-sep23-sandbox-testers.json`). The successful purchase sheet
+  used the owner's ordinary Apple account in Apple's no-charge test environment.
+  Its verified Sandbox receipt is valid purchase evidence, but it does not
+  provide the dedicated tester's accelerated lifecycle controls.
 - The owner reports successful Apple sign-in on the connected iPhone with
   Debug build 10 against the staging Preview. A read-only staging check confirms
   an `apple_auth_grants` record for `eu.memoai.memo`, updated at 21:19:09 UTC
   on 22 September (`review-sep22-device-apple-grant-confirmation.json`). This
-  confirms grant persistence; session recovery, actual revocation and Google
-  authentication are separate checks and remain open.
+  confirms grant persistence. The later device test also recovered the Apple
+  session after relaunch, opened Settings, signed out and opened Google.
+- Google authentication completed on the physical iPhone at 21:38:09 UTC.
+  The real Google system-browser page returned to Memo home; XCTest passed in
+  75.5 seconds (`review-sep22-device-google-live.xcresult`). Staging's Auth API
+  independently confirms the Google identity and sign-in timestamp in
+  `review-sep22-device-provider-session-confirmation.json`. The subsequent
+  synthetic-account preparation test relaunched Memo, recovered this Google
+  session, opened Settings and signed out. Both provider screenshots were
+  inspected: the app's home screen uses the shared PWA layout with no browser
+  toolbar. Google's separate system authentication sheet retains system chrome.
+  These are staging results; Apple revocation and final TestFlight verification
+  remain open.
+- The physical iPhone subsequently completed the synthetic Word QA account's
+  email-code login (`review-sep22-iphone-billing-account.xcresult`: one pass,
+  135.5 seconds). That fixture has consumed its free note and has no Apple
+  entitlement, independently confirmed in `review-sep22-billing-before.json`.
+  Its recorder test correctly encountered the upgrade screen when opening a
+  second note, so **no hardware recording pass** is claimed from
+  `review-sep22-iphone-recording.xcresult`. The screenshot shows the real US
+  catalogue, three-day trial, $19.99/month and $129.99/year renewal terms, and
+  working-layout restore/terms/privacy controls. Retest capture after a real
+  Sandbox purchase unlocks the account; the fixture's allowance was not reset.
 - The opt-in `testPreviewGoogleSignInHandoff` test builds successfully and is
   prepared to recover the existing session, sign out through Settings, verify
   both provider buttons, and open Google authentication. Physical-device runs
@@ -55,8 +110,12 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
   out while enabling automation mode despite CoreDevice reporting the iPhone
   unlocked. Evidence: `review-sep22-device-google-handoff.log` and
   `review-sep22-device-google-retry.log`. No Google sign-in or session-recovery
-  pass is claimed. Device automation approval is requested from the owner;
-  the Sandbox tester form separately awaits owner-entered credentials.
+  pass was claimed from those attempts. After the owner enabled automation,
+  the 23:34 run navigated onboarding but lost its CoreDevice connection.
+  The 23:37 retry completed successfully as recorded above. The handoff test
+  now also saves screenshots in its own test-runner container so a connection
+  failure does not lose all visual evidence. The Sandbox tester form separately
+  awaits owner-entered credentials.
 - Release build 10 is archived and exported locally with the current native
   restore fix and corrected User ID Analytics declaration. Apple `altool`
   validation returned **VERIFY SUCCEEDED with no errors** at 23:16 CEST on

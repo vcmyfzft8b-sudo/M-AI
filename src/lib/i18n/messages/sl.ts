@@ -88,6 +88,8 @@ export const sl = {
   "settings.install.ctaDetail": "Odpre se čez cel zaslon, brez vrstice brskalnika. Pokaži mi, kako.",
   "settings.rows.redeem": "Unovči kodo",
   "settings.analytics.title": "Neobvezna analitika",
+  "settings.analytics.on": "Vklopljeno",
+  "settings.analytics.off": "Izklopljeno",
   "settings.analytics.detail": "Dovoli Memu in Vercelu merjenje obiskov strani, približne lokacije, podatkov o napravi in delovanja. Obiski so lahko povezani s tvojim računom. Privzeto izklopljeno; na tej napravi lahko možnost kadar koli izklopiš.",
   "settings.analytics.saveFailed": "Izbire ni bilo mogoče shraniti. Preveri, ali so piškotki blokirani.",
   "settings.rows.privacy": "Zasebnost",

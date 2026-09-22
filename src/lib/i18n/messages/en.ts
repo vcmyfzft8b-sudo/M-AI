@@ -79,6 +79,8 @@ export const en: Messages = {
   "settings.install.ctaDetail": "It opens full screen, with no browser bar. Show me how.",
   "settings.rows.redeem": "Redeem a code",
   "settings.analytics.title": "Optional analytics",
+  "settings.analytics.on": "On",
+  "settings.analytics.off": "Off",
   "settings.analytics.detail": "Allow Memo and Vercel to measure page visits, approximate location, device details and performance. Visits may be linked to your account. Off by default; you can turn this off at any time on this device.",
   "settings.analytics.saveFailed": "Your choice could not be saved. Check whether cookies are blocked.",
   "settings.rows.privacy": "Privacy",

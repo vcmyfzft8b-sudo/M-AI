@@ -611,6 +611,19 @@ final class WrapperTests: XCTestCase {
         app.launchEnvironment["MEMO_IOS_URL"] = preview
         app.launch()
         dismissInitialOffer(app)
+        // Keep this opt-in handoff observable even if CoreDevice disconnects
+        // before Xcode finalizes its result bundle. These are test-runner files,
+        // never files or screenshot behavior shipped in Memo itself.
+        func capture(_ name: String, file: String) throws {
+            let screenshot = XCUIScreen.main.screenshot()
+            let attachment = XCTAttachment(screenshot: screenshot)
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            try screenshot.pngRepresentation.write(to: directory.appendingPathComponent(file))
+        }
+        try capture("Google test launch state", file: "google-launch.png")
         let settings = app.webViews.links.matching(NSPredicate(
             format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "Settings", "Nastavitve")).firstMatch
         if settings.waitForExistence(timeout: 30) {
@@ -638,10 +651,7 @@ final class WrapperTests: XCTestCase {
             format: "label IN %@", ["Continue with Apple", "Nadaljuj z Apple"])).firstMatch.exists)
         google.tap()
         RunLoop.current.run(until: Date().addingTimeInterval(8))
-        let boundary = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        boundary.name = "Google authentication handoff on iPhone"
-        boundary.lifetime = .keepAlways
-        add(boundary)
+        try capture("Google authentication handoff on iPhone", file: "google-handoff.png")
         print("MEMO_QA: Google button tapped; waiting for account-owner authentication")
         let signedIn = app.webViews.buttons.matching(NSPredicate(
             format: "label CONTAINS %@ OR label CONTAINS %@", "New note", "Nov zapisek")).firstMatch
@@ -649,10 +659,7 @@ final class WrapperTests: XCTestCase {
         while Date() < deadline && !signedIn.exists {
             RunLoop.current.run(until: Date().addingTimeInterval(2))
         }
-        let final = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        final.name = "Google authentication result on iPhone"
-        final.lifetime = .keepAlways
-        add(final)
+        try capture("Google authentication result on iPhone", file: "google-result.png")
         guard signedIn.exists else {
             throw XCTSkip("Google flow opened; completed authentication was not observed")
         }
@@ -726,13 +733,100 @@ final class WrapperTests: XCTestCase {
         shot.name = "Actual Sandbox checkout boundary"
         shot.lifetime = .keepAlways
         add(shot)
+        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        try XCUIScreen.main.screenshot().pngRepresentation.write(to: directory.appendingPathComponent("sandbox-checkout.png"))
         for (name, process) in [("Memo", app), ("System", XCUIApplication(bundleIdentifier: "com.apple.springboard"))] {
             let hierarchy = XCTAttachment(string: process.debugDescription)
             hierarchy.name = name + " checkout accessibility"
             hierarchy.lifetime = .keepAlways
             add(hierarchy)
         }
-        throw XCTSkip("Captured purchase boundary; completion must be verified separately")
+        guard env["MEMO_QA_COMPLETE_CHECKOUT"] == "1" else {
+            throw XCTSkip("Captured purchase boundary; completion must be verified separately")
+        }
+        print("MEMO_QA: Sandbox checkout opened; waiting for test-account authentication")
+        let home = app.webViews.buttons.matching(NSPredicate(
+            format: "label CONTAINS %@ OR label CONTAINS %@", "New note", "Nov zapisek")).firstMatch
+        let deadline = Date().addingTimeInterval(300)
+        let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        var confirmedTestPurchase = false
+        var nextCapture = Date.distantPast
+        while Date() < deadline {
+            if app.state == .runningForeground && home.exists && home.isHittable && !payment.exists { break }
+            // Only confirm Apple's explicitly free Sandbox sheet. Never enter
+            // credentials or confirm a production purchase from this test.
+            if !confirmedTestPurchase {
+                for process in [app, system] {
+                    let notice = process.staticTexts.matching(NSPredicate(
+                        format: "label CONTAINS %@", "You will not be charged")).firstMatch
+                    let subscribe = process.buttons["Subscribe"].firstMatch
+                    if notice.exists && subscribe.exists && subscribe.isHittable {
+                        subscribe.tap()
+                        confirmedTestPurchase = true
+                        print("MEMO_QA: Confirmed Apple's no-charge Sandbox purchase")
+                        break
+                    }
+                }
+            }
+            if Date() >= nextCapture {
+                try XCUIScreen.main.screenshot().pngRepresentation.write(to: directory.appendingPathComponent("sandbox-progress.png"))
+                try (app.debugDescription + "\n" + system.debugDescription).write(
+                    to: directory.appendingPathComponent("sandbox-progress.txt"), atomically: true, encoding: .utf8)
+                nextCapture = Date().addingTimeInterval(20)
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(2))
+        }
+        let completed = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        completed.name = "Sandbox checkout result"
+        completed.lifetime = .keepAlways
+        add(completed)
+        try XCUIScreen.main.screenshot().pngRepresentation.write(to: directory.appendingPathComponent("sandbox-result.png"))
+        guard home.exists && home.isHittable && !payment.exists else {
+            throw XCTSkip("Checkout opened; completed purchase was not observed")
+        }
+        // The route's persisted Sandbox entitlement is verified separately;
+        // returning home alone is not evidence of renewal or restoration.
+        print("MEMO_QA: Checkout returned to Memo home; verify the server entitlement")
+    }
+
+    // Run only after a real Sandbox entitlement has been independently verified.
+    // The server record is checked again after the UI run; this test never seeds
+    // a subscription or substitutes a StoreKit fixture.
+    @MainActor func testPreviewRestorePurchasedSubscription() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MEMO_QA_COMPLETE_CHECKOUT"] == "1",
+              let preview = env["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires an explicitly verified Sandbox purchase")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        func openSettings() {
+            let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+            XCTAssertTrue(settings.waitForExistence(timeout: 30))
+            settings.tap()
+            XCTAssertTrue(app.webViews.staticTexts["Apple subscription active"].firstMatch.waitForExistence(timeout: 20))
+        }
+        openSettings()
+        let restore = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Restore purchases")).firstMatch
+        XCTAssertTrue(restore.waitForExistence(timeout: 10))
+        for _ in 0..<8 where !restore.isHittable { app.webViews.firstMatch.swipeUp() }
+        XCTAssertTrue(restore.isHittable)
+        keepStudyScreenshot("Purchased Apple subscription before restore", app: app)
+        restore.tap()
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        let ready = NSPredicate { _, _ in restore.exists && restore.isEnabled }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: restore)], timeout: 45), .completed)
+        XCTAssertFalse(app.webViews.staticTexts.matching(NSPredicate(
+            format: "label CONTAINS %@", "Your purchase could not be confirmed yet")).firstMatch.exists)
+        XCTAssertTrue(app.webViews.staticTexts["Apple subscription active"].firstMatch.exists)
+        keepStudyScreenshot("Purchased Apple subscription after restore", app: app)
+        app.terminate()
+        app.launch()
+        openSettings()
+        keepStudyScreenshot("Purchased Apple subscription after relaunch", app: app)
     }
 
     // Real storefront prices must reach the wheel and both discounted plans.
@@ -1837,6 +1931,11 @@ final class WrapperTests: XCTestCase {
             let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
             XCTAssertTrue(settings.waitForExistence(timeout: 30))
             settings.tap()
+            let row = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Optional analytics")).firstMatch
+            XCTAssertTrue(row.waitForExistence(timeout: 20))
+            for _ in 0..<7 where !row.isHittable { app.webViews.firstMatch.swipeUp() }
+            keepStudyScreenshot("Optional analytics fits the Settings list", app: app)
+            row.tap()
             let choice = app.webViews.switches["Optional analytics"]
             XCTAssertTrue(choice.waitForExistence(timeout: 20))
             for _ in 0..<7 where !choice.isHittable { app.webViews.firstMatch.swipeUp() }

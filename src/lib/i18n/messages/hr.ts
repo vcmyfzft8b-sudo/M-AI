@@ -79,6 +79,8 @@ export const hr: Messages = {
   "settings.install.ctaDetail": "Otvara se preko cijelog zaslona, bez trake preglednika. Pokaži mi kako.",
   "settings.rows.redeem": "Iskoristi kod",
   "settings.analytics.title": "Neobvezna analitika",
+  "settings.analytics.on": "Uključeno",
+  "settings.analytics.off": "Isključeno",
   "settings.analytics.detail": "Dopusti Memu i Vercelu mjerenje posjeta stranicama, približne lokacije, podataka o uređaju i performansi. Posjeti mogu biti povezani s tvojim računom. Zadano je isključeno; na ovom uređaju možeš je isključiti u bilo kojem trenutku.",
   "settings.analytics.saveFailed": "Odabir nije bilo moguće spremiti. Provjeri jesu li kolačići blokirani.",
   "settings.rows.privacy": "Privatnost",

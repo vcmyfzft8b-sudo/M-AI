@@ -1,5 +1,25 @@
 # Privacy reconciliation — 22 September 2026
 
+## Settings presentation and default — 23 September
+
+Optional analytics uses a compact Settings row, matching Language and the
+other account actions. The row shows On/Off and opens a standard detail sheet
+with the complete disclosure, privacy-policy link and switch. The same shared
+component serves browsers and the iOS wrapper; opening or closing the sheet
+does not consent to analytics. Existing choices remain unchanged.
+
+The owner requested default-on only if permitted. The current implementation
+retains explicit opt-in: it uses a non-essential visit cookie and can associate
+usage with an account. Apple's guideline 5.1.1(ii) requires consent or a valid
+legal basis; Slovenian ZEKom-2 guidance requires prior consent for cookies
+outside the necessary/transmission exceptions. This is a decision about Memo's
+current implementation, not a claim that every analytics implementation always
+requires the same consent mechanism.
+
+Sources checked 23 September:
+[Apple guideline 5.1.1](https://developer.apple.com/app-store/review/guidelines/#data-collection-and-storage)
+and [Slovenian Information Commissioner, consent to cookies](https://www.ip-rs.si/mnenja-zvop-2/privolitev-v-uporabo-pi%C5%A1kotkov-1711356267).
+
 This is an implementation audit, not confirmation that every published App Store
 answer or legal-policy statement is correct. The portal was previously observed
 as Published with 15 data types; purpose-level answers still need comparison.

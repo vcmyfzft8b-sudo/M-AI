@@ -6197,14 +6197,16 @@
   min-width: 0;
 }
 
-.memo-card-row.memo-settings-analytics {
-  flex-wrap: nowrap;
-  flex-direction: row;
-  align-items: center;
+.memo-analytics-sheet {
+  touch-action: pan-y;
 }
 
-.memo-settings-analytics .memo-card-row-copy {
-  flex: 1;
+.memo-analytics-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.15rem;
+  margin: 1.6rem 0;
 }
 
 .memo-card-row-title {

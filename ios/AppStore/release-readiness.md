@@ -15,11 +15,14 @@ submit:** current end-to-end purchase and physical-device checks remain open.
 - Finish hardware recording/audio/interruptions and the other explicitly listed
   device checks. The portrait lock and email-code/settings walkthrough pass on
   the connected iPhone; perceived haptics and audio quality remain unverified.
-- Verify final account erasure after the existing three-hour upload drain, and
-  confirm the remaining imported-file and study-feature coverage below.
+- Final account/file erasure after the three-hour drain passes. Verify the
+  corrected analytics cleanup in the final deployed release; actual Apple
+  authorization revocation remains part of the authentication gate.
 - Obtain the owner's Content Rights confirmation and correct Apple's declaration
   for imported third-party documents/web pages. Reconcile the published privacy
-  answers and final screenshots with the release implementation.
+  answers and final screenshots with the release implementation. The new
+  [privacy reconciliation](privacy-reconciliation.md) identifies incomplete
+  analytics/cookie disclosures and the checks still required.
 - Resolve the optional discount-code request without weakening transaction
   ownership checks. Equivalent Stripe codes are not implemented on Apple.
 - Account for the iPadOS windowing limit: portrait layout is verified, but
@@ -55,11 +58,16 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
   The final staging read (`review-sep22-library-rows-after.log`) confirms the
   circuit note is ready with its original title and no temporary folders or
   membership rows remain. Earlier harness/runner failures are not pass evidence.
-- The deletion-test account's pre-cleanup storage inventory contains eight
-  objects (3,635,379 bytes): `review-sep22-erasure-storage-before.json`.
-  Its existing erasure worker remains live and is waiting for 17:04:40 CEST;
-  the files have not yet been claimed as erased. The iPhone remained locked
-  at the 16:48 CEST check (`review-sep22-device-lock-latest.json`).
+- At 17:04:56 CEST, the original deletion worker completed its unchanged drain:
+  Auth, the note and the deletion request were removed; all eight storage
+  objects (3,635,379 bytes) were gone. It exposed one retained analytics session
+  and 73 page views, with their owners set to null. The corrected engine now
+  removes owned analytics before Auth deletion and clears the visit cookie.
+  Five regression tests and an isolated staging integration pass, including
+  anonymous-view cascade and preservation of unrelated records. The known
+  original fixture's remaining analytics were removed by their captured IDs.
+  See `privacy-reconciliation.md` for evidence and limits. Session replay is
+  also disabled, and the native User ID declaration now includes Analytics.
 - Real tutor startup testing exposed an allowance bug: the first synthetic
   session reserved its 60-second allowance before WebKit's microphone prompt
   was answered. No explanation played; after the test terminated, the abandoned

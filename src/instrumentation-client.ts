@@ -14,16 +14,11 @@ Sentry.init({
     process.env.NODE_ENV,
   sendDefaultPii: false,
   tracesSampleRate: isDevelopment ? 1.0 : 0.1,
-  integrations: [
-    Sentry.replayIntegration({
-      maskAllText: true,
-      maskAllInputs: true,
-      blockAllMedia: true,
-      block: [".note-read-content", ".lecture-markdown"],
-    }),
-  ],
-  replaysSessionSampleRate: isDevelopment ? 0.1 : 0,
-  replaysOnErrorSampleRate: 1.0,
+  // Session replay records user activity even when text and media are masked.
+  // Keep it disabled until there is explicit consent and a recording indicator.
+  // Error reports and performance traces remain enabled independently.
+  replaysSessionSampleRate: 0,
+  replaysOnErrorSampleRate: 0,
   beforeSend(event) {
     if (shouldDropClientErrorEvent(event)) {
       return null;

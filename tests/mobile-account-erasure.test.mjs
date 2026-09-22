@@ -8,10 +8,16 @@ function fixture() {
     lectures: [{ id: "lecture", user_id: "owner" }],
     generation_failure_captures: [{ lecture_id: "retained", user_id: "owner" }],
     ai_usage_events: [{ user_id: "owner" }],
+    site_sessions: [{ id: "visit", user_id: "owner" }, { id: "other-visit", user_id: "other" }],
+    site_page_views: [
+      { session_id: "visit", user_id: "owner" },
+      { session_id: "visit", user_id: null },
+      { session_id: "other-visit", user_id: "other" },
+    ],
     profiles: [{ id: "owner", stripe_customer_id: "customer" }],
   };
   const objects = new Set(["owner/audio.wav", "tts/owner/speech.wav", "podcast/owner/show.wav", "failure-captures/retained/input.pdf", "other/keep.pdf"]);
-  const state = { tables, objects, authExists: true, failStorage: false, failCompletion: false, cancelled: 0 };
+  const state = { tables, objects, authExists: true, failStorage: false, failCompletion: false, failAnalytics: false, cancelled: 0 };
   const service = {
     from(table) {
       let action = "select", updates, single = false, filters = [], start = 0, end = Infinity;
@@ -30,6 +36,8 @@ function fixture() {
             if (action === "update") rows.forEach(r => Object.assign(r, updates));
             if (action === "delete") {
               if (table === "account_deletion_requests" && state.failCompletion) return { error: new Error("connection lost after auth deletion") };
+              if (table === "site_sessions" && state.failAnalytics) return { error: new Error("analytics unavailable") };
+              if (table === "site_sessions") tables.site_page_views = tables.site_page_views.filter(v => !rows.some(s => s.id === v.session_id));
               tables[table] = tables[table].filter(r => !rows.includes(r));
             }
             return { data: single ? rows[0] ?? null : structuredClone(rows), error: null };
@@ -50,6 +58,9 @@ function fixture() {
       if (!state.authExists) return { error: { status: 404 } };
       state.authExists = false;
       tables.lectures = []; tables.profiles = [];
+      for (const table of ["site_sessions", "site_page_views"]) {
+        tables[table].forEach(row => { if (row.user_id === "owner") row.user_id = null; });
+      }
       return { error: null };
     } } },
   };
@@ -65,6 +76,20 @@ test("erasure waits for upload tokens to drain and preserves other accounts", as
   assert.deepEqual([...f.objects], ["other/keep.pdf"]);
   assert.equal(f.cancelled, 1);
   assert.equal(f.tables.account_deletion_requests.length, 0);
+  assert.deepEqual(f.tables.site_sessions, [{ id: "other-visit", user_id: "other" }]);
+  assert.deepEqual(f.tables.site_page_views, [{ session_id: "other-visit", user_id: "other" }]);
+});
+
+test("analytics cleanup failure keeps ownership and the durable job for retry", async () => {
+  const f = fixture(); f.failAnalytics = true;
+  assert.deepEqual(await f.run(), { deleted: 0, failed: 1 });
+  assert.equal(f.authExists, true);
+  assert.equal(f.tables.site_sessions[0].user_id, "owner");
+  assert.equal(f.tables.account_deletion_requests.length, 1);
+  f.failAnalytics = false;
+  assert.deepEqual(await f.run(), { deleted: 1, failed: 0 });
+  assert.deepEqual(f.tables.site_sessions, [{ id: "other-visit", user_id: "other" }]);
+  assert.deepEqual(f.tables.site_page_views, [{ session_id: "other-visit", user_id: "other" }]);
 });
 
 test("Apple revocation failure retains the account and job until a retry succeeds", async () => {

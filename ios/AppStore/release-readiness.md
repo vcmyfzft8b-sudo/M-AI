@@ -56,6 +56,13 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
   the filtered Preview scheme selected zero tests, then an origin override
   containing `/onboarding` was rejected and opened the published page. The
   final run uses the unfiltered scheme and an origin-only local override.
+  The READY `058c4eb1` Preview is
+  `https://memo-7elesth2r-nace-valencics-projects.vercel.app`. Both browser and
+  native-UA checks pass there: footer bottom equals keyboard top, with the
+  answer visible, at 375 × 667 and 393 × 852 respectively. Reports:
+  `review-sep23-onboarding-keyboard-preview-browser.json` and
+  `review-sep23-onboarding-keyboard-preview-native.json`. These Preview checks
+  simulate the keyboard geometry; the simulator result above uses UIKit.
 - Recording returned from actual Siri on the iPhone and continued advancing;
   the retained capture shows active recording, not the optional paused branch.
   The same test then backgrounds the app, returns, stops to an M4A capture and

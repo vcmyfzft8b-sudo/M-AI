@@ -11,8 +11,8 @@ The current evidence and unresolved gates are in
   It includes keyboard bridge v4. It has **not been uploaded**. The unsubmitted
   App Review draft still contains build 9, version 1.0, four subscriptions and
   their group. Release is manual.
-- The test branch `codex/ios-app-wrapper` is pushed at `a8f29b9d`. Its READY
-  Preview is `https://memo-f3876ro3o-nace-valencics-projects.vercel.app`, using
+- The latest runtime commit on `codex/ios-app-wrapper` is `058c4eb1`. Its READY
+  Preview is `https://memo-7elesth2r-nace-valencics-projects.vercel.app`, using
   shared staging. The branch's changes are not a production deployment.
 - Actual app coverage includes photo/PDF/Word/slides/web-article note generation,
   flashcards, quiz/practice, mindmap/export, memory palace, speed reader,
@@ -35,7 +35,7 @@ The current evidence and unresolved gates are in
 1. Confirm final erasure; test actual Sign in with Apple token revocation.
 2. Finish dedicated Sandbox lifecycle checks: accelerated renewal, expiry,
    refund/revocation and other products. The new dedicated tester was not created.
-3. Complete physical audio quality, locked-screen/interruption and spoken-tutor
+3. Complete physical audio quality, locked-screen/call-interruption and spoken-tutor
    checks. UI playback/recording evidence alone does not verify these.
 4. Obtain the owner's third-party Content Rights confirmation, then correct the
    current `DOES_NOT_USE_THIRD_PARTY_CONTENT` declaration. Imported documents and

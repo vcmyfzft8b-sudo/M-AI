@@ -102,6 +102,13 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         if !overlay.isHidden, !retry.isHidden { message.text = text("connectionFailed") }
     }
 
+    private var keyboardMotion: KeyboardMotion?
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        keyboardMotion?.layoutChanged()
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         // A take the page never collected cannot be recovered — the draft it
@@ -141,10 +148,11 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             (() => {
               if (!\(AppConfiguration.trustedOriginsJSON).includes(location.origin)) return;
               Object.defineProperty(window, 'memoNative', { value: Object.freeze({
-                // 3 adds remote notifications. The page is deployed
+                // 4 adds keyboard layout frames. The page is deployed
                 // independently of the binary, so it has to ask before calling
                 // a command an installed older build would reject.
-                version: 3,
+                version: 4,
+                get keyboardFrame() { return window.__memoKeyboardFrame; },
                 request: (command, payload = {}) => window.webkit.messageHandlers.memoNative.postMessage({command, ...payload})
               }) });
               \(Haptics.script)
@@ -214,6 +222,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
+        keyboardMotion = KeyboardMotion(host: view, webView: webView)
         buildOverlay()
         store.deliver = { [weak self] jws in
             guard let self else { throw Store.StoreError.unavailable }
@@ -377,6 +386,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         webView.isHidden = false
         loadingCover.isHidden = true
         resume()
+        keyboardMotion?.refresh()
         // A settled page is the only dependable sign that a sign-in finished,
         // and the token has to be attached to whoever is signed in *now*. Does
         // nothing when notifications were never allowed, and the post is

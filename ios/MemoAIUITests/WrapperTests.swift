@@ -1915,6 +1915,54 @@ final class WrapperTests: XCTestCase {
 
     // Opens each remaining settings row (sheets, native prompts and in-app
     // pages) and gets back to Settings, relaunching if the way back is lost.
+    @MainActor func testPreviewKeyboardEverywhere() throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires the signed-in synthetic staging account")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        defer { app.terminate() }
+        passConsentGate(app)
+        dismissInitialOffer(app)
+        func button(_ label: String) -> XCUIElement { app.webViews.buttons[label].firstMatch }
+        func checkField(_ field: XCUIElement, name: String, composer: Bool = false) {
+            XCTAssertTrue(field.waitForExistence(timeout: 20), name)
+            field.tap()
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10), name)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            let gap = app.keyboards.firstMatch.frame.minY - field.frame.maxY
+            XCTAssertGreaterThanOrEqual(gap, 10, "\(name) must clear the keyboard")
+            if composer { XCTAssertLessThan(gap, 80, "\(name) must remain beside the keyboard") }
+            keepStudyScreenshot(name, app: app)
+        }
+        let search = app.webViews.searchFields["Search notes"].firstMatch
+        checkField(search, name: "Home search above keyboard")
+        app.webViews.staticTexts["My notes"].firstMatch.tap()
+        let original = "Introduction to Electric Circuits"
+        button("Actions for \(original)").tap()
+        button("Rename \(original)").tap()
+        checkField(app.webViews.textFields["Note title"].firstMatch, name: "Rename sheet above keyboard")
+        button("Cancel").tap()
+        button("Chat with your notes").tap()
+        checkField(app.webViews.textFields["Ask anything about your notes"].firstMatch, name: "Library chat above keyboard", composer: true)
+        let close = button("Close")
+        XCTAssertTrue(close.isHittable)
+        close.tap()
+        let note = app.webViews.links.matching(NSPredicate(format: "label CONTAINS %@", original)).firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 20))
+        note.tap()
+        let chat = button("Chat about this note")
+        XCTAssertTrue(chat.waitForExistence(timeout: 30))
+        chat.tap()
+        checkField(app.webViews.textFields["Type your question"].firstMatch, name: "Note chat above keyboard", composer: true)
+        XCTAssertTrue(button("Close").isHittable)
+        button("Close").tap()
+        XCTAssertTrue(chat.waitForExistence(timeout: 20))
+    }
+
     @MainActor func testPreviewAnalyticsChoice() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
               URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
@@ -1931,7 +1979,7 @@ final class WrapperTests: XCTestCase {
             let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
             XCTAssertTrue(settings.waitForExistence(timeout: 30))
             settings.tap()
-            let row = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Optional analytics")).firstMatch
+            let row = app.webViews.otherElements.matching(NSPredicate(format: "label CONTAINS %@", "Optional analytics")).firstMatch
             XCTAssertTrue(row.waitForExistence(timeout: 20))
             for _ in 0..<7 where !row.isHittable { app.webViews.firstMatch.swipeUp() }
             keepStudyScreenshot("Optional analytics fits the Settings list", app: app)
@@ -1943,18 +1991,30 @@ final class WrapperTests: XCTestCase {
             return choice
         }
         let choice = openChoice()
-        XCTAssertEqual(choice.value as? String, "0", "A fresh analytics choice must be off")
-        keepStudyScreenshot("Optional analytics off by default", app: app)
+        let originallyEnabled = choice.value as? String == "1"
+        // Browser tests cover the fresh default. This device may already hold
+        // the owner's explicit choice, which must survive our verification.
+        if originallyEnabled { choice.tap() }
+        XCTAssertEqual(choice.value as? String, "0")
+        keepStudyScreenshot("Optional analytics disabled", app: app)
         choice.tap()
         XCTAssertEqual(choice.value as? String, "1")
+        app.webViews.buttons["Done"].tap()
+        XCUIDevice.shared.press(.home)
+        RunLoop.current.run(until: Date().addingTimeInterval(2))
         app.terminate(); app.launch()
         let persisted = openChoice()
         XCTAssertEqual(persisted.value as? String, "1", "Consent must survive relaunch")
         persisted.tap()
         XCTAssertEqual(persisted.value as? String, "0")
         keepStudyScreenshot("Optional analytics withdrawn", app: app)
+        app.webViews.buttons["Done"].tap()
+        XCUIDevice.shared.press(.home)
+        RunLoop.current.run(until: Date().addingTimeInterval(2))
         app.terminate(); app.launch()
-        XCTAssertEqual(openChoice().value as? String, "0", "Withdrawal must survive relaunch")
+        let finalChoice = openChoice()
+        XCTAssertEqual(finalChoice.value as? String, "0", "Withdrawal must survive relaunch")
+        if originallyEnabled { finalChoice.tap() }
     }
 
     @MainActor func testPreviewSettingsRows() throws {
@@ -2111,6 +2171,53 @@ final class WrapperTests: XCTestCase {
         continueAfterFailure = false
         XCTAssertTrue(app.webViews.staticTexts["Native bridge ready"].waitForExistence(timeout: 30))
         return app
+    }
+
+    /// Runs the shared sheet controller against a real UIKit keyboard. The
+    /// local fixture saves per-frame geometry for show, field switch and hide.
+    @MainActor func testLocalKeyboardMotion() throws {
+        guard let origin = ProcessInfo.processInfo.environment["MEMO_KEYBOARD_QA_URL"],
+              URL(string: origin)?.host == "localhost" else {
+            throw XCTSkip("Start scripts/ios/keyboard-motion-fixture.mjs")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = origin
+        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let first = app.webViews.textFields["First field"]
+        XCTAssertTrue(first.waitForExistence(timeout: 30))
+        for cycle in 0..<3 {
+            first.tap()
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+            first.typeText("Memo")
+            let second = app.webViews.textViews["Second field"]
+            second.tap()
+            second.typeText("Keyboard motion")
+            XCTAssertLessThan(second.frame.maxY, app.keyboards.firstMatch.frame.minY)
+            keepStudyScreenshot("Keyboard motion cycle \(cycle)", app: app)
+            app.webViews.buttons["Dismiss keyboard"].tap()
+            expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
+            waitForExpectations(timeout: 10)
+            RunLoop.current.run(until: Date().addingTimeInterval(2))
+        }
+        keepStudyScreenshot("Keyboard dismissed", app: app)
+        app.webViews.links["Chat composer"].tap()
+        let chat = app.webViews.textFields["Ask Memo"]
+        XCTAssertTrue(chat.waitForExistence(timeout: 15))
+        for _ in 0..<3 {
+            chat.tap()
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+            chat.typeText("Synthetic question")
+            let gap = app.keyboards.firstMatch.frame.minY - chat.frame.maxY
+            XCTAssertGreaterThanOrEqual(gap, 10)
+            XCTAssertLessThan(gap, 60, "The composer must stay next to the keyboard")
+            keepStudyScreenshot("Chat composer above keyboard", app: app)
+            app.webViews.buttons["Dismiss keyboard"].tap()
+            expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
+            waitForExpectations(timeout: 10)
+            RunLoop.current.run(until: Date().addingTimeInterval(2))
+        }
     }
 
     @MainActor func testLaunchAndKeyboard() {

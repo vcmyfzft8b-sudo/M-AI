@@ -3,7 +3,9 @@
 import { isNativeUserAgent } from "./runtime";
 export { useNativeIOS } from "@/components/native-provider";
 
-type NativeBridge = { version: number; request: (command: string, payload?: Record<string, unknown>) => Promise<unknown> };
+export type NativeKeyboardFrame = { inset: number; height: number; target: number; keyboardHeight: number };
+
+type NativeBridge = { version: number; readonly keyboardFrame?: NativeKeyboardFrame; request: (command: string, payload?: Record<string, unknown>) => Promise<unknown> };
 declare global { interface Window { memoNative?: NativeBridge } }
 
 export function isNativeIOS() {

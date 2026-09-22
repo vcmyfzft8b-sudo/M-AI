@@ -324,3 +324,34 @@ These are shared PWA changes; no separate native library UI was introduced.
 8. Select the build and all four subscriptions and submit only when all required fields/checks are complete.
 
 Apple evaluates the app's utility and overall experience under [review guideline 4.2](https://developer.apple.com/app-store/review/guidelines/#minimum-functionality); native billing and sharing alone do not guarantee approval. Also check [account deletion requirements](https://developer.apple.com/support/offering-account-deletion-in-your-app), [privacy disclosures](https://developer.apple.com/app-store/app-privacy-details/), and [current submission requirements](https://developer.apple.com/app-store/submitting/).
+
+### Keyboard motion (bridge v4)
+
+`KeyboardMotion.swift` anchors a noninteractive marker to `UIKeyboardLayoutGuide`
+and samples its presentation layer on `CADisplayLink`. The shared `KeyboardInset`
+controller receives the latest geometry through `memo:keyboard`; all existing
+chat composers, forms and sheets consume the same CSS variables. It does not
+add a second easing animation or wait for WebKit's late viewport resize. The
+study editor's extra delayed scrolling is disabled for this native path.
+
+Frames are sent only when geometry changes, with at most one JavaScript call in
+flight. Sampling stops after dismissal and in the background. Floating iPad
+keyboards do not lift the whole page. ProMotion refresh-rate support is enabled;
+iOS still chooses the actual cadence for the device and power conditions.
+Browsers and older binaries retain the visualViewport fallback. Both a v4 binary
+and this web deployment are required to use the native measurements.
+
+Local motion fixture (no accounts or billable services):
+
+```sh
+node scripts/ios/keyboard-motion-fixture.mjs
+# Build with MEMO_APP_BOUND_HOST=localhost, then run only
+# MemoAIUITests/WrapperTests/testLocalKeyboardMotion with:
+# TEST_RUNNER_MEMO_KEYBOARD_QA_URL=http://localhost:4198
+```
+
+It loads the actual shared controller/styles and exercises three form and three
+chat keyboard cycles. Geometry is saved under `ios/build/keyboard-motion-*-frames.json`
+(or the `MEMO_KEYBOARD_QA_OUTPUT` prefix). The separate
+`testPreviewKeyboardEverywhere` checks actual library search, rename, library chat
+and note chat against the synthetic Preview account without sending messages.

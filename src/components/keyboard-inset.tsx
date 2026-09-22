@@ -1,16 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
+import type { NativeKeyboardFrame } from "@/lib/mobile/client";
 
-/**
- * How long iOS takes to move the keyboard, and the shape of that movement.
- *
- * UIKit animates the keyboard with its own curve — `UIViewAnimationCurve(7)`,
- * the private one it reserves for this — over a quarter of a second. These are
- * that animation written as CSS, and two things are drawn on them: the
- * dismissal, which iOS will not describe (see `settle`), and the clearance,
- * which no platform describes because it is ours (see `rampUp`).
- */
+/** Browser / older-wrapper fallback when visualViewport supplies only an end
+ * frame. New wrappers follow UIKit's measured presentation frames instead of
+ * assuming a fixed animation duration or curve. */
 const KEYBOARD_MS = 250;
 const KEYBOARD_CURVE = [0.38, 0.7, 0.125, 1] as const;
 
@@ -94,6 +89,7 @@ export function KeyboardInset() {
     }
 
     const root = document.documentElement;
+    const nativeFrames = root.hasAttribute("data-native") && (window.memoNative?.version ?? 0) >= 4;
     let previousInset = -1;
     let previousHeight = -1;
     let previousTop = -1;
@@ -281,14 +277,14 @@ export function KeyboardInset() {
        * Reporting the viewport the drawn keyboard implies, rather than the one
        * that has already arrived, keeps the sum exactly where it was.
        */
-      const height = Math.round(Math.max(0, fullHeight - inset));
+      const height = nativeFrames ? Math.max(0, fullHeight - inset) : Math.round(Math.max(0, fullHeight - inset));
       /*
        * At rest the page is not panned, whatever the last reading said. iOS
        * pans the visual viewport to clear the keys and unwinds it afterwards,
        * and the unwinding is reported in pieces — so a stale `offsetTop` landed
        * after the keyboard had gone and shifted every fixed screen by it.
        */
-      const top = idle() ? 0 : Math.max(0, Math.round(viewport.offsetTop));
+      const top = nativeFrames || idle() ? 0 : Math.max(0, Math.round(viewport.offsetTop));
       published = inset;
 
       /*
@@ -763,6 +759,43 @@ export function KeyboardInset() {
         }
       }, 0);
     };
+
+    if (nativeFrames) {
+      let extent = 0;
+      let focused: Element | null = null;
+      const apply = (state: NativeKeyboardFrame | undefined) => {
+        if (!state || ![state.inset, state.height, state.target, state.keyboardHeight].every(Number.isFinite) || state.height <= 0) return;
+        const inset = Math.min(state.height, Math.max(0, state.inset));
+        // The full keyboard height stays constant while an interactive drag
+        // reduces its overlap. Keyboard-language / suggestion-bar changes can
+        // legitimately change that height without dismissing the keyboard.
+        extent = Math.max(inset, state.keyboardHeight || state.target || extent);
+        fullHeight = state.height;
+        // This is already an animation frame. A second easing/rAF would make
+        // the sheet chase the keyboard, and blur must not race its dismissal.
+        writeUp(extent > 0 ? Math.min(1, inset / extent) : 0);
+        write(inset);
+        root.style.setProperty("--memo-keyboard-bar", "0");
+        if (focused !== document.activeElement || !scroller) {
+          focused = document.activeElement;
+          scroller = scrollerFor(focused as HTMLElement | null);
+          liftFrom = scroller?.scrollTop ?? 0;
+        }
+        if (inset > 0) lift(1);
+        else { extent = 0; scroller = null; }
+      };
+      const onNativeFrame = (event: Event) => apply((event as CustomEvent<NativeKeyboardFrame>).detail);
+      const onNativeFocus = () => apply(window.memoNative?.keyboardFrame);
+      window.addEventListener("memo:keyboard", onNativeFrame);
+      document.addEventListener("focusin", onNativeFocus);
+      apply(window.memoNative?.keyboardFrame);
+      return () => {
+        window.removeEventListener("memo:keyboard", onNativeFrame);
+        document.removeEventListener("focusin", onNativeFocus);
+        ground.remove();
+        for (const key of ["--memo-keyboard", "--memo-viewport", "--memo-viewport-top", "--memo-keyboard-up", "--memo-keyboard-bar"]) root.style.removeProperty(key);
+      };
+    }
 
     fullHeight = Math.round(groundLine());
     write(measure());

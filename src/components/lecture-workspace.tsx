@@ -3499,6 +3499,12 @@ export function LectureWorkspace({
       return;
     }
 
+    // The shared controller follows every native keyboard frame and reveals
+    // the focused field there. A second delayed scroll races that animation.
+    if (document.documentElement.hasAttribute("data-native") && (window.memoNative?.version ?? 0) >= 4) {
+      return;
+    }
+
     const sheet = studyManagerSheetRef.current;
 
     if (!sheet) {

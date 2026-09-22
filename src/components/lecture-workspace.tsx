@@ -1324,6 +1324,7 @@ export function LectureWorkspace({
   const [isRegeneratingStudy, setIsRegeneratingStudy] = useState(false);
   const [isRegeneratingQuiz, setIsRegeneratingQuiz] = useState(false);
   const [isStartingPracticeTest, setIsStartingPracticeTest] = useState(false);
+  const practiceTestStartLock = useRef(false);
   const [isAwaitingStudyGeneration, setIsAwaitingStudyGeneration] = useState(false);
   const [isAwaitingQuizGeneration, setIsAwaitingQuizGeneration] = useState(false);
   const [isAwaitingPracticeTestGeneration, setIsAwaitingPracticeTestGeneration] = useState(false);
@@ -2358,10 +2359,11 @@ export function LectureWorkspace({
   }
 
   async function handlePracticeTestStart() {
-    if (blockedOffline("generate")) {
+    if (practiceTestStartLock.current || blockedOffline("generate")) {
       return;
     }
 
+    practiceTestStartLock.current = true;
     setStudyError(null);
     setIsAwaitingPracticeTestGeneration(true);
     setIsStartingPracticeTest(true);
@@ -2376,6 +2378,19 @@ export function LectureWorkspace({
         method: "POST",
       });
       payload = await parseApiResponse(response, t);
+
+      setCurrentPracticeAttemptId(payload?.id ?? null);
+      setPracticeAttemptQuestionIds(
+        Array.isArray(payload?.questions) ? payload.questions.map((question: { id: string }) => question.id) : [],
+      );
+      setPracticeTextAnswers({});
+      setPracticeUnknownQuestionIds([]);
+      setLatestViewedPracticeAttemptId(payload?.id ?? null);
+      setPracticeSubmittedAt(null);
+      // Keep the start action locked until the new attempt is in the page's
+      // data. Re-enabling it after the POST lets another tap create an extra
+      // attempt while the detail refresh is still in flight.
+      await refreshLectureDetail();
     } catch (error) {
       if (redirectToBillingIfNeeded({ error, router })) {
         return;
@@ -2387,18 +2402,9 @@ export function LectureWorkspace({
       );
       return;
     } finally {
+      practiceTestStartLock.current = false;
       setIsStartingPracticeTest(false);
     }
-
-    setCurrentPracticeAttemptId(payload?.id ?? null);
-    setPracticeAttemptQuestionIds(
-      Array.isArray(payload?.questions) ? payload.questions.map((question: { id: string }) => question.id) : [],
-    );
-    setPracticeTextAnswers({});
-    setPracticeUnknownQuestionIds([]);
-    setLatestViewedPracticeAttemptId(payload?.id ?? null);
-    setPracticeSubmittedAt(null);
-    await refreshLectureDetail();
   }
 
   function handlePracticeAnswerChange(questionId: string, value: string) {

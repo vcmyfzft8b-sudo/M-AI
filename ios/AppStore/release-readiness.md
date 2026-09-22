@@ -11,7 +11,7 @@ submit:** current end-to-end purchase and physical-device checks remain open.
 - Native simulator build passed; 126 focused mobile tests and all 1,552 web
   tests passed. These checks do not prove real Apple authentication or billing.
 - App Store Connect API confirms version 1.0 is READY_FOR_REVIEW in an
-  **unsubmitted draft**, with VALID build **1.0.0 (6)** attached and manual
+  **unsubmitted draft**, with VALID build **1.0.0 (8)** attached and manual
   release selected. Draft `b7aa39c6-3b7a-4e6c-a0c5-75dc3c54d2be` contains the
   app version, all four subscription versions and their subscription group.
   Its `submittedDate` is null. All 16 uploaded screenshots are COMPLETE;
@@ -75,17 +75,46 @@ submit:** current end-to-end purchase and physical-device checks remain open.
 - The real staging photo study flow passed: upload, note generation, flashcards,
   quiz, mindmap, native image sharing, chat response, read-aloud playback controls,
   and note deletion. Retained screenshots were visually checked, including the
-  actual chat answer. Audio audibility and long playback were not verified.
+  actual chat answer. Build 8 repeated this flow on another fresh staging account
+  and verified the read-aloud clock advances (captured at 0:04); the note was
+  retained for the remaining study tools. An initial test stopped at the optional
+  notification nudge; dismissing it through the UI allowed the flow to pass.
+  Audio audibility and long playback were not verified.
 - Added wrapper-only light tap and selection haptics, with trusted-event,
   disabled-control, foreground and rate-limit guards. Build **7** is installed
   on the phone; its settings click-through passes. Four native regression tests
   also pass: keyboard, document export, blob export and native error text across
   all five languages and relaunches. Physical vibration strength needs human
   perception; the simulator cannot verify it. Build 7 archived and uploaded
-  successfully; Apple is processing it. The unsubmitted draft still has build 6
-  until the new build is valid and can be attached. The final 17 origin/billing
-  guard tests pass. A gallery of 36 screenshots is retained at
+  successfully; Apple validated it, and it is attached to the unsubmitted draft.
+  Build **8** archived, uploaded and passed Apple processing; it is now attached
+  to the unsubmitted draft. It integrates `origin/main` at `890e0c0f`, including
+  the native push-token removal race fix, offline shell navigation and tutor fixes.
+  The 139 affected mobile/offline/tutor checks pass after integration. The
+  previous full-suite result predates that integration. The screenshot gallery is at
   `ios/build/review-sep22-screenshots.md`.
+
+- Build 8 recording passed in the dedicated simulator: native capture, pause
+  with a frozen timer, resume, 15 seconds in the background, stop and delivery
+  of the `.m4a` to the PWA. The take was cancelled before note generation.
+  Hardware audio quality and locked-iPhone behavior remain unverified.
+- Additional build 8 Simulator checks passed: memory-palace generation, 3D
+  rendering, movement and exit; speed-reader playback advances and pause holds
+  its position. These do not prove every game interaction or device performance.
+  Podcast generation and playback also pass, with its playback position
+  advancing eight seconds before pausing. A fresh iPad install completes
+  Slovenian onboarding and synthetic email login; portrait/landscape notes,
+  flashcards and settings checks pass. The wider layout uses the PWA rail.
+- Repeated practice-test starts exposed a real shared PWA race: the start
+  action unlocked before the new attempt finished loading, creating two
+  attempts and reopening the leftover attempt after grading. A synchronous
+  lock now covers both the POST and detail refresh. All 55 practice-test checks
+  pass, including delayed-refresh, same-render repeat taps and retry coverage.
+  Real Preview verification of the fix remains pending deployment.
+- The real iPhone Sandbox checkout now reaches Apple’s account/password dialog.
+  It has not completed a transaction; the inspection test is explicitly skipped,
+  not counted as a purchase pass. The user has been asked to authenticate with
+  a Sandbox tester directly on the phone.
 
 Evidence is in ignored `ios/build/review-sep22-*` artifacts. The primary local
 `main` was clean and matched fetched `origin/main` at `2603764d` when checked;

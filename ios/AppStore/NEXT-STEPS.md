@@ -3,7 +3,7 @@
 Current evidence is at the top of `ios/AppStore/release-readiness.md`.
 
 - The user confirmed **PWA onboarding first**, then Google/Apple/email sign-in.
-- App Privacy is published. Content Rights is populated. Build **1.0.0 (6)**
+- App Privacy is published. Content Rights is populated. Build **1.0.0 (8)**
   is attached. The download price is free.
 - Draft submission `b7aa39c6-3b7a-4e6c-a0c5-75dc3c54d2be` contains version
   1.0, all four subscriptions and their group. **It is not submitted.**
@@ -18,8 +18,15 @@ Current evidence is at the top of `ios/AppStore/release-readiness.md`.
   both Google and Apple buttons are present. The photo study workflow passed,
   including notes, flashcards, quiz, mindmap/export, chat and deletion. Physical
   iPhone onboarding, email login and settings tests also pass.
-- Build 7 adds wrapper-only haptics and is installed on the iPhone. Its Release
-  archive uploaded successfully and is processing; the draft still has build 6.
+- Build 7 adds wrapper-only haptics and is installed on the iPhone. Build **8** is now VALID and attached to the unsubmitted draft,
+  including the released push-token sign-out fix from `origin/main` at `890e0c0f`.
+  All 139 affected mobile/offline/tutor checks pass. Simulator native recording
+  also passes start/pause/resume/background/stop; physical audio remains open.
+- Additional simulator passes: memory palace generation/movement, speed reader,
+  podcast generation/playback, and iPad onboarding/login/rotated study/settings.
+- Fixed a shared PWA race that allowed duplicate practice-test attempts while
+  the new attempt loaded. 55 practice checks pass; deploy the test branch and
+  rerun the actual Preview flow before treating this release gate as closed.
 - Device tests pass for real Apple product loading, three-day trial display,
   the wheel and both half-off offer cards, and settings/theme controls.
 - Preview catalogue loading is fixed: the Preview host must be included with

@@ -1,25 +1,33 @@
 import XCTest
+import UIKit
 
 final class WrapperTests: XCTestCase {
     /// Walk the same anonymous onboarding as a fresh PWA install before login.
     /// The working-adult route avoids school-only questions; demo steps keep
     /// their ordinary Continue action instead of bypassing the survey cookie.
-    @MainActor private func completeAnonymousOnboarding(_ app: XCUIApplication) {
-        let start = app.webViews.buttons["Get started"].firstMatch
-        guard start.waitForExistence(timeout: 10) || app.webViews.otherElements["Setup progress"].firstMatch.exists else { return }
-        let choices = ["Instagram Reels", "For me", "Working", "Learn 10× faster", "Audio notes", "No, just help me in general", "Casual — 10 min / day"]
+    @MainActor private func completeOnboarding(_ app: XCUIApplication) {
+        let start = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Get started", "Začnimo"])).firstMatch
+        let progress = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", ["Setup progress", "Napredek nastavitve"])).firstMatch
+        guard start.waitForExistence(timeout: 10) || progress.exists else { return }
+        let choices = ["Instagram Reels", "For me", "Zame", "Working", "Zaposlen/a", "Learn 10× faster", "Učiti se 10x hitreje", "Audio notes", "Audio zapiski", "No, just help me in general", "Ne, pomagaj mi na splošno", "Casual — 10 min / day", "Sproščeno - 10 min / dan"]
         let deadline = Date().addingTimeInterval(180)
         var capturedWaitingState = false
         while Date() < deadline {
-            if app.webViews.buttons["Continue with email"].firstMatch.exists { return }
+            if app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Continue with email", "Nadaljuj z e-pošto", "Close the subscription offer", "Zapri ponudbo naročnine"])).firstMatch.exists
+                || app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "New note", "Nov zapisek")).firstMatch.exists { return }
             XCTAssertFalse(app.webViews.staticTexts["Your answers could not be saved."].firstMatch.exists,
                            "Anonymous onboarding must save successfully before sign-in")
-            let cta = ["Get started", "Make my first note", "Continue"].map {
+            let cta = ["Get started", "Začnimo", "Make my first note", "Ustvari prvi zapisek", "Continue", "Nadaljuj"].map {
                 app.webViews.buttons.matching(NSPredicate(format: "label == %@", $0)).firstMatch
             }
             // WebKit exposes aria-pressed options as switches, not buttons.
-            let options = choices.map {
-                app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", $0)).firstMatch
+            let options = choices.flatMap { choice in
+                let label = NSPredicate(format: "label CONTAINS %@", choice)
+                // The tablet rail repeats prior answers as static text. Only
+                // the real selectable controls can advance this question.
+                return [app.webViews.buttons.matching(label).firstMatch,
+                        app.webViews.switches.matching(label).firstMatch,
+                        app.webViews.radioButtons.matching(label).firstMatch]
             }
             let action = (cta + options).first { $0.exists && $0.isEnabled && $0.isHittable }
             if let action {
@@ -52,6 +60,15 @@ final class WrapperTests: XCTestCase {
         }
     }
 
+    @MainActor private func dismissNotificationNudge(_ app: XCUIApplication) {
+        let prompt = app.webViews.staticTexts["Shall we tell you when it’s done?"].firstMatch
+        if prompt.exists {
+            let decline = app.webViews.buttons["No thanks"].firstMatch
+            XCTAssertTrue(decline.exists)
+            decline.tap()
+        }
+    }
+
     // Opt-in account switch for the dedicated staging simulator. This signs in
     // through the real email-code flow; it does not fabricate an entitlement.
     @MainActor func testPreviewPrepareStudyAccount() throws {
@@ -66,6 +83,7 @@ final class WrapperTests: XCTestCase {
         app.launchEnvironment["MEMO_IOS_URL"] = preview
         app.launch()
         passConsentGate(app)
+        completeOnboarding(app)
         dismissInitialOffer(app)
         let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
         if settings.waitForExistence(timeout: 15) {
@@ -78,12 +96,13 @@ final class WrapperTests: XCTestCase {
             let signOutButtons = app.webViews.buttons.matching(identifier: "Sign out")
             signOutButtons.element(boundBy: signOutButtons.count - 1).tap()
         }
-        completeAnonymousOnboarding(app)
-        XCTAssertTrue(app.webViews.buttons["Continue with Google"].firstMatch.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.webViews.buttons["Continue with Apple"].firstMatch.exists)
+        completeOnboarding(app)
+        XCTAssertTrue(app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Continue with Google", "Nadaljuj z Google"])).firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Continue with Apple", "Nadaljuj z Apple"])).firstMatch.exists)
         XCTAssertTrue(signInWithCode(app, email: email, code: code), "The staging review account must sign in")
+        completeOnboarding(app)
         dismissInitialOffer(app)
-        XCTAssertTrue(app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "New note")).firstMatch.waitForExistence(timeout: 30))
+        XCTAssertTrue(app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "New note", "Nov zapisek")).firstMatch.waitForExistence(timeout: 30))
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "Staging study account signed in"
         shot.lifetime = .keepAlways
@@ -94,12 +113,12 @@ final class WrapperTests: XCTestCase {
     /// consent gate at launch; allow it again (retrying until React hydrates).
     @MainActor private func passConsentGate(_ app: XCUIApplication) {
         let allow = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "Allow AI processing", "Dovoli obdelavo")).firstMatch
-        let home = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "New note")).firstMatch
+        let home = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "New note", "Nov zapisek")).firstMatch
         // Wait for whichever page follows the launch cover: home, or the gate.
         let deadline = Date().addingTimeInterval(45)
         while Date() < deadline, !allow.exists, !home.exists,
-              !app.webViews.otherElements["Setup progress"].firstMatch.exists,
-              !app.webViews.buttons["Continue with email"].firstMatch.exists {
+              !app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", ["Setup progress", "Napredek nastavitve"])).firstMatch.exists,
+              !app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Continue with email", "Nadaljuj z e-pošto", "Close the subscription offer", "Zapri ponudbo naročnine"])).firstMatch.exists {
             RunLoop.current.run(until: Date().addingTimeInterval(1))
         }
         guard allow.exists else { return }
@@ -170,9 +189,9 @@ final class WrapperTests: XCTestCase {
         let window = app.windows.firstMatch.frame
         let y = rowY / window.height
         // Start well inside the screen: a drag from the left edge is the back gesture.
-        let from = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.85 : 0.3, dy: y))
-        let to = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.3 : 0.85, dy: y))
-        from.press(forDuration: 0.05, thenDragTo: to, withVelocity: .fast, thenHoldForDuration: 0.05)
+        let from = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.7 : 0.4, dy: y))
+        let to = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.4 : 0.7, dy: y))
+        from.press(forDuration: 0.1, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.2)
     }
     // Real study flow on a staging Preview: a synthetic lesson photo becomes a
     // note, then flashcards, a quiz and a mindmap are generated, the mindmap is
@@ -198,20 +217,10 @@ final class WrapperTests: XCTestCase {
         func contains(_ text: String) -> NSPredicate { NSPredicate(format: "label CONTAINS %@", text) }
         func webButton(_ text: String) -> XCUIElement { app.webViews.buttons.matching(contains(text)).firstMatch }
         func webText(_ text: String) -> XCUIElement { app.webViews.staticTexts.matching(contains(text)).firstMatch }
-        let tabNames = ["Notes", "Tutor", "Flashcards", "Podcast", "Quiz", "Mindmap", "Palace", "Test", "Speed reader", "Transcript"]
         /// The tab strip is a horizontally scrolling chip row: drag it from a
         /// visible chip until the wanted chip is on screen.
         func tapTab(_ name: String) {
-            let tab = app.webViews.buttons.matching(NSPredicate(format: "label == %@", name)).firstMatch
-            XCTAssertTrue(tab.waitForExistence(timeout: 15), "\(name) tab must exist")
-            let width = app.windows.firstMatch.frame.width
-            func onScreen() -> Bool { tab.frame.minX >= 0 && tab.frame.maxX <= width && tab.isHittable }
-            for _ in 0..<6 where !onScreen() {
-                scrollStrip(app, tabNames: tabNames, rowY: tab.frame.midY, left: tab.frame.midX > width)
-                RunLoop.current.run(until: Date().addingTimeInterval(1))
-            }
-            XCTAssertTrue(onScreen(), "\(name) tab must be reachable")
-            tab.tap()
+            openStudyTab(name, in: app)
             RunLoop.current.run(until: Date().addingTimeInterval(1))
         }
         /// Wait until any element of `ready` appears; fail early if `failure` shows or after `timeout`.
@@ -270,10 +279,12 @@ final class WrapperTests: XCTestCase {
         }
         let deadline = Date().addingTimeInterval(600)
         while Date() < deadline, !notesReady() {
+            dismissNotificationNudge(app)
             XCTAssertFalse(failed.exists, "Note generation failed")
             RunLoop.current.run(until: Date().addingTimeInterval(10))
         }
         XCTAssertTrue(notesReady(), "Notes did not finish within 10 minutes")
+        dismissNotificationNudge(app)
         snap("03 Generated note")
 
         // 3. Flashcards.
@@ -347,11 +358,22 @@ final class WrapperTests: XCTestCase {
         listen.tap()
         let pause = webButton("Pause")
         XCTAssertTrue(pause.waitForExistence(timeout: 120), "Read-aloud must start playing")
+        let playbackClock = app.webViews.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "^[0-9]{1,2}:[0-9]{2}$")).firstMatch
+        let advancing = NSPredicate { _, _ in
+            guard playbackClock.exists else { return false }
+            return playbackClock.label.split(separator: ":").compactMap { Int($0) }.reduce(0) { $0 * 60 + $1 } >= 2
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: advancing, object: playbackClock)], timeout: 30), .completed,
+                       "Read-aloud playback time must advance, not merely display Pause")
         snap("09 Read aloud playing")
         pause.tap()
         let closeReader = webButton("Close the reader")
         if closeReader.waitForExistence(timeout: 5) { closeReader.tap() }
 
+        if ProcessInfo.processInfo.environment["MEMO_QA_KEEP_NOTE"] == "1" {
+            snap("10 Note retained for further study-tool checks")
+            return
+        }
         // 8. Delete the note from the actions sheet and land on an empty home.
         let actions = app.webViews.buttons["Actions"]
         XCTAssertTrue(actions.waitForExistence(timeout: 15))
@@ -365,6 +387,168 @@ final class WrapperTests: XCTestCase {
         confirm.tap()
         XCTAssertTrue(newNote.waitForExistence(timeout: 60), "Deleting the note must return home")
         snap("11 Home after deletion")
+    }
+
+    @MainActor private func openPreviewStudyNote() throws -> XCUIApplication {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires the retained synthetic Plant Life Cycle note in staging")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        passConsentGate(app)
+        dismissInitialOffer(app)
+        let note = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Plant Life Cycle")).firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 30))
+        note.tap()
+        XCTAssertTrue(app.webViews.buttons["Notes"].firstMatch.waitForExistence(timeout: 30))
+        dismissNotificationNudge(app)
+        return app
+    }
+
+    @MainActor private func openStudyTab(_ name: String, in app: XCUIApplication) {
+        let names = ["Notes", "Tutor", "Flashcards", "Podcast", "Quiz", "Mindmap", "Palace", "Test", "Speed read", "Transcript"]
+        let tab = app.webViews.buttons.matching(NSPredicate(format: "label == %@", name)).firstMatch
+        XCTAssertTrue(tab.waitForExistence(timeout: 15))
+        let width = app.windows.firstMatch.frame.width
+        for _ in 0..<12 {
+            let frame = tab.frame
+            // WebKit's clipped edge chips can throw from isHittable rather
+            // than return false. Move the whole chip inside the strip, then
+            // tap its observed centre as a person would.
+            if frame.width > 1 && frame.minX >= 12 && frame.maxX <= width - 12 {
+                app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
+                    .withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
+                return
+            }
+            let visible = names.enumerated().compactMap { index, label -> (Int, CGRect)? in
+                let candidate = app.webViews.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
+                guard candidate.exists else { return nil }
+                let candidateFrame = candidate.frame
+                return candidateFrame.width > 1 && candidateFrame.minX >= 12 && candidateFrame.maxX <= width - 12
+                    ? (index, candidateFrame) : nil
+            }.first
+            let targetIndex = names.firstIndex(of: name) ?? 0
+            let left = visible.map { targetIndex > $0.0 } ?? (frame.midX >= width / 2)
+            scrollStrip(app, tabNames: names, rowY: visible?.1.midY ?? frame.midY, left: left)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        }
+        XCTFail("\(name) tab must be reachable")
+    }
+
+    @MainActor private func keepStudyScreenshot(_ name: String, app: XCUIApplication) {
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    @MainActor func testPreviewSpeedReaderAdvancesAndPauses() throws {
+        let app = try openPreviewStudyNote()
+        openStudyTab("Speed read", in: app)
+        let start = app.webViews.buttons["Start reading"].firstMatch
+        XCTAssertTrue(start.waitForExistence(timeout: 15))
+        let position = app.webViews.sliders["Position in the note"].firstMatch
+        XCTAssertTrue(position.exists)
+        let before = String(describing: position.value)
+        start.tap()
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        let pause = app.webViews.buttons["Pause"].firstMatch
+        XCTAssertTrue(pause.exists)
+        pause.tap()
+        XCTAssertNotEqual(String(describing: position.value), before, "Playback must move through the note")
+        let paused = String(describing: position.value)
+        RunLoop.current.run(until: Date().addingTimeInterval(2))
+        XCTAssertEqual(String(describing: position.value), paused, "Pause must stop the words advancing")
+        keepStudyScreenshot("Speed reader after play and pause", app: app)
+    }
+
+    @MainActor func testPreviewPracticeTestSubmission() throws {
+        let app = try openPreviewStudyNote()
+        openStudyTab("Test", in: app)
+        let answer = app.webViews.textViews["Your answer:"].firstMatch
+        let readyBy = Date().addingTimeInterval(180)
+        while Date() < readyBy && !answer.exists {
+            let start = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Create a test", "Start a new test"])).firstMatch
+            if start.exists && start.isEnabled { start.tap() }
+            RunLoop.current.run(until: Date().addingTimeInterval(2))
+        }
+        XCTAssertTrue(answer.exists, "Questions must be generated")
+        var submitted = false
+        for index in 0..<30 {
+            if index == 0 {
+                answer.tap()
+                answer.typeText("A seed absorbs water and germinates. Roots grow down into the soil, and the shoot grows toward light. Leaves use photosynthesis to support the plant's growth.")
+                app.webViews.firstMatch.swipeUp()
+            } else {
+                let unknown = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "I don't know")).firstMatch
+                XCTAssertTrue(unknown.exists)
+                unknown.tap()
+            }
+            let submit = app.webViews.buttons["Submit the test"].firstMatch
+            if submit.exists {
+                XCTAssertTrue(submit.isEnabled)
+                submit.tap()
+                submitted = true
+                break
+            }
+            let next = app.webViews.buttons["Next"].firstMatch
+            XCTAssertTrue(next.exists)
+            for _ in 0..<3 where !next.isHittable { app.webViews.firstMatch.swipeUp() }
+            next.tap()
+        }
+        XCTAssertTrue(submitted)
+        XCTAssertTrue(app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "points scored")).firstMatch.waitForExistence(timeout: 180), "The submitted test must return graded results")
+        keepStudyScreenshot("Practice test graded result", app: app)
+    }
+
+    @MainActor func testPreviewMemoryPalaceOpens() throws {
+        let app = try openPreviewStudyNote()
+        openStudyTab("Palace", in: app)
+        let prepare = app.webViews.buttons["Prepare study game"].firstMatch
+        if prepare.waitForExistence(timeout: 10) { prepare.tap() }
+        let start = app.webViews.buttons["Start game"].firstMatch
+        XCTAssertTrue(start.waitForExistence(timeout: 180))
+        start.tap()
+        let leave = app.webViews.buttons["Back to the note"].firstMatch
+        XCTAssertTrue(leave.waitForExistence(timeout: 30))
+        XCTAssertFalse(app.webViews.staticTexts["This device can't run the 3D palace. The flashcards work everywhere."].exists)
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        keepStudyScreenshot("Memory palace rendered in the wrapper", app: app)
+        let from = app.webViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.78))
+        from.press(forDuration: 0.1, thenDragTo: from.withOffset(CGVector(dx: 0, dy: -70)))
+        keepStudyScreenshot("Memory palace after movement", app: app)
+        leave.tap()
+        XCTAssertTrue(app.webViews.buttons["Palace"].firstMatch.waitForExistence(timeout: 10))
+    }
+
+    @MainActor func testPreviewPodcastPlaybackAdvances() throws {
+        let app = try openPreviewStudyNote()
+        openStudyTab("Podcast", in: app)
+        let make = app.webViews.buttons["Make the episode"].firstMatch
+        XCTAssertTrue(make.waitForExistence(timeout: 15))
+        make.tap()
+        let short = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Short")).firstMatch
+        XCTAssertTrue(short.waitForExistence(timeout: 10), "The episode format/length chooser must open")
+        if short.exists && short.isHittable { short.tap() }
+        let makeButtons = app.webViews.buttons.matching(identifier: "Make the episode")
+        let confirm = makeButtons.element(boundBy: makeButtons.count - 1)
+        XCTAssertTrue(confirm.exists)
+        confirm.tap()
+        let play = app.webViews.buttons["Play"].firstMatch
+        XCTAssertTrue(play.waitForExistence(timeout: 180), "The podcast script must finish")
+        play.tap()
+        let pause = app.webViews.buttons["Pause"].firstMatch
+        XCTAssertTrue(pause.waitForExistence(timeout: 120))
+        let position = app.webViews.sliders["Position in the episode"].firstMatch
+        XCTAssertTrue(position.exists)
+        let initial = String(describing: position.value)
+        RunLoop.current.run(until: Date().addingTimeInterval(8))
+        XCTAssertNotEqual(String(describing: position.value), initial, "Podcast audio time must advance")
+        keepStudyScreenshot("Podcast playing in the wrapper", app: app)
+        pause.tap()
     }
 
     // Loads real App Store products with no StoreKit fixture. This deliberately
@@ -404,6 +588,49 @@ final class WrapperTests: XCTestCase {
         add(hierarchy)
         XCTAssertEqual(result, .completed, "Real StoreKit prices must load before checkout is enabled")
         if close.exists { close.tap() }
+    }
+
+    // Opt-in inspection of Apple's actual Sandbox purchase sheet. No local
+    // StoreKit configuration and no fabricated entitlement are used here.
+    @MainActor func testPreviewInspectSandboxCheckout() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MEMO_QA_CHECKOUT"] == "1",
+              let preview = env["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Explicit Sandbox checkout inspection only")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        let close = app.webViews.buttons["Close the subscription offer"].firstMatch
+        if !close.waitForExistence(timeout: 15) {
+            let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+            XCTAssertTrue(settings.waitForExistence(timeout: 20))
+            settings.tap()
+            let choose = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Choose a plan")).firstMatch
+            XCTAssertTrue(choose.waitForExistence(timeout: 15))
+            for _ in 0..<5 where !choose.isHittable { app.webViews.firstMatch.swipeUp() }
+            choose.tap()
+        }
+        let payment = app.webViews.buttons.matching(NSPredicate(
+            format: "label IN %@", ["Continue to payment", "Start the 3-day free trial"]
+        )).firstMatch
+        let ready = NSPredicate { _, _ in payment.exists && payment.isEnabled }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: payment)], timeout: 30), .completed)
+        payment.tap()
+        RunLoop.current.run(until: Date().addingTimeInterval(12))
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "Actual Sandbox checkout boundary"
+        shot.lifetime = .keepAlways
+        add(shot)
+        for (name, process) in [("Memo", app), ("System", XCUIApplication(bundleIdentifier: "com.apple.springboard"))] {
+            let hierarchy = XCTAttachment(string: process.debugDescription)
+            hierarchy.name = name + " checkout accessibility"
+            hierarchy.lifetime = .keepAlways
+            add(hierarchy)
+        }
+        throw XCTSkip("Captured purchase boundary; completion must be verified separately")
     }
 
     // Real storefront prices must reach the wheel and both discounted plans.
@@ -448,6 +675,36 @@ final class WrapperTests: XCTestCase {
     // Visual review of the edge-to-edge layout on a staging Preview with a
     // signed-in synthetic account: home, the new-note sheet, a note with its
     // chat and actions sheets, and settings. Screenshots are the evidence.
+    @MainActor func testPreviewTabletLayouts() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("Dedicated iPad layout check") }
+        XCUIDevice.shared.orientation = .portrait
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let app = try openPreviewStudyNote()
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+            XCUIDevice.shared.orientation = orientation
+            RunLoop.current.run(until: Date().addingTimeInterval(3))
+            let frame = app.windows.firstMatch.frame
+            XCTAssertEqual(frame.width > frame.height, orientation.isLandscape)
+            let notes = app.webViews.buttons["Notes"].firstMatch
+            XCTAssertTrue(notes.isHittable)
+            XCTAssertGreaterThanOrEqual(notes.frame.minX, frame.minX)
+            XCTAssertLessThanOrEqual(notes.frame.maxX, frame.maxX)
+            keepStudyScreenshot(orientation.isLandscape ? "iPad note landscape" : "iPad note portrait", app: app)
+        }
+        openStudyTab("Flashcards", in: app)
+        XCTAssertTrue(app.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Card ")).firstMatch.waitForExistence(timeout: 15))
+        keepStudyScreenshot("iPad flashcards landscape", app: app)
+        // The PWA desktop layout exposes Settings in its navigation rail;
+        // the phone-only Back button is intentionally absent on a wide iPad.
+        let back = app.webViews.buttons["Back"].firstMatch
+        if back.exists { back.tap() }
+        let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 20))
+        settings.tap()
+        XCTAssertTrue(app.webViews.switches["Dark"].waitForExistence(timeout: 15))
+        keepStudyScreenshot("iPad settings landscape", app: app)
+    }
+
     @MainActor func testPreviewSafeAreaReview() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
               URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
@@ -620,6 +877,7 @@ final class WrapperTests: XCTestCase {
         app.launch()
         signInWithCode(app, email: email, code: code)
         passConsentGate(app)
+        completeOnboarding(app)
         continueAfterFailure = false
         func snap(_ name: String) {
             let shot = XCTAttachment(screenshot: app.screenshot())
@@ -687,7 +945,7 @@ final class WrapperTests: XCTestCase {
         while Date().timeIntervalSince(started) < 30, (elapsed() ?? 0) < 2 {
             RunLoop.current.run(until: Date().addingTimeInterval(1))
         }
-        guard let before = elapsed(), before >= 2 else {
+        guard var before = elapsed(), before >= 2 else {
             snap("L2 Recording did not start")
             return XCTFail("The clock must run once recording starts")
         }
@@ -696,6 +954,17 @@ final class WrapperTests: XCTestCase {
             either("you can lock your phone", "telefon lahko ugasneš")).firstMatch.exists,
             "The app's hint says the phone can be locked")
         snap("L2 Recording")
+        webButton("Pause", "Začasno ustavi").tap()
+        let resume = webButton("Resume recording", "Nadaljuj snemanje")
+        XCTAssertTrue(resume.waitForExistence(timeout: 10))
+        let pausedAt = try XCTUnwrap(elapsed())
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        XCTAssertLessThanOrEqual(try XCTUnwrap(elapsed()) - pausedAt, 1,
+                                 "Paused time must not be added to the recording")
+        snap("L2a Paused recording")
+        resume.tap()
+        XCTAssertTrue(webButton("Pause", "Začasno ustavi").waitForExistence(timeout: 10))
+        before = try XCTUnwrap(elapsed())
 
         // Away long enough that a page-side timer would visibly fall behind.
         let away = 15
@@ -956,6 +1225,8 @@ final class WrapperTests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["MEMO_IOS_URL"] = preview
         app.launch()
+        passConsentGate(app)
+        dismissInitialOffer(app)
         continueAfterFailure = false
         let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@ OR label BEGINSWITH %@", "Settings", "Postavke", "Nastavitve")).firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 30))

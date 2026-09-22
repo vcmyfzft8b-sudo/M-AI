@@ -37,6 +37,8 @@ export function sessionHarness({ source } = {}) {
   const state = {
     updates: [], request: async () => response(), input: null, output: null,
     socketOpen: true, open: async () => { state.socketOpen = true; },
+    sessionCalls: 0,
+    sessionResponse: null,
   };
   const window = {
     setTimeout: (fn, delay) => { const id = ++timerId; timers.set(id, { fn, at: now + delay }); return id; },
@@ -109,10 +111,13 @@ export function sessionHarness({ source } = {}) {
     document: { visibilityState: "visible" },
     fetch: async (url, options) => {
       if (url.endsWith("/plan")) return pendingPlan.promise;
-      if (url.endsWith("/session")) return { ok: true, json: async () => ({
-        language: "en", grantId: null, grantedSeconds: 1800, usage: {},
-        realtime: { tts: {}, stt: {} },
-      }) };
+      if (url.endsWith("/session")) {
+        state.sessionCalls += 1;
+        return state.sessionResponse ?? { ok: true, json: async () => ({
+          language: "en", grantId: null, grantedSeconds: 1800, usage: {},
+          realtime: { tts: {}, stt: {} },
+        }) };
+      }
       if (url.endsWith("/usage")) return { ok: true };
       const call = { ...JSON.parse(options.body), signal: options.signal, at: now };
       calls.push(call);

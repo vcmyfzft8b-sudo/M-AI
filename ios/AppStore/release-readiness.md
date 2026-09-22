@@ -6,9 +6,10 @@ submit:** current end-to-end purchase and physical-device checks remain open.
 
 ## Remaining submission gates
 
-- Complete actual Apple and Google authentication with designated test identities,
-  including session recovery and Apple account-deletion revocation. Opening the
-  native provider sheet is only a boundary check.
+- Complete Google authentication, provider session recovery and Apple
+  account-deletion revocation. The owner completed Apple sign-in on the physical
+  iPhone on 22 September; staging independently records its native Apple grant
+  at 21:19:09 UTC. Opening a provider sheet alone is only a boundary check.
 - Complete Apple Sandbox purchases, entitlement delivery, restore, renewal,
   expiry and refund/revocation. Real product prices and a signed TEST notification
   pass; neither proves a purchased subscription works.
@@ -41,6 +42,21 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- The owner reports successful Apple sign-in on the connected iPhone with
+  Debug build 10 against the staging Preview. A read-only staging check confirms
+  an `apple_auth_grants` record for `eu.memoai.memo`, updated at 21:19:09 UTC
+  on 22 September (`review-sep22-device-apple-grant-confirmation.json`). This
+  confirms grant persistence; session recovery, actual revocation and Google
+  authentication are separate checks and remain open.
+- The opt-in `testPreviewGoogleSignInHandoff` test builds successfully and is
+  prepared to recover the existing session, sign out through Settings, verify
+  both provider buttons, and open Google authentication. Physical-device runs
+  at 23:27 and 23:28 CEST both failed before executing the test: XCTest timed
+  out while enabling automation mode despite CoreDevice reporting the iPhone
+  unlocked. Evidence: `review-sep22-device-google-handoff.log` and
+  `review-sep22-device-google-retry.log`. No Google sign-in or session-recovery
+  pass is claimed. Device automation approval is requested from the owner;
+  the Sandbox tester form separately awaits owner-entered credentials.
 - Release build 10 is archived and exported locally with the current native
   restore fix and corrected User ID Analytics declaration. Apple `altool`
   validation returned **VERIFY SUCCEEDED with no errors** at 23:16 CEST on

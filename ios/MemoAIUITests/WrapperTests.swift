@@ -596,6 +596,69 @@ final class WrapperTests: XCTestCase {
         if close.exists { close.tap() }
     }
 
+    // Opt-in physical-device handoff. Navigate with XCTest, but leave provider
+    // credentials and verification to the account owner. Reaching the provider
+    // sheet is not a passing authentication result.
+    @MainActor func testPreviewGoogleSignInHandoff() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MEMO_QA_GOOGLE_SIGN_IN"] == "1",
+              let preview = env["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Explicit staging Google authentication handoff only")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        dismissInitialOffer(app)
+        let settings = app.webViews.links.matching(NSPredicate(
+            format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "Settings", "Nastavitve")).firstMatch
+        if settings.waitForExistence(timeout: 30) {
+            let recovered = XCTAttachment(screenshot: app.screenshot())
+            recovered.name = "Existing provider session recovered after relaunch"
+            recovered.lifetime = .keepAlways
+            add(recovered)
+            print("MEMO_QA: existing signed-in session recovered")
+            settings.tap()
+            let labels = ["Sign out", "Odjava"]
+            let signOut = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", labels)).firstMatch
+            XCTAssertTrue(signOut.waitForExistence(timeout: 15))
+            for _ in 0..<8 where !signOut.isHittable { app.webViews.firstMatch.swipeUp() }
+            signOut.tap()
+            XCTAssertTrue(app.webViews.staticTexts.matching(NSPredicate(
+                format: "label IN %@", ["Sign out?", "Se želiš odjaviti?"])).firstMatch.waitForExistence(timeout: 10))
+            let confirmations = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", labels))
+            confirmations.element(boundBy: confirmations.count - 1).tap()
+        }
+        completeOnboarding(app)
+        let google = app.webViews.buttons.matching(NSPredicate(
+            format: "label IN %@", ["Continue with Google", "Nadaljuj z Google"])).firstMatch
+        XCTAssertTrue(google.waitForExistence(timeout: 30))
+        XCTAssertTrue(app.webViews.buttons.matching(NSPredicate(
+            format: "label IN %@", ["Continue with Apple", "Nadaljuj z Apple"])).firstMatch.exists)
+        google.tap()
+        RunLoop.current.run(until: Date().addingTimeInterval(8))
+        let boundary = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        boundary.name = "Google authentication handoff on iPhone"
+        boundary.lifetime = .keepAlways
+        add(boundary)
+        print("MEMO_QA: Google button tapped; waiting for account-owner authentication")
+        let signedIn = app.webViews.buttons.matching(NSPredicate(
+            format: "label CONTAINS %@ OR label CONTAINS %@", "New note", "Nov zapisek")).firstMatch
+        let deadline = Date().addingTimeInterval(240)
+        while Date() < deadline && !signedIn.exists {
+            RunLoop.current.run(until: Date().addingTimeInterval(2))
+        }
+        let final = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        final.name = "Google authentication result on iPhone"
+        final.lifetime = .keepAlways
+        add(final)
+        guard signedIn.exists else {
+            throw XCTSkip("Google flow opened; completed authentication was not observed")
+        }
+        print("MEMO_QA: Google sign-in returned to Memo home")
+    }
+
     // Opens native Apple authentication on an explicitly selected, signed-out
     // test device. Authentication requires the designated test account; opening the sheet
     // must never be reported as a completed provider sign-in.

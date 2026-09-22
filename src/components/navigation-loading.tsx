@@ -19,8 +19,9 @@ import { SettingsLoading } from "@/components/settings-loading";
 import { SupportArticleLoading, SupportIndexLoading } from "@/components/support-loading";
 import { useCreatorDemoBasePath } from "@/components/creator-demo/creator-demo-context";
 import { getVisibleAppHeaderBottom, getVisibleAppSidebarRight } from "@/lib/app-header-offset";
-import { isOfflineNow } from "@/components/offline/offline-provider";
+import { isOfflineNow, isShellNow } from "@/components/offline/offline-provider";
 import { mapAppHref, unmapDemoPathname } from "@/lib/creator-demo/paths";
+import { needsDocumentNavigation } from "@/lib/offline/paths";
 
 /**
  * If a navigation never lands (offline, crashed transition), release the
@@ -313,27 +314,28 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
     }
 
     /*
-     * With no connection, every link in the app goes through the document
-     * rather than through the router.
+     * With no connection every link goes through the document rather than
+     * through the router — the service worker hands back the cached shell
+     * under the address that was asked for, where a client-side navigation
+     * would only end in a transition the network cannot finish. Every asset
+     * the shell needs is already cached, so this is not the slow path it would
+     * be online.
      *
-     * A client-side navigation fetches the destination's payload from the
-     * server, which offline is a request that cannot be made — the router has
-     * no way to render a route it has never seen, and the tap would end in a
-     * failed transition. A full navigation is a request the service worker can
-     * answer: it hands back the cached shell under the address that was asked
-     * for, and the shell draws that screen from the snapshot in this browser.
-     *
-     * Every asset it needs is already cached, so this is not the slow path it
-     * would be online — and the demo is excluded because its whole library
-     * lives in memory, which a document navigation would throw away.
+     * And from inside that shell every link goes through the document too,
+     * connection or no connection: carrying on in a copy of the app is what
+     * bounces a paid account between the upgrade screen and the home screen
+     * until the engine kills the tab. The rule, and the incident behind it, are
+     * in `needsDocumentNavigation`.
      */
     if (
-      isOfflineNow() &&
-      !demoBasePath &&
-      href.startsWith("/") &&
-      // Nothing to answer the document request without a worker in front of it.
-      typeof navigator !== "undefined" &&
-      navigator.serviceWorker?.controller
+      needsDocumentNavigation({
+        href,
+        isOffline: isOfflineNow(),
+        isShell: isShellNow(),
+        inCreatorDemo: Boolean(demoBasePath),
+        hasServiceWorker:
+          typeof navigator !== "undefined" && Boolean(navigator.serviceWorker?.controller),
+      })
     ) {
       window.location.assign(href);
       return;

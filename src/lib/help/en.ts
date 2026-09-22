@@ -162,7 +162,7 @@ We neither receive nor store your card details. Payment details are handled dire
 - IP address, device type, browser and operating system
 - access times, requests and server responses
 - error and crash data
-- aggregated page-visit statistics
+- page visits, approximate country/region/city and device details, linked to your account where available, if you enable optional analytics
 
 ## 3. Purposes and legal bases
 
@@ -184,7 +184,6 @@ We neither receive nor store your card details. Payment details are handled dire
 
 - security of the service, preventing abuse, rate limiting and detecting fraud
 - fixing faults and improving the reliability of the product
-- aggregated usage statistics from which no individual can be identified
 - establishing or defending legal claims
 
 Where we process on the basis of legitimate interest, we have weighed our interest against your rights. You can object to such processing at any time.
@@ -192,7 +191,7 @@ Where we process on the basis of legitimate interest, we have weighed our intere
 **Consent (Article 6(1)(a) GDPR)**
 
 - optional product messages, where you sign up for them
-- optional cookies or similar technologies, where these are in use
+- optional analytics, only after you enable it in Settings
 
 You can withdraw consent at any time. Withdrawal does not affect the lawfulness of processing before it.
 
@@ -219,7 +218,7 @@ We do not sell data. We pass it only to the providers we need in order to run th
 - **Google (Gemini)** — transcription, extracting text from documents, embeddings, generating notes and chat answers
 - **Soniox** — audio transcription, where that service is switched on
 - **OpenRouter and its selected model providers** — generating AI answers and study content where these services are used
-- **Vercel** — hosting the app, and aggregated visit statistics
+- **Vercel** — hosting, optional visit analytics and performance measurements
 - **Inngest** — running background jobs, where switched on
 - **Sentry** — error and crash monitoring
 - **Google and Apple** — sign-in, where you choose to sign in through them
@@ -287,12 +286,13 @@ If you believe we are processing your data unlawfully, you can lodge a complaint
 
 ## 12. Cookies and similar technologies
 
-We use:
+We use essential cookies and local storage for sign-in, security, settings and remembering your analytics choice. These are needed for the functions you request.
 
-- **essential cookies and local storage** — for signing in, keeping your session, security and basic settings. These are required for the service to work and cannot be switched off
-- **visit statistics** — aggregated, non-personal measurements of page visits through Vercel Analytics
+**Optional analytics is off by default.** In Settings → Optional analytics, you can allow Memo and Vercel to collect page visits, approximate location, device information and performance measurements. Visits may be linked to your Memo account. You can turn this off again on the same device without losing access to the app.
 
-We do not use advertising cookies or cross-site tracking. If we introduce optional cookies in future, we will ask for your consent to them.
+The essential \`memo-analytics\` preference lasts up to 180 days. When you opt in, the \`memo-visit\` analytics cookie lasts up to 24 hours. Turning analytics off removes that visit cookie and stops future optional collection. A cookie's expiry does not delete records already on the server: account-linked visit records are removed when you delete your account, or you can request their removal at info@memoai.eu.
+
+We do not use advertising cookies, cross-site advertising tracking or session replay. Necessary security and error diagnostics continue independently of optional analytics.
 
 ## 13. Children
 

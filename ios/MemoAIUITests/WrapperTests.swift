@@ -1758,6 +1758,43 @@ final class WrapperTests: XCTestCase {
 
     // Opens each remaining settings row (sheets, native prompts and in-app
     // pages) and gets back to Settings, relaunching if the way back is lost.
+    @MainActor func testPreviewAnalyticsChoice() throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires the dedicated signed-in staging account")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        defer { app.terminate() }
+        func openChoice() -> XCUIElement {
+            passConsentGate(app)
+            dismissInitialOffer(app)
+            let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+            XCTAssertTrue(settings.waitForExistence(timeout: 30))
+            settings.tap()
+            let choice = app.webViews.switches["Optional analytics"]
+            XCTAssertTrue(choice.waitForExistence(timeout: 20))
+            for _ in 0..<7 where !choice.isHittable { app.webViews.firstMatch.swipeUp() }
+            XCTAssertTrue(choice.isHittable)
+            return choice
+        }
+        let choice = openChoice()
+        XCTAssertEqual(choice.value as? String, "0", "A fresh analytics choice must be off")
+        keepStudyScreenshot("Optional analytics off by default", app: app)
+        choice.tap()
+        XCTAssertEqual(choice.value as? String, "1")
+        app.terminate(); app.launch()
+        let persisted = openChoice()
+        XCTAssertEqual(persisted.value as? String, "1", "Consent must survive relaunch")
+        persisted.tap()
+        XCTAssertEqual(persisted.value as? String, "0")
+        keepStudyScreenshot("Optional analytics withdrawn", app: app)
+        app.terminate(); app.launch()
+        XCTAssertEqual(openChoice().value as? String, "0", "Withdrawal must survive relaunch")
+    }
+
     @MainActor func testPreviewSettingsRows() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
               URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {

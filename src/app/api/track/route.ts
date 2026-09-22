@@ -5,6 +5,7 @@ import { getOptionalUser } from "@/lib/auth";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { callRpc } from "@/lib/admin/db";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { ANALYTICS_COOKIE, hasAnalyticsConsent } from "@/lib/analytics-consent";
 
 /**
  * Visitor beacon.
@@ -109,6 +110,10 @@ function readUtm(params: URLSearchParams, key: string): string | null {
 }
 
 export async function POST(request: NextRequest) {
+  // Old pages and direct calls must not bypass the client-side opt-in gate.
+  if (!hasAnalyticsConsent(request.cookies.get(ANALYTICS_COOKIE)?.value)) {
+    return new NextResponse(null, { status: 204, headers: { "Cache-Control": "no-store" } });
+  }
   const limited = await enforceRateLimit({
     request,
     route: "track:post",

@@ -162,7 +162,7 @@ Podatke o tvojoj platnoj kartici ne primamo i ne čuvamo. Podatke o plaćanju di
 - IP adresa, vrsta uređaja, preglednik i operativni sistem
 - vremena pristupa, zahtjevi i odgovori servera
 - podaci o greškama i rušenjima
-- agregirani podaci o posjetama stranicama
+- posjete stranicama, približna država/regija/grad i podaci o uređaju, povezani s tvojim računom kada je dostupan, ako uključiš neobaveznu analitiku
 
 ## 3. Svrhe obrade i pravni osnovi
 
@@ -184,7 +184,6 @@ Podatke o tvojoj platnoj kartici ne primamo i ne čuvamo. Podatke o plaćanju di
 
 - sigurnost usluge, sprječavanje zloupotrebe, ograničavanje broja zahtjeva i otkrivanje prevara
 - otklanjanje grešaka i poboljšavanje pouzdanosti proizvoda
-- agregirana statistika korištenja iz koje nije moguće prepoznati pojedinca
 - ostvarivanje ili odbrana pravnih zahtjeva
 
 Kod obrade na osnovu legitimnog interesa odmjerili smo svoj interes i tvoja prava. Takvoj obradi možeš prigovoriti bilo kada.
@@ -192,7 +191,7 @@ Kod obrade na osnovu legitimnog interesa odmjerili smo svoj interes i tvoja prav
 **Saglasnost (član 6. stav 1. tačka (a) GDPR-a)**
 
 - neobavezne poruke o proizvodu, kada se na njih prijaviš
-- neobavezni kolačići ili slične tehnologije, kada su u upotrebi
+- neobavezna analitika, tek nakon što je uključiš u postavkama
 
 Saglasnost možeš povući bilo kada. Povlačenje ne utiče na zakonitost obrade prije povlačenja.
 
@@ -219,7 +218,7 @@ Podatke ne prodajemo. Prosljeđujemo ih samo pružaocima koji su nam potrebni za
 - **OpenRouter i odabrani pružaoci modela** — generisanje AI odgovora i sadržaja za učenje kada se koriste te usluge
 - **Google (Gemini)** — transkripcija, izdvajanje teksta iz dokumenata, ugrađivanja, izrada bilježaka i odgovora u chatu
 - **Soniox** — transkripcija audiosnimaka, kada je ta usluga uključena
-- **Vercel** — hosting aplikacije i agregirana statistika posjeta
+- **Vercel** — hosting, neobavezna analitika posjeta i mjerenja performansi
 - **Inngest** — izvršavanje poslova u pozadini, kada je uključen
 - **Sentry** — praćenje grešaka i rušenja
 - **Google i Apple** — prijava, kada odabereš prijavu preko njih
@@ -287,12 +286,13 @@ Ako smatraš da tvoje podatke obrađujemo nezakonito, možeš podnijeti pritužb
 
 ## 12. Kolačići i slične tehnologije
 
-Koristimo:
+Nužne kolačiće i lokalnu pohranu koristimo za prijavu, sigurnost, postavke i pamćenje tvog izbora analitike. Potrebni su za funkcije koje tražiš.
 
-- **neophodne kolačiće i lokalnu pohranu** — za prijavu, održavanje sesije, sigurnost i osnovna podešavanja. Oni su potrebni za rad usluge i nije ih moguće isključiti
-- **statistiku posjeta** — agregirana i nelična mjerenja posjeta stranicama putem Vercel Analyticsa
+**Neobavezna analitika zadano je isključena.** U Postavke → Neobavezna analitika možeš dopustiti Memu i Vercelu prikupljanje posjeta stranicama, približne lokacije, podataka o uređaju i mjerenja performansi. Posjete mogu biti povezane s tvojim Memo računom. Na istom uređaju možeš je isključiti u bilo kojem trenutku bez gubitka pristupa aplikaciji.
 
-Oglašivačke kolačiće i praćenje između web-stranica ne koristimo. Ako u budućnosti uvedemo neobavezne kolačiće, za njih ćemo zatražiti tvoju saglasnost.
+Nužni kolačić izbora \`memo-analytics\` traje do 180 dana. Nakon saglasnosti analitički kolačić \`memo-visit\` traje do 24 sata. Isključivanje analitike uklanja kolačić posjete i zaustavlja buduće neobavezno prikupljanje. Istek kolačića ne briše zapise već sačuvane na serveru: zapisi posjeta povezani s računom uklanjaju se pri brisanju računa, a njihovo uklanjanje možeš zatražiti i na info@memoai.eu.
+
+Ne koristimo oglašivačke kolačiće, oglašivačko praćenje između web-stranica ni ponovnu reprodukciju korisničkih sesija. Nužna sigurnosna dijagnostika i prijava grešaka nastavljaju raditi neovisno o neobaveznoj analitici.
 
 ## 13. Djeca
 

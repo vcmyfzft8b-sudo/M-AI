@@ -154,7 +154,7 @@ Podatkov o tvoji plačilni kartici ne prejmemo in ne hranimo. Plačilne podatke 
 - IP-naslov, vrsta naprave, brskalnik in operacijski sistem
 - časi dostopa, zahtevki in odzivi strežnika
 - podatki o napakah in zrušitvah
-- agregirani podatki o obisku strani
+- obiski strani, približna država/regija/mesto in podatki o napravi, povezani s tvojim računom, kadar je na voljo, če vklopiš neobvezno analitiko
 
 ## 3. Nameni obdelave in pravne podlage
 
@@ -176,7 +176,6 @@ Podatkov o tvoji plačilni kartici ne prejmemo in ne hranimo. Plačilne podatke 
 
 - varnost storitve, preprečevanje zlorab, omejevanje števila zahtevkov in odkrivanje goljufij
 - odpravljanje napak in izboljševanje zanesljivosti izdelka
-- agregirana statistika uporabe, iz katere ni mogoče prepoznati posameznika
 - uveljavljanje ali obramba pravnih zahtevkov
 
 Pri obdelavi na podlagi zakonitega interesa smo pretehtali svoj interes in tvoje pravice. Zoper tako obdelavo lahko kadar koli ugovarjaš.
@@ -184,7 +183,7 @@ Pri obdelavi na podlagi zakonitega interesa smo pretehtali svoj interes in tvoje
 **Privolitev (člen 6(1)(a) GDPR)**
 
 - neobvezna sporočila o izdelku, kadar se nanje prijaviš
-- neobvezni piškotki ali podobne tehnologije, kadar so v uporabi
+- neobvezna analitika, šele ko jo vklopiš v nastavitvah
 
 Privolitev lahko kadar koli prekličeš. Preklic ne vpliva na zakonitost obdelave pred preklicem.
 
@@ -211,7 +210,7 @@ Podatkov ne prodajamo. Posredujemo jih le ponudnikom, ki jih potrebujemo za delo
 - **Google (Gemini)** — prepisovanje, izluščanje besedila iz dokumentov, embeddingi, ustvarjanje zapiskov in odgovorov v klepetu
 - **Soniox** — prepisovanje zvočnih posnetkov, kadar je ta storitev vklopljena
 - **OpenRouter in izbrani ponudniki modelov** — ustvarjanje odgovorov z umetno inteligenco in učnih vsebin, kadar uporabljamo te storitve
-- **Vercel** — gostovanje aplikacije in agregirana statistika obiska
+- **Vercel** — gostovanje, neobvezna analitika obiska in meritve delovanja
 - **Inngest** — izvajanje opravil v ozadju, kadar je vklopljen
 - **Sentry** — spremljanje napak in zrušitev
 - **Google in Apple** — prijava, kadar izbereš prijavo prek njiju
@@ -279,12 +278,13 @@ Za preverjanje istovetnosti lahko zahtevamo dodatne podatke, vendar le v obsegu,
 
 ## 12. Piškotki in podobne tehnologije
 
-Uporabljamo:
+Nujne piškotke in lokalno shrambo uporabljamo za prijavo, varnost, nastavitve in pomnjenje tvoje izbire glede analitike. Potrebni so za funkcije, ki jih zahtevaš.
 
-- **nujne piškotke in lokalno shrambo** — za prijavo, ohranjanje seje, varnost in osnovne nastavitve. Ti so potrebni za delovanje storitve in jih ni mogoče izklopiti
-- **statistiko obiska** — agregirane in neosebne meritve obiska strani prek Vercel Analytics
+**Neobvezna analitika je privzeto izklopljena.** V Nastavitve → Neobvezna analitika lahko Memu in Vercelu dovoliš zbiranje obiskov strani, približne lokacije, podatkov o napravi in meritev delovanja. Obiski so lahko povezani s tvojim računom Memo. Na isti napravi lahko možnost kadar koli izklopiš, ne da bi izgubil dostop do aplikacije.
 
-Oglaševalskih piškotkov in sledenja med spletnimi mesti ne uporabljamo. Če bi v prihodnje uvedli neobvezne piškotke, bomo zanje pridobili tvojo privolitev.
+Nujni piškotek z izbiro \`memo-analytics\` velja do 180 dni. Ob privolitvi analitični piškotek \`memo-visit\` velja do 24 ur. Izklop analitike odstrani ta piškotek obiska in ustavi prihodnje neobvezno zbiranje. Potek piškotka ne izbriše že shranjenih zapisov na strežniku: zapisi obiskov, povezani z računom, se odstranijo ob izbrisu računa, njihov izbris pa lahko zahtevaš tudi na info@memoai.eu.
+
+Ne uporabljamo oglaševalskih piškotkov, oglaševalskega sledenja med spletnimi mesti ali ponovnega predvajanja uporabniških sej. Nujna varnostna diagnostika in poročanje o napakah delujeta neodvisno od neobvezne analitike.
 
 ## 13. Otroci
 

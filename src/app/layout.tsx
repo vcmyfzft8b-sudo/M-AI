@@ -3,8 +3,7 @@ import { getImageProps } from "next/image";
 import { headers } from "next/headers";
 import { NativeProvider } from "@/components/native-provider";
 import { isNativeUserAgent } from "@/lib/mobile/runtime";
-import { Analytics } from "@vercel/analytics/next";
-import { SpeedInsights } from "@vercel/speed-insights/next";
+import { OptionalAnalytics } from "@/components/optional-analytics";
 
 import { I18nProvider } from "@/components/i18n-provider";
 import { KeyboardInset } from "@/components/keyboard-inset";
@@ -12,7 +11,6 @@ import { LaunchScreen } from "@/components/launch-screen";
 import { NavigationFeedbackProvider } from "@/components/navigation-loading";
 import { ServiceWorkerRegistration } from "@/components/service-worker";
 import { ThemeController } from "@/components/theme-controller";
-import { VisitTracker } from "@/components/visit-tracker";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -366,11 +364,9 @@ export default async function RootLayout({
             * path from a context that only exists inside that layout.
             */}
           <NavigationFeedbackProvider>{children}</NavigationFeedbackProvider>
-          <VisitTracker />
+          <OptionalAnalytics />
           </NativeProvider>
         </I18nProvider>
-        <Analytics />
-        <SpeedInsights />
       </body>
     </html>
   );

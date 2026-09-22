@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useCallback, useState, useSyncExternalStore } from "react";
 
 import { BillingPortalButton } from "@/components/billing-portal-button";
+import { AnalyticsSettings } from "@/components/analytics-settings";
 import { NativeAccountActions } from "@/components/native-account-actions";
 import { useNativeIOS } from "@/lib/mobile/client";
 import { SettingsTestPersona } from "@/components/settings-test-persona";
@@ -547,6 +548,7 @@ export function SettingsScreen({
               {/* Its own component: the row opens a sheet and posts the
                   choice, which none of the plain rows above do. */}
               <LanguageSettingsRow />
+              {!isDemo ? <AnalyticsSettings /> : null}
               {rows.map(renderRow)}
               {native && !isDemo ? <NativeAccountActions showManage={!appleSubscription} onWithdraw={() => setConfirm("withdraw")} /> : null}
               {accountRows.map(renderRow)}

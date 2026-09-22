@@ -6197,6 +6197,16 @@
   min-width: 0;
 }
 
+.memo-card-row.memo-settings-analytics {
+  flex-wrap: nowrap;
+  flex-direction: row;
+  align-items: center;
+}
+
+.memo-settings-analytics .memo-card-row-copy {
+  flex: 1;
+}
+
 .memo-card-row-title {
   font-size: 1.08rem;
   font-weight: 700;

@@ -42,6 +42,11 @@ Current evidence is at the top of `ios/AppStore/release-readiness.md`.
 - PDF import through the native Files picker and actual circuit-note generation
   pass (`review-sep22-pdf-import-picker.xcresult`). The committed PDF fixture
   and its setup are documented in `docs/ios-app.md`.
+- Integrated released PWA startup/stale-page recovery fix `a6be0d41`. Its unit,
+  type, Preview browser-navigation and actual iOS settings checks pass on
+  Preview `memo-jkf65k6fg-nace-valencics-projects.vercel.app` (`22251866`).
+- Project regeneration now retains the checked-in manifests, entitlements and
+  translations. Isolated output verification passes; build 9 remains unchanged.
 - Device tests pass for real Apple product loading, three-day trial display,
   the wheel and both half-off offer cards, and settings/theme controls.
 - Preview catalogue loading is fixed: the Preview host must be included with

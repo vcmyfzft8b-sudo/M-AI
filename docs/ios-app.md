@@ -189,7 +189,7 @@ npm run ios:open
 
 Debug builds can set `MEMO_IOS_URL` in **Edit Scheme → Run → Arguments → Environment Variables** to `https://your-preview.vercel.app`. Only localhost/127.0.0.1 HTTP or Vercel HTTPS origins are accepted. Set the build setting `MEMO_APP_BOUND_HOST` to the same hostname (without scheme or path), for example `xcodebuild … MEMO_APP_BOUND_HOST=your-preview.vercel.app`. This includes the Preview in `WKAppBoundDomains`; changing only the runtime URL blocks the JavaScript/native bridge. Rebuild after changing hosts. Omit the URL path; the app opens `/onboarding`, which resumes a session or follows the shared PWA onboarding/sign-in flow. Release builds always use the production origin.
 
-The project and manifest generator is `python3 scripts/ios/create-project.py`; generated files and brand assets are checked in. Keep changes to generated configuration in that script as well. Version/build numbers live in `ios/Config/App.xcconfig`.
+The Xcode structure generator is `python3 scripts/ios/create-project.py`; generated files and brand assets are checked in. App/extension manifests, entitlements and localized strings are maintained directly in their checked-in files. The generator preserves those files (and copies them when generating into a separate output directory), so regenerating cannot restore obsolete orientation, privacy or notification defaults. Shared version/build numbers live in `ios/Config/Version.xcconfig`.
 
 ## 6. Test before release
 

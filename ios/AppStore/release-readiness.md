@@ -169,9 +169,13 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   `origin/main` `a6be0d41` into this task branch (`0c46a612`). It keeps the
   initial shell consistent with server rendering and recovers stale route
   content. Its 11 focused hydration tests and TypeScript checking pass.
-  The merged branch still needs its updated Preview/navigation check; no
-  production merge was performed by this task, and build 9's native binary
-  is unchanged by this web-only integration.
+  Preview `memo-jkf65k6fg-nace-valencics-projects.vercel.app` is READY at
+  `22251866`. The real-browser regression passes with web and iOS user agents:
+  stale routes recover without React errors, and normal navigation/back/forward
+  retain the shell. The actual iOS settings, theme and scroll test also passes
+  (`review-sep22-hydration-native.xcresult`, 23.5 seconds). No production merge
+  was performed by this task, and build 9's native binary is unchanged by this
+  web-only integration.
 - Actual PDF import also passes on build 9: the native Files picker selected
   `memo-qa-electric-circuits.pdf`, the PWA uploaded it, and the note workspace
   displayed generated resistance/circuit content. The original, visually
@@ -184,6 +188,20 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   `memo-1n6o49ce2-nace-valencics-projects.vercel.app` (25c1649b), not the
   subsequent hydration integration. The branch-only review-email allowlist
   includes that account; global staging database configuration is unchanged.
+- Found that the legacy project generator could overwrite maintained manifests
+  and translations with stale defaults. It now preserves/copies the checked-in
+  app and extension manifests, entitlements, privacy manifest and localized
+  strings instead of maintaining duplicate versions. Isolated generation
+  reproduced all 14 files byte-for-byte; checks confirmed portrait-only/full
+  screen, app-bound hosts, APNs and FileTimestamp/DeviceID privacy declarations.
+  The generated project passes plist validation. The shipped files and build 9
+  were not regenerated or changed by this maintenance fix.
+- PDF screenshot review found one remaining content-formatting issue: the
+  synthetic circuit note displays a bare `\Omega` command in prose. A staging
+  read confirmed it is stored as `**ohms (\Omega)**`, without math delimiters,
+  rather than a missing iOS font. The import is complete and the lecture is
+  `ready`, but this visible formatting case still needs correction/verification.
+  Synthetic lecture: `b3f227d1-c8ee-4e45-82c4-a5017f4d0ac6` (PDF QA account).
 - The real iPhone Sandbox checkout now reaches Apple’s account/password dialog.
   It has not completed a transaction; the inspection test is explicitly skipped,
   not counted as a purchase pass. The user has been asked to authenticate with

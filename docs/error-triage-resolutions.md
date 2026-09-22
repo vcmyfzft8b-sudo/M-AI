@@ -907,7 +907,7 @@ investigation can start from the replay without treating a proposed trigger as e
   `c34a41f53f474106bc4213915386d8d7`
 - **Release:** `2603764dacec1c7343c260c83d7f7b96046d83f7`, the release serving production at
   the event time; deployment `dpl_7E4ziUNnPBMuJ2E5iieXUKgmZ84W` was ready at
-  `2026-09-20T15:26:34Z`
+  `2026-09-20T15:29:34.206Z`
 - **Device:** Mobile Safari 18.7.5 on iOS 18.7, iPhone, viewport 390×663, `lang="sl-SI"`
 - **Replay:** `612e72365e7f440eb96920a7e3e238cd`
 - **Status:** `needs-human`; the original trigger has not been reproduced and this entry changes
@@ -929,8 +929,9 @@ The rrweb recording provides these observations, rechecked against Sentry on 202
   There is no earlier recorded click. The span does not identify the caller or explain why
   the note layout was present before recording began.
 - `1789937552873`: the `replay.hydrate-error` breadcrumb.
-- `1789937552885`: one mutation removes 71 nodes and adds 132, replacing the children of
-  both `<head>` and `<body>`. The rebuilt main still contains `div.memo-note-screen`.
+- `1789937552885`: one mutation removes 71 nodes and adds 132. It removes all four direct
+  children of `<body>` and 67 of the 72 direct children of `<head>` in the snapshot. The rebuilt
+  main still contains `div.memo-note-screen`.
 
 The shell changes visible across that mutation are:
 

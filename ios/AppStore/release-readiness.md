@@ -3,6 +3,35 @@
 This section supersedes the older portal status below. **Not yet ready to
 submit:** current end-to-end purchase and physical-device checks remain open.
 
+
+## Remaining submission gates
+
+- Complete actual Apple and Google authentication with designated test identities,
+  including session recovery and Apple account-deletion revocation. Opening the
+  native provider sheet is only a boundary check.
+- Complete Apple Sandbox purchases, entitlement delivery, restore, renewal,
+  expiry and refund/revocation. Real product prices and a signed TEST notification
+  pass; neither proves a purchased subscription works.
+- Finish hardware recording/audio/interruptions and the other explicitly listed
+  device checks. The portrait lock and email-code/settings walkthrough pass on
+  the connected iPhone; perceived haptics and audio quality remain unverified.
+- Verify final account erasure after the existing three-hour upload drain, and
+  confirm the remaining imported-file and study-feature coverage below.
+- Obtain the owner's Content Rights confirmation and correct Apple's declaration
+  for imported third-party documents/web pages. Reconcile the published privacy
+  answers and final screenshots with the release implementation.
+- Resolve the optional discount-code request without weakening transaction
+  ownership checks. Equivalent Stripe codes are not implemented on Apple.
+- Obtain production merge/release authorization, verify the deployed web app
+  with the signed Release binary, and complete TestFlight checks before review
+  submission. Build 9 is uploaded and the review draft exists; neither is a
+  production deployment of this branch or an App Review submission.
+
+Apple's Small Business enrollment is submitted, but its 15% approval remains
+unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
+
+## Verified work and evidence
+
 - Integrated `origin/main` at `2603764d` into `codex/ios-app-wrapper` at
   `6256fed1`; their product trees matched. The branch Preview
   `https://memo-1nyjrhksm-nace-valencics-projects.vercel.app` is READY and uses
@@ -16,7 +45,8 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   app version, all four subscription versions and their subscription group.
   Its `submittedDate` is null. All 16 uploaded screenshots are COMPLETE;
   review credentials, contact and metadata are present. Content Rights is
-  populated (`DOES_NOT_USE_THIRD_PARTY_CONTENT`).
+  populated (`DOES_NOT_USE_THIRD_PARTY_CONTENT`), but needs the account holder's
+  rights confirmation before correcting it for document/web-page imports.
 - Fixed Apple's missing app-download price by configuring a free download
   with Slovenia as the base territory. Verified EUR subscription prices:
   19.99 monthly / 129.99 yearly, first-period offers 9.99 / 64.99, and
@@ -196,12 +226,70 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   screen, app-bound hosts, APNs and FileTimestamp/DeviceID privacy declarations.
   The generated project passes plist validation. The shipped files and build 9
   were not regenerated or changed by this maintenance fix.
-- PDF screenshot review found one remaining content-formatting issue: the
-  synthetic circuit note displays a bare `\Omega` command in prose. A staging
-  read confirmed it is stored as `**ohms (\Omega)**`, without math delimiters,
-  rather than a missing iOS font. The import is complete and the lecture is
-  `ready`, but this visible formatting case still needs correction/verification.
-  Synthetic lecture: `b3f227d1-c8ee-4e45-82c4-a5017f4d0ac6` (PDF QA account).
+- Fixed the circuit-note formatting bug at `c1cd4bbf`: the note processor
+  omitted capital and variant Greek commands from its math detection, stripping
+  valid delimiters around `\Omega`. The 97 affected math/mobile checks and
+  TypeScript validation pass. Preview `memo-lvfffyrvm-nace-valencics-projects.vercel.app`
+  is READY. A fresh synthetic account imported the original PDF through the
+  native picker; all three setup/language/import tests pass in
+  `review-sep22-math-import.xcresult`. Staging stores `**ohms (\(\Omega\))**`,
+  and the actual app screenshot displays Ω correctly. This did not rewrite the
+  earlier synthetic note or reset any account's allowance.
+- Portrait-only behavior now also passes on the physical iPhone 16 with build
+  9 (`review-sep22-device-portrait.xcresult`): sideways launch, both landscape
+  directions and upside-down rotation retain a vertical app and PWA viewport.
+  The retained screenshot shows the actual sign-in screen with Google, Apple
+  and email. The first launch waited for the phone to become unlocked.
+- Apple's signed Sandbox TEST notification reached the branch Preview and
+  Apple reported `SUCCESS`; local certificate verification confirmed type TEST
+  and Sandbox environment. Two replays returned HTTP 200 with `received: true`.
+  The Sandbox callback URL was temporarily pointed at this Preview and restored
+  to its original `https://www.memoai.eu/api/mobile/notifications` value after
+  verification; the production callback URL was preserved. Evidence:
+  `review-sep22-sandbox-notification.json`. This verifies delivery/signature
+  handling, not purchase-ledger writes, renewal or refund behavior.
+- The actual iPhone Apple button opens Apple's native Sign in with Apple sheet
+  for Memo AI. `review-sep22-device-apple-signin.xcresult` records this as a
+  deliberately skipped authentication inspection, not a completed sign-in.
+  Provider authentication still requires a designated test Apple account.
+- Rechecked the uploaded screenshot records after the portrait-only change:
+  all 16 are COMPLETE and portrait (1320×2868, 1284×2778, 2064×2752).
+  Evidence: `review-sep22-screenshot-audit.json`. This is an asset/state and
+  orientation check, not a new visual comparison of every uploaded image.
+- Actual audio-file import exposed an indefinite metadata wait in WKWebView:
+  choosing the original 92-second M4A left creation disabled with no feedback.
+  Commit `03a05823` explicitly loads metadata, bounds each probe, releases its
+  media resources and shows translated preparation progress. The existing
+  transcode fallback then prepares an MP3 when WebKit does not answer. On READY
+  Preview `memo-ouat4dqak-nace-valencics-projects.vercel.app`, the same synthetic
+  account and M4A pass native import, transcription, generated notes and reading
+  the transcript (`review-sep22-audio-import-retry.xcresult`, 133.5 seconds).
+  Staging confirms an audio lecture with duration 92 and status ready. No quota
+  was reset after the initial failure. The desktop browser also reads the
+  original AAC duration successfully; its duration includes codec padding.
+  All 117 affected audio/math/mobile/i18n tests, type checking and focused lint
+  pass. The fixture and its original synthetic script are retained in the repo.
+- The source recording also passes actual playback, pause, ten-second seeking
+  in both directions and playback-speed selection on the same audio note.
+  `review-sep22-source-audio-playback.xcresult` passed in 52.9 seconds; the
+  screenshot shows paused playback at 0:04 and 1.5×. This confirms playback
+  controls and advancing media time, not perceived speaker audio quality.
+- Actual Word import passes on READY Preview
+  `memo-j5l9znk52-nace-valencics-projects.vercel.app` at `03a05823`:
+  native Files selection of the original DOCX, upload and generated circuit
+  notes. `review-sep22-word-import.xcresult` has three passes (account setup,
+  language, import); the import took 82.3 seconds. Staging confirms the note
+  is ready. The selected file and rendered result were visually inspected.
+  The fresh account consumed its ordinary free note; no allowance was reset.
+- Actual PowerPoint import passes on that same Preview: native Files selected
+  the original PPTX, Memo recognized three slides and generated a completed
+  circuit note. `review-sep22-slides-import.xcresult` has three passes; the
+  import took 74.1 seconds. The selected PPTX and final note were visually
+  inspected. `review-sep22-office-status.json` confirms both Office notes are
+  ready. These fixtures cover editable text, not embedded Office media.
+- The 22 September 15:50 CEST email search still found the Small Business
+  enrollment receipt and no approval message. The reduced commission remains
+  unconfirmed.
 - The real iPhone Sandbox checkout now reaches Apple’s account/password dialog.
   It has not completed a transaction; the inspection test is explicitly skipped,
   not counted as a purchase pass. The user has been asked to authenticate with
@@ -344,7 +432,7 @@ ignored by Git.
 - Build 1 processed (`VALID`) and is `IN_BETA_TESTING` for the internal TestFlight group **Memo internal** (`c60398fa-…`, access to all builds); the account holder is invited (accept the TestFlight e-mail, then install from the TestFlight app). `scripts/apple/asc-api.mjs` makes ad-hoc App Store Connect API calls.
 - Still open: install from TestFlight and run the device checks (microphone/tutor, native Apple and Google sign-in, Sandbox purchases, Manage Apple subscriptions); a completed web Apple sign-in on a real Apple Account; screenshots, age rating and review notes in App Store Connect; the submission itself.
 
-## Required before calling the app ready
+## Historical release gates recorded on 17 September
 
 1. **Real authentication:** complete Google and Apple sign-in on the connected
    iPhone; confirm session resume, account association, sign-out and Apple
@@ -396,7 +484,7 @@ ignored by Git.
 - Web "Continue with Apple" reaches Apple's sign-in page with `client_id=eu.memoai.web`; completing it with a real Apple Account is the remaining check.
 - Still pending in App Store Connect: the server-notifications URLs (`https://www.memoai.eu/api/mobile/notifications` — the bare domain 307-redirects and Apple does not follow redirects), App Store Connect API access (needed for a command-line export/upload), the four products at one service level, screenshots and review notes.
 
-## Current operational blockers
+## Historical operational blockers recorded on 17 September
 
 - **Export needs Xcode's Organizer or an App Store Connect API key.** The
   Apple ID is signed in to Xcode, but `xcodebuild -exportArchive` from a

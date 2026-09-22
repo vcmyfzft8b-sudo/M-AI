@@ -37,7 +37,6 @@ export function readAudioDurationFromMetadata(file: File): Promise<number | null
     const audio = document.createElement("audio");
     const objectUrl = URL.createObjectURL(file);
     let settled = false;
-    let timeout: ReturnType<typeof setTimeout>;
 
     const finish = (duration: number | null) => {
       if (settled) {
@@ -66,7 +65,7 @@ export function readAudioDurationFromMetadata(file: File): Promise<number | null
     // WebKit can leave detached media in its initial state without either a
     // metadata or error event. Explicitly load it, and let the existing header
     // / transcode fallbacks run if decoding still never answers.
-    timeout = setTimeout(() => finish(null), AUDIO_METADATA_TIMEOUT_MS);
+    const timeout = setTimeout(() => finish(null), AUDIO_METADATA_TIMEOUT_MS);
     audio.preload = "metadata";
     try {
       audio.src = objectUrl;

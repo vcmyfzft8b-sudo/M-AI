@@ -216,6 +216,33 @@ account preparation in the same suite, select `testPreviewPrepareStudyAccount`
 and `testPreviewResetLanguageToEnglish` before the study test; XCTest orders
 selected methods alphabetically. Keep all fixtures and accounts synthetic.
 
+`testPreviewStudyNoteFromAudioFile` follows the same native picker flow for
+`memo-qa-electric-circuits-audio.m4a`, then verifies both generated notes and
+the source transcript. Set
+`TEST_RUNNER_MEMO_QA_AUDIO=memo-qa-electric-circuits-audio` and use an account
+with an unused free note. Its original script is checked in beside the audio;
+the 92-second recording was synthesized with macOS Samantha and converted to
+mono AAC. It contains no recorded user speech. Seed it in the same dedicated
+Simulator Files folder used by the PDF test.
+
+Audio preparation explicitly starts metadata loading and waits at most ten
+seconds per probe before trying the existing WAV-header/transcode fallback.
+The picker displays translated preparation progress during that wait. This
+prevents an M4A whose metadata never fires in WKWebView from leaving creation
+disabled indefinitely; it does not promise that every codec decodes natively.
+
+`testPreviewSourceAudioPlayback` reopens the retained audio note without
+consuming another free note. It verifies an advancing playback clock, a held
+pause, both ten-second seek controls and captures the selected playback speed.
+
+`testPreviewStudyNoteFromOfficeDocument` uses the same Files-to-generation
+path as the PDF test. Set `TEST_RUNNER_MEMO_QA_OFFICE` to
+`memo-qa-circuits-word` or `memo-qa-circuits-slides`, seed the matching DOCX or
+PPTX from `ios/MemoAIUITests/Fixtures`, and use a separate synthetic staging
+account with an unused free note for each import. The original one-page Word
+lesson and three-slide deck contain plain educational text only; these tests
+do not cover embedded media or complex Office formatting.
+
 Required end-to-end checks with synthetic staging data:
 
 - Email OTP sign-up, login, logout, relaunch, consent acceptance/decline/withdrawal, onboarding, and settings/account deletion access.

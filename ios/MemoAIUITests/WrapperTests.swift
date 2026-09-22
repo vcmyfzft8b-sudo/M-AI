@@ -389,10 +389,10 @@ final class WrapperTests: XCTestCase {
         snap("11 Home after deletion")
     }
 
-    @MainActor private func openPreviewStudyNote() throws -> XCUIApplication {
+    @MainActor private func openPreviewStudyNote(title: String = "Plant Life Cycle") throws -> XCUIApplication {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
               URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
-            throw XCTSkip("Requires the retained synthetic Plant Life Cycle note in staging")
+            throw XCTSkip("Requires a retained synthetic study note in staging")
         }
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -400,7 +400,7 @@ final class WrapperTests: XCTestCase {
         app.launch()
         passConsentGate(app)
         dismissInitialOffer(app)
-        let note = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Plant Life Cycle")).firstMatch
+        let note = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: 30))
         note.tap()
         XCTAssertTrue(app.webViews.buttons["Notes"].firstMatch.waitForExistence(timeout: 30))
@@ -596,6 +596,39 @@ final class WrapperTests: XCTestCase {
         if close.exists { close.tap() }
     }
 
+    // Opens native Apple authentication on an explicitly selected, signed-out
+    // test device. Authentication requires the designated test account; opening the sheet
+    // must never be reported as a completed provider sign-in.
+    @MainActor func testPreviewInspectAppleSignIn() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MEMO_QA_APPLE_SIGN_IN"] == "1",
+              let preview = env["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Explicit Apple authentication inspection only")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        let apple = app.webViews.buttons.matching(NSPredicate(
+            format: "label IN %@", ["Continue with Apple", "Nadaljuj z Apple"]
+        )).firstMatch
+        XCTAssertTrue(apple.waitForExistence(timeout: 30), "Requires the signed-out login screen")
+        apple.tap()
+        RunLoop.current.run(until: Date().addingTimeInterval(12))
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "Native Apple sign-in boundary"
+        shot.lifetime = .keepAlways
+        add(shot)
+        for (name, process) in [("Memo", app), ("System", XCUIApplication(bundleIdentifier: "com.apple.springboard"))] {
+            let hierarchy = XCTAttachment(string: process.debugDescription)
+            hierarchy.name = name + " Apple sign-in accessibility"
+            hierarchy.lifetime = .keepAlways
+            add(hierarchy)
+        }
+        throw XCTSkip("Captured Apple authentication boundary; test-account authentication is required")
+    }
+
     // Opt-in inspection of Apple's actual Sandbox purchase sheet. No local
     // StoreKit configuration and no fabricated entitlement are used here.
     @MainActor func testPreviewInspectSandboxCheckout() throws {
@@ -756,10 +789,24 @@ final class WrapperTests: XCTestCase {
     }
 
     @MainActor func testPreviewStudyNoteFromPDF() throws {
-        let env = ProcessInfo.processInfo.environment
-        guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
-              env["MEMO_QA_PDF"] == "memo-qa-electric-circuits" else {
-            throw XCTSkip("Requires staging, an unused synthetic free note and the seeded circuits PDF")
+        guard ProcessInfo.processInfo.environment["MEMO_QA_PDF"] == "memo-qa-electric-circuits" else {
+            throw XCTSkip("Requires an unused synthetic free note and the seeded circuits PDF")
+        }
+        try importCircuitDocument(fixtureName: "memo-qa-electric-circuits")
+    }
+
+    @MainActor func testPreviewStudyNoteFromOfficeDocument() throws {
+        guard let fixture = ProcessInfo.processInfo.environment["MEMO_QA_OFFICE"],
+              ["memo-qa-circuits-word", "memo-qa-circuits-slides"].contains(fixture) else {
+            throw XCTSkip("Requires an unused synthetic free note and a seeded Word or PowerPoint fixture")
+        }
+        try importCircuitDocument(fixtureName: fixture)
+    }
+
+    @MainActor private func importCircuitDocument(fixtureName: String) throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires the shared staging Preview")
         }
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -787,8 +834,8 @@ final class WrapperTests: XCTestCase {
         if browse.waitForExistence(timeout: 5) { browse.tap() }
         let local = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "On My iPhone")).firstMatch
         if local.waitForExistence(timeout: 5) { local.tap() }
-        keepStudyScreenshot("Native PDF picker", app: app)
-        let pdf = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "memo-qa-electric-circuits")).firstMatch
+        keepStudyScreenshot("Native document picker", app: app)
+        let pdf = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", fixtureName)).firstMatch
         XCTAssertTrue(pdf.waitForExistence(timeout: 15), "The fixture must be visible in the native Files picker")
         pdf.tap()
         let open = app.buttons["Open"].firstMatch
@@ -797,7 +844,7 @@ final class WrapperTests: XCTestCase {
         XCTAssertTrue(create.waitForExistence(timeout: 30))
         expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: create)
         waitForExpectations(timeout: 90)
-        keepStudyScreenshot("PDF attached through the native picker", app: app)
+        keepStudyScreenshot("Document attached through the native picker", app: app)
         create.tap()
         XCTAssertTrue(app.webViews.buttons["Notes"].firstMatch.waitForExistence(timeout: 120))
         let content = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "resistance")).firstMatch
@@ -807,9 +854,100 @@ final class WrapperTests: XCTestCase {
             XCTAssertFalse(app.webViews.staticTexts["Processing failed"].exists)
             RunLoop.current.run(until: Date().addingTimeInterval(5))
         }
-        XCTAssertTrue(content.exists, "The PDF must produce actual electric-circuit notes")
+        XCTAssertTrue(content.exists, "The document must produce actual electric-circuit notes")
         dismissNotificationNudge(app)
-        keepStudyScreenshot("Notes generated from the circuits PDF", app: app)
+        keepStudyScreenshot("Notes generated from the circuits document", app: app)
+    }
+
+    @MainActor func testPreviewStudyNoteFromAudioFile() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              env["MEMO_QA_AUDIO"] == "memo-qa-electric-circuits-audio" else {
+            throw XCTSkip("Requires staging, an unused synthetic free note and the seeded synthetic lecture audio")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        passConsentGate(app)
+        dismissInitialOffer(app)
+        func button(_ label: String) -> XCUIElement {
+            app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", label)).firstMatch
+        }
+        let newNote = button("New note")
+        XCTAssertTrue(newNote.waitForExistence(timeout: 30))
+        newNote.tap()
+        let documents = button("Upload audio")
+        XCTAssertTrue(documents.waitForExistence(timeout: 15))
+        documents.tap()
+        let choose = button("Choose a file")
+        XCTAssertTrue(choose.waitForExistence(timeout: 15))
+        choose.tap()
+        keepStudyScreenshot("Audio source menu", app: app)
+        let files = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Choose File")).firstMatch
+        if files.waitForExistence(timeout: 5) { files.tap() }
+        let browse = app.buttons["Browse"].firstMatch
+        if browse.waitForExistence(timeout: 5) { browse.tap() }
+        let local = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "On My iPhone")).firstMatch
+        if local.waitForExistence(timeout: 5) { local.tap() }
+        keepStudyScreenshot("Native audio picker", app: app)
+        let audio = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "memo-qa-electric-circuits-audio")).firstMatch
+        XCTAssertTrue(audio.waitForExistence(timeout: 15), "The fixture must be visible in the native Files picker")
+        audio.tap()
+        let open = app.buttons["Open"].firstMatch
+        if open.waitForExistence(timeout: 3), open.isEnabled { open.tap() }
+        let create = button("Create the note")
+        XCTAssertTrue(create.waitForExistence(timeout: 30))
+        expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: create)
+        waitForExpectations(timeout: 90)
+        keepStudyScreenshot("Audio file attached through the native picker", app: app)
+        create.tap()
+        XCTAssertTrue(app.webViews.buttons["Notes"].firstMatch.waitForExistence(timeout: 120))
+        let content = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "resistance")).firstMatch
+        let deadline = Date().addingTimeInterval(420)
+        while Date() < deadline && !content.exists {
+            dismissNotificationNudge(app)
+            XCTAssertFalse(app.webViews.staticTexts["Processing failed"].exists)
+            RunLoop.current.run(until: Date().addingTimeInterval(5))
+        }
+        XCTAssertTrue(content.exists, "The audio must be transcribed into actual electric-circuit notes")
+        dismissNotificationNudge(app)
+        keepStudyScreenshot("Notes generated from the audio lecture", app: app)
+        openStudyTab("Transcript", in: app)
+        let transcript = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "amperes")).firstMatch
+        XCTAssertTrue(transcript.waitForExistence(timeout: 30), "The actual source transcription must be readable")
+        keepStudyScreenshot("Transcript from the imported audio lecture", app: app)
+    }
+
+    @MainActor func testPreviewSourceAudioPlayback() throws {
+        guard ProcessInfo.processInfo.environment["MEMO_QA_AUDIO"] == "memo-qa-electric-circuits-audio" else {
+            throw XCTSkip("Requires the retained synthetic audio lecture")
+        }
+        let app = try openPreviewStudyNote(title: "Introduction to Electric Circuits")
+        openStudyTab("Transcript", in: app)
+        let play = app.webViews.buttons["Play"].firstMatch
+        let pause = app.webViews.buttons["Pause"].firstMatch
+        XCTAssertTrue(play.waitForExistence(timeout: 30))
+        let clock = app.webViews.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "^[0-9]{1,2}:[0-9]{2}$")).firstMatch
+        func elapsed() -> Int {
+            guard clock.exists else { return -1 }
+            return clock.label.split(separator: ":").compactMap { Int($0) }.reduce(0) { $0 * 60 + $1 }
+        }
+        play.tap()
+        XCTAssertTrue(pause.waitForExistence(timeout: 20))
+        let advanced = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in elapsed() >= 3 }, object: clock)
+        XCTAssertEqual(XCTWaiter.wait(for: [advanced], timeout: 30), .completed)
+        pause.tap()
+        XCTAssertTrue(play.waitForExistence(timeout: 10))
+        let pausedAt = elapsed()
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        XCTAssertLessThanOrEqual(abs(elapsed() - pausedAt), 1, "Pause must stop the source recording")
+        app.webViews.buttons["Forward 10 seconds"].firstMatch.tap()
+        XCTAssertLessThanOrEqual(abs(elapsed() - pausedAt - 10), 1)
+        app.webViews.buttons["Back 10 seconds"].firstMatch.tap()
+        XCTAssertLessThanOrEqual(abs(elapsed() - pausedAt), 1)
+        app.webViews.buttons["Playback speed"].firstMatch.tap()
+        keepStudyScreenshot("Source audio played, paused, skipped and changed speed", app: app)
     }
 
     @MainActor func testPreviewWithdrawAndRestoreAIConsent() throws {

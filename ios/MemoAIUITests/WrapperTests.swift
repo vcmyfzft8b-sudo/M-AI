@@ -442,6 +442,9 @@ final class WrapperTests: XCTestCase {
         dismissInitialOffer(app)
         let note = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: 30))
+        // Newer notes push it down behind the dock; bring it into reach first.
+        let dockTop = app.webViews.buttons["New note"].firstMatch.exists ? app.webViews.buttons["New note"].firstMatch.frame.minY : app.windows.firstMatch.frame.maxY
+        for _ in 0..<6 where !note.isHittable || note.frame.maxY > dockTop - 8 { app.webViews.firstMatch.swipeUp() }
         note.tap()
         XCTAssertTrue(app.webViews.buttons["Notes"].firstMatch.waitForExistence(timeout: 30))
         dismissNotificationNudge(app)
@@ -1574,6 +1577,48 @@ final class WrapperTests: XCTestCase {
         keepStudyScreenshot("Tutor hour offer (App Store)", app: app)
     }
 
+    // A real Sandbox purchase of the tutor hour on a device. Confirms only
+    // Apple's explicitly no-charge Sandbox sheet; the credit is verified on the server.
+    @MainActor func testPreviewBuyTutorHour() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MEMO_QA_COMPLETE_CHECKOUT"] == "1", env["MEMO_QA_TUTOR_HOUR"] == "1" else {
+            throw XCTSkip("Explicit Sandbox tutor-hour purchase only")
+        }
+        let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let app = try openPreviewStudyNote(title: "Introduction to Electric Circuits")
+        openStudyTab("Tutor", in: app)
+        let meter = app.webViews.buttons.matching(NSPredicate(format: "label MATCHES %@", ".*[0-9]+%.*")).firstMatch
+        if meter.waitForExistence(timeout: 20) { meter.tap() }
+        let offer = app.webViews.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Add an hour for")).firstMatch
+        XCTAssertTrue(offer.waitForExistence(timeout: 30))
+        keepStudyScreenshot("Tutor hour offer on the iPhone", app: app)
+        offer.tap()
+        var confirmed = false
+        let deadline = Date().addingTimeInterval(240)
+        while Date() < deadline && !confirmed {
+            for process in [app, system] {
+                let notice = process.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "You will not be charged")).firstMatch
+                let buy = process.buttons.matching(NSPredicate(format: "label IN %@", ["Buy", "Purchase", "Subscribe"])).firstMatch
+                if notice.exists && buy.exists && buy.isHittable {
+                    let sheet = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+                    sheet.name = "Apple's Sandbox sheet for the tutor hour"; sheet.lifetime = .keepAlways; add(sheet)
+                    buy.tap(); confirmed = true; break
+                }
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(2))
+        }
+        XCTAssertTrue(confirmed, "Apple's Sandbox purchase sheet must appear")
+        // The page reloads once the server has credited the hour.
+        let topped = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Topped")).firstMatch
+        let end = Date().addingTimeInterval(90)
+        while Date() < end && !topped.exists {
+            if meter.exists && meter.isHittable && !offer.exists { meter.tap() }
+            RunLoop.current.run(until: Date().addingTimeInterval(3))
+        }
+        keepStudyScreenshot("After buying the tutor hour", app: app)
+        XCTAssertTrue(topped.exists, "The bought hour must show as topped-up time")
+    }
+
     @MainActor func testPreviewStudyNoteFromPDF() throws {
         guard ProcessInfo.processInfo.environment["MEMO_QA_PDF"] == "memo-qa-electric-circuits" else {
             throw XCTSkip("Requires an unused synthetic free note and the seeded circuits PDF")
@@ -2607,9 +2652,13 @@ final class WrapperTests: XCTestCase {
         continueAfterFailure = false
         let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@ OR label BEGINSWITH %@", "Settings", "Postavke", "Nastavitve")).firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 30))
-        settings.tap()
         let language = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "Language", "Jezik")).firstMatch
-        XCTAssertTrue(language.waitForExistence(timeout: 15))
+        // A tap before the page hydrates is dropped; try again rather than fail.
+        for _ in 0..<3 where !language.exists {
+            if settings.exists { settings.tap() }
+            _ = language.waitForExistence(timeout: 12)
+        }
+        XCTAssertTrue(language.exists)
         for _ in 0..<5 where !language.isHittable { app.webViews.firstMatch.swipeUp() }
         language.tap()
         // The sheet lists native language names; take the last "English" so a

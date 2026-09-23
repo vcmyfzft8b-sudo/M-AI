@@ -81,7 +81,7 @@ export const bs: Messages = {
   "settings.analytics.title": "Neobavezna analitika",
   "settings.analytics.on": "Uključeno",
   "settings.analytics.off": "Isključeno",
-  "settings.analytics.detail": "Dopusti Memu i Vercelu mjerenje posjeta stranicama, približne lokacije, podataka o uređaju i performansi. Posjete mogu biti povezane s tvojim računom. Zadano je isključeno; na ovom uređaju možeš je isključiti u bilo kojem trenutku.",
+  "settings.analytics.detail": "Dopusti Memu i Vercelu mjerenje posjeta stranicama, približne lokacije, podataka o uređaju i performansi. Posjete mogu biti povezane s tvojim računom. Na ovom uređaju možeš je uključiti ili isključiti u bilo kojem trenutku.",
   "settings.analytics.saveFailed": "Izbor nije bilo moguće sačuvati. Provjeri jesu li kolačići blokirani.",
   "settings.rows.privacy": "Privatnost",
   "settings.rows.share": "Podijeli",

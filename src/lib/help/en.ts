@@ -164,7 +164,7 @@ We neither receive nor store your card details. Payment details are handled dire
 - IP address, device type, browser and operating system
 - access times, requests and server responses
 - error and crash data
-- page visits, approximate country/region/city and device details, linked to your account where available, if you enable optional analytics
+- page visits, approximate country/region/city and device details, linked to your account where available, through optional analytics (in the iOS app only after you turn it on; on the website unless you turn it off)
 
 ## 3. Purposes and legal bases
 
@@ -193,7 +193,7 @@ Where we process on the basis of legitimate interest, we have weighed our intere
 **Consent (Article 6(1)(a) GDPR)**
 
 - optional product messages, where you sign up for them
-- optional analytics, only after you enable it in Settings
+- optional analytics: in the iOS app only after you turn it on in Settings; on the website unless you turn it off there
 
 You can withdraw consent at any time. Withdrawal does not affect the lawfulness of processing before it.
 
@@ -290,11 +290,11 @@ If you believe we are processing your data unlawfully, you can lodge a complaint
 
 We use essential cookies and local storage for sign-in, security, settings and remembering your analytics choice. These are needed for the functions you request.
 
-**Optional analytics is off by default.** In Settings → Optional analytics, you can allow Memo and Vercel to collect page visits, approximate location, device information and performance measurements. Visits may be linked to your Memo account. You can turn this off again on the same device without losing access to the app.
+**Optional analytics is off by default in the iOS app and on by default on the website.** In Settings → Optional analytics, you choose whether Memo and Vercel collect page visits, approximate location, device information and performance measurements. Visits may be linked to your Memo account. You can turn this off again on the same device without losing access to the app.
 
 The essential \`memo-analytics\` preference lasts up to 180 days. When you opt in, the \`memo-visit\` analytics cookie lasts up to 24 hours. Turning analytics off removes that visit cookie and stops future optional collection. A cookie's expiry does not delete records already on the server: account-linked visit records are removed when you delete your account, or you can request their removal at info@memoai.eu.
 
-We do not use advertising cookies, cross-site advertising tracking or session replay. Necessary security and error diagnostics continue independently of optional analytics.
+We do not use advertising cookies or cross-site advertising tracking. On the website only, when an error occurs, our error service may keep a replay of the moments before it with all text, inputs and media hidden; the iOS app never records one. Necessary security and error diagnostics continue independently of optional analytics.
 
 ## 13. Children
 

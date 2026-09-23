@@ -1,3 +1,5 @@
+import { isNativeUserAgent } from "./mobile/runtime.ts";
+
 export const ANALYTICS_COOKIE = "memo-analytics";
 export const ANALYTICS_MAX_AGE = 180 * 24 * 60 * 60;
 const CHANGE_EVENT = "memo-analytics-change";
@@ -10,10 +12,29 @@ export function hasAnalyticsConsent(value: string | undefined, now = Date.now())
   return age >= 0 && age < ANALYTICS_MAX_AGE * 1000;
 }
 
+/** An explicit, current "off". */
+export function hasAnalyticsDenial(value: string | undefined) {
+  return /^v1\.denied\.(\d{13})$/.test(value ?? "");
+}
+
+/**
+ * Whether optional analytics may run. The iOS app is opt-in: only a current
+ * grant counts, as its App Store privacy answers say. The website counts
+ * visitors by default, as it always has, and honours an explicit "off".
+ */
+export function analyticsAllowed(value: string | undefined, native: boolean, now = Date.now()) {
+  return native ? hasAnalyticsConsent(value, now) : !hasAnalyticsDenial(value);
+}
+
 export function readAnalyticsConsent() {
   try {
     const value = document.cookie.split(";").map(part => part.trim())
       .find(part => part.startsWith(`${ANALYTICS_COOKIE}=`))?.slice(ANALYTICS_COOKIE.length + 1);
+    if (!isNativeUserAgent(navigator.userAgent)) {
+      if (hasAnalyticsDenial(value)) return false;
+      try { return !hasAnalyticsDenial(localStorage.getItem(ANALYTICS_COOKIE) ?? undefined) || hasAnalyticsConsent(value); }
+      catch { return true; }
+    }
     if (!hasAnalyticsConsent(value)) return false;
     // WebKit can restore an older cookie after the app process exits. The
     // separate preference record may veto that stale grant, but must never

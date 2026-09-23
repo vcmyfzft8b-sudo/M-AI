@@ -164,7 +164,7 @@ Podatke o tvojoj platnoj kartici ne primamo i ne čuvamo. Podatke o plaćanju di
 - IP adresa, vrsta uređaja, preglednik i operativni sistem
 - vremena pristupa, zahtjevi i odgovori servera
 - podaci o greškama i rušenjima
-- posjete stranicama, približna država/regija/grad i podaci o uređaju, povezani s tvojim računom kada je dostupan, ako uključiš neobaveznu analitiku
+- posjete stranicama, približna država/regija/grad i podaci o uređaju, povezani s tvojim računom kada je dostupan, putem neobavezne analitike (u iOS aplikaciji tek kad je uključiš; na web-stranici dok je ne isključiš)
 
 ## 3. Svrhe obrade i pravni osnovi
 
@@ -193,7 +193,7 @@ Kod obrade na osnovu legitimnog interesa odmjerili smo svoj interes i tvoja prav
 **Saglasnost (član 6. stav 1. tačka (a) GDPR-a)**
 
 - neobavezne poruke o proizvodu, kada se na njih prijaviš
-- neobavezna analitika, tek nakon što je uključiš u postavkama
+- neobavezna analitika: u iOS aplikaciji tek nakon što je uključiš u postavkama; na web-stranici dok je tamo ne isključiš
 
 Saglasnost možeš povući bilo kada. Povlačenje ne utiče na zakonitost obrade prije povlačenja.
 
@@ -290,11 +290,11 @@ Ako smatraš da tvoje podatke obrađujemo nezakonito, možeš podnijeti pritužb
 
 Nužne kolačiće i lokalnu pohranu koristimo za prijavu, sigurnost, postavke i pamćenje tvog izbora analitike. Potrebni su za funkcije koje tražiš.
 
-**Neobavezna analitika zadano je isključena.** U Postavke → Neobavezna analitika možeš dopustiti Memu i Vercelu prikupljanje posjeta stranicama, približne lokacije, podataka o uređaju i mjerenja performansi. Posjete mogu biti povezane s tvojim Memo računom. Na istom uređaju možeš je isključiti u bilo kojem trenutku bez gubitka pristupa aplikaciji.
+**U iOS aplikaciji neobavezna analitika zadano je isključena, a na web-stranici zadano je uključena.** U Postavke → Neobavezna analitika odlučuješ dopuštaš li Memu i Vercelu prikupljanje posjeta stranicama, približne lokacije, podataka o uređaju i mjerenja performansi. Posjete mogu biti povezane s tvojim Memo računom. Na istom uređaju možeš je isključiti u bilo kojem trenutku bez gubitka pristupa aplikaciji.
 
 Nužni kolačić izbora \`memo-analytics\` traje do 180 dana. Nakon saglasnosti analitički kolačić \`memo-visit\` traje do 24 sata. Isključivanje analitike uklanja kolačić posjete i zaustavlja buduće neobavezno prikupljanje. Istek kolačića ne briše zapise već sačuvane na serveru: zapisi posjeta povezani s računom uklanjaju se pri brisanju računa, a njihovo uklanjanje možeš zatražiti i na info@memoai.eu.
 
-Ne koristimo oglašivačke kolačiće, oglašivačko praćenje između web-stranica ni ponovnu reprodukciju korisničkih sesija. Nužna sigurnosna dijagnostika i prijava grešaka nastavljaju raditi neovisno o neobaveznoj analitici.
+Ne koristimo oglašivačke kolačiće ni oglašivačko praćenje između web-stranica. Samo na web-stranici usluga za greške može pri grešci sačuvati snimak trenutaka prije nje, sa skrivenim svim tekstom, unosima i medijima; iOS aplikacija to nikad ne snima. Nužna sigurnosna dijagnostika i prijava grešaka nastavljaju raditi neovisno o neobaveznoj analitici.
 
 ## 13. Djeca
 

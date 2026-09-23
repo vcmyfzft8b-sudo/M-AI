@@ -81,7 +81,7 @@ export const en: Messages = {
   "settings.analytics.title": "Optional analytics",
   "settings.analytics.on": "On",
   "settings.analytics.off": "Off",
-  "settings.analytics.detail": "Allow Memo and Vercel to measure page visits, approximate location, device details and performance. Visits may be linked to your account. Off by default; you can turn this off at any time on this device.",
+  "settings.analytics.detail": "Allow Memo and Vercel to measure page visits, approximate location, device details and performance. Visits may be linked to your account. You can turn this on or off at any time on this device.",
   "settings.analytics.saveFailed": "Your choice could not be saved. Check whether cookies are blocked.",
   "settings.rows.privacy": "Privacy",
   "settings.rows.share": "Share",

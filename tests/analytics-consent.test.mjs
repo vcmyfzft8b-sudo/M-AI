@@ -12,7 +12,8 @@ test("only a current explicit opt-in permits analytics", () => {
 });
 
 function withBrowser(blocked, run) {
-  const names = ["document", "window", "location", "localStorage"];
+  // These cases are the iOS app's opt-in; the website's default is tested below.
+  const names = ["document", "window", "location", "localStorage", "navigator"];
   const original = names.map(name => Object.getOwnPropertyDescriptor(globalThis, name));
   const cookies = new Map([["memo-visit", "existing-session"]]);
   const writes = [];
@@ -25,7 +26,7 @@ function withBrowser(blocked, run) {
       if (value.includes("Max-Age=0")) cookies.delete(key); else cookies.set(key, val);
     },
   };
-  const browser = { document, window: new EventTarget(), location: { protocol: "https:" }, localStorage: { setItem() { throw Error("Blocked localStorage"); } } };
+  const browser = { document, window: new EventTarget(), location: { protocol: "https:" }, localStorage: { setItem() { throw Error("Blocked localStorage"); } }, navigator: { userAgent: "Mozilla/5.0 (iPhone) MemoAI-iOS/1.0" } };
   names.forEach(name => Object.defineProperty(globalThis, name, { configurable: true, value: browser[name] }));
   try { run(cookies, writes); } finally { names.forEach((name, i) => original[i] ? Object.defineProperty(globalThis, name, original[i]) : delete globalThis[name]); }
 }
@@ -71,3 +72,16 @@ test("a durable withdrawal vetoes an older cookie restored by WebKit", () => wit
   cookies.set(ANALYTICS_COOKIE, `v1.granted.${now - ANALYTICS_MAX_AGE * 1000}`);
   assert.equal(readAnalyticsConsent(), false);
 }));
+
+test("the iOS app is opt-in while the website counts visitors unless they opt out", async () => {
+  const { analyticsAllowed } = await import("../src/lib/analytics-consent.ts");
+  const now = Date.UTC(2026, 8, 23);
+  const granted = `v1.granted.${now - 1000}`;
+  const denied = `v1.denied.${now - 1000}`;
+  assert.equal(analyticsAllowed(undefined, true, now), false, "the app starts with analytics off");
+  assert.equal(analyticsAllowed(granted, true, now), true);
+  assert.equal(analyticsAllowed(denied, true, now), false);
+  assert.equal(analyticsAllowed(undefined, false, now), true, "the website counts visitors by default");
+  assert.equal(analyticsAllowed(granted, false, now), true);
+  assert.equal(analyticsAllowed(denied, false, now), false, "an explicit off is honoured on the website");
+});

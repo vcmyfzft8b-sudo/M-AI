@@ -156,7 +156,7 @@ Podatkov o tvoji plačilni kartici ne prejmemo in ne hranimo. Plačilne podatke 
 - IP-naslov, vrsta naprave, brskalnik in operacijski sistem
 - časi dostopa, zahtevki in odzivi strežnika
 - podatki o napakah in zrušitvah
-- obiski strani, približna država/regija/mesto in podatki o napravi, povezani s tvojim računom, kadar je na voljo, če vklopiš neobvezno analitiko
+- obiski strani, približna država/regija/mesto in podatki o napravi, povezani s tvojim računom, kadar je na voljo, prek neobvezne analitike (v aplikaciji za iOS šele, ko jo vklopiš; na spletni strani, dokler je ne izklopiš)
 
 ## 3. Nameni obdelave in pravne podlage
 
@@ -185,7 +185,7 @@ Pri obdelavi na podlagi zakonitega interesa smo pretehtali svoj interes in tvoje
 **Privolitev (člen 6(1)(a) GDPR)**
 
 - neobvezna sporočila o izdelku, kadar se nanje prijaviš
-- neobvezna analitika, šele ko jo vklopiš v nastavitvah
+- neobvezna analitika: v aplikaciji za iOS šele, ko jo vklopiš v nastavitvah; na spletni strani, dokler je tam ne izklopiš
 
 Privolitev lahko kadar koli prekličeš. Preklic ne vpliva na zakonitost obdelave pred preklicem.
 
@@ -282,11 +282,11 @@ Za preverjanje istovetnosti lahko zahtevamo dodatne podatke, vendar le v obsegu,
 
 Nujne piškotke in lokalno shrambo uporabljamo za prijavo, varnost, nastavitve in pomnjenje tvoje izbire glede analitike. Potrebni so za funkcije, ki jih zahtevaš.
 
-**Neobvezna analitika je privzeto izklopljena.** V Nastavitve → Neobvezna analitika lahko Memu in Vercelu dovoliš zbiranje obiskov strani, približne lokacije, podatkov o napravi in meritev delovanja. Obiski so lahko povezani s tvojim računom Memo. Na isti napravi lahko možnost kadar koli izklopiš, ne da bi izgubil dostop do aplikacije.
+**V aplikaciji za iOS je neobvezna analitika privzeto izklopljena, na spletni strani pa privzeto vklopljena.** V Nastavitve → Neobvezna analitika izbereš, ali Memu in Vercelu dovoliš zbiranje obiskov strani, približne lokacije, podatkov o napravi in meritev delovanja. Obiski so lahko povezani s tvojim računom Memo. Na isti napravi lahko možnost kadar koli izklopiš, ne da bi izgubil dostop do aplikacije.
 
 Nujni piškotek z izbiro \`memo-analytics\` velja do 180 dni. Ob privolitvi analitični piškotek \`memo-visit\` velja do 24 ur. Izklop analitike odstrani ta piškotek obiska in ustavi prihodnje neobvezno zbiranje. Potek piškotka ne izbriše že shranjenih zapisov na strežniku: zapisi obiskov, povezani z računom, se odstranijo ob izbrisu računa, njihov izbris pa lahko zahtevaš tudi na info@memoai.eu.
 
-Ne uporabljamo oglaševalskih piškotkov, oglaševalskega sledenja med spletnimi mesti ali ponovnega predvajanja uporabniških sej. Nujna varnostna diagnostika in poročanje o napakah delujeta neodvisno od neobvezne analitike.
+Ne uporabljamo oglaševalskih piškotkov ali oglaševalskega sledenja med spletnimi mesti. Samo na spletni strani lahko storitev za napake ob napaki shrani posnetek trenutkov pred njo, pri čemer so vsa besedila, vnosi in mediji skriti; aplikacija za iOS tega nikoli ne snema. Nujna varnostna diagnostika in poročanje o napakah delujeta neodvisno od neobvezne analitike.
 
 ## 13. Otroci
 

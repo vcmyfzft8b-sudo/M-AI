@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 
 import { resolveRange } from "../src/lib/admin/ranges.ts";
-import { creatorRevenue, promoCodeStats } from "../src/lib/admin/sales-math.ts";
+import { appleProceedsEstimate, creatorRevenue, promoCodeStats } from "../src/lib/admin/sales-math.ts";
 import { codeCreditForTransaction } from "../src/lib/mobile/code-credit.ts";
 
 const purchase = {
@@ -88,4 +88,12 @@ test("the transactions route answers 409 only for another account's purchase", (
   assert.match(route, /error instanceof AppleAccountMismatch[\s\S]{0,200}status: 409/);
   const apple = readFileSync(new URL("../src/lib/mobile/apple.ts", import.meta.url), "utf8");
   assert.match(apple, /appAccountToken\.toLowerCase\(\) !== userId\.toLowerCase\(\)\) \{\s*throw new AppleAccountMismatch/);
+});
+
+test("a creator is credited with what Apple pays Memo, not the customer's price", () => {
+  // €64.99 → €53.27 without VAT → €37.29 after Apple's 30%, or €45.28 at 15%.
+  assert.equal(appleProceedsEstimate(6499), 3729);
+  assert.equal(appleProceedsEstimate(6499, 0.15), 4528);
+  assert.equal(appleProceedsEstimate(6499, Number.NaN), 3729, "a bad setting falls back to 30%");
+  assert.equal(appleProceedsEstimate(6499, 1.5), 3729);
 });

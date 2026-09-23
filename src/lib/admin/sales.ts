@@ -13,6 +13,7 @@ import type {
   SubscriptionSnapshot,
 } from "@/lib/admin/sales-math";
 import { getStripeClient } from "@/lib/billing";
+import { appleProceedsEstimate } from "@/lib/admin/sales-math";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 /**
@@ -549,7 +550,7 @@ async function loadAppleCodeSales(sinceUnix: number): Promise<AppleCodeSale[]> {
     .map((row) => ({
       id: row.id,
       code: row.code,
-      amount: row.price_minor,
+      amount: appleProceedsEstimate(row.price_minor, Number(process.env.APPLE_COMMISSION_RATE ?? 0.3)),
       currency: row.currency,
       paidAt: Math.floor(Date.parse(row.paid_at) / 1000),
     }));

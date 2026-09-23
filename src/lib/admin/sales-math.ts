@@ -82,11 +82,24 @@ export type SalesData = {
   appleCodeSales?: AppleCodeSale[];
 };
 
+/**
+ * What Memo is paid for an App Store sale, in minor units: the customer price
+ * less Slovenian VAT (22%, which Apple withholds) and Apple's commission.
+ * Creators earn a share of cash collected, and for an App Store sale that is
+ * this, not the price the customer saw. An estimate: VAT follows the buyer's
+ * country, and the commission is 30% until the Small Business Program (15%)
+ * is confirmed — set APPLE_COMMISSION_RATE then.
+ */
+export function appleProceedsEstimate(priceMinor: number, commission = 0.3) {
+  const rate = Number.isFinite(commission) && commission >= 0 && commission < 1 ? commission : 0.3;
+  return Math.round((priceMinor / 1.22) * (1 - rate));
+}
+
 export type AppleCodeSale = {
   id: string;
   /** Epoch seconds. */
   paidAt: number;
-  /** Apple's customer price, minor units, before Apple's commission and VAT. */
+  /** What Memo is paid for it, minor units (see appleProceedsEstimate). */
   amount: number;
   currency: string;
   code: string;

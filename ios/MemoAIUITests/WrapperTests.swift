@@ -2373,9 +2373,14 @@ final class WrapperTests: XCTestCase {
         field.typeText("MEMO50")
         XCTAssertEqual(field.value as? String, "MEMO50")
         check.tap()
-        let yearly = app.webViews.staticTexts.matching(NSPredicate(format: "(label CONTAINS %@ OR label CONTAINS %@) AND (label CONTAINS %@ OR label CONTAINS %@)", "64.99", "64,99", "129.99", "129,99")).firstMatch
+        // WebKit exposes aria-pressed plan buttons as a single accessible
+        // button/switch, with both prices in its label rather than StaticText.
+        let plans = app.webViews.descendants(matching: .any).matching(NSPredicate(
+            format: "elementType IN %@",
+            [XCUIElement.ElementType.button.rawValue, XCUIElement.ElementType.switch.rawValue]))
+        let yearly = plans.matching(NSPredicate(format: "(label CONTAINS %@ OR label CONTAINS %@) AND (label CONTAINS %@ OR label CONTAINS %@)", "64.99", "64,99", "129.99", "129,99")).firstMatch
         XCTAssertTrue(yearly.waitForExistence(timeout: 45), "The actual StoreKit first-year and renewal prices must both appear")
-        let monthly = app.webViews.staticTexts.matching(NSPredicate(format: "(label CONTAINS %@ OR label CONTAINS %@) AND (label CONTAINS %@ OR label CONTAINS %@)", "9.99", "9,99", "19.99", "19,99")).firstMatch
+        let monthly = plans.matching(NSPredicate(format: "(label CONTAINS %@ OR label CONTAINS %@) AND (label CONTAINS %@ OR label CONTAINS %@)", "9.99", "9,99", "19.99", "19,99")).firstMatch
         XCTAssertTrue(monthly.exists)
         // Inspect prices only. This test must never confirm a paid subscription.
         keepStudyScreenshot("Verified code with actual Apple prices", app: app)

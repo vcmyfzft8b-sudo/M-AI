@@ -2172,7 +2172,7 @@ export const sl = {
   "native.codeUnavailable": "Ta koda ali ponudba ni na voljo za ta račun. Preveri kodo in naročnino ter poskusi znova.",
   "native.codeUpdate": "Za uporabo kod pri nakupu prek Appla posodobi aplikacijo Memo.",
   "native.redeemHelp": "Vnesi veljavno kodo za 50 % popusta in si oglej ponudbo Apple. Popust velja za prvi plačani mesec ali leto, nato velja redna cena. Brezplačni preizkus ni vključen. Apple pred nakupom potrdi končno ceno. Trajni popusti in darilne kode tukaj niso podprti.",
-  "native.giftHelp": "Memo trenutno ne omogoča podarjanja naročnine v App Store. Vsaka oseba naj uporablja svoj račun Memo in svoj račun Apple. Spletnih darilnih ali promocijskih kod ni mogoče uporabiti pri nakupu v App Store.",
+  "native.giftHelp": "Memo trenutno ne omogoča podarjanja naročnine v App Store. Vsaka oseba naj uporablja svoj račun Memo in svoj račun Apple. Spletnih darilnih kod ni mogoče uporabiti pri nakupu v App Store.",
   "native.micDenied": "Memo potrebuje dostop do mikrofona. Dovoli ga v Nastavitvah iOS → Memo AI → Mikrofon.",
   "native.appleDisconnectLink": "Oglej si navodila Apple",
 

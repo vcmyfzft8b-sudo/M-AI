@@ -2137,7 +2137,7 @@ export const en: Messages = {
   "native.codeUnavailable": "This code or offer is not available for this account. Check the code and your subscription, then try again.",
   "native.codeUpdate": "Update Memo to use discount codes with Apple checkout.",
   "native.redeemHelp": "Enter an eligible 50% code to see your Apple offer. The discount covers the first paid month or year, then the regular price applies. It does not include a free trial. Apple confirms the final price before purchase. Recurring discounts and gift codes are not supported here.",
-  "native.giftHelp": "Memo does not currently offer a way to gift an App Store subscription. Each person should use their own Memo account and Apple Account. Website gift or promotional codes cannot be applied to an App Store purchase.",
+  "native.giftHelp": "Memo does not currently offer a way to gift an App Store subscription. Each person should use their own Memo account and Apple Account. Website gift codes cannot be applied to an App Store purchase.",
   "native.micDenied": "Memo needs microphone access. Allow it in iOS Settings → Memo AI → Microphone.",
   "native.appleDisconnectLink": "See Apple’s instructions",
 

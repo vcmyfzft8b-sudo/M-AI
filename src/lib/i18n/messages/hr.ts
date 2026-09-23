@@ -2150,7 +2150,7 @@ export const hr: Messages = {
   "native.codeUnavailable": "Ovaj kod ili ponuda nisu dostupni za ovaj račun. Provjeri kod i pretplatu pa pokušaj ponovno.",
   "native.codeUpdate": "Ažuriraj Memo za upotrebu kodova pri kupnji putem Applea.",
   "native.redeemHelp": "Unesi važeći kod za 50 % popusta kako bi vidio Appleovu ponudu. Popust vrijedi za prvi plaćeni mjesec ili godinu, nakon čega se primjenjuje redovna cijena. Besplatno probno razdoblje nije uključeno. Apple potvrđuje konačnu cijenu prije kupnje. Trajni popusti i darovni kodovi ovdje nisu podržani.",
-  "native.giftHelp": "Memo trenutačno ne omogućuje darivanje pretplate u App Storeu. Svaka osoba treba koristiti vlastiti Memo račun i Apple račun. Darovni ili promotivni kodovi za web-stranicu ne mogu se primijeniti na kupnju u App Storeu.",
+  "native.giftHelp": "Memo trenutačno ne omogućuje darivanje pretplate u App Storeu. Svaka osoba treba koristiti vlastiti Memo račun i Apple račun. Darovni kodovi za web-stranicu ne mogu se primijeniti na kupnju u App Storeu.",
   "native.micDenied": "Memo treba pristup mikrofonu. Dopusti ga u Postavkama iOS-a → Memo AI → Mikrofon.",
   "native.appleDisconnectLink": "Pogledaj upute Applea",
 

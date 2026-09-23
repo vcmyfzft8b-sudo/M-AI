@@ -596,7 +596,39 @@ final class WrapperTests: XCTestCase {
         // Exercise the player's real seek control instead.
         app.webViews.buttons["Back 10 seconds"].firstMatch.tap()
         XCTAssertNotEqual(String(describing: position.value), paused, "Seeking back must change the episode position")
+        XCTAssertTrue(play.exists, "Seeking while paused must remain paused")
         keepStudyScreenshot("Podcast paused and sought back", app: app)
+
+        if ProcessInfo.processInfo.environment["MEMO_QA_CROSS_SEGMENT_SEEK"] == "1" {
+            let clock = app.webViews.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "^[0-9]{1,2}:[0-9]{2}$")).firstMatch
+            func elapsed() -> Int {
+                clock.label.split(separator: ":").compactMap { Int($0) }.reduce(0) { $0 * 60 + $1 }
+            }
+            // Begin in the first turn, then use the actual range track to seek
+            // beyond it. The circuit fixture's first turn lasts 17.478 seconds.
+            for _ in 0..<20 where elapsed() > 0 {
+                app.webViews.buttons["Back 10 seconds"].firstMatch.tap()
+                XCTAssertTrue(play.exists)
+            }
+            XCTAssertEqual(elapsed(), 0)
+            position.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5)).tap()
+            RunLoop.current.run(until: Date().addingTimeInterval(6))
+            XCTAssertGreaterThan(elapsed(), 18, "The seek must cross a turn boundary")
+            XCTAssertTrue(play.exists, "A cross-turn seek must preserve Pause")
+            XCTAssertFalse(pause.exists)
+            let sought = String(describing: position.value)
+            RunLoop.current.run(until: Date().addingTimeInterval(3))
+            XCTAssertEqual(String(describing: position.value), sought)
+            keepStudyScreenshot("Podcast cross-turn seek stays paused", app: app)
+            play.tap()
+            XCTAssertTrue(pause.waitForExistence(timeout: 30))
+            let advancing = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                String(describing: position.value) != sought
+            }, object: position)
+            XCTAssertEqual(XCTWaiter.wait(for: [advancing], timeout: 30), .completed)
+            pause.tap()
+            keepStudyScreenshot("Podcast resumes from the sought turn", app: app)
+        }
     }
 
     @MainActor func testPreviewReadAloudPlaybackControls() throws {

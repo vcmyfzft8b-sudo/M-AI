@@ -42,6 +42,21 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- A real Preview walkthrough reproduced paused podcast seeking restarting audio
+  when the target crossed a speaker-turn boundary. The shared player now
+  preserves playback intent, invalidates superseded loads on Pause/Close, and
+  persists seeks at the end of the gesture. Local browser and native-UA checks
+  cross from 0 to 20,439 ms and independently read that position back from the
+  staging server. Resume advances; normal playback crosses the first turn with
+  exactly one audio element playing. Delayed real segment responses remain
+  paused after Pause and cannot restart playback after Close. Only latency is
+  simulated in those race checks; authentication, component and audio are real.
+  Evidence: `review-sep23-podcast-seek-paused-cross-segment-repro.json`,
+  `review-sep23-podcast-seek-local-browser-persisted.json`,
+  `review-sep23-podcast-seek-local-native-handoff-from-start.log`, and
+  `review-sep23-podcast-seek-local-pending-{pause,close}.json`.
+  TypeScript, focused lint and 116 podcast/mobile regression tests pass.
+  Stronger physical cross-turn seek coverage is prepared but not yet verified.
 - The keyboard coverage audit found onboarding's practice-answer footer still
   pinned behind the keyboard. It now uses the same shared inset on both PWA
   and wrapper, with a single scrollable step and a footer that follows each

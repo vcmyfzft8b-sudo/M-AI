@@ -238,3 +238,16 @@ test("with Apple billing off nothing is verified at all", async () => {
   assert.equal((await route.post()).status, 503);
   assert.deepEqual(route.calls.verified, []);
 });
+
+// 23 September, TestFlight on production: an Apple ID that already held a purchase made for
+// another Memo account got "could not be confirmed yet, try again" (503) forever, because the
+// sandbox allowlist was checked before ownership. Ownership now answers first.
+test("a sandbox purchase made for another Memo account is reported as such, not as retryable", async () => {
+  const reviewer = "0d3e5149-7b2c-4a1e-9f3d-2c8b6e5a4d10";
+  const other = "11111111-2222-4333-8444-555555555555";
+  const apple = loadApple({
+    allowlist: reviewer,
+    verdicts: { [Environment.PRODUCTION]: wrongEnvironment(), [Environment.SANDBOX]: { appAccountToken: other, productId: "eu.memoai.premium.yearly" } },
+  });
+  await assert.rejects(apple.saveAppleTransaction("ey.sandbox", reviewer, true), (error) => error.name === "AppleAccountMismatch");
+});

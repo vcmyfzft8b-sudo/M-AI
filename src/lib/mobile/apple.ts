@@ -71,6 +71,11 @@ async function verifyTransaction(jws: string, userId?: string) {
         || !process.env.APPLE_SANDBOX_REVIEW_USER_IDS) throw error;
     environment = Environment.SANDBOX;
     verified = await appleVerifier(environment).verifyAndDecodeTransaction(jws);
+    // A TestFlight Apple ID can still hold a purchase made for another Memo
+    // account; say that, rather than refusing it as an unknown sandbox buyer.
+    if (userId && verified.appAccountToken && verified.appAccountToken.toLowerCase() !== userId.toLowerCase()) {
+      throw new AppleAccountMismatch();
+    }
     if (!verified.appAccountToken || !sandboxReviewer(verified.appAccountToken)) throw new AppleNotificationRejected("Sandbox account not allowed");
   }
   return { environment, verified };

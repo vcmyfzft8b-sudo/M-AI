@@ -24,6 +24,9 @@ export async function POST(request: Request) {
     if (error instanceof AppleAccountMismatch) {
       return applyCookies(NextResponse.json({ error: await tr("native.otherAccount") }, { status: 409 }));
     }
+    // The type only: no transaction, account or Apple payload in the log.
+    console.error("Apple transaction not saved", { error: error instanceof Error ? error.name : typeof error,
+      message: error instanceof Error ? error.message.slice(0, 120) : undefined });
     return applyCookies(NextResponse.json({ error: await tr("native.verifyFailed") }, { status: 503 }));
   }
 }

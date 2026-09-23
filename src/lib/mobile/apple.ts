@@ -3,6 +3,7 @@ import "server-only";
 import { AppStoreServerAPIClient, Environment, SignedDataVerifier, VerificationException, VerificationStatus, type JWSTransactionDecodedPayload } from "@apple/app-store-server-library";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { entitlementFromVerifiedTransaction } from "@/lib/mobile/transaction";
+import { attributeAppleCodePurchase } from "@/lib/mobile/code-attribution";
 import roots from "@/lib/mobile/apple-roots.json";
 
 export function appleEnvironment(): Environment.PRODUCTION | Environment.SANDBOX {
@@ -146,6 +147,10 @@ export async function saveAppleTransaction(signedTransaction: string, userId?: s
   const history = await service.from("profiles").update({ subscription_trial_started_at: row.purchased_at } as never)
     .eq("id", row.user_id).is("subscription_trial_started_at", null);
   if (history.error) throw new Error("Apple subscription history update failed", { cause: history.error });
+  // Creator credit is bookkeeping: it must never withhold the entitlement.
+  await attributeAppleCodePurchase(verified, row).catch(() => {
+    console.error("Apple code attribution unavailable", { stage: "attach_purchase" });
+  });
   return { ...row, plan };
 }
 

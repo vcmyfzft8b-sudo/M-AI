@@ -7,11 +7,13 @@ import { addDays, parseDay, todayInReportZone } from "@/lib/admin/ranges";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { DASHBOARD_REFRESH_SECONDS } from "@/lib/admin/refresh";
 import type {
+  AppleCodeSale,
   PaymentSnapshot,
   SalesData,
   SubscriptionSnapshot,
 } from "@/lib/admin/sales-math";
 import { getStripeClient } from "@/lib/billing";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 /**
  * Sales reporting straight from Stripe.
@@ -505,10 +507,11 @@ export async function loadSalesData(): Promise<SalesData> {
     ).getTime() / 1000,
   );
 
-  const [subscriptionResult, paymentResult, promotionCodes] = await Promise.all([
+  const [subscriptionResult, paymentResult, promotionCodes, appleCodeSales] = await Promise.all([
     cachedSubscriptions(sinceUnix),
     loadPayments(sinceUnix),
     cachedPromotionCodes(),
+    loadAppleCodeSales(sinceUnix),
   ]);
 
   return {
@@ -518,7 +521,35 @@ export async function loadSalesData(): Promise<SalesData> {
     codeRedemptions: new Map(promotionCodes.redemptions),
     customerCodes: paymentResult.customerCodes,
     truncated: subscriptionResult.truncated || paymentResult.truncated,
+    appleCodeSales,
   };
+}
+
+/**
+ * Creator-code purchases made through Apple in the iOS app. Production reads
+ * only real purchases; any other deployment reads its Sandbox ones.
+ */
+async function loadAppleCodeSales(sinceUnix: number): Promise<AppleCodeSale[]> {
+  const { data, error } = await createSupabaseServiceRoleClient()
+    .from("apple_code_redemptions")
+    .select("id,code,price_minor,currency,paid_at")
+    .eq("environment", process.env.VERCEL_ENV === "production" ? "production" : "sandbox")
+    .not("paid_at", "is", null)
+    .is("revoked_at", null)
+    .gte("paid_at", new Date(sinceUnix * 1000).toISOString());
+
+  if (error) {
+    throw new Error("Apple code sales unavailable", { cause: error });
+  }
+
+  return ((data ?? []) as Array<{ id: string; code: string; price_minor: number; currency: string; paid_at: string }>)
+    .map((row) => ({
+      id: row.id,
+      code: row.code,
+      amount: row.price_minor,
+      currency: row.currency,
+      paidAt: Math.floor(Date.parse(row.paid_at) / 1000),
+    }));
 }
 
 /** Paid revenue between two reporting days, in minor units. */
@@ -542,6 +573,7 @@ export async function refreshSalesData() {
 }
 
 export type {
+  AppleCodeSale,
   DayProjection,
   ForecastDay,
   PaymentSnapshot,

@@ -74,6 +74,22 @@ export type SalesData = {
   customerCodes: Map<string, string>;
   /** True when a page cap was hit and the figures are therefore partial. */
   truncated: boolean;
+  /**
+   * First charges of Apple subscriptions bought with a creator code in the iOS
+   * app. Apple never sees our codes, so these come from our own ledger
+   * (`apple_code_redemptions`), not from Stripe. Refunded ones are left out.
+   */
+  appleCodeSales?: AppleCodeSale[];
+};
+
+export type AppleCodeSale = {
+  id: string;
+  /** Epoch seconds. */
+  paidAt: number;
+  /** Apple's customer price, minor units, before Apple's commission and VAT. */
+  amount: number;
+  currency: string;
+  code: string;
 };
 
 const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
@@ -696,6 +712,24 @@ export function promoCodeStats(
 
     if (code) {
       credit(code, payment);
+    }
+  }
+
+  // Apple purchases are already one row per coded first charge, so each one
+  // is both the subscription the code created and its credited payment.
+  for (const sale of data.appleCodeSales ?? []) {
+    ensure(sale.code).subscriptions += 1;
+    const day = unixDay(sale.paidAt);
+
+    if (day >= range.from && day <= range.to) {
+      credit(sale.code, {
+        id: sale.id,
+        paidAt: sale.paidAt,
+        amount: sale.amount,
+        currency: sale.currency,
+        customerId: `apple:${sale.id}`,
+        promotionCodeIds: [],
+      });
     }
   }
 

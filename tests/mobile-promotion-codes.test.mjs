@@ -39,6 +39,7 @@ function harness(options = {}) {
     "node:crypto":crypto, "@apple/app-store-server-library":{PromotionalOfferSignatureCreator}, "next/server":{NextResponse}, zod:{z},
     "@/lib/mobile/promotion-policy":{APPLE_CODE_OFFERS,acceptsAppleHalfOffCode},
     "@/lib/mobile/account-lifecycle": {accountDeletionRequested:()=>!!options.deleting},
+    "@/lib/mobile/code-attribution": {recordAppleCodeValidation:async(userId,code)=>{calls.push(["recorded",userId,code]);}},
     "@/lib/mobile/apple":{appleBillingConfigured:()=>!options.disabled,appleAccountEnvironments:()=>["sandbox"]},
     "@/lib/i18n/server":{tr:async key=>key},
     "@/lib/rate-limit":{rateLimitPresets:{mutate:[]}, enforceRateLimit:async()=>options.limited?new Response(null,{status:429}):null},
@@ -74,6 +75,8 @@ test("new users get introductory selection without a promotional signature", asy
   const b=await r.json();assert.equal(b.mode,"introductory");assert.equal(b.userId,userID);assert.equal(b.signature,undefined);
   assert.ok(h.calls.some(([k,v])=>k==="user_id"&&v===userID));
   assert.deepEqual(h.calls.find(([k])=>k==="environment")[1],["sandbox"]);
+  // The creator's credit depends on this record; Apple's purchase never carries the code.
+  assert.ok(h.calls.some(([k,id])=>k==="recorded"&&id===userID));
 });
 
 test("returning-user signatures bind the verified account, product and Apple offer", async () => {

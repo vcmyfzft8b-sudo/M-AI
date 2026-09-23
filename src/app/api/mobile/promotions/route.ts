@@ -7,6 +7,7 @@ import { applePromotionCatalogue } from "@/lib/mobile/promotion-catalogue";
 import { appleBillingConfigured, appleAccountEnvironments } from "@/lib/mobile/apple";
 import { APPLE_CODE_OFFERS, acceptsAppleHalfOffCode } from "@/lib/mobile/promotion-policy";
 import { accountDeletionRequested } from "@/lib/mobile/account-lifecycle";
+import { recordAppleCodeValidation } from "@/lib/mobile/code-attribution";
 import { createSupabaseRouteHandlerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -61,6 +62,11 @@ export async function POST(request: Request) {
       .select("original_transaction_id").eq("user_id", user.id).in("environment", appleAccountEnvironments(user.id)).limit(1);
     if (history.error) throw new Error("Apple history unavailable");
     const mode = history.data?.length ? "promotional" : "introductory";
+    // Apple's purchase never carries our code, so remember it now for the
+    // creator's credit. Losing that record must not cost the buyer the offer.
+    await recordAppleCodeValidation(user.id, code).catch(() => {
+      console.error("Apple code attribution unavailable", { stage: "record_validation" });
+    });
     const result = { userId: user.id, mode, offers: APPLE_CODE_OFFERS };
     if (!productId || mode === "introductory") return reply(result);
     stage = "offer_signature";

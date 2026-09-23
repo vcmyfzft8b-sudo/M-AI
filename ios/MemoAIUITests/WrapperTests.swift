@@ -2222,6 +2222,18 @@ final class WrapperTests: XCTestCase {
                       "The audio is the app's own m4a, not a MediaRecorder container")
         snap("L4 Recording ready")
 
+        if env["MEMO_QA_UPLOAD_RECORDING"] == "1" {
+            // The audio check: upload this take so its transcript can be read
+            // back and compared with what was spoken next to the phone.
+            let create = app.webViews.buttons.matching(
+                NSPredicate(format: "label == %@ OR label == %@", "Create the note", "Create")).firstMatch
+            XCTAssertTrue(create.waitForExistence(timeout: 10))
+            create.tap()
+            XCTAssertTrue(app.webViews.buttons["Notes"].firstMatch.waitForExistence(timeout: 120),
+                          "The uploaded recording must open as a note")
+            snap("L5 Recording uploaded")
+            return
+        }
         // Leave the account as it was found: no note, no spent free note.
         let cancel = app.webViews.buttons.matching(
             NSPredicate(format: "label == %@ OR label == %@", "Cancel", "Prekliči")).firstMatch

@@ -247,7 +247,7 @@ export function SettingsScreen({
       id: "redeem",
       emoji: "🎟️",
       title: t("settings.rows.redeem"),
-      href: "/app/support/redeem-code",
+      href: "/app/support/redeem-code?from=settings",
     },
     {
       id: "privacy",

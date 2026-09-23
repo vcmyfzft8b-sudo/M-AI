@@ -9,10 +9,15 @@ import { isNativeUserAgent } from "@/lib/mobile/runtime";
 
 export default async function SupportArticlePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ from?: string | string[] }>;
 }) {
   const { slug } = await params;
+  // Settings links straight into an article (the code form); its arrow must
+  // return there, not to the help index the reader never saw.
+  const backHref = (await searchParams).from === "settings" ? "/app/settings" : undefined;
   const { locale, t } = await getTranslations();
   const article = getHelpArticle(slug, locale);
 
@@ -33,6 +38,7 @@ export default async function SupportArticlePage({
       title={article.title}
       content={content}
       appearance={native && slug === "redeem-code" ? "offer" : "article"}
+      backHref={backHref}
     >
       {native && slug === "redeem-code" && <AppleCodeForm />}
     </SupportArticleScreen>

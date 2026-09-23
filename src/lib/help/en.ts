@@ -155,6 +155,8 @@ Contact for privacy questions and for exercising your rights: info@memoai.eu
 
 For App Store subscriptions, we process Apple's signed transaction records, product and transaction identifiers, purchase and expiry dates, and refund or revocation status. We send Apple your Memo account's technical identifier to associate the purchase with your account and verify access.
 
+If you allow notifications in the iOS app, we store the push token Apple issues for your device, linked to your account, and use Apple's push service to tell you when a note is ready. The notification contains the note's title. You can turn notifications off in iOS Settings at any time; signing out removes the token, and deleting your account deletes it.
+
 We neither receive nor store your card details. Payment details are handled directly by Stripe for web purchases or Apple for App Store purchases.
 
 **Technical data**

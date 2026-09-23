@@ -147,6 +147,8 @@ Kontakt za vprašanja o zasebnosti in za uveljavljanje pravic: info@memoai.eu
 
 Pri naročninah v App Store obdelujemo podpisana potrdila Apple o transakcijah, identifikatorje izdelkov in transakcij, datume nakupa in poteka ter stanje vračila ali preklica dostopa. Družbi Apple pošljemo tehnični identifikator tvojega računa Memo, da nakup povežemo s tvojim računom in preverimo dostop.
 
+Če v aplikaciji za iOS dovoliš obvestila, shranimo žeton za potisna obvestila, ki ga Apple dodeli tvoji napravi, in ga povežemo s tvojim računom. Prek Applove storitve za potisna obvestila ti sporočimo, ko je zapisek pripravljen. Obvestilo vsebuje naslov zapiska. Obvestila lahko kadar koli izklopiš v nastavitvah iOS; ob odjavi žeton odstranimo, ob izbrisu računa pa izbrišemo.
+
 Podatkov o tvoji plačilni kartici ne prejmemo in ne hranimo. Plačilne podatke neposredno obdeluje Stripe pri spletnih nakupih oziroma Apple pri nakupih v App Store.
 
 **Tehnični podatki**

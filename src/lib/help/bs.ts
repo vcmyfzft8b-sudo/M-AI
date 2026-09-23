@@ -155,6 +155,8 @@ Kontakt za pitanja o privatnosti i za ostvarivanje prava: info@memoai.eu
 
 Za pretplate u App Storeu obrađujemo Appleove potpisane zapise o transakcijama, identifikatore proizvoda i transakcija, datume kupovine i isteka te status povrata ili opoziva pristupa. Appleu šaljemo tehnički identifikator tvog Memo računa kako bismo kupovinu povezali s računom i provjerili pristup.
 
+Ako u iOS aplikaciji dozvoliš obavještenja, pohranjujemo token za push obavještenja koji Apple dodjeljuje tvom uređaju i povezujemo ga s tvojim računom. Putem Appleove usluge za push obavještenja javljamo ti kad je bilješka spremna. Obavještenje sadrži naslov bilješke. Obavještenja možeš u bilo kojem trenutku isključiti u postavkama iOS-a; odjavom se token uklanja, a brisanjem računa briše.
+
 Podatke o tvojoj platnoj kartici ne primamo i ne čuvamo. Podatke o plaćanju direktno obrađuje Stripe za web kupovine ili Apple za kupovine u App Storeu.
 
 **Tehnički podaci**

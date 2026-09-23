@@ -32,6 +32,7 @@ export default async function SupportArticlePage({
       category={t(`help.category.${article.category}`)}
       title={article.title}
       content={content}
+      appearance={native && slug === "redeem-code" ? "offer" : "article"}
     >
       {native && slug === "redeem-code" && <AppleCodeForm />}
     </SupportArticleScreen>

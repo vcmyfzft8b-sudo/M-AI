@@ -15,6 +15,8 @@ export function AppleCodeForm() {
   const [selected, setSelected] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const offerProducts = [...products].sort((a, b) =>
+    Number(APPLE_PRODUCTS[b.id] === "yearly") - Number(APPLE_PRODUCTS[a.id] === "yearly"));
   useEffect(() => { setSupported((window.memoNative?.version ?? 0) >= 5); }, []);
 
   async function loadOffers() {
@@ -62,20 +64,35 @@ export function AppleCodeForm() {
         onChange={event => { setCode(event.target.value); setProducts([]); setSelected(""); setNotice(""); }} />
     </label>
     {products.length > 0 && <div className="memo-offer-plans" role="group" aria-label={t("settings.rows.redeem")}>
-      {products.map(product => <button type="button" key={product.id} disabled={busy}
-        className={`memo-offer-plan${selected === product.id ? " selected" : ""}`}
-        aria-pressed={selected === product.id} onClick={() => setSelected(product.id)}>
-        <span className="memo-offer-plan-copy">
-          <span>{t(APPLE_PRODUCTS[product.id] === "yearly" ? "billing.plan.yearly" : "billing.plan.monthly")}</span>
-          <span>{t(APPLE_PRODUCTS[product.id] === "yearly" ? "native.firstYearPrice" : "native.firstMonthPrice",
-            { initial: product.introPrice!, renewal: product.price })}</span>
-        </span>
-      </button>)}
+      {offerProducts.map(product => {
+        const yearly = APPLE_PRODUCTS[product.id] === "yearly";
+        const plan = t(yearly ? "billing.plan.yearly" : "billing.plan.monthly");
+        const detail = t(yearly ? "native.firstYearPrice" : "native.firstMonthPrice",
+          { initial: product.introPrice!, renewal: product.price });
+        return <button type="button" key={product.id} disabled={busy}
+          className={`memo-offer-plan memo-code-plan${selected === product.id ? " selected" : ""}`}
+          aria-label={`${plan}. ${detail}`} aria-pressed={selected === product.id}
+          onClick={() => setSelected(product.id)}>
+          {yearly && <span className="memo-offer-badge">{t("paywall.save", { percent: 50 })}</span>}
+          <span className="memo-code-plan-heading">
+            <strong>{plan}</strong>
+            <span className="memo-offer-radio" aria-hidden="true" />
+          </span>
+          <span className="memo-code-plan-price">
+            <strong>{product.introPrice}</strong>
+            <span>{t(yearly ? "native.codeFirstYear" : "native.codeFirstMonth")}</span>
+          </span>
+          <span className="memo-code-plan-renewal">
+            {t(yearly ? "native.codeRenewYear" : "native.codeRenewMonth", { renewal: product.price })}
+          </span>
+        </button>;
+      })}
     </div>}
     {notice && <p className="memo-inline-error" role="status">{notice}</p>}
     <button className="memo-button-coral" type="submit" disabled={busy || !code.trim()} aria-busy={busy}>
       {busy ? t("common.loading") : products.length ? t("common.continue") : t("native.codeCheck")}
     </button>
+    {products.length > 0 && <p className="memo-code-terms">{t("native.codeTerms")}</p>}
     <AppleBillingTerms busy={busy} onRestore={() => void restore()} />
   </form>;
 }

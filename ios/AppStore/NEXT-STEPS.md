@@ -14,8 +14,8 @@ The current evidence and unresolved gates are in
   The English testing checklist is saved. The unsubmitted App Review draft
   still contains build 9, version 1.0, four subscriptions and their group.
   Release is manual; final production-web/TestFlight checks remain required.
-- The latest verified deployment commit on `codex/ios-app-wrapper` is `a3987046`. Its READY
-  Preview is `https://memo-ko8s6jrwl-nace-valencics-projects.vercel.app`, using
+- The latest verified deployment commit on `codex/ios-app-wrapper` is `e6ae401c`. Its READY
+  Preview is `https://memo-q8gibkq3y-nace-valencics-projects.vercel.app`, using
   shared staging. The branch's changes are not a production deployment.
 - Actual app coverage includes photo/PDF/Word/slides/web-article note generation,
   flashcards, quiz/practice, mindmap/export, memory palace, speed reader,
@@ -49,6 +49,11 @@ The current evidence and unresolved gates are in
   default. Synthetic AI-response checks also corrected treatment guidance,
   mature themes and weapon references to infrequent educational content.
   These checks do not prove every possible AI output or the owner's content rights.
+- The restricted Stripe catalogue key is configured on this Preview branch and
+  hosted code validation passes. The owner created the new Slovenia Sandbox
+  tester; Apple's API confirms it exists with five-minute monthly renewals.
+  The owner also confirmed third-party content rights, and Apple's declaration
+  is now verified as `USES_THIRD_PARTY_CONTENT`.
 
 ## Remaining release gates
 
@@ -58,12 +63,11 @@ corrected without changing the credential-free runtime behavior.
 
 1. Repeat erasure on the final release; test actual Sign in with Apple token revocation.
 2. Finish dedicated Sandbox lifecycle checks: accelerated renewal, expiry,
-   refund/revocation and other products. The new dedicated tester was not created.
+   refund/revocation and other products using the newly created dedicated tester.
 3. Complete physical audio quality, locked-screen/call-interruption and spoken-tutor
    checks. UI playback/recording evidence alone does not verify these.
-4. Obtain the owner's third-party Content Rights confirmation, then correct the
-   current `DOES_NOT_USE_THIRD_PARTY_CONTENT` declaration. Imported documents and
-   web pages make that current declaration inaccurate; do not infer licensing.
+4. Content Rights confirmation and portal correction are complete. Recheck final
+   release metadata against the product before submission.
 5. Finish real Sandbox purchases for the new code flow. Bridge v5 and the
    Settings → Redeem a code form now implement live validation of the audited
    24 unrestricted 50%-once Stripe codes, with StoreKit prices and checkout.
@@ -74,11 +78,9 @@ corrected without changing the credential-free runtime behavior.
    Both promotional offers are saved and freshly verified in App Store Connect
    across 175 storefronts. Slovenia/US first periods are €/$9.99 and €/$64.99.
    Actual StoreKit code-price display passed in Simulator against the local staging
-   server. Hosted Preview validation is blocked by the missing catalogue key.
-   Set branch-only `APPLE_PROMOTION_CATALOGUE_KEY` to a restricted Stripe key
-   with Read access to Coupons, Promotion Codes, Prices and Products; this
-   credential is separate from checkout, and unrestricted live keys are refused
-   by hosted Preview. The owner has been asked for that key.
+   server. Hosted Preview code validation now passes with the owner's restricted
+   catalogue key, configured as sensitive branch-only `APPLE_PROMOTION_CATALOGUE_KEY`.
+   Its four catalogue reads pass; the key stays separate from checkout.
    Actual promotional purchase/restore and creator-code attribution remain
    unverified/unimplemented respectively. Recurring and gift codes are not
    supported by this first-period flow. Uploaded build 12 has bridge v5;

@@ -3,6 +3,50 @@
 This section supersedes the older portal status below. **Not yet ready to
 submit:** current end-to-end purchase and physical-device checks remain open.
 
+## Owner setup completed — 23 September, 08:35 CEST
+
+- The owner supplied the restricted Stripe catalogue credential. All four
+  catalogue reads (Coupons, Promotion Codes, Prices, Products) returned 200.
+  It is stored outside Git with owner-only local permissions and as a sensitive,
+  encrypted `APPLE_PROMOTION_CATALOGUE_KEY` on Preview branch
+  `codex/ios-app-wrapper` only. No production configuration was changed.
+- Redeployed `e6ae401c` with that credential:
+  `https://memo-q8gibkq3y-nace-valencics-projects.vercel.app` is READY.
+  Real hosted code validation passes for an eligible first-period code, an
+  invalid code and an unsupported recurring code. Browser/native-UA separation,
+  cancellation and light/dark checks pass. The browser harness simulates
+  StoreKit prices; it does not prove an Apple purchase.
+  Evidence: `review-sep23-code-hosted-restricted-browser.json`.
+- The real simulator test also passes against this hosted Preview:
+  `review-sep23-code-hosted-restricted-sim.xcresult` (172.1 seconds). It checks
+  invalid-code rejection, keyboard clearance, and actual StoreKit first-period
+  and renewal prices for both plans. The simulator uses the US storefront
+  ($9.99/$19.99 monthly, $64.99/$129.99 yearly); this is not a purchase test.
+- The owner created the new Sandbox tester, independently verified through
+  Apple's API: `8eeecb16-12ff-4870-b1a2-d83502083a0b`, Slovenia, five-minute
+  monthly renewal rate. Account creation is complete; accelerated lifecycle
+  and promotional purchase testing are still required.
+- After explicit owner confirmation of the necessary licences/permissions,
+  updated and independently read back `contentRightsDeclaration` as
+  `USES_THIRD_PARTY_CONTENT`. This supersedes the pending rights confirmation
+  and missing tester/key statements in the earlier dated evidence below.
+
+## Redeem-code paywall styling — 23 September
+
+- Replaced the native redemption article's large help card with a short intro.
+  Offer cards now use the paywall's outlined selection, radio indicator and
+  savings badge, with a prominent actual StoreKit introductory price and a
+  separate renewal line. Yearly appears first; changing the code still clears
+  the quote. The full price/period remains the accessible button label.
+- All five languages include the first-period, renewal and no-trial wording.
+  Restore, terms and privacy links remain beside the purchase action. The
+  browser help article and Stripe flow retain their platform behavior.
+- Local light/dark, cancellation and invalid-code checks pass against staging
+  with real catalogue validation and simulated StoreKit prices. TypeScript,
+  focused lint and 111 mobile/i18n checks pass. The first local attempt lacked
+  the sensitive Apple key omitted by Vercel's environment export; the local
+  test runner now loads the existing private key from its secure local file.
+
 ## Public keyboard API audit — 23 September
 
 - Removed runtime subclassing of WebKit’s internal `WKContent` view and the

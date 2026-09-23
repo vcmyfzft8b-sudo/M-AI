@@ -76,6 +76,7 @@ export function VoiceUsageSheet({
   blocked,
   buyingCredits,
   onBuyCredits,
+  onCreditsAdded,
   extra,
 }: {
   usage: VoiceUsage | null;
@@ -89,6 +90,8 @@ export function VoiceUsageSheet({
   blocked?: boolean;
   buyingCredits?: boolean;
   onBuyCredits?: () => void;
+  /** Called once an App Store hour has been credited, to re-read the meter in place. */
+  onCreditsAdded?: () => void;
   /** Settings belonging to the feature this meter is shown on, below the divider. */
   extra?: ReactNode;
 }) {
@@ -118,7 +121,10 @@ export function VoiceUsageSheet({
     setAppleNotice("");
     try {
       const result = await nativeRequest<{ status: string }>("purchaseTutorHour", { quote: appleHour.quote });
-      if (result.status === "purchased") { window.location.reload(); return; }
+      // Re-read the meter in place: a full reload in the wrapper right after
+      // Apple's own "You're all set" alert was measured ending on the native
+      // "could not connect" screen.
+      if (result.status === "purchased") { if (onCreditsAdded) onCreditsAdded(); else window.location.reload(); return; }
       if (result.status === "pending") setAppleNotice(t("native.pending"));
       if (result.status === "priceChanged") {
         const item = await nativeRequest<{ price?: string; quote?: string }>("tutorProduct");

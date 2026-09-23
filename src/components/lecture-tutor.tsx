@@ -2001,6 +2001,7 @@ export function LectureTutor({
         blocked={Boolean(blocked)}
         buyingCredits={buyingCredits}
         onBuyCredits={() => void buyCredits()}
+        onCreditsAdded={() => { setBlocked(null); void refreshUsage(); }}
       />
       <div
         className={`memo-tutor phase-${phase}`}

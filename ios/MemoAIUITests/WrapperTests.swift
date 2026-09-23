@@ -1593,21 +1593,31 @@ final class WrapperTests: XCTestCase {
         XCTAssertTrue(offer.waitForExistence(timeout: 30))
         keepStudyScreenshot("Tutor hour offer on the iPhone", app: app)
         offer.tap()
-        var confirmed = false
+        // A consumable asks for the side button, which only a person can press:
+        // capture Apple's sheet, then wait for "You're all set" and dismiss it.
+        var sawSheet = false
+        var done = false
         let deadline = Date().addingTimeInterval(240)
-        while Date() < deadline && !confirmed {
+        while Date() < deadline && !done {
             for process in [app, system] {
                 let notice = process.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "You will not be charged")).firstMatch
-                let buy = process.buttons.matching(NSPredicate(format: "label IN %@", ["Buy", "Purchase", "Subscribe"])).firstMatch
-                if notice.exists && buy.exists && buy.isHittable {
+                if !sawSheet && notice.exists {
+                    sawSheet = true
                     let sheet = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
                     sheet.name = "Apple's Sandbox sheet for the tutor hour"; sheet.lifetime = .keepAlways; add(sheet)
-                    buy.tap(); confirmed = true; break
+                    print("MEMO_QA: CONFIRM_WITH_SIDE_BUTTON")
+                }
+                let ok = process.buttons["OK"].firstMatch
+                if process.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "You’re all set")).firstMatch.exists
+                    || process.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "You're all set")).firstMatch.exists {
+                    if ok.exists { ok.tap() }
+                    done = true; break
                 }
             }
-            RunLoop.current.run(until: Date().addingTimeInterval(2))
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
         }
-        XCTAssertTrue(confirmed, "Apple's Sandbox purchase sheet must appear")
+        XCTAssertTrue(sawSheet, "Apple's Sandbox purchase sheet must appear")
+        XCTAssertTrue(done, "The purchase must complete once confirmed")
         // The page reloads once the server has credited the hour.
         let topped = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Topped")).firstMatch
         let end = Date().addingTimeInterval(90)

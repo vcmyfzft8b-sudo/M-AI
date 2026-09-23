@@ -1629,6 +1629,27 @@ final class WrapperTests: XCTestCase {
         XCTAssertTrue(topped.exists, "The bought hour must show as topped-up time")
     }
 
+    // A tap on a "notes ready" notification that launches the app must land on
+    // that note, not on the start page loaded right after it.
+    @MainActor func testPreviewNotificationLaunchOpensNote() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              let lecture = env["MEMO_QA_NOTIFICATION_LECTURE"], let title = env["MEMO_QA_NOTE_TITLE"] else {
+            throw XCTSkip("Requires a staging note id")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launchEnvironment["MEMO_QA_NOTIFICATION_LECTURE"] = lecture
+        app.launch()
+        passConsentGate(app)
+        let heading = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+        let notes = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Notes", "Zapiski"])).firstMatch
+        let opened = notes.waitForExistence(timeout: 40) && heading.waitForExistence(timeout: 10)
+        RunLoop.current.run(until: Date().addingTimeInterval(4))
+        keepStudyScreenshot("Launched from a note notification", app: app)
+        XCTAssertTrue(opened && notes.exists, "The note must open and stay open, not give way to the start page")
+    }
+
     @MainActor func testPreviewStudyNoteFromPDF() throws {
         guard ProcessInfo.processInfo.environment["MEMO_QA_PDF"] == "memo-qa-electric-circuits" else {
             throw XCTSkip("Requires an unused synthetic free note and the seeded circuits PDF")

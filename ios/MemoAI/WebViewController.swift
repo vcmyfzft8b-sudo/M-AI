@@ -45,6 +45,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private let retry = UIButton(type: .system)
     private var timeout: Task<Void, Never>?
     private var loadTimeoutPaused = false
+    /// The note a launching notification tap asked for, opened after the first page.
+    private var launchNote: URL?
     private var downloadFiles: [ObjectIdentifier: URL] = [:]
     private var checkingAppleCredential = false
     private var memoLocale: String?
@@ -213,14 +215,6 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         store.showPurchaseIntent = { [weak self] in
             self?.webView.load(URLRequest(url: AppConfiguration.origin.appendingPathComponent("app/start")))
         }
-        push.openNote = { [weak self] lecture in
-            // A notification only ever carries a lecture id this app was told
-            // about, but it arrives from outside the web view, so it is built
-            // into a path here rather than interpolated into a URL string.
-            guard let self, let id = UUID(uuidString: lecture) else { return }
-            self.webView.load(URLRequest(url: AppConfiguration.origin
-                .appendingPathComponent("app/lectures").appendingPathComponent(id.uuidString.lowercased())))
-        }
         push.tokenChanged = { [weak self] token in
             // Apple reissues tokens unprompted — a restore, an OS upgrade — and
             // the old one stops working the moment it does.
@@ -238,8 +232,30 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                     $0.host == cookie.domain.trimmingCharacters(in: CharacterSet(charactersIn: "."))
                 }
             }) { setMemoLocale(cookie.value) }
+            /*
+             * A tap on a "notes ready" notification can be what launched the
+             * app. Its note used to be opened before the start page and then
+             * replaced by it, landing on the home screen (UI test, 23
+             * September). It is now opened once the start page has loaded —
+             * the same path as a tap while the app is running. Loading the
+             * note as the very first document timed out on a cold start.
+             */
+            launchNote = push.takePendingNote().flatMap(noteURL)
             webView.load(URLRequest(url: AppConfiguration.startURL))
+            // From here on a tap navigates straight to its note.
+            push.openNote = { [weak self] lecture in
+                guard let self, let url = self.noteURL(lecture) else { return }
+                self.webView.load(URLRequest(url: url))
+            }
         }
+    }
+
+    /// A notification only ever carries a lecture id this app was told about,
+    /// but it arrives from outside the web view, so it is built into a path
+    /// here rather than interpolated into a URL string.
+    private func noteURL(_ lecture: String) -> URL? {
+        guard let id = UUID(uuidString: lecture) else { return nil }
+        return AppConfiguration.origin.appendingPathComponent("app/lectures").appendingPathComponent(id.uuidString.lowercased())
     }
 
     private func buildOverlay() {
@@ -388,6 +404,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        if let note = launchNote {
+            launchNote = nil
+            webView.load(URLRequest(url: note))
+        }
         timeout?.cancel()
         overlay.isHidden = true
         webView.isHidden = false

@@ -1,25 +1,25 @@
 # Memo iOS submission checklist
 
-## Status on 23 September 2026 (after release #476)
+## Status on 23 September 2026 (after #476, #477, #478)
 
-- **Production released:** PR #476 merged as `0b4333db`; migration `0055` applied
-  by the workflow and verified in the live schema; Vercel production deployed and
-  serving the release; local `main` = `origin/main`.
-- **Production settings:** `APPLE_PROMOTION_CATALOGUE_KEY` (restricted, read-only)
-  added; `NATIVE_GOOGLE_SIGN_IN_ENABLED=true` and `APPLE_PUSH_*` were already set;
-  the production redirect allowlist contains `/auth/mobile-callback`.
-- **App Store Connect:** build **14** (keyboard spring + launch-interruption retry)
-  VALID, in TestFlight, attached to version 1.0 in place of build 9; final review
-  notes saved (`review-notes-final.md`). **Not submitted.**
-- **Left for the owner:** install build 14 from TestFlight and check review login,
-  one notification tap, keyboard feel, recording playback and the tutor's voice;
-  delete the accidental staging recording on `ios-text`; then authorize submission.
-
-
-Updated 23 September 2026. **Not ready to submit yet.** This is the current
-handoff; it supersedes unfinished items in older dated notes when those items
-are marked complete here. Apple makes the approval decision; no checklist can
-guarantee acceptance.
+- **Production:** #476 (billing lifecycle, creator codes via Apple, keyboard
+  spring, web analytics), #477 (App Store tutor hour) and #478 (notification
+  launch opens its note) are merged and deployed; migration `0055` applied and
+  verified in the live schema; local `main` = `origin/main` (`ea6fd066`).
+- **App Store Connect:** version 1.0 has **build 16** attached, final review
+  notes (codes, notifications, account binding, tutor time) and five products
+  READY_TO_SUBMIT: four subscriptions and the consumable `eu.memoai.tutor.hour`
+  (€2.00, review screenshot uploaded). The tutor hour must be added to the
+  review submission together with the version. **Not submitted.**
+- **Verified on the physical iPhone (Sandbox):** trial purchase, renewal,
+  restore, cancellation, expiry, `MEMO50` promotional purchase with creator
+  credit, account binding, push delivery, recording, tutor-hour purchase
+  (credited once, 3600 s). Simulator: languages, settings rows, study tools,
+  keyboard spring frame by frame, notification launch opening its note.
+- **Left for the owner:** install 1.0.0 (16) from TestFlight with the review
+  account and check keyboard feel, a notification tap, recording playback and
+  the tutor's voice; delete the accidental staging recording on `ios-text`;
+  then authorize submission.
 
 ## What is already done
 

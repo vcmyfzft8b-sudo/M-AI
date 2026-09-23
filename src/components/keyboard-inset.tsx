@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import type { NativeKeyboardFrame } from "@/lib/mobile/client";
+import { createClockAlignment, isKeyboardSpring, springInset, type KeyboardSpring } from "@/lib/mobile/keyboard-spring";
 
 /** Browser / older-wrapper fallback when visualViewport supplies only an end
  * frame. New wrappers follow UIKit's measured presentation frames instead of
@@ -763,9 +764,9 @@ export function KeyboardInset() {
     if (nativeFrames) {
       let extent = 0;
       let focused: Element | null = null;
-      const apply = (state: NativeKeyboardFrame | undefined) => {
+      const apply = (state: NativeKeyboardFrame | undefined, drawnInset?: number) => {
         if (!state || ![state.inset, state.height, state.target, state.keyboardHeight].every(Number.isFinite) || state.height <= 0) return;
-        const inset = Math.min(state.height, Math.max(0, state.inset));
+        const inset = Math.min(state.height, Math.max(0, drawnInset ?? state.inset));
         // The full keyboard height stays constant while an interactive drag
         // reduces its overlap. Keyboard-language / suggestion-bar changes can
         // legitimately change that height without dismissing the keyboard.
@@ -784,7 +785,52 @@ export function KeyboardInset() {
         if (inset > 0) lift(1);
         else { extent = 0; scroller = null; }
       };
-      const onNativeFrame = (event: Event) => apply((event as CustomEvent<NativeKeyboardFrame>).detail);
+      /*
+       * While UIKit's keyboard spring runs, draw from the spring rather than
+       * from the samples. A sample is where the keys were when the wrapper
+       * read them; by the time this page has laid out and painted, the keys
+       * have moved on, and a composer riding on them was measured sliding
+       * under them for the first frames. The spring says where the keys will
+       * be when this frame reaches the screen, one frame after it starts.
+       */
+      const clock = createClockAlignment();
+      let spring: KeyboardSpring | null = null;
+      let latest: NativeKeyboardFrame | undefined;
+      let springFrame = 0;
+      let lastTick = 0;
+      let frameMs = 1000 / 60;
+      const tick = (now: number) => {
+        springFrame = 0;
+        if (lastTick && now - lastTick > 4 && now - lastTick < 40) frameMs = frameMs * 0.8 + (now - lastTick) * 0.2;
+        lastTick = now;
+        if (!spring || !latest) return;
+        const t = spring.elapsed + (clock.native(now + frameMs) - spring.sentAt);
+        if (!Number.isFinite(t) || t >= spring.duration) {
+          const end = spring.target;
+          spring = null;
+          lastTick = 0;
+          apply(latest, end);
+          return;
+        }
+        apply(latest, springInset(spring, t));
+        springFrame = requestAnimationFrame(tick);
+      };
+      const onNativeFrame = (event: Event) => {
+        const state = (event as CustomEvent<NativeKeyboardFrame>).detail;
+        const next = state?.spring;
+        if (isKeyboardSpring(next)) {
+          clock.observe(next.sentAt, performance.now());
+          latest = state;
+          spring = next;
+          if (!springFrame) springFrame = requestAnimationFrame(tick);
+          return;
+        }
+        // No animation: an interactive drag, the keys at rest, or an older wrapper.
+        spring = null;
+        lastTick = 0;
+        if (springFrame) { cancelAnimationFrame(springFrame); springFrame = 0; }
+        apply(state);
+      };
       const onNativeFocus = () => apply(window.memoNative?.keyboardFrame);
       window.addEventListener("memo:keyboard", onNativeFrame);
       document.addEventListener("focusin", onNativeFocus);
@@ -792,6 +838,7 @@ export function KeyboardInset() {
       return () => {
         window.removeEventListener("memo:keyboard", onNativeFrame);
         document.removeEventListener("focusin", onNativeFocus);
+        if (springFrame) cancelAnimationFrame(springFrame);
         ground.remove();
         for (const key of ["--memo-keyboard", "--memo-viewport", "--memo-viewport-top", "--memo-keyboard-up", "--memo-keyboard-bar"]) root.style.removeProperty(key);
       };

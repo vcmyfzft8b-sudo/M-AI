@@ -87,6 +87,7 @@ import WebKit
         let target = max(0, webView.frame.maxY - endTop)
         let extent = min(height, max(keyboardHeight, target))
         let values = [inset, height, target, extent]
+        let spring = springState(target: target)
         // Guide constraints cause a layout pass whenever the keyboard moves,
         // including interactive drags. That wakes layoutChanged(). Sample the
         // intervening presentation frames, then sleep even if the keys remain
@@ -100,7 +101,7 @@ import WebKit
         webView.evaluateJavaScript("""
             (() => {
               if (!\(AppConfiguration.trustedOriginsJSON).includes(location.origin)) return;
-              const frame = {inset: \(inset), height: \(height), target: \(target), keyboardHeight: \(extent)};
+              const frame = {inset: \(inset), height: \(height), target: \(target), keyboardHeight: \(extent)\(spring)};
               window.__memoKeyboardFrame = frame;
               window.dispatchEvent(new CustomEvent('memo:keyboard', {detail: frame}));
             })();
@@ -108,6 +109,33 @@ import WebKit
                 self?.pending = false
                 if error != nil { self?.stop() }
             }
+    }
+
+    /**
+     The keyboard's own path, so the page can draw where it *will* be.
+
+     UIKit moves the keyboard (and the layout guide this marker follows) with an
+     additive `CASpringAnimation` — measured: mass 1, stiffness 555.03, damping
+     47.12, 0.383 s, i.e. critically damped. Every sample the page receives is
+     already a frame or two old by the time it is drawn, which is exactly the
+     gap between the keys and a composer riding on them. Handing over the
+     spring, how far into it we are and when this was sent lets the page
+     compute the position for the moment its own frame reaches the screen.
+     Interactive drags carry no animation and stay sample-driven.
+     */
+    private func springState(target: CGFloat) -> String {
+        guard let animation = marker.layer.animation(forKey: "position") as? CASpringAnimation,
+              animation.isAdditive, animation.beginTime > 0,
+              let from = animation.fromValue as? CGPoint ?? (animation.fromValue as? NSValue)?.cgPointValue,
+              animation.mass > 0, animation.stiffness > 0 else { return "" }
+        let now = CACurrentMediaTime()
+        let elapsed = marker.layer.convertTime(now, from: nil) - animation.beginTime
+        guard elapsed >= -0.05, elapsed < animation.duration else { return "" }
+        let omega = (animation.stiffness / animation.mass).squareRoot()
+        let zeta = animation.damping / (2 * (animation.stiffness * animation.mass).squareRoot())
+        // The animation offsets the marker's top by `from.y` at its start and
+        // by nothing at its end; the inset moves the opposite way.
+        return ", spring: {offset: \(from.y), omega: \(omega), zeta: \(zeta), duration: \(animation.duration), elapsed: \(elapsed), sentAt: \(now), target: \(target)}"
     }
 
     @MainActor private final class DisplayTarget: NSObject {

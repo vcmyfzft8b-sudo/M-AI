@@ -1354,6 +1354,84 @@ final class WrapperTests: XCTestCase {
         keepStudyScreenshot("Note generated from a public article", app: app)
     }
 
+    // End to end on a device: start a note, accept notifications, leave the
+    // app, and tap the "ready" notification when it arrives.
+    @MainActor func testPreviewPushNotificationOpensNote() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              let link = env["MEMO_QA_PUBLIC_ARTICLE"], URL(string: link)?.scheme == "https",
+              env["MEMO_QA_PUSH"] == "1" else {
+            throw XCTSkip("Requires a device, a staging Preview with APNs and a public article")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        passConsentGate(app)
+        dismissInitialOffer(app)
+        let newNote = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "New note")).firstMatch
+        XCTAssertTrue(newNote.waitForExistence(timeout: 30))
+        newNote.tap()
+        let source = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "link")).firstMatch
+        XCTAssertTrue(source.waitForExistence(timeout: 15))
+        source.tap()
+        let input = app.webViews.textFields.firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 15))
+        input.tap()
+        input.typeText(link)
+        let create = app.webViews.buttons["Create the note"].firstMatch
+        XCTAssertTrue(create.waitForExistence(timeout: 10))
+        create.tap()
+        // Memo's own question comes first; iOS asks only if the reader agrees.
+        let notify = app.webViews.buttons["Notify me"].firstMatch
+        if notify.waitForExistence(timeout: 45) {
+            keepStudyScreenshot("Memo offers to notify when the note is ready", app: app)
+            notify.tap()
+            let allow = springboard.alerts.buttons["Allow"].firstMatch
+            if allow.waitForExistence(timeout: 10) { allow.tap() }
+        }
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        XCUIDevice.shared.press(.home)
+        let banner = springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "is ready to study")).firstMatch
+        let deadline = Date().addingTimeInterval(420)
+        var seen = false
+        while Date() < deadline {
+            if banner.exists { seen = true; break }
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
+        }
+        if !seen {
+            // A banner shows for a few seconds; the Notification Center keeps it.
+            let top = springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.001))
+            top.press(forDuration: 0.1, thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.6)))
+            seen = banner.waitForExistence(timeout: 10)
+        }
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "Note-ready notification on the device"
+        shot.lifetime = .keepAlways
+        add(shot)
+        XCTAssertTrue(seen, "The note-ready notification must arrive")
+        // A banner slides away within seconds, so open it from the
+        // Notification Center, where it stays until it is tapped.
+        if !app.wait(for: .runningForeground, timeout: 1) {
+            RunLoop.current.run(until: Date().addingTimeInterval(6))
+            let top = springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.001))
+            top.press(forDuration: 0.1, thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.6)))
+            let stored = springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "is ready to study")).firstMatch
+            XCTAssertTrue(stored.waitForExistence(timeout: 10), "The notification must stay in the Notification Center")
+            // Tap the visible row itself (a label match can be an off-screen
+            // copy); several Memo notifications stack and the first tap expands them.
+            let row = springboard.buttons.matching(NSPredicate(format: "label CONTAINS %@", "is ready to study")).firstMatch
+            for _ in 0..<3 where !app.wait(for: .runningForeground, timeout: 3) {
+                if row.exists && row.isHittable { row.tap() }
+                else { springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.31)).tap() }
+            }
+        }
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
+        XCTAssertTrue(app.webViews.buttons["Notes"].firstMatch.waitForExistence(timeout: 30), "Tapping it must open the note")
+        keepStudyScreenshot("Note opened from its notification", app: app)
+    }
+
     @MainActor func testPreviewStudyNoteFromPDF() throws {
         guard ProcessInfo.processInfo.environment["MEMO_QA_PDF"] == "memo-qa-electric-circuits" else {
             throw XCTSkip("Requires an unused synthetic free note and the seeded circuits PDF")

@@ -62,9 +62,15 @@ Do not fabricate entitlement or use real paid checkout for these tests.
 
 ## 2. Resolve the remaining discount-code parity gaps
 
-- [ ] Implement and verify creator-code attribution in creator reporting if
-  required for launch. It is currently unimplemented for this Apple code flow.
-- [ ] Resolve scope for the audited legacy recurring/gift codes: the current
+- [ ] Verify creator-code attribution with a real Sandbox code purchase.
+  *Implemented 23 September (`92c98bfb`, migration `0055`, tried on staging
+  only):* the server records a validated code and credits the Apple purchase
+  that follows within a day; `/admin` creator figures count that first charge
+  like Stripe's. The credited amount is Apple's customer price (before Apple's
+  commission and VAT); the owner decides the payout base. Unit and migration
+  tests pass; the end-to-end purchase check needs the iPhone.
+- [x] Resolve scope for the audited legacy recurring/gift codes. *Owner decided
+  on 23 September to exclude them from v1; they keep failing closed.* Audit: the current
   native flow supports 24 unrestricted 50%-off-once codes, not the seven legacy
   10%-off-forever codes or the 100%-off-forever gift code. These fail closed.
   Provide compatible Apple offers or explicitly agree to exclude them from v1;
@@ -104,13 +110,15 @@ Do not fabricate entitlement or use real paid checkout for these tests.
   mindmap/export, memory-palace and reader flows on the final release.
 - [ ] Check all keyboard entry points and sheets, portrait rotation lock, loading
   screen, safe areas, light/dark themes, larger text and supported iPad layouts.
-- [ ] Verify regional first-run language for English, Slovenian, Croatian, Bosnian
+- [x] Verify regional first-run language for English, Slovenian, Croatian, Bosnian
   and Serbian, matching the PWA's current behavior. *Manual selection is done:*
   `testPreviewAllSettingsLanguagesPersist` passed on 23 September (279.9 s,
   simulator, Preview for `421e2d26`, result `review-sep23-languages-sim-r5`).
   Each language survives a relaunch and translates the Apple code form. It found
   and fixed a bug: the code form's back arrow went to Help instead of Settings.
-  Regional first-run detection on a clean install is still unverified.
+  Regional first-run: a fresh request with the iOS user agent from Slovenia
+  served `lang="sl-SI"` onboarding; HR/BA/RS/other mappings are the shared
+  `localeForCountry` covered by `tests/i18n-catalogues.test.mjs`.
 - [ ] Confirm no browser toolbar, install prompt, landing page or development
   overlay appears in the main app. Authentication/external-link system UI and
   iPadOS window controls are not app browser chrome and cannot all be suppressed.
@@ -123,7 +131,12 @@ Do not fabricate entitlement or use real paid checkout for these tests.
 Note-completion notifications are implemented but the last inspected Preview
 configuration lacked `APPLE_PUSH_*`, so live delivery remains unverified.
 
-- [ ] Decide whether notifications ship in v1. If yes, securely configure APNs
+- [x] Decide whether notifications ship in v1. *Owner: ship.* APNs key
+  `2HU95KN368` verified against both APNs hosts (a fake token returns
+  BadDeviceToken, not InvalidProviderToken); the four `APPLE_PUSH_*` values are
+  set on this branch's Preview. Build 12 carries `aps-environment=production`.
+  Production values and live delivery remain below.
+- [ ] Verify notifications end to end. If yes, securely configure APNs
   for the intended environments and verify permission allow/deny, token
   registration, background/terminated delivery, correct-note navigation on tap,
   and sign-out/deletion cleanup. If deferred, keep the feature disabled and remove

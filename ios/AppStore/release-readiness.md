@@ -2,6 +2,8 @@
 
 This section supersedes the older portal status below. **Not yet ready to
 submit:** current end-to-end purchase and physical-device checks remain open.
+For the complete current continuation checklist, use
+[SUBMISSION-CHECKLIST.md](SUBMISSION-CHECKLIST.md).
 
 ## Owner setup completed — 23 September, 08:35 CEST
 
@@ -46,6 +48,15 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   focused lint and 111 mobile/i18n checks pass. The first local attempt lacked
   the sensitive Apple key omitted by Vercel's environment export; the local
   test runner now loads the existing private key from its secure local file.
+- Hosted follow-up on READY commit `5b283dac` also passes:
+  `https://memo-ebx5i4rr2-nace-valencics-projects.vercel.app`. The browser harness
+  verifies real catalogue validation, native/browser separation, cancellation,
+  invalid-code handling and light/dark appearance with simulated StoreKit quotes
+  (`review-sep23-code-redesign-hosted-browser.json`). The actual native simulator
+  test verifies invalid-code rejection, keyboard clearance and real StoreKit
+  monthly/yearly offer and renewal prices in **163.685 seconds**
+  (`review-sep23-code-redesign-hosted-sim.xcresult`). Neither test purchases an
+  offer; real promotional purchase/restore remains on the submission checklist.
 
 ## Public keyboard API audit — 23 September
 
@@ -90,7 +101,8 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   and Brazil returns `SIXTEEN`. No terms or content-frequency answers were changed.
 - This fixes the minimum-age mismatch, not every questionnaire answer. A final
   sensitive-content audit must consider the AI assistant and imported study
-  material. The separate owner Content Rights confirmation remains pending.
+  material. The separate owner Content Rights confirmation was subsequently
+  received and recorded; see the completed setup section above.
 - Follow-up on the READY `a3987046` Preview used three synthetic library-chat
   questions (first aid, non-graphic First World War history, and reproductive
   biology), without persisting a conversation or using customer data. All three

@@ -1,21 +1,21 @@
 # Memo AI iOS — release handoff (updated 23 September 2026)
 
-The current evidence and unresolved gates are in
-[release-readiness.md](release-readiness.md). **Not ready for App Review submission.**
+The complete current handoff is [SUBMISSION-CHECKLIST.md](SUBMISSION-CHECKLIST.md),
+with dated evidence in [release-readiness.md](release-readiness.md).
+**Not ready for App Review submission.**
 
 ## Current state
 
 - The wrapper shares the PWA onboarding, study tools, settings and design.
   Only platform billing, provider authentication and native device functions differ.
-- Release **1.0.0 (11)** includes keyboard bridge v4 and was uploaded to Apple
-  without errors at **04:14 CEST on 23 September**. Delivery ID:
-  `e5980c8c-e9ca-4621-9a30-50a7aae2cf09`. Apple processed it as **VALID** and
-  **IN_BETA_TESTING**; it is listed in the existing **Memo internal** group.
+- Release **1.0.0 (12)** includes keyboard bridge v5 and the public keyboard
+  accessory implementation. Apple processed it as **VALID / IN_BETA_TESTING**;
+  it is listed in the existing **Memo internal** group. Details are below.
   The English testing checklist is saved. The unsubmitted App Review draft
   still contains build 9, version 1.0, four subscriptions and their group.
   Release is manual; final production-web/TestFlight checks remain required.
-- The latest verified deployment commit on `codex/ios-app-wrapper` is `e6ae401c`. Its READY
-  Preview is `https://memo-q8gibkq3y-nace-valencics-projects.vercel.app`, using
+- The latest READY deployment commit on `codex/ios-app-wrapper` is `5b283dac`. Its
+  Preview is `https://memo-ebx5i4rr2-nace-valencics-projects.vercel.app`, using
   shared staging. The branch's changes are not a production deployment.
 - Actual app coverage includes photo/PDF/Word/slides/web-article note generation,
   flashcards, quiz/practice, mindmap/export, memory palace, speed reader,

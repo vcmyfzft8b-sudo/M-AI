@@ -125,6 +125,12 @@ focused lint and `plutil` validation passed. No production merge was performed.
 
 ## Still required
 
+Current consolidated release checklist:
+[SUBMISSION-CHECKLIST.md](SUBMISSION-CHECKLIST.md). The build-10 note below is
+historical: build 12 with the corrected manifest is now uploaded and available
+in internal TestFlight. Final production behavior and Apple authorization
+revocation still need verification.
+
 - Deploy the optional-analytics change to production after release authorization.
   The five policy translations now describe account-linked visits, the visit
   cookie and the Settings choice. See the implementation and test scope below.

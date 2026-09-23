@@ -706,6 +706,7 @@ export const en: Messages = {
   "capture.error.localServerSlow": "The local server did not respond quickly enough. Refresh the page and try again.",
   "capture.error.notePrepTooLong": "Preparing the note is taking too long. Refresh the page and try again.",
   "capture.error.filePrepFailed": "The file could not be prepared.",
+  "capture.error.micDenied": "Allow microphone access in your browser settings to record audio.",
   "capture.error.recordStartFailed": "The recording could not be started.",
   "capture.error.noRecordingSupport": "This browser does not support recording inside the app.",
   "capture.error.audioNoteFailed": "The audio note could not be created.",

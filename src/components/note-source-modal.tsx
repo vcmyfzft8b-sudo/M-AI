@@ -878,8 +878,13 @@ export function NoteSourceModal({
         });
       }, 1000);
     } catch (recordError) {
-      setError(
-        compressionErrorMessage(recordError, t) ?? t("capture.error.recordStartFailed"),
+      const permissionDenied = recordError instanceof Error && (
+        recordError.name === "NotAllowedError" || recordError.name === "SecurityError" ||
+        nativeRecorder && recordError.message.endsWith("[microphone denied]")
+      );
+      setError(permissionDenied
+        ? t(nativeRecorder ? "native.micDenied" : "capture.error.micDenied")
+        : compressionErrorMessage(recordError, t) ?? t("capture.error.recordStartFailed"),
       );
     } finally {
       setIsStarting(false);

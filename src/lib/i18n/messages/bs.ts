@@ -714,6 +714,7 @@ export const bs: Messages = {
   "capture.error.localServerSlow": "Lokalni server nije odgovorio dovoljno brzo. Osvježi stranicu i pokušaj ponovo.",
   "capture.error.notePrepTooLong": "Priprema bilješke traje predugo. Osvježi stranicu i pokušaj ponovo.",
   "capture.error.filePrepFailed": "Datoteku nije bilo moguće pripremiti.",
+  "capture.error.micDenied": "Za snimanje zvuka dozvoli pristup mikrofonu u postavkama preglednika.",
   "capture.error.recordStartFailed": "Snimanje nije bilo moguće započeti.",
   "capture.error.noRecordingSupport": "Ovaj preglednik ne podržava snimanje unutar aplikacije.",
   "capture.error.audioNoteFailed": "Zvučnu bilješku nije bilo moguće napraviti.",

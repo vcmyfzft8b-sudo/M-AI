@@ -731,6 +731,7 @@ export const sl = {
   "capture.error.localServerSlow": "Lokalni strežnik se ni odzval dovolj hitro. Osveži stran in poskusi znova.",
   "capture.error.notePrepTooLong": "Priprava zapiska traja predolgo. Osveži stran in poskusi znova.",
   "capture.error.filePrepFailed": "Datoteke ni bilo mogoče pripraviti.",
+  "capture.error.micDenied": "Za snemanje zvoka dovoli dostop do mikrofona v nastavitvah brskalnika.",
   "capture.error.recordStartFailed": "Snemanja ni bilo mogoče začeti.",
   "capture.error.noRecordingSupport": "Ta brskalnik ne podpira snemanja znotraj aplikacije.",
   "capture.error.audioNoteFailed": "Zvočnega zapiska ni bilo mogoče ustvariti.",

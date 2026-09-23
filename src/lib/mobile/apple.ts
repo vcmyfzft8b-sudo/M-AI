@@ -14,6 +14,11 @@ function sandboxReviewer(userId: string) {
   return (process.env.APPLE_SANDBOX_REVIEW_USER_IDS || "").split(",").map(id => id.trim().toLowerCase()).includes(userId.toLowerCase());
 }
 
+export function appleAccountEnvironments(userId: string) {
+  return appleEnvironment() === Environment.PRODUCTION
+    ? sandboxReviewer(userId) ? ["production", "sandbox"] : ["production"] : ["sandbox"];
+}
+
 function assertDatabaseEnvironment() {
   const host = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "https://invalid").host;
   const expected = appleEnvironment() === Environment.PRODUCTION ? "zrcwmhuwwvguiekzmcdj.supabase.co" : "yviipoccwsndxyrhtcjm.supabase.co";
@@ -149,8 +154,7 @@ export async function getAppleEntitlement(userId: string) {
   assertDatabaseEnvironment();
   const { data, error } = await createSupabaseServiceRoleClient()
     .from("mobile_app_store_entitlements").select("product_id,expires_at")
-    .eq("user_id", userId).in("environment", appleEnvironment() === Environment.PRODUCTION
-      ? sandboxReviewer(userId) ? ["production", "sandbox"] : ["production"] : ["sandbox"])
+    .eq("user_id", userId).in("environment", appleAccountEnvironments(userId))
     .eq("status", "active").gt("expires_at", new Date().toISOString())
     .order("expires_at", { ascending: false }).limit(1).maybeSingle();
   if (error) throw new Error("Apple entitlement lookup failed", { cause: error });

@@ -4,6 +4,7 @@ import { useT } from "@/components/i18n-provider";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
+import type { ReactNode } from "react";
 
 /** A single help article, on the redesign's page chrome. */
 export function SupportArticleScreen({
@@ -11,11 +12,13 @@ export function SupportArticleScreen({
   title,
   content,
   backHref = "/app/support",
+  children,
 }: {
   category: string;
   title: string;
   content: string;
   backHref?: string;
+  children?: ReactNode;
 }) {
   const t = useT();
   const { navigateWithFeedback, overlay: navigationOverlay, isNavigating } = useInstantNavigation();
@@ -50,6 +53,7 @@ export function SupportArticleScreen({
           <div className="memo-help-intro memo-article-body">
             <MarkdownRenderer content={content} />
           </div>
+          {children}
         </div>
       </div>
     </div>

@@ -2318,6 +2318,69 @@ final class WrapperTests: XCTestCase {
 
     // Opens each remaining settings row (sheets, native prompts and in-app
     // pages) and gets back to Settings, relaunching if the way back is lost.
+    @MainActor func testAppleDiscountCodePrices() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let origin = env["MEMO_CODE_QA_URL"], let host = URL(string: origin)?.host,
+              host == "localhost" || host.hasSuffix(".vercel.app"),
+              let email = env["MEMO_QA_EMAIL"], email == "ios-pdf-20260922@example.com",
+              let code = env["MEMO_QA_CODE"] else {
+            throw XCTSkip("Requires the isolated staging PDF account and code-enabled server")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = origin
+        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        defer { app.terminate() }
+        // The isolated simulator may retain a different synthetic study login.
+        // Switch through Settings so this test cannot accidentally reuse a paid account.
+        let previousSettings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "Settings", "Nastavitve")).firstMatch
+        if previousSettings.waitForExistence(timeout: 15) {
+            previousSettings.tap()
+            let signOut = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Sign out", "Odjava"])).firstMatch
+            XCTAssertTrue(signOut.waitForExistence(timeout: 15))
+            for _ in 0..<8 where !signOut.isHittable { app.webViews.firstMatch.swipeUp() }
+            signOut.tap()
+            let confirm = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Sign out", "Odjava"]))
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
+            confirm.element(boundBy: confirm.count - 1).tap()
+        }
+        completeOnboarding(app)
+        _ = signInWithCode(app, email: email, code: code)
+        passConsentGate(app)
+        dismissInitialOffer(app)
+        let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "Settings", "Nastavitve")).firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 30)); settings.tap()
+        let redeem = app.webViews.links.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "Redeem", "Unovči")).firstMatch
+        XCTAssertTrue(redeem.waitForExistence(timeout: 20))
+        for _ in 0..<8 where !redeem.isHittable { app.webViews.firstMatch.swipeUp() }
+        redeem.tap()
+        let field = app.webViews.textFields.matching(NSPredicate(format: "label IN %@", ["Discount code", "Koda za popust"])).firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 20)); field.tap()
+        field.typeText("INVALID_MEMO_QA")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertLessThanOrEqual(field.frame.maxY, app.keyboards.firstMatch.frame.minY - 10)
+        let check = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Check code", "Preveri kodo"])).firstMatch
+        check.tap()
+        let invalid = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "This code or offer is not available", "Ta koda ali ponudba ni na voljo")).firstMatch
+        XCTAssertTrue(invalid.waitForExistence(timeout: 30))
+        field.tap()
+        field.press(forDuration: 1.2)
+        let selectAllButton = app.buttons["Select All"].firstMatch
+        let selectAllMenu = app.menuItems["Select All"].firstMatch
+        let selectAll = selectAllButton.waitForExistence(timeout: 5) ? selectAllButton : selectAllMenu
+        XCTAssertTrue(selectAll.waitForExistence(timeout: 5)); selectAll.tap()
+        field.typeText("MEMO50")
+        XCTAssertEqual(field.value as? String, "MEMO50")
+        check.tap()
+        let yearly = app.webViews.staticTexts.matching(NSPredicate(format: "(label CONTAINS %@ OR label CONTAINS %@) AND (label CONTAINS %@ OR label CONTAINS %@)", "64.99", "64,99", "129.99", "129,99")).firstMatch
+        XCTAssertTrue(yearly.waitForExistence(timeout: 45), "The actual StoreKit first-year and renewal prices must both appear")
+        let monthly = app.webViews.staticTexts.matching(NSPredicate(format: "(label CONTAINS %@ OR label CONTAINS %@) AND (label CONTAINS %@ OR label CONTAINS %@)", "9.99", "9,99", "19.99", "19,99")).firstMatch
+        XCTAssertTrue(monthly.exists)
+        // Inspect prices only. This test must never confirm a paid subscription.
+        keepStudyScreenshot("Verified code with actual Apple prices", app: app)
+    }
+
     @MainActor func testPreviewKeyboardEverywhere() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
               URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {

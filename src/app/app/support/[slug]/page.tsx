@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 
 import { SupportArticleScreen } from "@/components/support-article-screen";
+import { AppleCodeForm } from "@/components/apple-code-form";
 import { getHelpArticle } from "@/lib/help-center";
 import { getTranslations } from "@/lib/i18n/server";
 import { isNativeUserAgent } from "@/lib/mobile/runtime";
@@ -31,6 +32,8 @@ export default async function SupportArticlePage({
       category={t(`help.category.${article.category}`)}
       title={article.title}
       content={content}
-    />
+    >
+      {native && slug === "redeem-code" && <AppleCodeForm />}
+    </SupportArticleScreen>
   );
 }

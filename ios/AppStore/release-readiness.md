@@ -3,6 +3,40 @@
 This section supersedes the older portal status below. **Not yet ready to
 submit:** current end-to-end purchase and physical-device checks remain open.
 
+## Discount codes — 23 September, local implementation
+
+- A read-only Stripe catalogue audit found 24 active unrestricted codes sharing
+  `memo50-first-cycle` (50%, once), plus older recurring/gift campaigns. No
+  customer records or payments were read or modified. The private inventory is
+  `review-sep23-stripe-code-terms.json`; it is not a client-side code allowlist.
+- Created `memo_code_half_month` and `memo_code_half_year` on the existing paid
+  monthly/yearly Apple subscriptions. Each copies the exact current introductory
+  price points in all 175 storefronts. Fresh read-back verifies every territory
+  and price point, including €/$9.99 and €/$64.99 in Slovenia/USA. Existing base
+  prices, three-day trials and introductory offers are unchanged.
+  `scripts/apple/half-off-offers.mjs` defaults to read-only planning/verification;
+  `--apply` only creates missing offers and refuses an existing mismatch.
+- The new authenticated `/api/mobile/promotions` checks the live code/coupon at
+  display and purchase time. Unsupported changed terms, caps, customer limits,
+  disabled/expired codes and active membership fail closed. Returning subscribers
+  need their own verified Apple transaction history in an allowed environment.
+  Signatures bind product, offer, user UUID and a fresh nonce using Apple's SDK;
+  the receipt verifier's account-token checks are unchanged.
+- Bridge v5 supplies actual StoreKit prices and uses Apple's signed promotional
+  purchase option. New subscribers use the existing intro instead. Settings →
+  Redeem a code has localized copy in all five languages and the same design
+  tokens as Settings; browsers retain their existing web help/checkout.
+- The native simulator build, TypeScript and lint pass. The full suite passes
+  **1,622 tests**, including cryptographic account/product/offer binding and
+  altered-code rejection. Headless light/dark and browser/native-UA checks pass
+  against the local server with real catalogue validation and **simulated**
+  StoreKit prices (`review-sep23-code-local-browser.json`). These do not establish
+  a completed Apple purchase. Actual StoreKit UI verification is still running.
+- Uploaded build 11 still has bridge v4. This work needs a new binary, Preview
+  verification and the authorized production release. Actual promotional
+  purchase/restore, code attribution in creator reporting, and recurring/gift
+  campaigns remain outside the completed evidence. Do not claim submission-ready.
+
 
 ## Remaining submission gates
 

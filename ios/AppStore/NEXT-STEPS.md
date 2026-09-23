@@ -36,7 +36,7 @@ The current evidence and unresolved gates are in
 
 ## Remaining release gates
 
-The whole-repository run now passes 1,612 tests with no failures or skips.
+The whole-repository run now passes 1,622 tests with no failures or skips.
 The only failure on the first full run was a stale offline-shell source assertion,
 corrected without changing the credential-free runtime behavior.
 
@@ -48,17 +48,22 @@ corrected without changing the credential-free runtime behavior.
 4. Obtain the owner's third-party Content Rights confirmation, then correct the
    current `DOES_NOT_USE_THIRD_PARTY_CONTENT` declaration. Imported documents and
    web pages make that current declaration inaccurate; do not infer licensing.
-5. Resolve matching discount codes without weakening account ownership checks.
-   Current Apple introductory offers work; equivalent code redemption is absent.
-   Do not conclude that the redemption-sheet limitation makes all in-app codes
-   impossible: Apple's signed promotional purchase option supports an
-   `appAccountToken` bound into the signature for existing/former subscribers.
-   New subscribers use introductory offers. A combined implementation must
-   validate the actual web code terms, display StoreKit prices, enforce offer
-   eligibility and redemption limits on the server, and test real purchases.
+5. Finish real Sandbox purchases for the new code flow. Bridge v5 and the
+   Settings → Redeem a code form now implement live validation of the audited
+   24 unrestricted 50%-once Stripe codes, with StoreKit prices and checkout.
+   New subscribers use introductory offers; former Apple subscribers receive
+   a server-signed promotional offer bound to their verified `appAccountToken`.
+   Active subscriptions cannot buy twice. Unsupported terms, expired/disabled
+   codes, customer restrictions and redemption caps fail closed.
+   Both promotional offers are saved and freshly verified in App Store Connect
+   across 175 storefronts. Slovenia/US first periods are €/$9.99 and €/$64.99.
+   Actual promotional purchase/restore and creator-code attribution remain
+   unverified/unimplemented respectively. Recurring and gift codes are not
+   supported by this first-period flow. Uploaded build 11 has bridge v4;
+   this feature needs a new binary and the matching web deployment.
    Sources: [promotional purchase option](https://developer.apple.com/documentation/storekit/product/purchaseoption/promotionaloffer(offerid:keyid:nonce:signature:timestamp:))
    and [promotional-offer eligibility](https://developer.apple.com/help/app-store-connect/manage-subscriptions/set-up-promotional-offers-for-auto-renewable-subscriptions).
-   This is a supported alternative to investigate, not implemented coverage.
+   The local build and route tests prove implementation, not App Store purchase completion.
 6. Verify final screenshots/metadata and the final production web deployment
    against the signed release, then TestFlight. Obtain merge/release authorization
    before changing production, and submit only after these gates pass.

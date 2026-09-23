@@ -151,7 +151,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                 // 4 adds keyboard layout frames. The page is deployed
                 // independently of the binary, so it has to ask before calling
                 // a command an installed older build would reject.
-                version: 4,
+                version: 5,
                 get keyboardFrame() { return window.__memoKeyboardFrame; },
                 request: (command, payload = {}) => window.webkit.messageHandlers.memoNative.postMessage({command, ...payload})
               }) });
@@ -575,6 +575,33 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                     await forgetPushToken()
                     replyHandler(["status": "disabled"], nil)
                 case "products": replyHandler(try await store.products(), nil)
+                case "codeProducts", "codePurchase":
+                    guard let code = body["code"] as? String else { throw Store.StoreError.unavailable }
+                    var request = ["code": code]
+                    if command == "codePurchase" {
+                        guard let product = body["productId"] as? String else { throw Store.StoreError.unavailable }
+                        request["productId"] = product
+                    }
+                    // Revalidate the code and membership at purchase time. The server
+                    // selects the offer and signs it with this user's appAccountToken.
+                    let offer = try await api(path: "/api/mobile/promotions", body: request)
+                    guard let userID = offer["userId"] as? String, let account = UUID(uuidString: userID),
+                          let mode = offer["mode"] as? String, ["introductory", "promotional"].contains(mode),
+                          let ids = offer["offers"] as? [String: String] else { throw Store.StoreError.unavailable }
+                    if command == "codeProducts" {
+                        let items = try await store.products(promotionalOffers: mode == "promotional" ? ids : nil)
+                        replyHandler(items.filter { item in (item["id"] as? String).map { ids[$0] != nil } ?? false }, nil)
+                    } else {
+                        guard let product = request["productId"], ids[product] != nil,
+                              let quote = body["quote"] as? String else { throw Store.StoreError.unavailable }
+                        var promotion: Store.Promotion?
+                        if mode == "promotional" {
+                            guard let signature = offer["signature"] as? [String: Any] else { throw Store.StoreError.unavailable }
+                            promotion = try Store.Promotion(signature)
+                            guard promotion?.offerID == ids[product] else { throw Store.StoreError.unavailable }
+                        }
+                        replyHandler(["status": try await store.purchase(id: product, account: account, quote: quote, promotion: promotion)], nil)
+                    }
                 case "pendingProduct": replyHandler(["productId": store.pendingProductID as Any? ?? NSNull()], nil)
                 case "purchase":
                     let account = try await api(path: "/api/mobile/account")

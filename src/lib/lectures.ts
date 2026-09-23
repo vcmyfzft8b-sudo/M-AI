@@ -992,7 +992,10 @@ export async function getLectureDetailForUser(params: {
         .from("chat_messages")
         .select("*")
         .eq("lecture_id", lectureRow.id)
-        .order("created_at", { ascending: true }),
+        .order("created_at", { ascending: true })
+        // A question/answer pair is inserted together and shares a timestamp.
+        // Text roles sort user before assistant in descending order.
+        .order("role", { ascending: false }),
     }),
     safeLectureDetailQuery<LectureStudySectionRow[]>({
       section: "studySections",

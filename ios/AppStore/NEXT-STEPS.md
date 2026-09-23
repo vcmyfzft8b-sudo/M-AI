@@ -14,8 +14,8 @@ The current evidence and unresolved gates are in
   The English testing checklist is saved. The unsubmitted App Review draft
   still contains build 9, version 1.0, four subscriptions and their group.
   Release is manual; final production-web/TestFlight checks remain required.
-- The latest verified deployment commit on `codex/ios-app-wrapper` is `dfc1dcfa`. Its READY
-  Preview is `https://memo-ic9e6bb8v-nace-valencics-projects.vercel.app`, using
+- The latest verified deployment commit on `codex/ios-app-wrapper` is `a3987046`. Its READY
+  Preview is `https://memo-ko8s6jrwl-nace-valencics-projects.vercel.app`, using
   shared staging. The branch's changes are not a production deployment.
 - Actual app coverage includes photo/PDF/Word/slides/web-article note generation,
   flashcards, quiz/practice, mindmap/export, memory palace, speed reader,
@@ -46,7 +46,9 @@ The current evidence and unresolved gates are in
 - The age-rating override now matches the published minimum age of 16 in
   Memo's terms. Apple confirms `ageRatingOverrideV2: SIXTEEN_PLUS`; its older
   aggregate rating field returns `SEVENTEEN_PLUS`. This corrects the former 4+
-  default; sensitive-content questionnaire verification remains a release check.
+  default. Synthetic AI-response checks also corrected treatment guidance,
+  mature themes and weapon references to infrequent educational content.
+  These checks do not prove every possible AI output or the owner's content rights.
 
 ## Remaining release gates
 

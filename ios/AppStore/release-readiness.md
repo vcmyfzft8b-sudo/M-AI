@@ -47,6 +47,27 @@ submit:** current end-to-end purchase and physical-device checks remain open.
 - This fixes the minimum-age mismatch, not every questionnaire answer. A final
   sensitive-content audit must consider the AI assistant and imported study
   material. The separate owner Content Rights confirmation remains pending.
+- Follow-up on the READY `a3987046` Preview used three synthetic library-chat
+  questions (first aid, non-graphic First World War history, and reproductive
+  biology), without persisting a conversation or using customer data. All three
+  completed normally. The first two produced treatment guidance and war/weapon
+  references, contradicting the existing `NONE` answers. Updated and independently
+  read back `medicalOrTreatmentInformation`, `matureOrSuggestiveThemes` and
+  `gunsOrOtherWeapons` as `INFREQUENT`, retaining the 16+ override. This is an
+  editorial classification of occasional educational content, not a statistical
+  claim about user traffic or exhaustive AI-safety validation.
+  Evidence: `review-sep23-content-audit.json` and
+  `review-sep23-content-rating-verified.json`. Apple's
+  [category definitions](https://developer.apple.com/help/app-store-connect/reference/app-information/age-ratings-values-and-definitions/)
+  explicitly include treatment guidance, war and weapon references; its
+  [AI guidance](https://developer.apple.com/news/?id=ks775ehf) requires considering
+  chatbot outputs. Neutral reproductive biology alone is not evidence of erotic
+  content. No extra content categories were guessed from that sample.
+- Capability audit: both chats are private AI conversations, not person-to-person
+  messaging; notes are owner-scoped and export through the system share sheet.
+  No in-app social feed or broad user-content distribution route was found.
+  Apple's messaging/social/UGC capability answers therefore remain false.
+  These observations do not establish the owner's third-party content rights.
 
 ## Discount codes — 23 September, local implementation
 
@@ -130,7 +151,7 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   or that the app can suppress them.
 - Obtain production merge/release authorization, verify the deployed web app
   with the signed Release binary, and complete TestFlight checks before review
-  submission. Build 11 is available for internal TestFlight testing; the unsubmitted
+   submission. Build 12 is available for internal TestFlight testing; the unsubmitted
   review draft still contains build 9. Neither is a production deployment of
   this branch or an App Review submission.
 

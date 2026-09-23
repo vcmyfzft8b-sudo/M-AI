@@ -45,12 +45,22 @@ final class PushNotifications: NSObject, UNUserNotificationCenterDelegate {
     }
     private var pendingNote: String?
 
+    /// The note a launching tap asked for, handed over once.
+    func takePendingNote() -> String? {
+        defer { pendingNote = nil }
+        return pendingNote
+    }
+
     private var deviceToken: String?
     private var waiting: [CheckedContinuation<String, Error>] = []
 
     override init() {
         super.init()
         UNUserNotificationCenter.current().delegate = self
+        #if DEBUG
+        // UI tests: behave as if this launch came from tapping a note's notification.
+        if let lecture = ProcessInfo.processInfo.environment["MEMO_QA_NOTIFICATION_LECTURE"] { pendingNote = lecture }
+        #endif
     }
 
     /// Provisional counts: it is still a delivered notification, just a quiet one.

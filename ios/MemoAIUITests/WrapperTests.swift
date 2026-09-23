@@ -2316,6 +2316,83 @@ final class WrapperTests: XCTestCase {
                       || app.webViews.staticTexts["Settings"].waitForExistence(timeout: 20), "Settings must render in English again")
     }
 
+    // Uses the existing isolated PDF account, normal Settings picker and real
+    // server refresh. No injected locale, fabricated session or native bridge.
+    @MainActor func testPreviewAllSettingsLanguagesPersist() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MEMO_QA_EMAIL"] == "ios-pdf-20260922@example.com",
+              let preview = env["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires the signed-in synthetic PDF account on staging")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        defer { app.terminate() }
+        passConsentGate(app)
+        dismissInitialOffer(app)
+        let settingsNames = ["Settings", "Nastavitve", "Postavke", "Podešavanja"]
+        func openSettings() {
+            // This unpaid fixture sees the normal offer again after cold launch.
+            let close = app.webViews.buttons.matching(NSPredicate(format: "label IN %@",
+                ["Close the subscription offer", "Zapri ponudbo naročnine", "Zatvori ponudu pretplate"])).firstMatch
+            if close.waitForExistence(timeout: 8) {
+                for _ in 0..<4 where close.exists {
+                    close.tap()
+                    RunLoop.current.run(until: Date().addingTimeInterval(2))
+                }
+            }
+            let link = app.webViews.links.matching(NSPredicate(
+                format: "label MATCHES %@", "(Settings|Nastavitve|Postavke|Podešavanja).*"
+            )).firstMatch
+            XCTAssertTrue(link.waitForExistence(timeout: 30)); link.tap()
+            XCTAssertTrue(app.webViews.staticTexts.matching(NSPredicate(
+                format: "label IN %@", settingsNames)).firstMatch.waitForExistence(timeout: 15))
+        }
+        func languageRow() -> XCUIElement {
+            let row = app.webViews.buttons.matching(NSPredicate(
+                format: "label CONTAINS %@ OR label CONTAINS %@", "Language", "Jezik"
+            )).firstMatch
+            XCTAssertTrue(row.waitForExistence(timeout: 15))
+            for _ in 0..<7 where !row.isHittable { app.webViews.firstMatch.swipeUp() }
+            XCTAssertTrue(row.isHittable)
+            return row
+        }
+        openSettings()
+        for (locale, title, redeem, field) in [
+            ("Slovenščina", "Nastavitve", "Unovči kodo", "Koda za popust"),
+            ("Hrvatski", "Postavke", "Iskoristi kod", "Kod za popust"),
+            ("Bosanski", "Postavke", "Iskoristi kod", "Kod za popust"),
+            ("Srpski", "Podešavanja", "Iskoristi kod", "Kod za popust"),
+            ("English", "Settings", "Redeem a code", "Discount code")
+        ] {
+            languageRow().tap()
+            let option = app.webViews.descendants(matching: .any).matching(NSPredicate(
+                format: "label == %@", locale))
+            XCTAssertTrue(option.firstMatch.waitForExistence(timeout: 10))
+            // Last exact match is the option, not the existing row subtitle.
+            option.allElementsBoundByIndex.last!.tap()
+            let row = languageRow()
+            XCTAssertTrue(row.waitForExistence(timeout: 15))
+            let applied = NSPredicate { _, _ in row.label.contains(locale) }
+            XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: applied, object: row)], timeout: 20), .completed)
+            app.terminate(); app.launch()
+            openSettings()
+            XCTAssertTrue(app.webViews.staticTexts[title].exists)
+            XCTAssertTrue(languageRow().label.contains(locale), "Language must survive relaunch: \(locale)")
+            keepStudyScreenshot("Settings language persists — \(locale)", app: app)
+            let redeemLink = app.webViews.links.matching(NSPredicate(format: "label CONTAINS %@", redeem)).firstMatch
+            XCTAssertTrue(redeemLink.exists)
+            for _ in 0..<7 where !redeemLink.isHittable { app.webViews.firstMatch.swipeUp() }
+            redeemLink.tap()
+            XCTAssertTrue(app.webViews.textFields[field].waitForExistence(timeout: 20))
+            keepStudyScreenshot("Apple code form translated — \(locale)", app: app)
+            let back = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Back", "Nazaj", "Natrag", "Nazad"])).firstMatch
+            XCTAssertTrue(back.waitForExistence(timeout: 10)); back.tap()
+        }
+    }
+
     // Opens each remaining settings row (sheets, native prompts and in-app
     // pages) and gets back to Settings, relaunching if the way back is lost.
     @MainActor func testAppleDiscountCodePrices() throws {

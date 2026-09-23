@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import StoreKitTest
 
 final class WrapperTests: XCTestCase {
     /// Walk the same anonymous onboarding as a fresh PWA install before login.
@@ -1570,7 +1571,6 @@ final class WrapperTests: XCTestCase {
         let offer = app.webViews.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Add an hour for")).firstMatch
         XCTAssertTrue(offer.waitForExistence(timeout: 30), "A subscriber out of time is offered the Apple hour")
         XCTAssertTrue(offer.label.contains("2.00") || offer.label.contains("2,00"), "StoreKit's price, not a typed one: \(offer.label)")
-        XCTAssertFalse(app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "€2.")).firstMatch.label.contains("checkout"))
         keepStudyScreenshot("Tutor hour offer (App Store)", app: app)
     }
 

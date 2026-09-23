@@ -56,7 +56,17 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
   `review-sep23-podcast-seek-local-native-handoff-from-start.log`, and
   `review-sep23-podcast-seek-local-pending-{pause,close}.json`.
   TypeScript, focused lint and 116 podcast/mobile regression tests pass.
+  A Preview persistence check exposed overlapping responses. The test now waits
+  for the initial reset acknowledgement before the seek. A separate deterministic
+  regression reproduced an actual save-order race: a slow older save overwrote
+  the newer position. Per-episode save ordering fixes it; pending positions are
+  buffered immediately and older acknowledgements cannot clear newer entries.
+  The two new regression tests, TypeScript, lint and 118 focused tests pass;
+  the real local browser also persists and resumes the sought position.
   Stronger physical cross-turn seek coverage is prepared but not yet verified.
+  The first physical attempt was stopped because its Play-only starting-state
+  assumption could not handle an already autoplaying cached episode; the test
+  now explicitly pauses before checking playback.
 - The keyboard coverage audit found onboarding's practice-answer footer still
   pinned behind the keyboard. It now uses the same shared inset on both PWA
   and wrapper, with a single scrollable step and a footer that follows each

@@ -577,12 +577,14 @@ final class WrapperTests: XCTestCase {
         XCTAssertTrue(confirm.exists)
         confirm.tap()
         let play = app.webViews.buttons["Play"].firstMatch
-        XCTAssertTrue(play.waitForExistence(timeout: 180), "The podcast script must finish")
-        play.tap()
         let pause = app.webViews.buttons["Pause"].firstMatch
-        XCTAssertTrue(pause.waitForExistence(timeout: 120))
         let position = app.webViews.sliders["Position in the episode"].firstMatch
-        XCTAssertTrue(position.exists)
+        XCTAssertTrue(position.waitForExistence(timeout: 180), "The podcast script must finish")
+        // Reopening a cached episode can autoplay before XCTest sees Play.
+        if pause.exists { pause.tap() }
+        XCTAssertTrue(play.waitForExistence(timeout: 10))
+        play.tap()
+        XCTAssertTrue(pause.waitForExistence(timeout: 120))
         let initial = String(describing: position.value)
         RunLoop.current.run(until: Date().addingTimeInterval(8))
         XCTAssertNotEqual(String(describing: position.value), initial, "Podcast audio time must advance")

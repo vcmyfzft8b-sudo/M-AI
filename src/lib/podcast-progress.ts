@@ -11,7 +11,7 @@
  *   - pause and leaving the player, which is the real save;
  *   - the tab going away, which cannot await anything and so uses `sendBeacon`.
  *
- * The local buffer is not a second store. It holds the writes that failed — a flaky connection,
+ * The local buffer is not a second store. It holds pending and failed writes — a flaky connection,
  * a phone that locked mid-request — and replays them on the next save and on the next load. A
  * position that survived to `localStorage` but never reached the server is still better than
  * the one the server has, and is applied over it on the way in.
@@ -49,6 +49,10 @@ export type PodcastProgress = {
 type BufferedProgress = PodcastProgress & { lectureId: string };
 
 type Buffer = Record<string, BufferedProgress>;
+
+// Keep ordinary writes in gesture order: a slow Pause save must not land after
+// a newer seek. Different episodes remain independent.
+const pendingSaves = new Map<string, Promise<void>>();
 
 function readBuffer(): Buffer {
   if (typeof window === "undefined") {
@@ -90,8 +94,8 @@ export function hasFinished(positionMs: number, durationMs: number | null) {
 /**
  * The server's progress for an episode, corrected by anything this device knows and it does not.
  *
- * A buffered entry is only newer information if it actually failed to send, which is the only
- * reason one is kept — so it wins outright rather than being merged field by field.
+ * A buffered entry has not been acknowledged yet, so it wins outright rather
+ * than being merged field by field.
  */
 export function mergeStoredProgress<T extends { id: string } & Partial<PodcastProgress>>(
   episodes: T[],
@@ -118,10 +122,14 @@ export function mergeStoredProgress<T extends { id: string } & Partial<PodcastPr
   });
 }
 
-function forget(episodeId: string) {
+function forget(episodeId: string, acknowledged: PodcastProgress) {
   const buffer = readBuffer();
+  const pending = buffer[episodeId];
 
-  if (!(episodeId in buffer)) {
+  if (!pending || pending.updatedAt !== acknowledged.updatedAt ||
+      pending.positionMs !== acknowledged.positionMs ||
+      pending.durationMs !== acknowledged.durationMs ||
+      pending.finished !== acknowledged.finished) {
     return;
   }
 
@@ -158,29 +166,38 @@ function buildBody(params: SaveParams) {
  */
 export async function savePodcastProgress(params: SaveParams) {
   const body = buildBody(params);
+  const progress = {
+    positionMs: Math.max(0, Math.round(params.positionMs)),
+    durationMs: params.durationMs,
+    finished: hasFinished(params.positionMs, params.durationMs),
+    updatedAt: Date.now(),
+  };
+  // Buffer before waiting: closing the screen must not lose a queued save.
+  remember(params.lectureId, params.episodeId, progress);
+  const previous = pendingSaves.get(params.episodeId) ?? Promise.resolve();
+  const work = previous.then(async () => {
+    try {
+      const response = await fetch(`/api/lectures/${params.lectureId}/podcast/progress`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+        keepalive: true,
+      });
 
-  try {
-    const response = await fetch(`/api/lectures/${params.lectureId}/podcast/progress`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body,
-      keepalive: true,
-    });
+      const payload = (await response.json().catch(() => null)) as { saved?: boolean } | null;
 
-    const payload = (await response.json().catch(() => null)) as { saved?: boolean } | null;
-
-    if (!response.ok || payload?.saved !== true) {
-      throw new Error("progress not saved");
+      if (response.ok && payload?.saved === true) {
+        forget(params.episodeId, progress);
+      }
+    } catch {
+      // The newest position is already buffered. Never replace it with the
+      // older position from a failed request.
     }
-
-    forget(params.episodeId);
-  } catch {
-    remember(params.lectureId, params.episodeId, {
-      positionMs: Math.max(0, Math.round(params.positionMs)),
-      durationMs: params.durationMs,
-      finished: hasFinished(params.positionMs, params.durationMs),
-      updatedAt: Date.now(),
-    });
+  });
+  pendingSaves.set(params.episodeId, work);
+  await work;
+  if (pendingSaves.get(params.episodeId) === work) {
+    pendingSaves.delete(params.episodeId);
   }
 }
 

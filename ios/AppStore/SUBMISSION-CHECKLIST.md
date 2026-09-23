@@ -41,7 +41,8 @@ Use synthetic accounts and the dedicated Sandbox tester. Record the product,
 storefront, transaction result and independently verified server entitlement.
 Do not fabricate entitlement or use real paid checkout for these tests.
 
-- [ ] Sign the new Sandbox tester into the test device and confirm its storefront.
+- [x] Sign the new Sandbox tester into the test device and confirm its storefront.
+  *23 Sep: signed in by the owner on the iPhone 16; purchases are Slovenia/EUR.*
 - [ ] Cover monthly and yearly purchases, including the separate three-day trial
   products. Check eligible/ineligible trial users, displayed renewal terms and
   trial-to-paid entitlement updates.
@@ -53,10 +54,21 @@ Do not fabricate entitlement or use real paid checkout for these tests.
   discount or combine a free trial and discount incorrectly. Check its daily limit.
 - [ ] Exercise accelerated renewal, auto-renew cancellation, access until expiry,
   expiry, refund and revocation. Confirm server notifications update access.
+  *23 Sep, physical iPhone, fresh account `ios-text`: yearly trial purchased
+  (Apple offerType 1, ledger = Apple), renewed to the first paid year
+  (RENEWAL, reached the ledger when the app reopened), Restore + relaunch kept
+  access, cancelled through the app's Manage Apple subscriptions
+  (autoRenewStatus 0, still active until 10:41 UTC). Expiry, refund and
+  revocation remain. Staging notifications go to production's URL, so on
+  staging the app, not a notification, delivers renewals.*
 - [ ] Exercise cancelled, interrupted/offline and pending purchases; retry or
   restore after delivery failure and ensure duplicate events remain harmless.
 - [ ] Verify purchases stay bound to the correct Memo account, restore works on
   that account, and an existing paid user cannot accidentally buy twice.
+  *Binding verified on the iPhone: Restore on `ios-audio` granted nothing and
+  now says the purchase belongs to another Memo account (`bb2cad0a`); it used
+  to say "try Restore again" forever. A second account's paywall correctly
+  offered the paid plan, not the used trial. Buy-twice still to check.*
 - [ ] Repeat purchase/restore and Manage Apple subscriptions in the final
   TestFlight build against the final production configuration.
 

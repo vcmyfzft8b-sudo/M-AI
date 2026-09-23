@@ -44,6 +44,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private let message = UILabel()
     private let retry = UIButton(type: .system)
     private var timeout: Task<Void, Never>?
+    private var loadTimeoutPaused = false
     private var downloadFiles: [ObjectIdentifier: URL] = [:]
     private var checkingAppleCredential = false
     private var memoLocale: String?
@@ -222,6 +223,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             Task { await self?.savePushToken(token) }
         }
         NotificationCenter.default.addObserver(self, selector: #selector(resume), name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(pauseLoadTimeout), name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(checkAppleCredential), name: ASAuthorizationAppleIDProvider.credentialRevokedNotification, object: nil)
         Task {
             // The PWA cookie persists across launches in WKWebView. Do not seed
@@ -296,8 +298,38 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     @objc private func reload() { webView.load(URLRequest(url: AppConfiguration.startURL)) }
     @objc private func resume() {
+        /*
+         * A phone call, the lock button or the app switcher suspends the app,
+         * and iOS cancels its loads while it is away. Coming back to the
+         * "could not connect" screen that caused is not something to ask the
+         * reader to fix: try again unprompted. A load that was still running
+         * gets its timeout back, now that it can make progress again.
+         */
+        if UIApplication.shared.applicationState == .active {
+            if !overlay.isHidden && !retry.isHidden { reload() }
+            else if loadTimeoutPaused && webView.isLoading { startLoadTimeout() }
+            loadTimeoutPaused = false
+        }
         Task { try? await store.reconcile() }
         checkAppleCredential()
+    }
+
+    /// Time in the background is not time the page failed to load in.
+    @objc private func pauseLoadTimeout() {
+        guard let timeout, webView.isLoading else { return }
+        timeout.cancel()
+        self.timeout = nil
+        loadTimeoutPaused = true
+    }
+
+    private func startLoadTimeout() {
+        timeout?.cancel()
+        timeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(30))
+            guard !Task.isCancelled else { return }
+            self?.webView.stopLoading()
+            self?.showFailure()
+        }
     }
 
     @objc private func checkAppleCredential() {
@@ -348,13 +380,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             message.text = nil
             retry.isHidden = true
         }
-        timeout?.cancel()
-        timeout = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(30))
-            guard !Task.isCancelled else { return }
-            self?.webView.stopLoading()
-            self?.showFailure()
-        }
+        startLoadTimeout()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

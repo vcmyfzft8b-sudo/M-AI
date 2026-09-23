@@ -1213,6 +1213,31 @@ final class WrapperTests: XCTestCase {
             "The reader must learn which account owns the purchase, not be told to retry")
     }
 
+    // A call or the Home button during launch suspends the app, and iOS
+    // cancels its loads. Coming back must load Memo, not a connection error.
+    @MainActor func testPreviewRecoversWhenLeftDuringLaunch() throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires a staging Preview")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        for round in 1...2 {
+            app.terminate()
+            app.launch()
+            RunLoop.current.run(until: Date().addingTimeInterval(round == 1 ? 0.5 : 2))
+            XCUIDevice.shared.press(.home)
+            RunLoop.current.run(until: Date().addingTimeInterval(40))
+            app.activate()
+            let loaded = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label IN %@",
+                ["Settings", "New note", "Continue with email", "Get started", "Close the subscription offer"])).firstMatch
+            let failure = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "could not connect")).firstMatch
+            let ok = loaded.waitForExistence(timeout: 30)
+            keepStudyScreenshot("Round \(round): back after leaving during launch", app: app)
+            XCTAssertTrue(ok && !failure.exists, "Round \(round): Memo must load after returning, not show a connection error")
+        }
+    }
+
     // Real storefront prices must reach the wheel and both discounted plans.
     // This consumes only the synthetic account's daily spin, never a purchase.
     @MainActor func testPreviewWheelShowsRealHalfOffPrices() throws {

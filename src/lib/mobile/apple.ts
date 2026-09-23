@@ -47,6 +47,15 @@ export function appleBillingConfigured() {
   try { appleVerifier(); appleAPI(); return true; } catch { return false; }
 }
 
+/**
+ * The purchase is genuine but was bought for a different Memo account (Apple's
+ * appAccountToken names another user). Retrying never helps; the buyer has to
+ * sign in to the account that owns it.
+ */
+export class AppleAccountMismatch extends Error {
+  constructor() { super("Apple purchase belongs to another account"); this.name = "AppleAccountMismatch"; }
+}
+
 /** A notification Apple can resend for three days without it ever becoming acceptable. */
 export class AppleNotificationRejected extends Error {
   constructor(message: string, options?: { cause?: unknown }) { super(message, options); this.name = "AppleNotificationRejected"; }
@@ -112,6 +121,9 @@ export async function saveAppleTransaction(signedTransaction: string, userId?: s
   let verified = checked.verified;
   const verifier = appleVerifier(checked.environment);
   const expected = { bundleId: process.env.APPLE_BUNDLE_ID || "eu.memoai.memo", environment: checked.environment, userId };
+  if (userId && verified.appAccountToken && verified.appAccountToken.toLowerCase() !== userId.toLowerCase()) {
+    throw new AppleAccountMismatch();
+  }
   // Validate ownership before contacting Apple or touching the database.
   entitlementFromVerifiedTransaction(verified, expected);
   if (refresh) {
@@ -136,6 +148,7 @@ export async function saveAppleTransaction(signedTransaction: string, userId?: s
   if (insertError) throw new Error("Apple entitlement insert failed", { cause: insertError });
   const owner = await table().select("user_id,environment").eq("original_transaction_id", row.original_transaction_id).eq("product_id", row.product_id).single();
   const existing = owner.data as { user_id: string; environment: string } | null;
+  if (!owner.error && existing && existing.user_id !== row.user_id) throw new AppleAccountMismatch();
   if (owner.error || existing?.user_id !== row.user_id || existing.environment !== row.environment) throw new Error("Apple transaction ownership mismatch");
   // SQL conditional update prevents a delayed renewal/refund or concurrent restore
   // from overwriting a newer purchase, or a newer signature for the same purchase.

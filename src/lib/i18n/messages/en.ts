@@ -2091,6 +2091,7 @@ export const en: Messages = {
   // Native iOS app and Apple subscription controls.
   "native.unavailable": "Subscriptions are temporarily unavailable. Please try again.",
   "native.verifyFailed": "Your purchase could not be confirmed yet. Use Restore purchases to try again; you will not be charged again.",
+  "native.otherAccount": "This Apple Account's subscription belongs to a different Memo account. Sign in to that account to use it, or manage it in your Apple subscriptions.",
   "native.signInFailed": "Sign-in could not be completed. Please try again.",
   "auth.mobileCallback.title": "Signing you in…",
   "auth.mobileCallback.body": "You can close this window.",

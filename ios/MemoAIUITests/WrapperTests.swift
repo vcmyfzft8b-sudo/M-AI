@@ -413,7 +413,8 @@ final class WrapperTests: XCTestCase {
         snap("11 Home after deletion")
     }
 
-    @MainActor private func openPreviewStudyNote(title: String = "Plant Life Cycle") throws -> XCUIApplication {
+    // Staging's retained note varies by fixture account; MEMO_QA_NOTE_TITLE picks it.
+    @MainActor private func openPreviewStudyNote(title: String = ProcessInfo.processInfo.environment["MEMO_QA_NOTE_TITLE"] ?? "Plant Life Cycle") throws -> XCUIApplication {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
               URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
             throw XCTSkip("Requires a retained synthetic study note in staging")
@@ -1142,9 +1143,14 @@ final class WrapperTests: XCTestCase {
         app.launch()
         func openSettings() {
             let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+            let active = app.webViews.staticTexts["Apple subscription active"].firstMatch
             XCTAssertTrue(settings.waitForExistence(timeout: 30))
-            settings.tap()
-            XCTAssertTrue(app.webViews.staticTexts["Apple subscription active"].firstMatch.waitForExistence(timeout: 20))
+            // A tap before the page hydrates is dropped; try again rather than fail.
+            for _ in 0..<3 where !active.exists {
+                if settings.exists { settings.tap() }
+                _ = active.waitForExistence(timeout: 12)
+            }
+            XCTAssertTrue(active.exists)
         }
         openSettings()
         let restore = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Restore purchases")).firstMatch
@@ -1154,8 +1160,10 @@ final class WrapperTests: XCTestCase {
         keepStudyScreenshot("Purchased Apple subscription before restore", app: app)
         restore.tap()
         RunLoop.current.run(until: Date().addingTimeInterval(3))
+        // On a device Apple's sync asks the tester for the Apple Account
+        // password, so leave time for a person to type it.
         let ready = NSPredicate { _, _ in restore.exists && restore.isEnabled }
-        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: restore)], timeout: 45), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: restore)], timeout: 180), .completed)
         XCTAssertFalse(app.webViews.staticTexts.matching(NSPredicate(
             format: "label CONTAINS %@", "Your purchase could not be confirmed yet")).firstMatch.exists)
         XCTAssertTrue(app.webViews.staticTexts["Apple subscription active"].firstMatch.exists)
@@ -1164,6 +1172,39 @@ final class WrapperTests: XCTestCase {
         app.launch()
         openSettings()
         keepStudyScreenshot("Purchased Apple subscription after relaunch", app: app)
+    }
+
+    // A second Memo account on the same Apple Account must not inherit the
+    // first account's subscription through Restore. Run only after a verified
+    // purchase belongs to a different synthetic account.
+    @MainActor func testPreviewRestoreKeepsPurchaseWithItsAccount() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MEMO_QA_COMPLETE_CHECKOUT"] == "1",
+              let preview = env["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires a purchase owned by another synthetic account")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        dismissInitialOffer(app)
+        let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+        let restore = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Restore purchases")).firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 30))
+        for _ in 0..<3 where !restore.exists {
+            if settings.exists { settings.tap() }
+            _ = restore.waitForExistence(timeout: 12)
+        }
+        let active = app.webViews.staticTexts["Apple subscription active"].firstMatch
+        XCTAssertFalse(active.exists, "This account has no purchase of its own")
+        for _ in 0..<8 where !restore.isHittable { app.webViews.firstMatch.swipeUp() }
+        restore.tap()
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        let ready = NSPredicate { _, _ in restore.exists && restore.isEnabled }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: restore)], timeout: 180), .completed)
+        keepStudyScreenshot("Restore on another Memo account", app: app)
+        XCTAssertFalse(active.exists, "Restore must not move another account's subscription")
     }
 
     // Real storefront prices must reach the wheel and both discounted plans.
@@ -1732,8 +1773,10 @@ final class WrapperTests: XCTestCase {
         XCTAssertTrue(newNote.waitForExistence(timeout: 30))
         snap("R1 Home")
         newNote.tap()
-        let cancel = app.webViews.buttons.matching(NSPredicate(format: "label == %@", "Cancel")).firstMatch
-        if cancel.waitForExistence(timeout: 10) {
+        // The sheet closes with its ✕ ("Close"); "Cancel" was the old label.
+        let cancel = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Cancel", "Close"])).firstMatch
+        let sheet = app.webViews.buttons.matching(contains("Record audio")).firstMatch
+        if sheet.waitForExistence(timeout: 10) && cancel.exists {
             snap("R2 New note sheet")
             cancel.tap()
         } else {
@@ -2402,6 +2445,60 @@ final class WrapperTests: XCTestCase {
         }
     }
 
+    // A reviewer may force-quit seconds after changing a setting. Each round
+    // switches language, kills the app about two seconds later and checks the
+    // relaunch is still signed in and in the chosen language.
+    @MainActor func testPreviewRelaunchRightAfterLanguageChange() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MEMO_QA_EMAIL"] == "ios-pdf-20260922@example.com",
+              let preview = env["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires the signed-in synthetic PDF account on staging")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        var problems: [String] = []
+        func settingsLink() -> XCUIElement {
+            app.webViews.links.matching(NSPredicate(
+                format: "label MATCHES %@", "(Settings|Nastavitve|Postavke|Podešavanja).*")).firstMatch
+        }
+        func reachSettings() -> Bool {
+            let close = app.webViews.buttons.matching(NSPredicate(format: "label IN %@",
+                ["Close the subscription offer", "Zapri ponudbo naročnine", "Zatvori ponudu pretplate"])).firstMatch
+            if close.waitForExistence(timeout: 10) { close.tap() }
+            guard settingsLink().waitForExistence(timeout: 30) else { return false }
+            settingsLink().tap()
+            return app.webViews.staticTexts.matching(NSPredicate(format: "label IN %@",
+                ["Settings", "Nastavitve", "Postavke", "Podešavanja"])).firstMatch.waitForExistence(timeout: 15)
+        }
+        app.launch()
+        passConsentGate(app)
+        guard reachSettings() else { return XCTFail("Settings must open at the start") }
+        for (round, language) in ["Slovenščina", "English", "Srpski", "English", "Hrvatski", "English", "Bosanski", "English", "Srpski", "English"].enumerated() {
+            let row = app.webViews.buttons.matching(NSPredicate(
+                format: "label CONTAINS %@ OR label CONTAINS %@", "Language", "Jezik")).firstMatch
+            XCTAssertTrue(row.waitForExistence(timeout: 15))
+            for _ in 0..<7 where !row.isHittable { app.webViews.firstMatch.swipeUp() }
+            row.tap()
+            let option = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", language))
+            XCTAssertTrue(option.firstMatch.waitForExistence(timeout: 10))
+            option.allElementsBoundByIndex.last!.tap()
+            RunLoop.current.run(until: Date().addingTimeInterval(2))
+            app.terminate()
+            app.launch()
+            let title = ["English": "Settings", "Slovenščina": "Nastavitve", "Hrvatski": "Postavke", "Bosanski": "Postavke", "Srpski": "Podešavanja"][language]!
+            if !reachSettings() {
+                keepStudyScreenshot("Round \(round + 1): relaunch after choosing \(language)", app: app)
+                problems.append("round \(round + 1) (\(language)): relaunch did not reach Settings")
+                app.terminate(); app.launch()
+                guard reachSettings() else { problems.append("second relaunch also failed"); break }
+            } else if !app.webViews.staticTexts[title].exists {
+                problems.append("round \(round + 1): language is not \(language) after relaunch")
+            }
+        }
+        XCTAssertTrue(problems.isEmpty, "Relaunch problems:\n" + problems.joined(separator: "\n"))
+    }
+
     // Opens each remaining settings row (sheets, native prompts and in-app
     // pages) and gets back to Settings, relaunching if the way back is lost.
     @MainActor func testAppleDiscountCodePrices() throws {
@@ -2665,8 +2762,12 @@ final class WrapperTests: XCTestCase {
         }
         XCTAssertTrue(redeem.exists && redeem.isHittable)
         redeem.tap()
-        let appleHelp = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Codes issued for website purchases cannot be entered")).firstMatch
+        // The redeem article is now the Apple code form itself.
+        let appleHelp = app.webViews.textFields["Discount code"].firstMatch
         XCTAssertTrue(appleHelp.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "cancel it in your Apple")).firstMatch.exists
+            || app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Apple")).firstMatch.exists,
+            "The code form must describe Apple billing")
         XCTAssertFalse(app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Stripe Checkout")).firstMatch.exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "Apple billing help"

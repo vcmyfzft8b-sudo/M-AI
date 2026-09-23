@@ -2126,6 +2126,7 @@ export const sl = {
   // Native iOS app and Apple subscription controls.
   "native.unavailable": "Naročnine trenutno niso na voljo. Poskusi znova.",
   "native.verifyFailed": "Nakupa še ni bilo mogoče potrditi. Poskusi z možnostjo Obnovi nakupe; ponovno plačilo ni potrebno.",
+  "native.otherAccount": "Naročnina tega Apple računa pripada drugemu Memo računu. Za uporabo se prijavi v tisti račun ali jo upravljaj med naročninami Apple.",
   "native.signInFailed": "Prijave ni bilo mogoče dokončati. Poskusi znova.",
   "auth.mobileCallback.title": "Prijavljam te…",
   "auth.mobileCallback.body": "To okno lahko zapreš.",

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { saveAppleTransaction } from "@/lib/mobile/apple";
+import { AppleAccountMismatch, saveAppleTransaction } from "@/lib/mobile/apple";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
@@ -19,7 +19,11 @@ export async function POST(request: Request) {
   try {
     await saveAppleTransaction(body.data.signedTransaction, user.id, true);
     return applyCookies(NextResponse.json({ verified: true }, { headers: { "Cache-Control": "no-store" } }));
-  } catch {
+  } catch (error) {
+    // 409 tells the app that retrying cannot help: another Memo account owns it.
+    if (error instanceof AppleAccountMismatch) {
+      return applyCookies(NextResponse.json({ error: await tr("native.otherAccount") }, { status: 409 }));
+    }
     return applyCookies(NextResponse.json({ error: await tr("native.verifyFailed") }, { status: 503 }));
   }
 }

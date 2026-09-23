@@ -2104,6 +2104,7 @@ export const bs: Messages = {
   // Native iOS app and Apple subscription controls.
   "native.unavailable": "Pretplate trenutno nisu dostupne. Pokušaj ponovo.",
   "native.verifyFailed": "Kupovina još nije potvrđena. Pokušaj putem opcije Obnovi kupovine; nećeš ponovo platiti.",
+  "native.otherAccount": "Pretplata ovog Apple računa pripada drugom Memo računu. Prijavi se na taj račun da je koristiš ili njome upravljaj u Apple pretplatama.",
   "native.signInFailed": "Prijava nije mogla biti dovršena. Pokušaj ponovo.",
   "auth.mobileCallback.title": "Prijavljujem te…",
   "auth.mobileCallback.body": "Ovaj prozor možeš zatvoriti.",

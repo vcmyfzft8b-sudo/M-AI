@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useT } from "@/components/i18n-provider";
 import { AppleBillingTerms } from "@/components/apple-billing-terms";
 import { nativeRequest } from "@/lib/mobile/client";
+import { nativeBillingFailureKey } from "@/lib/mobile/billing-notice";
 import { halfOffProducts, type NativeProduct } from "@/lib/mobile/products";
 import { APPLE_PRODUCTS } from "@/lib/mobile/runtime";
 
@@ -50,7 +51,7 @@ export function AppleCodeForm() {
     if (busy) return;
     setBusy(true); setNotice("");
     try { await nativeRequest("restore"); window.location.assign("/app"); }
-    catch { setNotice(t("native.verifyFailed")); }
+    catch (error) { setNotice(t(nativeBillingFailureKey(error))); }
     finally { setBusy(false); }
   }
 

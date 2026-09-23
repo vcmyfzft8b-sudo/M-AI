@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useT } from "@/components/i18n-provider";
 import { nativeRequest } from "@/lib/mobile/client";
+import { nativeBillingFailureKey } from "@/lib/mobile/billing-notice";
 import { Emoji, Msym } from "@/components/msym";
 
 export function NativeAccountActions({ showManage = true, onWithdraw }: { showManage?: boolean; onWithdraw: () => void }) {
@@ -16,7 +17,7 @@ export function NativeAccountActions({ showManage = true, onWithdraw }: { showMa
     try {
       await nativeRequest(command);
       if (command === "restore") window.location.reload();
-    } catch { setNotice(t("native.verifyFailed")); }
+    } catch (error) { setNotice(t(nativeBillingFailureKey(error))); }
     finally { setBusy(false); }
   }
   const actions = [

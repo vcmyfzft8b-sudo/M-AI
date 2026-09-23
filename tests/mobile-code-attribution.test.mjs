@@ -71,3 +71,20 @@ test("Apple code sales reach the creator who owns the code", () => {
   const byCreator = creatorRevenue([{ id: "david", promo_codes: ["david50"] }], stats);
   assert.equal(byCreator.get("david").revenue, 7499);
 });
+
+test("a purchase owned by another Memo account says so instead of asking for a retry", async () => {
+  const { nativeBillingFailureKey } = await import("../src/lib/mobile/billing-notice.ts");
+  // The native bridge wraps the server's status in its error text.
+  assert.equal(nativeBillingFailureKey(new Error("That did not work. [server 409: This Apple Account's subscription belongs to a different Memo account.]")), "native.otherAccount");
+  assert.equal(nativeBillingFailureKey(new Error("That did not work. [server 503: Your purchase could not be confirmed yet.]")), "native.verifyFailed");
+  assert.equal(nativeBillingFailureKey(new Error("That did not work.")), "native.verifyFailed");
+  assert.equal(nativeBillingFailureKey("server 4090"), "native.verifyFailed");
+  assert.equal(nativeBillingFailureKey(undefined), "native.verifyFailed");
+});
+
+test("the transactions route answers 409 only for another account's purchase", () => {
+  const route = readFileSync(new URL("../src/app/api/mobile/transactions/route.ts", import.meta.url), "utf8");
+  assert.match(route, /error instanceof AppleAccountMismatch[\s\S]{0,200}status: 409/);
+  const apple = readFileSync(new URL("../src/lib/mobile/apple.ts", import.meta.url), "utf8");
+  assert.match(apple, /appAccountToken\.toLowerCase\(\) !== userId\.toLowerCase\(\)\) \{\s*throw new AppleAccountMismatch/);
+});

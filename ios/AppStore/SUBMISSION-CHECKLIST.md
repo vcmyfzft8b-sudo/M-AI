@@ -120,6 +120,13 @@ Do not fabricate entitlement or use real paid checkout for these tests.
   → trial/paywall/wheel/code → restore/manage subscription → deletion.
 - [ ] Recheck applicable photo/PDF/Word/slides/text/link, flashcard, quiz, practice,
   mindmap/export, memory-palace and reader flows on the final release.
+- [ ] Keyboard motion (owner, 23 Sep: must move out of the way as smoothly as
+  native iOS). *Found: the chat bar slid under the keyboard for the first
+  frames (recording, frame by frame). Fixed in `cd6b2236`: the wrapper hands
+  over UIKit's keyboard spring (mass 1, stiffness 555.03, damping 47.12,
+  0.383 s) and the page draws each frame where the keys will be. Verified on
+  the simulator for the note chat, library chat and rename sheet, opening and
+  closing. Needs build 14 on the iPhone and the owner's own feel check.*
 - [ ] Check all keyboard entry points and sheets, portrait rotation lock, loading
   screen, safe areas, light/dark themes, larger text and supported iPad layouts.
 - [x] Verify regional first-run language for English, Slovenian, Croatian, Bosnian
@@ -148,7 +155,14 @@ configuration lacked `APPLE_PUSH_*`, so live delivery remains unverified.
   BadDeviceToken, not InvalidProviderToken); the four `APPLE_PUSH_*` values are
   set on this branch's Preview. Build 12 carries `aps-environment=production`.
   Production values and live delivery remain below.
-- [ ] Verify notifications end to end. If yes, securely configure APNs
+- [ ] Verify notifications end to end.
+  *23 Sep, physical iPhone, staging: device token registered (sandbox), a
+  finished note queued its push, and three separate notes delivered "Your
+  notes are ready — <title> is ready to study" to the iPhone (screenshots in
+  `review-sep23-device-push-*`). Previews do not run Vercel crons, so the
+  per-minute sender was triggered by hand there; production runs it. Still
+  open: a human tap on the notification opening the note (UI-test taps on
+  Notification Center only dismissed it), and production APNs delivery.* If yes, securely configure APNs
   for the intended environments and verify permission allow/deny, token
   registration, background/terminated delivery, correct-note navigation on tap,
   and sign-out/deletion cleanup. If deferred, keep the feature disabled and remove

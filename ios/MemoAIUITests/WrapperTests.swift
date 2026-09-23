@@ -471,6 +471,101 @@ final class WrapperTests: XCTestCase {
         add(shot)
     }
 
+    @MainActor func testPreviewFlashcardEditingPersists() throws {
+        guard ProcessInfo.processInfo.environment["MEMO_QA_EMAIL"] == "ios-word-20260922@example.com" else {
+            throw XCTSkip("Mutates only the dedicated synthetic circuit note")
+        }
+        let title = "Introduction to Electric Circuits"
+        let front = "QA circuit: what does resistance oppose?"
+        let originalBack = "The flow of current."
+        let updatedBack = "The flow of electric current through a circuit."
+        let app = try openPreviewStudyNote(title: title)
+        defer { app.terminate() }
+        func button(_ name: String) -> XCUIElement { app.webViews.buttons[name].firstMatch }
+        func scrollTo(_ element: XCUIElement, coordinateTap: Bool = false) {
+            XCTAssertTrue(element.waitForExistence(timeout: 15))
+            // XCTest excludes the prediction strip from its keyboard rectangle.
+            // Keep gestures and controls above that strip as well as the keys.
+            func visible() -> Bool {
+                let bottom = app.keyboards.firstMatch.exists ? app.keyboards.firstMatch.frame.minY - 44 : app.windows.firstMatch.frame.maxY
+                return (coordinateTap || element.isHittable) && element.frame.maxY <= bottom - 10 && element.frame.minY >= 60
+            }
+            for _ in 0..<6 where !visible() {
+                let window = app.windows.firstMatch
+                let bottom = app.keyboards.firstMatch.exists ? app.keyboards.firstMatch.frame.minY - 64 : window.frame.maxY - 80
+                let origin = window.coordinate(withNormalizedOffset: .zero)
+                origin.withOffset(CGVector(dx: window.frame.width * 0.95, dy: bottom - 25))
+                    .press(forDuration: 0.1, thenDragTo: origin.withOffset(CGVector(dx: window.frame.width * 0.95, dy: max(180, bottom - 200))))
+            }
+            XCTAssertTrue(visible(), "The complete control must be above the keyboard before tapping")
+        }
+        func findSavedCard() -> XCUIElement {
+            let search = app.webViews.textFields["Search..."].firstMatch
+            scrollTo(search)
+            search.tap()
+            search.typeText(front)
+            let card = app.webViews.staticTexts[front].firstMatch
+            scrollTo(card)
+            return card
+        }
+        openStudyTab("Flashcards", in: app)
+        let create = button("Create flashcards")
+        if create.waitForExistence(timeout: 5) { create.tap() }
+        XCTAssertTrue(button("Edit flashcards").waitForExistence(timeout: 300), "Real generated flashcards must become available")
+        keepStudyScreenshot("Generated circuit flashcards on iPhone", app: app)
+        button("Edit flashcards").tap()
+        let question = app.webViews.textViews["Question"].firstMatch
+        let answer = app.webViews.textViews["Answer"].firstMatch
+        XCTAssertTrue(question.waitForExistence(timeout: 15))
+        question.tap()
+        question.typeText(front)
+        answer.tap()
+        answer.typeText(originalBack)
+        XCTAssertGreaterThanOrEqual(app.keyboards.firstMatch.frame.minY - answer.frame.maxY, 10,
+                                    "The flashcard answer must stay clear of the keyboard")
+        keepStudyScreenshot("Flashcard answer above the keyboard", app: app)
+        scrollTo(button("Add card"))
+        button("Add card").tap()
+        XCTAssertTrue(button("Add card").waitForExistence(timeout: 20))
+        findSavedCard().tap()
+        XCTAssertTrue(button("Save card").waitForExistence(timeout: 15))
+        // Select the whole answer through iOS's editing menu. A plain tap can
+        // put the caret at the start, where backspace removes nothing.
+        answer.tap()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        answer.press(forDuration: 1.2)
+        let selectAllButton = app.buttons["Select All"].firstMatch
+        let selectAllMenu = app.menuItems["Select All"].firstMatch
+        let selectAll = selectAllButton.waitForExistence(timeout: 5) ? selectAllButton : selectAllMenu
+        XCTAssertTrue(selectAll.waitForExistence(timeout: 5))
+        selectAll.tap()
+        answer.typeText(updatedBack)
+        XCTAssertEqual(answer.value as? String, updatedBack)
+        scrollTo(button("Save card"))
+        button("Save card").tap()
+        XCTAssertTrue(button("Add card").waitForExistence(timeout: 20))
+        button("Close").tap()
+        app.terminate()
+        app.launch()
+        let note = app.webViews.links.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 30))
+        note.tap()
+        openStudyTab("Flashcards", in: app)
+        button("Edit flashcards").tap()
+        let saved = findSavedCard()
+        XCTAssertTrue(app.webViews.staticTexts[updatedBack].firstMatch.waitForExistence(timeout: 15),
+                      "The edited answer must survive full app restart")
+        keepStudyScreenshot("Edited flashcard survives iPhone relaunch", app: app)
+        saved.swipeLeft()
+        // WebKit reports the revealed action as not hittable under the
+        // translated card. Tap its visible, measured center and verify removal.
+        scrollTo(button("Delete"), coordinateTap: true)
+        button("Delete").coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: saved)], timeout: 20), .completed,
+                       "Delete must remove only the filtered synthetic QA card")
+        keepStudyScreenshot("Synthetic flashcard deleted", app: app)
+    }
+
     @MainActor func testPreviewSpeedReaderAdvancesAndPauses() throws {
         let app = try openPreviewStudyNote()
         openStudyTab("Speed read", in: app)

@@ -42,6 +42,21 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- Physical iPhone flashcard generation and editing now have dedicated coverage.
+  The circuit note generated 13 cards through the ordinary app action. The
+  editor test adds a manual card, selects/replaces its answer through iOS's
+  editing menu, saves, fully relaunches Memo, verifies the exact updated answer,
+  swipes to reveal Delete and removes the test card. The answer field stays above
+  the keyboard. `review-sep23-iphone-flashcard-edit-final.xcresult` passes one
+  test in 104.9 seconds; four screenshots are retained. An independent
+  authenticated API read confirms all 13 generated cards remain, no manual QA
+  card remains, and the study asset is ready
+  (`review-sep23-flashcard-final-server.json`). Earlier attempts exposed test
+  assumptions about the mobile edit label, off-screen fields, text selection
+  and WebKit's hit-testing of a revealed swipe action. Those harness issues
+  were corrected; the final run uses visible control coordinates, native
+  Select All, real app requests and persisted content. Failed-run manual cards
+  were cleaned through the authenticated API; generated cards were preserved.
 - Offline cold-launch testing found two shared defects: the new native
   `/onboarding` entry was missing from the offline route map, and anonymous
   shell fetching re-detected IP language despite recording the selected locale.

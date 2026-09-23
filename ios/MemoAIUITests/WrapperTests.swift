@@ -1857,6 +1857,45 @@ final class WrapperTests: XCTestCase {
         snap("S5 Signed in")
     }
 
+    /// Run only on the dedicated simulator after simctl revokes microphone access.
+    @MainActor func testPreviewMicrophoneDenied() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MEMO_QA_MIC_DENIED"] == "1",
+              let preview = env["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              let email = env["MEMO_QA_EMAIL"], let code = env["MEMO_QA_CODE"] else {
+            throw XCTSkip("Requires denied microphone access on the isolated staging simulator")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        defer { app.terminate() }
+        passConsentGate(app)
+        completeOnboarding(app)
+        signInWithCode(app, email: email, code: code)
+        dismissInitialOffer(app)
+        func button(_ english: String, _ slovenian: String) -> XCUIElement {
+            app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@", english, slovenian)).firstMatch
+        }
+        let newNote = button("New note", "Nov zapisek")
+        XCTAssertTrue(newNote.waitForExistence(timeout: 30))
+        newNote.tap()
+        let record = button("Record audio", "Posnemi zvok")
+        XCTAssertTrue(record.waitForExistence(timeout: 15))
+        record.tap()
+        let start = button("Start recording", "Začni snemanje")
+        XCTAssertTrue(start.waitForExistence(timeout: 15))
+        start.tap()
+        let help = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "iOS Settings", "Nastavitvah iOS")).firstMatch
+        XCTAssertTrue(help.waitForExistence(timeout: 15), "Denied access must explain where to enable the microphone")
+        XCTAssertTrue(start.isEnabled, "Denied access must release the busy state")
+        XCTAssertFalse(button("Resume recording", "Nadaljuj snemanje").exists)
+        keepStudyScreenshot("Microphone denied with recovery instructions", app: app)
+        button("Cancel", "Prekliči").tap()
+        XCTAssertTrue(newNote.waitForExistence(timeout: 15), "A denial must leave the app usable")
+    }
+
     // Recording survives the app leaving the screen, on a staging Preview.
     //
     // This is the page's side of the recorder. The native half — that capture

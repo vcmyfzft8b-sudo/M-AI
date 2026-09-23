@@ -34,7 +34,7 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   or that the app can suppress them.
 - Obtain production merge/release authorization, verify the deployed web app
   with the signed Release binary, and complete TestFlight checks before review
-  submission. Build 11 is uploaded for TestFlight processing; the unsubmitted
+  submission. Build 11 is available for internal TestFlight testing; the unsubmitted
   review draft still contains build 9. Neither is a production deployment of
   this branch or an App Review submission.
 
@@ -42,6 +42,21 @@ Apple's Small Business enrollment is submitted, but its 15% approval remains
 unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
+
+- Microphone denial now explains how to enable access instead of exposing a
+  technical bridge/browser error. iOS uses the existing localized Settings
+  instructions; browsers get localized recording instructions in all five
+  catalogues. TypeScript, focused lint and 99 mobile/recorder/locale regressions
+  pass. Actual rendered local and READY `eb62bb1a` Preview checks pass under
+  both user agents; native-UA browser checks simulate the bridge denial and
+  are not a substitute for the real app. The actual Simulator permission was
+  revoked through simctl: `review-sep23-microphone-sim.xcresult` passes one test
+  (105.7 seconds) with the native recorder, correct recovery copy, released busy
+  state and successful dismissal. Microphone permission was restored afterward.
+  Screenshot: `review-sep23-microphone-sim-attachments/C6FBF487-6208-4300-871E-737DE08CE216.png`.
+  The first deployed browser harness clicked New note before hydration; the
+  final run waits for the source picker and keeps all denial assertions.
+  Logs: `review-sep23-microphone-{local-browser-final,preview-final}.log`.
 
 - A read-only Apple Server API check at 04:18 CEST independently verified the
   synthetic Word account's Sandbox subscription and renewal signatures. Apple
@@ -283,9 +298,14 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
   at 04:14 CEST on 23 September; delivery ID
   `e5980c8c-e9ca-4621-9a30-50a7aae2cf09`. The IPA checksum and strict signature
   were verified again immediately before upload. Evidence:
-  `review-sep23-build11-upload.json`. Processing/TestFlight availability is
-  pending; the matching production web deployment and final TestFlight checks
-  remain required. This supersedes build 10 packaging.
+  `review-sep23-build11-upload.json`. Apple subsequently reports **VALID**,
+  `APP_STORE_ELIGIBLE`, no non-exempt encryption, and **IN_BETA_TESTING**.
+  Independent group membership lists build 11 in **Memo internal**. English
+  testing notes were saved as beta localization
+  `823d6172-dcd0-46e4-b288-03845b2b8ed4`, explicitly noting that this binary
+  opens production while the web fixes remain on the test branch. Evidence:
+  `review-sep23-build11-delivery-status.json`. Matching production web deployment
+  and final TestFlight checks remain required; this supersedes build 10 packaging.
 - A second actual-wrapper deletion run now uses the synthetic Slides account
   (`ios-slides-20260922@example.com`) on staging. Preparation, real analytics
   opt-in/relaunch/withdrawal and deletion each pass:

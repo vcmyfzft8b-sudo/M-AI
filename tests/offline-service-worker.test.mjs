@@ -306,12 +306,24 @@ test("trimming the cache never drops the shell", async () => {
   );
 });
 
-test("the shell is fetched without the session cookie", () => {
-  assert.match(
-    source,
-    /fetch\(SHELL_URL, \{ credentials: "omit"/,
-    "it is served to whoever opens the app next, so it must carry nobody's data",
-  );
+test("the public shell carries the selected locale without session credentials", async () => {
+  for (const locale of ["en", "sl", "hr", "bs", "sr"]) {
+    let requested;
+    const worker = loadWorker({ fetchImpl: async (url, options) => {
+      requested = { url, options };
+      return { status: 200, redirected: false, clone: () => ({ text: async () => "<html></html>" }) };
+    } });
+    const waits = [];
+    worker.listeners.get("message")({
+      data: { type: "cache-shell", locale, build: "current", fonts: [] },
+      waitUntil: (work) => waits.push(work),
+    });
+    await Promise.all(waits);
+    assert.equal(new URL(requested.url).pathname, "/offline");
+    assert.equal(new URL(requested.url).searchParams.get("locale"), locale);
+    assert.equal(requested.options.credentials, "omit");
+    assert.equal(requested.options.cache, "no-store");
+  }
 });
 
 /*

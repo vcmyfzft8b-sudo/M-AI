@@ -33,13 +33,14 @@ final class Store {
 
     deinit { updates?.cancel(); intents?.cancel() }
 
-    func products() async throws -> [[String: Any]] {
+    func products(promotionalOffers: [String: String]? = nil) async throws -> [[String: Any]] {
         let products = try await Product.products(for: AppConfiguration.productIDs)
             .filter { $0.type == .autoRenewable }
             .sorted { $0.price < $1.price }
         var result: [[String: Any]] = []
         for product in products {
-            var item = await presentation(product)
+            if let promotionalOffers, promotionalOffers[product.id] == nil { continue }
+            var item = await presentation(product, promotionalOfferID: promotionalOffers?[product.id])
             if product.subscription?.subscriptionPeriod.unit == .year,
                let monthly = products.first(where: {
                    $0.subscription?.subscriptionPeriod.unit == .month &&
@@ -55,7 +56,7 @@ final class Store {
 
     /// Only advertise the first-period offers this paywall can explain accurately.
     /// StoreKit still decides eligibility and applies the configured introductory offer.
-    private func presentation(_ product: Product) async -> [String: Any] {
+    private func presentation(_ product: Product, promotionalOfferID: String? = nil) async -> [String: Any] {
         var result: [String: Any] = ["id": product.id, "name": product.displayName,
             "price": product.displayPrice]
         if product.subscription?.subscriptionPeriod.unit == .year {
@@ -64,9 +65,15 @@ final class Store {
             result["monthlyPrice"] = product.displayPrice
         }
         var offerKey = "standard"
+        var chosenOffer: Product.SubscriptionOffer?
+        if let promotionalOfferID {
+            chosenOffer = product.subscription?.promotionalOffers.first { $0.id == promotionalOfferID }
+            guard chosenOffer != nil else { result["available"] = false; return result }
+        } else if let subscription = product.subscription, await subscription.isEligibleForIntroOffer {
+            chosenOffer = subscription.introductoryOffer
+        }
         if let subscription = product.subscription,
-           let offer = subscription.introductoryOffer,
-           await subscription.isEligibleForIntroOffer {
+           let offer = chosenOffer {
             let isThreeDayTrial = offer.paymentMode == .freeTrial && offer.price == 0 &&
                 offer.periodCount == 1 && offer.period.unit == .day && offer.period.value == 3
             let isFirstPeriodDiscount = offer.paymentMode == .payUpFront && offer.periodCount == 1 &&
@@ -77,7 +84,8 @@ final class Store {
                 result["available"] = false
                 return result
             }
-            offerKey = "intro:\(offer.paymentMode):\(offer.id ?? "default"):\(offer.price):\(offer.displayPrice):\(offer.period.value):\(offer.period.unit)"
+            let kind = promotionalOfferID == nil ? "intro" : "promo"
+            offerKey = "\(kind):\(offer.paymentMode):\(offer.id ?? "default"):\(offer.price):\(offer.displayPrice):\(offer.period.value):\(offer.period.unit)"
             if isThreeDayTrial {
                 result["trialDays"] = 3
             } else {
@@ -103,16 +111,21 @@ final class Store {
         return result
     }
 
-    func purchase(id: String, account: UUID, quote: String) async throws -> String {
+    func purchase(id: String, account: UUID, quote: String, promotion: Promotion? = nil) async throws -> String {
         guard !purchasing, AppConfiguration.productIDs.contains(id) else { throw StoreError.unavailable }
         purchasing = true
         defer { purchasing = false }
         guard let product = try await Product.products(for: [id]).first else { throw StoreError.unavailable }
-        let current = await presentation(product)
+        let current = await presentation(product, promotionalOfferID: promotion?.offerID)
         guard current["available"] as? Bool == true, current["quote"] as? String == quote else {
             return "priceChanged"
         }
-        switch try await product.purchase(options: [.appAccountToken(account)]) {
+        var options: Set<Product.PurchaseOption> = [.appAccountToken(account)]
+        if let promotion {
+            options.insert(.promotionalOffer(offerID: promotion.offerID, keyID: promotion.keyID,
+                nonce: promotion.nonce, signature: promotion.signature, timestamp: promotion.timestamp))
+        }
+        switch try await product.purchase(options: options) {
         case .success(let result):
             try await accept(result)
             pendingProduct = nil
@@ -129,8 +142,10 @@ final class Store {
     }
 
     func reconcile() async throws {
-        for await result in Transaction.unfinished { try await accept(result) }
-        for await result in Transaction.currentEntitlements { try await accept(result) }
+        try await reconcileStoreTransactions(
+            unfinished: Transaction.unfinished,
+            currentEntitlements: Transaction.currentEntitlements
+        ) { try await self.accept($0) }
     }
 
     private func accept(_ result: VerificationResult<Transaction>) async throws {
@@ -142,6 +157,25 @@ final class Store {
     }
 
     enum StoreError: Error { case unavailable }
+
+    /// Created from our authenticated server response, never a page-supplied signature.
+    struct Promotion {
+        let offerID: String
+        let keyID: String
+        let nonce: UUID
+        let signature: Data
+        let timestamp: Int
+
+        init(_ value: [String: Any]) throws {
+            guard let offerID = value["offerId"] as? String,
+                  let keyID = value["keyId"] as? String,
+                  let nonceText = value["nonce"] as? String, let nonce = UUID(uuidString: nonceText),
+                  let encoded = value["signature"] as? String, let signature = Data(base64Encoded: encoded),
+                  let timestamp = value["timestamp"] as? Int else { throw StoreError.unavailable }
+            self.offerID = offerID; self.keyID = keyID; self.nonce = nonce
+            self.signature = signature; self.timestamp = timestamp
+        }
+    }
 }
 
 /// A native step that failed for a reason worth showing: the page appends it

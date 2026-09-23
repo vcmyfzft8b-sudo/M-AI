@@ -52,6 +52,13 @@ export async function eraseDueAccountsWith(
       if (captures.error) throw captures.error;
       const usage = await service.from("ai_usage_events").delete().eq("user_id", job.user_id);
       if (usage.error) throw usage.error;
+      // These tables use ON DELETE SET NULL. Remove the owned activity before
+      // deleting Auth, while its owner is still available for scoped cleanup.
+      // Deleting a session also cascades its signed-out page views.
+      const views = await service.from("site_page_views").delete().eq("user_id", job.user_id);
+      if (views.error) throw views.error;
+      const sessions = await service.from("site_sessions").delete().eq("user_id", job.user_id);
+      if (sessions.error) throw sessions.error;
       // A checkout that began just before the deletion request may finish after
       // the first cancellation pass. Reconcile once more after the drain.
       const profileResult = await service.from("profiles").select("stripe_customer_id").eq("id", job.user_id).maybeSingle();

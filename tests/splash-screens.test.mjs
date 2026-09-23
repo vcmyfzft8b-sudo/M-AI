@@ -276,8 +276,13 @@ test("the service worker caches build output, and no page but the shell", () => 
    */
   assert.match(
     sw,
-    /fetch\(SHELL_URL, \{ credentials: "omit"/,
-    "the shell must be fetched without the session cookie",
+    /const shellUrl = new URL\(SHELL_URL, self\.location\.origin\)/,
+    "the localized request must still target the public shell on this origin",
+  );
+  assert.match(
+    sw,
+    /fetch\(shellUrl\.href, \{ credentials: "omit"/,
+    "the localized shell must be fetched without the session cookie",
   );
   assert.match(sw, /if \(response\.redirected\) \{\s*return;/, "a redirect is not the shell");
 

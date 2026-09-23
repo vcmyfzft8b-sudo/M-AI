@@ -15,7 +15,7 @@ export default async function AccountDeletedPage({ searchParams }: { searchParam
         {t("native.appleDisconnectCopy")}{" "}
         <a href="https://support.apple.com/en-us/102571">{t("native.appleDisconnectLink")}</a>
       </p> : null}
-      <InstantLink className="memo-button-coral" href="/auth/continue">{t("auth.signIn")}</InstantLink>
+      <InstantLink className="memo-button-coral memo-auth-submit" href="/auth/continue">{t("auth.signIn")}</InstantLink>
     </div>
   </AuthScreen>;
 }

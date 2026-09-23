@@ -17,6 +17,7 @@ import { readWavDurationSeconds } from "@/lib/wav-duration";
 
 /** The transcoder writes mono 16 kHz mp3 at 48 kbps, so its bytes convert straight to seconds. */
 const COMPRESSED_AUDIO_BYTES_PER_SECOND = 6_000;
+const AUDIO_METADATA_TIMEOUT_MS = 10_000;
 
 /*
  * Thrown as `CompressionError`s so the wording is chosen where the failure is
@@ -43,13 +44,16 @@ export function readAudioDurationFromMetadata(file: File): Promise<number | null
       }
 
       settled = true;
+      clearTimeout(timeout);
+      audio.onloadedmetadata = null;
+      audio.onerror = null;
+      audio.onabort = null;
+      audio.removeAttribute("src");
+      audio.load();
       URL.revokeObjectURL(objectUrl);
       audio.remove();
       resolve(duration);
     };
-
-    audio.preload = "metadata";
-    audio.src = objectUrl;
 
     audio.onloadedmetadata = () => {
       // A streamed or malformed container reports Infinity here, which is not a duration.
@@ -57,6 +61,18 @@ export function readAudioDurationFromMetadata(file: File): Promise<number | null
     };
 
     audio.onerror = () => finish(null);
+    audio.onabort = () => finish(null);
+    // WebKit can leave detached media in its initial state without either a
+    // metadata or error event. Explicitly load it, and let the existing header
+    // / transcode fallbacks run if decoding still never answers.
+    const timeout = setTimeout(() => finish(null), AUDIO_METADATA_TIMEOUT_MS);
+    audio.preload = "metadata";
+    try {
+      audio.src = objectUrl;
+      if (!settled) audio.load();
+    } catch {
+      finish(null);
+    }
   });
 }
 
@@ -86,7 +102,7 @@ export type PreparedAudioSource = {
 export async function prepareAudioSourceForUpload(params: {
   file: File;
   knownDurationSeconds?: number | null;
-  onStageChange?: (label: string) => void;
+  onStageChange?: (label: MessageKey) => void;
 }): Promise<PreparedAudioSource> {
   const knownDuration =
     params.knownDurationSeconds != null && params.knownDurationSeconds > 0
@@ -101,7 +117,7 @@ export async function prepareAudioSourceForUpload(params: {
   }
 
   if (originalDuration == null || params.file.size > MAX_AUDIO_BYTES) {
-    params.onStageChange?.("Stiskam zvok...");
+    params.onStageChange?.("audio.upload.normalising");
   }
 
   // compressAudioForUpload decides for itself whether this file needs transcoding: anything over

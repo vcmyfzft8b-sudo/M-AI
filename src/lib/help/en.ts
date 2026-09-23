@@ -155,6 +155,8 @@ Contact for privacy questions and for exercising your rights: info@memoai.eu
 
 For App Store subscriptions, we process Apple's signed transaction records, product and transaction identifiers, purchase and expiry dates, and refund or revocation status. We send Apple your Memo account's technical identifier to associate the purchase with your account and verify access.
 
+If you allow notifications in the iOS app, we store the push token Apple issues for your device, linked to your account, and use Apple's push service to tell you when a note is ready. The notification contains the note's title. You can turn notifications off in iOS Settings at any time; signing out removes the token, and deleting your account deletes it.
+
 We neither receive nor store your card details. Payment details are handled directly by Stripe for web purchases or Apple for App Store purchases.
 
 **Technical data**
@@ -162,7 +164,7 @@ We neither receive nor store your card details. Payment details are handled dire
 - IP address, device type, browser and operating system
 - access times, requests and server responses
 - error and crash data
-- aggregated page-visit statistics
+- page visits, approximate country/region/city and device details, linked to your account where available, through optional analytics (in the iOS app only after you turn it on; on the website unless you turn it off)
 
 ## 3. Purposes and legal bases
 
@@ -184,7 +186,6 @@ We neither receive nor store your card details. Payment details are handled dire
 
 - security of the service, preventing abuse, rate limiting and detecting fraud
 - fixing faults and improving the reliability of the product
-- aggregated usage statistics from which no individual can be identified
 - establishing or defending legal claims
 
 Where we process on the basis of legitimate interest, we have weighed our interest against your rights. You can object to such processing at any time.
@@ -192,7 +193,7 @@ Where we process on the basis of legitimate interest, we have weighed our intere
 **Consent (Article 6(1)(a) GDPR)**
 
 - optional product messages, where you sign up for them
-- optional cookies or similar technologies, where these are in use
+- optional analytics: in the iOS app only after you turn it on in Settings; on the website unless you turn it off there
 
 You can withdraw consent at any time. Withdrawal does not affect the lawfulness of processing before it.
 
@@ -219,7 +220,7 @@ We do not sell data. We pass it only to the providers we need in order to run th
 - **Google (Gemini)** — transcription, extracting text from documents, embeddings, generating notes and chat answers
 - **Soniox** — audio transcription, where that service is switched on
 - **OpenRouter and its selected model providers** — generating AI answers and study content where these services are used
-- **Vercel** — hosting the app, and aggregated visit statistics
+- **Vercel** — hosting, optional visit analytics and performance measurements
 - **Inngest** — running background jobs, where switched on
 - **Sentry** — error and crash monitoring
 - **Google and Apple** — sign-in, where you choose to sign in through them
@@ -287,12 +288,13 @@ If you believe we are processing your data unlawfully, you can lodge a complaint
 
 ## 12. Cookies and similar technologies
 
-We use:
+We use essential cookies and local storage for sign-in, security, settings and remembering your analytics choice. These are needed for the functions you request.
 
-- **essential cookies and local storage** — for signing in, keeping your session, security and basic settings. These are required for the service to work and cannot be switched off
-- **visit statistics** — aggregated, non-personal measurements of page visits through Vercel Analytics
+**Optional analytics is off by default in the iOS app and on by default on the website.** In Settings → Optional analytics, you choose whether Memo and Vercel collect page visits, approximate location, device information and performance measurements. Visits may be linked to your Memo account. You can turn this off again on the same device without losing access to the app.
 
-We do not use advertising cookies or cross-site tracking. If we introduce optional cookies in future, we will ask for your consent to them.
+The essential \`memo-analytics\` preference lasts up to 180 days. When you opt in, the \`memo-visit\` analytics cookie lasts up to 24 hours. Turning analytics off removes that visit cookie and stops future optional collection. A cookie's expiry does not delete records already on the server: account-linked visit records are removed when you delete your account, or you can request their removal at info@memoai.eu.
+
+We do not use advertising cookies or cross-site advertising tracking. On the website only, when an error occurs, our error service may keep a replay of the moments before it with all text, inputs and media hidden; the iOS app never records one. Necessary security and error diagnostics continue independently of optional analytics.
 
 ## 13. Children
 

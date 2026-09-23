@@ -1,0 +1,15 @@
+This is an original synthetic lesson for testing Memo. It contains no personal information.
+
+Today we will study electric circuits. An electric circuit is a continuous closed loop. A battery supplies a potential difference, and electric charge moves through wires and components. If the loop is broken, steady current stops.
+
+Current is the rate at which electric charge flows. We measure current in amperes. Voltage is the electric potential difference between two points. We measure voltage in volts. Resistance is how strongly a component opposes the flow of current. We measure resistance in ohms.
+
+Ohm's law connects these quantities. Voltage equals current multiplied by resistance. For example, if a resistor has a resistance of six ohms and the current is two amperes, the voltage across it is twelve volts.
+
+In a series circuit, the same current passes through every component. The total resistance is the sum of the individual resistances. Two resistors of three ohms and six ohms in series have a total resistance of nine ohms.
+
+In a parallel circuit, each branch has the same voltage across it. The current divides between the branches. Adding a parallel path reduces the total resistance.
+
+Electrical power is the rate of energy transfer. Power equals voltage multiplied by current, and we measure it in watts. A device using twelve volts and two amperes transfers energy at twenty-four watts.
+
+To summarize: current is measured in amperes, voltage in volts, resistance in ohms, and power in watts. Always switch off the power before changing the components in a real circuit.

@@ -6,6 +6,7 @@ import { IMPERSONATION_COOKIE, ADMIN_RESTORE_COOKIE } from "@/lib/admin/imperson
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { tr } from "@/lib/i18n/server";
+import { ANALYTICS_COOKIE } from "@/lib/analytics-consent";
 
 export const maxDuration = 300;
 
@@ -52,6 +53,8 @@ export async function POST(request: NextRequest) {
     await supabase.auth.signOut({ scope: "local" });
     const response = applyCookies(NextResponse.json({ deletionRequested: true, appleManualRevocationRequired }, { status: 202, headers: { "Cache-Control": "no-store" } }));
     request.cookies.getAll().filter(cookie => cookie.name.startsWith("sb-")).forEach(cookie => response.cookies.set(cookie.name, "", { path: "/", maxAge: 0 }));
+    response.cookies.set("memo-visit", "", { path: "/", maxAge: 0 });
+    response.cookies.set(ANALYTICS_COOKIE, "", { path: "/", maxAge: 0 });
     return response;
   } catch {
     return applyCookies(NextResponse.json({ error: await tr("native.deleteFailed") }, { status: 503 }));

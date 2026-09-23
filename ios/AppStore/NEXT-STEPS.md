@@ -1,16 +1,106 @@
-# Memo AI iOS — handoff for the next agent (updated 20 September 2026)
+# Memo AI iOS — release handoff (updated 23 September 2026)
 
-> **20 September, compliance sweep.** The wrapper was audited end to end
-> against Apple's review requirements; see the top of
-> `ios/AppStore/release-readiness.md`. Two real gaps were found and fixed in
-> the binary (the privacy manifest was missing the file-timestamp
-> required-reason declaration, which would have produced ITMS-91053; lecture
-> takes were not excluded from iCloud backup). Everything else in the list
-> below still stands, plus one item it did not have: the app record's
-> **Content Rights declaration is `null`** and must be answered before the
-> version can be submitted.
+The complete current handoff is [SUBMISSION-CHECKLIST.md](SUBMISSION-CHECKLIST.md),
+with dated evidence in [release-readiness.md](release-readiness.md).
+**Not ready for App Review submission.**
 
-Read this before `docs/ios-app.md` (setup reference) and `ios/AppStore/release-readiness.md` (evidence log).
+## Current state
+
+- The wrapper shares the PWA onboarding, study tools, settings and design.
+  Only platform billing, provider authentication and native device functions differ.
+- Release **1.0.0 (12)** includes keyboard bridge v5 and the public keyboard
+  accessory implementation. Apple processed it as **VALID / IN_BETA_TESTING**;
+  it is listed in the existing **Memo internal** group. Details are below.
+  The English testing checklist is saved. The unsubmitted App Review draft
+  still contains build 9, version 1.0, four subscriptions and their group.
+  Release is manual; final production-web/TestFlight checks remain required.
+- The latest READY deployment commit on `codex/ios-app-wrapper` is `5b283dac`. Its
+  Preview is `https://memo-ebx5i4rr2-nace-valencics-projects.vercel.app`, using
+  shared staging. The branch's changes are not a production deployment.
+- Actual app coverage includes photo/PDF/Word/slides/web-article note generation,
+  flashcards, quiz/practice, mindmap/export, memory palace, speed reader,
+  podcast/read-aloud, chats, settings, consent and keyboard handling. See the
+  dated evidence for each test's scope; this is not blanket hardware validation.
+- Native Apple and Google sign-in passed on the physical iPhone. A real Sandbox
+  yearly trial purchase, restore and access after restart passed on the
+  synthetic Word account. No entitlement or quota was fabricated.
+- Slovenia products show €19.99/month and €129.99/year; eligible first periods
+  show €9.99 and €64.99. The separate trial products offer three days free.
+- Paid/Free Apps Agreements, bank, tax, EU trader status and DAC7 are Active.
+  All 15 App Privacy types were reconciled and published. Small Business Program
+  enrollment is submitted; approval of the 15% rate is unconfirmed.
+- The second synthetic UI deletion completed after its unchanged three-hour
+  drain at **04:06:37 CEST on 23 September**. Independent staging inventory
+  confirms Auth, Storage, note and owned analytics erasure; the unrelated Word
+  account remains intact. Actual Apple grant revocation is still unverified.
+
+- Build **12** is locally archived/exported with bridge v5 and a public keyboard
+  accessory override, replacing the internal WebKit class modification. Its actual
+  simulator form/chat cycles pass. Use the `release-12-public` artifacts only;
+  Apple package validation passed without errors. It uploaded successfully at
+  05:27 CEST (delivery `e8fd64f0-7833-480b-8409-a98efbe2dfaa`). Apple processed it
+  as **VALID / IN_BETA_TESTING**, and it appears in **Memo internal**. English
+  testing notes explain that matching web fixes still need deployment.
+  Search, rename and both chats also pass on the physical iPhone 16 with this
+  public override. The test restored its signed-out synthetic session normally.
+- The age-rating override now matches the published minimum age of 16 in
+  Memo's terms. Apple confirms `ageRatingOverrideV2: SIXTEEN_PLUS`; its older
+  aggregate rating field returns `SEVENTEEN_PLUS`. This corrects the former 4+
+  default. Synthetic AI-response checks also corrected treatment guidance,
+  mature themes and weapon references to infrequent educational content.
+  These checks do not prove every possible AI output or the owner's content rights.
+- The restricted Stripe catalogue key is configured on this Preview branch and
+  hosted code validation passes. The owner created the new Slovenia Sandbox
+  tester; Apple's API confirms it exists with five-minute monthly renewals.
+  The owner also confirmed third-party content rights, and Apple's declaration
+  is now verified as `USES_THIRD_PARTY_CONTENT`.
+
+## Remaining release gates
+
+The whole-repository run now passes 1,622 tests with no failures or skips.
+The only failure on the first full run was a stale offline-shell source assertion,
+corrected without changing the credential-free runtime behavior.
+
+1. Repeat erasure on the final release; test actual Sign in with Apple token revocation.
+2. Finish dedicated Sandbox lifecycle checks: accelerated renewal, expiry,
+   refund/revocation and other products using the newly created dedicated tester.
+3. Complete physical audio quality, locked-screen/call-interruption and spoken-tutor
+   checks. UI playback/recording evidence alone does not verify these.
+4. Content Rights confirmation and portal correction are complete. Recheck final
+   release metadata against the product before submission.
+5. Finish real Sandbox purchases for the new code flow. Bridge v5 and the
+   Settings → Redeem a code form now implement live validation of the audited
+   24 unrestricted 50%-once Stripe codes, with StoreKit prices and checkout.
+   New subscribers use introductory offers; former Apple subscribers receive
+   a server-signed promotional offer bound to their verified `appAccountToken`.
+   Active subscriptions cannot buy twice. Unsupported terms, expired/disabled
+   codes, customer restrictions and redemption caps fail closed.
+   Both promotional offers are saved and freshly verified in App Store Connect
+   across 175 storefronts. Slovenia/US first periods are €/$9.99 and €/$64.99.
+   Actual StoreKit code-price display passed in Simulator against the local staging
+   server. Hosted Preview code validation now passes with the owner's restricted
+   catalogue key, configured as sensitive branch-only `APPLE_PROMOTION_CATALOGUE_KEY`.
+   Its four catalogue reads pass; the key stays separate from checkout.
+   Actual promotional purchase/restore and creator-code attribution remain
+   unverified/unimplemented respectively. Recurring and gift codes are not
+   supported by this first-period flow. Uploaded build 12 has bridge v5;
+   this feature still needs the matching web deployment and completed purchase tests.
+   Sources: [promotional purchase option](https://developer.apple.com/documentation/storekit/product/purchaseoption/promotionaloffer(offerid:keyid:nonce:signature:timestamp:))
+   and [promotional-offer eligibility](https://developer.apple.com/help/app-store-connect/manage-subscriptions/set-up-promotional-offers-for-auto-renewable-subscriptions).
+   The local build and route tests prove implementation, not App Store purchase completion.
+6. Verify final screenshots/metadata and the final production web deployment
+   against the signed release, then TestFlight. Obtain merge/release authorization
+   before changing production, and submit only after these gates pass.
+
+Use CLI/API and isolated simulator/XCTest runs so the owner can use the Mac.
+Do not take over Arc's shared cursor without a necessary, limited handoff.
+Do not promise Apple acceptance or claim the app can suppress iPadOS window controls.
+
+## Historical notes
+
+The sections below are dated history, **not current setup instructions**. They
+include superseded builds, resolved gates and old account requirements. Use the
+current section and `release-readiness.md` to decide the next action.
 
 ## Where things stand (18 September 2026, evening)
 
@@ -23,9 +113,10 @@ Read this before `docs/ios-app.md` (setup reference) and `ios/AppStore/release-r
 
 ## Note notifications (added 20 September 2026)
 
-The app can now tell a reader their note is finished after they have put the
-phone down. Everything is built and tested except the one piece Apple will not
-let anything but a human create.
+The branch implements note-completion notifications, but live APNs delivery is
+not verified. A fresh Vercel Preview environment listing on 23 September still
+contains no `APPLE_PUSH_*` configuration, so the feature remains disabled there.
+An APNs key and the device checks below are still required before enabling it.
 
 **What you have to do, once:** Apple Developer portal → Certificates,
 Identifiers & Profiles → **Keys** → **+** → name it `Memo push` → tick **Apple
@@ -67,13 +158,23 @@ the row so the next account on that phone is not notified.
 
 ## Remaining work, in order
 
-1. **Merge PR #421** (the account holder decides), confirm production serves it (`/auth/password` → 404; `/auth/continue` has no header logo under either user agent), then re-check the review sign-in on production: Continue with email → `apple-review@memoai.eu` → the code from `~/.config/memoai/apple/review-account.env` → home with the Plant Life Cycle note.
-2. **Device checks on the TestFlight build** (account holder's iPhone; not possible in the simulator): Google and Apple sign-in complete and resume after relaunch (the Apple one already created account `0d3e5149-…` on 17 September, consented and onboarded); recording (start, lock the phone for several minutes, unlock, stop — the clock and the note's duration must both include the locked time, and the Lock Screen banner must count up throughout) and the tutor (microphone, interruptions); Sandbox purchases with the Slovenian Sandbox tester on the device-QA account `ios-device-qa@memoai.eu` (same fixed code): trial monthly/yearly, the wheel's discounted products, same-account restore, wrong-account restore, cancel and expiry; Settings → Manage Apple subscriptions; account deletion of a synthetic account (Apple grant revoked, storage erased by the hourly cron at :40). Fix what fails, bump `CURRENT_PROJECT_VERSION`, re-archive and re-upload (commands below), re-attach the new build to version 1.0.
-3. **Privacy questionnaire** in App Store Connect (no API for it; account holder signed in in the Browser pane): derive from `ios/MemoAI/PrivacyInfo.xcprivacy` — name, e-mail, user id, purchase history, audio, photos/videos, other user content, customer support, product interaction, other usage data, crash/performance/other diagnostics, coarse location; all linked to the user, none used for tracking; purposes app functionality and analytics. Never "Data Not Collected".
-4. **Attach the four subscriptions to version 1.0** on the version page (the "In-App Purchases and Subscriptions" section; there is no API for the attachment). They are READY_TO_SUBMIT already.
-5. **Submit for review** with manual release, then watch Sentry and `vercel logs --search "api/mobile"` for `/api/mobile/*` errors. After the first approved build, retry turning **Streamlined Purchasing** off.
-6. **Business status to confirm, not assume:** Small Business Program (submitted, no decision e-mail yet), EU trader declaration (In Review). Do not claim the 15 % commission until Apple confirms.
-7. Rotate the Supabase Apple client secret before **16 March 2027** (`node scripts/apple/web-client-secret.mjs eu.memoai.web`).
+1. Re-run real Preview onboarding and the synthetic study workflow; no production
+   accounts or data in Preview. Finish settings, recording, offline and keyboard
+   checks on the dedicated simulator and retain screenshots.
+2. On the account holder's connected iPhone, verify native Google and Apple sign-in,
+   microphone/tutor, recording while locked, Sandbox purchases, restore, expiry,
+   cancellation, Apple subscription management and synthetic-account deletion.
+   Authentication must be completed by the account holder when required.
+3. Review the final screenshots and privacy declarations against the final app.
+   If native code changes after build 6, bump both targets' shared build number,
+   archive/upload a new build and replace the draft's attached build.
+4. Submit the assembled draft only after release gates pass and submission is
+   authorized. Keep manual release selected. Apple's READY_FOR_REVIEW status
+   does not mean tests passed or the app is approved.
+5. Small Business Program enrollment receipt is confirmed by Apple's 15 September
+   email; approval and the 15% rate remain unconfirmed. EU trader status is Active.
+6. Rotate the Supabase Apple client secret before **16 March 2027**
+   (`node scripts/apple/web-client-secret.mjs eu.memoai.web`).
 
 ## The separation contract (do not break it)
 

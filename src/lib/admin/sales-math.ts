@@ -74,6 +74,35 @@ export type SalesData = {
   customerCodes: Map<string, string>;
   /** True when a page cap was hit and the figures are therefore partial. */
   truncated: boolean;
+  /**
+   * First charges of Apple subscriptions bought with a creator code in the iOS
+   * app. Apple never sees our codes, so these come from our own ledger
+   * (`apple_code_redemptions`), not from Stripe. Refunded ones are left out.
+   */
+  appleCodeSales?: AppleCodeSale[];
+};
+
+/**
+ * What Memo is paid for an App Store sale, in minor units: the customer price
+ * less Slovenian VAT (22%, which Apple withholds) and Apple's commission.
+ * Creators earn a share of cash collected, and for an App Store sale that is
+ * this, not the price the customer saw. An estimate: VAT follows the buyer's
+ * country, and the commission is 30% until the Small Business Program (15%)
+ * is confirmed — set APPLE_COMMISSION_RATE then.
+ */
+export function appleProceedsEstimate(priceMinor: number, commission = 0.3) {
+  const rate = Number.isFinite(commission) && commission >= 0 && commission < 1 ? commission : 0.3;
+  return Math.round((priceMinor / 1.22) * (1 - rate));
+}
+
+export type AppleCodeSale = {
+  id: string;
+  /** Epoch seconds. */
+  paidAt: number;
+  /** What Memo is paid for it, minor units (see appleProceedsEstimate). */
+  amount: number;
+  currency: string;
+  code: string;
 };
 
 const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
@@ -696,6 +725,26 @@ export function promoCodeStats(
 
     if (code) {
       credit(code, payment);
+    }
+  }
+
+  // Apple purchases are already one row per coded first charge, so each one
+  // is both the subscription the code created and its credited payment.
+  for (const sale of data.appleCodeSales ?? []) {
+    ensure(sale.code).subscriptions += 1;
+    const day = unixDay(sale.paidAt);
+
+    // Every figure here is euros. A sale in another App Store currency still
+    // counts as the code's subscription, but is not added to euro revenue.
+    if (sale.currency.toLowerCase() === "eur" && day >= range.from && day <= range.to) {
+      credit(sale.code, {
+        id: sale.id,
+        paidAt: sale.paidAt,
+        amount: sale.amount,
+        currency: sale.currency,
+        customerId: `apple:${sale.id}`,
+        promotionCodeIds: [],
+      });
     }
   }
 

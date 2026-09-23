@@ -64,6 +64,11 @@ export type Database = {
         Insert: { user_id: string; client_id: string; apple_subject: string; refresh_token_encrypted: string; updated_at?: string };
         Update: { apple_subject?: string; refresh_token_encrypted?: string; updated_at?: string };
       };
+      apple_code_redemptions: {
+        Row: { id: string; user_id: string | null; code: string; validated_at: string; environment: "production" | "sandbox" | null; original_transaction_id: string | null; transaction_id: string | null; product_id: string | null; offer_type: number | null; price_minor: number | null; currency: string | null; paid_at: string | null; revoked_at: string | null };
+        Insert: { id?: string; user_id?: string | null; code: string; validated_at?: string; environment?: "production" | "sandbox" | null; original_transaction_id?: string | null; transaction_id?: string | null; product_id?: string | null; offer_type?: number | null; price_minor?: number | null; currency?: string | null; paid_at?: string | null; revoked_at?: string | null };
+        Update: { validated_at?: string; environment?: "production" | "sandbox" | null; original_transaction_id?: string | null; transaction_id?: string | null; product_id?: string | null; offer_type?: number | null; price_minor?: number | null; currency?: string | null; paid_at?: string | null; revoked_at?: string | null };
+      };
       account_deletion_requests: {
         Row: { user_id: string; requested_at: string; cleanup_after: string; failure_lecture_ids: string[] };
         Insert: { user_id: string; requested_at?: string; cleanup_after?: string; failure_lecture_ids?: string[] };

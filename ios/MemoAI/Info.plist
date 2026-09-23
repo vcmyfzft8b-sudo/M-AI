@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<key>CFBundleDisplayName</key>
 	<string>Memo AI</string>
 	<key>CFBundleExecutable</key>
@@ -46,6 +48,7 @@
 		<string>memoai.eu</string>
 		<string>www.memoai.eu</string>
 		<string>localhost</string>
+		<string>$(MEMO_APP_BOUND_HOST)</string>
 	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
@@ -68,18 +71,17 @@
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
+	<!-- Keep the portrait scene in iPad compatibility mode. iPadOS windowed
+	     mode can still scale its presentation and show system resize controls. -->
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 </dict>
 </plist>

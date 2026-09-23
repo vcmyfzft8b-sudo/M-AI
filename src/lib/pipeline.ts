@@ -1255,6 +1255,9 @@ export async function answerLectureChat(params: {
         .eq("lecture_id", params.lectureId)
         .eq("user_id", params.userId)
         .order("created_at", { ascending: false })
+        // Reverse chronology also reverses each same-timestamp pair. After
+        // .reverse() below the learner's question precedes its answer.
+        .order("role", { ascending: true })
         .limit(TUTOR_HISTORY_TURN_LIMIT),
       retrieveLectureContext({ lectureId: params.lectureId, question: params.question }),
       fetchLearnerProfile(params.userId),

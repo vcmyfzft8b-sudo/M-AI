@@ -118,6 +118,30 @@ export class SpeechInputError extends Error {
   }
 }
 
+/** Resolve the user's permission before reserving a timed tutor allowance. */
+export async function requestTutorMicrophone(): Promise<MediaStream> {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new SpeechInputError("This browser cannot open a microphone.", "unavailable");
+  }
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+      },
+    });
+  } catch (error) {
+    const denied = error instanceof DOMException &&
+      (error.name === "NotAllowedError" || error.name === "SecurityError");
+    throw new SpeechInputError(
+      denied ? "Microphone access was refused." : "The microphone could not be opened.",
+      denied ? "denied" : "unavailable",
+    );
+  }
+}
+
 export class TutorSpeechInput {
   private stream: MediaStream | null = null;
   private context: AudioContext | null = null;
@@ -202,33 +226,22 @@ export class TutorSpeechInput {
    * else sees it, and `autoGainControl` keeps somebody sitting back from a laptop
    * at the same level as somebody leaning in.
    */
-  async start() {
+  async start(preparedStream?: MediaStream) {
+    this.stream = preparedStream ?? null;
     const AudioContextClass =
       window.AudioContext ??
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
 
-    if (!navigator.mediaDevices?.getUserMedia || !AudioContextClass) {
+    if (!AudioContextClass) {
+      this.close();
       throw new SpeechInputError("This browser cannot open a microphone.", "unavailable");
     }
 
-    try {
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1,
-        },
-      });
-    } catch (error) {
-      const denied =
-        error instanceof DOMException &&
-        (error.name === "NotAllowedError" || error.name === "SecurityError");
-
-      throw new SpeechInputError(
-        denied ? "Microphone access was refused." : "The microphone could not be opened.",
-        denied ? "denied" : "unavailable",
-      );
+    this.stream ??= await requestTutorMicrophone();
+    if (this.closed) {
+      this.stream.getTracks().forEach((track) => track.stop());
+      this.stream = null;
+      return;
     }
 
     /*

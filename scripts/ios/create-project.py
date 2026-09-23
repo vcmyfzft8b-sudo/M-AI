@@ -1,46 +1,20 @@
-"""Generate the dependency-free Xcode project; run from the repository root."""
+"""Generate the Xcode structure while retaining checked-in app configuration."""
 from pathlib import Path
-import json, plistlib
+import json
 root=Path('ios')
+source_root=Path(__file__).resolve().parents[2]/'ios'
 app=root/'MemoAI'
 def write(path,text):
  path.parent.mkdir(parents=True,exist_ok=True); path.write_text(text)
-def plist(path,data):
- path.parent.mkdir(parents=True,exist_ok=True); path.write_bytes(plistlib.dumps(data))
-plist(root/'Config/MemoAI.entitlements', {'com.apple.developer.applesignin': ['Default']})
-plist(app/'Info.plist', {
- 'CFBundleDisplayName':'Memo AI','CFBundleIdentifier':'$(PRODUCT_BUNDLE_IDENTIFIER)',
- 'CFBundleExecutable':'$(EXECUTABLE_NAME)','CFBundleName':'$(PRODUCT_NAME)',
- 'CFBundlePackageType':'APPL','CFBundleShortVersionString':'$(MARKETING_VERSION)',
- 'CFBundleVersion':'$(CURRENT_PROJECT_VERSION)','LSRequiresIPhoneOS':True,
- 'UIApplicationSupportsIndirectInputEvents':True,
- 'UILaunchStoryboardName':'LaunchScreen',
- 'CFBundleURLTypes':[{'CFBundleURLName':'eu.memoai.memo.auth','CFBundleURLSchemes':['eu.memoai.memo.auth']}],
- 'UISupportedInterfaceOrientations':['UIInterfaceOrientationPortrait','UIInterfaceOrientationLandscapeLeft','UIInterfaceOrientationLandscapeRight'],
- 'UISupportedInterfaceOrientations~ipad':['UIInterfaceOrientationPortrait','UIInterfaceOrientationPortraitUpsideDown','UIInterfaceOrientationLandscapeLeft','UIInterfaceOrientationLandscapeRight'],
- 'NSMicrophoneUsageDescription':'Record lectures and speak with your Memo voice tutor.',
- 'NSCameraUsageDescription':'Scan study materials and attach photos to your notes.',
- # The native share sheet offers "Save Image" for exported mindmap PNGs; without
- # this string iOS terminates the app when a user picks it.
- 'NSPhotoLibraryAddUsageDescription':'Save mindmap images exported from your notes to your photo library.',
- 'ITSAppUsesNonExemptEncryption':False,
- # Lectures are recorded natively so capture survives the screen locking;
- # without the audio background mode the session ends the moment iOS suspends
- # the app and the recording is silently truncated.
- 'UIBackgroundModes':['audio'],
- 'NSSupportsLiveActivities':True,
- 'NSAppTransportSecurity':{'NSAllowsLocalNetworking':True}
-})
-# Includes data collected through the embedded app and backend, not just Swift.
-# Review against deployed providers before submitting App Store privacy answers.
-collected=[]
-for kind in ['Name','EmailAddress','UserID','PurchaseHistory','AudioData','PhotosorVideos','OtherUserContent','CustomerSupport']:
- collected.append({'NSPrivacyCollectedDataType':'NSPrivacyCollectedDataType'+kind,'NSPrivacyCollectedDataTypeLinked':True,'NSPrivacyCollectedDataTypeTracking':False,'NSPrivacyCollectedDataTypePurposes':['NSPrivacyCollectedDataTypePurposeAppFunctionality']})
-for kind in ['ProductInteraction','OtherUsageData','CrashData','PerformanceData','OtherDiagnosticData','CoarseLocation']:
- collected.append({'NSPrivacyCollectedDataType':'NSPrivacyCollectedDataType'+kind,'NSPrivacyCollectedDataTypeLinked':True,'NSPrivacyCollectedDataTypeTracking':False,'NSPrivacyCollectedDataTypePurposes':['NSPrivacyCollectedDataTypePurposeAnalytics','NSPrivacyCollectedDataTypePurposeAppFunctionality']})
-plist(app/'PrivacyInfo.xcprivacy', {'NSPrivacyTracking':False,'NSPrivacyTrackingDomains':[], 'NSPrivacyCollectedDataTypes':collected, 'NSPrivacyAccessedAPITypes':[
- # The app-only theme preference lives in UserDefaults (required-reason API, CA92.1).
- {'NSPrivacyAccessedAPIType':'NSPrivacyAccessedAPICategoryUserDefaults','NSPrivacyAccessedAPITypeReasons':['CA92.1']}]})
+def copy_configuration(path):
+ # The shipped manifests are the source of truth. Duplicated defaults used to
+ # remove portrait locking, app-bound domains, APNs and required privacy reasons.
+ source=source_root/path.relative_to(root)
+ data=source.read_bytes()
+ path.parent.mkdir(parents=True,exist_ok=True)
+ if path.resolve()!=source.resolve(): path.write_bytes(data)
+for path in [root/'Config/MemoAI.entitlements', app/'Info.plist', app/'PrivacyInfo.xcprivacy']:
+ copy_configuration(path)
 assets=app/'Assets.xcassets'
 write(assets/'Contents.json',json.dumps({'info':{'author':'xcode','version':1}},indent=2)+'\n')
 write(assets/'AppIcon.appiconset/Contents.json',json.dumps({'images':[{'filename':'AppIcon.png','idiom':'universal','platform':'ios','size':'1024x1024'}],'info':{'author':'xcode','version':1}},indent=2)+'\n')
@@ -52,35 +26,15 @@ for theme,channels in [('light',(241,241,245)),('dark',(18,18,20))]:
  if theme=='dark': c['appearances']=[{'appearance':'luminosity','value':'dark'}]
  colors.append(c)
 write(assets/'Canvas.colorset/Contents.json',json.dumps({'colors':colors,'info':{'author':'xcode','version':1}},indent=2)+'\n')
-# All UI copy is catalogued. English is the development fallback; the PWA keeps its five locales.
-strings={
- 'en':{'retry':'Try again','loading':'Opening Memo…','connectionFailed':'Memo could not connect. Check your connection and try again.','actionFailed':'This action could not be completed. Please try again.','ok':'OK','recording':'Recording lecture','recordingPaused':'Paused'},
- 'sl':{'retry':'Poskusi znova','loading':'Odpiranje Mema…','connectionFailed':'Memo se ni mogel povezati. Preveri povezavo in poskusi znova.','actionFailed':'Dejanja ni bilo mogoče dokončati. Poskusi znova.','ok':'V redu','recording':'Snemanje predavanja','recordingPaused':'Zaustavljeno'},
- 'hr':{'retry':'Pokušaj ponovno','loading':'Otvaranje Mema…','connectionFailed':'Memo se nije mogao povezati. Provjeri vezu i pokušaj ponovno.','actionFailed':'Radnju nije bilo moguće dovršiti. Pokušaj ponovno.','ok':'U redu','recording':'Snimanje predavanja','recordingPaused':'Pauzirano'},
- 'bs':{'retry':'Pokušaj ponovo','loading':'Otvaranje Mema…','connectionFailed':'Memo se nije mogao povezati. Provjeri vezu i pokušaj ponovo.','actionFailed':'Radnju nije bilo moguće dovršiti. Pokušaj ponovo.','ok':'U redu','recording':'Snimanje predavanja','recordingPaused':'Pauzirano'},
- 'sr':{'retry':'Pokušaj ponovo','loading':'Otvaranje Mema…','connectionFailed':'Memo nije mogao da se poveže. Proveri vezu i pokušaj ponovo.','actionFailed':'Radnja nije mogla da se završi. Pokušaj ponovo.','ok':'U redu','recording':'Snimanje predavanja','recordingPaused':'Pauzirano'}}
-for locale,table in strings.items():
- write(app/f'{locale}.lproj/Localizable.strings','\n'.join(f'{json.dumps(k)} = {json.dumps(v,ensure_ascii=False)};' for k,v in table.items())+'\n')
-permissions = {
- 'en': ('Scan study materials and attach photos to your notes.', 'Record lectures and speak with your Memo voice tutor.', 'Save mindmap images exported from your notes to your photo library.'),
- 'sl': ('Skeniraj učno gradivo in priloži fotografije zapiskom.', 'Snemaj predavanja in se pogovarjaj z glasovnim tutorjem Memo.', 'Shrani slike miselnih vzorcev, izvožene iz zapiskov, v svojo knjižnico fotografij.'),
- 'hr': ('Skeniraj materijale za učenje i priloži fotografije bilješkama.', 'Snimaj predavanja i razgovaraj s glasovnim tutorom Memo.', 'Spremi slike mentalnih mapa izvezene iz bilješki u svoju biblioteku fotografija.'),
- 'bs': ('Skeniraj materijale za učenje i priloži fotografije bilješkama.', 'Snimaj predavanja i razgovaraj s glasovnim tutorom Memo.', 'Sačuvaj slike mentalnih mapa izvezene iz bilješki u svoju biblioteku fotografija.'),
- 'sr': ('Skeniraj materijale za učenje i priloži fotografije beleškama.', 'Snimaj predavanja i razgovaraj sa glasovnim tutorom Memo.', 'Sačuvaj slike mentalnih mapa izvezene iz beleški u svoju biblioteku fotografija.'),
-}
-for locale, (camera, microphone, photoLibraryAdd) in permissions.items():
- table = {'NSCameraUsageDescription': camera, 'NSMicrophoneUsageDescription': microphone, 'NSPhotoLibraryAddUsageDescription': photoLibraryAdd}
- write(app/f'{locale}.lproj/InfoPlist.strings','\n'.join(f'{json.dumps(k)} = {json.dumps(v,ensure_ascii=False)};' for k,v in table.items())+'\n')
+# Keep the maintained translations and permission descriptions when regenerating.
+for locale in ['en','sl','hr','bs','sr']:
+ for name in ['Localizable.strings','InfoPlist.strings']:
+  copy_configuration(app/f'{locale}.lproj'/name)
 # The Lock Screen recording banner is drawn by a WidgetKit extension; the app
 # only starts and updates the activity. Its brand images are checked in beside
 # this manifest, as the app's are.
 widget=root/'RecordingLiveActivity'
-plist(widget/'Info.plist', {
- 'CFBundleDisplayName':'Memo AI','CFBundleIdentifier':'$(PRODUCT_BUNDLE_IDENTIFIER)',
- 'CFBundleExecutable':'$(EXECUTABLE_NAME)','CFBundleName':'$(PRODUCT_NAME)',
- 'CFBundlePackageType':'$(PRODUCT_BUNDLE_PACKAGE_TYPE)',
- 'CFBundleShortVersionString':'$(MARKETING_VERSION)','CFBundleVersion':'$(CURRENT_PROJECT_VERSION)',
- 'NSExtension':{'NSExtensionPointIdentifier':'com.apple.widgetkit-extension'}})
+copy_configuration(widget/'Info.plist')
 write(widget/'Assets.xcassets/Contents.json',json.dumps({'info':{'author':'xcode','version':1}},indent=2)+'\n')
 for name,filename in [('MemoMark','mark.png'),('MemoLockup','lockup.png')]:
  write(widget/f'Assets.xcassets/{name}.imageset/Contents.json',json.dumps({'images':[{'filename':filename,'idiom':'universal'}],'info':{'author':'xcode','version':1}},indent=2)+'\n')

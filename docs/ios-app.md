@@ -70,6 +70,14 @@ The follow-up privacy manifest declares UserDefaults reason `CA92.1` for the app
 
 Memo uses a root WKWebView without an address bar, browser tabs or navigation toolbar. Its background fills the app window while content respects the iPhone camera/status area and home indicator. Link previews are disabled; deliberate external website links open in the system browser instead of an embedded Safari sheet. Google authentication and Apple billing retain their required system interfaces. The branch Preview now sets `VERCEL_PREVIEW_FEEDBACK_ENABLED=0` so Vercel’s review toolbar cannot overlay the app during review. The new deployment is ready. Native Debug build and the actual Preview simulator settings/theme/scroll test passed. Visually verified the toolbar is absent on home and settings. Fresh screenshots: `ios/build/screenshots/12-full-screen-home.png`, `13-full-screen-settings-light.png`, `14-full-screen-settings-dark.png`, and `15-full-screen-settings-apple.png`. The passing result bundle is `ios/build/browser-free-final.xcresult`. The UI test ran successfully while direct Mac control remained locked. A fresh distribution archive/export must include the browser-control changes before any upload.
 
+The current wrapper locks its scene to portrait on iPhone and iPad. This is
+separate from iPadOS window management: in iPadOS 26 Windowed Apps and Stage
+Manager, Apple can show a resize handle and scale the scene even when
+`UIRequiresFullScreen` is true. The handle is visible in the current build 9
+iPad capture. That key prevents classic Split View on older iPadOS; it does
+not guarantee exclusive full screen on modern iPadOS. See
+[Apple's UIRequiresFullScreen documentation](https://developer.apple.com/documentation/BundleResources/Information-Property-List/UIRequiresFullScreen).
+
 ### Language selection — same policy as the PWA
 
 On the first online launch, the website’s existing IP-country lookup selects Slovenian for SI, Croatian for HR, Bosnian for BA and Serbian (Latin script) for RS. All other or unknown countries use English. The wrapper does not request GPS or replace this with the iPhone language/region. The first server-rendered login page uses the detected language and saves the regular `memo-locale` cookie in WKWebView’s persistent storage.
@@ -132,6 +140,14 @@ In App Store Connect, **Users and Access → Integrations → In-App Purchase**,
 - `APPLE_APP_ID`: numeric app record ID
 - `APPLE_IAP_KEY_ID`, `APPLE_IAP_ISSUER_ID`, `APPLE_IAP_PRIVATE_KEY`: Apple API credentials
 - `APPLE_IAP_ENABLED=true`: only after configuration and validation
+- `APPLE_PROMOTION_CATALOGUE_KEY`: separate server-only Stripe restricted key for
+  code validation (Read only: Coupons, Promotion Codes, Prices and Products).
+  Required in hosted Preview; it may read the live offer catalogue but must not
+  grant customer/payment access. Use a branch-scoped secret; never change the
+  shared staging database configuration. Preview rejects an unrestricted live
+  key and never falls back to web checkout credentials. Production may retain
+  its existing Stripe key until the restricted catalogue key is configured.
+  See [Stripe restricted keys](https://docs.stripe.com/keys/restricted-api-keys).
 - `APPLE_SANDBOX_REVIEW_USER_IDS`: optional comma-separated UUIDs of explicitly chosen synthetic TestFlight/App Review accounts
 
 Do not place secrets in Swift, `NEXT_PUBLIC_*`, Git, or chat. The [official Apple server library](https://github.com/apple/app-store-server-library-node) handles JWS verification and API authentication. Public root certificates in `src/lib/mobile/apple-roots.json` come from [Apple PKI](https://www.apple.com/certificateauthority/).
@@ -187,9 +203,9 @@ npm run ios:open
 5. Alternatively put `DEVELOPMENT_TEAM = YOURTEAMID` in ignored `ios/Config/Local.xcconfig`. Never commit private signing material.
 6. Select your connected iPhone and run. Enable Developer Mode on the phone if Xcode asks.
 
-Debug builds can set `MEMO_IOS_URL` in **Edit Scheme → Run → Arguments → Environment Variables** to `https://your-preview.vercel.app`. Only localhost/127.0.0.1 HTTP or Vercel HTTPS origins are accepted. Omit the path; the app opens `/auth/continue`, which resumes an existing session or shows login. Release builds always use `https://memoai.eu`.
+Debug builds can set `MEMO_IOS_URL` in **Edit Scheme → Run → Arguments → Environment Variables** to `https://your-preview.vercel.app`. Only localhost/127.0.0.1 HTTP or Vercel HTTPS origins are accepted. Set the build setting `MEMO_APP_BOUND_HOST` to the same hostname (without scheme or path), for example `xcodebuild … MEMO_APP_BOUND_HOST=your-preview.vercel.app`. This includes the Preview in `WKAppBoundDomains`; changing only the runtime URL blocks the JavaScript/native bridge. Rebuild after changing hosts. Omit the URL path; the app opens `/onboarding`, which resumes a session or follows the shared PWA onboarding/sign-in flow. Release builds always use the production origin.
 
-The project and manifest generator is `python3 scripts/ios/create-project.py`; generated files and brand assets are checked in. Keep changes to generated configuration in that script as well. Version/build numbers live in `ios/Config/App.xcconfig`.
+The Xcode structure generator is `python3 scripts/ios/create-project.py`; generated files and brand assets are checked in. App/extension manifests, entitlements and localized strings are maintained directly in their checked-in files. The generator preserves those files (and copies them when generating into a separate output directory), so regenerating cannot restore obsolete orientation, privacy or notification defaults. Shared version/build numbers live in `ios/Config/Version.xcconfig`.
 
 ## 6. Test before release
 
@@ -204,6 +220,44 @@ MEMO_IOS_TEST_DEVICE=iPad npm run ios:test
 The native tests launch their own local synthetic fixture and isolated simulator (deleted again on exit). They cover launch, bridge injection, keyboard, HTTP-error retry, document download sharing and generated blob sharing. They do not exercise the real PWA, login, StoreKit purchases, recording, or server deletion.
 
 The `testPreview*` cases in `WrapperTests` skip unless `MEMO_IOS_URL` names a Vercel Preview; run them through a user scheme (or `TEST_RUNNER_MEMO_IOS_URL`) against a simulator whose app is already signed in with a synthetic staging account. `testPreviewCreateStudyNoteFromPhoto` picks a lesson photo from the simulator library (`swift ios/build/make-study-fixture.swift`, then `xcrun simctl addmedia <udid> ios/build/synthetic-plant-lesson.png`), waits for the note, creates flashcards, a quiz and a mindmap, shares the mindmap PNG through the native sheet, chats, plays read-aloud and deletes the note. It consumes the account's one free note, so a full pass needs a fresh synthetic account. `testPreviewSignInScreenAndCodeLogin` runs on a signed-out simulator with `TEST_RUNNER_MEMO_QA_EMAIL`/`TEST_RUNNER_MEMO_QA_CODE` for a staging account listed in the Preview's `APP_REVIEW_ACCOUNT_EMAILS` (create one with the Supabase admin API against staging only). `testPreviewRecordingSurvivesTheAppLeavingTheScreen` signs itself in with the same two variables, records, sends the app to the home screen for fifteen seconds and checks the clock counted that time and that the finished file is the app's own `.m4a`; it cancels before creating, so the free note is not spent, and it needs the microphone granted first (`xcrun simctl privacy <udid> grant microphone eu.memoai.memo`). `testPreviewSafeAreaReview` only captures screenshots of the edge-to-edge layout for review. The test script uses the dedicated `MemoAIStoreTests` scheme with `ios/MemoAIUITests/Offers.storekit`; the normal `MemoAI` launch/archive scheme has no local StoreKit configuration. Test configuration prices (including €64.99 yearly introductory pricing) are synthetic and do not configure App Store Connect. `StoreOfferTests` exercises real StoreKit product loading, eligible first-period prices and rejection of a stale quote before a purchase starts. Run test commands sequentially because each uses this checkout's `ios/build` and fixture URL resource. Test artifacts and local signing files are ignored.
+
+`testPreviewStudyNoteFromPDF` uses the original synthetic lesson at
+`ios/MemoAIUITests/Fixtures/memo-qa-electric-circuits.pdf`. Place it in the
+dedicated simulator's Files app under **On My iPhone**, sign in to an English
+staging account with an unused free note, and set
+`TEST_RUNNER_MEMO_QA_PDF=memo-qa-electric-circuits`. The test uses the native
+file picker, uploads the PDF and waits for actual generated circuit content.
+It does not inject a generated note or bypass the note allowance. When running
+account preparation in the same suite, select `testPreviewPrepareStudyAccount`
+and `testPreviewResetLanguageToEnglish` before the study test; XCTest orders
+selected methods alphabetically. Keep all fixtures and accounts synthetic.
+
+`testPreviewStudyNoteFromAudioFile` follows the same native picker flow for
+`memo-qa-electric-circuits-audio.m4a`, then verifies both generated notes and
+the source transcript. Set
+`TEST_RUNNER_MEMO_QA_AUDIO=memo-qa-electric-circuits-audio` and use an account
+with an unused free note. Its original script is checked in beside the audio;
+the 92-second recording was synthesized with macOS Samantha and converted to
+mono AAC. It contains no recorded user speech. Seed it in the same dedicated
+Simulator Files folder used by the PDF test.
+
+Audio preparation explicitly starts metadata loading and waits at most ten
+seconds per probe before trying the existing WAV-header/transcode fallback.
+The picker displays translated preparation progress during that wait. This
+prevents an M4A whose metadata never fires in WKWebView from leaving creation
+disabled indefinitely; it does not promise that every codec decodes natively.
+
+`testPreviewSourceAudioPlayback` reopens the retained audio note without
+consuming another free note. It verifies an advancing playback clock, a held
+pause, both ten-second seek controls and captures the selected playback speed.
+
+`testPreviewStudyNoteFromOfficeDocument` uses the same Files-to-generation
+path as the PDF test. Set `TEST_RUNNER_MEMO_QA_OFFICE` to
+`memo-qa-circuits-word` or `memo-qa-circuits-slides`, seed the matching DOCX or
+PPTX from `ios/MemoAIUITests/Fixtures`, and use a separate synthetic staging
+account with an unused free note for each import. The original one-page Word
+lesson and three-slide deck contain plain educational text only; these tests
+do not cover embedded media or complex Office formatting.
 
 Required end-to-end checks with synthetic staging data:
 
@@ -230,13 +284,41 @@ Notes on behaviour worth knowing:
 
 ### Offline
 
-The app opens and reads with no connection. Everything about it is shared with the web app and documented in [docs/offline.md](/docs/offline.md); the two things that are the wrapper's own are `WKAppBoundDomains` in `Info.plist` and `limitsNavigationsToAppBoundDomains` on the web view — WKWebView runs a service worker only for an app-bound domain, and with either half missing the page never even attempts to register one. Both are off for a Vercel preview, whose host changes with every deployment and so cannot be in a static list, so **offline mode cannot be checked on a preview**: use production, or a local production build served over TLS as that document describes.
+The app opens and reads with no connection. Everything about it is shared with the web app and documented in [docs/offline.md](/docs/offline.md); the two things that are the wrapper's own are `WKAppBoundDomains` in `Info.plist` and `limitsNavigationsToAppBoundDomains` on the web view — WKWebView runs a service worker only for an app-bound domain, and with either half missing the page never even attempts to register one. Preview builds must include their hostname through the `MEMO_APP_BOUND_HOST` build setting, matching `MEMO_IOS_URL`. The wrapper reads the built plist and enables app-bound navigation for that origin. Merely turning off the navigation restriction does not restore JavaScript/native bridge access on unlisted domains. Use a stable Preview alias and rebuild if its hostname changes. Local offline checks still require TLS as described in that document.
+
+### Haptic feedback
+
+The iOS wrapper adds light feedback to real button/link taps and selection feedback to toggles, tabs and plan choices. Delegation handles controls added during PWA navigation without changing the web UI. Disabled controls, scripted clicks, typing and scrolling do not trigger feedback; native calls are limited to one per 100 ms while the app is active. `Haptics.swift` uses UIKit feedback generators and the existing trusted-origin bridge. Physical strength must be checked on an iPhone; Simulator cannot reproduce it.
 
 ### Product and review limits
 
 Recording is native and continues with the phone locked; the tutor still relies on WKWebView and must be tested on a physical phone. The app reads with no connection — the library, every note that has been opened and its study material — and refuses only what has to be made or spoken on the spot; see [docs/offline.md](/docs/offline.md), which also covers the two wrapper settings that make it possible (`WKAppBoundDomains` and `limitsNavigationsToAppBoundDomains`, without which WKWebView runs no service worker at all) and how to check it on a simulator. Generated blob sharing has a 32 MiB cap. Extra voice-credit consumables are not offered in iOS. The account deletion screen explains that Apple subscriptions must be cancelled separately through Apple's subscription controls.
 
 The native AI consent gate discloses Google Gemini, Soniox, OpenRouter and its model providers before the study screens open. Withdrawal stops subsequent normal app use; it does not cancel an already running job. The local legal catalogues now disclose OpenRouter and Apple transaction verification, distinguish web billing from App Store billing, and direct Apple cancellation/refund requests to Apple in all five languages. These updates still require deployment with this branch.
+
+### Real tutor startup check
+
+`testPreviewLiveTutorSessionControls` runs against an existing synthetic circuit
+note on staging. Enable `MEMO_QA_LIVE_TUTOR=1` explicitly because it opens a real
+microphone and consumes the account's ordinary tutor allowance. Optional
+`MEMO_QA_MIC_PERMISSION_DELAY=40` leaves the system permission prompt open so a
+read-only staging check can verify that no allowance is reserved yet. The test
+checks explaining, sustained pause, resume and end. Its 22 September run passed
+on Preview `93c30937`; a 40-second permission wait charged no time and the actual
+session settled at nine seconds. It does not verify perceived sound quality or
+a learner interrupting by speaking. Do not reset usage to obtain a pass.
+
+### Library verification
+
+`testPreviewLibrarySearchRenameAndFolders` requires
+`MEMO_QA_LIBRARY_WRITES=1` and a retained synthetic circuit note in the dedicated
+staging account. It exercises search, a saved note rename, folder creation and
+rename, membership changes, relaunch persistence, and deleting a populated
+folder without deleting its note. It restores the note title and removes the
+temporary folder through the real UI. The 22 September run passed on Preview
+`28c57449` in 120 seconds. Phone and desktop folder menus now share their saved
+list, and the phone exposes the existing membership picker through Add lectures.
+These are shared PWA changes; no separate native library UI was introduced.
 
 ## 7. Archive, TestFlight, and submit
 
@@ -250,3 +332,34 @@ The native AI consent gate discloses Google Gemini, Soniox, OpenRouter and its m
 8. Select the build and all four subscriptions and submit only when all required fields/checks are complete.
 
 Apple evaluates the app's utility and overall experience under [review guideline 4.2](https://developer.apple.com/app-store/review/guidelines/#minimum-functionality); native billing and sharing alone do not guarantee approval. Also check [account deletion requirements](https://developer.apple.com/support/offering-account-deletion-in-your-app), [privacy disclosures](https://developer.apple.com/app-store/app-privacy-details/), and [current submission requirements](https://developer.apple.com/app-store/submitting/).
+
+### Keyboard motion (bridge v4)
+
+`KeyboardMotion.swift` anchors a noninteractive marker to `UIKeyboardLayoutGuide`
+and samples its presentation layer on `CADisplayLink`. The shared `KeyboardInset`
+controller receives the latest geometry through `memo:keyboard`; all existing
+chat composers, forms and sheets consume the same CSS variables. It does not
+add a second easing animation or wait for WebKit's late viewport resize. The
+study editor's extra delayed scrolling is disabled for this native path.
+
+Frames are sent only when geometry changes, with at most one JavaScript call in
+flight. Sampling stops after dismissal and in the background. Floating iPad
+keyboards do not lift the whole page. ProMotion refresh-rate support is enabled;
+iOS still chooses the actual cadence for the device and power conditions.
+Browsers and older binaries retain the visualViewport fallback. Both a v4 binary
+and this web deployment are required to use the native measurements.
+
+Local motion fixture (no accounts or billable services):
+
+```sh
+node scripts/ios/keyboard-motion-fixture.mjs
+# Build with MEMO_APP_BOUND_HOST=localhost, then run only
+# MemoAIUITests/WrapperTests/testLocalKeyboardMotion with:
+# TEST_RUNNER_MEMO_KEYBOARD_QA_URL=http://localhost:4198
+```
+
+It loads the actual shared controller/styles and exercises three form and three
+chat keyboard cycles. Geometry is saved under `ios/build/keyboard-motion-*-frames.json`
+(or the `MEMO_KEYBOARD_QA_OUTPUT` prefix). The separate
+`testPreviewKeyboardEverywhere` checks actual library search, rename, library chat
+and note chat against the synthetic Preview account without sending messages.

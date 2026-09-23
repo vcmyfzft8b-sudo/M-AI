@@ -3,6 +3,7 @@ import "server-only";
 import { AppStoreServerAPIClient, Environment, SignedDataVerifier, VerificationException, VerificationStatus, type JWSTransactionDecodedPayload } from "@apple/app-store-server-library";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { entitlementFromVerifiedTransaction } from "@/lib/mobile/transaction";
+import { attributeAppleCodePurchase } from "@/lib/mobile/code-attribution";
 import roots from "@/lib/mobile/apple-roots.json";
 
 export function appleEnvironment(): Environment.PRODUCTION | Environment.SANDBOX {
@@ -12,6 +13,11 @@ export function appleEnvironment(): Environment.PRODUCTION | Environment.SANDBOX
 function sandboxReviewer(userId: string) {
   // Explicit synthetic review/TestFlight accounts only, never a request flag or UA.
   return (process.env.APPLE_SANDBOX_REVIEW_USER_IDS || "").split(",").map(id => id.trim().toLowerCase()).includes(userId.toLowerCase());
+}
+
+export function appleAccountEnvironments(userId: string) {
+  return appleEnvironment() === Environment.PRODUCTION
+    ? sandboxReviewer(userId) ? ["production", "sandbox"] : ["production"] : ["sandbox"];
 }
 
 function assertDatabaseEnvironment() {
@@ -39,6 +45,15 @@ function appleAPI(environment = appleEnvironment()) {
 export function appleBillingConfigured() {
   if (process.env.APPLE_IAP_ENABLED !== "true") return false;
   try { appleVerifier(); appleAPI(); return true; } catch { return false; }
+}
+
+/**
+ * The purchase is genuine but was bought for a different Memo account (Apple's
+ * appAccountToken names another user). Retrying never helps; the buyer has to
+ * sign in to the account that owns it.
+ */
+export class AppleAccountMismatch extends Error {
+  constructor() { super("Apple purchase belongs to another account"); this.name = "AppleAccountMismatch"; }
 }
 
 /** A notification Apple can resend for three days without it ever becoming acceptable. */
@@ -106,6 +121,9 @@ export async function saveAppleTransaction(signedTransaction: string, userId?: s
   let verified = checked.verified;
   const verifier = appleVerifier(checked.environment);
   const expected = { bundleId: process.env.APPLE_BUNDLE_ID || "eu.memoai.memo", environment: checked.environment, userId };
+  if (userId && verified.appAccountToken && verified.appAccountToken.toLowerCase() !== userId.toLowerCase()) {
+    throw new AppleAccountMismatch();
+  }
   // Validate ownership before contacting Apple or touching the database.
   entitlementFromVerifiedTransaction(verified, expected);
   if (refresh) {
@@ -130,6 +148,7 @@ export async function saveAppleTransaction(signedTransaction: string, userId?: s
   if (insertError) throw new Error("Apple entitlement insert failed", { cause: insertError });
   const owner = await table().select("user_id,environment").eq("original_transaction_id", row.original_transaction_id).eq("product_id", row.product_id).single();
   const existing = owner.data as { user_id: string; environment: string } | null;
+  if (!owner.error && existing && existing.user_id !== row.user_id) throw new AppleAccountMismatch();
   if (owner.error || existing?.user_id !== row.user_id || existing.environment !== row.environment) throw new Error("Apple transaction ownership mismatch");
   // SQL conditional update prevents a delayed renewal/refund or concurrent restore
   // from overwriting a newer purchase, or a newer signature for the same purchase.
@@ -141,6 +160,10 @@ export async function saveAppleTransaction(signedTransaction: string, userId?: s
   const history = await service.from("profiles").update({ subscription_trial_started_at: row.purchased_at } as never)
     .eq("id", row.user_id).is("subscription_trial_started_at", null);
   if (history.error) throw new Error("Apple subscription history update failed", { cause: history.error });
+  // Creator credit is bookkeeping: it must never withhold the entitlement.
+  await attributeAppleCodePurchase(verified, row).catch(() => {
+    console.error("Apple code attribution unavailable", { stage: "attach_purchase" });
+  });
   return { ...row, plan };
 }
 
@@ -149,8 +172,7 @@ export async function getAppleEntitlement(userId: string) {
   assertDatabaseEnvironment();
   const { data, error } = await createSupabaseServiceRoleClient()
     .from("mobile_app_store_entitlements").select("product_id,expires_at")
-    .eq("user_id", userId).in("environment", appleEnvironment() === Environment.PRODUCTION
-      ? sandboxReviewer(userId) ? ["production", "sandbox"] : ["production"] : ["sandbox"])
+    .eq("user_id", userId).in("environment", appleAccountEnvironments(userId))
     .eq("status", "active").gt("expires_at", new Date().toISOString())
     .order("expires_at", { ascending: false }).limit(1).maybeSingle();
   if (error) throw new Error("Apple entitlement lookup failed", { cause: error });

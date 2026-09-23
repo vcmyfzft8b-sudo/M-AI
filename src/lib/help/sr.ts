@@ -155,6 +155,8 @@ Kontakt za pitanja o privatnosti i za ostvarivanje prava: info@memoai.eu
 
 Za pretplate u App Storeu obrađujemo Appleove potpisane zapise o transakcijama, identifikatore proizvoda i transakcija, datume kupovine i isteka i status povraćaja ili opoziva pristupa. Appleu šaljemo tehnički identifikator tvog Memo naloga kako bismo kupovinu povezali s nalogom i proverili pristup.
 
+Ako u iOS aplikaciji dozvoliš obaveštenja, čuvamo token za push obaveštenja koji Apple dodeljuje tvom uređaju i povezujemo ga s tvojim nalogom. Preko Appleove usluge za push obaveštenja javljamo ti kada je beleška spremna. Obaveštenje sadrži naslov beleške. Obaveštenja možeš u bilo kom trenutku isključiti u podešavanjima iOS-a; odjavom se token uklanja, a brisanjem naloga briše.
+
 Podatke o tvojoj platnoj kartici ne primamo i ne čuvamo. Podatke o plaćanju direktno obrađuje Stripe za veb kupovine ili Apple za kupovine u App Storeu.
 
 **Tehnički podaci**
@@ -162,7 +164,7 @@ Podatke o tvojoj platnoj kartici ne primamo i ne čuvamo. Podatke o plaćanju di
 - IP adresa, vrsta uređaja, pregledač i operativni sistem
 - vremena pristupa, zahtevi i odgovori servera
 - podaci o greškama i rušenjima
-- agregirani podaci o posetama stranicama
+- posete stranicama, približna država/regija/grad i podaci o uređaju, povezani s tvojim nalogom kada je dostupan, putem neobavezne analitike (u iOS aplikaciji tek kad je uključiš; na veb-sajtu dok je ne isključiš)
 
 ## 3. Svrhe obrade i pravni osnovi
 
@@ -184,7 +186,6 @@ Podatke o tvojoj platnoj kartici ne primamo i ne čuvamo. Podatke o plaćanju di
 
 - bezbednost usluge, sprečavanje zloupotrebe, ograničavanje broja zahteva i otkrivanje prevara
 - otklanjanje grešaka i poboljšavanje pouzdanosti proizvoda
-- agregirana statistika korišćenja iz koje nije moguće prepoznati pojedinca
 - ostvarivanje ili odbrana pravnih zahteva
 
 Kod obrade na osnovu legitimnog interesa odmerili smo svoj interes i tvoja prava. Takvoj obradi možeš da prigovoriš bilo kada.
@@ -192,7 +193,7 @@ Kod obrade na osnovu legitimnog interesa odmerili smo svoj interes i tvoja prava
 **Pristanak (član 6. stav 1. tačka (a) GDPR-a)**
 
 - neobavezne poruke o proizvodu, kada se na njih prijaviš
-- neobavezni kolačići ili slične tehnologije, kada su u upotrebi
+- neobavezna analitika: u iOS aplikaciji tek nakon što je uključiš u podešavanjima; na veb-sajtu dok je tamo ne isključiš
 
 Pristanak možeš da povučeš bilo kada. Povlačenje ne utiče na zakonitost obrade pre povlačenja.
 
@@ -219,7 +220,7 @@ Podatke ne prodajemo. Prosleđujemo ih samo pružaocima koji su nam potrebni za 
 - **OpenRouter i izabrani pružaoci modela** — generisanje AI odgovora i sadržaja za učenje kada se koriste te usluge
 - **Google (Gemini)** — transkripcija, izdvajanje teksta iz dokumenata, ugrađivanja, izrada beleški i odgovora u chatu
 - **Soniox** — transkripcija audiosnimaka, kada je ta usluga uključena
-- **Vercel** — hosting aplikacije i agregirana statistika poseta
+- **Vercel** — hosting, neobavezna analitika poseta i merenja performansi
 - **Inngest** — izvršavanje poslova u pozadini, kada je uključen
 - **Sentry** — praćenje grešaka i rušenja
 - **Google i Apple** — prijava, kada izabereš prijavu preko njih
@@ -287,12 +288,13 @@ Ako smatraš da tvoje podatke obrađujemo nezakonito, možeš da podneseš pritu
 
 ## 12. Kolačići i slične tehnologije
 
-Koristimo:
+Neophodne kolačiće i lokalnu memoriju koristimo za prijavu, bezbednost, podešavanja i pamćenje tvog izbora analitike. Potrebni su za funkcije koje tražiš.
 
-- **neophodne kolačiće i lokalno skladištenje** — za prijavu, održavanje sesije, bezbednost i osnovna podešavanja. Oni su potrebni za rad usluge i nije ih moguće isključiti
-- **statistiku poseta** — agregirana i nelična merenja poseta stranicama putem Vercel Analyticsa
+**U iOS aplikaciji neobavezna analitika podrazumevano je isključena, a na veb-sajtu podrazumevano je uključena.** U Podešavanja → Neobavezna analitika odlučuješ da li dozvoljavaš Memu i Vercelu prikupljanje poseta stranicama, približne lokacije, podataka o uređaju i merenja performansi. Posete mogu biti povezane s tvojim Memo nalogom. Na istom uređaju možeš je isključiti u bilo kom trenutku bez gubitka pristupa aplikaciji.
 
-Oglašivačke kolačiće i praćenje između sajtova ne koristimo. Ako u budućnosti uvedemo neobavezne kolačiće, za njih ćemo zatražiti tvoj pristanak.
+Neophodni kolačić izbora \`memo-analytics\` traje do 180 dana. Nakon pristanka analitički kolačić \`memo-visit\` traje do 24 sata. Isključivanje analitike uklanja kolačić posete i zaustavlja buduće neobavezno prikupljanje. Istek kolačića ne briše zapise već sačuvane na serveru: zapisi poseta povezani s nalogom uklanjaju se pri brisanju naloga, a njihovo uklanjanje možeš zatražiti i na info@memoai.eu.
+
+Ne koristimo oglašivačke kolačiće ni oglašivačko praćenje između sajtova. Samo na veb-sajtu usluga za greške može pri grešci da sačuva snimak trenutaka pre nje, sa skrivenim celim tekstom, unosima i medijima; iOS aplikacija to nikad ne snima. Neophodna bezbednosna dijagnostika i prijava grešaka nastavljaju da rade nezavisno od neobavezne analitike.
 
 ## 13. Deca
 

@@ -1,9 +1,12 @@
 import * as Sentry from "@sentry/nextjs";
+import { isNativeUserAgent } from "@/lib/mobile/runtime";
 
 import { shouldDropClientErrorEvent } from "@/lib/sentry-client-filters";
 
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 const isDevelopment = process.env.NODE_ENV === "development";
+
+const nativeApp = typeof navigator !== "undefined" && isNativeUserAgent(navigator.userAgent);
 
 Sentry.init({
   dsn,
@@ -14,7 +17,10 @@ Sentry.init({
     process.env.NODE_ENV,
   sendDefaultPii: false,
   tracesSampleRate: isDevelopment ? 1.0 : 0.1,
-  integrations: [
+  // The website keeps its masked replay of the moments before an error. The
+  // iOS app does not replay at all: its App Store privacy answers say so.
+  // Error reports and performance traces run in both.
+  integrations: nativeApp ? [] : [
     Sentry.replayIntegration({
       maskAllText: true,
       maskAllInputs: true,
@@ -22,8 +28,8 @@ Sentry.init({
       block: [".note-read-content", ".lecture-markdown"],
     }),
   ],
-  replaysSessionSampleRate: isDevelopment ? 0.1 : 0,
-  replaysOnErrorSampleRate: 1.0,
+  replaysSessionSampleRate: 0,
+  replaysOnErrorSampleRate: nativeApp ? 0 : 1.0,
   beforeSend(event) {
     if (shouldDropClientErrorEvent(event)) {
       return null;

@@ -67,16 +67,12 @@ enum AppConfiguration {
         }), encoding: .utf8)!
     }
 
-    /**
-     Whether every trusted origin is in `WKAppBoundDomains`.
-
-     Only then may the web view opt into the app-bound restriction, which is
-     what lets a service worker run — and so what makes offline mode possible.
-     A Vercel preview's host is generated per deployment and cannot be in a
-     static list, so a preview build stays unrestricted and has no worker.
-     */
+    /// The plist also limits JavaScript injection and native message handlers.
+    /// Preview builds must include their selected host at build time; disabling
+    /// limitsNavigationsToAppBoundDomains does not bypass those restrictions.
     static var isAppBound: Bool {
-        trustedOrigins.allSatisfy { ["memoai.eu", "www.memoai.eu", "localhost"].contains($0.host ?? "") }
+        let hosts = Bundle.main.object(forInfoDictionaryKey: "WKAppBoundDomains") as? [String] ?? []
+        return trustedOrigins.allSatisfy { hosts.contains($0.host ?? "") }
     }
 
     static func isInternal(_ url: URL) -> Bool {

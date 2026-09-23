@@ -2,6 +2,7 @@
 
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
+import { clearVisitorCookie, readAnalyticsConsent } from "@/lib/analytics-consent";
 
 /**
  * Sends the visitor beacon that powers the admin dashboard's traffic and
@@ -14,6 +15,7 @@ import { Suspense, useEffect, useRef } from "react";
 const HEARTBEAT_INTERVAL_MS = 60_000;
 
 function postBeacon(path: string, event: "view" | "heartbeat") {
+  if (!readAnalyticsConsent()) return;
   const body = JSON.stringify({
     path,
     referrer: event === "view" ? document.referrer || null : null,
@@ -28,6 +30,9 @@ function postBeacon(path: string, event: "view" | "heartbeat") {
     keepalive: true,
   }).catch(() => {
     // Analytics is best effort and must never disturb the page.
+  }).finally(() => {
+    // A response already in flight can set its cookie after withdrawal.
+    if (!readAnalyticsConsent()) clearVisitorCookie();
   });
 }
 

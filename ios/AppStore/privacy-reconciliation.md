@@ -1,0 +1,227 @@
+# Privacy reconciliation — 22 September 2026
+
+## Settings presentation and default — 23 September
+
+Optional analytics uses a compact Settings row, matching Language and the
+other account actions. The row shows On/Off and opens a standard detail sheet
+with the complete disclosure, privacy-policy link and switch. The same shared
+component serves browsers and the iOS wrapper; opening or closing the sheet
+does not consent to analytics. Existing choices remain unchanged.
+
+The owner requested default-on only if permitted. The current implementation
+retains explicit opt-in: it uses a non-essential visit cookie and can associate
+usage with an account. Apple's guideline 5.1.1(ii) requires consent or a valid
+legal basis; Slovenian ZEKom-2 guidance requires prior consent for cookies
+outside the necessary/transmission exceptions. This is a decision about Memo's
+current implementation, not a claim that every analytics implementation always
+requires the same consent mechanism.
+
+Sources checked 23 September:
+[Apple guideline 5.1.1](https://developer.apple.com/app-store/review/guidelines/#data-collection-and-storage)
+and [Slovenian Information Commissioner, consent to cookies](https://www.ip-rs.si/mnenja-zvop-2/privolitev-v-uporabo-pi%C5%A1kotkov-1711356267).
+
+This is an implementation audit, not a legal-policy certification. The 23 September
+portal comparison below supersedes the earlier count-only observation.
+
+## Published portal comparison — 23 September
+
+Inspected App Store Connect's App Privacy page and Product Page Preview Details
+for app `6812409212` in the signed-in Arc session. All 15 declared types were
+compared with `ios/MemoAI/PrivacyInfo.xcprivacy`. The published purposes are:
+
+| Data type | Purposes | Linked to identity | Tracking |
+| --- | --- | --- | --- |
+| Name | App Functionality | Yes | No |
+| Email Address | App Functionality | Yes | No |
+| User ID | App Functionality, Analytics | Yes | No |
+| Device ID | App Functionality | Yes | No |
+| Purchase History | App Functionality | Yes | No |
+| Photos or Videos | App Functionality | Yes | No |
+| Audio Data | App Functionality | Yes | No |
+| Customer Support | App Functionality | Yes | No |
+| Other User Content | App Functionality | Yes | No |
+| Coarse Location | App Functionality, Analytics | Yes | No |
+| Product Interaction | App Functionality, Analytics | Yes | No |
+| Other Usage Data | App Functionality, Analytics | Yes | No |
+| Crash Data | App Functionality, Analytics | Yes | No |
+| Performance Data | App Functionality, Analytics | Yes | No |
+| Other Diagnostic Data | App Functionality, Analytics | Yes | No |
+
+Two discrepancies were corrected and published:
+
+- User ID omitted Analytics. `/api/track` supplies `p_user_id` for signed-in,
+  opted-in visits; the purpose now includes Analytics, matching the manifest.
+- Product Interaction appeared in both linked and unlinked preview categories.
+  Its identity-linkage answer was corrected to Yes. The User ID linkage was
+  also explicitly verified as Yes after adding its purpose. Arc's accessibility
+  radio click focused the option without selecting it; keyboard selection and
+  visual verification were needed before publication.
+
+The final detail preview lists all 15 types under Data Linked to You, with no
+Data Not Linked to You or tracking section. The page reports Published. This
+confirms saved portal answers, not a production deployment or Apple approval.
+Source checks also confirmed account-linked diagnostic IDs in `monitoring.ts`,
+disabled client session replay, and account-bound APNs tokens in the mobile
+push route. The privacy-policy URL remains `https://memoai.eu/legal/privacy-policy`.
+Recheck this table if release data collection changes.
+
+## Findings and corrections
+
+- `src/app/api/track/route.ts` stores a 24-hour `memo-visit` session cookie,
+  page paths, optional account ID, referral/campaign values, approximate
+  country/region/city and device/browser classes. It does not store raw IP or
+  raw user agent in the visitor tables. These records are **not exclusively
+  anonymous aggregates**: signed-in records are linked to `auth.users`.
+- User ID therefore has Analytics as well as App Functionality in the native
+  privacy manifest. The corresponding published Apple purpose answer was
+  corrected on 23 September. Build 9 predates this manifest correction.
+- `src/instrumentation-client.ts` previously enabled masked Sentry session
+  replay for errors, without an explicit replay-consent flow or recording
+  indicator. Replay integration has been removed and both replay rates set to
+  zero. Error reporting and sampled performance traces remain active.
+- `src/lib/monitoring.ts` explicitly attaches account IDs and note IDs to some
+  error reports. `sendDefaultPii: false` does not make those reports unlinked.
+  The manifest already marks diagnostics as linked.
+- Account erasure previously relied on Auth deletion to set analytics owners
+  to null. It now deletes owned page views and sessions before Auth deletion;
+  session deletion cascades associated anonymous page views. Deletion also
+  expires `memo-visit` in the response. Failure preserves the owner and cleanup
+  job so the next attempt can still find the records.
+
+## Evidence
+
+The original UI-deleted synthetic account completed its unchanged three-hour
+drain at 17:04:56 CEST. Auth, its one note and the deletion request were removed;
+all eight storage objects (3,635,379 bytes) were gone. The prior code retained
+one session and 73 page views with null owners. The captured IDs established
+ownership before deletion; only those known test records were then removed.
+
+The corrected erasure engine passed an isolated staging integration test:
+owned session, signed-in view and anonymous view removed; unrelated session and
+view preserved; Auth removed; fixture cleaned up. The fixture had no sign-in
+credentials or upload tokens issued. Its already-due job is a database test,
+not evidence of a second native UI deletion or Apple grant revocation.
+
+Local artifacts in `ios/build/`:
+
+- `review-sep22-erasure-complete.json`
+- `review-sep22-erasure-storage-before.json`
+- `review-sep22-erasure-storage-after.json`
+- `review-sep22-erasure-analytics-before.json`
+- `review-sep22-erasure-analytics-repair.json`
+- `review-sep22-erasure-analytics-integration.json`
+
+Five erasure regression tests cover the drain, account isolation, analytics
+failure/retry, Apple revocation failure, storage failure and post-Auth retry.
+
+The same isolation/cascade test also passed through the actual deployed Preview
+`/api/cron/account-erasure` at 17:10:53 CEST, using its authenticated cron route:
+`review-sep22-erasure-preview-integration.json`. Commit `bc816773` was READY at
+`https://memo-12fux1759-nace-valencics-projects.vercel.app`, deployment
+`dpl_Fx9BA4J61YhnbtxkjaQZzw2fJfEg`. The endpoint deleted one synthetic account,
+reported zero failures, removed its owned session and both types of page view,
+and preserved the unrelated fixture until explicit fixture cleanup. TypeScript,
+focused lint and `plutil` validation passed. No production merge was performed.
+
+## Still required
+
+Current consolidated release checklist:
+[SUBMISSION-CHECKLIST.md](SUBMISSION-CHECKLIST.md). The build-10 note below is
+historical: build 12 with the corrected manifest is now uploaded and available
+in internal TestFlight. Final production behavior and Apple authorization
+revocation still need verification.
+
+- Deploy the optional-analytics change to production after release authorization.
+  The five policy translations now describe account-linked visits, the visit
+  cookie and the Settings choice. See the implementation and test scope below.
+- The portal comparison is complete for the current implementation (table above).
+  Confirm the final production release still has the audited data flows, including
+  AI providers, support, purchases, push tokens, diagnostics and coarse location.
+- Verify the final deployed app no longer initializes replay. These source
+  changes do not alter an existing production deployment.
+- Actual Apple-auth revocation still needs a real authenticated test identity.
+- Build and upload a release containing the corrected manifest after the
+  remaining release gates are resolved.
+
+Build 10 now contains the corrected manifest and passed local signature checks
+and Apple's package validation on 22 September at 23:16 CEST. It is exported at
+`ios/build/export-release-10/MemoAI.ipa`; it has not been uploaded. Portal purposes
+are now reconciled; the final production deployment still needs verification.
+
+Sources checked 22 September:
+[Apple privacy details](https://developer.apple.com/app-store/app-privacy-details/)
+and [App Review guideline 2.5.14](https://developer.apple.com/app-store/review/guidelines/#software-requirements).
+
+## Optional analytics implementation
+
+Commit `5bcc4427` adds one shared PWA/iOS Settings switch. The default and the
+server-rendered state are off. Only an explicit, current `v1.granted` preference
+permits analytics; missing, denied, malformed, future and expired values do not.
+The choice expires after 180 days. First-party page-view tracking, Vercel Web
+Analytics and Speed Insights mount after opt-in. The tracking endpoint also
+checks consent before parsing a body, authenticating or writing any analytics.
+
+Withdrawal clears the 24-hour visitor cookie and each vendor event callback
+checks the current choice. A first-party response already in flight clears any
+late visitor cookie when it returns after withdrawal. Account deletion expires
+the analytics choice as well as the visitor cookie. Security/error diagnostics
+continue separately; session replay remains disabled. The policy explains that
+withdrawing consent stops future optional collection and does not automatically
+remove previously collected server records. Existing account-linked records are
+removed during account erasure; support can handle separate removal requests.
+
+This intentionally means traffic reports cover opted-in visitors, rather than
+every visitor. There is no extra onboarding interruption or cookie banner;
+users can optionally enable analytics from Settings.
+
+Local validation:
+
+- TypeScript and focused lint pass.
+- 24 consent, catalogue, UI-string and help-article tests pass.
+- `review-sep22-analytics-local-browser.json`: no analytics scripts or page-view
+  calls before consent; direct unconsented tracking returns 204 without setting
+  a cookie; opt-in records a visit and survives reload; withdrawal removes the
+  visitor cookie, survives reload and stops collection. A delayed real tracking
+  response does not restore its cookie after withdrawal. No page errors.
+- The phone-width Settings screenshot was visually inspected. This local
+  development screenshot contains Next.js development chrome and is not an
+  App Store asset. Native and deployed-Preview verification are recorded below.
+
+Deployed native check: `review-sep22-analytics-native.xcresult`, one pass in
+51.5 seconds, on READY Preview `5bcc4427`
+(`memo-del8juj3d-nace-valencics-projects.vercel.app`,
+`dpl_8SSieqF7dAc63trNyHS8EiiJQAso`). The actual wrapper opens Settings with
+analytics off, enables it, relaunches with it still enabled, withdraws it, then
+relaunches with it still off. Both native screenshots were visually inspected;
+they show the shared Settings content in portrait without browser or Preview
+toolbar controls. This is English native coverage, not every locale on-device.
+
+Deployed browser check: `review-sep22-analytics-preview-localized-browser.json`
+passed at 17:29:42 CEST on the same immutable Preview. It covers the local
+consent/cookie cases above and explicitly calls the already-loaded Vercel
+page-view function after withdrawal, verifying no new analytics request. The
+first browser run timed out because its test expected an English switch while
+geo-detection selected Slovenian; the localized rerun passed without changing
+the product. All five public policy translations returned 200 and disclosed
+the default-off behavior and both cookies:
+`review-sep22-analytics-policy-locales.json`.
+
+An early browser screenshot caught unloaded icon glyphs and the switch color
+transition. A separate settled capture explicitly waited for the Material
+Symbols font and confirmed the off state; it was visually inspected:
+`review-sep22-analytics-preview-settled.png`. Its diagnostic probe reported
+failed Sentry requests, so this is not proof of Sentry delivery. The actual
+native captures have loaded icons and the correct off state.
+
+Consent basis reviewed against the Slovenian Information Commissioner's
+[guidance on analytics cookies](https://www.ip-rs.si/mnenja-gdpr/varovanje-osebnih-podatkov-in-spletni-pi%C5%A1kotki-1669965271).
+
+The physical analytics relaunch test also found WebKit restoring an older consent
+cookie. The browser preference record can now veto a stale grant when it contains
+a newer withdrawal. It cannot grant consent or restore a missing/expired cookie.
+The default remains off; a later explicit opt-in supersedes an earlier withdrawal.
+
+Verified on the connected iPhone after the fix: opt-in persisted across relaunch,
+withdrawal persisted across the following relaunch, and QA finished opted out
+(`review-sep23-iphone-analytics-durable.xcresult`). Browser and native user-agent
+Preview checks passed too; no default-on change was made.

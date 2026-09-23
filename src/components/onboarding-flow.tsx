@@ -1502,7 +1502,7 @@ export function OnboardingFlow({
   };
 
   return (
-    <div className="memo-onboarding-v2">
+    <div className="memo-onboarding-v2 memo-onboarding-keyboard">
       <div style={{ position: "relative", height: "100%", minHeight: "100%", maxHeight: "100%", display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", gridTemplateColumns: "minmax(0, 1fr)", overflow: "hidden", boxSizing: "border-box", background: "var(--bg)", color: "var(--text)", fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI', sans-serif", WebkitFontSmoothing: "antialiased" }}>
       <div aria-hidden="true" style={{ position: "absolute", inset: "-10%", gridArea: "1 / 1 / 3 / 2", pointerEvents: "none", backgroundImage: "radial-gradient(58% 44% at 18% 10%, var(--mesh-lift) 0%, transparent 68%), radial-gradient(48% 38% at 84% 20%, var(--mesh-sink) 0%, transparent 64%), radial-gradient(54% 40% at 32% 44%, var(--mesh-lift) 0%, transparent 66%), radial-gradient(64% 46% at 90% 60%, var(--mesh-sink) 0%, transparent 62%), radial-gradient(50% 42% at 8% 76%, var(--mesh-lift) 0%, transparent 66%), radial-gradient(60% 44% at 64% 94%, var(--mesh-sink) 0%, transparent 64%)", opacity: "var(--mesh-opacity, 1)", animation: "memo-aurora 40s ease-in-out infinite" }}></div>
       <header style={{ position: "relative", zIndex: "2", gridRow: "1", display: "flex", alignItems: "center", gap: "0.85rem", padding: "max(0.7rem, env(safe-area-inset-top)) clamp(1rem, 4vw, 2rem) clamp(0.5rem, 1.4vh, 0.9rem)" }}>
@@ -1530,8 +1530,8 @@ export function OnboardingFlow({
       <p style={{ margin: "0", fontSize: "0.82rem", fontWeight: "600", lineHeight: "1.5", color: "var(--muted-2)" }}>{v.c.asideFoot}</p>
       </aside>
       </>) : null}
-      <main style={{ flex: "1 1 30rem", maxWidth: "34rem", width: "100%", minHeight: "0", maxHeight: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-      <div style={{ minHeight: "0", maxHeight: "100%", transition: "opacity 200ms ease, transform 260ms cubic-bezier(0.2,0.85,0.2,1)", opacity: v.fade, transform: `translate3d(${v.shift}px, 0, 0)` }}>
+      <main className="memo-onboarding-step-scroll" style={{ flex: "1 1 30rem", maxWidth: "34rem", width: "100%", minHeight: "0", maxHeight: "100%", display: "flex", flexDirection: "column" }}>
+      <div style={{ minHeight: "0", flexShrink: "0", transition: "opacity 200ms ease, transform 260ms cubic-bezier(0.2,0.85,0.2,1)", opacity: v.fade, transform: `translate3d(${v.shift}px, 0, 0)` }}>
       {v.isWelcome ? (<>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "1.1rem", paddingTop: "1.4rem" }}>
       <img src="/memo-mascot.png" alt="" fetchPriority="high" decoding="sync" style={{ width: "clamp(5.5rem, min(34vw, 19vh), 12rem)", maxHeight: "24vh", height: "auto", objectFit: "contain", display: "block", animation: "memo-bob 5s ease-in-out infinite", filter: "drop-shadow(0 22px 40px rgba(0,0,0,0.35))" }} />
@@ -1913,7 +1913,7 @@ export function OnboardingFlow({
       </>) : null}
       </div>
       </main>
-      <footer style={{ position: "fixed", left: "0", right: "0", bottom: "0", zIndex: "6", boxSizing: "border-box", background: "linear-gradient(to top, var(--bg) 62%, transparent)", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.55rem", padding: "clamp(0.5rem, 1.4vh, 0.9rem) clamp(1rem, 4vw, 2rem) max(0.8rem, env(safe-area-inset-bottom))" }}>
+      <footer className="memo-onboarding-keyboard-footer" style={{ position: "fixed", left: "0", right: "0", zIndex: "6", boxSizing: "border-box", background: "linear-gradient(to top, var(--bg) 62%, transparent)", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.55rem", paddingTop: "clamp(0.5rem, 1.4vh, 0.9rem)", paddingInline: "clamp(1rem, 4vw, 2rem)" }}>
       {v.showCta ? (<>
       <button type="button" onClick={v.next} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", width: "100%", maxWidth: "34rem", minHeight: "clamp(2.9rem, 7vh, 3.5rem)", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "clamp(0.95rem, 2.2vh, 1.06rem)", fontWeight: "800", letterSpacing: "-0.01em", cursor: "pointer", transition: "transform 170ms cubic-bezier(0.2,0.85,0.2,1), opacity 200ms ease, box-shadow 240ms ease", background: v.ctaBg, color: v.ctaColor, boxShadow: v.ctaGlow, opacity: v.ctaOpacity }} disabled={v.ctaDisabled || v.finishing} aria-busy={v.finishing} className="memo-ob-fx-8">{v.finishing ? <span aria-hidden="true" className="memo-spin" style={{ width: "1.05rem", height: "1.05rem", flex: "0 0 auto", boxSizing: "border-box", borderRadius: "999px", border: "2px solid currentColor", borderTopColor: "transparent" }} /> : null}<span className="memo-ob-cta-label">{v.ctaLabel}</span></button>
       </>) : null}

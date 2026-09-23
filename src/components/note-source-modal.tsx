@@ -505,6 +505,7 @@ export function NoteSourceModal({
   const replaceAudioSource = useCallback(async (nextSource: AudioSource) => {
     let preparedSource = nextSource;
     let originalPreviewUrlToRevoke: string | null = null;
+    setBusyLabel(t("audio.upload.normalising"));
 
     try {
       // Every limit is checked inside prepareAudioSourceForUpload, against the file we would
@@ -513,7 +514,7 @@ export function NoteSourceModal({
       const prepared = await prepareAudioSourceForUpload({
         file: nextSource.file,
         knownDurationSeconds: nextSource.durationSeconds,
-        onStageChange: setBusyLabel,
+        onStageChange: (key) => setBusyLabel(t(key)),
       });
 
       if (prepared.compressed) {
@@ -877,8 +878,13 @@ export function NoteSourceModal({
         });
       }, 1000);
     } catch (recordError) {
-      setError(
-        compressionErrorMessage(recordError, t) ?? t("capture.error.recordStartFailed"),
+      const permissionDenied = recordError instanceof Error && (
+        recordError.name === "NotAllowedError" || recordError.name === "SecurityError" ||
+        nativeRecorder && recordError.message.endsWith("[microphone denied]")
+      );
+      setError(permissionDenied
+        ? t(nativeRecorder ? "native.micDenied" : "capture.error.micDenied")
+        : compressionErrorMessage(recordError, t) ?? t("capture.error.recordStartFailed"),
       );
     } finally {
       setIsStarting(false);

@@ -326,6 +326,10 @@ export function LecturePodcast({
   const voicesRef = useRef(voices);
   const podcastRef = useRef<PodcastPayload | null>(null);
   const isPlayingRef = useRef(false);
+  // Loading a turn can outlive a seek, Pause or Close. Only the latest request
+  // may install/play audio, and an old loaded turn must never resume meanwhile.
+  const playbackRequestRef = useRef(0);
+  const loadedIndexRef = useRef<number | null>(null);
   /*
    * Read inside loadStatus rather than closed over.
    *
@@ -514,6 +518,10 @@ export function LecturePodcast({
   );
 
   const stopPlayback = useCallback(() => {
+    playbackRequestRef.current += 1;
+    loadedIndexRef.current = null;
+    isPlayingRef.current = false;
+    setPreparingIndex(null);
     for (const element of [audioARef.current, audioBRef.current]) {
       if (element) {
         element.pause();
@@ -529,6 +537,7 @@ export function LecturePodcast({
   /* Nothing outlives the screen: an object URL is a file the browser keeps until it is told not to. */
   useEffect(
     () => () => {
+      playbackRequestRef.current += 1;
       for (const segment of segmentsRef.current.values()) {
         URL.revokeObjectURL(segment.objectUrl);
       }
@@ -1200,12 +1209,21 @@ export function LecturePodcast({
   );
 
   const playSegment = useCallback(
-    async (index: number, offsetMs = 0) => {
+    async (index: number, offsetMs = 0, shouldPlay = true) => {
+      const request = ++playbackRequestRef.current;
+      audioARef.current?.pause();
+      audioBRef.current?.pause();
+      loadedIndexRef.current = null;
+      setPreparingIndex(null);
       if (index >= (podcastRef.current?.turns.length ?? 0)) {
+        isPlayingRef.current = false;
         setIsPlaying(false);
         return;
       }
 
+      isPlayingRef.current = shouldPlay;
+      setIsPlaying(shouldPlay);
+      currentIndexRef.current = index;
       setCurrentIndex(index);
       setPositionMs(offsetMs);
       setError(null);
@@ -1219,16 +1237,20 @@ export function LecturePodcast({
         try {
           segment = await ensureSegment(index);
         } catch (caught) {
+          if (request !== playbackRequestRef.current) return;
           setPreparingIndex(null);
+          isPlayingRef.current = false;
           setIsPlaying(false);
           setError(caught instanceof Error ? caught.message : t("podcast.error.audio"));
           return;
         }
 
+        if (request !== playbackRequestRef.current) return;
         setPreparingIndex(null);
       }
 
       if (!segment) {
+        isPlayingRef.current = false;
         setIsPlaying(false);
         setError(t("podcast.error.audio"));
         return;
@@ -1261,14 +1283,21 @@ export function LecturePodcast({
 
       element.currentTime = offsetMs / 1000;
       activeSlotRef.current = slot;
+      loadedIndexRef.current = index;
       preparedRef.current = null;
+
+      if (!shouldPlay) return;
 
       try {
         startMetering();
         await element.play();
+        if (request !== playbackRequestRef.current) return;
+        isPlayingRef.current = true;
         setIsPlaying(true);
       } catch {
+        if (request !== playbackRequestRef.current) return;
         /* A play() the browser refused because the gesture was spent: leave it paused, not broken. */
+        isPlayingRef.current = false;
         setIsPlaying(false);
       }
     },
@@ -1520,7 +1549,10 @@ export function LecturePodcast({
   function togglePlayback() {
     const element = elementFor(activeSlotRef.current);
 
-    if (isPlaying) {
+    if (isPlayingRef.current) {
+      playbackRequestRef.current += 1;
+      isPlayingRef.current = false;
+      setPreparingIndex(null);
       element?.pause();
       setIsPlaying(false);
       /* Pausing is the clearest statement anybody makes about where they got to. */
@@ -1528,11 +1560,22 @@ export function LecturePodcast({
       return;
     }
 
-    if (element?.src && element.readyState > 0) {
+    if (loadedIndexRef.current === currentIndex && element?.src && element.readyState > 0) {
+      const request = ++playbackRequestRef.current;
+      isPlayingRef.current = true;
+      setIsPlaying(true);
       startMetering();
       void element.play().then(
-        () => setIsPlaying(true),
-        () => setIsPlaying(false),
+        () => {
+          if (request !== playbackRequestRef.current) return;
+          isPlayingRef.current = true;
+          setIsPlaying(true);
+        },
+        () => {
+          if (request !== playbackRequestRef.current) return;
+          isPlayingRef.current = false;
+          setIsPlaying(false);
+        },
       );
       return;
     }
@@ -1542,31 +1585,27 @@ export function LecturePodcast({
 
   function skip(seconds: number) {
     const target = elapsedMs + seconds * 1000;
-    const located = locateAt(Math.max(0, Math.min(target, Math.max(0, totalMs - 1_000))));
-
-    const active = elementFor(activeSlotRef.current);
-
-    if (located.index === currentIndex && active?.src) {
-      active.currentTime = located.offsetMs / 1000;
-      setPositionMs(located.offsetMs);
-      return;
-    }
-
-    void playSegment(located.index, located.offsetMs);
+    const at = seekTo(Math.max(0, Math.min(target, Math.max(0, totalMs - 1_000))));
+    persistProgress({ positionMs: at });
   }
 
   function seekTo(targetMs: number) {
     const located = locateAt(targetMs);
+    let at = located.offsetMs;
+    for (let index = 0; index < located.index; index += 1) at += durationOf(index);
+    // Update the unload/close snapshot in this event, before React renders.
+    progressRef.current.positionMs = at;
 
     const active = elementFor(activeSlotRef.current);
 
-    if (located.index === currentIndex && active?.src) {
+    if (located.index === currentIndex && loadedIndexRef.current === currentIndex && active?.src) {
       active.currentTime = located.offsetMs / 1000;
       setPositionMs(located.offsetMs);
-      return;
+      return at;
     }
 
-    void playSegment(located.index, located.offsetMs);
+    void playSegment(located.index, located.offsetMs, isPlayingRef.current);
+    return at;
   }
 
   if (!isReady) {
@@ -1889,23 +1928,24 @@ export function LecturePodcast({
           ref={slot === "a" ? audioARef : audioBRef}
           preload="auto"
           onTimeUpdate={(event) => {
-            if (activeSlotRef.current === slot) {
+            if (activeSlotRef.current === slot && loadedIndexRef.current === currentIndexRef.current) {
               setPositionMs(event.currentTarget.currentTime * 1000);
             }
           }}
           onEnded={() => {
             /* The idle element can fire this too, having been loaded and seeked. Ignore it. */
-            if (activeSlotRef.current !== slot) {
+            if (activeSlotRef.current !== slot || !isPlayingRef.current || loadedIndexRef.current !== currentIndexRef.current) {
               return;
             }
 
-            const next = currentIndex + 1;
+            const next = currentIndexRef.current + 1;
 
             if (next < turns.length) {
               void playSegment(next, 0);
               return;
             }
 
+            isPlayingRef.current = false;
             setIsPlaying(false);
             setPositionMs(durationOf(currentIndex));
             /*
@@ -2116,6 +2156,11 @@ export function LecturePodcast({
                   } as CSSProperties
                 }
                 onChange={(event) => seekTo(Number(event.currentTarget.value))}
+                // Save once per gesture, not on every frame of a thumb drag.
+                onPointerUp={() => persistProgress()}
+                onPointerCancel={() => persistProgress()}
+                onKeyUp={() => persistProgress()}
+                onBlur={() => persistProgress()}
               />
               <span className="memo-podcast-clock end">{formatClock(totalMs)}</span>
             </div>

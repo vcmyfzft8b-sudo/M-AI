@@ -2,16 +2,14 @@ import UIKit
 import WebKit
 import StoreKit
 import AuthenticationServices
-import ObjectiveC
 
 /// WKWebView shows a browser-style accessory bar (previous/next/done) above
 /// the keyboard for every form field. Memo's sheets already carry their own
-/// controls, so the content view answers `inputAccessoryView` with nil.
+/// controls. WKWebView supports this public responder override directly.
 final class MemoWebView: WKWebView, UIScrollViewDelegate {
     override init(frame: CGRect, configuration: WKWebViewConfiguration) {
         super.init(frame: frame, configuration: configuration)
         scrollView.delegate = self
-        hideKeyboardAccessoryBar()
     }
 
     /// When the keyboard opens, WebKit scrolls the document to reveal the focused
@@ -26,43 +24,27 @@ final class MemoWebView: WKWebView, UIScrollViewDelegate {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    override func didMoveToWindow() {
-        super.didMoveToWindow()
-        hideKeyboardAccessoryBar()
-    }
-
-    private func hideKeyboardAccessoryBar() {
-        guard let content = scrollView.subviews.first(where: {
-            String(cString: object_getClassName($0)).hasPrefix("WKContent")
-        }), let base = object_getClass(content) else { return }
-        let name = String(cString: class_getName(base)) + "_MemoNoAccessoryBar"
-        if String(cString: class_getName(base)) == name { return }
-        let selector = #selector(getter: UIResponder.inputAccessoryView)
-        var subclass: AnyClass? = NSClassFromString(name)
-        if subclass == nil, let created = objc_allocateClassPair(base, name, 0),
-           let method = class_getInstanceMethod(UIResponder.self, selector) {
-            let none: @convention(block) (AnyObject) -> UIView? = { _ in nil }
-            class_addMethod(created, selector, imp_implementationWithBlock(none), method_getTypeEncoding(method))
-            objc_registerClassPair(created)
-            subclass = created
-        }
-        if let subclass { object_setClass(content, subclass) }
-    }
+    override var inputAccessoryView: UIView? { nil }
 }
 
 @MainActor
 final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandlerWithReply, WKDownloadDelegate {
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .portrait }
+
     private var webView: WKWebView!
     private let store = Store()
     private let appleSignIn = AppleSignIn()
     private let googleSignIn = GoogleSignIn()
     private let recorder = LectureRecorder()
+    private let haptics = Haptics()
     private let push: PushNotifications
     private let overlay = UIStackView()
     private let loadingCover = UIView()
     private let message = UILabel()
     private let retry = UIButton(type: .system)
     private var timeout: Task<Void, Never>?
+    private var loadTimeoutPaused = false
     private var downloadFiles: [ObjectIdentifier: URL] = [:]
     private var checkingAppleCredential = false
     private var memoLocale: String?
@@ -98,6 +80,13 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         if !overlay.isHidden, !retry.isHidden { message.text = text("connectionFailed") }
     }
 
+    private var keyboardMotion: KeyboardMotion?
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        keyboardMotion?.layoutChanged()
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         // A take the page never collected cannot be recovered — the draft it
@@ -124,10 +113,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
          * is already handed to the system browser, and both native sign-ins run
          * in `ASWebAuthenticationSession`, outside this view.
          *
-         * Off for a Vercel preview, whose host changes with every deployment
-         * and so cannot be in a static list: a preview would otherwise refuse
-         * to load at all. Previews are for layout and flow; offline mode is
-         * checked against production or a local TLS build.
+         * Preview builds include their selected host via MEMO_APP_BOUND_HOST.
+         * The same restriction must be enabled there for the native bridge
+         * and service worker to behave as they do in the release app.
          */
         config.limitsNavigationsToAppBoundDomains = AppConfiguration.isAppBound
         config.allowsInlineMediaPlayback = true
@@ -138,12 +126,14 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             (() => {
               if (!\(AppConfiguration.trustedOriginsJSON).includes(location.origin)) return;
               Object.defineProperty(window, 'memoNative', { value: Object.freeze({
-                // 3 adds remote notifications. The page is deployed
+                // 4 adds keyboard layout frames. The page is deployed
                 // independently of the binary, so it has to ask before calling
                 // a command an installed older build would reject.
-                version: 3,
+                version: 5,
+                get keyboardFrame() { return window.__memoKeyboardFrame; },
                 request: (command, payload = {}) => window.webkit.messageHandlers.memoNative.postMessage({command, ...payload})
               }) });
+              \(Haptics.script)
               // WebKit does not consistently promote blob anchor clicks to
               // WKDownload. Move generated exports through the same native sheet.
               document.addEventListener('click', async event => {
@@ -210,6 +200,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
+        keyboardMotion = KeyboardMotion(host: view, webView: webView)
         buildOverlay()
         store.deliver = { [weak self] jws in
             guard let self else { throw Store.StoreError.unavailable }
@@ -232,6 +223,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             Task { await self?.savePushToken(token) }
         }
         NotificationCenter.default.addObserver(self, selector: #selector(resume), name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(pauseLoadTimeout), name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(checkAppleCredential), name: ASAuthorizationAppleIDProvider.credentialRevokedNotification, object: nil)
         Task {
             // The PWA cookie persists across launches in WKWebView. Do not seed
@@ -306,8 +298,38 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     @objc private func reload() { webView.load(URLRequest(url: AppConfiguration.startURL)) }
     @objc private func resume() {
+        /*
+         * A phone call, the lock button or the app switcher suspends the app,
+         * and iOS cancels its loads while it is away. Coming back to the
+         * "could not connect" screen that caused is not something to ask the
+         * reader to fix: try again unprompted. A load that was still running
+         * gets its timeout back, now that it can make progress again.
+         */
+        if UIApplication.shared.applicationState == .active {
+            if !overlay.isHidden && !retry.isHidden { reload() }
+            else if loadTimeoutPaused && webView.isLoading { startLoadTimeout() }
+            loadTimeoutPaused = false
+        }
         Task { try? await store.reconcile() }
         checkAppleCredential()
+    }
+
+    /// Time in the background is not time the page failed to load in.
+    @objc private func pauseLoadTimeout() {
+        guard let timeout, webView.isLoading else { return }
+        timeout.cancel()
+        self.timeout = nil
+        loadTimeoutPaused = true
+    }
+
+    private func startLoadTimeout() {
+        timeout?.cancel()
+        timeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(30))
+            guard !Task.isCancelled else { return }
+            self?.webView.stopLoading()
+            self?.showFailure()
+        }
     }
 
     @objc private func checkAppleCredential() {
@@ -358,13 +380,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             message.text = nil
             retry.isHidden = true
         }
-        timeout?.cancel()
-        timeout = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(30))
-            guard !Task.isCancelled else { return }
-            self?.webView.stopLoading()
-            self?.showFailure()
-        }
+        startLoadTimeout()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -373,6 +389,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         webView.isHidden = false
         loadingCover.isHidden = true
         resume()
+        keyboardMotion?.refresh()
         // A settled page is the only dependable sign that a sign-in finished,
         // and the token has to be attached to whoever is signed in *now*. Does
         // nothing when notifications were never allowed, and the post is
@@ -482,6 +499,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         Task {
             do {
                 switch command {
+                case "haptic":
+                    if let kind = body["kind"] as? String { haptics.play(kind) }
+                    replyHandler(["status": "done"], nil)
                 case "signInWithGoogle":
                     guard let window = view.window else { throw Store.StoreError.unavailable }
                     let challenge = try await api(path: "/api/mobile/google-auth")
@@ -558,6 +578,33 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                     await forgetPushToken()
                     replyHandler(["status": "disabled"], nil)
                 case "products": replyHandler(try await store.products(), nil)
+                case "codeProducts", "codePurchase":
+                    guard let code = body["code"] as? String else { throw Store.StoreError.unavailable }
+                    var request = ["code": code]
+                    if command == "codePurchase" {
+                        guard let product = body["productId"] as? String else { throw Store.StoreError.unavailable }
+                        request["productId"] = product
+                    }
+                    // Revalidate the code and membership at purchase time. The server
+                    // selects the offer and signs it with this user's appAccountToken.
+                    let offer = try await api(path: "/api/mobile/promotions", body: request)
+                    guard let userID = offer["userId"] as? String, let account = UUID(uuidString: userID),
+                          let mode = offer["mode"] as? String, ["introductory", "promotional"].contains(mode),
+                          let ids = offer["offers"] as? [String: String] else { throw Store.StoreError.unavailable }
+                    if command == "codeProducts" {
+                        let items = try await store.products(promotionalOffers: mode == "promotional" ? ids : nil)
+                        replyHandler(items.filter { item in (item["id"] as? String).map { ids[$0] != nil } ?? false }, nil)
+                    } else {
+                        guard let product = request["productId"], ids[product] != nil,
+                              let quote = body["quote"] as? String else { throw Store.StoreError.unavailable }
+                        var promotion: Store.Promotion?
+                        if mode == "promotional" {
+                            guard let signature = offer["signature"] as? [String: Any] else { throw Store.StoreError.unavailable }
+                            promotion = try Store.Promotion(signature)
+                            guard promotion?.offerID == ids[product] else { throw Store.StoreError.unavailable }
+                        }
+                        replyHandler(["status": try await store.purchase(id: product, account: account, quote: quote, promotion: promotion)], nil)
+                    }
                 case "pendingProduct": replyHandler(["productId": store.pendingProductID as Any? ?? NSNull()], nil)
                 case "purchase":
                     let account = try await api(path: "/api/mobile/account")

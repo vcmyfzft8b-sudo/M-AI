@@ -1039,6 +1039,9 @@ export function HomeDashboard({
   const [manualModal, setManualModal] = useState<NoteSourceMode | null>(null);
   const [isMobileCreateMenuOpen, setIsMobileCreateMenuOpen] = useState(false);
   const [libraryLectures, setLibraryLectures] = useState(lectures);
+  // Both responsive folder menus and library chat share the same saved list.
+  const [libraryFolders, setLibraryFolders] = useState(folders);
+  useEffect(() => setLibraryFolders(folders), [folders]);
   const [useDashboardSwipeActions, setUseDashboardSwipeActions] = useState(false);
   const [busyLectureId, setBusyLectureId] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -1761,7 +1764,8 @@ export function HomeDashboard({
               <LibraryFolderMenu
                 lectures={libraryLectures}
                 userId={userId}
-                initialFolders={folders}
+                folders={libraryFolders}
+                onFoldersChange={setLibraryFolders}
                 selectedFolderId={selectedFolderId}
                 onSelectFolder={(folderId, lectureIds) => {
                   setSelectedFolderId(folderId);
@@ -1791,7 +1795,8 @@ export function HomeDashboard({
             <LibraryFolderMenu
               lectures={libraryLectures}
               userId={userId}
-              initialFolders={folders}
+              folders={libraryFolders}
+              onFoldersChange={setLibraryFolders}
               selectedFolderId={selectedFolderId}
               onSelectFolder={(folderId, lectureIds) => {
                 setSelectedFolderId(folderId);
@@ -1964,7 +1969,7 @@ export function HomeDashboard({
 
       {/* Desktop: the always-present ask bar, and the full panel it opens. */}
       <LibraryChat
-        folders={folders}
+        folders={libraryFolders}
         lectures={libraryLectures}
         open={isLibraryChatOpen}
         onOpenChange={setIsLibraryChatOpen}

@@ -1324,6 +1324,7 @@ export function LectureWorkspace({
   const [isRegeneratingStudy, setIsRegeneratingStudy] = useState(false);
   const [isRegeneratingQuiz, setIsRegeneratingQuiz] = useState(false);
   const [isStartingPracticeTest, setIsStartingPracticeTest] = useState(false);
+  const practiceTestStartLock = useRef(false);
   const [isAwaitingStudyGeneration, setIsAwaitingStudyGeneration] = useState(false);
   const [isAwaitingQuizGeneration, setIsAwaitingQuizGeneration] = useState(false);
   const [isAwaitingPracticeTestGeneration, setIsAwaitingPracticeTestGeneration] = useState(false);
@@ -2358,10 +2359,11 @@ export function LectureWorkspace({
   }
 
   async function handlePracticeTestStart() {
-    if (blockedOffline("generate")) {
+    if (practiceTestStartLock.current || blockedOffline("generate")) {
       return;
     }
 
+    practiceTestStartLock.current = true;
     setStudyError(null);
     setIsAwaitingPracticeTestGeneration(true);
     setIsStartingPracticeTest(true);
@@ -2376,6 +2378,19 @@ export function LectureWorkspace({
         method: "POST",
       });
       payload = await parseApiResponse(response, t);
+
+      setCurrentPracticeAttemptId(payload?.id ?? null);
+      setPracticeAttemptQuestionIds(
+        Array.isArray(payload?.questions) ? payload.questions.map((question: { id: string }) => question.id) : [],
+      );
+      setPracticeTextAnswers({});
+      setPracticeUnknownQuestionIds([]);
+      setLatestViewedPracticeAttemptId(payload?.id ?? null);
+      setPracticeSubmittedAt(null);
+      // Keep the start action locked until the new attempt is in the page's
+      // data. Re-enabling it after the POST lets another tap create an extra
+      // attempt while the detail refresh is still in flight.
+      await refreshLectureDetail();
     } catch (error) {
       if (redirectToBillingIfNeeded({ error, router })) {
         return;
@@ -2387,18 +2402,9 @@ export function LectureWorkspace({
       );
       return;
     } finally {
+      practiceTestStartLock.current = false;
       setIsStartingPracticeTest(false);
     }
-
-    setCurrentPracticeAttemptId(payload?.id ?? null);
-    setPracticeAttemptQuestionIds(
-      Array.isArray(payload?.questions) ? payload.questions.map((question: { id: string }) => question.id) : [],
-    );
-    setPracticeTextAnswers({});
-    setPracticeUnknownQuestionIds([]);
-    setLatestViewedPracticeAttemptId(payload?.id ?? null);
-    setPracticeSubmittedAt(null);
-    await refreshLectureDetail();
   }
 
   function handlePracticeAnswerChange(questionId: string, value: string) {
@@ -2728,23 +2734,27 @@ export function LectureWorkspace({
       return;
     }
 
-    setQuizSelections((current) => ({
-      ...current,
+    const nextSelections = {
+      ...quizSelections,
       [currentQuizQuestionId]: optionIndex,
-    }));
+    };
+    setQuizSelections(nextSelections);
 
     // A right answer needs no interruption — the design lets it read for a
     // beat, then moves on by itself. A miss waits for the feedback row.
     if (optionIndex === activeQuizQuestion.correct_option_idx) {
       window.clearTimeout(quizAdvanceTimerRef.current ?? undefined);
       quizAdvanceTimerRef.current = window.setTimeout(
-        () => moveQuizQuestion(1),
+        // This callback belongs to the render before the answer was saved.
+        // Carry the answer into final-round scoring rather than reading the
+        // stale quizSelections captured by that render.
+        () => moveQuizQuestion(1, nextSelections),
         QUIZ_CORRECT_PAUSE_MS,
       );
     }
   }
 
-  function finishQuizRound() {
+  function finishQuizRound(selections = quizSelections) {
     const summary = quizQueue.reduce<QuizRoundSummary>(
       (current, questionId) => {
         const question = quizQuestionsById.get(questionId);
@@ -2753,7 +2763,7 @@ export function LectureWorkspace({
           return current;
         }
 
-        if (quizSelections[questionId] === question.correct_option_idx) {
+        if (selections[questionId] === question.correct_option_idx) {
           current.correct += 1;
           return current;
         }
@@ -2785,7 +2795,7 @@ export function LectureWorkspace({
     }
 
     const answer = activeQuizQuestion.options[activeQuizQuestion.correct_option_idx] ?? "";
-    const prompt = `Pomagaj mi razumeti, zakaj je »${answer}« pravilen odgovor na »${activeQuizQuestion.prompt}«`;
+    const prompt = t("quiz.reviewPrompt", { answer, question: activeQuizQuestion.prompt });
 
     moveQuizQuestion(1);
     setIsChatDismissed(false);
@@ -2793,11 +2803,11 @@ export function LectureWorkspace({
     void submitChatQuestion(prompt);
   }
 
-  function moveQuizQuestion(direction: -1 | 1) {
+  function moveQuizQuestion(direction: -1 | 1, selections = quizSelections) {
     const nextIndex = activeQuizQuestionIndex + direction;
 
     if (direction === 1 && nextIndex >= quizQueue.length) {
-      finishQuizRound();
+      finishQuizRound(selections);
       return;
     }
 
@@ -3490,6 +3500,12 @@ export function LectureWorkspace({
    */
   useEffect(() => {
     if (!isStudyManagerOpen) {
+      return;
+    }
+
+    // The shared controller follows every native keyboard frame and reveals
+    // the focused field there. A second delayed scroll races that animation.
+    if (document.documentElement.hasAttribute("data-native") && (window.memoNative?.version ?? 0) >= 4) {
       return;
     }
 

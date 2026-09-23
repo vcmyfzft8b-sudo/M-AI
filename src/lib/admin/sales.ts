@@ -538,8 +538,11 @@ async function loadAppleCodeSales(sinceUnix: number): Promise<AppleCodeSale[]> {
     .is("revoked_at", null)
     .gte("paid_at", new Date(sinceUnix * 1000).toISOString());
 
+  // Bookkeeping on top of the Stripe figures, never a reason to lose them: a
+  // deploy can land before migration 0055 has created the table.
   if (error) {
-    throw new Error("Apple code sales unavailable", { cause: error });
+    console.error("Apple code sales unavailable", { code: error.code });
+    return [];
   }
 
   return ((data ?? []) as Array<{ id: string; code: string; price_minor: number; currency: string; paid_at: string }>)

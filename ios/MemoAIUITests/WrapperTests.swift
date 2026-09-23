@@ -1238,6 +1238,64 @@ final class WrapperTests: XCTestCase {
         }
     }
 
+    // A real Sandbox purchase through a creator code, for the attribution check.
+    // Confirms only Apple's explicitly no-charge Sandbox sheet.
+    @MainActor func testPreviewPurchaseWithCode() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MEMO_QA_COMPLETE_CHECKOUT"] == "1", let code = env["MEMO_QA_PROMO_CODE"],
+              let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Explicit Sandbox code purchase only")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        dismissInitialOffer(app)
+        let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+        let redeem = app.webViews.links.matching(NSPredicate(format: "label CONTAINS %@", "Redeem a code")).firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 30))
+        for _ in 0..<3 where !redeem.exists {
+            if settings.exists { settings.tap() }
+            _ = redeem.waitForExistence(timeout: 12)
+        }
+        for _ in 0..<8 where !redeem.isHittable { app.webViews.firstMatch.swipeUp() }
+        redeem.tap()
+        let field = app.webViews.textFields["Discount code"].firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 20)); field.tap()
+        field.typeText(code)
+        app.webViews.buttons["Check code"].firstMatch.tap()
+        let yearly = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "(elementType == %d OR elementType == %d) AND (label CONTAINS %@ OR label CONTAINS %@)",
+            XCUIElement.ElementType.button.rawValue, XCUIElement.ElementType.switch.rawValue, "64,99", "64.99")).firstMatch
+        XCTAssertTrue(yearly.waitForExistence(timeout: 45), "The code must unlock the half-price yearly offer")
+        yearly.tap()
+        keepStudyScreenshot("Code offer before purchase", app: app)
+        let buy = app.webViews.buttons["Continue"].firstMatch
+        XCTAssertTrue(buy.waitForExistence(timeout: 10)); buy.tap()
+        let deadline = Date().addingTimeInterval(300)
+        var confirmed = false
+        let home = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "New note")).firstMatch
+        while Date() < deadline {
+            if app.state == .runningForeground && home.exists && home.isHittable { break }
+            if !confirmed {
+                for process in [app, system] {
+                    let notice = process.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "You will not be charged")).firstMatch
+                    let subscribe = process.buttons["Subscribe"].firstMatch
+                    if notice.exists && subscribe.exists && subscribe.isHittable {
+                        let sheet = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+                        sheet.name = "Apple's Sandbox sheet for the code offer"
+                        sheet.lifetime = .keepAlways
+                        add(sheet)
+                        subscribe.tap(); confirmed = true; break
+                    }
+                }
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(2))
+        }
+        keepStudyScreenshot("After the code purchase", app: app)
+        XCTAssertTrue(home.exists, "The purchase must return to Memo's home")
+    }
+
     // Real storefront prices must reach the wheel and both discounted plans.
     // This consumes only the synthetic account's daily spin, never a purchase.
     @MainActor func testPreviewWheelShowsRealHalfOffPrices() throws {

@@ -721,7 +721,9 @@ export function promoCodeStats(
     ensure(sale.code).subscriptions += 1;
     const day = unixDay(sale.paidAt);
 
-    if (day >= range.from && day <= range.to) {
+    // Every figure here is euros. A sale in another App Store currency still
+    // counts as the code's subscription, but is not added to euro revenue.
+    if (sale.currency.toLowerCase() === "eur" && day >= range.from && day <= range.to) {
       credit(sale.code, {
         id: sale.id,
         paidAt: sale.paidAt,

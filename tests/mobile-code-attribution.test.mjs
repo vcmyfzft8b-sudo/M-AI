@@ -61,13 +61,14 @@ test("Apple code sales reach the creator who owns the code", () => {
     appleCodeSales: [
       { id: "a1", code: "DAVID50", amount: 6499, currency: "eur", paidAt: at("2026-08-18T10:00:00Z") },
       { id: "a2", code: "DAVID50", amount: 999, currency: "eur", paidAt: at("2026-06-01T10:00:00Z") },
+      { id: "a3", code: "DAVID50", amount: 999, currency: "usd", paidAt: at("2026-08-18T11:00:00Z") },
     ],
   };
   const stats = promoCodeStats(data, range);
-  assert.equal(stats.get("DAVID50").revenue, 1000 + 6499, "the June sale is outside the range");
+  assert.equal(stats.get("DAVID50").revenue, 1000 + 6499, "the June sale is outside the range and dollars are not euros");
   assert.equal(stats.get("DAVID50").payments, 2);
   assert.equal(stats.get("DAVID50").customers, 2);
-  assert.equal(stats.get("DAVID50").subscriptions, 2, "both Apple subscriptions were created with the code");
+  assert.equal(stats.get("DAVID50").subscriptions, 3, "every Apple subscription created with the code counts");
   const byCreator = creatorRevenue([{ id: "david", promo_codes: ["david50"] }], stats);
   assert.equal(byCreator.get("david").revenue, 7499);
 });

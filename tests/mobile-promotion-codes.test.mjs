@@ -52,7 +52,9 @@ function harness(options = {}) {
     },
     "@/lib/billing":{
       getUserEntitlementState:async()=>({hasPaidAccess:!!options.paid}), getPriceIdForPlan:p=>p,
-      getStripeClient:()=>({
+    },
+    "@/lib/mobile/promotion-catalogue":{
+      applePromotionCatalogue:()=>({
         promotionCodes:{list:async({code})=>{calls.push(["code",code]);return {has_more:!!options.truncated,data:options.missing?[]:[{...validPromotion(),...options.promotion}]};}},
         coupons:{retrieve:async()=>({...validCoupon(),...options.coupon})},
         prices:{retrieve:async()=>({product:"memo-premium"})},

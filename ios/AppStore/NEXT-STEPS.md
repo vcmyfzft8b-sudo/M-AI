@@ -14,8 +14,8 @@ The current evidence and unresolved gates are in
   The English testing checklist is saved. The unsubmitted App Review draft
   still contains build 9, version 1.0, four subscriptions and their group.
   Release is manual; final production-web/TestFlight checks remain required.
-- The latest runtime commit on `codex/ios-app-wrapper` is `eb62bb1a`. Its READY
-  Preview is `https://memo-jzgo7k4r7-nace-valencics-projects.vercel.app`, using
+- The latest verified deployment commit on `codex/ios-app-wrapper` is `9321c434`. Its READY
+  Preview is `https://memo-j2iafs3t7-nace-valencics-projects.vercel.app`, using
   shared staging. The branch's changes are not a production deployment.
 - Actual app coverage includes photo/PDF/Word/slides/web-article note generation,
   flashcards, quiz/practice, mindmap/export, memory palace, speed reader,
@@ -57,6 +57,12 @@ corrected without changing the credential-free runtime behavior.
    codes, customer restrictions and redemption caps fail closed.
    Both promotional offers are saved and freshly verified in App Store Connect
    across 175 storefronts. Slovenia/US first periods are €/$9.99 and €/$64.99.
+   Actual StoreKit code-price display passed in Simulator against the local staging
+   server. Hosted Preview validation is blocked by the missing catalogue key.
+   Set branch-only `APPLE_PROMOTION_CATALOGUE_KEY` to a restricted Stripe key
+   with Read access to Coupons, Promotion Codes, Prices and Products; this
+   credential is separate from checkout, and unrestricted live keys are refused
+   by hosted Preview. The owner has been asked for that key.
    Actual promotional purchase/restore and creator-code attribution remain
    unverified/unimplemented respectively. Recurring and gift codes are not
    supported by this first-period flow. Uploaded build 11 has bridge v4;

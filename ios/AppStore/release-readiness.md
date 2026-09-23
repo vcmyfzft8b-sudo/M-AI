@@ -31,7 +31,19 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   altered-code rejection. Headless light/dark and browser/native-UA checks pass
   against the local server with real catalogue validation and **simulated**
   StoreKit prices (`review-sep23-code-local-browser.json`). These do not establish
-  a completed Apple purchase. Actual StoreKit UI verification is still running.
+  a completed Apple purchase. Actual StoreKit UI verification subsequently passed:
+  `review-sep23-code-sim-prices.xcresult` verifies invalid-code handling, keyboard
+  clearance and first-period/renewal prices for both products in the US storefront.
+  It uses the local staging server and real StoreKit, with no purchase confirmation.
+- Hosted Preview `9321c434` is READY, but its real API test fails 503 at
+  `catalogue_client`: Preview has no Stripe catalogue credential. No live checkout
+  secret was installed there. A dedicated `APPLE_PROMOTION_CATALOGUE_KEY` now
+  supports a restricted catalogue key separately from checkout; hosted Preview
+  refuses an unrestricted live key and refuses falling back to checkout.
+  The owner has been asked to supply the read-only key. Three credential-boundary
+  tests cover these paths. Earlier native Preview test also omitted the selected
+  host from `WKAppBoundDomains`; the runner is corrected for its next run.
+  All these Preview checks must be repeated once the key is available.
 - Uploaded build 11 still has bridge v4. This work needs a new binary, Preview
   verification and the authorized production release. Actual promotional
   purchase/restore, code attribution in creator reporting, and recurring/gift
@@ -59,8 +71,9 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   now records the completed comparison of all 15 portal data types and the
   published User ID purpose/Product Interaction linkage corrections. Verify the
   final production deployment preserves these audited data flows.
-- Resolve the optional discount-code request without weakening transaction
-  ownership checks. Equivalent Stripe codes are not implemented on Apple.
+- Finish hosted Preview validation and real Apple promotional purchase/restore
+  for the implemented first-period discount-code flow described above. Creator-code
+  reporting attribution and older recurring/gift campaigns remain incomplete.
 - Account for the iPadOS windowing limit: portrait layout is verified, but
   `UIRequiresFullScreen` cannot force exclusive full-screen presentation in
   iPadOS 26 Windowed Apps or Stage Manager. The system can show a resize handle

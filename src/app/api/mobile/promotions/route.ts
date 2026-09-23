@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { PromotionalOfferSignatureCreator } from "@apple/app-store-server-library";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getStripeClient, getPriceIdForPlan, getUserEntitlementState } from "@/lib/billing";
+import { getPriceIdForPlan, getUserEntitlementState } from "@/lib/billing";
+import { applePromotionCatalogue } from "@/lib/mobile/promotion-catalogue";
 import { appleBillingConfigured, appleAccountEnvironments } from "@/lib/mobile/apple";
 import { APPLE_CODE_OFFERS, acceptsAppleHalfOffCode } from "@/lib/mobile/promotion-policy";
 import { accountDeletionRequested } from "@/lib/mobile/account-lifecycle";
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
     if ((await getUserEntitlementState(user.id)).hasPaidAccess) return reply({ error: await tr("native.active") }, 409);
     const { code, productId } = parsed.data;
     stage = "catalogue_client";
-    const stripe = getStripeClient();
+    const stripe = applePromotionCatalogue();
     // Catalogue reads only. Apple checkout never creates a Stripe customer,
     // checkout session, payment, subscription or coupon redemption.
     stage = "catalogue_codes";

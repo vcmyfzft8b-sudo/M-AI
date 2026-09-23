@@ -140,6 +140,14 @@ In App Store Connect, **Users and Access → Integrations → In-App Purchase**,
 - `APPLE_APP_ID`: numeric app record ID
 - `APPLE_IAP_KEY_ID`, `APPLE_IAP_ISSUER_ID`, `APPLE_IAP_PRIVATE_KEY`: Apple API credentials
 - `APPLE_IAP_ENABLED=true`: only after configuration and validation
+- `APPLE_PROMOTION_CATALOGUE_KEY`: separate server-only Stripe restricted key for
+  code validation (Read only: Coupons, Promotion Codes, Prices and Products).
+  Required in hosted Preview; it may read the live offer catalogue but must not
+  grant customer/payment access. Use a branch-scoped secret; never change the
+  shared staging database configuration. Preview rejects an unrestricted live
+  key and never falls back to web checkout credentials. Production may retain
+  its existing Stripe key until the restricted catalogue key is configured.
+  See [Stripe restricted keys](https://docs.stripe.com/keys/restricted-api-keys).
 - `APPLE_SANDBOX_REVIEW_USER_IDS`: optional comma-separated UUIDs of explicitly chosen synthetic TestFlight/App Review accounts
 
 Do not place secrets in Swift, `NEXT_PUBLIC_*`, Git, or chat. The [official Apple server library](https://github.com/apple/app-store-server-library-node) handles JWS verification and API authentication. Public root certificates in `src/lib/mobile/apple-roots.json` come from [Apple PKI](https://www.apple.com/certificateauthority/).

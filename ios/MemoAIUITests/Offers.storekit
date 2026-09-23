@@ -1,7 +1,23 @@
 {
   "identifier": "F9BCA496-12E8-4776-BBD5-1E9F21BC6150",
   "nonRenewingSubscriptions": [],
-  "products": [],
+  "products": [
+    {
+      "displayPrice": "2.00",
+      "familyShareable": false,
+      "internalID": "6815251236",
+      "localizations": [
+        {
+          "description": "An extra hour for the voice tutor and podcast.",
+          "displayName": "1 hour of tutor time",
+          "locale": "en_GB"
+        }
+      ],
+      "productID": "eu.memoai.tutor.hour",
+      "referenceName": "Tutor hour",
+      "type": "Consumable"
+    }
+  ],
   "settings": {
     "_applicationInternalID": "6812409212",
     "_developerTeamID": "J4PCHZ8P7T",

@@ -1,5 +1,6 @@
 "use client";
-import { useNativeIOS } from "@/lib/mobile/client";
+import { nativeRequest, useNativeIOS } from "@/lib/mobile/client";
+import { nativeBillingFailureKey } from "@/lib/mobile/billing-notice";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -75,6 +76,7 @@ export function VoiceUsageSheet({
   blocked,
   buyingCredits,
   onBuyCredits,
+  onCreditsAdded,
   extra,
 }: {
   usage: VoiceUsage | null;
@@ -88,12 +90,54 @@ export function VoiceUsageSheet({
   blocked?: boolean;
   buyingCredits?: boolean;
   onBuyCredits?: () => void;
+  /** Called once an App Store hour has been credited, to re-read the meter in place. */
+  onCreditsAdded?: () => void;
   /** Settings belonging to the feature this meter is shown on, below the divider. */
   extra?: ReactNode;
 }) {
   const t = useT();
   const native = useNativeIOS();
   const [isOpen, setOpen] = useState(false);
+  /*
+   * The app sells the same hour through Apple (a consumable), never Stripe.
+   * Wrappers before bridge 6 cannot, and keep the offer hidden as before.
+   */
+  const [appleHour, setAppleHour] = useState<{ price: string; quote: string } | null>(null);
+  const [appleNotice, setAppleNotice] = useState("");
+  const [appleBusy, setAppleBusy] = useState(false);
+  const wantsAppleHour = Boolean(native && usage?.hasPaidAccess
+    && ((!usage.hasUnlimitedUsage && usage.remainingSeconds <= 0) || blocked));
+  useEffect(() => {
+    if (!wantsAppleHour || (window.memoNative?.version ?? 0) < 6) return;
+    let live = true;
+    nativeRequest<{ available?: boolean; price?: string; quote?: string }>("tutorProduct")
+      .then((item) => { if (live && item?.available && item.price && item.quote) setAppleHour({ price: item.price, quote: item.quote }); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [wantsAppleHour]);
+  const buyAppleHour = async () => {
+    if (!appleHour || appleBusy) return;
+    setAppleBusy(true);
+    setAppleNotice("");
+    try {
+      const result = await nativeRequest<{ status: string }>("purchaseTutorHour", { quote: appleHour.quote });
+      // Re-read the meter in place: a full reload in the wrapper right after
+      // Apple's own "You're all set" alert was measured ending on the native
+      // "could not connect" screen.
+      if (result.status === "purchased") { if (onCreditsAdded) onCreditsAdded(); else window.location.reload(); return; }
+      if (result.status === "pending") setAppleNotice(t("native.pending"));
+      if (result.status === "priceChanged") {
+        const item = await nativeRequest<{ price?: string; quote?: string }>("tutorProduct");
+        if (item?.price && item.quote) setAppleHour({ price: item.price, quote: item.quote });
+        setAppleNotice(t("native.priceChanged"));
+      }
+    } catch (error) {
+      setAppleNotice(t(nativeBillingFailureKey(error)));
+    } finally {
+      setAppleBusy(false);
+    }
+  };
+
   const menuRef = useRef<HTMLDetailsElement | null>(null);
   const close = useCallback(() => {
     setOpen(false);
@@ -162,7 +206,9 @@ export function VoiceUsageSheet({
         : "tutor.paywall.trialTitle",
   );
   const offerBody = t(
-    usage?.hasPaidAccess
+    usage?.hasPaidAccess && native
+      ? "native.tutorHourBody"
+      : usage?.hasPaidAccess
       ? isPodcast
         ? "podcast.paywall.creditsBody"
         : "tutor.paywall.creditsBody"
@@ -221,13 +267,26 @@ export function VoiceUsageSheet({
         * shown once there is nothing left, whether they arrived by running out or by opening the
         * meter to see how much was gone.
         */}
-      {(isOutOfTime || blocked) && !(native && usage.hasPaidAccess) ? (
+      {(isOutOfTime || blocked) && !(native && usage.hasPaidAccess && !appleHour) ? (
         <>
           <div className="note-read-settings-divider" />
           <div className="memo-tutor-offer">
             <h2>{offerTitle}</h2>
             <p>{offerBody}</p>
-            {usage.hasPaidAccess ? (
+            {usage.hasPaidAccess && native && appleHour ? (
+              <>
+                <button
+                  type="button"
+                  className="memo-tutor-start"
+                  disabled={appleBusy}
+                  aria-busy={appleBusy}
+                  onClick={() => void buyAppleHour()}
+                >
+                  {appleBusy ? t("common.loading") : t("native.tutorHourCta", { price: appleHour.price })}
+                </button>
+                <p className="memo-tutor-offer-terms">{appleNotice || t("native.tutorHourTerms")}</p>
+              </>
+            ) : usage.hasPaidAccess ? (
               <button
                 type="button"
                 className="memo-tutor-start"

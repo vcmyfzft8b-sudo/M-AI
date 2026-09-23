@@ -1920,6 +1920,7 @@ export function LecturePodcast({
         blocked={limitReached}
         buyingCredits={buyingCredits}
         onBuyCredits={() => void buyCredits()}
+        onCreditsAdded={() => void loadStatus({ silent: true })}
       />
       {/* Two elements, so the hand-off between turns is a bare play() on something decoded. */}
       {(["a", "b"] as const).map((slot) => (

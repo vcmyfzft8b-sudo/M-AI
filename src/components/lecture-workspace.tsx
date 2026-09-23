@@ -2734,23 +2734,27 @@ export function LectureWorkspace({
       return;
     }
 
-    setQuizSelections((current) => ({
-      ...current,
+    const nextSelections = {
+      ...quizSelections,
       [currentQuizQuestionId]: optionIndex,
-    }));
+    };
+    setQuizSelections(nextSelections);
 
     // A right answer needs no interruption — the design lets it read for a
     // beat, then moves on by itself. A miss waits for the feedback row.
     if (optionIndex === activeQuizQuestion.correct_option_idx) {
       window.clearTimeout(quizAdvanceTimerRef.current ?? undefined);
       quizAdvanceTimerRef.current = window.setTimeout(
-        () => moveQuizQuestion(1),
+        // This callback belongs to the render before the answer was saved.
+        // Carry the answer into final-round scoring rather than reading the
+        // stale quizSelections captured by that render.
+        () => moveQuizQuestion(1, nextSelections),
         QUIZ_CORRECT_PAUSE_MS,
       );
     }
   }
 
-  function finishQuizRound() {
+  function finishQuizRound(selections = quizSelections) {
     const summary = quizQueue.reduce<QuizRoundSummary>(
       (current, questionId) => {
         const question = quizQuestionsById.get(questionId);
@@ -2759,7 +2763,7 @@ export function LectureWorkspace({
           return current;
         }
 
-        if (quizSelections[questionId] === question.correct_option_idx) {
+        if (selections[questionId] === question.correct_option_idx) {
           current.correct += 1;
           return current;
         }
@@ -2799,11 +2803,11 @@ export function LectureWorkspace({
     void submitChatQuestion(prompt);
   }
 
-  function moveQuizQuestion(direction: -1 | 1) {
+  function moveQuizQuestion(direction: -1 | 1, selections = quizSelections) {
     const nextIndex = activeQuizQuestionIndex + direction;
 
     if (direction === 1 && nextIndex >= quizQueue.length) {
-      finishQuizRound();
+      finishQuizRound(selections);
       return;
     }
 

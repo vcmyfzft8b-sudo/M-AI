@@ -129,7 +129,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                 // 4 adds keyboard layout frames. The page is deployed
                 // independently of the binary, so it has to ask before calling
                 // a command an installed older build would reject.
-                version: 5,
+                version: 6,
                 get keyboardFrame() { return window.__memoKeyboardFrame; },
                 request: (command, payload = {}) => window.webkit.messageHandlers.memoNative.postMessage({command, ...payload})
               }) });
@@ -205,6 +205,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         store.deliver = { [weak self] jws in
             guard let self else { throw Store.StoreError.unavailable }
             _ = try await self.api(path: "/api/mobile/transactions", body: ["signedTransaction": jws])
+        }
+        store.deliverConsumable = { [weak self] jws in
+            guard let self else { throw Store.StoreError.unavailable }
+            _ = try await self.api(path: "/api/mobile/tutor-credits", body: ["signedTransaction": jws])
         }
         store.showPurchaseIntent = { [weak self] in
             self?.webView.load(URLRequest(url: AppConfiguration.origin.appendingPathComponent("app/start")))
@@ -613,6 +617,14 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                           let product = body["productId"] as? String,
                           let quote = body["quote"] as? String else { throw Store.StoreError.unavailable }
                     replyHandler(["status": try await store.purchase(id: product, account: uuid, quote: quote)], nil)
+                case "tutorProduct": replyHandler(try await store.tutorProduct(), nil)
+                case "purchaseTutorHour":
+                    // Subscribers only, decided by the server, before Apple's sheet opens.
+                    let account = try await api(path: "/api/mobile/tutor-credits")
+                    guard account["canPurchase"] as? Bool == true,
+                          let id = account["userId"] as? String, let uuid = UUID(uuidString: id),
+                          let quote = body["quote"] as? String else { throw Store.StoreError.unavailable }
+                    replyHandler(["status": try await store.purchaseTutorHour(account: uuid, quote: quote)], nil)
                 case "restore":
                     try await store.restore()
                     replyHandler(["status": "restored"], nil)

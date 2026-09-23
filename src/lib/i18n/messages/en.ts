@@ -2091,6 +2091,9 @@ export const en: Messages = {
   // Native iOS app and Apple subscription controls.
   "native.unavailable": "Subscriptions are temporarily unavailable. Please try again.",
   "native.verifyFailed": "Your purchase could not be confirmed yet. Use Restore purchases to try again; you will not be charged again.",
+  "native.tutorHourBody": "It resets tomorrow. To carry on now, add an hour of spoken time.",
+  "native.tutorHourCta": "Add an hour for {price}",
+  "native.tutorHourTerms": "One-time purchase through Apple. The hour is added to your account and used after your daily time runs out, for the tutor or the podcast.",
   "native.otherAccount": "This Apple Account's subscription belongs to a different Memo account. Sign in to that account to use it, or manage it in your Apple subscriptions.",
   "native.signInFailed": "Sign-in could not be completed. Please try again.",
   "auth.mobileCallback.title": "Signing you in…",

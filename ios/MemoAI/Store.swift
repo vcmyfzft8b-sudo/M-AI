@@ -9,6 +9,8 @@ final class Store {
     private var pendingProduct: Product?
     private var purchasing = false
     var deliver: ((String) async throws -> Void)?
+    /// Posts a tutor-hour purchase to the server, which credits it once.
+    var deliverConsumable: ((String) async throws -> Void)?
     var showPurchaseIntent: (() -> Void)?
     var pendingProductID: String? { pendingProduct?.id }
 
@@ -136,6 +138,32 @@ final class Store {
         }
     }
 
+    /// The tutor hour as the page shows it: Apple's own name and price.
+    func tutorProduct() async throws -> [String: Any] {
+        guard let product = try await Product.products(for: [AppConfiguration.tutorHourProductID]).first,
+              product.type == .consumable else { return ["available": false] }
+        return ["id": product.id, "name": product.displayName, "price": product.displayPrice, "available": true,
+                "quote": "\(product.id):\(product.price):\(product.priceFormatStyle.currencyCode):\(product.displayPrice)"]
+    }
+
+    func purchaseTutorHour(account: UUID, quote: String) async throws -> String {
+        guard !purchasing else { throw StoreError.unavailable }
+        purchasing = true
+        defer { purchasing = false }
+        guard let product = try await Product.products(for: [AppConfiguration.tutorHourProductID]).first,
+              product.type == .consumable else { throw StoreError.unavailable }
+        let current = try await tutorProduct()
+        guard current["quote"] as? String == quote else { return "priceChanged" }
+        switch try await product.purchase(options: [.appAccountToken(account)]) {
+        case .success(let result):
+            try await accept(result)
+            return "purchased"
+        case .pending: return "pending"
+        case .userCancelled: return "cancelled"
+        @unknown default: throw StoreError.unavailable
+        }
+    }
+
     func restore() async throws {
         try await AppStore.sync()
         try await reconcile()
@@ -149,8 +177,17 @@ final class Store {
     }
 
     private func accept(_ result: VerificationResult<Transaction>) async throws {
-        guard case .verified(let transaction) = result,
-              AppConfiguration.productIDs.contains(transaction.productID),
+        guard case .verified(let transaction) = result else { throw StoreError.unavailable }
+        if transaction.productID == AppConfiguration.tutorHourProductID {
+            // Finished only once the server has credited it (or found it
+            // refunded), so an interrupted delivery is retried from
+            // Transaction.unfinished on the next launch rather than lost.
+            guard let deliverConsumable else { throw StoreError.unavailable }
+            try await deliverConsumable(result.jwsRepresentation)
+            await transaction.finish()
+            return
+        }
+        guard AppConfiguration.productIDs.contains(transaction.productID),
               let deliver else { throw StoreError.unavailable }
         try await deliver(result.jwsRepresentation)
         await transaction.finish()

@@ -44,6 +44,8 @@ enum AppConfiguration {
     }()
     static let productIDs = ["eu.memoai.premium.monthly", "eu.memoai.premium.yearly",
                              "eu.memoai.premium.trial.monthly", "eu.memoai.premium.trial.yearly"]
+    /// One hour of tutor time, an Apple consumable. Never an entitlement.
+    static let tutorHourProductID = "eu.memoai.tutor.hour"
     /**
      Where the app opens.
 

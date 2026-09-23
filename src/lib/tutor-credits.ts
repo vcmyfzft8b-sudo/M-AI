@@ -69,3 +69,42 @@ export async function creditTutorPurchase(session: Stripe.Checkout.Session) {
     seconds: Math.round(hours * TUTOR_CREDIT_PACK_SECONDS),
   });
 }
+
+/**
+ * Credits an App Store tutor hour, once per Apple transaction.
+ *
+ * Same ledger as the Stripe top-up, keyed `apple:<transactionId>`, so a restore,
+ * a retried delivery or `Transaction.updates` replaying an unfinished purchase
+ * credits the hour once. If crediting fails after the claim, the claim is
+ * released so the app's retry can credit it: Apple has already charged.
+ */
+export async function creditAppleTutorPurchase(params: {
+  userId: string;
+  transactionId: string;
+  amountMinor: number;
+  currency: string;
+}) {
+  const supabase = createSupabaseServiceRoleClient();
+  const key = `apple:${params.transactionId}`;
+  const { error: claimError } = await supabase.from("tutor_credit_purchases").insert({
+    stripe_checkout_session_id: key,
+    user_id: params.userId,
+    seconds: TUTOR_CREDIT_PACK_SECONDS,
+    amount_total: params.amountMinor,
+    currency: params.currency,
+  } as never);
+
+  if (claimError) {
+    if ((claimError as { code?: string }).code === "23505") return { credited: false as const };
+    throw claimError;
+  }
+
+  try {
+    await creditTutorSeconds({ userId: params.userId, seconds: TUTOR_CREDIT_PACK_SECONDS });
+  } catch (error) {
+    await supabase.from("tutor_credit_purchases").delete().eq("stripe_checkout_session_id", key);
+    throw error;
+  }
+
+  return { credited: true as const };
+}

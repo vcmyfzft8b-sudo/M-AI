@@ -67,6 +67,7 @@ function loadApple({ vercelEnv = "production", allowlist, verdicts }) {
     "@/lib/supabase/server": { createSupabaseServiceRoleClient: () => { throw new Error("no database in this test"); } },
     "@/lib/mobile/transaction": { entitlementFromVerifiedTransaction: () => ({ plan: "monthly" }) },
     "@/lib/mobile/code-attribution": { attributeAppleCodePurchase: async () => {} },
+    "@/lib/mobile/runtime": { isAppleConsumable: (value) => value === "eu.memoai.tutor.hour" },
     "@/lib/mobile/apple-roots.json": { default: ["cm9vdA=="] },
   });
   return { ...exports, constructed };

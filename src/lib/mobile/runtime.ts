@@ -21,3 +21,14 @@ export function isAppleProduct(value: unknown): value is AppleProductId {
 export function isTrialProduct(value: AppleProductId): boolean {
   return value === "eu.memoai.premium.trial.monthly" || value === "eu.memoai.premium.trial.yearly";
 }
+
+/**
+ * One hour of tutor time, sold in the app as an Apple consumable — the App
+ * Store counterpart of the web's €2 Stripe top-up (Apple's nearest point is
+ * €1.99). Never a subscription product: it grants seconds, not access.
+ */
+export const APPLE_TUTOR_HOUR_PRODUCT = "eu.memoai.tutor.hour";
+
+export function isAppleConsumable(value: unknown): value is typeof APPLE_TUTOR_HOUR_PRODUCT {
+  return value === APPLE_TUTOR_HOUR_PRODUCT;
+}

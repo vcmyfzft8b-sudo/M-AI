@@ -1504,6 +1504,76 @@ final class WrapperTests: XCTestCase {
         keepStudyScreenshot("Note opened from its notification", app: app)
     }
 
+    // Simulator: tapping a "notes ready" notification opens that note. The
+    // runner injects the push with `simctl push` once the app is in the
+    // background; the payload names the note by id, as the server's does.
+    @MainActor func testPreviewNotificationTapOpensNoteSimulator() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MEMO_QA_PUSH_SIM"] == "1", let preview = env["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              let title = env["MEMO_QA_NOTE_TITLE"], let link = env["MEMO_QA_PUBLIC_ARTICLE"] else {
+            throw XCTSkip("Simulator notification tap only")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        passConsentGate(app)
+        dismissInitialOffer(app)
+        // Memo asks about notifications only after a note is started.
+        let newNote = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "New note")).firstMatch
+        XCTAssertTrue(newNote.waitForExistence(timeout: 30)); newNote.tap()
+        let source = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "link")).firstMatch
+        XCTAssertTrue(source.waitForExistence(timeout: 15)); source.tap()
+        let input = app.webViews.textFields.firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 15)); input.tap(); input.typeText(link)
+        app.webViews.buttons["Create the note"].firstMatch.tap()
+        let notify = app.webViews.buttons["Notify me"].firstMatch
+        if notify.waitForExistence(timeout: 45) {
+            notify.tap()
+            let allow = springboard.alerts.buttons["Allow"].firstMatch
+            if allow.waitForExistence(timeout: 10) { allow.tap() }
+        }
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        XCUIDevice.shared.press(.home)
+        print("MEMO_QA: READY_FOR_PUSH")
+        let banner = springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "is ready to study")).firstMatch
+        XCTAssertTrue(banner.waitForExistence(timeout: 120), "The injected notification must show")
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "Notification on the simulator"; shot.lifetime = .keepAlways; add(shot)
+        banner.tap()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20), "Tapping it must bring Memo back")
+        let heading = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+        XCTAssertTrue(app.webViews.buttons["Notes"].firstMatch.waitForExistence(timeout: 30) && heading.waitForExistence(timeout: 10),
+                      "Tapping it must open that note")
+        keepStudyScreenshot("Note opened from its notification", app: app)
+    }
+
+    // The App Store tutor hour offered once the daily time is used up, with
+    // StoreKit's own price (local StoreKit configuration, no purchase made).
+    @MainActor func testPreviewTutorHourOffer() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MEMO_QA_TUTOR_HOUR"] == "1", let preview = env["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires an out-of-time synthetic subscriber on staging")
+        }
+        let config = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Offers", withExtension: "storekit"))
+        let session = try SKTestSession(contentsOf: config)
+        session.resetToDefaultState(); session.disableDialogs = true
+        session.storefront = "SVN"; session.locale = Locale(identifier: "en_GB")
+        let app = try openPreviewStudyNote(title: "Introduction to Electric Circuits")
+        defer { app.terminate() }
+        openStudyTab("Tutor", in: app)
+        let meter = app.webViews.buttons.matching(NSPredicate(format: "label MATCHES %@", ".*[0-9]+%.*")).firstMatch
+        if meter.waitForExistence(timeout: 20) { meter.tap() }
+        let offer = app.webViews.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Add an hour for")).firstMatch
+        XCTAssertTrue(offer.waitForExistence(timeout: 30), "A subscriber out of time is offered the Apple hour")
+        XCTAssertTrue(offer.label.contains("2.00") || offer.label.contains("2,00"), "StoreKit's price, not a typed one: \(offer.label)")
+        XCTAssertFalse(app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "€2.")).firstMatch.label.contains("checkout"))
+        keepStudyScreenshot("Tutor hour offer (App Store)", app: app)
+    }
+
     @MainActor func testPreviewStudyNoteFromPDF() throws {
         guard ProcessInfo.processInfo.environment["MEMO_QA_PDF"] == "memo-qa-electric-circuits" else {
             throw XCTSkip("Requires an unused synthetic free note and the seeded circuits PDF")

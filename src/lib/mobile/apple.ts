@@ -3,6 +3,7 @@ import "server-only";
 import { AppStoreServerAPIClient, Environment, SignedDataVerifier, VerificationException, VerificationStatus, type JWSTransactionDecodedPayload } from "@apple/app-store-server-library";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { entitlementFromVerifiedTransaction } from "@/lib/mobile/transaction";
+import { isAppleConsumable } from "@/lib/mobile/runtime";
 import { attributeAppleCodePurchase } from "@/lib/mobile/code-attribution";
 import roots from "@/lib/mobile/apple-roots.json";
 
@@ -116,9 +117,43 @@ export function appleNotificationRetryable(error: unknown) {
   return true;
 }
 
+/**
+ * A verified tutor-hour purchase, refreshed from Apple so a replayed receipt
+ * for a refunded purchase is recognised. Throws `AppleAccountMismatch` when
+ * the purchase belongs to another Memo account.
+ */
+export async function verifyAppleConsumable(signedTransaction: string, userId: string) {
+  const checked = await verifyTransaction(signedTransaction, userId);
+  let verified = checked.verified;
+  const bundleId = process.env.APPLE_BUNDLE_ID || "eu.memoai.memo";
+  if (verified.bundleId !== bundleId || verified.environment !== checked.environment
+      || !isAppleConsumable(verified.productId) || verified.type !== "Consumable"
+      || !verified.transactionId || !/^\d+$/.test(verified.transactionId)) {
+    throw new Error("Invalid Apple consumable");
+  }
+  if (!verified.appAccountToken || verified.appAccountToken.toLowerCase() !== userId.toLowerCase()) {
+    throw new AppleAccountMismatch();
+  }
+  const current = await appleAPI(checked.environment).getTransactionInfo(verified.transactionId);
+  if (!current.signedTransactionInfo) throw new Error("Apple returned no transaction");
+  verified = await appleVerifier(checked.environment).verifyAndDecodeTransaction(current.signedTransactionInfo);
+  return {
+    transactionId: verified.transactionId!,
+    environment: checked.environment === Environment.PRODUCTION ? "production" as const : "sandbox" as const,
+    revoked: Boolean(verified.revocationDate),
+    // Apple reports milliunits.
+    amountMinor: Number.isSafeInteger(verified.price) ? Math.round(verified.price! / 10) : 0,
+    currency: (verified.currency ?? "EUR").toLowerCase(),
+  };
+}
+
 export async function saveAppleTransaction(signedTransaction: string, userId?: string, refresh = false) {
   const checked = await verifyTransaction(signedTransaction, userId);
   let verified = checked.verified;
+  // Tutor hours are consumables: credited once by /api/mobile/tutor-credits,
+  // never an entitlement. A server notification about one (a refund, Apple's
+  // consumption request) is acknowledged rather than retried for three days.
+  if (isAppleConsumable(verified.productId)) return null;
   const verifier = appleVerifier(checked.environment);
   const expected = { bundleId: process.env.APPLE_BUNDLE_ID || "eu.memoai.memo", environment: checked.environment, userId };
   if (userId && verified.appAccountToken && verified.appAccountToken.toLowerCase() !== userId.toLowerCase()) {

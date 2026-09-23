@@ -36,6 +36,10 @@ The current evidence and unresolved gates are in
 
 ## Remaining release gates
 
+The whole-repository run now passes 1,612 tests with no failures or skips.
+The only failure on the first full run was a stale offline-shell source assertion,
+corrected without changing the credential-free runtime behavior.
+
 1. Repeat erasure on the final release; test actual Sign in with Apple token revocation.
 2. Finish dedicated Sandbox lifecycle checks: accelerated renewal, expiry,
    refund/revocation and other products. The new dedicated tester was not created.
@@ -46,6 +50,15 @@ The current evidence and unresolved gates are in
    web pages make that current declaration inaccurate; do not infer licensing.
 5. Resolve matching discount codes without weakening account ownership checks.
    Current Apple introductory offers work; equivalent code redemption is absent.
+   Do not conclude that the redemption-sheet limitation makes all in-app codes
+   impossible: Apple's signed promotional purchase option supports an
+   `appAccountToken` bound into the signature for existing/former subscribers.
+   New subscribers use introductory offers. A combined implementation must
+   validate the actual web code terms, display StoreKit prices, enforce offer
+   eligibility and redemption limits on the server, and test real purchases.
+   Sources: [promotional purchase option](https://developer.apple.com/documentation/storekit/product/purchaseoption/promotionaloffer(offerid:keyid:nonce:signature:timestamp:))
+   and [promotional-offer eligibility](https://developer.apple.com/help/app-store-connect/manage-subscriptions/set-up-promotional-offers-for-auto-renewable-subscriptions).
+   This is a supported alternative to investigate, not implemented coverage.
 6. Verify final screenshots/metadata and the final production web deployment
    against the signed release, then TestFlight. Obtain merge/release authorization
    before changing production, and submit only after these gates pass.

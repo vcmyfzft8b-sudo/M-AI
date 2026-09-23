@@ -43,6 +43,17 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- The final whole-repository test run passes **1,612 tests, zero failures and
+  zero skips** (`review-sep23-release-full-tests-final.log`, 29.3 seconds).
+  The first full run found one stale source assertion expecting the offline
+  shell to use its pre-localization URL directly. The corrected assertion
+  checks that the localized URL is constructed from the same-origin public
+  shell and is still fetched with `credentials: "omit"`. Executable worker
+  tests independently verify that behavior in all five locales. Runtime code
+  was not changed to satisfy the stale assertion. This suite supplements the
+  actual wrapper/Preview evidence; it does not replace remaining hardware,
+  real purchase lifecycle or owner-attestation checks.
+
 - Microphone denial now explains how to enable access instead of exposing a
   technical bridge/browser error. iOS uses the existing localized Settings
   instructions; browsers get localized recording instructions in all five

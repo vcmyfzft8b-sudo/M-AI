@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 
 import { canRenderOffline, resolveOfflineRoute } from "../src/lib/offline/paths.ts";
 
@@ -15,9 +16,18 @@ import { canRenderOffline, resolveOfflineRoute } from "../src/lib/offline/paths.
  */
 
 test("the library is what the app's own entry points resolve to", () => {
-  for (const path of ["/app", "/app/", "/", "/auth/continue", "/offline", "/app/start"]) {
+  for (const path of ["/app", "/app/", "/", "/onboarding", "/onboarding/", "/auth/continue", "/offline", "/app/start"]) {
     assert.deepEqual(resolveOfflineRoute(path), { kind: "home" }, path);
   }
+});
+
+test("the wrapper's actual cold-launch path opens the cached library", () => {
+  const source = readFileSync(new URL("../ios/MemoAI/AppConfiguration.swift", import.meta.url), "utf8");
+  const entry = source.match(/static var startURL: URL \{ origin\.appendingPathComponent\("([^"]+)"\)/);
+  assert.ok(entry, "Recheck the native entry path if its configuration changes");
+  assert.deepEqual(resolveOfflineRoute(`/${entry[1]}`), { kind: "home" });
+  assert.equal(canRenderOffline(`/${entry[1]}?source=launch`), true);
+  assert.equal(resolveOfflineRoute("/onboarding/unknown").kind, "unavailable");
 });
 
 test("a note route carries its id through, decoded", () => {

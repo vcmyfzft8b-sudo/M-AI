@@ -2325,6 +2325,69 @@ final class WrapperTests: XCTestCase {
         return app
     }
 
+    @MainActor func testLocalOfflineColdLaunch() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MEMO_QA_OFFLINE_PROXY"] == "https://localhost:3459",
+              let token = env["MEMO_QA_OFFLINE_CONTROL"],
+              let email = env["MEMO_QA_EMAIL"], email == "ios-word-20260922@example.com",
+              let code = env["MEMO_QA_CODE"] else {
+            throw XCTSkip("Requires the isolated TLS proxy and synthetic staging account")
+        }
+        continueAfterFailure = false
+        let origin = "https://localhost:3459"
+        func connection(_ offline: Bool) async throws {
+            var request = URLRequest(url: URL(string: origin + "/__qa_network")!)
+            request.setValue(token, forHTTPHeaderField: "X-Memo-QA-Control")
+            request.setValue(offline ? "1" : "0", forHTTPHeaderField: "X-Memo-QA-Offline")
+            let (_, response) = try await URLSession.shared.data(for: request)
+            XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = origin
+        try await connection(false)
+        do {
+            app.launch()
+            completeOnboarding(app)
+            _ = signInWithCode(app, email: email, code: code)
+            passConsentGate(app)
+            completeOnboarding(app)
+            dismissInitialOffer(app)
+            let note = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Introduction to Electric Circuits")).firstMatch
+            XCTAssertTrue(note.waitForExistence(timeout: 60))
+            note.tap()
+            XCTAssertTrue(app.webViews.buttons["Notes"].firstMatch.waitForExistence(timeout: 30))
+            // Allow the real service worker to cache the shell and build assets.
+            try await Task.sleep(nanoseconds: 20_000_000_000)
+            try await connection(true)
+            app.terminate()
+            app.launch()
+            XCTAssertTrue(note.waitForExistence(timeout: 45), "A cold launch must recover the cached library at the native entry URL")
+            keepStudyScreenshot("Offline cold launch opens the saved library", app: app)
+            note.tap()
+            XCTAssertTrue(app.webViews.buttons["Notes"].firstMatch.waitForExistence(timeout: 30))
+            XCTAssertTrue(app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "resistance")).firstMatch.exists)
+            keepStudyScreenshot("Cached note remains readable offline", app: app)
+            openStudyTab("Tutor", in: app)
+            XCTAssertTrue(app.webViews.staticTexts["The walkthrough needs a connection"].firstMatch.waitForExistence(timeout: 15))
+            openStudyTab("Podcast", in: app)
+            XCTAssertTrue(app.webViews.staticTexts["The episode needs a connection"].firstMatch.waitForExistence(timeout: 15))
+            keepStudyScreenshot("Live features explain the missing connection", app: app)
+            try await connection(false)
+            app.terminate()
+            app.launch()
+            let newNote = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "New note")).firstMatch
+            XCTAssertTrue(newNote.waitForExistence(timeout: 45))
+            newNote.tap()
+            XCTAssertTrue(app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Record audio")).firstMatch.waitForExistence(timeout: 15), "Reconnection must restore normal paid-account creation")
+            keepStudyScreenshot("Online creation returns after reconnecting", app: app)
+            app.terminate()
+        } catch {
+            try? await connection(false)
+            app.terminate()
+            throw error
+        }
+    }
+
     @MainActor func testLocalOnboardingKeyboard() throws {
         guard let origin = ProcessInfo.processInfo.environment["MEMO_KEYBOARD_QA_URL"],
               URL(string: origin)?.host == "localhost" else {

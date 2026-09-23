@@ -46,6 +46,14 @@ function seedLocaleCookie(request: NextRequest, response: NextResponse) {
 
 export async function updateSession(request: NextRequest) {
   const env = getPublicEnv();
+  // The service worker fetches a public shell without cookies. Carry only its
+  // validated language into this request; no session or account data is added.
+  const offlineLocale = request.nextUrl.pathname === "/offline"
+    ? parseLocale(request.nextUrl.searchParams.get("locale"))
+    : null;
+  if (offlineLocale) {
+    request.cookies.set(LOCALE_COOKIE, offlineLocale);
+  }
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-pathname", request.nextUrl.pathname);
   // Never let the browser supply the private authentication handoff. Page

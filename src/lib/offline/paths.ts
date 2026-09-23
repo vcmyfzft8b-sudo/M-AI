@@ -16,7 +16,7 @@ export type OfflineRoute =
   | { kind: "unavailable"; backToHome: boolean };
 
 /** Where the wrapper starts, and where a signed-in session is resumed from. */
-const SESSION_ENTRY_PATHS = new Set(["/", "/auth/continue", "/app/start", "/offline"]);
+const SESSION_ENTRY_PATHS = new Set(["/", "/onboarding", "/auth/continue", "/app/start", "/offline"]);
 
 function stripTrailingSlash(pathname: string) {
   return pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;

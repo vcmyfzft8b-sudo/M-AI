@@ -16,7 +16,7 @@ submit:** current end-to-end purchase and physical-device checks remain open.
 - Finish hardware recording/audio/interruptions and the other explicitly listed
   device checks. The portrait lock and email-code/settings walkthrough pass on
   the connected iPhone; perceived haptics and audio quality remain unverified.
-- Final account/file erasure after the three-hour drain passes. Verify the
+- Verify final account/file erasure after the unchanged three-hour drain and the
   corrected analytics cleanup in the final deployed release; actual Apple
   authorization revocation remains part of the authentication gate.
 - Obtain the owner's Content Rights confirmation and correct Apple's declaration
@@ -42,6 +42,27 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- Offline cold-launch testing found two shared defects: the new native
+  `/onboarding` entry was missing from the offline route map, and anonymous
+  shell fetching re-detected IP language despite recording the selected locale.
+  A real cached Preview navigation reproduced the missing-library screen in
+  Slovenian for an English-selected account (`review-sep23-offline-entry-baseline.json`).
+  `/onboarding` now opens the cached library; shell requests pass a validated
+  locale while continuing to omit account cookies. Online onboarding is unchanged.
+  A production-mode local build and 139 offline/mobile regressions pass, including
+  the actual native start path and all five supported shell locales.
+  The real simulator test uses a one-day local TLS certificate trusted only in
+  the dedicated QA simulator and a task-only proxy to staging-backed local code.
+  After caching the library/note, the proxy closes and rejects app-origin traffic.
+  Full app termination/relaunch, saved library/note reading, Tutor/Podcast offline
+  explanations, reconnection and the normal creation menu all pass:
+  `review-sep23-offline-native-retry.xcresult` (1 pass, 182.6 seconds).
+  Proxy counters stay at 396 between disconnect and reconnect; these are actual
+  cached WKWebView screens, not replacement UI. This isolates app-origin loss,
+  rather than changing the Mac network or claiming a physical airplane-mode test.
+  The initial native attempt was stopped before offline testing because the TLS
+  proxy's forwarded origin failed onboarding's same-origin check. Correcting the
+  test proxy resolved it without weakening the application check.
 - A real Preview walkthrough reproduced paused podcast seeking restarting audio
   when the target crossed a speaker-turn boundary. The shared player now
   preserves playback intent, invalidates superseded loads on Pause/Close, and

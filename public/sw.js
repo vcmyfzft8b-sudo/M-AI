@@ -407,7 +407,11 @@ async function cacheOfflineShell(locale, strings, fonts, build) {
   let response;
 
   try {
-    response = await fetch(SHELL_URL, { credentials: "omit", cache: "no-store" });
+    // Session cookies stay omitted, but the shell must use the reader's
+    // selected language rather than re-detecting their IP country.
+    const shellUrl = new URL(SHELL_URL, self.location.origin);
+    shellUrl.searchParams.set("locale", locale || "en");
+    response = await fetch(shellUrl.href, { credentials: "omit", cache: "no-store" });
   } catch {
     return;
   }

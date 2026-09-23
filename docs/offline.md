@@ -39,6 +39,16 @@ already knows how to put in front of the reader. Without that refusal, an upload
 offline fails with whatever the engine calls a dropped connection ("Load failed"
 in Safari), which is English, unexplained, and reads as a crash.
 
+The native cold-launch path, `/onboarding`, resolves to the saved library while
+offline, just like `/app` and the earlier sign-in entry points. A device without
+a saved library still gets the ordinary unavailable screen. This does not alter
+the online onboarding or sign-in flow.
+
+The worker fetches `/offline?locale=…` with credentials omitted. Middleware accepts
+only a supported locale on that exact path and supplies it to rendering; no
+account/session cookie is added. This keeps a chosen language when the location
+would otherwise detect another one, including after an offline cold launch.
+
 Navigation offline goes through the document rather than the router
 (`navigation-loading.tsx`): a client-side navigation would fetch a payload that
 cannot be fetched. Every asset is already cached, so it is not the slow path it
@@ -91,8 +101,8 @@ optional:
   `limitsNavigationsToAppBoundDomains` on the web view configuration. WKWebView
   runs a service worker only for an app-bound domain. Without both halves the
   page's `navigator.serviceWorker.register` never fires — measured: zero requests
-  for `/sw.js` — and the app has nothing to open. It is switched off for a Vercel
-  preview, whose host changes per deployment and so cannot be in a static list.
+  for `/sw.js` — and the app has nothing to open. A Preview must name its selected host in `MEMO_APP_BOUND_HOST` at build
+  time; an unlisted Preview origin cannot exercise app-bound service workers.
 - **A secure origin.** WKWebView does not extend secure-context status to
   `http://localhost` the way browsers do, so a plain local dev server cannot
   exercise offline mode at all.

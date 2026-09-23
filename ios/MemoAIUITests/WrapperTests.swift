@@ -488,7 +488,10 @@ final class WrapperTests: XCTestCase {
             // XCTest excludes the prediction strip from its keyboard rectangle.
             // Keep gestures and controls above that strip as well as the keys.
             func visible() -> Bool {
-                let bottom = app.keyboards.firstMatch.exists ? app.keyboards.firstMatch.frame.minY - 44 : app.windows.firstMatch.frame.maxY
+                // A swipe-revealed action sits on the last filtered row, which cannot
+                // scroll higher; it only has to clear the keys it is tapped above.
+                let strip: CGFloat = coordinateTap ? 0 : 44
+                let bottom = app.keyboards.firstMatch.exists ? app.keyboards.firstMatch.frame.minY - strip : app.windows.firstMatch.frame.maxY
                 return (coordinateTap || element.isHittable) && element.frame.maxY <= bottom - 10 && element.frame.minY >= 60
             }
             for _ in 0..<6 where !visible() {
@@ -1188,10 +1191,10 @@ final class WrapperTests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["MEMO_IOS_URL"] = preview
         app.launch()
-        dismissInitialOffer(app)
+        // Either Restore will do: the launch offer carries one as well as Settings.
         let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
         let restore = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Restore purchases")).firstMatch
-        XCTAssertTrue(settings.waitForExistence(timeout: 30))
+        XCTAssertTrue(settings.waitForExistence(timeout: 30) || restore.waitForExistence(timeout: 5))
         for _ in 0..<3 where !restore.exists {
             if settings.exists { settings.tap() }
             _ = restore.waitForExistence(timeout: 12)
@@ -1205,6 +1208,9 @@ final class WrapperTests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: restore)], timeout: 180), .completed)
         keepStudyScreenshot("Restore on another Memo account", app: app)
         XCTAssertFalse(active.exists, "Restore must not move another account's subscription")
+        XCTAssertTrue(app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@",
+            "belongs to a different Memo account")).firstMatch.waitForExistence(timeout: 5),
+            "The reader must learn which account owns the purchase, not be told to retry")
     }
 
     // Real storefront prices must reach the wheel and both discounted plans.

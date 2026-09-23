@@ -566,6 +566,125 @@ final class WrapperTests: XCTestCase {
         keepStudyScreenshot("Synthetic flashcard deleted", app: app)
     }
 
+    @MainActor func testPreviewCircuitQuizGeneration() throws {
+        guard ProcessInfo.processInfo.environment["MEMO_QA_EMAIL"] == "ios-word-20260922@example.com" else {
+            throw XCTSkip("Uses only the dedicated synthetic circuit note")
+        }
+        let app = try openPreviewStudyNote(title: "Introduction to Electric Circuits")
+        defer { app.terminate() }
+        openStudyTab("Quiz", in: app)
+        let create = app.webViews.buttons["Create a quiz"].firstMatch
+        if create.waitForExistence(timeout: 5) { create.tap() }
+        XCTAssertTrue(app.webViews.staticTexts["Question 1"].firstMatch.waitForExistence(timeout: 300),
+                      "The actual generated quiz must become available")
+        XCTAssertTrue(app.webViews.buttons["Edit quiz"].firstMatch.exists)
+        keepStudyScreenshot("Generated circuit quiz on iPhone", app: app)
+    }
+
+    @MainActor func testPreviewCircuitQuizRoundAndRecovery() throws {
+        struct Question: Decodable {
+            let prompt: String
+            let options: [String]
+            let correct_option_idx: Int
+        }
+        guard ProcessInfo.processInfo.environment["MEMO_QA_EMAIL"] == "ios-word-20260922@example.com",
+              let json = ProcessInfo.processInfo.environment["MEMO_QA_QUIZ_QUESTIONS"]?.data(using: .utf8) else {
+            throw XCTSkip("Requires actual generated questions from the synthetic circuit note")
+        }
+        let questions = try JSONDecoder().decode([Question].self, from: json)
+        XCTAssertGreaterThan(questions.count, 1)
+        let title = "Introduction to Electric Circuits"
+        let app = try openPreviewStudyNote(title: title)
+        defer { app.terminate() }
+        func button(_ name: String) -> XCUIElement { app.webViews.buttons[name].firstMatch }
+        func tapVisible(_ element: XCUIElement) {
+            XCTAssertTrue(element.waitForExistence(timeout: 15))
+            // Measure the actual dock, not an arbitrary reserved height. A
+            // scroll over an already fully visible answer can become a tap
+            // when the content is too short to scroll.
+            let dock = button("Edit quiz")
+            let bottom = dock.exists ? dock.frame.minY - 4 : app.windows.firstMatch.frame.maxY - 70
+            for _ in 0..<6 where !element.isHittable || element.frame.maxY > bottom {
+                let origin = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
+                origin.withOffset(CGVector(dx: 10, dy: bottom - 20)).press(forDuration: 0.1,
+                    thenDragTo: origin.withOffset(CGVector(dx: 10, dy: 400)))
+            }
+            XCTAssertTrue(element.isHittable)
+            element.tap()
+        }
+        openStudyTab("Quiz", in: app)
+        XCTAssertTrue(app.webViews.staticTexts["Question 1"].firstMatch.waitForExistence(timeout: 20))
+        var missed: Question?
+        for index in 0..<questions.count {
+            let question = try XCTUnwrap(questions.first { app.webViews.staticTexts[$0.prompt].firstMatch.exists },
+                                        "The visible prompt must match an actual generated question")
+            let answer = question.options[index == 0 ? (question.correct_option_idx + 1) % question.options.count : question.correct_option_idx]
+            tapVisible(app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", answer)).firstMatch)
+            if index == 0 {
+                missed = question
+                XCTAssertTrue(app.webViews.staticTexts["Not quite."].firstMatch.waitForExistence(timeout: 10))
+                keepStudyScreenshot("Quiz wrong-answer feedback on iPhone", app: app)
+                tapVisible(button("Got it"))
+            }
+            let next = index + 1 < questions.count
+                ? app.webViews.staticTexts["Question \(index + 2)"].firstMatch
+                : app.webViews.staticTexts["Go over the questions you missed"].firstMatch
+            XCTAssertTrue(next.waitForExistence(timeout: 15))
+            if index == 1 {
+                // Give the ordinary debounced save time to reach the server,
+                // then verify recovery through a full process restart.
+                RunLoop.current.run(until: Date().addingTimeInterval(7))
+                app.terminate()
+                app.launch()
+                let note = app.webViews.links.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+                XCTAssertTrue(note.waitForExistence(timeout: 30))
+                note.tap()
+                openStudyTab("Quiz", in: app)
+                XCTAssertTrue(next.waitForExistence(timeout: 20), "The current question must survive relaunch")
+                keepStudyScreenshot("Quiz progress survives iPhone relaunch", app: app)
+            }
+        }
+        keepStudyScreenshot("Quiz first round with one missed answer", app: app)
+        tapVisible(button("Go over 1 missed question"))
+        let retry = try XCTUnwrap(missed)
+        XCTAssertTrue(app.webViews.staticTexts[retry.prompt].firstMatch.waitForExistence(timeout: 15))
+        tapVisible(app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", retry.options[retry.correct_option_idx])).firstMatch)
+        XCTAssertTrue(app.webViews.staticTexts["Every question is done"].firstMatch.waitForExistence(timeout: 15))
+        keepStudyScreenshot("Quiz completed after reviewing missed answer", app: app)
+        tapVisible(button("Start the quiz over"))
+        XCTAssertTrue(app.webViews.staticTexts["Question 1"].firstMatch.waitForExistence(timeout: 15))
+    }
+
+    @MainActor func testPreviewQuizExplanationUsesSelectedLanguage() throws {
+        struct Question: Decodable {
+            let prompt: String
+            let options: [String]
+            let correct_option_idx: Int
+        }
+        guard ProcessInfo.processInfo.environment["MEMO_QA_EMAIL"] == "ios-word-20260922@example.com",
+              let json = ProcessInfo.processInfo.environment["MEMO_QA_QUIZ_QUESTIONS"]?.data(using: .utf8) else {
+            throw XCTSkip("Requires actual generated questions from the synthetic circuit note")
+        }
+        let questions = try JSONDecoder().decode([Question].self, from: json)
+        let app = try openPreviewStudyNote(title: "Introduction to Electric Circuits")
+        defer { app.terminate() }
+        openStudyTab("Quiz", in: app)
+        XCTAssertTrue(app.webViews.buttons["Edit quiz"].firstMatch.waitForExistence(timeout: 20))
+        let question = try XCTUnwrap(questions.first { app.webViews.staticTexts[$0.prompt].firstMatch.exists })
+        let wrong = question.options[(question.correct_option_idx + 1) % question.options.count]
+        app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", wrong)).firstMatch.tap()
+        let why = app.webViews.buttons["See why"].firstMatch
+        XCTAssertTrue(why.waitForExistence(timeout: 15))
+        why.tap()
+        let expected = "Help me understand why “\(question.options[question.correct_option_idx])” is the correct answer to “\(question.prompt)”."
+        // XCTest's identifier subscript rejects strings over 128 characters;
+        // a label predicate can match the full, untruncated chat message.
+        XCTAssertTrue(app.webViews.staticTexts.matching(NSPredicate(format: "label == %@", expected)).firstMatch.waitForExistence(timeout: 30),
+                      "The quiz explanation must use the selected English language in the actual chat")
+        RunLoop.current.run(until: Date().addingTimeInterval(5))
+        keepStudyScreenshot("Quiz explanation opens English chat on iPhone", app: app)
+    }
+
     @MainActor func testPreviewSpeedReaderAdvancesAndPauses() throws {
         let app = try openPreviewStudyNote()
         openStudyTab("Speed read", in: app)

@@ -16,9 +16,9 @@ submit:** current end-to-end purchase and physical-device checks remain open.
 - Finish hardware recording/audio/interruptions and the other explicitly listed
   device checks. The portrait lock and email-code/settings walkthrough pass on
   the connected iPhone; perceived haptics and audio quality remain unverified.
-- Verify final account/file erasure after the unchanged three-hour drain and the
-  corrected analytics cleanup in the final deployed release; actual Apple
-  authorization revocation remains part of the authentication gate.
+- Repeat account/file erasure on the final deployed release. Staging deletion
+  and analytics cleanup passed after the unchanged three-hour drain; actual
+  Apple authorization revocation remains part of the authentication gate.
 - Obtain the owner's Content Rights confirmation and correct Apple's declaration
   for imported third-party documents/web pages. Reconcile final screenshots with
   the release implementation. The [privacy reconciliation](privacy-reconciliation.md)
@@ -42,6 +42,57 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
 
+- Full quiz testing found a scoring defect: the delayed automatic advance used
+  the render from before the final answer, so a correct last answer was counted
+  as missed. Even a one-question retry could repeat indefinitely. The real
+  Preview reached retry round 23 (`review-sep23-quiz-repeat-loop-baseline.json`).
+  The callback now carries its updated answers into round scoring. Executing
+  the component's actual handlers with render-snapshot semantics reproduces two
+  failures on the old source and passes all four regressions after the fix.
+  TypeScript, focused lint and 113 mobile, keyboard, locale and study regressions
+  pass. Local real-component completion/restart checks pass with browser and
+  native user agents. READY Preview `memo-35hsi0jd2-nace-valencics-projects.vercel.app`
+  at runtime commit `9afd7b14` also completes/restarts the quiz; an independent
+  authenticated API read verifies the reset after the normal five-second save.
+  The physical iPhone passes wrong-answer feedback, all 13 generated questions,
+  full process restart/recovery, exactly one missed-question retry, 100%
+  completion and restart: `review-sep23-iphone-quiz-round-final.xcresult`
+  (1 pass, 125.2 seconds). Four screenshots are retained; the final completion
+  capture was visually inspected. The generated-quiz screen check separately
+  passes in `review-sep23-iphone-quiz-generation-final.xcresult` (38.3 seconds).
+  Earlier harness attempts waited for an intentionally hidden eyebrow, scrolled
+  an already visible answer, or closed a browser before its five-second save.
+  The final checks use the visible counter, measured dock boundary and persisted
+  setup state; those earlier failures are not counted as passes.
+- Quiz "See why" also hardcoded its user message in Slovenian. The selected
+  language now supplies that message through all five catalogues. An actual
+  Preview request reproduced the Slovenian message in an English-selected app
+  (`review-sep23-quiz-chat-baseline.json`). Local browser/native checks now send
+  the English message, receive a completed real chat response and show no page
+  errors (`review-sep23-quiz-chat-local-{browser,native}.json`). The physical iPhone
+  chat handoff passes in `review-sep23-iphone-quiz-chat-final.xcresult` (41.1
+  seconds), with the full English message visible in chat. The first attempt
+  hit XCTest's 128-character identifier limit; matching the full label with a
+  predicate fixes the harness without truncating the assertion.
+- Inspecting that saved chat found a separate ordering defect: each inserted
+  question/answer pair shares its database timestamp, so timestamp-only reads
+  sometimes returned the assistant before the user. This affected both reopened
+  chat and the history supplied to the tutor. Both reads now break timestamp ties
+  by role, with inverse ordering for the reverse-chronological history query.
+  The actual reversed pair is retained in `review-sep23-chat-order-baseline.json`.
+  All five saved pairs now appear in the right order in both the local API and
+  rendered browser/native-UA chat (`review-sep23-chat-order-local-{browser,native}.json`).
+  TypeScript, focused lint and 40 chat/tutor tests pass, including three order
+  regressions. READY Preview `memo-hez4o32lx-nace-valencics-projects.vercel.app`
+  at runtime commit `5fadfe40` passes server and rendered ordering under both
+  user agents (`review-sep23-chat-order-preview-browser.json` and
+  `review-sep23-chat-order-preview-native-final.json`), with no page errors.
+  The physical iPhone quiz/chat handoff also passes on this Preview:
+  `review-sep23-iphone-quiz-chat-ordered.xcresult` (41.2 seconds); its screenshot
+  shows the English question followed by its relevant answer. An earlier
+  native-UA harness run timed out on the intermediate library title before
+  reaching chat. The final run navigates directly to the authenticated note
+  and retains every server/UI ordering assertion.
 - Physical iPhone flashcard generation and editing now have dedicated coverage.
   The circuit note generated 13 cards through the ordinary app action. The
   editor test adds a manual card, selects/replaces its answer through iOS's
@@ -230,11 +281,14 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
   sessions and 22 page views. The UI confirms deletion requested; the server
   independently confirms access blocked and the unmodified cleanup deadline
   **23 September, 04:06:24 CEST**. The purchased Word QA account remains intact.
-  `review-sep23-wait-erasure.mjs` is running for that deadline against the audited
-  immutable Preview; final cleanup is **pending**, not a pass yet. Captured IDs
-  in `review-sep23-erasure-inventory-before.json` allow checking for orphaned
-  analytics even after their account owner disappears. Queue evidence is in
-  `review-sep23-erasure-inventory-queued.json`.
+  Cleanup completed at **04:06:37 CEST** against the audited immutable Preview:
+  one deletion, zero failures. Independent inventory confirms the Auth account,
+  note, storage file, both analytics sessions, all 22 page views and the queued
+  job are gone. Captured analytics IDs also rule out orphaned rows. The unrelated
+  Word account still owns its note. Evidence: `review-sep23-erasure-complete.json`
+  and `review-sep23-erasure-inventory-{before,queued,after}.json`. This verifies
+  staging erasure of an email-review account, not Apple grant revocation or
+  production deletion.
 - The deletion confirmation screenshot exposed an uncentered Sign in link.
   Reusing `memo-auth-submit` fixes it in both the PWA and wrapper. Local browser
   and native-user-agent checks pass in light/dark, with centered text, no
@@ -950,6 +1004,12 @@ These references guide implementation; they do not establish Apple's approval
 of Memo or replace the unresolved end-to-end checks above.
 
 ### 23 September: native keyboard motion and analytics Settings
+
+- The controller is mounted once in the root layout and follows focus globally,
+  including chat inputs, textareas, search, editors and portalled sheets. The
+  final audit reran all 97 mobile/keyboard regressions successfully. Actual
+  device coverage below is specific; it is not a measured frame-rate guarantee
+  for every field or device.
 
 - Bridge v4 now supplies UIKit keyboard-layout presentation frames to the shared
   PWA keyboard controller. Library/note chat, search and rename passed on the

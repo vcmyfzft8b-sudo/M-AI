@@ -11,8 +11,8 @@ The current evidence and unresolved gates are in
   It includes keyboard bridge v4. It has **not been uploaded**. The unsubmitted
   App Review draft still contains build 9, version 1.0, four subscriptions and
   their group. Release is manual.
-- The latest runtime commit on `codex/ios-app-wrapper` is `058c4eb1`. Its READY
-  Preview is `https://memo-7elesth2r-nace-valencics-projects.vercel.app`, using
+- The latest runtime commit on `codex/ios-app-wrapper` is `5fadfe40`. Its READY
+  Preview is `https://memo-hez4o32lx-nace-valencics-projects.vercel.app`, using
   shared staging. The branch's changes are not a production deployment.
 - Actual app coverage includes photo/PDF/Word/slides/web-article note generation,
   flashcards, quiz/practice, mindmap/export, memory palace, speed reader,
@@ -26,13 +26,14 @@ The current evidence and unresolved gates are in
 - Paid/Free Apps Agreements, bank, tax, EU trader status and DAC7 are Active.
   All 15 App Privacy types were reconciled and published. Small Business Program
   enrollment is submitted; approval of the 15% rate is unconfirmed.
-- A second synthetic UI deletion is queued for its unchanged three-hour drain
-  at **04:06:24 CEST on 23 September**. Verify the live waiter's completion and
-  independent Auth, Storage, note and analytics inventory before marking it done.
+- The second synthetic UI deletion completed after its unchanged three-hour
+  drain at **04:06:37 CEST on 23 September**. Independent staging inventory
+  confirms Auth, Storage, note and owned analytics erasure; the unrelated Word
+  account remains intact. Actual Apple grant revocation is still unverified.
 
 ## Remaining release gates
 
-1. Confirm final erasure; test actual Sign in with Apple token revocation.
+1. Repeat erasure on the final release; test actual Sign in with Apple token revocation.
 2. Finish dedicated Sandbox lifecycle checks: accelerated renewal, expiry,
    refund/revocation and other products. The new dedicated tester was not created.
 3. Complete physical audio quality, locked-screen/call-interruption and spoken-tutor
@@ -67,9 +68,10 @@ current section and `release-readiness.md` to decide the next action.
 
 ## Note notifications (added 20 September 2026)
 
-The app can now tell a reader their note is finished after they have put the
-phone down. Everything is built and tested except the one piece Apple will not
-let anything but a human create.
+The branch implements note-completion notifications, but live APNs delivery is
+not verified. A fresh Vercel Preview environment listing on 23 September still
+contains no `APPLE_PUSH_*` configuration, so the feature remains disabled there.
+An APNs key and the device checks below are still required before enabling it.
 
 **What you have to do, once:** Apple Developer portal → Certificates,
 Identifiers & Profiles → **Keys** → **+** → name it `Memo push` → tick **Apple

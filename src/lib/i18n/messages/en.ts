@@ -367,6 +367,7 @@ export const en: Messages = {
   "quiz.wrongTitle": "Not quite.",
   "quiz.correctAnswerIs": "The correct answer is {letter}",
   "quiz.reviewWhy": "See why",
+  "quiz.reviewPrompt": "Help me understand why “{answer}” is the correct answer to “{question}”.",
   "quiz.understood": "Got it",
   "quiz.allDone": "Every question is done",
   "quiz.repeatMissed": "Go over the questions you missed",

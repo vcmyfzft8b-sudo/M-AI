@@ -372,6 +372,7 @@ export const hr: Messages = {
   "quiz.wrongTitle": "Ups, nije točno.",
   "quiz.correctAnswerIs": "Točan odgovor je {letter}",
   "quiz.reviewWhy": "Pogledaj zašto",
+  "quiz.reviewPrompt": "Pomozi mi razumjeti zašto je „{answer}” točan odgovor na „{question}”.",
   "quiz.understood": "Razumijem",
   "quiz.allDone": "Sva pitanja su obrađena",
   "quiz.repeatMissed": "Ponovi pitanja koja si promašio",

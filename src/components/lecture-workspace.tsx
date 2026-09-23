@@ -2791,7 +2791,7 @@ export function LectureWorkspace({
     }
 
     const answer = activeQuizQuestion.options[activeQuizQuestion.correct_option_idx] ?? "";
-    const prompt = `Pomagaj mi razumeti, zakaj je »${answer}« pravilen odgovor na »${activeQuizQuestion.prompt}«`;
+    const prompt = t("quiz.reviewPrompt", { answer, question: activeQuizQuestion.prompt });
 
     moveQuizQuestion(1);
     setIsChatDismissed(false);

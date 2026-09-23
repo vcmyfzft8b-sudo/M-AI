@@ -386,6 +386,7 @@ export const sl = {
   "quiz.wrongTitle": "Ups, ni pravilno.",
   "quiz.correctAnswerIs": "Pravilen odgovor je {letter}",
   "quiz.reviewWhy": "Preglej zakaj",
+  "quiz.reviewPrompt": "Pomagaj mi razumeti, zakaj je »{answer}« pravilen odgovor na »{question}«.",
   "quiz.understood": "Razumem",
   "quiz.allDone": "Vsa vprašanja so predelana",
   "quiz.repeatMissed": "Ponovi vprašanja, ki si jih zgrešil",

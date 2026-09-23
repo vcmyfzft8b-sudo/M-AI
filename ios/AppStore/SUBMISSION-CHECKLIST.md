@@ -104,8 +104,13 @@ Do not fabricate entitlement or use real paid checkout for these tests.
   mindmap/export, memory-palace and reader flows on the final release.
 - [ ] Check all keyboard entry points and sheets, portrait rotation lock, loading
   screen, safe areas, light/dark themes, larger text and supported iPad layouts.
-- [ ] Verify regional first-run language and manual language selection for English,
-  Slovenian, Croatian, Bosnian and Serbian, matching the PWA's current behavior.
+- [ ] Verify regional first-run language for English, Slovenian, Croatian, Bosnian
+  and Serbian, matching the PWA's current behavior. *Manual selection is done:*
+  `testPreviewAllSettingsLanguagesPersist` passed on 23 September (279.9 s,
+  simulator, Preview for `421e2d26`, result `review-sep23-languages-sim-r5`).
+  Each language survives a relaunch and translates the Apple code form. It found
+  and fixed a bug: the code form's back arrow went to Help instead of Settings.
+  Regional first-run detection on a clean install is still unverified.
 - [ ] Confirm no browser toolbar, install prompt, landing page or development
   overlay appears in the main app. Authentication/external-link system UI and
   iPadOS window controls are not app browser chrome and cannot all be suppressed.

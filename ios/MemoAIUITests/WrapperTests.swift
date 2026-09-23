@@ -2330,6 +2330,15 @@ final class WrapperTests: XCTestCase {
         app.launchEnvironment["MEMO_IOS_URL"] = preview
         app.launch()
         defer { app.terminate() }
+        // A new preview host has no session cookie yet: sign in the same
+        // synthetic account rather than depending on an earlier run.
+        let signedIn = app.webViews.links.matching(NSPredicate(
+            format: "label MATCHES %@", "(Settings|Nastavitve|Postavke|Podešavanja).*")).firstMatch
+        if !signedIn.waitForExistence(timeout: 15), let code = env["MEMO_QA_CODE"] {
+            completeOnboarding(app)
+            XCTAssertTrue(signInWithCode(app, email: "ios-pdf-20260922@example.com", code: code))
+            completeOnboarding(app)
+        }
         passConsentGate(app)
         dismissInitialOffer(app)
         let settingsNames = ["Settings", "Nastavitve", "Postavke", "Podešavanja"]

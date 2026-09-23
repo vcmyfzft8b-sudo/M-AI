@@ -34,13 +34,22 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   or that the app can suppress them.
 - Obtain production merge/release authorization, verify the deployed web app
   with the signed Release binary, and complete TestFlight checks before review
-  submission. Build 9 is uploaded and the review draft exists; neither is a
-  production deployment of this branch or an App Review submission.
+  submission. Build 11 is uploaded for TestFlight processing; the unsubmitted
+  review draft still contains build 9. Neither is a production deployment of
+  this branch or an App Review submission.
 
 Apple's Small Business enrollment is submitted, but its 15% approval remains
 unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
 
 ## Verified work and evidence
+
+- A read-only Apple Server API check at 04:18 CEST independently verified the
+  synthetic Word account's Sandbox subscription and renewal signatures. Apple
+  reports the yearly trial active with auto-renew on, matching the staging
+  ledger exactly. Its first expiration is **23 September at 23:58:04 CEST**;
+  the latest transaction is still `PURCHASE`, not `RENEWAL`. This confirms
+  current ownership/entitlement consistency, not renewal, refund or expiry
+  coverage. Evidence: `review-sep23-sandbox-lifecycle-current.json`.
 
 - Full quiz testing found a scoring defect: the delayed automatic advance used
   the render from before the final answer, so a correct last answer was counted
@@ -270,8 +279,13 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
   `review-sep23-build11-apple-validation.json`. Export:
   `ios/build/export-release-11/MemoAI.ipa`; SHA-256
   `9bb6f15dabd09af7b3446c0681496e45739913c126b2501b5cf820582d9c7744`.
-  **Not uploaded or submitted.** The matching production web deployment and
-  TestFlight verification remain required; this supersedes build 10 packaging.
+  **Uploaded, not submitted for App Review.** Upload succeeded without errors
+  at 04:14 CEST on 23 September; delivery ID
+  `e5980c8c-e9ca-4621-9a30-50a7aae2cf09`. The IPA checksum and strict signature
+  were verified again immediately before upload. Evidence:
+  `review-sep23-build11-upload.json`. Processing/TestFlight availability is
+  pending; the matching production web deployment and final TestFlight checks
+  remain required. This supersedes build 10 packaging.
 - A second actual-wrapper deletion run now uses the synthetic Slides account
   (`ios-slides-20260922@example.com`) on staging. Preparation, real analytics
   opt-in/relaunch/withdrawal and deletion each pass:

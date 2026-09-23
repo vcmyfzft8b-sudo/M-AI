@@ -7,10 +7,11 @@ The current evidence and unresolved gates are in
 
 - The wrapper shares the PWA onboarding, study tools, settings and design.
   Only platform billing, provider authentication and native device functions differ.
-- Release **1.0.0 (11)** is archived, exported and validated by Apple locally.
-  It includes keyboard bridge v4. It has **not been uploaded**. The unsubmitted
-  App Review draft still contains build 9, version 1.0, four subscriptions and
-  their group. Release is manual.
+- Release **1.0.0 (11)** includes keyboard bridge v4 and was uploaded to Apple
+  without errors at **04:14 CEST on 23 September**. Delivery ID:
+  `e5980c8c-e9ca-4621-9a30-50a7aae2cf09`. Processing/TestFlight availability
+  remains to be verified. The unsubmitted App Review draft still contains build
+  9, version 1.0, four subscriptions and their group. Release is manual.
 - The latest runtime commit on `codex/ios-app-wrapper` is `5fadfe40`. Its READY
   Preview is `https://memo-hez4o32lx-nace-valencics-projects.vercel.app`, using
   shared staging. The branch's changes are not a production deployment.

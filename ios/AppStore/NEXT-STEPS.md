@@ -14,8 +14,8 @@ The current evidence and unresolved gates are in
   The English testing checklist is saved. The unsubmitted App Review draft
   still contains build 9, version 1.0, four subscriptions and their group.
   Release is manual; final production-web/TestFlight checks remain required.
-- The latest verified deployment commit on `codex/ios-app-wrapper` is `9321c434`. Its READY
-  Preview is `https://memo-j2iafs3t7-nace-valencics-projects.vercel.app`, using
+- The latest verified deployment commit on `codex/ios-app-wrapper` is `dfc1dcfa`. Its READY
+  Preview is `https://memo-ic9e6bb8v-nace-valencics-projects.vercel.app`, using
   shared staging. The branch's changes are not a production deployment.
 - Actual app coverage includes photo/PDF/Word/slides/web-article note generation,
   flashcards, quiz/practice, mindmap/export, memory palace, speed reader,
@@ -33,6 +33,11 @@ The current evidence and unresolved gates are in
   drain at **04:06:37 CEST on 23 September**. Independent staging inventory
   confirms Auth, Storage, note and owned analytics erasure; the unrelated Word
   account remains intact. Actual Apple grant revocation is still unverified.
+
+- Build **12** is locally archived/exported with bridge v5 and a public keyboard
+  accessory override, replacing the internal WebKit class modification. Its actual
+  simulator form/chat cycles pass. Use the `release-12-public` artifacts only;
+  Apple package validation passed without errors. It has not been uploaded to TestFlight.
 
 ## Remaining release gates
 

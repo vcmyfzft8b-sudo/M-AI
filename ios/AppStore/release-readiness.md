@@ -3,6 +3,28 @@
 This section supersedes the older portal status below. **Not yet ready to
 submit:** current end-to-end purchase and physical-device checks remain open.
 
+## Public keyboard API audit — 23 September
+
+- Removed runtime subclassing of WebKit’s internal `WKContent` view and the
+  Objective-C runtime import. `MemoWebView` now overrides the public
+  `UIResponder.inputAccessoryView` property. WebKit supports forwarding this
+  override: [upstream change and API test](https://chromium.googlesource.com/external/github.com/WebKit/webkit/+/refs/heads/safari-608.1.34.0-branch/Source/WebKit/ChangeLog).
+- The real simulator keyboard fixture passes three form/textarea cycles and
+  three chat cycles (`review-sep23-keyboard-public.xcresult`, 43.3 seconds).
+  Screenshot inspection confirms no previous/next/Done accessory bar. Geometry
+  records show a roughly 12 pt settled chat gap, median/p95 moving frames of
+  17 ms and zero final inset. This is simulator evidence, not measured hardware
+  120 fps or a complete release acceptance claim.
+- Build **12** with this public override and bridge v5 is archived/exported at
+  `MemoAI-release-12-public.xcarchive` / `export-release-12-public/MemoAI.ipa`.
+  Both app and Live Activity extension are build 12, portrait-only; the privacy
+  manifest is present. The earlier `release-12` archive predates this replacement
+  and must not be uploaded. Apple package validation for the replacement
+  **succeeded with no errors** (`review-sep23-release12-public-validation.json`).
+  SHA-256: `207ed41f4540a029d26cdd82e95f31cda5f946b1d8b12c06588f8e0ec67f5c6d`.
+  Nothing from build 12 has been uploaded or submitted. Package validation
+  checks the deliverable; it does not verify app behavior or guarantee review approval.
+
 ## Discount codes — 23 September, local implementation
 
 - A read-only Stripe catalogue audit found 24 active unrestricted codes sharing
@@ -43,7 +65,11 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   The owner has been asked to supply the read-only key. Three credential-boundary
   tests cover these paths. Earlier native Preview test also omitted the selected
   host from `WKAppBoundDomains`; the runner is corrected for its next run.
-  All these Preview checks must be repeated once the key is available.
+  All these Preview checks must be repeated once the key is available. The
+  subsequent local-server run, which also sets `VERCEL_ENV=preview`, now correctly
+  refuses its unrestricted fallback (`review-sep23-code-local-final.log`); the
+  earlier successful native price check predates this credential-boundary guard.
+  The two task-owned local servers were stopped after testing.
 - Uploaded build 11 still has bridge v4. This work needs a new binary, Preview
   verification and the authorized production release. Actual promotional
   purchase/restore, code attribution in creator reporting, and recurring/gift

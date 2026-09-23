@@ -2,16 +2,14 @@ import UIKit
 import WebKit
 import StoreKit
 import AuthenticationServices
-import ObjectiveC
 
 /// WKWebView shows a browser-style accessory bar (previous/next/done) above
 /// the keyboard for every form field. Memo's sheets already carry their own
-/// controls, so the content view answers `inputAccessoryView` with nil.
+/// controls. WKWebView supports this public responder override directly.
 final class MemoWebView: WKWebView, UIScrollViewDelegate {
     override init(frame: CGRect, configuration: WKWebViewConfiguration) {
         super.init(frame: frame, configuration: configuration)
         scrollView.delegate = self
-        hideKeyboardAccessoryBar()
     }
 
     /// When the keyboard opens, WebKit scrolls the document to reveal the focused
@@ -26,28 +24,7 @@ final class MemoWebView: WKWebView, UIScrollViewDelegate {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    override func didMoveToWindow() {
-        super.didMoveToWindow()
-        hideKeyboardAccessoryBar()
-    }
-
-    private func hideKeyboardAccessoryBar() {
-        guard let content = scrollView.subviews.first(where: {
-            String(cString: object_getClassName($0)).hasPrefix("WKContent")
-        }), let base = object_getClass(content) else { return }
-        let name = String(cString: class_getName(base)) + "_MemoNoAccessoryBar"
-        if String(cString: class_getName(base)) == name { return }
-        let selector = #selector(getter: UIResponder.inputAccessoryView)
-        var subclass: AnyClass? = NSClassFromString(name)
-        if subclass == nil, let created = objc_allocateClassPair(base, name, 0),
-           let method = class_getInstanceMethod(UIResponder.self, selector) {
-            let none: @convention(block) (AnyObject) -> UIView? = { _ in nil }
-            class_addMethod(created, selector, imp_implementationWithBlock(none), method_getTypeEncoding(method))
-            objc_registerClassPair(created)
-            subclass = created
-        }
-        if let subclass { object_setClass(content, subclass) }
-    }
+    override var inputAccessoryView: UIView? { nil }
 }
 
 @MainActor

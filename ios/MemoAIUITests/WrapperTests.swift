@@ -74,13 +74,27 @@ final class WrapperTests: XCTestCase {
     }
 
     @MainActor private func dismissInitialOffer(_ app: XCUIApplication) {
+        // An account without a subscription meets the offer on every cold
+        // launch, and after a slow start it can arrive late. Wait until either
+        // it can be closed or the home screen's Settings is reachable.
         let close = app.webViews.buttons.matching(NSPredicate(
             format: "label == %@ OR label == %@", "Close the subscription offer", "Zapri ponudbo naročnine")).firstMatch
-        if close.waitForExistence(timeout: 8) {
-            for _ in 0..<4 where close.exists {
+        let settings = app.webViews.links.matching(NSPredicate(
+            format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "Settings", "Nastavitve")).firstMatch
+        let deadline = Date().addingTimeInterval(30)
+        while Date() < deadline {
+            if close.exists {
                 close.tap()
                 RunLoop.current.run(until: Date().addingTimeInterval(2))
+                continue
             }
+            if settings.exists && settings.isHittable {
+                // Give a late offer one more beat to show before moving on.
+                RunLoop.current.run(until: Date().addingTimeInterval(2))
+                if !close.exists { return }
+                continue
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
         }
     }
 
@@ -2888,6 +2902,7 @@ final class WrapperTests: XCTestCase {
             if app.webViews.switches["Dark"].waitForExistence(timeout: 5) { return true }
             let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
             if !settings.waitForExistence(timeout: 10) { app.terminate(); app.launch(); _ = settings.waitForExistence(timeout: 30) }
+            dismissInitialOffer(app)
             guard settings.exists else { return false }
             settings.tap()
             return app.webViews.switches["Dark"].waitForExistence(timeout: 15)
@@ -2900,6 +2915,8 @@ final class WrapperTests: XCTestCase {
             let element = web(.any, label)
             var reached = element.exists && element.isHittable
             for _ in 0..<8 where !reached { app.webViews.firstMatch.swipeUp(); settle(0.4); reached = element.exists && element.isHittable }
+            // Rows above the last one visited (Sign out sits near the top) need the other way.
+            for _ in 0..<10 where !reached { app.webViews.firstMatch.swipeDown(); settle(0.4); reached = element.exists && element.isHittable }
             guard reached else { problems.append("\(name): unreachable"); return }
             element.tap(); settle(2.5); snap(name); dismiss(); settle()
         }
@@ -2930,6 +2947,7 @@ final class WrapperTests: XCTestCase {
         app.launchEnvironment["MEMO_IOS_URL"] = preview
         app.launch()
         continueAfterFailure = false
+        dismissInitialOffer(app)
         let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 30))
         settings.tap()

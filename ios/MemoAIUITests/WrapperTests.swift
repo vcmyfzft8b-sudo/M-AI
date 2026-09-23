@@ -942,7 +942,9 @@ final class WrapperTests: XCTestCase {
             format: "label IN %@", ["Continue to payment", "Start the 3-day free trial"]
         )).firstMatch
         let ready = NSPredicate { _, _ in payment.exists && payment.isEnabled }
+        let shownAt = Date()
         let result = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: nil)], timeout: 60)
+        print(String(format: "MEMO_QA: paywall prices ready after %.2f s", Date().timeIntervalSince(shownAt)))
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "Real StoreKit subscription catalogue"
         shot.lifetime = .keepAlways

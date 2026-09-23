@@ -8,6 +8,21 @@ import { APPLE_PRODUCTS, type AppleProductId } from "@/lib/mobile/runtime";
 import { nativeProducts, trialPlanProducts, halfOffProducts, type NativeProduct } from "@/lib/mobile/products";
 import { clearOfferResume } from "@/lib/offer-resume";
 
+/**
+ * The last plans StoreKit returned, so a paywall opened again draws its prices
+ * at once instead of waiting on the App Store. Only ever a first frame: the
+ * live list replaces it moments later, and a purchase re-checks Apple's price.
+ */
+const PLANS_KEY = "memo.apple.plans.v1";
+
+function readCachedPlans(): unknown {
+  try { return JSON.parse(window.localStorage.getItem(PLANS_KEY) ?? "null"); } catch { return null; }
+}
+
+function saveCachedPlans(items: unknown) {
+  try { window.localStorage.setItem(PLANS_KEY, JSON.stringify(items)); } catch { /* Storage can be blocked. */ }
+}
+
 /** Apple supplies prices and checkout; the PWA owns the visible paywall. */
 export function useAppleBilling(enabled: boolean, halfOffOnly = false) {
   const t = useT();
@@ -19,11 +34,18 @@ export function useAppleBilling(enabled: boolean, halfOffOnly = false) {
   useEffect(() => {
     if (!enabled) return;
     let active = true;
+    const cached = readCachedPlans();
+    const early = cached ? (halfOffOnly ? halfOffProducts(cached) : trialPlanProducts(cached)) : [];
+    if (early.length) {
+      setProducts(early);
+      setSelected(early.find(item => APPLE_PRODUCTS[item.id] === "yearly")?.id ?? early[0].id);
+    }
     Promise.all([
       nativeRequest<unknown>("products"),
       nativeRequest<{ productId: string | null }>("pendingProduct").catch(() => ({ productId: null })),
     ]).then(([items, pending]) => {
       if (!active) return;
+      saveCachedPlans(items);
       const valid = halfOffOnly ? halfOffProducts(items) : trialPlanProducts(items);
       const intended = nativeProducts(items).find(item => item.id === pending.productId);
       // External Apple intents retain the product and terms the buyer chose.

@@ -63,6 +63,15 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
   The initial native attempt was stopped before offline testing because the TLS
   proxy's forwarded origin failed onboarding's same-origin check. Correcting the
   test proxy resolved it without weakening the application check.
+  Deployed verification also passes on READY Preview
+  `memo-f9uh04fts-nace-valencics-projects.vercel.app` at `72429edb`:
+  browser and native user agents both navigate through the real service worker
+  to the saved library/note while offline, retain English, and recover online
+  with no page errors (`review-sep23-offline-entry-preview-browser.log` and
+  `review-sep23-offline-entry-preview-native.log`). Anonymous shell requests for
+  all five supported locales return the matching HTML language under both user
+  agents (`review-sep23-offline-preview-locales.json`). These deployed checks use
+  headless Chromium; the simulator evidence above separately verifies WKWebView.
 - A real Preview walkthrough reproduced paused podcast seeking restarting audio
   when the target crossed a speaker-turn boundary. The shared player now
   preserves playback intent, invalidates superseded loads on Pause/Close, and

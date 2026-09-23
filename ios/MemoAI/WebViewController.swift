@@ -212,6 +212,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             guard let self else { throw Store.StoreError.unavailable }
             _ = try await self.api(path: "/api/mobile/tutor-credits", body: ["signedTransaction": jws])
         }
+        store.warmPlans()
         store.showPurchaseIntent = { [weak self] in
             self?.webView.load(URLRequest(url: AppConfiguration.origin.appendingPathComponent("app/start")))
         }
@@ -601,7 +602,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                 case "disablePushNotifications":
                     await forgetPushToken()
                     replyHandler(["status": "disabled"], nil)
-                case "products": replyHandler(try await store.products(), nil)
+                case "products": replyHandler(try await store.plans(), nil)
                 case "codeProducts", "codePurchase":
                     guard let code = body["code"] as? String else { throw Store.StoreError.unavailable }
                     var request = ["code": code]

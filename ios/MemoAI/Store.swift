@@ -13,6 +13,13 @@ final class Store {
     var deliverConsumable: ((String) async throws -> Void)?
     var showPurchaseIntent: (() -> Void)?
     var pendingProductID: String? { pendingProduct?.id }
+    /// The paywall's plans, fetched once at launch so the paywall opens with
+    /// prices already in hand; refreshed in the background, and dropped after
+    /// any transaction because offer eligibility can change with it. The
+    /// purchase itself re-checks Apple's live price through the quote.
+    private var cachedPlans: [[String: Any]]?
+    private var cachedPlansAt: Date?
+    private var plansRefresh: Task<[[String: Any]], Error>?
 
     init() {
         updates = Task { [weak self] in
@@ -34,6 +41,28 @@ final class Store {
     }
 
     deinit { updates?.cancel(); intents?.cancel() }
+
+    /// Fetch the plans ahead of the paywall.
+    func warmPlans() { Task { _ = try? await refreshPlans() } }
+
+    /// The plans at once from the launch-time fetch, then kept fresh.
+    func plans() async throws -> [[String: Any]] {
+        if let cachedPlans, let cachedPlansAt, Date().timeIntervalSince(cachedPlansAt) < 600 {
+            if Date().timeIntervalSince(cachedPlansAt) > 60 { warmPlans() }
+            return cachedPlans
+        }
+        return try await refreshPlans()
+    }
+
+    private func refreshPlans() async throws -> [[String: Any]] {
+        if let plansRefresh { return try await plansRefresh.value }
+        let task = Task { try await self.products() }
+        plansRefresh = task
+        defer { plansRefresh = nil }
+        let plans = try await task.value
+        if !plans.isEmpty { cachedPlans = plans; cachedPlansAt = Date() }
+        return plans
+    }
 
     func products(promotionalOffers: [String: String]? = nil) async throws -> [[String: Any]] {
         let products = try await Product.products(for: AppConfiguration.productIDs)
@@ -178,6 +207,7 @@ final class Store {
 
     private func accept(_ result: VerificationResult<Transaction>) async throws {
         guard case .verified(let transaction) = result else { throw StoreError.unavailable }
+        cachedPlans = nil
         if transaction.productID == AppConfiguration.tutorHourProductID {
             // Finished only once the server has credited it (or found it
             // refunded), so an interrupted delivery is retried from

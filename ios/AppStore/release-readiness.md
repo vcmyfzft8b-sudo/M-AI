@@ -63,7 +63,16 @@ unconfirmed. Apple controls review acceptance; these checks cannot guarantee it.
   buffered immediately and older acknowledgements cannot clear newer entries.
   The two new regression tests, TypeScript, lint and 118 focused tests pass;
   the real local browser also persists and resumes the sought position.
-  Stronger physical cross-turn seek coverage is prepared but not yet verified.
+  The READY `07b2db41` Preview is
+  `https://memo-mxif3n1a0-nace-valencics-projects.vercel.app`. The real browser
+  check confirms request/server/slider agree at 20,340 ms and verifies normal
+  segment handoff (`review-sep23-podcast-seek-preview-queue-diagnostic.log`).
+  An initial Preview walkthrough timed out before opening Podcast; the repeated
+  walkthrough passes without page errors.
+  Physical iPhone cross-turn seek/pause/resume now passes:
+  `review-sep23-iphone-podcast-seek-retry.xcresult` (1 pass, 75.5 seconds).
+  Screenshots show the paused sought position and successful resumed playback.
+  These checks verify transport and progress, not perceived audio quality.
   The first physical attempt was stopped because its Play-only starting-state
   assumption could not handle an already autoplaying cached episode; the test
   now explicitly pauses before checking playback.

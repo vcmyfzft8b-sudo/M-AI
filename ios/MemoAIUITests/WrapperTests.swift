@@ -2397,6 +2397,17 @@ final class WrapperTests: XCTestCase {
         app.launch()
         defer { app.terminate() }
         passConsentGate(app)
+        let signIn = app.webViews.buttons.matching(NSPredicate(
+            format: "label IN %@", ["Continue with email", "Nadaljuj z e-pošto"])).firstMatch
+        if signIn.exists {
+            let env = ProcessInfo.processInfo.environment
+            guard env["MEMO_QA_EMAIL"] == "ios-word-20260922@example.com",
+                  let code = env["MEMO_QA_CODE"] else {
+                return XCTFail("A signed-out device needs the synthetic Word account credentials")
+            }
+            XCTAssertTrue(signInWithCode(app, email: "ios-word-20260922@example.com", code: code))
+            passConsentGate(app)
+        }
         dismissInitialOffer(app)
         func button(_ label: String) -> XCUIElement { app.webViews.buttons[label].firstMatch }
         func checkField(_ field: XCUIElement, name: String, composer: Bool = false) {

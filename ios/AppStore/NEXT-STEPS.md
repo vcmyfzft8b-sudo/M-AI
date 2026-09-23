@@ -37,7 +37,16 @@ The current evidence and unresolved gates are in
 - Build **12** is locally archived/exported with bridge v5 and a public keyboard
   accessory override, replacing the internal WebKit class modification. Its actual
   simulator form/chat cycles pass. Use the `release-12-public` artifacts only;
-  Apple package validation passed without errors. It has not been uploaded to TestFlight.
+  Apple package validation passed without errors. It uploaded successfully at
+  05:27 CEST (delivery `e8fd64f0-7833-480b-8409-a98efbe2dfaa`). Apple processed it
+  as **VALID / IN_BETA_TESTING**, and it appears in **Memo internal**. English
+  testing notes explain that matching web fixes still need deployment.
+  Search, rename and both chats also pass on the physical iPhone 16 with this
+  public override. The test restored its signed-out synthetic session normally.
+- The age-rating override now matches the published minimum age of 16 in
+  Memo's terms. Apple confirms `ageRatingOverrideV2: SIXTEEN_PLUS`; its older
+  aggregate rating field returns `SEVENTEEN_PLUS`. This corrects the former 4+
+  default; sensitive-content questionnaire verification remains a release check.
 
 ## Remaining release gates
 
@@ -70,8 +79,8 @@ corrected without changing the credential-free runtime behavior.
    by hosted Preview. The owner has been asked for that key.
    Actual promotional purchase/restore and creator-code attribution remain
    unverified/unimplemented respectively. Recurring and gift codes are not
-   supported by this first-period flow. Uploaded build 11 has bridge v4;
-   this feature needs a new binary and the matching web deployment.
+   supported by this first-period flow. Uploaded build 12 has bridge v5;
+   this feature still needs the matching web deployment and completed purchase tests.
    Sources: [promotional purchase option](https://developer.apple.com/documentation/storekit/product/purchaseoption/promotionaloffer(offerid:keyid:nonce:signature:timestamp:))
    and [promotional-offer eligibility](https://developer.apple.com/help/app-store-connect/manage-subscriptions/set-up-promotional-offers-for-auto-renewable-subscriptions).
    The local build and route tests prove implementation, not App Store purchase completion.

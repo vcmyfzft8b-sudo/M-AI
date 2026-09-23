@@ -15,6 +15,13 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   records show a roughly 12 pt settled chat gap, median/p95 moving frames of
   17 ms and zero final inset. This is simulator evidence, not measured hardware
   120 fps or a complete release acceptance claim.
+- Physical iPhone 16 follow-up passed against the hosted branch Preview:
+  `review-sep23-iphone-keyboard-public-final.xcresult` (119.6 seconds). Search,
+  rename, library chat and note chat clear the real keyboard; both chat close
+  controls remain reachable. Screenshots confirm the accessory bar stays hidden.
+  The first run stopped at a signed-out session; the test now signs in through
+  the ordinary synthetic Word email-code flow when needed. It does not change
+  entitlement, account data or keyboard assertions.
 - Build **12** with this public override and bridge v5 is archived/exported at
   `MemoAI-release-12-public.xcarchive` / `export-release-12-public/MemoAI.ipa`.
   Both app and Live Activity extension are build 12, portrait-only; the privacy
@@ -22,8 +29,24 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   and must not be uploaded. Apple package validation for the replacement
   **succeeded with no errors** (`review-sep23-release12-public-validation.json`).
   SHA-256: `207ed41f4540a029d26cdd82e95f31cda5f946b1d8b12c06588f8e0ec67f5c6d`.
-  Nothing from build 12 has been uploaded or submitted. Package validation
-  checks the deliverable; it does not verify app behavior or guarantee review approval.
+  Uploaded successfully at **05:27 CEST** on 23 September, delivery
+  `e8fd64f0-7833-480b-8409-a98efbe2dfaa`; Apple confirms **VALID** and
+  **IN_BETA_TESTING**, with build 12 listed in **Memo internal**. English beta
+  notes describe keyboard/code checks and the pending matching web deployment. No App
+  Review submission has been made. Package validation checks the deliverable;
+  it does not verify app behavior or guarantee review approval.
+
+## Age-rating correction — 23 September
+
+- The published terms (`src/lib/help/en.ts`, section 3) require users to be
+  at least 16. The portal previously had a 4+ calculated rating and no override.
+  Set and independently read back `ageRatingOverrideV2: SIXTEEN_PLUS` using
+  Apple's supported [higher-rating override](https://developer.apple.com/help/app-store-connect/manage-app-information/set-an-app-age-rating/).
+  The older aggregate `appStoreAgeRating` field now returns `SEVENTEEN_PLUS`
+  and Brazil returns `SIXTEEN`. No terms or content-frequency answers were changed.
+- This fixes the minimum-age mismatch, not every questionnaire answer. A final
+  sensitive-content audit must consider the AI assistant and imported study
+  material. The separate owner Content Rights confirmation remains pending.
 
 ## Discount codes — 23 September, local implementation
 
@@ -70,7 +93,7 @@ submit:** current end-to-end purchase and physical-device checks remain open.
   refuses its unrestricted fallback (`review-sep23-code-local-final.log`); the
   earlier successful native price check predates this credential-boundary guard.
   The two task-owned local servers were stopped after testing.
-- Uploaded build 11 still has bridge v4. This work needs a new binary, Preview
+- Uploaded build 12 has bridge v5. This work still needs Preview
   verification and the authorized production release. Actual promotional
   purchase/restore, code attribution in creator reporting, and recurring/gift
   campaigns remain outside the completed evidence. Do not claim submission-ready.

@@ -11,7 +11,7 @@
 //   gate   --vercel F [--sentry F] [--backlog F]
 //            -> {actionable, reason, ...} on stdout
 //   queue  --vercel F [--sentry F] --backlog F --state F --until ISO
-//            [--may-advance true|false] -> records findings for manual triage
+//            [--may-advance true|false] [--note TEXT] -> records findings for manual triage
 //   commit --state F --until ISO --status ok|failed [--no-advance]
 //            -> rewrites state.json
 //
@@ -201,12 +201,14 @@ export function nextState(state, { until, status, noAdvance, now }) {
   }
 }
 
-// When the hosted fixer has no usable credential, the scheduled scan must still
-// preserve every finding and move the cursor after a complete scan. Otherwise
-// the 24-hour log retention eventually turns an authentication outage into an
-// unobservable production interval. A partial scan is recorded but never
+// When the hosted fixer is disabled, or starts and fails, the scheduled scan must
+// still preserve every finding and move the cursor after a complete scan.
+// Otherwise the 24-hour log retention eventually turns an authentication outage
+// into an unobservable production interval. A partial scan is recorded but never
 // advances the cursor.
-export function queueScanOnly({ vercel, sentry, backlog, state, until, mayAdvance = true, now }) {
+export const DISABLED_NOTE = 'Automated fixer disabled; awaiting manual triage.'
+
+export function queueScanOnly({ vercel, sentry, backlog, state, until, mayAdvance = true, now, note = DISABLED_NOTE }) {
   const decision = gate({ vercel, sentry, backlog })
   const entries = (backlog?.entries ?? []).map((entry) => ({ ...entry }))
   const byFingerprint = new Map(entries.map((entry) => [entry.fingerprint, entry]))
@@ -232,7 +234,7 @@ export function queueScanOnly({ vercel, sentry, backlog, state, until, mayAdvanc
         occurrences: group.count ?? 1,
         sentryIssues: [],
         prUrl: null,
-        notes: 'Automated fixer disabled; awaiting manual triage.',
+        notes: note,
       }
       entries.push(entry)
       byFingerprint.set(entry.fingerprint, entry)
@@ -256,7 +258,7 @@ export function queueScanOnly({ vercel, sentry, backlog, state, until, mayAdvanc
         occurrences: issue.count ?? 1,
         sentryIssues: [String(issue.id)],
         prUrl: null,
-        notes: 'Automated fixer disabled; awaiting manual triage.',
+        notes: note,
       }
       entries.push(entry)
       byFingerprint.set(entry.fingerprint, entry)
@@ -339,6 +341,7 @@ function main(argv) {
       state: readRequiredJson(flags.state),
       until: flags.until,
       mayAdvance: flags['may-advance'] !== 'false',
+      note: typeof flags.note === 'string' && flags.note ? flags.note : undefined,
     })
     writeFileSync(flags.backlog, `${JSON.stringify(result.backlog)}\n`)
     writeFileSync(flags.state, `${JSON.stringify(result.state, null, 2)}\n`)

@@ -193,9 +193,22 @@ final class Store {
         }
     }
 
-    func restore() async throws {
-        try await AppStore.sync()
+    /// False when the reader cancelled Apple's sign-in; nothing is wrong then.
+    @discardableResult
+    func restore() async throws -> Bool {
+        /*
+         * Apple's sync is the password step. If it fails or is cancelled, the
+         * purchases already on the device are still checked: stopping there
+         * reported a bare StoreKit error on TestFlight while the server was
+         * answering 409 ("belongs to another Memo account") for every one.
+         */
+        var syncFailure: Error?
+        do { try await AppStore.sync() } catch { syncFailure = error }
         try await reconcile()
+        // Cancelling Apple's password sheet is a choice, not a failure to report.
+        if let failure = syncFailure as? StoreKitError, case .userCancelled = failure { return false }
+        if let syncFailure { throw BridgeFailure(reason: "App Store sync: \(syncFailure)") }
+        return true
     }
 
     func reconcile() async throws {

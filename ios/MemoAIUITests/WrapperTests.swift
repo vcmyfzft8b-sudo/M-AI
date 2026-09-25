@@ -1693,6 +1693,68 @@ final class WrapperTests: XCTestCase {
         XCTAssertTrue(reason.waitForExistence(timeout: 30), "A refused restore must show the server's reason")
     }
 
+    // Restore whose App Store sync is cancelled (the Apple sign-in on the
+    // simulator) still checks the device's purchases and ends quietly.
+    @MainActor func testPreviewRestoreCancelledSyncShowsReason() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MEMO_QA_REFUSAL"] == "1", let preview = env["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires a staging preview and an unpaid synthetic account")
+        }
+        let app = XCUIApplication()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        passConsentGate(app)
+        let restore = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Restore purchases")).firstMatch
+        XCTAssertTrue(restore.waitForExistence(timeout: 40), "The launch offer carries Restore")
+        restore.tap()
+        // Apple's own sign-in: cancel it, as someone without the password would.
+        for process in [springboard, app] {
+            let cancel = process.buttons["Cancel"].firstMatch
+            if cancel.waitForExistence(timeout: 20) { cancel.tap(); break }
+        }
+        // A cancel is the reader's choice: Restore ends quietly, with no
+        // "could not be confirmed" notice and no reasonless failure.
+        RunLoop.current.run(until: Date().addingTimeInterval(8))
+        keepStudyScreenshot("Restore with a cancelled App Store sync", app: app)
+        let notice = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "could not be confirmed")).firstMatch
+        XCTAssertFalse(notice.exists, "Cancelling Apple's sign-in must not report a failure")
+        XCTAssertTrue(restore.exists, "The offer stays open for another try")
+    }
+
+    // Device, PRODUCTION, the owner's signed-in review account: Restore on an
+    // Apple ID whose subscription belongs to another Memo account must say so.
+    // Cancels Apple's password sheet; never types a credential.
+    @MainActor func testProductionRestoreOtherAccountMessage() throws {
+        guard ProcessInfo.processInfo.environment["MEMO_QA_PROD_RESTORE"] == "1" else {
+            throw XCTSkip("Owner-run production check only")
+        }
+        let app = XCUIApplication()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        app.launch()
+        let restore = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Restore purchases")).firstMatch
+        if !restore.waitForExistence(timeout: 30) {
+            let newNote = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "New note")).firstMatch
+            XCTAssertTrue(newNote.waitForExistence(timeout: 20), "Must be signed in on production")
+            newNote.tap()
+            XCTAssertTrue(restore.waitForExistence(timeout: 20))
+        }
+        restore.tap()
+        for _ in 0..<3 {
+            var cancelled = false
+            for process in [springboard, app] {
+                let cancel = process.buttons["Cancel"].firstMatch
+                if cancel.waitForExistence(timeout: 8) { cancel.tap(); cancelled = true; break }
+            }
+            if !cancelled { break }
+        }
+        let other = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "belongs to a different Memo account")).firstMatch
+        let shown = other.waitForExistence(timeout: 60)
+        keepStudyScreenshot("Production Restore on another account's purchase", app: app)
+        XCTAssertTrue(shown, "The reader must learn the purchase belongs to another Memo account")
+    }
+
     @MainActor func testPreviewStudyNoteFromPDF() throws {
         guard ProcessInfo.processInfo.environment["MEMO_QA_PDF"] == "memo-qa-electric-circuits" else {
             throw XCTSkip("Requires an unused synthetic free note and the seeded circuits PDF")

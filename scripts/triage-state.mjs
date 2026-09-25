@@ -148,9 +148,18 @@ export function gate({ vercel, sentry, backlog }) {
   // exists nowhere else. Issues past the enrichment cap land in `additional` --
   // sorted by frequency, which is exactly where a brand-new low-count issue sits
   // -- so they gate too.
-  const freshSentryAll = [...(sentry?.issues ?? []), ...(sentry?.additional ?? [])].filter(
-    (issue) => isFresh(entries.get(`sentry:${issue.id}`), issue.lastSeen),
-  )
+  //
+  // The issue list is every unresolved issue, not just those active in the window,
+  // and the read-only token can never resolve one. So an issue whose backlog entry
+  // was pruned would look brand new forever. One whose last event predates the
+  // window was already read by an earlier complete scan -- the cursor only moves
+  // after one -- so being unknown is not news on its own.
+  const windowStart = sentry?.window?.since ? new Date(sentry.window.since) : null
+  const freshSentryAll = [...(sentry?.issues ?? []), ...(sentry?.additional ?? [])].filter((issue) => {
+    const entry = entries.get(`sentry:${issue.id}`)
+    if (!entry && windowStart && issue.lastSeen && new Date(issue.lastSeen) < windowStart) return false
+    return isFresh(entry, issue.lastSeen)
+  })
   const freshSentry = freshSentryAll.filter((issue) => !isPerformanceDetector(issue))
   const ignoredSentry = freshSentryAll.filter(isPerformanceDetector)
 

@@ -439,3 +439,29 @@ test('the queue command takes a note for the entries it creates', () => {
   assert.equal(result.status, 0, result.stderr)
   assert.equal(JSON.parse(readFileSync(files.backlog, 'utf8')).entries[0].notes, 'Automated fixer failed; awaiting triage.')
 })
+
+test('a pruned Sentry issue with no activity in the window does not come back as new', () => {
+  const decision = gate({
+    vercel: { lossy: false, groups: [] },
+    sentry: {
+      window: { since: '2026-09-24T21:00:00Z', until: '2026-09-24T21:30:00Z' },
+      issues: [
+        // Fixed and pruned on 2026-09-24; still "unresolved" in Sentry.
+        { id: 'old', lastSeen: '2026-09-13T09:01:55Z' },
+        // Genuinely new in this window.
+        { id: 'new', lastSeen: '2026-09-24T21:10:00Z' },
+      ],
+    },
+    backlog: { entries: [] },
+  })
+  assert.deepEqual(decision.freshSentryIssueIds, ['new'])
+})
+
+test('a report without a window keeps treating unknown Sentry issues as fresh', () => {
+  const decision = gate({
+    vercel: { lossy: false, groups: [] },
+    sentry: { issues: [{ id: 'old', lastSeen: '2026-09-13T09:01:55Z' }] },
+    backlog: { entries: [] },
+  })
+  assert.deepEqual(decision.freshSentryIssueIds, ['old'])
+})

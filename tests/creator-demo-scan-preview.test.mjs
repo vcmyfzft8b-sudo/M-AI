@@ -98,7 +98,7 @@ test("the creator demo does not ask for a converted preview at all", () => {
   // the size guard produces, rather than an error the recording would show.
   assert.match(
     guard,
-    /if \(isCreatorDemo \|\| !canConvertScanPreview\(photoSource\.file\.size\)\) \{\s*setPhotoSources\(\(current\) =>[\s\S]*?previewStatus: "failed"[\s\S]*?return;/,
+    /if \(\s*isCreatorDemo \|\|[^{]*!canConvertScanPreview\(photoSource\.file\.size\)\s*\) \{\s*setPhotoSources\(\(current\) =>[\s\S]*?previewStatus: "failed"[\s\S]*?return;/,
     "the demo skip has to reuse the size guard's silent fallback",
   );
 });

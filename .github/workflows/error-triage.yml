@@ -9,7 +9,9 @@ name: Error triage
 #
 # The scan runs before `npm ci` and before Claude starts. While the hosted fixer
 # has no usable credential, TRIAGE_FIXER_ENABLED=false keeps scans and the
-# durable manual backlog running without starting Claude.
+# durable manual backlog running without starting Claude. If the fixer starts and
+# fails, its reason is printed and the findings it left are queued the same way,
+# so a broken credential can never open a gap in coverage.
 #
 # GitHub only runs scheduled workflows from the default branch, so this file has to
 # be on `main` before the cron fires.
@@ -34,6 +36,11 @@ on:
         required: false
         type: string
         default: "5"
+      force_fixer:
+        description: "Start the fixer even when the scan finds nothing new or TRIAGE_FIXER_ENABLED is false. Pair with dry_run to test the credential."
+        required: false
+        type: boolean
+        default: false
 
 # Two triage runs at once would fight over the state branch and could open duplicate PRs.
 concurrency:
@@ -172,7 +179,7 @@ jobs:
           echo "actionable=$(jq -r .actionable /tmp/gate.json)" >> "$GITHUB_OUTPUT"
 
       - name: Nothing to do
-        if: steps.scan.outputs.actionable != 'true'
+        if: steps.scan.outputs.actionable != 'true' && !inputs.force_fixer
         run: |
           set -euo pipefail
           echo "No new or regressed production errors between ${{ steps.window.outputs.since }} and ${{ steps.window.outputs.until }}."
@@ -199,11 +206,11 @@ jobs:
           fi
 
       - name: Install dependencies
-        if: steps.scan.outputs.actionable == 'true' && vars.TRIAGE_FIXER_ENABLED != 'false'
+        if: inputs.force_fixer || (steps.scan.outputs.actionable == 'true' && vars.TRIAGE_FIXER_ENABLED != 'false')
         run: npm ci
 
       - name: Queue findings for manual triage
-        if: steps.scan.outputs.actionable == 'true' && vars.TRIAGE_FIXER_ENABLED == 'false'
+        if: steps.scan.outputs.actionable == 'true' && vars.TRIAGE_FIXER_ENABLED == 'false' && !inputs.force_fixer
         run: |
           set -euo pipefail
           node scripts/triage-state.mjs queue \
@@ -230,7 +237,8 @@ jobs:
           fi
 
       - name: Fix, verify, and open PRs
-        if: steps.scan.outputs.actionable == 'true' && vars.TRIAGE_FIXER_ENABLED != 'false'
+        id: fix
+        if: inputs.force_fixer || (steps.scan.outputs.actionable == 'true' && vars.TRIAGE_FIXER_ENABLED != 'false')
         uses: anthropics/claude-code-action@v1
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -259,9 +267,54 @@ jobs:
           github_token: ${{ secrets.TRIAGE_GITHUB_TOKEN }}
           prompt: "/error-triage"
           claude_args: |
-            --model claude-opus-5
+            --model claude-opus-5-5
             --max-turns 300
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
+
+      # The action hides Claude's output, so a dead credential or an exhausted
+      # subscription used to fail in under a second with no reason anywhere, and
+      # the findings of every such run were never written down. Say why, then keep
+      # what the fixer did not reach: the gate is re-run against the backlog as the
+      # fixer left it, so anything it already handled is not queued twice.
+      - name: Queue what a failed fixer left
+        if: failure() && steps.fix.outcome == 'failure'
+        env:
+          EXECUTION_FILE: ${{ steps.fix.outputs.execution_file }}
+        run: |
+          set -euo pipefail
+          reason="unknown (no execution log)"
+          if [ -n "${EXECUTION_FILE:-}" ] && [ -s "$EXECUTION_FILE" ]; then
+            # Only the final result's own message: an error string such as an
+            # authentication failure or a usage limit, never the transcript.
+            reason="$(jq -r '[.[] | select(.type == "result")] | last
+              | ((.result // "") + " " + ((.errors // []) | map(tostring) | join("; ")))
+              | .[0:400]' "$EXECUTION_FILE" 2>/dev/null || true)"
+            [ -n "${reason// /}" ] || reason="no result message in the execution log"
+          fi
+          echo "::error::The fixer failed: ${reason}"
+          if [ "${{ inputs.dry_run }}" = "true" ] || [ "${{ steps.scan.outputs.actionable }}" != "true" ]; then
+            echo "Dry or forced run with nothing to queue; state left as the fixer left it."
+            exit 0
+          fi
+          node scripts/triage-state.mjs queue \
+            --vercel /tmp/vercel-report.json \
+            --sentry /tmp/sentry-report.json \
+            --backlog .triage-state/backlog.json \
+            --state .triage-state/state.json \
+            --until "${{ steps.window.outputs.until }}" \
+            --may-advance "${{ steps.window.outputs.may_advance }}" \
+            --note "Automated fixer failed; awaiting triage." > /tmp/manual-queue.json
+          cat /tmp/manual-queue.json
+          {
+            echo "### Production error scan: fixer failed"
+            echo
+            echo "Reason: ${reason}"
+            echo
+            echo "- Vercel groups queued: $(jq -r .queuedVercelGroups /tmp/manual-queue.json)"
+            echo "- Sentry issues queued: $(jq -r .queuedSentryIssues /tmp/manual-queue.json)"
+            echo "- Complete scan: $(jq -r .complete /tmp/manual-queue.json)"
+            echo "- Successful-scan cursor: $(jq -r .cursor /tmp/manual-queue.json)"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Save triage state
         if: always()

@@ -397,3 +397,71 @@ test('the workflow queue command writes backlog before the successful cursor', (
   assert.equal(JSON.parse(readFileSync(backlogFile, 'utf8')).entries.length, 1)
   assert.equal(JSON.parse(readFileSync(stateFile, 'utf8')).cursor, '2026-08-18T12:00:00.000Z')
 })
+
+test('a fixer that crashed mid-run queues only what it left behind, under its own note', () => {
+  // The fixer handled 'sentry:1' before it died: its entry was updated after the
+  // event, so the fallback queue must neither reopen it nor overwrite its notes.
+  const backlog = { entries: [{
+    fingerprint: 'sentry:1', sentryIssues: ['1'], status: 'open-pr',
+    updatedAt: '2026-08-18T11:50:00Z', notes: 'PR #9',
+  }] }
+  const result = queueScanOnly({
+    vercel: { lossy: false, groups: [] },
+    sentry: { issues: [
+      { id: '1', lastSeen: '2026-08-18T11:00:00Z' },
+      { id: '2', lastSeen: '2026-08-18T11:10:00Z' },
+    ] },
+    backlog, state: { cursor: '2026-08-18T09:00:00Z' },
+    until: '2026-08-18T12:00:00Z', now: '2026-08-18T12:01:00Z',
+    note: 'Automated fixer failed; awaiting triage.',
+  })
+  assert.equal(result.queuedSentryIssues, 1)
+  assert.equal(result.backlog.entries[0].status, 'open-pr')
+  assert.equal(result.backlog.entries[0].notes, 'PR #9')
+  assert.equal(result.backlog.entries[1].fingerprint, 'sentry:2')
+  assert.equal(result.backlog.entries[1].notes, 'Automated fixer failed; awaiting triage.')
+  assert.equal(result.state.cursor, '2026-08-18T12:00:00.000Z')
+})
+
+test('the queue command takes a note for the entries it creates', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'triage-note-'))
+  const files = Object.fromEntries(['vercel', 'sentry', 'backlog', 'state'].map((name) => [name, join(dir, `${name}.json`)]))
+  writeFileSync(files.vercel, JSON.stringify({ lossy: false, groups: [] }))
+  writeFileSync(files.sentry, JSON.stringify({ issues: [{ id: '7', lastSeen: '2026-08-18T11:00:00Z' }] }))
+  writeFileSync(files.backlog, JSON.stringify({ entries: [] }))
+  writeFileSync(files.state, JSON.stringify({}))
+  const result = spawnSync(process.execPath, [
+    fileURLToPath(new URL('../scripts/triage-state.mjs', import.meta.url)),
+    'queue', '--vercel', files.vercel, '--sentry', files.sentry,
+    '--backlog', files.backlog, '--state', files.state,
+    '--until', '2026-08-18T12:00:00Z', '--note', 'Automated fixer failed; awaiting triage.',
+  ], { encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(JSON.parse(readFileSync(files.backlog, 'utf8')).entries[0].notes, 'Automated fixer failed; awaiting triage.')
+})
+
+test('a pruned Sentry issue with no activity in the window does not come back as new', () => {
+  const decision = gate({
+    vercel: { lossy: false, groups: [] },
+    sentry: {
+      window: { since: '2026-09-24T21:00:00Z', until: '2026-09-24T21:30:00Z' },
+      issues: [
+        // Fixed and pruned on 2026-09-24; still "unresolved" in Sentry.
+        { id: 'old', lastSeen: '2026-09-13T09:01:55Z' },
+        // Genuinely new in this window.
+        { id: 'new', lastSeen: '2026-09-24T21:10:00Z' },
+      ],
+    },
+    backlog: { entries: [] },
+  })
+  assert.deepEqual(decision.freshSentryIssueIds, ['new'])
+})
+
+test('a report without a window keeps treating unknown Sentry issues as fresh', () => {
+  const decision = gate({
+    vercel: { lossy: false, groups: [] },
+    sentry: { issues: [{ id: 'old', lastSeen: '2026-09-13T09:01:55Z' }] },
+    backlog: { entries: [] },
+  })
+  assert.deepEqual(decision.freshSentryIssueIds, ['old'])
+})

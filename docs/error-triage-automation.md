@@ -17,6 +17,24 @@ complete and the backlog has been saved; a partial scan keeps the cursor for a
 retry. This mode requires a person to investigate and fix the queued errors.
 Set the variable back to `true` after restoring a working fixer credential.
 
+If the fixer starts and fails (a revoked token, an exhausted subscription, a model
+the account cannot use), the run no longer loses its findings: the "Queue what a
+failed fixer left" step prints the failure reason as an `::error::` annotation, then
+queues whatever the fixer did not handle with the note "Automated fixer failed" and
+saves state. The job still ends red, so GitHub's failure email still arrives.
+Before that step existed, the fixer failed in under a second with no reason in the
+log — the action hides Claude's output — and each such run dropped its findings
+(2026-09-18 and 2026-09-21 to 09-24).
+
+To test a credential without waiting for a real error, dispatch with
+`force_fixer` and `dry_run` together; the fixer then starts even when the scan
+finds nothing new, and even while `TRIAGE_FIXER_ENABLED` is `false`:
+
+```bash
+gh workflow run "Error triage" --repo vcmyfzft8b-sudo/Memo-AI \
+  -f force_fixer=true -f dry_run=true -f since=3h
+```
+
 It runs entirely in GitHub's cloud. Your Mac does not need to be on.
 
 This replaces the earlier local Sentry triage job. There is now one error-triage
@@ -329,7 +347,7 @@ If it costs or talks too much, in `.github/workflows/error-triage.yml`:
 
 - widen the cron interval, for example `17 */6 * * *` — halves the quiet-run floor
 - lower the default `max_fixes` so a single run cannot spend two hours
-- lower `--model` from `claude-opus-5` to `claude-sonnet-5`
+- lower `--model` from `claude-opus-5-5` to `claude-sonnet-5`
 - lower `--max-turns`
 - lower `timeout-minutes`, which caps the worst case absolutely
 

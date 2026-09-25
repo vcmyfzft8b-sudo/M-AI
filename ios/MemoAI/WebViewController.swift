@@ -647,8 +647,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                           let quote = body["quote"] as? String else { throw Store.StoreError.unavailable }
                     replyHandler(["status": try await store.purchaseTutorHour(account: uuid, quote: quote)], nil)
                 case "restore":
-                    try await store.restore()
-                    replyHandler(["status": "restored"], nil)
+                    let completed = try await store.restore()
+                    replyHandler(["status": completed ? "restored" : "cancelled"], nil)
                 case "manageSubscriptions":
                     guard let scene = view.window?.windowScene else { throw Store.StoreError.unavailable }
                     try await AppStore.showManageSubscriptions(in: scene)
@@ -662,7 +662,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                 let reason: String?
                 if let failure = error as? BridgeFailure { reason = failure.reason }
                 else if let message = (error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String { reason = message }
-                else { reason = nil }
+                // Never reasonless: a bare failure cannot be told apart from any other.
+                else { reason = String(describing: error) }
                 replyHandler(nil, reason.map { "\(text("actionFailed")) [\($0)]" } ?? text("actionFailed"))
             }
         }

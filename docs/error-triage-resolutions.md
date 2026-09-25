@@ -20,7 +20,7 @@ the fix being proved, not the bug recurring. Check the tag and the release befor
 - **Sentry:** issue `144942453` (six events, `2026-09-04T13:48:52Z`–`13:50:36Z`, Chrome Mobile /
   Android 10) and issue `144744376` (`TypeError: Failed to fetch`, `2026-09-03T15:11:09Z`)
 - **Route:** `/app` note-source sheet → `POST /api/scan-preview` (client-side, handled)
-- **Resolution:** PR "HEIC previews stop after the first no-answer" (branch `fix/heic-preview-stops-on-weak-uplink`)
+- **Resolution:** [PR #489](https://github.com/vcmyfzft8b-sudo/M-AI/pull/489)
 - **Regression test:** `tests/scan-preview-weak-uplink.test.mjs`
 
 Chrome cannot decode HEIC, so each photo's thumbnail is made by posting the whole photo to

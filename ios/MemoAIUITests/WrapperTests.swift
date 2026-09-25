@@ -1652,6 +1652,47 @@ final class WrapperTests: XCTestCase {
         XCTAssertTrue(opened && notes.exists, "The note must open and stay open, not give way to the start page")
     }
 
+    // The reason a server gives for refusing a purchase must reach the paywall.
+    // Xcode's local StoreKit completes the purchase; a preview whose Apple
+    // billing is not configured refuses it (503), for both Buy and Restore.
+    @MainActor func testPreviewPurchaseRefusalShowsReason() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MEMO_QA_REFUSAL"] == "1", let preview = env["MEMO_IOS_URL"],
+              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+            throw XCTSkip("Requires a preview that refuses Apple purchases")
+        }
+        let config = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Offers", withExtension: "storekit"))
+        let session = try SKTestSession(contentsOf: config)
+        session.resetToDefaultState(); session.clearTransactions(); session.disableDialogs = true
+        session.storefront = "SVN"; session.locale = Locale(identifier: "en_GB")
+        defer { session.clearTransactions() }
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        passConsentGate(app)
+        let pay = app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Continue to payment", "Start the 3-day free trial"])).firstMatch
+        if !pay.waitForExistence(timeout: 30) {
+            let settings = app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
+            XCTAssertTrue(settings.waitForExistence(timeout: 20)); settings.tap()
+            let choose = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Choose a plan")).firstMatch
+            XCTAssertTrue(choose.waitForExistence(timeout: 15))
+            for _ in 0..<5 where !choose.isHittable { app.webViews.firstMatch.swipeUp() }
+            choose.tap()
+        }
+        let ready = NSPredicate { _, _ in pay.exists && pay.isEnabled }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: nil)], timeout: 60), .completed)
+        pay.tap()
+        let reason = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "[server 503")).firstMatch
+        let buyShowed = reason.waitForExistence(timeout: 45)
+        keepStudyScreenshot("Refused purchase shows its reason", app: app)
+        XCTAssertTrue(buyShowed, "A refused purchase must show the server's reason")
+        let restore = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Restore purchases")).firstMatch
+        if !restore.exists { app.webViews.links.matching(NSPredicate(format: "label CONTAINS %@", "Restore purchases")).firstMatch.tap() } else { restore.tap() }
+        RunLoop.current.run(until: Date().addingTimeInterval(8))
+        keepStudyScreenshot("Refused restore shows its reason", app: app)
+        XCTAssertTrue(reason.waitForExistence(timeout: 30), "A refused restore must show the server's reason")
+    }
+
     @MainActor func testPreviewStudyNoteFromPDF() throws {
         guard ProcessInfo.processInfo.environment["MEMO_QA_PDF"] == "memo-qa-electric-circuits" else {
             throw XCTSkip("Requires an unused synthetic free note and the seeded circuits PDF")

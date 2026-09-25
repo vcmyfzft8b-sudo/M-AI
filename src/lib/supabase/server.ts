@@ -10,6 +10,7 @@ import type { Database } from "@/lib/database.types";
 import { getPublicEnv } from "@/lib/public-env";
 import { getServerEnv } from "@/lib/server-env";
 import { accountDeletionRequested } from "@/lib/mobile/account-lifecycle";
+import { withSupabaseReadRetry } from "@/lib/supabase/read-retry";
 
 function blockDeletingAccount(client: SupabaseClient<Database>) {
   const getUser = client.auth.getUser.bind(client.auth);
@@ -32,6 +33,7 @@ export async function createSupabaseServerClient() {
   }
 
   return blockDeletingAccount(createServerClient<Database>(env.supabaseUrl, env.supabaseAnonKey, {
+    global: { fetch: withSupabaseReadRetry() },
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -56,6 +58,7 @@ export async function createSupabaseRouteHandlerClient() {
   > = [];
 
   const supabase = blockDeletingAccount(createServerClient<Database>(env.supabaseUrl, env.supabaseAnonKey, {
+    global: { fetch: withSupabaseReadRetry() },
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -93,6 +96,7 @@ export function createSupabaseServiceRoleClient() {
         persistSession: false,
         autoRefreshToken: false,
       },
+      global: { fetch: withSupabaseReadRetry() },
     },
   );
 }

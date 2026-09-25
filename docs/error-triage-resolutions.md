@@ -15,6 +15,57 @@ provokes the very error it is fixing — and that event lands in the same Sentry
 `environment: preview` on a release that is the fix branch's head rather than a merge commit. It is
 the fix being proved, not the bug recurring. Check the tag and the release before opening anything.
 
+## 2026-09-25 — A Supabase read reset mid-response failed the whole /app render
+
+- **Sentry:** `MEMOAI-WEB-4E` (issue `149223961`, server render) and `MEMOAI-WEB-4D` (issue
+  `149223801`, its client echo), `2026-09-24T17:36:32Z`; Vercel `uncaught:GET /app:Error: {… TypeError: terminated …}`
+- **Resolution:** [PR #483](https://github.com/vcmyfzft8b-sudo/M-AI/pull/483), production from `2026-09-25T01:54Z`
+- **Regression test:** `tests/supabase-read-retry.test.mjs`
+
+The Supabase socket was reset mid-response (`read ECONNRESET`, surfacing as `TypeError: terminated`
+while the body was read) and the page failed for an Android user. Server-side Supabase clients now
+retry a PostgREST GET/HEAD once on a transport `TypeError`, reading the body inside the retry.
+Writes are not retried: the same day's `PATCH /api/lectures/[id]/study-session` reset
+(`MEMOAI-WEB-4C`, issue `149219608`, and its Vercel twin) is a single transport blip on a write and
+is closed without a change. Reopen only for a read that fails this way twice in a row after the
+cutoff, or repeated resets on a write.
+
+## 2026-09-25 — Findings from the fixer outage (2026-09-18, 09-21..24) closed without a code change
+
+The hosted fixer failed or was switched off in this window (PR #482 explains and fixes that), so
+its findings were queued as `needs-human`. Each was triaged by hand on 2026-09-25. The ones below
+need no code; the rest have their own entries above. **Do not reopen any of these for an event at or
+before 2026-09-25**; each line says what would be new evidence.
+
+- **`POST /api/mobile/transactions` 5xx** (Vercel, `2026-09-22T22:12Z`–`2026-09-23T15:54Z`, three
+  events, including the DEP0169 `url.parse()` log line of the same requests): a TestFlight purchase
+  owned by another Memo account answered 503. **Fixed by PR #480** (merged `2026-09-23T15:58:52Z`);
+  no event since. New evidence: a 5xx on this route after that merge.
+- **`MEMOAI-WEB-4B`, issue `148767593`** — `AppleNotificationRejected: Sandbox account not allowed`
+  on `POST /api/mobile/notifications`, 13 warnings `2026-09-22T21:58Z`–`2026-09-23T21:57Z`, hourly.
+  Apple sandbox renewals of one TestFlight subscription whose buyer is not on
+  `APPLE_SANDBOX_REVIEW_USER_IDS` (sandbox renews a year hourly, 12 times). The route acknowledges
+  with 200 and grants nothing, by design. New evidence: a *production*-environment payload rejected.
+- **`MEMOAI-WEB-3H`, issue `145277359`** (Safari `TypeError: Load failed`) and the Chrome twin
+  `…tutor-client] session failed: TypeError: Failed to fetch` (`2026-09-22T18:11Z`): the learner's
+  own network dropped `POST /tutor/session`; the tutor classifies it with `isTransportFailure` and
+  shows the connection message. New evidence: a burst from many users at once.
+- **`MEMOAI-WEB-49`, issue `148472327`** — one scan pipeline failed downloading a stored image after
+  the existing storage retries (`2026-09-21T18:02Z`): Supabase Storage answered 500. Provider fault.
+  New evidence: a second one.
+- **`MEMOAI-WEB-4A`, issue `148479321`** — iOS WKWebView `Load failed` during sign-out
+  (`2026-09-21T18:45Z`). **Fixed by PR #473** in the iOS wrapper (push-token removal before logout);
+  it ships with the next App Store build. New evidence: an event from a build that contains #473.
+- **`server_error:GET /api/cron/stalled-lectures:`** (`2026-09-22T02:25Z`) — one 500 with an empty
+  message and no Sentry event. The route captures its own failures (`captureRouteError` before its
+  500), so this failed outside the handler — platform-side. The hourly cron has run cleanly since.
+  New evidence: a second one, or one with a Sentry event.
+- **`server_error:POST /api/lectures/<id>/tts/chunks:`** (`2026-08-19T08:08Z`) — one 500 with no
+  application log line (the route's own 500 path logs `Failed to prepare note TTS chunk`) and the
+  same chunk answered 202 twenty-two seconds later. Platform-side, never recurred. New evidence: a
+  second one.
+- **`MEMOAI-WEB-1P`, issue `122566057`** — see its entry below; closed as third-party noise.
+
 ## 2026-09-25 — HEIC previews on a weak uplink each burned 18 s and filed a defect
 
 - **Sentry:** issue `144942453` (six events, `2026-09-04T13:48:52Z`–`13:50:36Z`, Chrome Mobile /
@@ -35,6 +86,7 @@ failure is a Sentry breadcrumb, not an issue. Submitting the photo note aborts t
 flight and stops new ones. A preview the server *answered* badly (`previewFailed`,
 `previewUnreadable`) still reports. Do not reopen for a scan-preview timeout or "Failed to fetch"
 on a release after this PR; they no longer reach Sentry by design.
+
 ## 2026-09-25 — An empty answer on the optional image description filed a defect
 
 - **Sentry:** `MEMOAI-WEB-3P`, issue `145845095`, level warning, one event `2026-09-09T05:26:26Z`
@@ -900,7 +952,7 @@ open a speculative patch to a page it cannot reproduce a failure on.
 - **Route:** `/`, the marketing landing page
 - **Normalized message:** `RangeError: Maximum call stack size exceeded.`
 - **Events:** 54 between `2026-05-25T16:49:24Z` and `2026-09-09T07:26:40Z`, `environment: production`
-- **Status:** `needs-human`. Not reproduced, and deliberately not fixed (triage rule 8).
+- **Status:** `wontfix` since 2026-09-25 — third-party in-app WebView noise, quiet since `2026-09-09`. Not reproduced, and deliberately not fixed (triage rule 8).
 
 **Why it is not actionable as it stands.** Only one of the 54 events is still inside Sentry's
 retention window, and its stack is a single frame with no filename and no function — `line 198` of

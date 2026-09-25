@@ -81,12 +81,16 @@ test("a speech connection dropped mid-sentence does not orphan the turn's reject
   await settle();
   assert.equal(output.turn.segmentOpen, true, "the turn is being fed when the socket goes");
 
+  // Since the mid-sentence reconnect, a loss on a visible page carries on; a page going into
+  // the background still fails the turn, which is the case this guards.
+  globalThis.document = { visibilityState: "hidden" };
   const orphaned = [];
   const record = (reason) => orphaned.push(reason);
   process.on("unhandledRejection", record);
   sockets[0].close();
   await settle();
   process.off("unhandledRejection", record);
+  delete globalThis.document;
 
   assert.deepEqual(
     orphaned.map((reason) => reason?.message),

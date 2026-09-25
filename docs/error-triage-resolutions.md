@@ -15,6 +15,27 @@ provokes the very error it is fixing — and that event lands in the same Sentry
 `environment: preview` on a release that is the fix branch's head rather than a merge commit. It is
 the fix being proved, not the bug recurring. Check the tag and the release before opening anything.
 
+## 2026-09-25 — HEIC previews on a weak uplink each burned 18 s and filed a defect
+
+- **Sentry:** issue `144942453` (six events, `2026-09-04T13:48:52Z`–`13:50:36Z`, Chrome Mobile /
+  Android 10) and issue `144744376` (`TypeError: Failed to fetch`, `2026-09-03T15:11:09Z`)
+- **Route:** `/app` note-source sheet → `POST /api/scan-preview` (client-side, handled)
+- **Resolution:** PR "HEIC previews stop after the first no-answer" (branch `fix/heic-preview-stops-on-weak-uplink`)
+- **Regression test:** `tests/scan-preview-weak-uplink.test.mjs`
+
+Chrome cannot decode HEIC, so each photo's thumbnail is made by posting the whole photo to
+`/api/scan-preview`. On an uplink that could not carry ~1 MB inside `SCAN_PREVIEW_TIMEOUT_MS`,
+`prepareHeicPhotoPreviewsSequentially` let six previews time out back to back (108 s) while the real
+upload competed with them, and each timeout was reported as a Sentry exception. Nothing was lost:
+the photos uploaded by signed URL and the note was created.
+
+Now the first preview that gets **no answer** (timeout, dropped connection, abort) sets
+`previewTransportFailedRef`; the rest of the batch show "no preview" without a round trip, and the
+failure is a Sentry breadcrumb, not an issue. Submitting the photo note aborts the preview in
+flight and stops new ones. A preview the server *answered* badly (`previewFailed`,
+`previewUnreadable`) still reports. Do not reopen for a scan-preview timeout or "Failed to fetch"
+on a release after this PR; they no longer reach Sentry by design.
+
 ## 2026-09-25 — A trial converting to paid refused the tutor, and checkout sold a second plan
 
 - **Sentry:** `MEMOAI-WEB-3X`, issue `146739830` (the 402 presentation was fixed in PR #405; this

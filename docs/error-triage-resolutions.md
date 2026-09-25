@@ -22,7 +22,7 @@ the fix being proved, not the bug recurring. Check the tag and the release befor
 - **Route:** `POST /api/lectures/pdf`, and the same pattern in `/text`, `/link`, `/scan`,
   `/manual` and `POST /api/lectures`
 - **Operation:** creating a note from an upload
-- **Resolution:** PR "Report every 500 a note-creation route returns" (fix/pdf-upload-route-reports-500)
+- **Resolution:** [PR #485](https://github.com/vcmyfzft8b-sudo/M-AI/pull/485)
 - **Regression test:** `tests/note-creation-routes-report-500.test.mjs`
 
 **Not a root-cause fix for the 08-16 event, and it cannot be one:** that 500 was caught by the route

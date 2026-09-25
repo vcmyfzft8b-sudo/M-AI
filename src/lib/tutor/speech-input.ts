@@ -22,6 +22,8 @@ const FRAME_MS = 20;
 
 /** Soniox closes an idle recognizer; this is well inside its window. */
 const KEEPALIVE_INTERVAL_MS = 10_000;
+/* How long a recognizer handshake may take before it counts as a failed connection. */
+const CONNECT_TIMEOUT_MS = 8_000;
 
 /**
  * Upper bound on semantic endpointing, not a fixed delay before every reply.
@@ -111,7 +113,7 @@ export type SpeechInputHandlers = {
 export class SpeechInputError extends Error {
   constructor(
     message: string,
-    readonly reason: "denied" | "unavailable" | "connection" | "busy",
+    readonly reason: "denied" | "unavailable" | "connection" | "busy" | "refused",
   ) {
     super(message);
     this.name = "SpeechInputError";
@@ -153,6 +155,15 @@ export class TutorSpeechInput {
 
   private muted = false;
   private closed = false;
+  /*
+   * The handshake in flight, if any. Two callers inside one handshake (a resume and a
+   * renewal, or a reconnect timer) used to open two sockets: the second overwrote the
+   * first, whose keepalive then ran for the life of the page on one of the
+   * organisation's ten realtime slots. A second caller now waits on the first.
+   */
+  private opening: Promise<void> | null = null;
+  /* Bumped by anything that stops wanting the socket being opened. */
+  private generation = 0;
   private level = 0;
 
   /**
@@ -194,6 +205,8 @@ export class TutorSpeechInput {
     }
 
     this.apiKey = apiKey;
+    this.generation += 1;
+    this.opening = null;
 
     const previous = this.socket;
     this.socket = null;
@@ -278,12 +291,34 @@ export class TutorSpeechInput {
   }
 
   private openSocket(sampleRate: number) {
+    const generation = this.generation;
+
     return new Promise<void>((resolve, reject) => {
       const socket = new WebSocket(this.config.url);
       socket.binaryType = "arraybuffer";
+      /* A handshake that never finishes would otherwise hold its caller forever. */
+      const connectTimer = setTimeout(() => {
+        socket.removeEventListener("open", onOpen);
+        socket.removeEventListener("error", onError);
+        socket.close();
+        reject(new SpeechInputError("The recognizer could not be reached.", "connection"));
+      }, CONNECT_TIMEOUT_MS);
 
       const onOpen = () => {
+        clearTimeout(connectTimer);
         socket.removeEventListener("error", onError);
+
+        /*
+         * Somebody stopped wanting this socket while it was opening — a pause, a renewal
+         * that is opening its own, or the session ending. Adopting it anyway would listen
+         * while paused, or leak a slot nobody will ever close.
+         */
+        if (this.closed || generation !== this.generation) {
+          socket.close();
+          reject(new SpeechInputError("The recognizer is no longer wanted.", "connection"));
+          return;
+        }
+
         socket.send(
           JSON.stringify({
             api_key: this.apiKey,
@@ -328,6 +363,7 @@ export class TutorSpeechInput {
         resolve();
       };
       const onError = () => {
+        clearTimeout(connectTimer);
         socket.removeEventListener("open", onOpen);
         reject(new SpeechInputError("The recognizer could not be reached.", "connection"));
       };
@@ -384,6 +420,9 @@ export class TutorSpeechInput {
    * that is not listening.
    */
   stopListening() {
+    this.generation += 1;
+    this.opening = null;
+
     if (this.keepaliveTimer) {
       clearInterval(this.keepaliveTimer);
       this.keepaliveTimer = null;
@@ -413,16 +452,28 @@ export class TutorSpeechInput {
       return Boolean(this.socket);
     }
 
+    if (this.opening) {
+      await this.opening.catch(() => {});
+      return Boolean(this.socket);
+    }
+
     for (const track of this.stream?.getAudioTracks() ?? []) {
       track.enabled = !this.muted;
     }
 
-    try {
-      await this.openSocket(this.sampleRate);
+    const opening = this.openSocket(this.sampleRate);
+    this.opening = opening;
 
-      return true;
+    try {
+      await opening;
+
+      return Boolean(this.socket);
     } catch {
       return false;
+    } finally {
+      if (this.opening === opening) {
+        this.opening = null;
+      }
     }
   }
 
@@ -439,6 +490,8 @@ export class TutorSpeechInput {
 
   close() {
     this.closed = true;
+    this.generation += 1;
+    this.opening = null;
 
     if (this.keepaliveTimer) {
       clearInterval(this.keepaliveTimer);
@@ -546,7 +599,7 @@ export class TutorSpeechInput {
           busy
             ? "Every realtime transcription stream is in use."
             : "The recognizer refused the stream.",
-          busy ? "busy" : "connection",
+          busy ? "busy" : "refused",
         ),
       );
 

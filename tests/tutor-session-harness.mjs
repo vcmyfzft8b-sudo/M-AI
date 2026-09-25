@@ -4,6 +4,7 @@ import ts from "typescript";
 import * as turnAudio from "../src/lib/tutor/turn-audio.ts";
 import * as heardLine from "../src/lib/tutor/heard-line.ts";
 import * as spokenSoFar from "../src/lib/tutor/spoken-so-far.ts";
+import * as listeningRetry from "../src/lib/tutor/listening-retry.ts";
 
 export const deferred = () => {
   let resolve, reject;
@@ -41,6 +42,8 @@ export function sessionHarness({ source } = {}) {
     sessionResponse: null,
     usageReports: [],
     microphoneStops: 0,
+    listenStarts: 0,
+    listenResults: [],
     requestMicrophone: async () => ({ getTracks: () => [{ stop: () => { state.microphoneStops += 1; } }] }),
   };
   const window = {
@@ -52,7 +55,15 @@ export function sessionHarness({ source } = {}) {
   class Input {
     constructor(_config, handlers) { state.input = this; this.handlers = handlers; }
     async start(stream) { this.stream = stream; }
-    resetUtterance() {} close() { this.stream?.getTracks().forEach(track => track.stop()); this.stream = null; } stopListening() {}
+    resetUtterance() {} close() { this.stream?.getTracks().forEach(track => track.stop()); this.stream = null; } stopListening() { this.isListening = false; }
+    isListening = true;
+    isMuted = false;
+    /* `state.listenResults` scripts what each reconnect gets; empty means it works. */
+    async startListening() {
+      state.listenStarts += 1;
+      this.isListening = state.listenResults.length ? state.listenResults.shift() : true;
+      return this.isListening;
+    }
   }
   class Output {
     room = "";
@@ -82,6 +93,7 @@ export function sessionHarness({ source } = {}) {
     "@/lib/tutor/turn-audio": turnAudio,
     "@/lib/tutor/heard-line": heardLine,
     "@/lib/tutor/prepared-reply": preparation.exports,
+    "@/lib/tutor/listening-retry": { ...listeningRetry, nextListeningRetryDelay: (reason, attempt) => listeningRetry.nextListeningRetryDelay(reason, attempt, () => 0.5) },
     "@/lib/tutor/spoken-so-far": spokenSoFar,
     "@/lib/tutor/speech-input": { TutorSpeechInput: Input, SpeechInputError: class extends Error {}, requestTutorMicrophone: () => state.requestMicrophone() },
     "@/lib/tutor/speech-output": { TutorSpeechOutput: Output, SpeechOutputError },

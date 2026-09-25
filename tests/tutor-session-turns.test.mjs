@@ -322,17 +322,64 @@ test("a turn refused for billing shows the paywall instead of failing the walkth
  * true all the same, so the hint that says "I cannot hear you" never appeared and the
  * learner went on talking to a tutor that had stopped listening several minutes earlier.
  */
-test("a recognizer that drops mid-session stops the screen promising it can hear", async () => {
+const recognizerError = (reason) => Object.assign(new Error("The recognizer connection closed."), { reason });
+
+test("a recognizer that drops mid-session stops the screen promising it can hear, then comes back", async () => {
   const h = sessionHarness();
   await h.start();
-  const dropped = Object.assign(new Error("The recognizer connection closed."), {
-    reason: "connection",
-  });
 
   const before = h.state.updates.length;
-  h.state.input.handlers.onError(dropped);
+  h.state.input.isListening = false;
+  h.state.input.handlers.onError(recognizerError("connection"));
   const said = h.state.updates.slice(before);
 
   assert.ok(said.includes(false), "the learner is still told they can cut in by speaking");
-  assert.ok(said.includes("tutor.error.connection"), "the drop is shown");
+  assert.ok(!said.includes("tutor.error.connection"), "no red box while it is being asked for back");
+
+  // MEMOAI-WEB-3Y: nothing used to reopen it until a pause or the half-hourly renewal.
+  await h.tick(1_100);
+  assert.equal(h.state.listenStarts, 1, "the recognizer is asked for back on its own");
+  assert.ok(h.state.updates.slice(before).includes(true), "the microphone is back");
+  assert.ok(!h.state.updates.slice(before).includes("tutor.error.connection"));
+});
+
+test("a recognizer that will not come back is said so once the tries run out", async () => {
+  const h = sessionHarness();
+  await h.start();
+  h.state.listenResults = [false, false, false, false];
+  const before = h.state.updates.length;
+  h.state.input.isListening = false;
+  h.state.input.handlers.onError(recognizerError("connection"));
+
+  await h.tick(1_000 + 3_000 + 9_000);
+  assert.equal(h.state.listenStarts, 3);
+  assert.ok(!h.state.updates.slice(before).includes("tutor.error.connection"), "still trying");
+  await h.tick(27_000);
+  assert.equal(h.state.listenStarts, 4, "four tries, then it stops");
+  assert.ok(h.state.updates.slice(before).includes("tutor.error.connection"), "the drop is shown");
+  await h.tick(120_000);
+  assert.equal(h.state.listenStarts, 4, "no storm after the cap");
+});
+
+test("a refused recognizer is not asked for again", async () => {
+  const h = sessionHarness();
+  await h.start();
+  const before = h.state.updates.length;
+  h.state.input.isListening = false;
+  h.state.input.handlers.onError(recognizerError("refused"));
+  assert.ok(h.state.updates.slice(before).includes("tutor.error.connection"));
+  await h.tick(60_000);
+  assert.equal(h.state.listenStarts, 0);
+});
+
+test("a full pool is asked again slowly, and a pause stops the asking", async () => {
+  const h = sessionHarness();
+  await h.start();
+  h.state.input.isListening = false;
+  h.state.input.handlers.onError(recognizerError("busy"));
+  await h.tick(10_000);
+  assert.equal(h.state.listenStarts, 0, "a full pool is not knocked on every second");
+  h.tutor.pause();
+  await h.tick(60_000);
+  assert.equal(h.state.listenStarts, 0, "a paused session does not take a slot");
 });

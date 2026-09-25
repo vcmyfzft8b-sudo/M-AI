@@ -30,6 +30,7 @@ import {
   TutorSpeechInput,
 } from "@/lib/tutor/speech-input";
 import { clearsHeardLine, latestHeardSentence, showsHeardLine, type TutorPhase } from "@/lib/tutor/heard-line";
+import { LISTEN_RETRY_STABLE_MS, listeningRetryMayRun, nextListeningRetryDelay } from "@/lib/tutor/listening-retry";
 import { PreparedTutorReply, preparedReplyKey } from "@/lib/tutor/prepared-reply";
 import { TutorClipPlayer } from "@/lib/tutor/clip-player";
 import { reportTutorFailure, resetTutorFailureReports } from "@/lib/tutor/report";
@@ -278,6 +279,10 @@ export function LectureTutor({
    */
   const nextSliceDueAtRef = useRef<number | null>(null);
   const renewalTimerRef = useRef<number | null>(null);
+  /* The recognizer's own reconnect: see `scheduleListeningRetry`. */
+  const listenRetryTimerRef = useRef<number | null>(null);
+  const listenRetryAttemptRef = useRef(0);
+  const listenRestoredAtRef = useRef(0);
   /* Declared here and filled in below, so a turn can pause the session it is running in. */
   const pauseRef = useRef<() => void>(() => {});
   /** The renewal in progress, so three callers cannot reserve three slices. */
@@ -373,6 +378,8 @@ export function LectureTutor({
     turnAbortRef.current = null;
     clearTimer(followUpTimerRef);
     clearTimer(renewalTimerRef);
+    clearTimer(listenRetryTimerRef);
+    listenRetryAttemptRef.current = 0;
     credentialsExpireAtRef.current = null;
     nextSliceDueAtRef.current = null;
 
@@ -679,6 +686,63 @@ export function LectureTutor({
     }
   }, [t]);
 
+  /**
+   * Asks for the recognizer back after it dropped or the pool was full, on a backoff
+   * (`nextListeningRetryDelay`), for as long as the walkthrough is running and visible.
+   * Only when the tries run out does the learner get the red box; until then the
+   * microphone hint says what is true, and a success puts everything back.
+   */
+  const scheduleListeningRetry = useCallback((reason: SpeechInputError["reason"]) => {
+    clearTimer(listenRetryTimerRef);
+
+    if (listenRestoredAtRef.current && Date.now() - listenRestoredAtRef.current >= LISTEN_RETRY_STABLE_MS) {
+      listenRetryAttemptRef.current = 0;
+    }
+
+    const delay = nextListeningRetryDelay(reason, listenRetryAttemptRef.current);
+
+    if (delay === null) {
+      return false;
+    }
+
+    listenRetryAttemptRef.current += 1;
+    listenRetryTimerRef.current = window.setTimeout(async () => {
+      listenRetryTimerRef.current = null;
+      const input = inputRef.current;
+
+      if (
+        !input ||
+        !listeningRetryMayRun({
+          phase: phaseRef.current,
+          visible: document.visibilityState === "visible",
+          listening: input.isListening,
+        })
+      ) {
+        return;
+      }
+
+      const renewed = await renewCredentialsRef.current();
+      const listening = renewed && (await input.startListening());
+
+      if (inputRef.current !== input) {
+        return;
+      }
+
+      if (listening) {
+        listenRestoredAtRef.current = Date.now();
+        setCanListen(!input.isMuted);
+        const dropped = [t("tutor.error.connection"), t("tutor.error.listeningBusy")];
+        setError((current) => (current && dropped.includes(current) ? null : current));
+        return;
+      }
+
+      if (!scheduleListeningRetry(reason)) {
+        setError(reason === "busy" ? t("tutor.error.listeningBusy") : t("tutor.error.connection"));
+      }
+    }, delay);
+
+    return true;
+  }, [t]);
   const adoptCredentials = useCallback((session: TutorSessionResponse) => {
     clearTimer(renewalTimerRef);
 
@@ -1649,18 +1713,26 @@ export function LectureTutor({
               /*
                * Every realtime stream in the organisation is taken. The walkthrough still
                * works — this costs only the ability to cut in by speaking — so it is said
-               * as a wait rather than as a breakage, and nothing is paused.
+               * as a wait rather than as a breakage, and nothing is paused. A slot is
+               * asked for again on the slow schedule; the wait is said once they run out.
                */
               setCanListen(false);
-              setError(t("tutor.error.listeningBusy"));
+              if (!scheduleListeningRetry("busy")) {
+                setError(t("tutor.error.listeningBusy"));
+              }
             } else if (inputError.reason === "connection") {
               /*
-               * The recognizer is gone and nothing reopens it on its own, so the one thing
-               * this screen promises — cut in whenever you like — is a promise it can no
-               * longer keep. Said in the same words as a microphone that was never granted,
-               * because from the learner's side it is the same thing. Pausing and continuing,
-               * or going over a topic again, asks for one back.
+               * The recognizer dropped. It is asked for back on its own, quickly, while the
+               * microphone hint tells the learner the truth in the meantime; the red box is
+               * for when the tries have run out. Pausing and continuing, or going over a
+               * topic again, still asks for one straight away.
                */
+              setCanListen(false);
+              if (!scheduleListeningRetry("connection")) {
+                setError(t("tutor.error.connection"));
+              }
+            } else if (inputError.reason === "refused") {
+              /* Soniox refused this stream outright; asking again would be refused too. */
               setCanListen(false);
               setError(t("tutor.error.connection"));
             }
@@ -1753,6 +1825,7 @@ export function LectureTutor({
     closePicker,
     commitInterruption,
     scheduleFollowUp,
+    scheduleListeningRetry,
     language,
     lectureId,
     setPhaseNow,
@@ -1767,6 +1840,7 @@ export function LectureTutor({
   function pause() {
     floorTokenRef.current += 1;
     clearTimer(followUpTimerRef);
+    clearTimer(listenRetryTimerRef);
     turnAbortRef.current?.abort();
     turnAbortRef.current = null;
     outputRef.current?.stop();

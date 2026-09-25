@@ -691,6 +691,30 @@ trigger), and then what called the route repeatedly enough to trip `expensiveMut
 is the evidence that is missing — it would carry the release and the call pattern — so treat a new
 event on this message as valuable rather than as a regression of #404.
 
+## 2026-09-25 — A dropped recognizer is now asked for back on its own
+
+- **Sentry:** `MEMOAI-WEB-3Y`, issue `147007726` — production events `2026-09-14T18:04Z`,
+  `2026-09-15T17:25Z`, `2026-09-22T16:01Z`, `2026-09-23T09:25Z` (phases speaking and thinking)
+- **Backlog:** both `uncaught:POST /api/lectures/<id>/tutor/report:[tutor-client] recognizer failed: SpeechInputError: The recognizer connection closed. …` fingerprints
+- **Resolution:** PR "The tutor asks for its microphone back" (branch `fix/tutor-mic-reconnects`)
+- **Regression tests:** `tests/tutor-listening-retry.test.mjs`, the recognizer cases in
+  `tests/tutor-session-turns.test.mjs`, and the handshake cases in
+  `tests/tutor-speech-input-lifecycle.test.mjs`
+
+PR #407 (entry below) made a drop let go of the dead socket; nothing then asked for a new one
+except Continue after a pause, "go over this again", or the half-hourly renewal — so a learner in a
+walkthrough without pauses could be unheard for up to thirty minutes while the tutor kept asking
+questions. A `connection` drop now schedules a reconnect at 1, 3, 9 and 27 s (±20 %), a full pool
+(`busy`, 429) at 20, 40, 60, 60 and 60 s, only while the walkthrough is running and visible; the
+microphone hint shows meanwhile and the red error appears only when the tries run out. A refusal
+frame is now reason `refused` and is not retried. The recognizer also no longer opens two sockets
+for two callers inside one handshake, no longer adopts a socket that finished opening after it was
+stopped, and gives up a handshake after 8 s.
+
+**The report still fires on every drop, by design** — a drop is a fact about the network. Judge a
+new event by what follows: a new `stt-rt` socket within seconds and no red box means this fix is
+working. Only a drop that is *not* followed by a reconnect (or a burst of reconnect storms) is news.
+
 ## 2026-09-14 — A dropped recognizer was reported but never let go of
 
 - **Sentry:** `MEMOAI-WEB-3Y`, issue `147007726`

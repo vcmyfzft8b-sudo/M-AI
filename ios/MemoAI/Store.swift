@@ -201,12 +201,18 @@ final class Store {
     func reconcile() async throws {
         try await reconcileStoreTransactions(
             unfinished: Transaction.unfinished,
-            currentEntitlements: Transaction.currentEntitlements
+            currentEntitlements: Transaction.currentEntitlements,
+            priority: { error in
+                // The server's own answer first, and "another account" above all.
+                guard let failure = error as? BridgeFailure else { return 0 }
+                return failure.reason.hasPrefix("server 409") ? 2 : 1
+            }
         ) { try await self.accept($0) }
     }
 
     private func accept(_ result: VerificationResult<Transaction>) async throws {
-        guard case .verified(let transaction) = result else { throw StoreError.unavailable }
+        // Local refusals carry a reason too, so no failure reaches the page blank.
+        guard case .verified(let transaction) = result else { throw BridgeFailure(reason: "unverified transaction") }
         cachedPlans = nil
         if transaction.productID == AppConfiguration.tutorHourProductID {
             // Finished only once the server has credited it (or found it
@@ -217,8 +223,10 @@ final class Store {
             await transaction.finish()
             return
         }
-        guard AppConfiguration.productIDs.contains(transaction.productID),
-              let deliver else { throw StoreError.unavailable }
+        guard AppConfiguration.productIDs.contains(transaction.productID) else {
+            throw BridgeFailure(reason: "unknown product \(transaction.productID)")
+        }
+        guard let deliver else { throw StoreError.unavailable }
         try await deliver(result.jwsRepresentation)
         await transaction.finish()
     }

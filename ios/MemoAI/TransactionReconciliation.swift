@@ -1,13 +1,21 @@
 /// A rejected or temporarily undeliverable transaction must not prevent the
-/// remaining purchases from reaching the server. Report the first failure only
-/// after both queues have been checked; the caller leaves failed items unfinished.
+/// remaining purchases from reaching the server. Report one failure only after
+/// both queues have been checked; the caller leaves failed items unfinished.
+/// `priority` picks which failure to report when several happen: the highest
+/// wins, the earliest among equals. A server's answer ("this purchase belongs
+/// to another account") is worth more to the reader than a local one, which on
+/// TestFlight was reported first and hid it.
 @MainActor
 func reconcileStoreTransactions<Pending: AsyncSequence, Current: AsyncSequence>(
     unfinished: Pending,
     currentEntitlements: Current,
+    priority: (Error) -> Int = { _ in 0 },
     deliver: (Pending.Element) async throws -> Void
 ) async throws where Pending.Element == Current.Element {
     var firstFailure: Error?
+    func record(_ error: Error) {
+        if firstFailure == nil || priority(error) > priority(firstFailure!) { firstFailure = error }
+    }
 
     func drain<Items: AsyncSequence>(_ items: Items) async throws where Items.Element == Pending.Element {
         do {
@@ -15,10 +23,10 @@ func reconcileStoreTransactions<Pending: AsyncSequence, Current: AsyncSequence>(
                 try Task.checkCancellation()
                 do { try await deliver(item) }
                 catch is CancellationError { throw CancellationError() }
-                catch { if firstFailure == nil { firstFailure = error } }
+                catch { record(error) }
             }
         } catch is CancellationError { throw CancellationError() }
-        catch { if firstFailure == nil { firstFailure = error } }
+        catch { record(error) }
     }
 
     try await drain(unfinished)

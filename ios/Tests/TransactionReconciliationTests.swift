@@ -57,9 +57,21 @@ struct TransactionReconciliationTests {
         } catch is CancellationError { }
         precondition(delivered == [1])
 
+        // The most useful failure is reported, not merely the first: a local
+        // failure first must not hide the server's answer that follows it.
+        do {
+            try await reconcileStoreTransactions(unfinished: stream([1]), currentEntitlements: stream([2, 3]),
+                priority: { ($0 as? FixtureError) == .rejected ? 2 : ($0 as? FixtureError) == .network ? 1 : 0 }) {
+                if $0 == 1 { throw FixtureError.queue }
+                if $0 == 2 { throw FixtureError.network }
+                throw FixtureError.rejected
+            }
+            fatalError("Failures must be reported")
+        } catch { precondition(error as? FixtureError == .rejected, "The highest-priority failure must win") }
+
         try await reconcileStoreTransactions(unfinished: stream([]), currentEntitlements: stream([])) { _ in
             fatalError("An empty store must not deliver a purchase")
         }
-        print("Transaction reconciliation: 5 scenarios passed")
+        print("Transaction reconciliation: 6 scenarios passed")
     }
 }

@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getRouteUser } from "@/lib/supabase/server";
 import { getTutorAllowance, settleTutorGrant, toClientUsage } from "@/lib/tutor-usage";
 import { routeIdParamSchema, uuidSchema } from "@/lib/validation";
 import { tr } from "@/lib/i18n/server";
@@ -22,14 +22,13 @@ const usageSchema = z.object({
  * Whatever it does not report is covered by the slice itself, which was reserved up front.
  */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const auth = await getRouteUser({ route: "POST /api/lectures/[id]/tutor/usage", request });
 
-  if (!user) {
-    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
+  if (!auth.user) {
+    return auth.response;
   }
+
+  const { user } = auth;
 
   const limited = await enforceRateLimit({
     request,
@@ -74,14 +73,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
 /** What is left, for the meter — read on opening the screen, before anything is granted. */
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const auth = await getRouteUser({ route: "GET /api/lectures/[id]/tutor/usage", request });
 
-  if (!user) {
-    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
+  if (!auth.user) {
+    return auth.response;
   }
+
+  const { user } = auth;
 
   const limited = await enforceRateLimit({
     request,

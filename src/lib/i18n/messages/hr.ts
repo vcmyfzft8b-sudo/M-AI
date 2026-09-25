@@ -457,6 +457,7 @@ export const hr: Messages = {
 
   /* ---- API and route errors ---- */
   "api.unauthorized": "Nedopušten pristup.",
+  "api.authUnavailable": "Trenutačno ne možemo potvrditi da si prijavljen. Pokušaj ponovno.",
   "api.invalidLectureId": "Neispravan ID bilješke.",
   "api.invalidVoiceRequest": "Taj glas ili jezik ne možemo pustiti.",
   "api.invalidFlashcardId": "Neispravan ID kartice.",

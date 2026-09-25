@@ -8,7 +8,7 @@ import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 import { DEFAULT_NOTE_TTS_VOICE } from "@/lib/note-tts-settings";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getRouteUser } from "@/lib/supabase/server";
 import { createTutorRealtimeCredentials } from "@/lib/tutor-realtime";
 import { getTutorAllowance, openTutorGrant, toClientUsage } from "@/lib/tutor-usage";
 import { loadTutorGrounding } from "@/lib/tutor-voice";
@@ -35,14 +35,13 @@ const SESSION_REQUEST_MAX_BYTES = 1024;
  * tutor-voice-prompt.ts. This route answers in a few hundred milliseconds.
  */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const auth = await getRouteUser({ route: "POST /api/lectures/[id]/tutor/session", request });
 
-  if (!user) {
-    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
+  if (!auth.user) {
+    return auth.response;
   }
+
+  const { user } = auth;
 
   const limited = await enforceRateLimit({
     request,

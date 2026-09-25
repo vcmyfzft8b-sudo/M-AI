@@ -6,7 +6,7 @@ import { createChatEventStream } from "@/lib/chat-stream";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getRouteUser } from "@/lib/supabase/server";
 import { loadTutorGrounding, speakTutorTurn } from "@/lib/tutor-voice";
 import { routeIdParamSchema } from "@/lib/validation";
 import { tr } from "@/lib/i18n/server";
@@ -71,14 +71,13 @@ const turnSchema = z.object({
  * and a lecture with a loading spinner in front of it.
  */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const auth = await getRouteUser({ route: "POST /api/lectures/[id]/tutor/turn", request });
 
-  if (!user) {
-    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
+  if (!auth.user) {
+    return auth.response;
   }
+
+  const { user } = auth;
 
   /*
    * A walkthrough is ten to twenty turns, and an inquisitive learner adds one

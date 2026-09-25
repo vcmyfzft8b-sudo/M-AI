@@ -870,15 +870,18 @@ export function LectureTutor({
          * once the voice has started would say the same sentence twice.
          */
         const requestTurn = async () => {
+          // A 503 marked `x-memo-retry: auth` is Supabase Auth failing for a moment, not
+          // a signed-out learner (2026-09-07): it gets the same single retry.
+          const authBlip = (response: Response) => response.headers.get("x-memo-retry") === "auth";
           if (prepared) {
             const ready = await prepared.result;
             controller.signal.throwIfAborted();
-            if (ready) return ready;
+            if (ready && !authBlip(ready)) return ready;
           }
           for (let attempt = 0; ; attempt += 1) {
             controller.signal.throwIfAborted();
             try {
-              return await fetch(`/api/lectures/${lectureId}/tutor/turn`, {
+              const response = await fetch(`/api/lectures/${lectureId}/tutor/turn`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 signal: controller.signal,
@@ -891,15 +894,18 @@ export function LectureTutor({
                   history: historyRef.current.slice(-12),
                 }),
               });
+              if (attempt >= 1 || !authBlip(response)) {
+                return response;
+              }
             } catch (caught) {
               if (attempt >= 1 || controller.signal.aborted) {
                 throw caught;
               }
-
-              await new Promise((settle) => {
-                window.setTimeout(settle, TURN_RETRY_DELAY_MS);
-              });
             }
+
+            await new Promise((settle) => {
+              window.setTimeout(settle, TURN_RETRY_DELAY_MS);
+            });
           }
         };
 

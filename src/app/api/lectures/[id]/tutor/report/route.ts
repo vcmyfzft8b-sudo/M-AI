@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getRouteUser } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 import { tr } from "@/lib/i18n/server";
 
@@ -35,14 +35,13 @@ const reportSchema = z.object({
 });
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const auth = await getRouteUser({ route: "POST /api/lectures/[id]/tutor/report", request });
 
-  if (!user) {
-    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
+  if (!auth.user) {
+    return auth.response;
   }
+
+  const { user } = auth;
 
   const limited = await enforceRateLimit({
     request,

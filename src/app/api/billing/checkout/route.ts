@@ -14,6 +14,7 @@ import {
   hasStripeSubscriptionHistory,
   PURCHASABLE_BILLING_PLAN_IDS,
 } from "@/lib/billing";
+import { hasLiveStripeSubscription } from "@/lib/billing-access";
 import { getDiscountWheelState } from "@/lib/discount-wheel";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -69,6 +70,13 @@ export async function POST(request: Request) {
     });
 
     const stripe = getStripeClient();
+    const existing = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 20 });
+    if (hasLiveStripeSubscription(existing.data)) {
+      return NextResponse.json(
+        { error: await tr("api.subscriptionAlreadyActive"), code: "subscription_active" },
+        { status: 409 },
+      );
+    }
     const hasPriorStripeSubscription = await hasStripeSubscriptionHistory({
       stripe,
       customerId,

@@ -97,3 +97,10 @@ test("a creator is credited with what Apple pays Memo, not the customer's price"
   assert.equal(appleProceedsEstimate(6499, Number.NaN), 3729, "a bad setting falls back to 30%");
   assert.equal(appleProceedsEstimate(6499, 1.5), 3729);
 });
+
+test("a failure other than another account's purchase keeps its technical reason for the notice", async () => {
+  const { nativeFailureDetail } = await import("../src/lib/mobile/billing-notice.ts");
+  assert.equal(nativeFailureDetail(new Error("That did not work. [server 503: Your purchase could not be confirmed yet.]")), "server 503: Your purchase could not be confirmed yet.");
+  assert.equal(nativeFailureDetail(new Error("That did not work.")), null);
+  assert.equal(nativeFailureDetail("That did not work. [StoreKitError.networkError]"), "StoreKitError.networkError");
+});

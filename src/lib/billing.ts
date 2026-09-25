@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { cache } from "react";
 import Stripe from "stripe";
 import { getAppleEntitlement } from "@/lib/mobile/apple";
+import { hasPaidAccess } from "@/lib/billing-access";
 
 import { PREVIEW_AUTH_BYPASS_USER_ID, getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -14,6 +15,8 @@ import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 import { getServerEnv } from "@/lib/server-env";
 import { resolveSiteOrigin } from "@/lib/site-url";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+
+export { hasPaidAccess };
 
 export type BillingPlan = "weekly" | "monthly" | "yearly";
 export type PurchasableBillingPlan = Exclude<BillingPlan, "weekly">;
@@ -47,7 +50,6 @@ export type UserEntitlementState = {
   shouldShowTrialEntry: boolean;
 };
 
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing", "past_due"]);
 const TRIAL_CHAT_MESSAGE_LIMIT = 5;
 export const DEV_BILLING_OVERRIDE_COOKIE = "memo-dev-billing-override";
 
@@ -105,23 +107,6 @@ export const PURCHASABLE_BILLING_PLANS = PURCHASABLE_BILLING_PLAN_IDS.map(
   (planId) => BILLING_PLANS[planId],
 );
 
-function subscriptionPeriodAllowsAccess(subscription: BillingSubscriptionRow, nowMs = Date.now()) {
-  if (!subscription.current_period_end) {
-    return true;
-  }
-
-  const periodEndMs = Date.parse(subscription.current_period_end);
-
-  return Number.isFinite(periodEndMs) && periodEndMs > nowMs;
-}
-
-export function hasPaidAccess(subscription: BillingSubscriptionRow | null, nowMs = Date.now()) {
-  return Boolean(
-    subscription &&
-      ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status) &&
-      subscriptionPeriodAllowsAccess(subscription, nowMs),
-  );
-}
 
 export function hasPriorSubscriptionHistory(
   profile: ProfileRow | null,

@@ -10,7 +10,7 @@ import JSZip from "jszip";
 import sharp from "sharp";
 
 import { isRetryableAiError } from "@/lib/ai/errors";
-import { generateTextWithGeminiFile } from "@/lib/ai/gemini";
+import { GeminiEmptyTextOutputError, generateTextWithGeminiFile } from "@/lib/ai/gemini";
 import { resolveMinimalThinkingConfig } from "@/lib/ai/gemini-models";
 import { MAX_SCAN_IMAGE_BYTES, STORAGE_BUCKET } from "@/lib/constants";
 import { stripUnstorableCharacters } from "@/lib/database-text";
@@ -341,6 +341,16 @@ Return plain text only. Keep the USEFUL and NOT_USEFUL markers in English exactl
       console.warn(
         "Document image description provider was temporarily unavailable; keeping the image undescribed.",
       );
+
+      return undefined;
+    }
+
+    // Both bounded attempts came back with no text at all (MEMOAI-WEB-3P, 2026-09-09). This
+    // call only decides whether to keep a picture's caption; the picture stays in the note on its
+    // nearby text either way, and every empty attempt is already a row in ai_usage_events. It is
+    // the same degradation as a busy provider, not a code defect, so it does not open one.
+    if (error instanceof GeminiEmptyTextOutputError) {
+      console.warn("Document image description came back empty twice; keeping the image undescribed.", { model });
 
       return undefined;
     }

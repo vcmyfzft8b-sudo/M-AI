@@ -15,6 +15,21 @@ provokes the very error it is fixing — and that event lands in the same Sentry
 `environment: preview` on a release that is the fix branch's head rather than a merge commit. It is
 the fix being proved, not the bug recurring. Check the tag and the release before opening anything.
 
+## 2026-09-25 — An empty answer on the optional image description filed a defect
+
+- **Sentry:** `MEMOAI-WEB-3P`, issue `145845095`, level warning, one event `2026-09-09T05:26:26Z`
+- **Route:** document processing (`describeDocumentImage`, `src/lib/document-image-extraction.ts`)
+- **Normalized message:** `GeminiEmptyTextOutputError: Model returned empty text output.`
+- **Resolution:** PR "Treat an empty image description as a degradation" (branch `fix/image-description-empty-output`)
+- **Regression test:** `tests/document-image-description-retry.test.mjs`
+
+Both bounded attempts to classify one embedded image returned no text. The fallback already worked —
+the image stayed in the note on its nearby text and the note was produced — but the catch sent
+anything `isRetryableAiError` did not match to Sentry. Empty output is now handled like a busy
+provider: logged, kept undescribed, no defect. The thinking-budget trap was ruled out at the time
+(`resolveMinimalThinkingConfig` is sent). A burst of these would still show in `ai_usage_events`
+and the Vercel warn log; a single one is not a regression.
+
 ## 2026-09-25 — A trial converting to paid refused the tutor, and checkout sold a second plan
 
 - **Sentry:** `MEMOAI-WEB-3X`, issue `146739830` (the 402 presentation was fixed in PR #405; this

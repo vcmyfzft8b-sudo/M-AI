@@ -34,3 +34,15 @@ test("an exhausted transient outage degrades without opening a Sentry defect", (
     "unexpected image-description failures must stay visible in Sentry",
   );
 });
+
+test("an empty answer from both attempts degrades without opening a Sentry defect", () => {
+  // MEMOAI-WEB-3P, 2026-09-09: both attempts returned no text, the image was kept undescribed
+  // and the note was fine, but the catch-all filed a defect.
+  const emptyGuard = DESCRIPTION_SOURCE.indexOf("if (error instanceof GeminiEmptyTextOutputError)");
+  const emptyFallback = DESCRIPTION_SOURCE.indexOf("return undefined", emptyGuard);
+  const unexpectedCapture = DESCRIPTION_SOURCE.indexOf("captureBackgroundError(error", emptyGuard);
+
+  assert.ok(emptyGuard > 0, "empty model output must be classified");
+  assert.ok(emptyFallback > emptyGuard && emptyFallback < unexpectedCapture);
+  assert.match(SOURCE, /import \{ GeminiEmptyTextOutputError, generateTextWithGeminiFile \} from "@\/lib\/ai\/gemini";/);
+});

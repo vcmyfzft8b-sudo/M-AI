@@ -879,7 +879,7 @@ half months with zero identified users does not justify changing a page that is 
 
 - **Sentry:** issue `145514494` (production, `2026-09-07T14:21:55Z`); `147291870` / `147295082`
   are the preview artefact explained in the correction below, not production evidence
-- **Resolution:** PR "Tutor routes retry a transient Auth failure" (branch `fix/tutor-transient-auth`)
+- **Resolution:** [PR #491](https://github.com/vcmyfzft8b-sudo/M-AI/pull/491)
 - **Regression test:** `tests/supabase-transient-auth.test.mjs` (drives the real `@supabase/ssr`
   client: a dropped connection at `/auth/v1/user` reads as signed out today)
 

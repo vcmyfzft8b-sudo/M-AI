@@ -15,6 +15,24 @@ provokes the very error it is fixing — and that event lands in the same Sentry
 `environment: preview` on a release that is the fix branch's head rather than a merge commit. It is
 the fix being proved, not the bug recurring. Check the tag and the release before opening anything.
 
+## 2026-09-25 — Note-creation routes answered 500 without leaving a trace
+
+- **Vercel:** `server_error:POST /api/lectures/pdf:` (backlog), one 500 at `2026-08-16T22:49:15Z`
+  with an empty message and no trace id; no Sentry issue
+- **Route:** `POST /api/lectures/pdf`, and the same pattern in `/text`, `/link`, `/scan`,
+  `/manual` and `POST /api/lectures`
+- **Operation:** creating a note from an upload
+- **Resolution:** PR "Report every 500 a note-creation route returns" (fix/pdf-upload-route-reports-500)
+- **Regression test:** `tests/note-creation-routes-report-500.test.mjs`
+
+**Not a root-cause fix for the 08-16 event, and it cannot be one:** that 500 was caught by the route
+and answered as JSON, so neither Sentry's request hook nor the Vercel log recorded what threw — one
+of the lecture lookup, the storage upload or the lectures update. Every 500 these six routes return
+now calls `captureRouteError` first (route, operation, user, lecture where known), so the next one
+arrives with a stack. The 08-16 event is closed as undiagnosable; do not open another branch for
+it. A new `POST /api/lectures/pdf` 500 after this PR's production cutoff will have a Sentry issue
+beside it: triage that issue, not this entry.
+
 ## 2026-09-01 — Inngest budget-clamp message was not classified
 
 - **Sentry:** `MEMOAI-WEB-37`, issue `144291117`

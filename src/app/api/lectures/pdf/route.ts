@@ -12,6 +12,7 @@ import {
 } from "@/lib/document-files";
 import { validateDocumentFileSignature } from "@/lib/file-validation";
 import { enqueueLectureDocumentProcessing } from "@/lib/jobs";
+import { captureRouteError } from "@/lib/monitoring";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import {
   buildValidationErrorResponse,
@@ -217,6 +218,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ lectureId });
   } catch (error) {
+    // The only record of an upload that failed here: the 500 below is handled, so
+    // Sentry's request hook never sees it and the Vercel log line has no message.
+    captureRouteError(error, { route: "POST /api/lectures/pdf", operation: "document_upload", request, userId: user.id, lectureId });
     return NextResponse.json(
       {
         error:

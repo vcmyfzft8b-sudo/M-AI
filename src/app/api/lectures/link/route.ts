@@ -9,6 +9,7 @@ import {
 } from "@/lib/link-source-validation";
 import { ExpectedLectureInputError } from "@/lib/lecture-processing-errors";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
+import { captureRouteError } from "@/lib/monitoring";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -159,6 +160,7 @@ export async function POST(request: Request) {
       );
     }
 
+    captureRouteError(error, { route: "POST /api/lectures/link", operation: "link_note_create", request, userId: user.id });
     return NextResponse.json(
       {
         error:

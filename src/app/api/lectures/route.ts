@@ -20,6 +20,7 @@ import {
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { createSanitizedStringSchema, languageHintSchema, optionalUploadFileNameSchema } from "@/lib/validation";
 import { tr } from "@/lib/i18n/server";
+import { captureRouteError } from "@/lib/monitoring";
 
 const CREATE_LECTURE_MAX_BYTES = 8 * 1024;
 const DELETE_LECTURES_MAX_BYTES = 16 * 1024;
@@ -120,6 +121,9 @@ export async function POST(request: Request) {
     .single();
 
   if (lectureError || !lecture) {
+    captureRouteError(lectureError ?? new Error("Audio note insert returned no row"), {
+      route: "POST /api/lectures", operation: "audio_note_create", request, userId: user.id,
+    });
     return NextResponse.json(
       { error: lectureError?.message ?? await tr("api.noteCreateFailed") },
       { status: 500 },
@@ -161,6 +165,9 @@ export async function POST(request: Request) {
     .createSignedUploadUrl(path);
 
   if (signedError || !signedUpload?.token) {
+    captureRouteError(signedError ?? new Error("Signed audio upload URL missing"), {
+      route: "POST /api/lectures", operation: "audio_upload_target", request, userId: user.id, lectureId: createdLecture.id,
+    });
     return NextResponse.json(
       { error: signedError?.message ?? await tr("api.uploadTargetFailed") },
       { status: 500 },

@@ -8,6 +8,7 @@ import { LECTURE_FAILURE_MESSAGE_KEYS } from "@/lib/lecture-failure-codes";
 import { toLectureFailureCode } from "@/lib/lecture-processing-errors";
 import { extractTextFromImage, prepareLectureFromTextSource } from "@/lib/manual-lectures";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
+import { captureRouteError } from "@/lib/monitoring";
 import {
   buildValidationErrorResponse,
   parseJsonRequest,
@@ -401,6 +402,10 @@ export async function POST(request: Request) {
      */
     const failureCode = toLectureFailureCode(error);
     const messageKey = failureCode ? LECTURE_FAILURE_MESSAGE_KEYS[failureCode] : null;
+
+    if (!failureCode) {
+      captureRouteError(error, { route: "POST /api/lectures/scan", operation: "scan_text_extract", request, userId: user.id });
+    }
 
     return NextResponse.json(
       {

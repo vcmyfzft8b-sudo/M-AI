@@ -17,6 +17,7 @@ import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { languageHintSchema } from "@/lib/validation";
 import { tr } from "@/lib/i18n/server";
+import { captureRouteError } from "@/lib/monitoring";
 
 const CREATE_MANUAL_LECTURE_MAX_BYTES = 8 * 1024;
 
@@ -166,6 +167,9 @@ export async function POST(request: Request) {
     .single();
 
   if (error || !lecture) {
+    captureRouteError(error ?? new Error("Manual note insert returned no row"), {
+      route: "POST /api/lectures/manual", operation: "manual_note_create", request, userId: user.id,
+    });
     return NextResponse.json(
       { error: error?.message ?? await tr("api.noteCreateFailed") },
       { status: 500 },

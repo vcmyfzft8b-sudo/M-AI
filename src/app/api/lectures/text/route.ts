@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createBillingRequiredResponse, getUserEntitlementState } from "@/lib/billing";
 import { enqueueLectureNotesGeneration } from "@/lib/jobs";
 import { prepareLectureFromTextSource } from "@/lib/manual-lectures";
+import { captureRouteError } from "@/lib/monitoring";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -104,6 +105,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ lectureId });
   } catch (error) {
+    // The only record of an upload that failed here: the 500 below is handled, so
+    // Sentry's request hook never sees it and the Vercel log line has no message.
+    captureRouteError(error, { route: "POST /api/lectures/text", operation: "text_note_create", request, userId: user.id });
     return NextResponse.json(
       {
         error:

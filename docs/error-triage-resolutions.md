@@ -35,6 +35,20 @@ failure is a Sentry breadcrumb, not an issue. Submitting the photo note aborts t
 flight and stops new ones. A preview the server *answered* badly (`previewFailed`,
 `previewUnreadable`) still reports. Do not reopen for a scan-preview timeout or "Failed to fetch"
 on a release after this PR; they no longer reach Sentry by design.
+## 2026-09-25 — An empty answer on the optional image description filed a defect
+
+- **Sentry:** `MEMOAI-WEB-3P`, issue `145845095`, level warning, one event `2026-09-09T05:26:26Z`
+- **Route:** document processing (`describeDocumentImage`, `src/lib/document-image-extraction.ts`)
+- **Normalized message:** `GeminiEmptyTextOutputError: Model returned empty text output.`
+- **Resolution:** [PR #488](https://github.com/vcmyfzft8b-sudo/M-AI/pull/488)
+- **Regression test:** `tests/document-image-description-retry.test.mjs`
+
+Both bounded attempts to classify one embedded image returned no text. The fallback already worked —
+the image stayed in the note on its nearby text and the note was produced — but the catch sent
+anything `isRetryableAiError` did not match to Sentry. Empty output is now handled like a busy
+provider: logged, kept undescribed, no defect. The thinking-budget trap was ruled out at the time
+(`resolveMinimalThinkingConfig` is sent). A burst of these would still show in `ai_usage_events`
+and the Vercel warn log; a single one is not a regression.
 
 ## 2026-09-25 — A trial converting to paid refused the tutor, and checkout sold a second plan
 

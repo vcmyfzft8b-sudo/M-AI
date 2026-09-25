@@ -365,6 +365,15 @@ export function NoteSourceModal({
   const sourceSheetSuppressClickRef = useRef(false);
   const photoSourcesRef = useRef<PhotoSource[]>([]);
   const photoPreviewQueueRef = useRef<Promise<void>>(Promise.resolve());
+  /*
+   * Set by the first HEIC preview that never got an answer (a timeout or a dropped
+   * connection). Every preview posts the whole photo, so on an uplink too weak to carry
+   * one inside SCAN_PREVIEW_TIMEOUT_MS the next five will not make it either: on
+   * 2026-09-04 six in a row burned 18 s each, beside the real upload they were
+   * competing with. Once it is set, the rest show "no preview" straight away.
+   */
+  const previewTransportFailedRef = useRef(false);
+  const previewAbortRef = useRef<AbortController | null>(null);
   const demoStagedModesRef = useRef<Set<NoteSourceMode>>(new Set());
 
   const recordingMimeType = useMemo(() => pickRecorderMimeType(), []);
@@ -647,6 +656,7 @@ export function NoteSourceModal({
     createdLectureIdRef.current = null;
     cancelRequestedRef.current = false;
     submitInFlightRef.current = false;
+    previewTransportFailedRef.current = false;
     demoStagedModesRef.current.clear();
   }, [clearAudioSource]);
 
@@ -1308,6 +1318,9 @@ export function NoteSourceModal({
   }
 
   async function createPhotoLecture() {
+    // A thumbnail is of no use once the note is on its way, and its POST competes with
+    // the photos' real upload for the same uplink.
+    previewAbortRef.current?.abort();
     if (photoSources.length === 0) {
       setError(t("capture.error.addPhotoFirst"));
       return;
@@ -1554,7 +1567,12 @@ export function NoteSourceModal({
     // whose `application/json` body fails the image check below and reported "the preview
     // could not be read" to Sentry from a public marketing page. Skip the round trip here
     // too rather than teach the catch-all a case it cannot honour.
-    if (isCreatorDemo || !canConvertScanPreview(photoSource.file.size)) {
+    if (
+      isCreatorDemo ||
+      previewTransportFailedRef.current ||
+      submitInFlightRef.current ||
+      !canConvertScanPreview(photoSource.file.size)
+    ) {
       setPhotoSources((current) =>
         current.map((currentPhotoSource) =>
           currentPhotoSource.id === photoSource.id
@@ -1577,15 +1595,48 @@ export function NoteSourceModal({
         ),
       );
 
-      const response = await fetchWithTimeout("/api/scan-preview", {
-        method: "POST",
-        headers: {
-          Accept: "image/jpeg",
-        },
-        timeoutMs: SCAN_PREVIEW_TIMEOUT_MS,
-        timeoutMessage: t("capture.error.previewTooLong"),
-        body: formData,
-      });
+      const controller = new AbortController();
+      previewAbortRef.current = controller;
+      let response: Response;
+
+      try {
+        response = await fetchWithTimeout("/api/scan-preview", {
+          method: "POST",
+          headers: {
+            Accept: "image/jpeg",
+          },
+          timeoutMs: SCAN_PREVIEW_TIMEOUT_MS,
+          timeoutMessage: t("capture.error.previewTooLong"),
+          body: formData,
+          signal: controller.signal,
+        });
+      } catch (transportError) {
+        // No answer at all: the learner's connection, not a defect of ours. The photo
+        // still uploads by signed URL; only this thumbnail and the rest of the batch's
+        // are skipped. A breadcrumb keeps it beside any real error that follows.
+        previewTransportFailedRef.current = true;
+        Sentry.addBreadcrumb({
+          category: "scan-preview",
+          level: "warning",
+          message: "scan-preview got no answer; skipping the remaining previews",
+          data: {
+            error: transportError instanceof Error ? transportError.message : String(transportError),
+            fileSize: photoSource.file.size,
+          },
+        });
+        setPhotoSources((current) =>
+          current.map((currentPhotoSource) =>
+            currentPhotoSource.id === photoSource.id
+              ? { ...currentPhotoSource, previewStatus: "failed" }
+              : currentPhotoSource,
+          ),
+        );
+        return;
+      } finally {
+        if (previewAbortRef.current === controller) {
+          previewAbortRef.current = null;
+        }
+      }
 
       if (!response.ok) {
         const payload = await response.json().catch(() => null);

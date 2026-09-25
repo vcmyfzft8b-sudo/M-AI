@@ -15,6 +15,29 @@ provokes the very error it is fixing — and that event lands in the same Sentry
 `environment: preview` on a release that is the fix branch's head rather than a merge commit. It is
 the fix being proved, not the bug recurring. Check the tag and the release before opening anything.
 
+## 2026-09-25 — A trial converting to paid refused the tutor, and checkout sold a second plan
+
+- **Sentry:** `MEMOAI-WEB-3X`, issue `146739830` (the 402 presentation was fixed in PR #405; this
+  entry is the refusal itself — backlog `investigate:tutor-entitlement-flip-mid-session`)
+- **Route:** `POST /api/lectures/<id>/tutor/turn` → 402, then `POST /api/billing/checkout`
+- **Historical event:** `2026-09-13T12:15:15Z`, production
+- **Resolution:** [PR #486](https://github.com/vcmyfzft8b-sudo/M-AI/pull/486)
+- **Regression test:** `tests/billing-period-rollover-grace.test.mjs`
+
+The learner's 3-day Stripe trial ended at `12:14:50`. `hasPaidAccess` compared the stored
+`current_period_end` to the clock to the second, so 25 s later the tutor refused them — before
+Stripe had billed the first month (`12:15:44`) and moved the row on. The paywall then took them to
+checkout, which never asked Stripe whether the customer already had a live subscription, and sold a
+second monthly plan at `12:18:21`. The same gap opened at every monthly renewal.
+
+A plan set to renew now keeps access for `PERIOD_ROLLOVER_GRACE_MS` (2 h) past its stored end; a
+cancelled plan still ends on time, and a failed renewal is refused by status (`past_due` →
+`canceled`). Checkout lists the customer's Stripe subscriptions and answers 409
+`subscription_active` when one is `active`, `trialing` or `past_due`.
+
+Not code: the affected customer (`cus_V6HQLrSqAxR3bc`) holds two active subscriptions; the
+duplicate (`sub_1UFCMoRqouykMYDO2FLk1GPz`) must be cancelled and refunded by a human in Stripe.
+
 ## 2026-09-01 — Inngest budget-clamp message was not classified
 
 - **Sentry:** `MEMOAI-WEB-37`, issue `144291117`

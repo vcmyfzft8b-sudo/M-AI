@@ -526,6 +526,7 @@ export const hr: Messages = {
   "api.ttsDailyLimitPaid": "Potrošio si današnju izradu zvuka. Novi zvuk bit će dostupan nakon ponovnog postavljanja u 00:00. Već pripremljene dijelove i dalje možeš slušati.",
   "api.ttsDailyLimitFree": "Potrošio si današnju besplatnu izradu zvuka. Za više zvuka nadogradi paket ili pričekaj ponovno postavljanje u 00:00. Već pripremljene dijelove i dalje možeš slušati.",
   "api.checkoutSessionFailed": "Checkout sesiju nije bilo moguće izraditi.",
+  "api.subscriptionAlreadyActive": "Već imaš aktivnu pretplatu. Osvježi stranicu; možeš njome upravljati u postavkama.",
   "api.portalSessionFailed": "Sesiju za portal pretplate nije bilo moguće izraditi.",
   "api.checkoutConsent": "Kupnjom izričito zahtijevaš da izvršenje usluge započne odmah i prije isteka 14-dnevnog roka za odustajanje. Ako kao potrošač tijekom tog roka odustaneš, vraćamo ti uplatu umanjenu za razmjerni dio već pružene usluge. Vrijede i uvjeti korištenja te politika povrata na memoai.eu/legal.",
   "api.prizeSaveFailed": "Nagradu nije bilo moguće spremiti. Pokušaj ponovno.",

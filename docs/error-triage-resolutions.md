@@ -20,7 +20,7 @@ the fix being proved, not the bug recurring. Check the tag and the release befor
 - **Sentry:** `MEMOAI-WEB-3P`, issue `145845095`, level warning, one event `2026-09-09T05:26:26Z`
 - **Route:** document processing (`describeDocumentImage`, `src/lib/document-image-extraction.ts`)
 - **Normalized message:** `GeminiEmptyTextOutputError: Model returned empty text output.`
-- **Resolution:** PR "Treat an empty image description as a degradation" (branch `fix/image-description-empty-output`)
+- **Resolution:** [PR #488](https://github.com/vcmyfzft8b-sudo/M-AI/pull/488)
 - **Regression test:** `tests/document-image-description-retry.test.mjs`
 
 Both bounded attempts to classify one embedded image returned no text. The fallback already worked —

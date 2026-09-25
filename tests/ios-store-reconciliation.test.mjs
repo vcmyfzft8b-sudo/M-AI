@@ -16,6 +16,6 @@ test("native reconciliation checks later purchases after a delivery or queue fai
       "ios/MemoAI/TransactionReconciliation.swift", "ios/Tests/TransactionReconciliationTests.swift",
       "-o", executable], { encoding: "utf8", timeout: 60_000 });
     const output = execFileSync(executable, { encoding: "utf8", timeout: 15_000 });
-    assert.match(output, /Transaction reconciliation: 5 scenarios passed/);
+    assert.match(output, /Transaction reconciliation: 6 scenarios passed/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });

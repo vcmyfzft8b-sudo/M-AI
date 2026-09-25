@@ -26,6 +26,14 @@ const PLAYBACK_LEAD_SECONDS = 0.12;
 
 /** Soniox closes an idle speech socket; this is well inside its window. */
 const KEEPALIVE_INTERVAL_MS = 15_000;
+/* A handshake that has not opened by now is treated as a connection that could not be opened. */
+const CONNECT_TIMEOUT_MS = 6_000;
+/*
+ * How often one turn may lose its connection mid-sentence and carry on. Two covers a blip and
+ * a blip again; a third in one turn is a connection that is not coming back, and the turn is
+ * failed as before so the learner is told.
+ */
+const MID_SEGMENT_RECONNECTS = 2;
 
 /**
  * How long the writer may go quiet before the stream it is feeding is closed.
@@ -148,6 +156,8 @@ type ActiveTurn = {
    */
   segmentPushed: string;
   segmentSynthesized: number;
+  /** Connections this turn has lost mid-sentence and carried on from. */
+  reconnects: number;
   /** Held so the whole turn keeps one voice, not just its first segment. */
   voice: string | undefined;
   speed: number | undefined;
@@ -288,8 +298,15 @@ export class TutorSpeechOutput {
     return new Promise<void>((resolve, reject) => {
       const socket = new WebSocket(this.config.url);
       socket.binaryType = "arraybuffer";
+      const connectTimer = setTimeout(() => {
+        socket.removeEventListener("open", onOpen);
+        socket.removeEventListener("error", onError);
+        socket.close();
+        reject(new SpeechOutputError("The speech connection could not be opened.", null));
+      }, CONNECT_TIMEOUT_MS);
 
       const onOpen = () => {
+        clearTimeout(connectTimer);
         socket.removeEventListener("error", onError);
         if (this.closed) {
           socket.close();
@@ -332,15 +349,38 @@ export class TutorSpeechOutput {
            */
           const turn = this.turn;
 
-          if (turn && !turn.audioComplete && !turn.segmentOpen) {
-            turn.awaitingTermination = false;
-
+          if (turn && !turn.audioComplete && !turn.segmentOpen && !turn.awaitingTermination) {
             if (turn.ended && !turn.pending) {
               turn.audioComplete = true;
               this.scheduleTurnEnd(turn);
             }
-          } else if (!turn?.audioComplete) {
-            this.failTurn(new SpeechOutputError("The speech connection closed.", null));
+          } else if (turn && !turn.audioComplete) {
+            /*
+             * Lost in the middle of a sentence (the backlog's tutor-speech-socket-closes-mid-
+             * segment, 2026-09-20): a segment still being fed, or one closed but not yet
+             * finished generating. The audio already scheduled keeps playing — it belongs to the
+             * audio graph, not the socket — so the part Soniox had not turned into sound yet is
+             * handed to a new connection, exactly as the 408 path below hands a starved stream's
+             * remainder to the next segment. The timings stay an exact prefix of the text, so
+             * at worst a syllable repeats at the seam; that beats a red box mid-lesson.
+             *
+             * A remainder that is only the space Soniox swallows is left to the seam repair.
+             * A hidden page keeps the old behaviour: the pause that follows is quiet anyway.
+             */
+            const remainder = turn.segmentPushed.slice(turn.segmentSynthesized);
+            const resend = remainder.trim() ? remainder : "";
+            const hidden = typeof document !== "undefined" && document.visibilityState === "hidden";
+
+            if (resend && (hidden || turn.reconnects >= MID_SEGMENT_RECONNECTS)) {
+              this.failTurn(new SpeechOutputError("The speech connection closed.", null));
+            } else {
+              if (resend) {
+                turn.reconnects += 1;
+              }
+
+              turn.pending = resend + turn.pending;
+              this.finishSegment(turn);
+            }
           }
 
           if (!this.closed) {
@@ -350,6 +390,7 @@ export class TutorSpeechOutput {
         resolve();
       };
       const onError = () => {
+        clearTimeout(connectTimer);
         socket.removeEventListener("open", onOpen);
         reject(new SpeechOutputError("The speech connection could not be opened.", null));
       };
@@ -496,6 +537,7 @@ export class TutorSpeechOutput {
       pending: "",
       segmentPushed: "",
       segmentSynthesized: 0,
+      reconnects: 0,
       voice: options.voice,
       speed: options.speed,
       quietTimer: null,
@@ -640,10 +682,12 @@ export class TutorSpeechOutput {
     } catch {
       /*
        * Only `ensureOpen` throws here, and only when the connection cannot be replaced at all.
-       * The turn keeps whatever audio it has and settles when that has played out; the socket's
-       * own close handler is what tells the session, so nothing is swallowed.
+       * The text it was carrying cannot be said, so the turn fails and the session says so.
+       * Dropping the text quietly left a sentence cut off with no explanation, and every later
+       * push started another doomed `ensureOpen`.
        */
       turn.pending = "";
+      this.failTurn(new SpeechOutputError("The speech connection closed.", null));
     } finally {
       turn.draining = false;
     }

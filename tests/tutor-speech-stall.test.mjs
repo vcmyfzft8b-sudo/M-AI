@@ -350,3 +350,107 @@ test("a turn whose writer produced nothing still finishes", async () => {
 
   output.close();
 });
+
+/*
+ * Backlog investigate:tutor-speech-socket-closes-mid-segment (2026-09-20): the speech
+ * connection closed while a segment was still being fed, and the close listener failed the
+ * whole turn — a red box mid-lesson — although drain already knew how to replace a lost
+ * connection and the 408 path already knew how to hand a remainder on.
+ */
+const firstWords = (socket, streamId, text) => socket.receive({
+  stream_id: streamId,
+  timestamps: {
+    characters: [...text],
+    character_start_times_seconds: [...text].map((_, index) => index * 0.05),
+    character_end_times_seconds: [...text].map((_, index) => index * 0.05 + 0.05),
+  },
+});
+
+test("a connection lost mid-sentence carries the unspoken rest to a new one", async () => {
+  const { output, errors, sockets, socket, turn } = await speaking();
+  let failed = null;
+  turn.finished.catch((error) => { failed = error; });
+
+  turn.push("The mitochondrion is the powerhouse of the cell. ");
+  await settle();
+  firstWords(socket, socket.liveStreamId, "The mitochondrion ");
+
+  socket.close();
+  await settle(); await settle();
+
+  assert.equal(failed, null, "the turn carries on");
+  assert.deepEqual(errors, []);
+  assert.equal(sockets.length, 2, "a new connection");
+  const texts = framesFor(sockets[1], sockets[1].liveStreamId).filter((f) => typeof f.text === "string" && f.text).map((f) => f.text);
+  assert.deepEqual(texts, ["is the powerhouse of the cell. "], "only what was never turned into sound is sent again");
+  assert.equal(output.turn.reconnects, 1);
+  output.close();
+});
+
+test("a closed segment still generating loses nothing either", async () => {
+  const { output, sockets, socket, turn } = await speaking();
+  let failed = null;
+  turn.finished.catch((error) => { failed = error; });
+
+  turn.push("Cristae fold the inner membrane. ");
+  await settle();
+  const first = socket.liveStreamId;
+  await wait(QUIET_MS * 2);
+  assert.ok(framesFor(socket, first).some((frame) => frame.text_end), "the quiet writer's segment was closed");
+  firstWords(socket, first, "Cristae ");
+
+  socket.close();
+  await settle(); await settle();
+
+  assert.equal(failed, null);
+  const texts = framesFor(sockets[1], sockets[1].liveStreamId).filter((f) => typeof f.text === "string" && f.text).map((f) => f.text);
+  assert.deepEqual(texts, ["fold the inner membrane. "]);
+  output.close();
+});
+
+test("a third loss in one turn is a connection that is not coming back", async () => {
+  const { output, sockets, turn } = await speaking();
+  turn.push("One sentence that keeps being cut off. ");
+  await settle();
+
+  for (let lost = 0; lost < 3; lost += 1) {
+    sockets.at(-1).close();
+    await settle(); await settle();
+  }
+
+  await assert.rejects(turn.finished, /The speech connection closed\./);
+  assert.equal(sockets.length, 3, "two reconnects, then no more");
+  output.close();
+});
+
+test("on a hidden page a mid-sentence loss fails the turn as before", async () => {
+  const { output, sockets, socket, turn } = await speaking();
+  turn.push("A sentence nobody is watching. ");
+  await settle();
+  globalThis.document = { visibilityState: "hidden" };
+  try {
+    socket.close();
+    await settle();
+    await assert.rejects(turn.finished, /The speech connection closed\./);
+    assert.equal(sockets.length, 1, "no reconnect for a page in the background");
+  } finally {
+    delete globalThis.document;
+    output.close();
+  }
+});
+
+test("a connection that cannot be replaced fails the turn instead of dropping its words", async () => {
+  const { output, socket, turn } = await speaking();
+  turn.push("Words that need a connection. ");
+  await settle();
+  const Real = globalThis.WebSocket;
+  globalThis.WebSocket = function () { throw new Error("offline"); };
+  try {
+    socket.close();
+    await settle(); await settle();
+    await assert.rejects(turn.finished, /The speech connection closed\./);
+  } finally {
+    globalThis.WebSocket = Real;
+    output.close();
+  }
+});

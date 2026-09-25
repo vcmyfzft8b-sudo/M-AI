@@ -691,6 +691,28 @@ trigger), and then what called the route repeatedly enough to trip `expensiveMut
 is the evidence that is missing — it would carry the release and the call pattern — so treat a new
 event on this message as valuable rather than as a regression of #404.
 
+## 2026-09-25 — The tutor's voice connection lost mid-sentence now carries on
+
+- **Backlog:** `investigate:tutor-speech-socket-closes-mid-segment` (raised with MEMOAI-WEB-48 /
+  PR #470, event `2026-09-20T17:03:00Z`, the uncaught `…speech failed…The speech connection closed.
+  (…phase opening)` fingerprint)
+- **Route:** `/app/lectures/:id` tutor (client-side), `src/lib/tutor/speech-output.ts`
+- **Resolution:** [PR #493](https://github.com/vcmyfzft8b-sudo/M-AI/pull/493)
+- **Regression tests:** the mid-sentence cases at the end of `tests/tutor-speech-stall.test.mjs`;
+  `tests/tutor-speech-connection.test.mjs` (hidden page still fails the turn)
+
+The close listener failed the whole turn whenever a segment was open (or closed but still
+generating), so a speech socket that dropped mid-sentence put a red box on screen and paused the
+lesson — although `drain` already replaces a lost connection and the 408 path already hands a
+starved stream's unspoken remainder to the next segment. A mid-sentence loss now does the same:
+the part Soniox had not turned into sound is re-sent on a new connection (scheduled audio keeps
+playing; at worst a syllable repeats at the seam), at most twice per turn and only on a visible
+page. A third loss in one turn, a hidden page, or a connection that cannot be replaced fails the
+turn as before (`The speech connection closed.`); a failed replacement no longer drops text
+silently; a handshake gives up after 6 s. Why Soniox closes a socket mid-segment is not ours to
+fix; one event a week is a network, not a regression. Reopen only for a turn that fails **with**
+reconnects left, or for a reconnect loop.
+
 ## 2026-09-25 — A dropped recognizer is now asked for back on its own
 
 - **Sentry:** `MEMOAI-WEB-3Y`, issue `147007726` — production events `2026-09-14T18:04Z`,

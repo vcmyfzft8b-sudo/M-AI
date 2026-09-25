@@ -457,6 +457,7 @@ export const sr: Messages = {
 
   /* ---- API and route errors ---- */
   "api.unauthorized": "Nedozvoljen pristup.",
+  "api.authUnavailable": "Trenutno ne možemo da potvrdimo da si prijavljen. Pokušaj ponovo.",
   "api.invalidLectureId": "Neispravan ID beleške.",
   "api.invalidVoiceRequest": "Taj glas ili jezik ne možemo da pustimo.",
   "api.invalidFlashcardId": "Neispravan ID kartice.",

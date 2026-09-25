@@ -450,6 +450,7 @@ export const en: Messages = {
 
   /* ---- API and route errors ---- */
   "api.unauthorized": "Not authorised.",
+  "api.authUnavailable": "We couldn't confirm you're signed in just now. Please try again.",
   "api.invalidLectureId": "Invalid note ID.",
   "api.invalidVoiceRequest": "That voice or language is not one we can preview.",
   "api.invalidFlashcardId": "Invalid card ID.",

@@ -875,11 +875,32 @@ run that gets one of those should triage it on that evidence rather than on this
 do not add a recursion guard to landing-page code chosen by guesswork — 54 events over three and a
 half months with zero identified users does not justify changing a page that is otherwise healthy.
 
-## Open — a tutor turn answered 401 mid-walkthrough in production, once, and was never explained
+## 2026-09-25 — A tutor turn answered 401 mid-walkthrough: a moment's failure at Supabase Auth
 
-**This is not a resolved incident.** It is recorded here so the next automated run recognises the
-issue ids, does not open a speculative patch to the authentication path, and does not have to
-re-derive the mechanism from scratch.
+- **Sentry:** issue `145514494` (production, `2026-09-07T14:21:55Z`); `147291870` / `147295082`
+  are the preview artefact explained in the correction below, not production evidence
+- **Resolution:** PR "Tutor routes retry a transient Auth failure" (branch `fix/tutor-transient-auth`)
+- **Regression test:** `tests/supabase-transient-auth.test.mjs` (drives the real `@supabase/ssr`
+  client: a dropped connection at `/auth/v1/user` reads as signed out today)
+
+**Resolved.** The production event's Session Replay settles it: `POST .../tutor/turn` answered 401
+at `14:21:55.535`, and `POST .../tutor/report` — same client code, same `getUser()`, same
+401-on-no-user check, **same cookies**, nothing navigated in between — answered 200 thirty
+milliseconds later; the learner then used the app normally. The session was never lost.
+`auth.getUser()` returns `{ user: null, error }` for any failure (a reset connection,
+`AuthRetryableFetchError`, a 429/5xx on refresh) exactly as for a missing session, and every tutor
+route read only `user`. (Supabase's token service tolerates a client re-sending an already-rotated
+refresh token, so the "dropped `setAll`" mechanism proposed below does not hold.)
+
+Every tutor route now authenticates through `getRouteUser` → `getUserWithRetry`: a transient Auth
+error is asked once more on a fresh client after 250 ms; still failing, the route answers **503**
+`auth_unavailable` with `x-memo-retry: auth` and reports to Sentry (operation `auth_unavailable`),
+and the tutor retries that turn once. A real missing session is still 401. A future 401 from these
+routes is a real signed-out request; a burst of `auth_unavailable` is an Auth outage — neither is a
+regression of this entry.
+
+The analysis below is kept as history.
+
 
 **Read the correction at the end of this entry first.** The two preview events that prompted it
 turned out to be an artefact of how that verification session was cleaned up, which leaves a single

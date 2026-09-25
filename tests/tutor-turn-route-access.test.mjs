@@ -11,7 +11,9 @@ function route({ user = { id: "synthetic-user" }, own = async () => ({ title: "S
   const calls = [];
   const modules = {
     zod: { z }, "next/server": { NextResponse: { json: (data, init) => Response.json(data, init) } },
-    "@/lib/supabase/server": { createSupabaseServerClient: async () => ({ auth: { getUser: async () => ({ data: { user } }) } }) },
+    "@/lib/supabase/server": { getRouteUser: async () => user
+      ? { supabase: {}, user, response: null }
+      : { supabase: null, user: null, response: Response.json({ error: "api.unauthorized" }, { status: 401 }) } },
     "@/lib/rate-limit": { enforceRateLimit: async () => null, rateLimitPresets: { tutorTurn: [] } },
     "@/lib/request-validation": { parseJsonRequest: async () => ({ success: true, data: { kind: "answer", history: [] } }) },
     "@/lib/validation": { routeIdParamSchema: z.object({ id: z.string().uuid() }) },

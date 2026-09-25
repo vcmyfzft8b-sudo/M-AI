@@ -473,6 +473,7 @@ export const sl = {
 
   /* ---- API and route errors ---- */
   "api.unauthorized": "Nedovoljen dostop.",
+  "api.authUnavailable": "Trenutno ne moremo preveriti, da si prijavljen. Poskusi znova.",
   "api.invalidLectureId": "Neveljaven ID zapiska.",
   "api.invalidVoiceRequest": "Tega glasu ali jezika ne moremo predvajati.",
   "api.invalidFlashcardId": "Neveljaven ID kartice.",

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getRouteUser } from "@/lib/supabase/server";
 import { ensureTutorPlan } from "@/lib/tutor-plan";
 import { routeIdParamSchema } from "@/lib/validation";
 import { tr } from "@/lib/i18n/server";
@@ -24,14 +24,13 @@ export const maxDuration = 300;
  * tail did not fit at all.
  */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const auth = await getRouteUser({ route: "POST /api/lectures/[id]/tutor/plan", request });
 
-  if (!user) {
-    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
+  if (!auth.user) {
+    return auth.response;
   }
+
+  const { user } = auth;
 
   const limited = await enforceRateLimit({
     request,

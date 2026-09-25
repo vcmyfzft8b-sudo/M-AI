@@ -21,8 +21,7 @@ the fix being proved, not the bug recurring. Check the tag and the release befor
   entry is the refusal itself — backlog `investigate:tutor-entitlement-flip-mid-session`)
 - **Route:** `POST /api/lectures/<id>/tutor/turn` → 402, then `POST /api/billing/checkout`
 - **Historical event:** `2026-09-13T12:15:15Z`, production
-- **Resolution:** PR "billing: keep access across a period rollover, refuse a second subscription"
-  (branch `fix/billing-period-rollover-grace`)
+- **Resolution:** [PR #486](https://github.com/vcmyfzft8b-sudo/M-AI/pull/486)
 - **Regression test:** `tests/billing-period-rollover-grace.test.mjs`
 
 The learner's 3-day Stripe trial ended at `12:14:50`. `hasPaidAccess` compared the stored

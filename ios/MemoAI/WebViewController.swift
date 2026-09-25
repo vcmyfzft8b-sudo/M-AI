@@ -713,11 +713,21 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             if (!response.ok) {
               let detail = '';
               try { detail = (await response.json()).error || ''; } catch {}
-              throw new Error('server ' + response.status + (detail ? ': ' + detail : ''));
+              return { __memoFailure: response.status, detail };
             }
             return await response.json();
             """, arguments: ["path": path, "body": body as Any? ?? NSNull()], in: nil, contentWorld: .page)
         guard let result = value as? [String: Any] else { throw Store.StoreError.unavailable }
+        /*
+         * A refusal comes back as a value, not a thrown exception, so its
+         * status always reaches the page: the text of a JavaScript exception
+         * did not survive the trip on TestFlight, and a 409 ("belongs to
+         * another Memo account") was shown as "could not be confirmed yet".
+         */
+        if let status = result["__memoFailure"] as? Int {
+            let detail = result["detail"] as? String ?? ""
+            throw BridgeFailure(reason: "server \(status)" + (detail.isEmpty ? "" : ": \(detail)"))
+        }
         return result
     }
 

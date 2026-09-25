@@ -519,6 +519,7 @@ export const en: Messages = {
   "api.ttsDailyLimitPaid": "You have used today's audio generation. New audio becomes available after the reset at 00:00. You can still listen to the parts already prepared.",
   "api.ttsDailyLimitFree": "You have used today's free audio generation. Upgrade for more audio or wait for the reset at 00:00. You can still listen to the parts already prepared.",
   "api.checkoutSessionFailed": "The checkout session could not be created.",
+  "api.subscriptionAlreadyActive": "You already have an active plan. Reload the page; you can manage it in Settings.",
   "api.portalSessionFailed": "The subscription portal session could not be created.",
   "api.checkoutConsent": "By purchasing you expressly request that the service begins immediately and before the 14-day withdrawal period expires. If you withdraw as a consumer during that period, we refund your payment less the proportionate part of the service already provided. The terms of use and refund policy at memoai.eu/legal also apply.",
   "api.prizeSaveFailed": "The prize could not be saved. Try again.",

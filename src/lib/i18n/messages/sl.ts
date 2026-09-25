@@ -542,6 +542,7 @@ export const sl = {
   "api.ttsDailyLimitPaid": "Porabil si današnje ustvarjanje zvoka. Nov zvok bo na voljo po ponastavitvi ob 00:00. Že pripravljene dele lahko še vedno poslušaš.",
   "api.ttsDailyLimitFree": "Porabil si današnje brezplačno ustvarjanje zvoka. Za več zvoka nadgradi paket ali počakaj do ponastavitve ob 00:00. Že pripravljene dele lahko še vedno poslušaš.",
   "api.checkoutSessionFailed": "Checkout seje ni bilo mogoče ustvariti.",
+  "api.subscriptionAlreadyActive": "Naročnino že imaš. Osveži stran; upravljaš jo lahko v nastavitvah.",
   "api.portalSessionFailed": "Seje za portal naročnine ni bilo mogoče ustvariti.",
   "api.checkoutConsent": "Z nakupom izrecno zahtevaš, da se izvajanje storitve začne takoj in pred iztekom 14-dnevnega odstopnega roka. Če kot potrošnik med tem rokom odstopiš, ti vrnemo plačilo, zmanjšano za sorazmerni del že opravljene storitve. Veljata tudi pogoji uporabe in politika vračil na memoai.eu/legal.",
   "api.prizeSaveFailed": "Nagrade ni bilo mogoče shraniti. Poskusi znova.",

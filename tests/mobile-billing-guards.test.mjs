@@ -25,6 +25,7 @@ function loadRoute(path) {
       getBillingCancelUrl: () => "", getBillingSuccessUrl: () => "", getBillingPortalReturnUrl: () => "", getPriceIdForPlan: () => "",
       hasStripeSubscriptionHistory: reached("history"), PURCHASABLE_BILLING_PLAN_IDS: ["monthly", "yearly"],
     },
+    "@/lib/billing-access": { hasLiveStripeSubscription: () => false },
     "@/lib/discount-wheel": { getDiscountWheelState: reached("wheel") },
     "@/lib/rate-limit": { rateLimitPresets: { mutate: [] }, enforceRateLimit: reached("rateLimit") },
     "@/lib/request-validation": { parseJsonRequest: reached("parse") },

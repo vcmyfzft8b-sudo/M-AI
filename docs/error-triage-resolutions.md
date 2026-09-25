@@ -696,7 +696,7 @@ event on this message as valuable rather than as a regression of #404.
 - **Sentry:** `MEMOAI-WEB-3Y`, issue `147007726` — production events `2026-09-14T18:04Z`,
   `2026-09-15T17:25Z`, `2026-09-22T16:01Z`, `2026-09-23T09:25Z` (phases speaking and thinking)
 - **Backlog:** both `uncaught:POST /api/lectures/<id>/tutor/report:[tutor-client] recognizer failed: SpeechInputError: The recognizer connection closed. …` fingerprints
-- **Resolution:** PR "The tutor asks for its microphone back" (branch `fix/tutor-mic-reconnects`)
+- **Resolution:** [PR #492](https://github.com/vcmyfzft8b-sudo/M-AI/pull/492)
 - **Regression tests:** `tests/tutor-listening-retry.test.mjs`, the recognizer cases in
   `tests/tutor-session-turns.test.mjs`, and the handshake cases in
   `tests/tutor-speech-input-lifecycle.test.mjs`

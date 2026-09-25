@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useT } from "@/components/i18n-provider";
 import { nativeRequest } from "@/lib/mobile/client";
-import { nativeBillingFailureKey } from "@/lib/mobile/billing-notice";
+import { nativeBillingFailureKey, nativeFailureDetail } from "@/lib/mobile/billing-notice";
 import { APPLE_PRODUCTS, type AppleProductId } from "@/lib/mobile/runtime";
 import { nativeProducts, trialPlanProducts, halfOffProducts, type NativeProduct } from "@/lib/mobile/products";
 import { clearOfferResume } from "@/lib/offer-resume";
@@ -82,7 +82,11 @@ export function useAppleBilling(enabled: boolean, halfOffOnly = false) {
         setProducts(valid);
         setNotice(t("native.priceChanged"));
       }
-    } catch (error) { setNotice(t(nativeBillingFailureKey(error))); }
+    } catch (error) {
+      const key = nativeBillingFailureKey(error);
+      const detail = key === "native.verifyFailed" ? nativeFailureDetail(error) : null;
+      setNotice(detail ? `${t(key)} [${detail}]` : t(key));
+    }
     finally { setBusy(false); }
   }
 

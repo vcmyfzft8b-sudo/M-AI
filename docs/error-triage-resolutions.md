@@ -697,7 +697,7 @@ event on this message as valuable rather than as a regression of #404.
   PR #470, event `2026-09-20T17:03:00Z`, the uncaught `…speech failed…The speech connection closed.
   (…phase opening)` fingerprint)
 - **Route:** `/app/lectures/:id` tutor (client-side), `src/lib/tutor/speech-output.ts`
-- **Resolution:** PR "The tutor's voice reconnects mid-sentence" (branch `fix/tutor-voice-reconnects-mid-sentence`)
+- **Resolution:** [PR #493](https://github.com/vcmyfzft8b-sudo/M-AI/pull/493)
 - **Regression tests:** the mid-sentence cases at the end of `tests/tutor-speech-stall.test.mjs`;
   `tests/tutor-speech-connection.test.mjs` (hidden page still fails the turn)
 

@@ -99,26 +99,6 @@
   }
 }
 
-/*
- * The tutor step hosts the landing page's walkthrough, which names no colour of
- * its own and reads `--lt-*` from whatever it is mounted in. Filled here from
- * the onboarding's palette, so the sphere and its voice row sit in this screen
- * rather than in the marketing page's. The step draws its own heading above the
- * component, so the padding that separates it from a section edge goes.
- */
-.memo-onboarding-v2 .landing-tutor {
-  --lt-text: var(--text);
-  --lt-muted: var(--muted);
-  --lt-tile: var(--tile);
-  --lt-line: var(--line);
-  --lt-surface: var(--surface);
-  --lt-ink: var(--ink);
-  --lt-on-ink: var(--on-ink);
-  /* The app's coral, which is this flow's accent too. */
-  --lt-flow: #ff6d68;
-  padding: 0 0 0.25rem;
-}
-
 /* See the note beside this class in onboarding-flow.tsx: four sources two-up on
    a phone leave no room for a filename, and the badge is the redundant half. */
 @media (max-width: 419px) {

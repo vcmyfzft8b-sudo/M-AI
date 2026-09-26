@@ -1880,7 +1880,8 @@ export function OnboardingFlow({
       <div>
       <h1 style={{ margin: "0 0 clamp(0.2rem, 0.6vh, 0.4rem)", fontSize: "clamp(1.15rem, min(5.6vw, 4.4vh), 2.15rem)", fontWeight: "850", lineHeight: "1.1", letterSpacing: "-0.025em" }}>{v.title}</h1>
       <p style={{ margin: "0 0 clamp(0.4rem, 1.6vh, 1.15rem)", fontSize: "clamp(0.84rem, 1.9vh, 0.96rem)", fontWeight: "600", color: "var(--muted)" }}>{v.subtitle}</p>
-      <LandingTutorDemo />
+      {/* Inside the app, so it follows the app's saved appearance, not the OS alone. */}
+      <LandingTutorDemo theme="app" />
       </div>
       </>) : null}
       {v.isLoading ? (<>

@@ -115,7 +115,7 @@ export const en: Messages = {
 
   /* ---- Landing page ---- */
   "landing.hero.title": "Never write lecture notes again!",
-  "landing.hero.lead": "Memo AI is your AI notetaker for lectures. From audio recordings, PDFs, documents and links it produces notes, transcripts, flashcards, quizzes, practice tests and an AI chat.",
+  "landing.hero.lead": "Memo AI is your AI notetaker for lectures. From audio recordings, PDFs, documents and links it produces notes, transcripts, flashcards, quizzes, practice tests, mind maps and podcasts, plus a tutor that explains it all out loud and an AI chat.",
   "landing.cta.tryFree": "Try it for €0",
   "landing.cta.signIn": "Sign in",
   "landing.hero.previewLabel": "{brand} app preview",
@@ -123,6 +123,7 @@ export const en: Messages = {
   "landing.features.title": "Capture it, organise it, learn it faster",
   "landing.tutor.title": "A lecture someone talks you through",
   "tutorDemo.heard1": "Wait, what if I don't follow something?",
+  "tutorDemo.topic": "Introduction",
   "landing.faq.title": "Frequently asked questions",
   "landing.finalCta.title": "Upload your first lecture.",
   "landing.finalCta.lead": "An hour-long lecture is processed in a few minutes — transcript, notes, flashcards and quiz all come out together.",
@@ -142,6 +143,11 @@ export const en: Messages = {
   "landing.seo.featureQuizzes": "Quizzes and practice tests",
   "landing.seo.featureTutor": "A tutor that explains your notes out loud",
   "landing.seo.featureChat": "AI chat with your material",
+  "landing.seo.featureReadAloud": "Notes read aloud",
+  "landing.seo.featurePodcast": "Podcast episodes about your notes",
+  "landing.seo.featureMindmap": "Mind maps of your notes",
+  "landing.seo.featurePalace": "A memory palace to study in",
+  "landing.seo.featureSpeedRead": "Speed reading",
 
   /* ---- Landing FAQ ---- */
   "landing.faq.processing.q": "How long does it take to process a lecture?",
@@ -1336,62 +1342,11 @@ export const en: Messages = {
   "api.scanNoTextInFile": "No readable text could be found in the photo \"{name}\".",
 
   /* ---- Landing preview — app chrome ---- */
-  "preview.quick.recordDetail": "Start with one tap",
-  "preview.quick.uploadLabel": "Upload audio",
-  "preview.quick.textLabel": "Upload a PDF or a document",
-  "preview.quick.textDetail": "Turn your material into structured notes",
-  "preview.quick.linkDetail": "A web article or source",
-  "preview.sheet.recordCardLabel": "Recording ready",
-  "preview.sheet.recordMeta": "48:12 • recorded in the app",
-  "preview.sheet.recordAgain": "Record again",
-  "preview.sheet.pickAnotherFile": "Choose another file",
-  "preview.sheet.pickAnotherDocument": "Choose another document",
-  "preview.sheet.pasteAnotherLink": "Paste another link",
   "preview.sheet.pageCount": "24 pages • 3.1 MB",
-  "preview.sheet.slideCount": "42 slides • 8.4 MB",
-  "preview.sheet.webArticle": "Web article • Slovenian",
-  "preview.sheet.wikipedia": "Wikipedia • Slovenian",
-  "preview.tab.study": "Study",
-  "preview.theme.system": "System",
-  "preview.folder.businessIs": "Business IS",
-  "preview.folder.biology": "Biology",
-  "preview.folder.economics": "Economics",
 
   /* ---- Landing preview — remaining chrome ---- */
-  "preview.searchByTitle": "Search by title",
-  "preview.emptyBody": "Try a shorter search term, or clear the search.",
-  "preview.keyPoints": "Key points",
-  "preview.showAnswer": "Show the answer",
-  "preview.backToQuestion": "Back to the question",
-  "preview.correct": "Correct",
-  "preview.incorrect": "Wrong",
-  "preview.finish": "Finish",
-  "preview.answerPlaceholder": "Write your answer here...",
-  "preview.askAboutLecture": "Ask about this lecture",
-  "preview.planName": "Memo AI Pro (active)",
   "preview.planUntil": "Active until 12 September 2026",
   "preview.managePlan": "Manage subscription",
-  "preview.noteTitleField": "Title",
-  "preview.renameHint": "Give this note a clearer title without leaving the page.",
-  "preview.answersStayWithLecture": "Your answers stay attached to this lecture.",
-  "preview.attemptOne": "Attempt 1",
-
-  /* ---- Landing preview — delete confirmation ---- */
-  "preview.deleteBefore": "Delete ",
-  "preview.deleteAfter": "? This cannot be undone.",
-
-  /* ---- Landing preview — help screen ---- */
-  "preview.help.family.body": "One plan cannot be shared across several accounts. Every student has their own note library.",
-  "preview.help.gift.title": "Can I gift Memo AI?",
-  "preview.help.gift.body": "Yes. You buy a code, send it to a friend, and they redeem it in settings.",
-  "preview.help.language.body": "We support Slovenian, English, German, Croatian and 20 more languages.",
-  "preview.help.feature.body": "Write to us at info@memoai.eu. Students' suggestions go into the roadmap.",
-  "preview.help.video.body": "Video links (YouTube, Drive) are not supported. Upload audio or a document instead.",
-  "preview.help.audio.body": "The file must be under 3 hours and under 300 MB. Use MP3, M4A, WAV or WEBM.",
-  "preview.help.transcript.body": "Move the phone closer to the lecturer and avoid noise. Shorter files give a more accurate transcript.",
-  "preview.help.redeem.body": "Open Settings, choose Redeem a code and enter the 8-character code.",
-  "preview.help.terms.body": "Memo AI is for personal study use. Do not pass material on without the author's permission.",
-  "preview.help.privacy.body": "Your recordings and notes are yours. We store them encrypted, and deletion is immediate and permanent.",
 
   /* ---- Landing preview — help titles ---- */
   "preview.help.familyTitle": "Family plan?",
@@ -1400,9 +1355,6 @@ export const en: Messages = {
   "preview.help.videoTitle": "The video link does not work",
   "preview.help.audioTitle": "I cannot upload audio",
   "preview.help.transcriptTitle": "The transcript is too short or inaccurate",
-
-  /* ---- Landing preview — second recording ---- */
-  "preview.sheet.recordMeta2": "31:47 • recorded in the app",
 
   /* ---- Landing feature showcase ---- */
   "showcase.captureTitle": "Record it or upload it",
@@ -1419,6 +1371,18 @@ export const en: Messages = {
   "showcase.testsDesc": "Practise longer answers and get ready for the real thing.",
   "showcase.listenTitle": "Listen to your notes",
   "showcase.listenDesc": "The app reads your notes aloud, without you looking at the screen.",
+  "showcase.podcastTitle": "A podcast of your note",
+  "showcase.podcastDesc": "Two hosts talk your note through – for the bus or the gym.",
+  "showcase.mindmapTitle": "Mind map",
+  "showcase.mindmapDesc": "Shows how the topics in your note connect to each other.",
+  "showcase.palaceTitle": "Memory palace",
+  "showcase.palaceDesc": "Walk through a small town where every stop is a question from your note.",
+  "showcase.speedTitle": "Speed reading",
+  "showcase.speedDesc": "Your note one word at a time, at the pace that suits you.",
+  "showcase.chatTitle": "Ask your notes",
+  "showcase.chatDesc": "Chat about one note, or ask across all of them at once.",
+  "showcase.chat.question": "What's the difference between a transactional system and a decision support system?",
+  "showcase.chat.answer": "A **transactional system** records the day-to-day business events, while a **decision support system** analyses that data for management.\n\n- Transactional: many small, routine entries\n- Decision support: scenarios and reports for decisions",
 
   /* ---- Landing flow demo — app chrome only ---- */
   "flowDemo.kindAudio": "Audio",
@@ -1428,19 +1392,7 @@ export const en: Messages = {
     one: "{count} page",
     other: "{count} pages",
   },
-  "flowDemo.today": "today",
-  "flowDemo.yesterday": "yesterday",
-  "flowDemo.onTuesday": "on Tuesday",
-  "flowDemo.onFriday": "on Friday",
-  "flowDemo.lastWeek": "last week",
-  "flowDemo.libraryLabel": "Notes",
-  "flowDemo.noteCount": {
-    one: "{count} note",
-    other: "{count} notes",
-  },
-  "flowDemo.dropTitle": "Drop a source here",
   "flowDemo.dropSubtitle": "Audio, PDF, a document or a photo",
-  "flowDemo.newNote": "New note",
   "flowDemo.step1Title": "Record it or upload it",
   "flowDemo.statusDragOrClick": "Drag it in or click",
   "flowDemo.statusTranscribing": "Transcribing…",
@@ -1449,14 +1401,6 @@ export const en: Messages = {
   "flowDemo.statusWritingNotes": "Writing the notes…",
   "flowDemo.statusNotesReady": "Notes ready",
   "flowDemo.step3Title": "Revise the material",
-  "flowDemo.tabCards": "Flashcards",
-  "flowDemo.tabQuiz": "Quiz",
-  "flowDemo.tabTest": "Test",
-  "flowDemo.showAnswer": "Show the answer",
-  "flowDemo.swipeHint": "Swipe left or right",
-  "flowDemo.answerPlaceholder": "Your answer",
-  "flowDemo.next": "Next",
-  "flowDemo.check": "Check",
   "flowDemo.statusBuildingMaterial": "Building your study set…",
   "flowDemo.statusMaterialReady": "Study set ready",
 
@@ -1529,15 +1473,8 @@ export const en: Messages = {
   /* ---- Landing — try callout and showcase chrome ---- */
   "landing.tryItHere": "Try it right here",
   "flowDemo.dragSourceToStep": "Drag a source into the first step",
-  "showcase.transcribing": "Transcribing",
 
   /* ---- Landing preview — redesigned capture and create sheet ---- */
-  "preview.create.record": "Record audio",
-  "preview.create.upload": "Upload audio",
-  "preview.create.file": "A PDF, a file or text",
-  "preview.create.link": "A web link",
-  "preview.capture.stopAndCreate": "Stop and make the note",
-  "preview.capture.create": "Make the note",
   "preview.capture.fileFormats": "PDF, DOCX, PPTX or an image",
   "preview.noteTitle.record": "New lecture recording",
   "preview.noteTitle.upload": "Uploaded recording",
@@ -1546,33 +1483,14 @@ export const en: Messages = {
   "preview.chatGreeting": "Hi! Ask me anything about this note.",
   "preview.help.giftTitle": "Can I gift Memo?",
   "preview.help.redeemTitle": "Redeem a code",
-  "preview.subScreen.test": "Practice test",
 
   /* ---- Landing preview — redesigned note and study screens ---- */
-  "preview.noteActions": "Note actions",
   "preview.folderEmptyTitle": "This folder is empty",
   "preview.folderEmptyBody": "Add notes to this folder, or go back to all of them.",
-  "preview.playReading": "Play the reading",
-  "preview.dictate": "Dictate",
-  "preview.submitTest": "Submit the test",
-  "preview.play": "Play",
   "preview.folderOptions": "Folder options",
-  "preview.thisNote": "This note",
-
-  /* ---- Landing preview — capture screen actions ---- */
-  "preview.pickAnother": "Pick another",
 
   /* ---- Landing preview — cards, player and support ---- */
-  "preview.cards.again": "Again",
-  "preview.cards.know": "I know it",
-  "preview.back10": "Back 10s",
-  "preview.forward10": "Forward 10s",
-  "preview.correctAnswerValue": "Correct answer: {answer}",
-  "preview.recent": "recent",
-  "preview.durationHoursMinutes": "{hours} hr {minutes} min",
   "preview.planMonthly": "Monthly (active)",
-  "preview.support.greeting": "Hi! This is the Memo AI team.",
-  "preview.support.checkSources": "For the fastest answer, check the sources below.",
 
   /* ---- Landing nav — mobile menu ---- */
   "nav.openMenu": "Open the menu",
@@ -1600,6 +1518,31 @@ export const en: Messages = {
   "flowDemo.note.bullet3Rest": "– ties the processes into one data model.",
   "flowDemo.note.keyLabel": "Key takeaway",
   "flowDemo.note.keyBody": "Without good data, even the best system will not produce good decisions.",
+
+  /* ---- Landing mindmap — the sample note drawn as a map ---- */
+  "landingMindmap.transactionalDetail": "Captures everyday business events, such as orders and payments.",
+  "landingMindmap.supportDetail": "Analyses the data and models scenarios for management.",
+  "landingMindmap.erpDetail": "Ties the company's processes into one data model.",
+  "landingMindmap.connects": "What ERP connects",
+  "landingMindmap.connectsDetail": "Every department works from one shared database, so nothing is entered twice.",
+  "landingMindmap.finance": "Finance",
+  "landingMindmap.purchasing": "Purchasing",
+  "landingMindmap.production": "Production",
+  "landingMindmap.sales": "Sales",
+  "landingMindmap.hr": "HR",
+  "landingMindmap.data": "Data quality",
+  "landingMindmap.goodData": "Good data, good decisions",
+  "landingMindmap.oneSource": "One source of truth",
+  "landingMindmap.oneSourceDetail": "Every report reads the same data, so the reports always agree.",
+  "landingMindmap.rollout": "Rolling it out",
+  "landingMindmap.redesign": "Redesign the processes first",
+  "landingMindmap.redesignDetail": "IT in a bad process only speeds the bad process up.",
+  "landingMindmap.training": "Train the people who use it",
+  "landingMindmap.exam": "For the exam",
+  "landingMindmap.compare": "Functional vs integrated",
+  "landingMindmap.compareDetail": "Be able to compare the two with an example.",
+  "landingMindmap.speed": "Event to decision in minutes",
+  "landingMindmap.speedDetail": "An integrated system shortens the road from a business event to a decision.",
 
   /* ---- Landing flow demo — the sample study set ---- */
   "flowDemo.card1Q": "What is a transactional information system?",
@@ -1640,27 +1583,10 @@ export const en: Messages = {
   "flowDemo.test2Keys": "data,record,transaction,report",
   "flowDemo.test3Keys": "analys,scenario,decision,forecast,compar",
 
-  /* ---- Landing feature showcase — the sample material ---- */
-  "showcase.note.line1": "collect and process the information",
-  "showcase.note.line2Before": "that supports",
-  "showcase.note.decision": "decision-making",
-  "showcase.note.keyBody": "An integrated system keeps every piece of data in one place.",
-  "showcase.card.front": "What does ERP stand for?",
-  "showcase.card.back": "Enterprise resource planning",
-  "showcase.quizCounter": "1 / 4 · Quiz",
-  "showcase.quizA": "Transactional",
-  "showcase.quizB": "Decision support",
-  "showcase.quizC": "Expert",
-  "showcase.testQuestionNo": "Question 1",
-  "showcase.testPrompt": "Name one advantage of an ERP system.",
-  "showcase.testAnswer": "One set of data for every department",
-  "showcase.testCorrect": "Correct",
-  "showcase.read.keyTypes": "The main types",
-  "showcase.read.lead": "A data model ties the processes into one system that supports decision-making in companies.",
-  "showcase.read.bullet1": "Transactional – captures the day-to-day business events.",
-  "showcase.read.bullet2": "Decision support – analysis and scenarios for management.",
-  "showcase.read.bullet3": "ERP – ties the processes into one data model.",
-  "showcase.read.keyBody": "Without good data, even the best system will not produce good decisions.",
+  /* ---- Landing practice screens — the demo grader's explanation ---- */
+  "landingStudy.test.feedbackFull": "The answer covers the key point of the expected answer.",
+  "landingStudy.test.feedbackPartial": "The answer touches on the key point but leaves part of it out.",
+  "landingStudy.test.feedbackMissed": "The answer misses the key point. Compare it with the expected answer.",
 
   /* ---- Landing preview — sample note: business information systems ---- */
   "pv.is.card1F": "What is a transactional information system?",
@@ -1669,8 +1595,6 @@ export const en: Messages = {
   "pv.is.card2B": "Finance, purchasing, production, sales and HR, into one shared database.",
   "pv.is.card3F": "Why does process redesign matter?",
   "pv.is.card3B": "Because putting IT into a bad process only speeds up the bad practice.",
-  "pv.is.practice1": "Compare functional and integrated information systems.",
-  "pv.is.practice2": "Explain why redesigning business processes is a condition for a successful ERP rollout.",
   "pv.is.quiz1Q": "What is the main advantage of integrated systems over functional ones?",
   "pv.is.quiz1O1": "One shared database and less duplication",
   "pv.is.quiz1O2": "Cheaper licences",
@@ -1698,8 +1622,6 @@ export const en: Messages = {
   "pv.micro.card2B": "When the coefficient is above 1 — a price rise then lowers total revenue.",
   "pv.micro.card3F": "What affects elasticity?",
   "pv.micro.card3B": "The number of substitutes, the share of the budget spent, and the length of the period.",
-  "pv.micro.practice1": "Work out the elasticity coefficient and explain its effect on total revenue.",
-  "pv.micro.practice2": "Compare the elasticity of necessities and luxuries, and justify the difference.",
   "pv.micro.quiz1Q": "What holds when demand is elastic?",
   "pv.micro.quiz1O1": "A price rise lowers total revenue",
   "pv.micro.quiz1O2": "A price rise raises revenue",
@@ -1727,8 +1649,6 @@ export const en: Messages = {
   "pv.anatomy.card2B": "It speeds the impulse up, jumping between the nodes of Ranvier.",
   "pv.anatomy.card3F": "What does the central nervous system consist of?",
   "pv.anatomy.card3B": "The brain and the spinal cord.",
-  "pv.anatomy.practice1": "Describe the path of a stimulus from receptor to effector.",
-  "pv.anatomy.practice2": "Explain the all-or-nothing principle of the action potential.",
   "pv.anatomy.quiz1Q": "Where does the signal pass chemically between two neurons?",
   "pv.anatomy.quiz1O1": "At the synapse",
   "pv.anatomy.quiz1O2": "In the dendrite",
@@ -1756,8 +1676,6 @@ export const en: Messages = {
   "pv.stats.card2B": "The probability of getting a result this extreme or more, if the null hypothesis holds.",
   "pv.stats.card3F": "When do we reject the null hypothesis?",
   "pv.stats.card3B": "When the p-value is below the chosen significance level, usually 0.05.",
-  "pv.stats.practice1": "Explain the difference between a type I and a type II error.",
-  "pv.stats.practice2": "Explain why a low p-value on its own does not prove a large effect.",
   "pv.stats.quiz1Q": "What does a p-value of 0.03 mean at a significance level of 0.05?",
   "pv.stats.quiz1O1": "We reject the null hypothesis",
   "pv.stats.quiz1O2": "We accept the null hypothesis as proven",
@@ -1823,10 +1741,6 @@ export const en: Messages = {
   "pv.note5Title": "Statistics – hypothesis testing",
   "pv.folderLectures": "Lectures",
   "pv.folderExams": "Exams",
-  "pv.tourAnswer": "The equilibrium price is the price at which the quantity supplied equals the quantity demanded.",
-
-  /* ---- Landing preview — delete confirmation body ---- */
-  "preview.deleteBody": "“{title}” will be deleted for good. This cannot be undone.",
 
   /* ---- Landing nav — menu links ---- */
   "nav.howItWorks": "How it works",

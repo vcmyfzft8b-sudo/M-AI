@@ -12,6 +12,7 @@ aspiration. Where the code still disagrees with a rule, that is noted.
 | --- | --- | --- | --- |
 | **App (canonical)** | `src/app/redesign.css` | `.memo`, `.memo-portal` | Everything inside the product |
 | Legacy | `src/app/globals.css` | `:root` | Landing, paywall. Do not extend. |
+| Landing demos | `src/app/redesign.css` via `LandingAppScope` | `.memo.memo-os-theme` / `.memo-theme-light` / `.memo-theme-dark` | App screens shown on the landing page — see [landing-page-sync.md](landing-page-sync.md) |
 | Onboarding | `src/app/onboarding.css` | `.memo-onboarding-v2` | Onboarding flow only |
 | Paywall | `src/app/globals.css` | `.memo-paywall-shell` | Paywall only |
 

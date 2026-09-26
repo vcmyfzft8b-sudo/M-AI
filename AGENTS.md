@@ -60,6 +60,25 @@ to one and not the other: build it once in `src/`, then check it under both user
   aligned when either changes (Apple has no exact €20/€130 points, so the app shows the nearest:
   €19.99/€129.99, and $19.99/$129.99 with $9.99/$64.99 first periods in the US storefront).
 
+## Landing Page And App Parity
+
+The landing page (`/`) demos the app — the hero phone, "How it works", the tutor section and the
+feature list. **Every new feature, redesign, restyle or copy change to an app screen the landing
+shows is also a landing-page change, in the same PR.** A PR that changes one and not the other is
+unfinished; if the landing part truly cannot ship with it, say so in the PR and open the
+follow-up before merging.
+
+- The landing renders the app's own markup: `.memo-*` classes inside `LandingAppScope`, and the
+  app's own component wherever it is pure. One component per app screen lives in
+  `src/components/landing/app/`. Never add an inline-styled copy of an app screen.
+- A new note tab or study mode goes into the hero phone's tabs, the "How it works" study pills and
+  the feature list, in `NOTE_TABS` order, with copy in all five catalogues; also update the hero
+  lead, the JSON-LD `featureList` and the FAQ if they list features.
+- Compare side by side at phone width, dark and light: `/creator/lectures/demo-note-mikroekonomija`
+  (the real app, no login) against `/`. Run `tests/landing-app-parity.test.mjs`.
+- Where each feature appears on the landing, and the full checklist:
+  [docs/landing-page-sync.md](/docs/landing-page-sync.md).
+
 ## Vercel Preview Rule
 
 - Every pushed branch should be expected to get its own Vercel preview deployment when the GitHub repo is connected to Vercel.

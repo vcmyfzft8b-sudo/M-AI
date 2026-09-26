@@ -9,9 +9,13 @@ import { LectureNoLongerExistsError } from "@/lib/lecture-processing-errors";
 import { fetchYoutubeTranscriptSource } from "@/lib/youtube-transcript";
 import { parseYoutubeVideoId } from "@/lib/youtube-url";
 import {
-  fetchReadableWebpage,
+  fetchLinkSource,
+  MAX_LINK_DOCUMENT_BYTES,
   prepareLectureFromTextSource,
 } from "@/lib/manual-lectures";
+import { prepareLectureFromDocumentFile } from "@/lib/document-processing";
+import { validateDocumentFileSignature } from "@/lib/file-validation";
+import { expectedInputFailure } from "@/lib/lecture-failure-text";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 export type StoredLinkProcessingResult = {
@@ -110,9 +114,37 @@ export async function processStoredLinkLecture(params: {
     return { needsNotesGeneration: true };
   }
 
-  const webpage = await fetchReadableWebpage({
-    url: pendingLinkUrl,
-  });
+  const source = await fetchLinkSource({ url: pendingLinkUrl });
+
+  // A link straight to a PDF, Word or PowerPoint file is read exactly like the same file uploaded.
+  if (source.kind === "document") {
+    const validated = await validateDocumentFileSignature(source.file, {
+      maxBytes: MAX_LINK_DOCUMENT_BYTES,
+    });
+
+    if (!validated.ok) {
+      // It said it was a document and is not one (an error page served as a PDF, say).
+      throw expectedInputFailure("link_not_loadable");
+    }
+
+    await prepareLectureFromDocumentFile({
+      lectureId: lectureRow.id,
+      userId: lectureRow.user_id,
+      languageHint: lectureRow.language_hint,
+      file: source.file,
+      fileName: source.file.name,
+      sourceTypeOverride: "link",
+      modelMetadata: {
+        importMode: "link",
+        linkKind: "document",
+        sourceUrl: pendingLinkUrl,
+      },
+    });
+
+    return { needsNotesGeneration: true };
+  }
+
+  const webpage = source;
   const extractedImages = await extractWebpageImages({
     html: webpage.html,
     pageUrl: webpage.finalUrl,

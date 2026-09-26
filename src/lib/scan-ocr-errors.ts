@@ -9,7 +9,7 @@ export type ScanOcrAttemptDiagnostics = {
   outputLength: number | null;
   /** Which rule turned this reading down, so a rejection is diagnosable from the row alone. */
   rejection: ScanOcrRejection | null;
-  stage: "ocr_primary" | "ocr_rescue";
+  stage: "ocr_primary" | "ocr_rescue" | "ocr_restate";
 };
 
 export type ScanOcrImageDiagnostics = {

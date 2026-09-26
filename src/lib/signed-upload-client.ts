@@ -138,6 +138,49 @@ async function attemptUpload(params: {
   });
 }
 
+/**
+ * How long one attempt may take before it is treated as a dropped connection and tried again.
+ * A PUT had no deadline at all, so a connection that went quiet mid-upload (a lift, a locked
+ * phone) hung the whole note until the learner gave up. Sized for a slow phone connection:
+ * thirty seconds plus 40 KB/s for the file itself.
+ */
+export function resolveUploadAttemptTimeoutMs(bytes: number) {
+  return 30_000 + Math.ceil(bytes / 40_000) * 1000;
+}
+
+async function attemptUploadWithDeadline(params: Parameters<typeof attemptUpload>[0]) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const onOuterAbort = () => controller.abort();
+  params.signal?.addEventListener("abort", onOuterAbort, { once: true });
+  let rejectOnTimeout: (error: Error) => void = () => undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    rejectOnTimeout = reject;
+  });
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+    // The Supabase client's own upload takes no abort signal, so the deadline has to win the
+    // race rather than cancel it. The abandoned request finishes or dies on its own; the retry
+    // writes the same path with upsert.
+    rejectOnTimeout(new Error("Upload timeout"));
+  }, resolveUploadAttemptTimeoutMs(params.file.size));
+
+  try {
+    await Promise.race([attemptUpload({ ...params, signal: controller.signal }), deadline]);
+  } catch (error) {
+    // Our own deadline, not the learner cancelling: a retryable network failure.
+    if (timedOut && !params.signal?.aborted) {
+      throw new Error("Upload timeout");
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+    params.signal?.removeEventListener("abort", onOuterAbort);
+  }
+}
+
 export async function uploadToSignedUrlWithRetry(params: {
   supabase: BrowserSupabaseClient;
   path: string;
@@ -149,7 +192,7 @@ export async function uploadToSignedUrlWithRetry(params: {
   onRetry?: (attempt: number, attempts: number) => void;
 }) {
   await runWithUploadRetries({
-    attempt: () => attemptUpload(params),
+    attempt: () => attemptUploadWithDeadline(params),
     attempts: params.attempts,
     signal: params.signal,
     onRetry: params.onRetry,

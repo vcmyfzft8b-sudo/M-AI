@@ -1,6 +1,6 @@
 import "server-only";
 
-import { MAX_SCAN_IMAGE_BYTES, STORAGE_BUCKET } from "@/lib/constants";
+import { STORAGE_BUCKET } from "@/lib/constants";
 import { flushPushNotifications } from "@/lib/mobile/push";
 import { LectureNoLongerExistsError } from "@/lib/lecture-processing-errors";
 import { extractTextFromImage, prepareLectureFromTextSource } from "@/lib/manual-lectures";
@@ -15,11 +15,12 @@ import {
   type ScanOcrImageDiagnostics,
 } from "@/lib/scan-ocr-errors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { sourceLocaleMessage } from "@/lib/lecture-failure-text";
+import { expectedInputFailure } from "@/lib/lecture-failure-text";
+import { normalizeScanImageForOcr } from "@/lib/scan-image-normalize";
 
 const SCAN_OCR_CONCURRENCY = 3;
-const SCAN_STORAGE_DOWNLOAD_MAX_ATTEMPTS = 3;
-const SCAN_STORAGE_DOWNLOAD_RETRY_DELAYS_MS = [500, 1500] as const;
+const SCAN_STORAGE_DOWNLOAD_MAX_ATTEMPTS = 5;
+const SCAN_STORAGE_DOWNLOAD_RETRY_DELAYS_MS = [500, 1500, 3000, 6000] as const;
 
 type StoredScanImage = {
   index: number;
@@ -41,6 +42,8 @@ type ExtractedScanBlock = {
 
 type ScanImageProcessingResult = {
   block: ExtractedScanBlock | null;
+  /** The photo never reached storage (or reached it empty): the upload, not the page. */
+  missing: boolean;
   skippedImages: ScanOcrImageDiagnostics[];
 };
 
@@ -125,7 +128,14 @@ function sleep(ms: number) {
   });
 }
 
-async function downloadStoredScanImage(image: StoredScanImage) {
+/**
+ * Fetches one uploaded photo, or null when it is not there to fetch.
+ *
+ * A missing photo used to fail the whole set ("Fotografije ni bilo mogoče prebrati.") even when
+ * every other page had arrived. One photo that did not finish uploading is now skipped, the notes
+ * are made from the pages that did, and the note says how many were missing.
+ */
+async function downloadStoredScanImage(image: StoredScanImage): Promise<File | null> {
   const normalizedMimeType = normalizeUploadScanImageMimeType({
     mimeType: image.mimeType,
     fileName: image.fileName,
@@ -137,8 +147,8 @@ async function downloadStoredScanImage(image: StoredScanImage) {
     const { data: blob, error } = await storage.download(image.path);
 
     if (!error && blob) {
-      if (blob.size <= 0 || blob.size > MAX_SCAN_IMAGE_BYTES) {
-        throw new Error("Slika za skeniranje je prevelika ali prazna.");
+      if (blob.size <= 0) {
+        return null;
       }
 
       return new File([blob], image.fileName || `photo-${image.index + 1}`, {
@@ -146,22 +156,42 @@ async function downloadStoredScanImage(image: StoredScanImage) {
       });
     }
 
-    const returnedNoBlob = !error && !blob;
     lastDownloadError = error ?? new Error("Shramba ni vrnila fotografije.");
 
     if (
       attempt >= SCAN_STORAGE_DOWNLOAD_MAX_ATTEMPTS ||
-      (!returnedNoBlob && !isTransientStorageDownloadError(lastDownloadError))
+      (error && !isTransientStorageDownloadError(lastDownloadError) && !isMissingObjectError(error))
     ) {
       break;
     }
 
-    await sleep(SCAN_STORAGE_DOWNLOAD_RETRY_DELAYS_MS[attempt - 1] ?? 1500);
+    await sleep(SCAN_STORAGE_DOWNLOAD_RETRY_DELAYS_MS[attempt - 1] ?? 3000);
   }
 
-  // error_message is shown to the user, so keep it Slovenian rather than forwarding
-  // Supabase's English text. The original error rides along for Sentry.
-  throw new Error(sourceLocaleMessage("pipeline.scanUnreadable"), { cause: lastDownloadError });
+  if (isMissingObjectError(lastDownloadError)) {
+    return null;
+  }
+
+  throw new Error("Fotografije ni bilo mogoče prenesti iz shrambe.", { cause: lastDownloadError });
+}
+
+function isMissingObjectError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const record = error as { status?: unknown; statusCode?: unknown; message?: unknown; name?: unknown };
+  const status = Number(record.status ?? record.statusCode);
+  const message = typeof record.message === "string" ? record.message.toLowerCase() : "";
+
+  return (
+    status === 404 ||
+    status === 400 ||
+    message.includes("not found") ||
+    message.includes("object not found") ||
+    // Supabase's storage client reports a missing object as an empty StorageUnknownError.
+    (record.name === "StorageUnknownError" && !message)
+  );
 }
 
 export async function processStoredScanLecture(
@@ -307,7 +337,13 @@ export async function processStoredScanLecture(
     images,
     SCAN_OCR_CONCURRENCY,
     async (image): Promise<ScanImageProcessingResult> => {
-      const file = await downloadStoredScanImage(image);
+      const downloaded = await downloadStoredScanImage(image);
+
+      if (!downloaded) {
+        return { block: null, missing: true, skippedImages: [] };
+      }
+
+      const file = await normalizeScanImageForOcr(downloaded);
       let extracted: Awaited<ReturnType<typeof extractTextFromImage>>;
 
       try {
@@ -320,6 +356,7 @@ export async function processStoredScanLecture(
         if (error instanceof NoReadableScanTextError) {
           return {
             block: null,
+            missing: false,
             skippedImages: error.diagnostics.images,
           };
         }
@@ -331,6 +368,7 @@ export async function processStoredScanLecture(
       if (!text) {
         return {
           block: null,
+          missing: false,
           skippedImages: [
             {
               attempts: [],
@@ -349,6 +387,7 @@ export async function processStoredScanLecture(
           pageNumber: image.index + 1,
           text,
         },
+        missing: false,
         skippedImages: [],
       };
     },
@@ -357,6 +396,19 @@ export async function processStoredScanLecture(
     result.block ? [result.block] : [],
   );
   const skippedImages = processedImages.flatMap((result) => result.skippedImages);
+  // Photos the upload salvage already knew were missing never made it into the list at all.
+  const salvagedMissingCount =
+    isRecord(metadata.uploadSalvage) && typeof metadata.uploadSalvage.missing === "number"
+      ? metadata.uploadSalvage.missing
+      : 0;
+  const missingImageCount =
+    processedImages.filter((result) => result.missing).length + salvagedMissingCount;
+
+  // None of the photos ever arrived: there is nothing to read, and the learner needs to know the
+  // upload is what failed -- not that their pages were unreadable.
+  if (extractedBlocks.length === 0 && !pastedText && processedImages.every((result) => result.missing)) {
+    throw expectedInputFailure("upload_incomplete");
+  }
 
   if (extractedBlocks.length === 0 && !pastedText) {
     throw new NoReadableScanTextError(
@@ -402,6 +454,8 @@ export async function processStoredScanLecture(
         readableImageCount: extractedBlocks.length,
         skippedImages,
       }),
+      // Shown on the finished note: "2 of 5 photos did not arrive; these notes are from the rest."
+      ...(missingImageCount > 0 ? { missingImageCount } : {}),
     },
   });
 

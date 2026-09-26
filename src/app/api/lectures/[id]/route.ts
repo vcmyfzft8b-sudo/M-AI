@@ -29,6 +29,7 @@ import { extractScanImageStoragePaths } from "@/lib/scan-image-uploads";
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { lectureTitleSchema, routeIdParamSchema } from "@/lib/validation";
 import { tr } from "@/lib/i18n/server";
+import { salvageAbandonedUpload, UPLOAD_SALVAGE_AFTER_MS } from "@/lib/upload-salvage";
 
 const UPDATE_LECTURE_MAX_BYTES = 8 * 1024;
 const STALE_NOTES_GENERATION_MS = 6 * 60 * 1000;
@@ -141,6 +142,17 @@ export async function GET(
   );
 
   if (
+    detail.lecture.status === "uploading" &&
+    Date.now() - processingUpdatedAt > UPLOAD_SALVAGE_AFTER_MS
+  ) {
+    // The device started this upload and never confirmed it. Somebody is looking at the note, so
+    // finish it now from what reached storage rather than leave them on a spinner until the sweep.
+    after(async () => {
+      await salvageAbandonedUpload(detail.lecture).catch((error) => {
+        console.warn("Upload salvage failed.", error);
+      });
+    });
+  } else if (
     detail.lecture.status === "generating_notes" &&
     !detail.artifact &&
     hasRecoverableNotesSource(detail) &&

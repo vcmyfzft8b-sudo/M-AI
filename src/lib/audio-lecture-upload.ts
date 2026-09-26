@@ -203,23 +203,57 @@ export async function createAudioLectureWithProcessingChunks(params: {
   assertNotAborted(params.signal);
   params.onStageChange?.("finalizing", params.t("audio.upload.finalizing"));
 
-  const finalizeResponse = await fetch(`/api/lectures/${createData.lectureId}/finalize`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    signal: params.signal,
-    body: JSON.stringify({
+  /*
+   * The recording is in storage by now, and losing it here is the worst outcome in the app: an
+   * hour of lecture thrown away over one dropped request. A network failure or a 5xx is tried
+   * again; if it still cannot get through, the note is kept and the server starts it from storage
+   * on its own (upload-salvage.ts). Only a real verdict on the file (a 4xx) fails the upload.
+   */
+  for (let attempt = 0; ; attempt += 1) {
+    assertNotAborted(params.signal);
+    let finalizeResponse: Response;
+
+    try {
+      finalizeResponse = await fetch(`/api/lectures/${createData.lectureId}/finalize`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        signal: params.signal,
+        body: JSON.stringify({
+          path: createData.path,
+        }),
+      });
+    } catch (networkError) {
+      if (params.signal?.aborted) {
+        throw networkError;
+      }
+
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+        continue;
+      }
+
+      return { lectureId: createData.lectureId, path: createData.path, finalizePending: true };
+    }
+
+    if (finalizeResponse.status >= 500 && attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+      continue;
+    }
+
+    if (finalizeResponse.status >= 500) {
+      return { lectureId: createData.lectureId, path: createData.path, finalizePending: true };
+    }
+
+    await parseApiResponse(finalizeResponse, params.t);
+
+    return {
+      lectureId: createData.lectureId,
       path: createData.path,
-    }),
-  });
-
-  await parseApiResponse(finalizeResponse, params.t);
-
-  return {
-    lectureId: createData.lectureId,
-    path: createData.path,
-  };
+      finalizePending: false,
+    };
+  }
 }
 
 /**

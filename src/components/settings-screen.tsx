@@ -537,7 +537,7 @@ export function SettingsScreen({
                     {isLoggingOut ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
                     ) : null}
-                    {isLoggingOut ? t("settings.signingOut") : t("settings.signOut")}
+                    <span>{isLoggingOut ? t("settings.signingOut") : t("settings.signOut")}</span>
                   </button>
                 </div>
               </>
@@ -613,7 +613,7 @@ export function SettingsScreen({
                 {isLoggingOut ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : null}
-                {isLoggingOut ? t("settings.signingOut") : confirmCopy[confirm].cta}
+                <span>{isLoggingOut ? t("settings.signingOut") : confirmCopy[confirm].cta}</span>
               </button>
             </div>
           </div>

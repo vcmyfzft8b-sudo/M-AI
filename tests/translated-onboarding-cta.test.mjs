@@ -178,6 +178,19 @@ const WRAPPED_LABELS = [
     'pending ? t("impersonation.leaving") : t("impersonation.stop")',
     1,
   ],
+  // The sign-out confirm threw on a translated /app/settings (MEMOAI-WEB-3A,
+  // 2026-09-26): its spinner appears the instant the learner confirms.
+  [
+    "src/components/settings-screen.tsx",
+    'isLoggingOut ? t("settings.signingOut") : confirmCopy[confirm].cta',
+    1,
+  ],
+  [
+    "src/components/settings-screen.tsx",
+    'isLoggingOut ? t("settings.signingOut") : t("settings.signOut")',
+    1,
+  ],
+  ["src/components/push-prompt.tsx", 't("push.enableAllow")', 1],
 ];
 
 for (const [file, label, count] of WRAPPED_LABELS) {

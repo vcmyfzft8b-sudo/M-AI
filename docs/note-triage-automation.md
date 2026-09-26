@@ -12,16 +12,21 @@ reasonably study from. This automation watches that promise in production.
    `generation_failure_captures` for 30 days), and every note stuck mid-pipeline for over two hours.
    The scan reads production with the service-role key, pulled from Vercel at run time; no database
    secret is stored in GitHub.
-2. **Reproduce and fix** (`.claude/skills/note-triage/SKILL.md`): for each finding not already in the
-   backlog, Claude replays the failure against current `main` with
-   `scripts/replay-failed-note.mjs <lectureId>`, looks at the learner's material, and decides:
+2. **Download and replay** (no AI agent involved): each new finding's captured material is downloaded
+   and replayed against current `main` with `scripts/replay-failed-note.mjs <lectureId>`. Then the
+   production key is deleted from the runner.
+3. **Reproduce and fix** (`.claude/skills/note-triage/SKILL.md`): Claude, holding only the model
+   keys (it reads learners' material, which is untrusted input, so it never has database access),
+   reads the replays, looks at the material, and decides:
    - `correct`: there was truly nothing learnable (a blank form, silence, a login wall);
    - `fixed-on-main`: current code already turns it into a note;
    - `open-pr`: our bug, fixed on its own branch with a PR (one per root cause), proven by replaying
      the same lecture on the branch;
    - `needs-human`: not reproducible, or the fix needs a migration.
-3. **State**: `NOTE_TRIAGE_STATE` (cursor) and `NOTE_TRIAGE_BACKLOG` (lecture ids, verdicts, PR links)
-   are repository Actions variables. The cursor only advances after a complete scan.
+4. **State**: `NOTE_TRIAGE_STATE` (cursor) and `NOTE_TRIAGE_BACKLOG` (lecture ids, verdicts, PR links)
+   are repository Actions variables. The cursor only advances after a complete scan whose findings were
+   triaged (a disabled or failed fixer holds it; the lookback is capped at a week). The backlog is
+   trimmed to stay under the 48 KB variable limit.
 
 It never merges, never pushes to `main`, never writes to production and never re-runs a learner's
 note. Learner material never enters git or a PR: replays write to `/tmp`, PRs refer to lecture ids.

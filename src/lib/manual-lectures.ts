@@ -1261,7 +1261,9 @@ async function readResponseBytesWithLimit(response: Response, maxBytes: number) 
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let totalBytes = 0;
+  let timedOut = false;
   const deadline = setTimeout(() => {
+    timedOut = true;
     void reader.cancel().catch(() => null);
   }, LINK_DOCUMENT_BODY_TIMEOUT_MS);
 
@@ -1285,6 +1287,11 @@ async function readResponseBytesWithLimit(response: Response, maxBytes: number) 
   } finally {
     clearTimeout(deadline);
     reader.releaseLock();
+  }
+
+  // A cancelled read ends like a finished one; a half-downloaded document must not be read as whole.
+  if (timedOut) {
+    throw expectedInputFailure("link_timeout");
   }
 
   const bytes = new Uint8Array(totalBytes);

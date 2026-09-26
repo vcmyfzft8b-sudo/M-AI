@@ -153,13 +153,21 @@ async function attemptUploadWithDeadline(params: Parameters<typeof attemptUpload
   let timedOut = false;
   const onOuterAbort = () => controller.abort();
   params.signal?.addEventListener("abort", onOuterAbort, { once: true });
+  let rejectOnTimeout: (error: Error) => void = () => undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    rejectOnTimeout = reject;
+  });
   const timeoutId = setTimeout(() => {
     timedOut = true;
     controller.abort();
+    // The Supabase client's own upload takes no abort signal, so the deadline has to win the
+    // race rather than cancel it. The abandoned request finishes or dies on its own; the retry
+    // writes the same path with upsert.
+    rejectOnTimeout(new Error("Upload timeout"));
   }, resolveUploadAttemptTimeoutMs(params.file.size));
 
   try {
-    await attemptUpload({ ...params, signal: controller.signal });
+    await Promise.race([attemptUpload({ ...params, signal: controller.signal }), deadline]);
   } catch (error) {
     // Our own deadline, not the learner cancelling: a retryable network failure.
     if (timedOut && !params.signal?.aborted) {

@@ -4,6 +4,10 @@
  * by hand.
  *
  *   node --experimental-strip-types scripts/replay-failed-note.mjs <lectureId> [--out=<dir>] [--no-note]
+ *   node --experimental-strip-types scripts/replay-failed-note.mjs <lectureId> --from=<dir> [--out=<dir>]
+ *
+ * --from replays a folder an earlier run downloaded (record.json + the files), with no database
+ * access; only the model keys are needed.
  *
  * It reads what production kept of the upload -- generation_failure_captures, which survives the
  * learner deleting the note, and the copies of their files under failure-captures/ -- then runs
@@ -132,8 +136,18 @@ async function readPdf(bytes) {
   return { text: "", attempts };
 }
 
-const [capture] = await rest(`/rest/v1/generation_failure_captures?lecture_id=eq.${lectureId}&select=*`);
-const [lecture] = await rest(`/rest/v1/lectures?id=eq.${lectureId}&select=id,user_id,source_type,status,storage_path,processing_metadata`);
+// --from=<dir>: replay a folder an earlier (online) run downloaded, with no database access at
+// all. The note-triage workflow downloads everything first and hands the agent only this.
+const fromDir = argValue("from");
+let capture;
+let lecture;
+
+if (fromDir) {
+  ({ capture, lecture } = JSON.parse(fs.readFileSync(path.join(fromDir, "record.json"), "utf8")));
+} else {
+  [capture] = await rest(`/rest/v1/generation_failure_captures?lecture_id=eq.${lectureId}&select=*`);
+  [lecture] = await rest(`/rest/v1/lectures?id=eq.${lectureId}&select=id,user_id,source_type,status,storage_path,processing_metadata`);
+}
 
 if (!capture && !lecture) {
   console.log(JSON.stringify({ lectureId, verdict: "gone", detail: "no lecture and no capture (older than 30 days, or never captured)" }));
@@ -141,6 +155,9 @@ if (!capture && !lecture) {
 }
 
 fs.mkdirSync(outDir, { recursive: true });
+if (!fromDir) {
+  fs.writeFileSync(path.join(outDir, "record.json"), JSON.stringify({ capture: capture ?? null, lecture: lecture ?? null }));
+}
 const metadata = lecture?.processing_metadata ?? capture?.processing_metadata ?? {};
 const sourceType = lecture?.source_type ?? capture?.source_type ?? "text";
 const report = { lectureId, sourceType, code: metadata?.failure?.code ?? null, message: capture?.error_message ?? null, reads: [] };
@@ -153,15 +170,23 @@ if (pendingDocument) files.push(pendingDocument);
 const pendingPhotos = Array.isArray(metadata?.pendingScanImages) ? metadata.pendingScanImages.map((image) => image.path) : [];
 for (const photo of pendingPhotos) if (!files.some((file) => file.endsWith(path.basename(photo)))) files.push(photo);
 
+async function loadFile(objectPath) {
+  if (fromDir) {
+    const local = path.join(fromDir, path.basename(objectPath));
+    return fs.existsSync(local) ? fs.readFileSync(local) : null;
+  }
+  return download(objectPath);
+}
+
 const readTexts = [];
 for (const objectPath of files) {
-  const bytes = await download(objectPath);
+  const bytes = await loadFile(objectPath);
   const name = path.basename(objectPath);
   if (!bytes) {
     report.reads.push({ file: name, missing: true });
     continue;
   }
-  fs.writeFileSync(path.join(outDir, name), bytes);
+  if (path.resolve(outDir) !== path.resolve(fromDir ?? "")) fs.writeFileSync(path.join(outDir, name), bytes);
   if (/\.(jpe?g|png|webp|heic|heif)$/i.test(name)) {
     const read = await readPhoto(bytes);
     report.reads.push({ file: name, ...read, text: undefined });
@@ -200,4 +225,5 @@ if (!sourceText.trim()) {
 
 report.costUsd = Number(ledger.costUsd.toFixed(4));
 report.outDir = outDir;
+fs.writeFileSync(path.join(outDir, fromDir ? "report.replayed.json" : "report.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));

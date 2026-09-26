@@ -89,17 +89,21 @@ function decodeTurboStream(flat: unknown[]) {
   return hydrate(0, 0);
 }
 
-function findKey(value: unknown, key: string, depth = 0): unknown {
-  if (!value || typeof value !== "object" || depth > 40) {
+function findKey(value: unknown, key: string, depth = 0, seen = new Set<object>()): unknown {
+  // The decoded payload is a graph, not a tree: shared values are one object, and a payload can
+  // reference itself. Visiting each object once keeps the search linear.
+  if (!value || typeof value !== "object" || depth > 40 || seen.has(value)) {
     return undefined;
   }
+
+  seen.add(value);
 
   if (!Array.isArray(value) && key in value) {
     return (value as Record<string, unknown>)[key];
   }
 
   for (const child of Object.values(value as Record<string, unknown>)) {
-    const found = findKey(child, key, depth + 1);
+    const found = findKey(child, key, depth + 1, seen);
 
     if (found !== undefined) {
       return found;

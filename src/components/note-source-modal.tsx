@@ -1497,11 +1497,17 @@ export function NoteSourceModal({
        * start request fails, it is tried again; if it still fails, the note page is opened anyway
        * and the server finishes the upload from storage on its own (upload-salvage.ts).
        */
-      let queued = false;
+      /*
+       * Only a lost answer is retried: a network failure, a timeout or a 5xx. A 4xx (a rejected
+       * photo, no plan) is a verdict, and it falls through to the catch below, which deletes the
+       * draft like any other failed upload. The start is idempotent on the server (it only claims
+       * a note that is still uploading), so a retry can never buy a second run.
+       */
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        let response: Response;
 
-      for (let attempt = 0; attempt < 2 && !queued; attempt += 1) {
         try {
-          const response = await fetchWithTimeout("/api/lectures/scan", {
+          response = await fetchWithTimeout("/api/lectures/scan", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1510,19 +1516,20 @@ export function NoteSourceModal({
             timeoutMessage: t("capture.error.photoQueueTooLong"),
             body: finalizeBody,
           });
-
-          await parseApiResponse<{ lectureId: string }>(response, t);
-          queued = true;
-        } catch (queueError) {
-          if (redirectToBillingIfNeeded({ error: queueError, router })) {
-            onClose();
-            return;
-          }
-
+        } catch (networkError) {
           if (controller.signal.aborted || cancelRequestedRef.current) {
-            throw queueError;
+            throw networkError;
           }
+
+          continue;
         }
+
+        if (response.status >= 500) {
+          continue;
+        }
+
+        await parseApiResponse<{ lectureId: string }>(response, t);
+        break;
       }
 
       // Kept either way: queued now, or finished from storage by the server shortly.

@@ -1,6 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["dub1"],
+  "functions": {
+    "src/app/api/inngest/route.ts": { "regions": ["iad1"] },
+    "src/app/api/internal/lectures/*/route.ts": { "regions": ["iad1"] },
+    "src/app/api/lectures/[id]/retry/route.ts": { "regions": ["iad1"] }
+  },
   "crons": [
     {
       "path": "/api/cron/account-erasure",

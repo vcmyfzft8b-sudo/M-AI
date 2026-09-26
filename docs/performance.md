@@ -12,16 +12,21 @@ Slovenia and the Balkans. Until 2026-09 every function ran in the project defaul
 five or six of them in sequence (the proxy's `getUser`, profile + subscriptions, Apple
 entitlement, trial state, the page's own queries).
 
-**The lecture pipeline stays in `iad1`**, pinned per route with
-`export const preferredRegion = "iad1"`: `/api/inngest`, every `/api/internal/lectures/*` route,
-and `/api/lectures/[id]/retry`. Those routes fetch third-party content (YouTube's innertube
-player, arbitrary web pages) where an EU address can get a different answer, such as a consent
-wall, and they talk to US-hosted model providers for minutes at a time. Moving them is a separate
-decision, and one that a preview cannot verify (see
-[lecture-pipeline-inngest.md](lecture-pipeline-inngest.md)).
+**The lecture pipeline stays in `iad1`**, pinned in the `functions` block of `vercel.json`:
+`/api/inngest`, every `/api/internal/lectures/*` route, and `/api/lectures/[id]/retry`. Those
+routes fetch third-party content (YouTube's innertube player, arbitrary web pages) where an EU
+address can get a different answer, such as a consent wall, and they talk to US-hosted model
+providers for minutes at a time. Moving them is a separate decision, and one that a preview
+cannot verify (see [lecture-pipeline-inngest.md](lecture-pipeline-inngest.md)).
 
-`preferredRegion` must be a literal in each file; Next reads segment config statically, so it
-cannot be imported from a shared constant.
+**Do not pin a route with `export const preferredRegion`.** Next records it in
+`functions-config-manifest.json`, so a local build looks right, but Vercel's Next builder
+(`@vercel/next`) strips `regions` from that manifest and the function runs in the project
+region anyway. That is what happened on this branch's first preview. The `functions` entry in
+`vercel.json` is the one the builder reads. To confirm where a request actually ran, the
+dashboard's request-log API lists a `region` for every middleware and function invocation:
+`https://vercel.com/api/logs/request-logs?projectId=…&ownerId=<team>&deploymentId=…&startDate=<ms>&endDate=<ms>`.
+The `x-vercel-id` header is not enough, because it names where the proxy ran.
 
 ## Stripe stays off the render path
 

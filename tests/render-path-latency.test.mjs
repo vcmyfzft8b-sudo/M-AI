@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
@@ -37,15 +38,26 @@ test("pages run beside the database; the lecture pipeline stays where it was", (
   const vercel = JSON.parse(read("../vercel.json"));
   assert.deepEqual(vercel.regions, ["dub1"]);
 
-  // Every pipeline route, listed rather than named, so a new one cannot forget the pin.
+  // Vercel's Next builder drops a route's `preferredRegion`; only `functions` in vercel.json
+  // places a single function elsewhere. Match each pipeline route the way the builder does:
+  // the exact source path first, then the pattern as a glob.
+  const pinned = Object.entries(vercel.functions ?? {})
+    .filter(([, fn]) => JSON.stringify(fn.regions) === JSON.stringify(["iad1"]))
+    .map(([pattern]) => pattern);
+  const matches = (file) => pinned.some((pattern) => pattern === file || path.matchesGlob(file, pattern));
+
   const internal = readdirSync(new URL("../src/app/api/internal/lectures/", import.meta.url))
-    .map((stage) => `../src/app/api/internal/lectures/${stage}/route.ts`);
+    .map((stage) => `src/app/api/internal/lectures/${stage}/route.ts`);
   assert.ok(internal.length >= 9);
-  for (const route of [
-    ...internal,
-    "../src/app/api/inngest/route.ts",
-    "../src/app/api/lectures/[id]/retry/route.ts",
-  ]) {
-    assert.match(read(route), /export const preferredRegion = "iad1";/, route);
+  for (const route of [...internal, "src/app/api/inngest/route.ts", "src/app/api/lectures/[id]/retry/route.ts"]) {
+    assert.ok(existsSync(new URL(`../${route}`, import.meta.url)), route);
+    assert.ok(matches(route), `${route} is not pinned to iad1`);
   }
+  // Nothing user-facing is.
+  for (const route of ["src/app/api/billing/checkout/route.ts", "src/app/api/lectures/link/route.ts"]) {
+    assert.ok(!matches(route), `${route} should run beside the database`);
+  }
+
+  // A segment-config pin would look like it works (Next records it) and would not.
+  for (const route of internal) assert.doesNotMatch(read(`../${route}`), /preferredRegion/);
 });

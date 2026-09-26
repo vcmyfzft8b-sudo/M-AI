@@ -17,8 +17,6 @@ const requestSchema = z.object({
 });
 
 export const maxDuration = 300;
-// Stays in Washington while pages run in Dublin: see docs/performance.md.
-export const preferredRegion = "iad1";
 const INTERNAL_JOB_MAX_BYTES = 8 * 1024;
 
 function getSecretFromRequest(request: Request) {

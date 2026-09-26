@@ -22,8 +22,6 @@ const requestSchema = z.object({
 });
 
 export const maxDuration = 300;
-// Stays in Washington while pages run in Dublin: see docs/performance.md.
-export const preferredRegion = "iad1";
 const INTERNAL_JOB_MAX_BYTES = 8 * 1024;
 // Ends up verbatim in the lecture's error_message, so keep it about what the user can do. Which
 // stage ran out of time is in the Sentry event markLecturePipelineFailed sends.

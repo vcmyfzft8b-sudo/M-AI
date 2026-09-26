@@ -26,7 +26,12 @@ const citedItemId = z.number().int().nonnegative();
 
 export const generatedFlashcardSchema = z.object({
   itemId: citedItemId,
-  front: z.string().min(6).max(160),
+  /**
+   * The rules below make a front stand alone and carry the context that separates confusable
+   * answers, and in an inflected language that runs past 160 characters — the old cap rejected a
+   * whole production batch, which fails the deck. The back's 260 already fits the same card face.
+   */
+  front: z.string().min(6).max(260),
   /**
    * One character is a whole answer in mathematics — e, 0, 1, x. A two-character floor is a prose
    * assumption, and it rejected entire flashcard batches from a production logarithms lecture.

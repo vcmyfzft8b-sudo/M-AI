@@ -220,7 +220,10 @@ function matchesExpectedAudioSignature(bytes: Uint8Array, fileExtension: string)
  * The refusals reach a person through an API response, so they are resolved in
  * the language of the request the validation is running inside.
  */
-export async function validateDocumentFileSignature(file: File) {
+export async function validateDocumentFileSignature(
+  file: File,
+  options: { maxBytes?: number } = {},
+) {
   if (file.size <= 0) {
     return {
       ok: false,
@@ -228,7 +231,8 @@ export async function validateDocumentFileSignature(file: File) {
     };
   }
 
-  if (file.size > MAX_DOCUMENT_BYTES) {
+  // Uploads are capped by the request body; a document we downloaded ourselves from a link is not.
+  if (file.size > (options.maxBytes ?? MAX_DOCUMENT_BYTES)) {
     return {
       ok: false,
       error: await tr("file.documentTooLarge"),

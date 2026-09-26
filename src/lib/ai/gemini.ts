@@ -40,10 +40,27 @@ const GEMINI_RETRY_DELAYS_MS = [5_000, 15_000, 45_000];
 let geminiClient: GoogleGenAI | undefined;
 
 export class GeminiEmptyTextOutputError extends Error {
-  constructor() {
-    super("Model returned empty text output.");
+  /**
+   * Why the candidate came back empty. "RECITATION" is the one that matters: Gemini withholds a
+   * verbatim copy of published text (a textbook page, a magazine scan), so the page was perfectly
+   * readable and a request to restate it instead of copying it succeeds.
+   */
+  readonly finishReason: string | null;
+
+  constructor(finishReason?: string | null) {
+    super(
+      finishReason === "RECITATION"
+        ? "Model withheld a verbatim copy of the source (RECITATION)."
+        : "Model returned empty text output.",
+    );
     this.name = "GeminiEmptyTextOutputError";
+    this.finishReason = finishReason ?? null;
   }
+}
+
+/** True when Gemini refused to copy published text verbatim, i.e. the source was readable. */
+export function isGeminiRecitationBlock(error: unknown) {
+  return error instanceof GeminiEmptyTextOutputError && error.finishReason === "RECITATION";
 }
 
 function isGeminiSchemaTooComplexError(error: unknown) {
@@ -605,7 +622,9 @@ export async function generateTextWithGeminiFile(params: {
           const outputText = stripCodeFences(response.text ?? "");
 
           if (!outputText) {
-            throw new GeminiEmptyTextOutputError();
+            throw new GeminiEmptyTextOutputError(
+              response.candidates?.[0]?.finishReason ?? null,
+            );
           }
 
           await logGenerationAttempt({
@@ -649,6 +668,12 @@ export async function generateTextWithGeminiFile(params: {
         }
 
         lastError = error;
+
+        // The same verbatim request is withheld every time; asking again only pays for it again.
+        // The caller decides whether to ask for a restatement instead.
+        if (isGeminiRecitationBlock(error)) {
+          break;
+        }
 
         if (attempt < maxAttempts - 1 && isRetryableAiError(error)) {
           await sleep(getRetryableAiDelayMs(attempt));

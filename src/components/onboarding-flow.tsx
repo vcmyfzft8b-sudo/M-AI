@@ -6,11 +6,18 @@
  * wants the dimensions up front and would either pin them or need `fill` and a
  * positioned wrapper around each — both of which change the layout the design
  * specifies. They are small PNGs already in `public/`, so the plain tag stays.
+ *
+ * The mascot still takes its URLs and intrinsic size from `getImageProps`. The
+ * size reserves its box before the file arrives (it used to grow from nothing
+ * and push the welcome step down), and the URLs are the optimised ones the root
+ * layout already preloads: the raw 140 KB PNG was the welcome step's largest
+ * paint, fetched late and apart from a preload it never used.
  */
 /* eslint-disable @next/next/no-img-element */
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import { getImageProps } from "next/image";
 import { useRouter } from "next/navigation";
 
 import { mapAppHrefForClient } from "@/lib/creator-demo/paths";
@@ -59,6 +66,9 @@ import {
  * the feature list — had drifted out of order, so every label on that step
  * named the option above it.
  */
+
+// The same call as the root layout's preload, so the request is the preloaded one.
+const MASCOT = getImageProps({ src: "/memo-mascot.png", alt: "", width: 320, height: 288 }).props;
 
 /** The accent the design ships with: the head of the app's own coral. */
 const ACCENT = "#ff6d68";
@@ -1534,7 +1544,7 @@ export function OnboardingFlow({
       <div style={{ minHeight: "0", flexShrink: "0", transition: "opacity 200ms ease, transform 260ms cubic-bezier(0.2,0.85,0.2,1)", opacity: v.fade, transform: `translate3d(${v.shift}px, 0, 0)` }}>
       {v.isWelcome ? (<>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "1.1rem", paddingTop: "1.4rem" }}>
-      <img src="/memo-mascot.png" alt="" fetchPriority="high" decoding="sync" style={{ width: "clamp(5.5rem, min(34vw, 19vh), 12rem)", maxHeight: "24vh", height: "auto", objectFit: "contain", display: "block", animation: "memo-bob 5s ease-in-out infinite", filter: "drop-shadow(0 22px 40px rgba(0,0,0,0.35))" }} />
+      <img src={MASCOT.src} srcSet={MASCOT.srcSet} width={MASCOT.width} height={MASCOT.height} alt="" fetchPriority="high" decoding="sync" style={{ width: "clamp(5.5rem, min(34vw, 19vh), 12rem)", maxHeight: "24vh", height: "auto", objectFit: "contain", display: "block", animation: "memo-bob 5s ease-in-out infinite", filter: "drop-shadow(0 22px 40px rgba(0,0,0,0.35))" }} />
       <h1 style={{ margin: "0", fontSize: "clamp(2rem, 7vw, 3rem)", fontWeight: "850", lineHeight: "1.05", letterSpacing: "-0.03em", textWrap: "pretty" }}>{v.c.welcomeTitle}</h1>
       <p style={{ margin: "0", maxWidth: "26rem", fontSize: "clamp(1rem, 3.6vw, 1.12rem)", fontWeight: "600", lineHeight: "1.45", color: "var(--muted)", textWrap: "pretty" }}>{v.c.welcomeSub}</p>
       </div>
@@ -1891,7 +1901,7 @@ export function OnboardingFlow({
       <circle cx="50" cy="50" r="45" fill="none" stroke="var(--line-soft)" strokeWidth="3" />
       <circle cx="50" cy="50" r="45" fill="none" stroke={v.accent} strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray="100" strokeDashoffset={v.ringOffset} style={{ transition: "stroke-dashoffset 200ms linear" }} />
       </svg>
-      <img src="/memo-mascot.png" alt="" fetchPriority="high" decoding="sync" style={{ position: "relative", width: "58%", maxWidth: "58%", maxHeight: "58%", height: "auto", display: "block", animation: "memo-bob 4.2s ease-in-out infinite", filter: "drop-shadow(0 14px 26px rgba(0,0,0,0.35))" }} />
+      <img src={MASCOT.src} srcSet={MASCOT.srcSet} width={MASCOT.width} height={MASCOT.height} alt="" fetchPriority="high" decoding="sync" style={{ position: "relative", width: "58%", maxWidth: "58%", maxHeight: "58%", height: "auto", display: "block", animation: "memo-bob 4.2s ease-in-out infinite", filter: "drop-shadow(0 14px 26px rgba(0,0,0,0.35))" }} />
       </div>
       <h1 style={{ margin: "0", fontSize: "clamp(1.25rem, min(5.4vw, 4vh), 1.9rem)", fontWeight: "850", lineHeight: "1.1", letterSpacing: "-0.03em", textWrap: "pretty" }}>{v.loadingTitle}</h1>
       <p style={{ margin: "0", fontSize: "clamp(0.86rem, 2.1vh, 0.98rem)", fontWeight: "600", color: "var(--muted)" }}>{v.loadingStage}</p>

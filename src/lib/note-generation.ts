@@ -41,6 +41,15 @@ import {
 import { judgeCollapseDuplicateItems } from "@/lib/study-items";
 import type { NoteGenerationResult, TranscriptSegmentInput } from "@/lib/types";
 import { expectedInputFailure } from "@/lib/lecture-failure-text";
+import {
+  buildTopicStudyTextInput,
+  buildTopicStudyTextInstructions,
+  countTopicStudyTextWords,
+  MIN_TOPIC_STUDY_TEXT_WORDS,
+  shouldWriteTopicNotes,
+  topicStudyTextSchema,
+  type TopicMaterialKind,
+} from "@/lib/notes/topic-notes";
 
 const NOTE_CHUNK_SUMMARY_CONCURRENCY = 2;
 // 8 workers, not 3: the extraction phase has to fit inside the Inngest step budget alongside the
@@ -259,18 +268,70 @@ async function generateNotesContentDriven(
   },
 ): Promise<NoteGenerationResult | null> {
   const sourceWordCount = segments.reduce((total, segment) => total + countWords(segment.text), 0);
-  const items = await extractKnowledgeItems({
+  const lectureId = params.usageContext?.lectureId ?? null;
+  let items = await extractKnowledgeItems({
     segments,
     sourceType: params.sourceType,
     outputLanguage: params.outputLanguage,
     usageContext: params.usageContext,
   });
+  let noteSegments = segments;
+  let topicNotes: { materialKind: TopicMaterialKind; topicTitle: string } | null = null;
 
-  // A source the extraction found nothing testable in is the learner's material, not a defect:
-  // both passes read it at different granularities and neither came back with a claim. Retrying
-  // cannot change that — the per-window extractions are checkpointed, so every Inngest retry
-  // replays the same empty result and fails identically — which is why this is thrown as an
-  // expected input failure, with a code that takes the futile retry button off the failed note.
+  // Material that names a topic but explains none of it -- an exercise sheet, a spoken question, a
+  // list of terms -- is taught as that topic instead of failing (notes/topic-notes.ts). The study
+  // text is checkpointed, so every Inngest step replays the same text, and the extraction over it
+  // is checkpointed per window like any other source.
+  if (shouldWriteTopicNotes({ itemCount: items.length, sourceWordCount })) {
+    const sourceText = segments.map((segment) => segment.text).join("\n\n");
+    const topicInstructions = buildTopicStudyTextInstructions({
+      outputLanguage: params.outputLanguage,
+    });
+    const topicInput = buildTopicStudyTextInput({
+      sourceText,
+      sourceType: params.sourceType,
+      titleHint: params.sourceTitleHint,
+    });
+    const topicMaxOutputTokens = 6000;
+    const topic = await withGenerationCheckpoint({
+      lectureId,
+      stage: "note_topic",
+      cacheKey: generationCacheKey([
+        stageModelCacheKeyPart("note_topic"),
+        topicInstructions,
+        topicInput,
+        topicMaxOutputTokens,
+      ]),
+      schema: topicStudyTextSchema,
+      generate: () =>
+        generateStructuredObject({
+          schema: topicStudyTextSchema,
+          maxOutputTokens: topicMaxOutputTokens,
+          stage: "note_topic",
+          instructions: topicInstructions,
+          input: topicInput,
+          usageContext: params.usageContext,
+        }),
+    });
+    const studyText = topic.studyText.trim();
+
+    if (topic.hasStudyTopic && countTopicStudyTextWords(studyText) >= MIN_TOPIC_STUDY_TEXT_WORDS) {
+      noteSegments = [
+        { idx: 0, startMs: 0, endMs: 0, speakerLabel: null, text: studyText },
+      ];
+      items = await extractKnowledgeItems({
+        segments: noteSegments,
+        sourceType: "document",
+        outputLanguage: params.outputLanguage,
+        usageContext: params.usageContext,
+      });
+      topicNotes = { materialKind: topic.materialKind, topicTitle: topic.topicTitle.trim() };
+    }
+  }
+
+  // Nothing to teach even as a topic: a blank form, a photo with nothing on it, a greeting. That
+  // is the learner's material, not a defect, and the retry button stays off because a retry
+  // replays the same checkpointed verdict.
   if (items.length === 0) {
     throw expectedInputFailure("source_no_study_content");
   }
@@ -283,9 +344,9 @@ async function generateNotesContentDriven(
   // Compact JSON on purpose: this is the largest prompt in the pipeline (every extracted item),
   // and pretty-printing it was pure token overhead on a call that already fights its timeout.
   const outlineInput = JSON.stringify({
-    sourceType: params.sourceType,
+    sourceType: topicNotes ? "document" : params.sourceType,
     sourceLabel: params.sourceLabel,
-    sourceTitleHint: params.sourceTitleHint ?? null,
+    sourceTitleHint: topicNotes?.topicTitle || params.sourceTitleHint || null,
     items: items.map(({ id, claim, kind, importance, sectionTitle }) => ({
       id,
       claim,
@@ -295,7 +356,6 @@ async function generateNotesContentDriven(
     })),
   });
   const outlineMaxOutputTokens = Math.max(2600, items.length * 60);
-  const lectureId = params.usageContext?.lectureId ?? null;
 
   // The gate model rides OpenRouter like everything else (2026-08-29); the fallback chain in
   // json.ts still lands it on direct Google if the gateway is the problem.
@@ -339,7 +399,7 @@ async function generateNotesContentDriven(
     (total, topic) => total + topic.itemIds.length,
     0,
   );
-  const sourceText = segments.map((segment) => segment.text).join("\n\n");
+  const sourceText = noteSegments.map((segment) => segment.text).join("\n\n");
 
   // The note is written straight from the raw source (buildSourceNoteInstructions carries the
   // whole contract — the outline above still feeds the study decks and the note's title, but the
@@ -409,7 +469,10 @@ async function generateNotesContentDriven(
     structuredNotesMd: normalizedStructuredNotesMd,
     modelMetadata: {
       pipeline: params.pipelineName,
-      notesMode: "content",
+      notesMode: topicNotes ? "topic" : "content",
+      // Read by the note screen to tell the learner what happened: their material held exercises
+      // or a question rather than an explanation, so the note teaches the topic it points at.
+      ...(topicNotes ? { topicNotes } : {}),
       // The extracted items travel with the artifact so study generation reuses this exact list
       // instead of re-extracting: one extraction per lecture, and the deck can never cover a
       // different set of facts than the notes were written from. keptInNote carries the outline's

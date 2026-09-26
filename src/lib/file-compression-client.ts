@@ -332,6 +332,46 @@ export async function compressScanImageForUpload(file: File): Promise<Compressio
   });
 }
 
+/**
+ * Photos go up at this size or smaller whenever the browser can re-encode them.
+ *
+ * They used to be uploaded exactly as the camera took them unless they passed 10 MB: 3-4 MB per
+ * page, 39 MB for a ten-page set, one PUT at a time over a phone connection. That is where the
+ * photo notes that never finished uploading came from (12 of the 47 failed notes in the week to
+ * 26 Sep 2026; one learner tried seven times). A page reads just as well at 2400 px, and the
+ * re-encode also bakes the camera's rotation into the pixels.
+ */
+export const SCAN_UPLOAD_TARGET_BYTES = 1_500_000;
+
+const SCAN_UPLOAD_PROFILES: RasterCompressionProfile[] = [
+  { maxDimension: 2400, quality: 0.82 },
+  { maxDimension: 2000, quality: 0.78 },
+  { maxDimension: 1700, quality: 0.72 },
+];
+
+/**
+ * Shrinks a photo for upload, and never fails: anything the browser cannot re-encode (HEIC on a
+ * browser without a decoder, a corrupt file) goes up as it is, and the server normalises it.
+ */
+export async function shrinkScanImageForUpload(file: File): Promise<File> {
+  if (file.size <= SCAN_UPLOAD_TARGET_BYTES) {
+    return file;
+  }
+
+  try {
+    const result = await compressRasterImageFile({
+      file,
+      maxBytes: SCAN_UPLOAD_TARGET_BYTES,
+      profiles: SCAN_UPLOAD_PROFILES,
+      kind: "photo",
+    });
+
+    return result.file.size < file.size ? result.file : file;
+  } catch {
+    return file;
+  }
+}
+
 async function generateZipBlob(zip: JSZip) {
   return zip.generateAsync({
     type: "blob",

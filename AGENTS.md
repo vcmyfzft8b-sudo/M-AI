@@ -133,6 +133,21 @@ each wrote to production's migration history from an unmerged branch and cost an
 - The automation opens pull requests and never merges them. It must not push to `main`, stack one fix branch on another, or write a database migration.
 - The operating procedure is [.claude/skills/error-triage/SKILL.md](/.claude/skills/error-triage/SKILL.md); setup and troubleshooting are in [docs/error-triage-automation.md](/docs/error-triage-automation.md).
 
+## Unfinished-Note Triage
+
+- A note must come out whenever the learner gave us anything learnable. Material that names a topic
+  without explaining it (exercise sheets, spoken questions, lists, headings) is taught as that topic
+  (`src/lib/notes/topic-notes.ts`); only material with nothing learnable fails, with a message that
+  says what to do. Do not reintroduce a length floor or a "no study content" refusal for thin material.
+- Photos and scanned PDFs of printed books are withheld by Gemini as RECITATION when read verbatim;
+  the readers fall back to a restatement (`src/lib/ocr-prompts.ts`). Keep that fallback.
+- An upload the device never confirmed is finished from what reached storage
+  (`src/lib/upload-salvage.ts`) before anything is failed or deleted.
+- The `Note triage` workflow scans production every six hours for failed and stuck notes, replays
+  them (`scripts/replay-failed-note.mjs`) and opens one PR per root cause. It never merges or writes
+  to production. Procedure: [.claude/skills/note-triage/SKILL.md](/.claude/skills/note-triage/SKILL.md);
+  setup: [docs/note-triage-automation.md](/docs/note-triage-automation.md).
+
 ## Lecture Pipeline And Inngest Steps
 
 - Production runs the lecture pipeline as Inngest functions, one stage per step. Previews and local runs take the internal HTTP routes instead and never cross a step boundary, so **a Vercel preview does not verify an Inngest change** — the general "check it on the preview before merging" rule does not cover this area. Verify on production right after the merge, and do not claim preview coverage the deployment did not provide.

@@ -34,6 +34,8 @@ export const LECTURE_FAILURE_MESSAGE_KEYS: Record<string, MessageKey> = {
   audio_no_clear_speech: "failure.audio_no_clear_speech",
   audio_not_decodable: "failure.audio_not_decodable",
   invalid_link_redirect: "failure.invalid_link_redirect",
+  link_blocked_by_site: "failure.link_blocked_by_site",
+  link_file_too_large: "failure.link_file_too_large",
   link_host_not_found: "failure.link_host_not_found",
   link_not_enough_text: "failure.link_not_enough_text",
   link_not_loadable: "failure.link_not_loadable",
@@ -89,6 +91,8 @@ export function lectureFailureMessage(
 const UNRETRYABLE_LECTURE_FAILURE_CODES = new Set([
   "audio_no_clear_speech",
   "audio_not_decodable",
+  "link_blocked_by_site",
+  "link_file_too_large",
   "link_not_enough_text",
   "link_requires_login",
   "private_network_link",

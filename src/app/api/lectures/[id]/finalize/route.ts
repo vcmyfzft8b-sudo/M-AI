@@ -106,7 +106,9 @@ export async function POST(
     return NextResponse.json({ error: validatedAudio.error }, { status: 400 });
   }
 
-  const { error } = await supabase
+  // Claimed only while the note is still uploading: a retried finalize whose first answer was
+  // lost, or the server's own upload salvage, must not start a second paid transcription.
+  const { data: claimed, error } = await supabase
     .from("lectures")
     .update(
       {
@@ -116,10 +118,16 @@ export async function POST(
       } as never,
     )
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .eq("status", "uploading")
+    .select("id");
 
   if (error) {
     return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
+  }
+
+  if (!claimed || claimed.length === 0) {
+    return NextResponse.json({ ok: true });
   }
 
   after(async () => {

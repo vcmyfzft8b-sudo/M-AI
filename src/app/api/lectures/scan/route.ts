@@ -160,7 +160,10 @@ export async function POST(request: Request) {
         images.length === 1
           ? sourceFileNames[0].replace(/\.[^.]+$/i, "")
           : `${images.length} fotografij`;
-      const { error: updateError } = await supabase
+      // Claimed only while the note is still uploading. The device retries this request when an
+      // answer is lost, and the server finishes abandoned uploads from storage on its own
+      // (upload-salvage.ts); whichever start lands second must not buy a second OCR run.
+      const { data: claimed, error: updateError } = await supabase
         .from("lectures")
         .update(
           {
@@ -180,10 +183,17 @@ export async function POST(request: Request) {
           } as never,
         )
         .eq("id", lectureId)
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .eq("status", "uploading")
+        .select("id");
 
       if (updateError) {
         throw new Error(updateError.message);
+      }
+
+      if (!claimed || claimed.length === 0) {
+        // Already started: answer as if this call had started it.
+        return NextResponse.json({ lectureId });
       }
 
       after(async () => {

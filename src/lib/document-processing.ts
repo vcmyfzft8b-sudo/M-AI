@@ -205,35 +205,68 @@ export async function processStoredDocumentLecture(params: {
     throw new Error(validatedDocument.error);
   }
 
-  const sourceType = isPdfDocument(file)
+  await prepareLectureFromDocumentFile({
+    lectureId: lectureRow.id,
+    userId: lectureRow.user_id,
+    languageHint: lectureRow.language_hint,
+    file,
+    fileName: pendingDocument.fileName,
+    onImageStage: async () => {
+      const { error: imageStatusError } = await supabase
+        .from("lectures")
+        .update(
+          {
+            status: "queued",
+            error_message: null,
+            processing_metadata: {
+              ...metadata,
+              pendingDocument,
+              processing: {
+                stage: "checking_document_images",
+                updatedAt: new Date().toISOString(),
+                errorMessage: null,
+              },
+            },
+          } as never,
+        )
+        .eq("id", lectureRow.id)
+        .eq("user_id", lectureRow.user_id);
+
+      if (imageStatusError) {
+        throw new Error(imageStatusError.message);
+      }
+    },
+    modelMetadata: { sourceDocumentUpload: pendingDocument },
+  });
+
+  return { needsNotesGeneration: true };
+}
+
+/**
+ * Reads a document into the lecture's source: text (pdf.js, or the vision reader for a scan),
+ * pictures for the note, and the page blocks. Shared by uploads and by links that lead straight
+ * to a document, so a PDF behind a link is read exactly like the same PDF uploaded.
+ */
+export async function prepareLectureFromDocumentFile(params: {
+  lectureId: string;
+  userId: string;
+  languageHint: string | null;
+  file: File;
+  fileName: string;
+  /** Called once the text is in, before pictures are extracted: the upload path shows a stage. */
+  onImageStage?: () => Promise<void>;
+  modelMetadata?: Record<string, unknown>;
+  sourceTypeOverride?: string;
+}) {
+  const { file } = params;
+  const documentKind = isPdfDocument(file)
     ? "pdf"
     : isPptxDocument(file)
       ? "presentation"
       : "text";
   const extracted = await extractTextFromDocument(file);
-  const { error: imageStatusError } = await supabase
-    .from("lectures")
-    .update(
-      {
-        status: "queued",
-        error_message: null,
-        processing_metadata: {
-          ...metadata,
-          pendingDocument,
-          processing: {
-            stage: "checking_document_images",
-            updatedAt: new Date().toISOString(),
-            errorMessage: null,
-          },
-        },
-      } as never,
-    )
-    .eq("id", lectureRow.id)
-    .eq("user_id", lectureRow.user_id);
 
-  if (imageStatusError) {
-    throw new Error(imageStatusError.message);
-  }
+  await params.onImageStage?.();
 
   // Pictures enrich the note; they never decide whether it exists. Storage talks to Supabase and
   // can fail on its own, so it is contained here as well as inside the extractor.
@@ -242,20 +275,20 @@ export async function processStoredDocumentLecture(params: {
   try {
     const extractedImages = await extractDocumentImages(file);
     documentImages = await storeDocumentImagesAsNoteMedia({
-      lectureId: lectureRow.id,
-      userId: lectureRow.user_id,
+      lectureId: params.lectureId,
+      userId: params.userId,
       images: extractedImages,
     });
   } catch (error) {
     console.warn("Storing document images failed; continuing without pictures.", error);
     captureBackgroundError(error, {
       operation: "document_image_storage",
-      extra: { lectureId: lectureRow.id },
+      extra: { lectureId: params.lectureId },
     });
   }
-  const titleHint = extracted.title || pendingDocument.fileName.replace(/\.[^.]+$/i, "");
+  const titleHint = extracted.title || params.fileName.replace(/\.[^.]+$/i, "");
   const extractedPageBlocks = extracted.pages.map((page) => ({
-    label: sourceType === "presentation" ? `Prosojnica ${page.pageNumber}` : `Stran ${page.pageNumber}`,
+    label: documentKind === "presentation" ? `Prosojnica ${page.pageNumber}` : `Stran ${page.pageNumber}`,
     pageNumber: page.pageNumber,
     text: page.text,
   }));
@@ -274,27 +307,25 @@ export async function processStoredDocumentLecture(params: {
   });
 
   await prepareLectureFromTextSource({
-    lectureId: lectureRow.id,
-    userId: lectureRow.user_id,
-    sourceType,
+    lectureId: params.lectureId,
+    userId: params.userId,
+    sourceType: params.sourceTypeOverride ?? documentKind,
     text: extracted.text,
     blocks: sourceBlocks,
     titleHint,
-    languageHint: lectureRow.language_hint ?? undefined,
+    languageHint: params.languageHint ?? undefined,
     modelMetadata: {
       importMode:
-        sourceType === "pdf"
+        documentKind === "pdf"
           ? "pdf"
-          : sourceType === "presentation"
+          : documentKind === "presentation"
             ? "presentation"
             : "document",
-      sourceFileName: pendingDocument.fileName,
-      sourceDocumentUpload: pendingDocument,
+      sourceFileName: params.fileName,
       // The note row prints "PDF, 24 strani"; this is where that 24 comes from.
       sourcePageCount: extracted.pages.length || null,
       documentImages,
+      ...params.modelMetadata,
     },
   });
-
-  return { needsNotesGeneration: true };
 }

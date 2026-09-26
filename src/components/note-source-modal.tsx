@@ -51,6 +51,7 @@ import {
   compressDocumentForUpload,
   compressionErrorMessage,
   compressScanImageForUpload,
+  shrinkScanImageForUpload,
 } from "@/lib/file-compression-client";
 import { prepareAudioSourceForUpload } from "@/lib/audio-source-preparation";
 import {
@@ -1354,12 +1355,31 @@ export function NoteSourceModal({
         return;
       }
 
-      const filesForUpload = photoSources.map((photoSource, index) => ({
-        file: photoSource.file,
+      // Shrunk before anything is sent: a 3-4 MB camera photo becomes well under 1.5 MB, which is
+      // what lets a ten-page set finish on a phone connection at all.
+      setBusyLabel(
+        photoSources.length === 1
+          ? t("capture.busy.compressingPhoto")
+          : t("capture.busy.compressingPhotos"),
+      );
+      // One at a time: decoding ten full-size camera photos at once can exhaust an iPhone's memory.
+      const shrunkFiles: File[] = [];
+
+      for (const photoSource of photoSources) {
+        shrunkFiles.push(await shrinkScanImageForUpload(photoSource.file));
+      }
+
+      if (cancelRequestedRef.current) {
+        await deleteCreatedLecture();
+        return;
+      }
+
+      const filesForUpload = shrunkFiles.map((file, index) => ({
+        file,
         index,
         mimeType: normalizeUploadScanImageMimeType({
-          mimeType: photoSource.file.type || "application/octet-stream",
-          fileName: photoSource.file.name,
+          mimeType: file.type || "application/octet-stream",
+          fileName: file.name,
         }),
       }));
       const controller = new AbortController();
@@ -1390,75 +1410,131 @@ export function NoteSourceModal({
       const supabase = createSupabaseBrowserClient();
 
       for (const [position, uploadFile] of filesForUpload.entries()) {
-        const uploadTarget = uploadTargetsByIndex.get(uploadFile.index);
-
-        if (!uploadTarget) {
+        if (!uploadTargetsByIndex.get(uploadFile.index)) {
           throw new Error(t("capture.error.missingPhotoTarget", { index: position + 1 }));
         }
+      }
 
+      /*
+       * Three at a time, each retried with its own deadline, and a photo that still fails does not
+       * take the others down with it. A whole set used to be thrown away over one dropped PUT;
+       * now the note is made from the pages that arrived and says how many did not.
+       */
+      let uploadedCount = 0;
+      let lastUploadError: unknown = null;
+      let nextUpload = 0;
+      const showUploadProgress = () =>
         setBusyLabel(
           filesForUpload.length === 1
             ? t("capture.busy.uploadingPhoto")
             : t("capture.busy.uploadingPhotoN", {
-                index: position + 1,
+                index: Math.min(uploadedCount + 1, filesForUpload.length),
                 total: filesForUpload.length,
               }),
         );
+      showUploadProgress();
 
-        /*
-         * Retried, because this is the one place in the app where a learner can lose real work.
-         * Ten photographed pages go up one at a time, and until this call retried, a single
-         * dropped PUT anywhere in that sequence threw the whole set away — the note was swept as
-         * `upload_incomplete` an hour later and there was nothing left on the row to retry from.
-         */
-        await uploadToSignedUrlWithRetry({
-          supabase,
-          path: uploadTarget.path,
-          token: uploadTarget.token,
-          file: uploadFile.file,
-          contentType: uploadFile.mimeType,
-          signal: controller.signal,
-          onRetry: (attempt, attempts) =>
-            setBusyLabel(t("capture.busy.retryingUpload", { attempt, total: attempts })),
-        });
+      await Promise.all(
+        Array.from({ length: Math.min(3, filesForUpload.length) }, async () => {
+          while (nextUpload < filesForUpload.length) {
+            const position = nextUpload;
+            nextUpload += 1;
+            const uploadFile = filesForUpload[position];
+            const uploadTarget = uploadTargetsByIndex.get(uploadFile.index)!;
+
+            try {
+              await uploadToSignedUrlWithRetry({
+                supabase,
+                path: uploadTarget.path,
+                token: uploadTarget.token,
+                file: uploadFile.file,
+                contentType: uploadFile.mimeType,
+                signal: controller.signal,
+                attempts: 4,
+                onRetry: (attempt, attempts) =>
+                  setBusyLabel(t("capture.busy.retryingUpload", { attempt, total: attempts })),
+              });
+              uploadedCount += 1;
+              showUploadProgress();
+            } catch (uploadError) {
+              if (controller.signal.aborted || cancelRequestedRef.current) {
+                throw uploadError;
+              }
+
+              lastUploadError = uploadError;
+            }
+          }
+        }),
+      );
+
+      if (uploadedCount === 0) {
+        throw lastUploadError ?? new Error(t("capture.error.photoNoteFailed"));
       }
 
       setBusyLabel(t("capture.busy.queueing"));
 
-      const response = await fetchWithTimeout("/api/lectures/scan", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        signal: controller.signal,
-        timeoutMessage:
-          t("capture.error.photoQueueTooLong"),
-        body: JSON.stringify({
-          lectureId,
-          // The photos are the whole source now — the sheet no longer takes pasted text.
-          text: "",
-          images: filesForUpload.map(({ file, index, mimeType }) => {
-            const uploadTarget = uploadTargetsByIndex.get(index);
+      const finalizeBody = JSON.stringify({
+        lectureId,
+        // The photos are the whole source now — the sheet no longer takes pasted text.
+        text: "",
+        // Every photo is listed, arrived or not: the server reads the ones in storage and the
+        // note tells the learner how many pages did not make it.
+        images: filesForUpload.map(({ file, index, mimeType }) => {
+          const uploadTarget = uploadTargetsByIndex.get(index)!;
 
-            if (!uploadTarget) {
-              throw new Error(`Manjka cilj za fotografijo ${index + 1}.`);
-            }
-
-            return {
-              index,
-              path: uploadTarget.path,
-              mimeType,
-              fileName: file.name,
-              size: file.size,
-            };
-          }),
+          return {
+            index,
+            path: uploadTarget.path,
+            mimeType,
+            fileName: file.name,
+            size: file.size,
+          };
         }),
       });
 
-      await parseApiResponse<{ lectureId: string }>(response, t);
+      /*
+       * The photos are in storage now, so from here the note must never be thrown away. If the
+       * start request fails, it is tried again; if it still fails, the note page is opened anyway
+       * and the server finishes the upload from storage on its own (upload-salvage.ts).
+       */
+      /*
+       * Only a lost answer is retried: a network failure, a timeout or a 5xx. A 4xx (a rejected
+       * photo, no plan) is a verdict, and it falls through to the catch below, which deletes the
+       * draft like any other failed upload. The start is idempotent on the server (it only claims
+       * a note that is still uploading), so a retry can never buy a second run.
+       */
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        let response: Response;
 
-      onClose();
+        try {
+          response = await fetchWithTimeout("/api/lectures/scan", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            signal: controller.signal,
+            timeoutMessage: t("capture.error.photoQueueTooLong"),
+            body: finalizeBody,
+          });
+        } catch (networkError) {
+          if (controller.signal.aborted || cancelRequestedRef.current) {
+            throw networkError;
+          }
+
+          continue;
+        }
+
+        if (response.status >= 500) {
+          continue;
+        }
+
+        await parseApiResponse<{ lectureId: string }>(response, t);
+        break;
+      }
+
+      // Kept either way: queued now, or finished from storage by the server shortly.
       createdLectureIdRef.current = null;
+      onClose();
       navigateWithFeedback(`/app/lectures/${lectureId}`);
       router.refresh();
     } catch (submitError) {

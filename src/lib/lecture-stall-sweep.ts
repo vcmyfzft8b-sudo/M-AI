@@ -21,6 +21,7 @@ import {
 import { reconcileLecturesWithArtifacts } from "@/lib/lectures";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { salvageAbandonedUpload, UPLOAD_SALVAGE_AFTER_MS } from "@/lib/upload-salvage";
 
 /**
  * Settles lectures whose pipeline run died without saying so, without waiting for the learner to
@@ -56,6 +57,8 @@ export type StallSweepOutcome = {
   failed: string[];
   /** Empty drafts removed rather than failed. See `isNeverStartedDraft`. */
   discarded: string[];
+  /** Uploads the device never confirmed, finished from what reached storage. */
+  salvaged: string[];
   waiting: number;
   deferred: number;
   errors: Array<{ lectureId: string; message: string }>;
@@ -77,7 +80,10 @@ async function loadCandidates(now: number): Promise<LectureRow[]> {
     .from("lectures")
     .select("*")
     .in("status", [...STALLED_LECTURE_STATUSES])
-    .lt("updated_at", new Date(now - STALL_RESUME_AFTER_MS).toISOString())
+    // Uploads are looked at sooner than stalled runs: an unconfirmed upload is finished from what
+    // reached storage after UPLOAD_SALVAGE_AFTER_MS, while everything else still waits the full
+    // STALL_RESUME_AFTER_MS (the plan returns "recent" for those in between).
+    .lt("updated_at", new Date(now - Math.min(STALL_RESUME_AFTER_MS, UPLOAD_SALVAGE_AFTER_MS)).toISOString())
     .gt("updated_at", new Date(now - MAX_CANDIDATE_AGE_MS).toISOString())
     .order("updated_at", { ascending: true })
     .limit(MAX_CANDIDATES);
@@ -174,6 +180,7 @@ export async function sweepStalledLectures(now = Date.now()): Promise<StallSweep
     resumed: [],
     failed: [],
     discarded: [],
+    salvaged: [],
     waiting: 0,
     deferred: 0,
     errors: [],
@@ -199,6 +206,28 @@ export async function sweepStalledLectures(now = Date.now()): Promise<StallSweep
   const nowIso = new Date(now).toISOString();
 
   for (const lecture of stillStalled) {
+    // Before an upload is failed or discarded, finish it from whatever reached storage.
+    if (
+      lecture.status === "uploading" &&
+      now - readProcessingUpdatedAt(lecture.processing_metadata, lecture.updated_at) >
+        UPLOAD_SALVAGE_AFTER_MS
+    ) {
+      try {
+        const salvage = await salvageAbandonedUpload(lecture);
+
+        if (salvage.outcome === "salvaged") {
+          outcome.salvaged.push(lecture.id);
+          continue;
+        }
+      } catch (error) {
+        outcome.errors.push({
+          lectureId: lecture.id,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        continue;
+      }
+    }
+
     const plan = planStalledLecture({
       status: lecture.status,
       processingMetadata: lecture.processing_metadata,

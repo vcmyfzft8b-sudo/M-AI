@@ -58,6 +58,8 @@ import { createAiChunkSelector } from "@/lib/source-condensation-ai";
 import {
   isUnsupportedVideoContentType,
   isReadableLinkContentType,
+  resolveLinkDocumentType,
+  type LinkDocumentType,
 } from "@/lib/link-source-validation";
 import { expectedInputFailure, sourceLocaleMessage } from "@/lib/lecture-failure-text";
 import {
@@ -73,6 +75,18 @@ import {
   looksLikeLoginPage,
 } from "@/lib/link-login-walls";
 import { serializeVector } from "@/lib/utils";
+import { looksLikeBotChallenge } from "@/lib/link-bot-challenge";
+import {
+  IMAGE_OCR_INSTRUCTIONS,
+  IMAGE_RESTATE_INSTRUCTIONS,
+  PDF_EXTRACT_INSTRUCTIONS,
+  PDF_RESTATE_INSTRUCTIONS,
+} from "@/lib/ocr-prompts";
+import {
+  extractChatGptSharedConversation,
+  formatSharedConversationAsSource,
+  isChatGptShareUrl,
+} from "@/lib/chatgpt-share";
 
 const MAX_LINK_FETCH_REDIRECTS = 3;
 /**
@@ -89,6 +103,22 @@ const MAX_LINK_FETCH_BYTES = 8_000_000;
 // the only remaining bound on the download itself.
 const MAX_LINK_READABLE_TEXT_CHARS = MAX_RAW_SOURCE_TEXT_CHARS;
 const LINK_FETCH_TIMEOUT_MS = 10_000;
+/**
+ * What we tell a server we will take. It used to be "text/html,application/xhtml+xml" only, and
+ * some servers take that literally: zgs.zrc-sazu.si answered a link to a PDF with 406 Not
+ * Acceptable, which surfaced as "this link could not be loaded" (2026-09-21). Pages are still
+ * preferred; documents are welcome, and anything else is judged by what actually comes back.
+ */
+const LINK_FETCH_ACCEPT =
+  "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf;q=0.9,*/*;q=0.8";
+/**
+ * A document behind a link is downloaded by us, not uploaded by the learner, so it is not bound by
+ * the 4 MB request-body limit that caps uploads (MAX_DOCUMENT_BYTES). A 32-page scanned journal
+ * issue was 9.8 MB. Past this, the learner is asked to upload a smaller file.
+ */
+export const MAX_LINK_DOCUMENT_BYTES = 30_000_000;
+/** The body of a linked document, unlike the headers, can take a while on a slow host. */
+const LINK_DOCUMENT_BODY_TIMEOUT_MS = 60_000;
 const TRANSCRIPT_SEGMENT_INSERT_BATCH_SIZE = 25;
 const OCR_PRIMARY_MAX_OUTPUT_TOKENS = 3500;
 const OCR_RESCUE_MAX_OUTPUT_TOKENS = 6000;
@@ -1169,7 +1199,7 @@ async function fetchReadableWebpageResponse(
       headers: {
         "User-Agent":
           "Mozilla/5.0 (compatible; MemoAI/1.0; +https://memoai.eu)",
-        Accept: "text/html,application/xhtml+xml",
+        Accept: LINK_FETCH_ACCEPT,
       },
       redirect: "manual",
       signal: controller.signal,
@@ -1223,7 +1253,66 @@ async function fetchReadableWebpageResponse(
   }
 }
 
-export async function fetchReadableWebpage(params: { url: string }) {
+async function readResponseBytesWithLimit(response: Response, maxBytes: number) {
+  if (!response.body) {
+    return new Uint8Array();
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  let timedOut = false;
+  const deadline = setTimeout(() => {
+    timedOut = true;
+    void reader.cancel().catch(() => null);
+  }, LINK_DOCUMENT_BODY_TIMEOUT_MS);
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      totalBytes += value.byteLength;
+
+      if (totalBytes > maxBytes) {
+        await reader.cancel().catch(() => null);
+        throw expectedInputFailure("link_file_too_large");
+      }
+
+      chunks.push(value);
+    }
+  } finally {
+    clearTimeout(deadline);
+    reader.releaseLock();
+  }
+
+  // A cancelled read ends like a finished one; a half-downloaded document must not be read as whole.
+  if (timedOut) {
+    throw expectedInputFailure("link_timeout");
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return bytes;
+}
+
+function linkDocumentFileName(url: URL, type: LinkDocumentType) {
+  const last = decodeURIComponent(url.pathname.split("/").filter(Boolean).pop() ?? "").trim();
+  const base = last.replace(/\.[a-z0-9]+$/i, "") || url.hostname;
+
+  return `${base}.${type.extension}`;
+}
+
+async function openLinkResponse(params: { url: string }) {
   const targetUrl = new URL(params.url);
   const { url, response, sawLoginWall } = await fetchReadableWebpageResponse(targetUrl);
   // The URL the learner pasted can be the sign-in endpoint itself, with no redirect to
@@ -1231,6 +1320,15 @@ export async function fetchReadableWebpage(params: { url: string }) {
   const behindLogin = sawLoginWall || isLoginWallUrl(url);
 
   if (!response.ok) {
+    // A bot screen answers 403 as readily as a sign-in wall does; they need opposite advice.
+    if (response.status === 403 || response.status === 429 || response.status === 503) {
+      const body = await readResponseBodyWithLimit(response, 200_000).catch(() => "");
+
+      if (looksLikeBotChallenge({ html: body, title: extractTitle(body), headers: response.headers })) {
+        throw expectedInputFailure("link_blocked_by_site");
+      }
+    }
+
     if (behindLogin || response.status === 401 || response.status === 403) {
       throw expectedInputFailure(LINK_LOGIN_WALL_CODE);
     }
@@ -1238,18 +1336,40 @@ export async function fetchReadableWebpage(params: { url: string }) {
     throw expectedInputFailure("link_not_loadable");
   }
 
-  const contentType = response.headers.get("content-type") ?? "";
+  return { url, response, behindLogin };
+}
 
-  if (isUnsupportedVideoContentType(contentType)) {
-    throw expectedInputFailure("unsupported_video_link");
-  }
-
-  if (!isReadableLinkContentType(contentType)) {
-    throw expectedInputFailure("unsupported_link_content_type");
-  }
-
+async function readWebpageFromResponse(params: {
+  url: URL;
+  response: Response;
+  behindLogin: boolean;
+}) {
+  const { url, response, behindLogin } = params;
   const html = await readResponseBodyWithLimit(response, MAX_LINK_FETCH_BYTES);
-  const title = extractTitle(html);
+  const pageTitle = extractTitle(html);
+
+  if (looksLikeBotChallenge({ html, title: pageTitle, headers: response.headers })) {
+    throw expectedInputFailure("link_blocked_by_site");
+  }
+
+  // A shared ChatGPT conversation renders in the browser; its markup is only the app shell. The
+  // conversation travels in the page's loader data, which is what a learner shared.
+  if (isChatGptShareUrl(url)) {
+    const conversation = extractChatGptSharedConversation(html);
+
+    if (conversation) {
+      const text = normalizeWhitespace(formatSharedConversationAsSource(conversation));
+
+      return {
+        finalUrl: url.toString(),
+        html,
+        title: conversation.title ?? pageTitle.replace(/^ChatGPT\s*-\s*/i, ""),
+        text: text.slice(0, MAX_LINK_READABLE_TEXT_CHARS),
+      };
+    }
+  }
+
+  const title = pageTitle;
   const description = extractMetaDescription(html);
   const text = cleanReadableWebpageText(decodeBasicHtmlEntities(htmlToText(html)));
   const composed = normalizeWhitespace(
@@ -1274,6 +1394,59 @@ export async function fetchReadableWebpage(params: { url: string }) {
     title,
     text: composed.slice(0, MAX_LINK_READABLE_TEXT_CHARS),
   };
+}
+
+export async function fetchReadableWebpage(params: { url: string }) {
+  const opened = await openLinkResponse(params);
+  const contentType = opened.response.headers.get("content-type") ?? "";
+
+  if (isUnsupportedVideoContentType(contentType)) {
+    throw expectedInputFailure("unsupported_video_link");
+  }
+
+  if (!isReadableLinkContentType(contentType)) {
+    throw expectedInputFailure("unsupported_link_content_type");
+  }
+
+  return readWebpageFromResponse(opened);
+}
+
+export type LinkSource =
+  | ({ kind: "webpage" } & Awaited<ReturnType<typeof readWebpageFromResponse>>)
+  | { kind: "document"; file: File; finalUrl: string; title: string };
+
+/**
+ * Everything a pasted link can lead to that we can make notes from: a web page, or a document
+ * (PDF, Word, PowerPoint) served straight from the link. A document link used to fail with "this
+ * link points to a file, download it and upload it" -- three of the week's failed notes -- when
+ * downloading it is exactly what we can do ourselves.
+ */
+export async function fetchLinkSource(params: { url: string }): Promise<LinkSource> {
+  const opened = await openLinkResponse(params);
+  const contentType = opened.response.headers.get("content-type") ?? "";
+  const documentType = resolveLinkDocumentType(contentType, opened.url);
+
+  if (documentType) {
+    const bytes = await readResponseBytesWithLimit(opened.response, MAX_LINK_DOCUMENT_BYTES);
+    const fileName = linkDocumentFileName(opened.url, documentType);
+
+    return {
+      kind: "document",
+      file: new File([bytes], fileName, { type: documentType.mimeType }),
+      finalUrl: opened.url.toString(),
+      title: fileName.replace(/\.[a-z0-9]+$/i, ""),
+    };
+  }
+
+  if (isUnsupportedVideoContentType(contentType)) {
+    throw expectedInputFailure("unsupported_video_link");
+  }
+
+  if (!isReadableLinkContentType(contentType)) {
+    throw expectedInputFailure("unsupported_link_content_type");
+  }
+
+  return { kind: "webpage", ...(await readWebpageFromResponse(opened)) };
 }
 
 export async function extractTextFromPdf(file: File) {
@@ -1364,8 +1537,8 @@ export async function extractTextFromPdf(file: File) {
     });
   }
 
-  const fallbackInstructions =
-    "Extract as much readable text from this PDF as possible into plain text. Do not summarize. Preserve the source language, preserve examples and important details, and ignore repeated headers, footers, and page numbers when possible. Return only the extracted document text. Do not include JSON, markdown fences, commentary, or confidence notes.";
+  const fallbackInstructions = PDF_EXTRACT_INSTRUCTIONS;
+  const restateInstructions = PDF_RESTATE_INSTRUCTIONS;
   const env = getServerEnv();
   let fallbackText: string;
 
@@ -1380,16 +1553,36 @@ export async function extractTextFromPdf(file: File) {
       maxOutputTokens: PDF_FALLBACK_MAX_OUTPUT_TOKENS,
     });
   } catch (error) {
-    // Both readers have now given up on this file: PDF.js found no usable text layer, and the
-    // Gemini fallback answered with nothing four times over on an escalating token budget. That
-    // is a PDF with no readable text in it -- a scan of photographs, a diagram-only deck -- which
-    // is the learner's file to fix and not a defect, so say so in a way they can act on instead of
-    // failing the lecture with "Model returned empty text output." and paging us about it.
-    if (error instanceof GeminiEmptyTextOutputError) {
-      throw expectedInputFailure("pdf_no_text");
+    if (!(error instanceof GeminiEmptyTextOutputError)) {
+      throw error;
     }
 
-    throw error;
+    fallbackText = "";
+
+    // Withheld or empty: ask for a restatement, the stronger reader first. Only when both come
+    // back empty is it a PDF with nothing readable in it -- a scan of photographs, a diagram-only
+    // deck -- which is the learner's file to fix, so say so in a way they can act on.
+    for (const model of [env.GEMINI_OCR_RESCUE_MODEL, env.GEMINI_OCR_MODEL]) {
+      try {
+        fallbackText = await generateTextWithGeminiFile({
+          instructions: restateInstructions,
+          file,
+          model,
+          thinkingConfig: resolveMinimalThinkingConfig(model),
+          maxOutputTokens: PDF_FALLBACK_MAX_OUTPUT_TOKENS * 2,
+          maxAttempts: 2,
+        });
+        break;
+      } catch (restateError) {
+        if (!(restateError instanceof GeminiEmptyTextOutputError)) {
+          throw restateError;
+        }
+      }
+    }
+
+    if (!fallbackText.trim()) {
+      throw expectedInputFailure("pdf_no_text");
+    }
   }
 
   return {
@@ -1449,136 +1642,134 @@ export async function extractTextFromDocument(file: File) {
   throw new Error("Nepodprta vrsta dokumenta. Uporabi PDF, TXT, Markdown, HTML, RTF, DOCX ali PPTX.");
 }
 
+type ImageOcrAttemptPlan = {
+  stage: ScanOcrAttemptDiagnostics["stage"];
+  instructions: string;
+  model: string;
+  maxOutputTokens: number;
+  mediaResolution: "medium" | "high";
+};
+
 export async function extractTextFromImage(file: File, context?: ImageOcrContext) {
   const env = getServerEnv();
-  const instructions =
-    "Extract all readable text from this photo of notes or printed material. The source is likely Slovenian, so preserve Slovenian characters such as č, š, and ž. Do not translate and do not summarize. Preserve the original language, headings, bullet points, equations, labels, line breaks, and important details. Ignore decorative background elements. If handwriting is uncertain, make the best faithful reading instead of inventing content. Return only the extracted text. Do not include JSON, markdown fences, commentary, or confidence notes.";
   const attempts: ScanOcrAttemptDiagnostics[] = [];
-
-  let primaryError: unknown = null;
-
-  try {
-    const primaryText = await generateTextWithGeminiFile({
-      instructions,
-      file,
+  const plans: ImageOcrAttemptPlan[] = [
+    {
+      stage: "ocr_primary",
+      instructions: IMAGE_OCR_INSTRUCTIONS,
       model: env.GEMINI_OCR_MODEL,
-      maxOutputTokens: OCR_PRIMARY_MAX_OUTPUT_TOKENS,
-      maxAttempts: 1,
-      thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_MODEL),
-      mediaResolution: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM,
-      usageContext: buildImageOcrUsageContext({
-        context,
-        stage: "ocr_primary",
-        file,
-      }),
-    });
-    const text = normalizeOcrPlainText(primaryText);
-    const verdict = classifyImageOcrText(text);
-    attempts.push({
-      acceptable: verdict.acceptable,
-      errorMessage: null,
       maxOutputTokens: OCR_PRIMARY_MAX_OUTPUT_TOKENS,
       mediaResolution: "medium",
-      model: env.GEMINI_OCR_MODEL,
-      outputLength: text.length,
-      rejection: verdict.acceptable ? null : verdict.rejection,
-      stage: "ocr_primary",
-    });
-
-    if (verdict.acceptable) {
-      return {
-        title: deriveImageTitle(file, text),
-        text,
-      };
-    }
-  } catch (error) {
-    primaryError = error;
-    attempts.push({
-      acceptable: error instanceof GeminiEmptyTextOutputError ? false : null,
-      errorMessage: toSafeErrorMessage(error),
-      maxOutputTokens: OCR_PRIMARY_MAX_OUTPUT_TOKENS,
-      mediaResolution: "medium",
-      model: env.GEMINI_OCR_MODEL,
-      outputLength: error instanceof GeminiEmptyTextOutputError ? 0 : null,
-      // An empty reply is the photo; any other throw is us or the provider, and says nothing
-      // about what was on the page.
-      rejection: error instanceof GeminiEmptyTextOutputError ? "unreadable" : null,
-      stage: "ocr_primary",
-    });
-  }
-
-  try {
-    const rescueText = await generateTextWithGeminiFile({
-      instructions,
-      file,
+    },
+    {
+      stage: "ocr_rescue",
+      instructions: IMAGE_OCR_INSTRUCTIONS,
       model: env.GEMINI_OCR_RESCUE_MODEL,
-      maxOutputTokens: OCR_RESCUE_MAX_OUTPUT_TOKENS,
-      maxAttempts: 1,
-      thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_RESCUE_MODEL),
-      mediaResolution: PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH,
-      usageContext: buildImageOcrUsageContext({
-        context,
-        stage: "ocr_rescue",
-        file,
-      }),
-    });
-    const text = normalizeOcrPlainText(rescueText);
-    const verdict = classifyImageOcrText(text);
-    attempts.push({
-      acceptable: verdict.acceptable,
-      errorMessage: null,
       maxOutputTokens: OCR_RESCUE_MAX_OUTPUT_TOKENS,
       mediaResolution: "high",
+    },
+    // The stronger reader first: the lite model still withholds some restatements.
+    {
+      stage: "ocr_restate",
+      instructions: IMAGE_RESTATE_INSTRUCTIONS,
       model: env.GEMINI_OCR_RESCUE_MODEL,
-      outputLength: text.length,
-      rejection: verdict.acceptable ? null : verdict.rejection,
-      stage: "ocr_rescue",
-    });
+      maxOutputTokens: OCR_RESCUE_MAX_OUTPUT_TOKENS,
+      mediaResolution: "high",
+    },
+    {
+      stage: "ocr_restate",
+      instructions: IMAGE_RESTATE_INSTRUCTIONS,
+      model: env.GEMINI_OCR_MODEL,
+      maxOutputTokens: OCR_RESCUE_MAX_OUTPUT_TOKENS,
+      mediaResolution: "high",
+    },
+  ];
 
-    if (!verdict.acceptable) {
-      throw buildNoReadableImageTextError({
-        attempts,
-        context,
+  // Real text that was merely short. A page with one exercise or one heading on it is still a
+  // page we read correctly; the notes stage decides what to teach from it, so it is kept rather
+  // than thrown away as a failed reading.
+  let bestShortText = "";
+  let lastProviderError: unknown = null;
+  let sawAnswer = false;
+
+  for (const plan of plans) {
+    // A verbatim reading that came back as real but thin text will not grow when restated.
+    if (plan.stage === "ocr_restate" && bestShortText) {
+      break;
+    }
+
+    try {
+      const rawText = await generateTextWithGeminiFile({
+        instructions: plan.instructions,
         file,
+        model: plan.model,
+        maxOutputTokens: plan.maxOutputTokens,
+        maxAttempts: 1,
+        thinkingConfig: resolveMinimalThinkingConfig(plan.model),
+        mediaResolution:
+          plan.mediaResolution === "high"
+            ? PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH
+            : PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM,
+        usageContext: buildImageOcrUsageContext({ context, stage: plan.stage, file }),
       });
-    }
-
-    return {
-      title: deriveImageTitle(file, text),
-      text,
-    };
-  } catch (error) {
-    if (error instanceof NoReadableScanTextError) {
-      throw error;
-    }
-
-    // A budget abort must keep its identity: rewrapping it would report a fabricated provider
-    // outage and let downstream abort handling treat the cancelled run as a retryable failure.
-    if (isWorkAbortedError(error) || isWorkAbortedError(primaryError)) {
-      throw error;
-    }
-
-    if (error instanceof GeminiEmptyTextOutputError) {
+      const text = normalizeOcrPlainText(rawText);
+      const verdict = classifyImageOcrText(text);
+      sawAnswer = true;
       attempts.push({
-        acceptable: false,
-        errorMessage: toSafeErrorMessage(error),
-        maxOutputTokens: OCR_RESCUE_MAX_OUTPUT_TOKENS,
-        mediaResolution: "high",
-        model: env.GEMINI_OCR_RESCUE_MODEL,
-        outputLength: 0,
-        rejection: "unreadable",
-        stage: "ocr_rescue",
+        acceptable: verdict.acceptable,
+        errorMessage: null,
+        maxOutputTokens: plan.maxOutputTokens,
+        mediaResolution: plan.mediaResolution,
+        model: plan.model,
+        outputLength: text.length,
+        rejection: verdict.acceptable ? null : verdict.rejection,
+        stage: plan.stage,
       });
 
-      throw buildNoReadableImageTextError({
-        attempts,
-        context,
-        file,
+      if (verdict.acceptable) {
+        return { title: deriveImageTitle(file, text), text };
+      }
+
+      if (verdict.rejection === "too_short" && text.length > bestShortText.length) {
+        bestShortText = text;
+      }
+    } catch (error) {
+      // A budget abort must keep its identity: rewrapping it would report a fabricated provider
+      // outage and let downstream abort handling treat the cancelled run as a retryable failure.
+      if (isWorkAbortedError(error)) {
+        throw error;
+      }
+
+      const empty = error instanceof GeminiEmptyTextOutputError;
+      sawAnswer ||= empty;
+      if (!empty) {
+        lastProviderError = error;
+      }
+      attempts.push({
+        acceptable: empty ? false : null,
+        errorMessage: toSafeErrorMessage(error),
+        maxOutputTokens: plan.maxOutputTokens,
+        mediaResolution: plan.mediaResolution,
+        model: plan.model,
+        outputLength: empty ? 0 : null,
+        // An empty reply is the photo (or a withheld copy); any other throw is us or the
+        // provider, and says nothing about what was on the page.
+        rejection: empty ? "unreadable" : null,
+        stage: plan.stage,
       });
     }
-
-    throw new Error(toUserFacingAiErrorMessage(primaryError ?? error));
   }
+
+  if (bestShortText) {
+    return { title: deriveImageTitle(file, bestShortText), text: bestShortText };
+  }
+
+  // Every reader answered and none found text: the photo itself is the problem.
+  if (sawAnswer) {
+    throw buildNoReadableImageTextError({ attempts, context, file });
+  }
+
+  throw new Error(toUserFacingAiErrorMessage(lastProviderError));
 }
 
 async function updateLectureEnrichmentProcessingStage(params: {
@@ -1687,6 +1878,19 @@ async function fitSourceTextToPipeline(params: {
   };
 }
 
+/**
+ * Whether a source has anything at all to make notes from.
+ *
+ * This used to demand 120 characters, which turned away a photo of one exercise, a single spoken
+ * question and a pasted topic name -- material a learner reasonably expects notes from. Short
+ * material now goes on to the notes stage, which teaches the topic it names when there is no
+ * explanation to condense (note-generation.ts, topic notes). Only text with no word in it stops
+ * here.
+ */
+export function hasEnoughSourceTextToTeach(text: string) {
+  return /\p{L}{2,}/u.test(text);
+}
+
 export async function createLectureFromTextSource(params: {
   userId: string;
   sourceType: string;
@@ -1700,7 +1904,7 @@ export async function createLectureFromTextSource(params: {
   const supabase = createSupabaseServiceRoleClient();
   const cleanedText = normalizeWhitespace(params.text);
 
-  if (cleanedText.length < 120) {
+  if (!hasEnoughSourceTextToTeach(cleanedText)) {
     throw expectedInputFailure("source_too_short");
   }
 
@@ -1983,7 +2187,7 @@ export async function prepareLectureFromTextSource(params: {
   const supabase = createSupabaseServiceRoleClient();
   const cleanedText = normalizeWhitespace(params.text);
 
-  if (cleanedText.length < 120) {
+  if (!hasEnoughSourceTextToTeach(cleanedText)) {
     throw expectedInputFailure("source_too_short");
   }
 

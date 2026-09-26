@@ -35,7 +35,10 @@ test("genuinely unstorable characters are still refused", () => {
 });
 
 test("the paste limits still hold at both ends", () => {
-  assert.equal(noteTextSchema.safeParse("too short").success, false);
+  // A topic name is enough since short material is taught as a topic (notes/topic-notes.ts);
+  // only a single character is still turned away.
+  assert.equal(noteTextSchema.safeParse("a").success, false);
+  assert.equal(noteTextSchema.safeParse("fotosinteza").success, true);
   assert.equal(noteTextSchema.safeParse("a".repeat(4_000_001)).success, false);
   assert.equal(noteTextSchema.safeParse("a".repeat(3_999_000)).success, true);
 });

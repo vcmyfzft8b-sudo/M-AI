@@ -114,3 +114,10 @@ test("Apple wheel offer keeps the PWA sheet and uses actual first-period prices"
   assert.match(ios, /Close the offer and it is gone/);
   assert.match(web, /Close the offer and it is gone/);
 });
+
+test("the code form's yearly card leads with the weekly price and says what is billed yearly", () => {
+  const form = readFileSync(new URL("../src/components/apple-code-form.tsx", import.meta.url), "utf8");
+  assert.match(form, /yearly && product\.introWeeklyPrice \?/);
+  assert.match(form, /t\("offer\.plan\.oneOffPrice", \{ amount: product\.introWeeklyPrice \}\)/);
+  assert.match(form, /t\("offer\.plan\.oneOffBilling", \{ discounted: product\.introPrice!, renewal: product\.price \}\)/);
+});

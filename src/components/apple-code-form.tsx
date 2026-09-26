@@ -79,13 +79,24 @@ export function AppleCodeForm() {
             <strong>{plan}</strong>
             <span className="memo-offer-radio" aria-hidden="true" />
           </span>
-          <span className="memo-code-plan-price">
-            <strong>{product.introPrice}</strong>
-            <span>{t(yearly ? "native.codeFirstYear" : "native.codeFirstMonth")}</span>
-          </span>
-          <span className="memo-code-plan-renewal">
-            {t(yearly ? "native.codeRenewYear" : "native.codeRenewMonth", { renewal: product.price })}
-          </span>
+          {/* The yearly card leads with its weekly figure, as the wheel does, and says
+              underneath exactly what is billed for the year and after it. */}
+          {yearly && product.introWeeklyPrice ? <>
+            <span className="memo-code-plan-price">
+              <strong>{t("offer.plan.oneOffPrice", { amount: product.introWeeklyPrice })}</strong>
+            </span>
+            <span className="memo-code-plan-renewal">
+              {t("offer.plan.oneOffBilling", { discounted: product.introPrice!, renewal: product.price })}
+            </span>
+          </> : <>
+            <span className="memo-code-plan-price">
+              <strong>{product.introPrice}</strong>
+              <span>{t(yearly ? "native.codeFirstYear" : "native.codeFirstMonth")}</span>
+            </span>
+            <span className="memo-code-plan-renewal">
+              {t(yearly ? "native.codeRenewYear" : "native.codeRenewMonth", { renewal: product.price })}
+            </span>
+          </>}
         </button>;
       })}
     </div>}

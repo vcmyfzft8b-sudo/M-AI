@@ -246,7 +246,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json(
       {
         error: await tr(
-          allowance.hasPaidAccess ? "api.tutorCreditsNeeded" : "api.tutorTrialUsed",
+          allowance.hasPaidAccess ? "api.podcastCreditsNeeded" : "api.podcastTrialUsed",
         ),
         code: allowance.hasPaidAccess ? "tutor_credits_needed" : "tutor_trial_used",
         usage: toClientUsage(allowance),

@@ -585,9 +585,11 @@ final class WrapperTests: XCTestCase {
         button("Close").tap()
         app.terminate()
         app.launch()
+        dismissInitialOffer(app)
         let note = app.webViews.links.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: 30))
-        note.tap()
+        app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: note.frame.midX, dy: note.frame.midY)).tap()
         openStudyTab("Flashcards", in: app)
         button("Edit flashcards").tap()
         let saved = findSavedCard()
@@ -1991,6 +1993,10 @@ final class WrapperTests: XCTestCase {
         tap("Rename folder")
         replace(app.webViews.textFields["Folder name"].firstMatch, with: "Library QA renamed")
         tap("Done")
+        // Done waits for the server before closing; quitting sooner cancels the save.
+        let renameField = app.webViews.textFields["Folder name"].firstMatch
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: renameField)
+        waitForExpectations(timeout: 20)
         app.terminate()
         app.launch()
         dismissInitialOffer(app)
@@ -2621,6 +2627,36 @@ final class WrapperTests: XCTestCase {
     // Click-through of every screen on a staging Preview with a signed-in
     // synthetic account. Problems are collected, not fatal, so the run always
     // yields the full set of screenshots to review.
+    /// The New note sheet closes with its ✕, and home is usable afterwards.
+    @MainActor func testPreviewNewNoteSheetCloses() throws {
+        guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"], isStagingTestHost(preview) else {
+            throw XCTSkip("Requires a signed-in synthetic staging account")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["MEMO_IOS_URL"] = preview
+        app.launch()
+        defer { app.terminate() }
+        passConsentGate(app)
+        dismissInitialOffer(app)
+        let newNote = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "New note")).firstMatch
+        XCTAssertTrue(newNote.waitForExistence(timeout: 30))
+        newNote.tap()
+        let record = app.webViews.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Record audio")).firstMatch
+        XCTAssertTrue(record.waitForExistence(timeout: 15))
+        let closes = app.webViews.buttons.matching(NSPredicate(format: "label == %@", "Close")).allElementsBoundByIndex
+        for (index, close) in closes.enumerated() {
+            print("QA close[\(index)] frame=\(close.frame) hittable=\(close.isHittable)")
+        }
+        let sheetClose = try XCTUnwrap(closes.first { $0.frame.minY > 0 && $0.frame.minY < record.frame.minY && $0.frame.width > 0 },
+                                       "The sheet has a visible close button above its first option")
+        sheetClose.tap()
+        let gone = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: record)], timeout: 10)
+        keepStudyScreenshot("After tapping the New note sheet's close button", app: app)
+        XCTAssertEqual(gone, .completed, "The ✕ must close the New note sheet")
+        XCTAssertTrue(app.webViews.links.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch.isHittable)
+    }
+
     @MainActor func testPreviewTour() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
               isStagingTestHost(preview) else {
@@ -2649,19 +2685,33 @@ final class WrapperTests: XCTestCase {
         /// Taps an element if it shows up; records a problem otherwise.
         @discardableResult func tap(_ what: String, _ element: XCUIElement, timeout: TimeInterval = 10, required: Bool = true) -> Bool {
             if element.waitForExistence(timeout: timeout) {
-                if !element.isHittable { app.webViews.firstMatch.swipeUp(); settle(0.5) }
-                if element.isHittable {
-                    element.tap(); settle(); return true
+                // WebKit can fail to answer isHittable for emoji-led rows, so judge
+                // by the element's frame and tap its centre, as a person would.
+                let window = app.windows.firstMatch.frame
+                func onScreen() -> Bool {
+                    let frame = element.frame
+                    return frame.width > 0 && frame.minY >= window.minY && frame.maxY <= window.maxY
                 }
-                if required { problems.append("\(what): present but not hittable") }
+                if !onScreen() { app.webViews.firstMatch.swipeUp(); settle(0.5) }
+                if onScreen() {
+                    let frame = element.frame
+                    app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
+                        .withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
+                    settle(); return true
+                }
+                if required { problems.append("\(what): present but not on screen") }
                 return false
             }
             if required { problems.append("\(what): not found") }
             return false
         }
         func scrollTo(_ element: XCUIElement, down: Bool = true) -> Bool {
+            let window = app.windows.firstMatch.frame
             for _ in 0..<6 {
-                if element.exists && element.isHittable { return true }
+                if element.exists {
+                    let frame = element.frame
+                    if frame.width > 0 && frame.minY >= window.minY && frame.maxY <= window.maxY { return true }
+                }
                 if down { app.webViews.firstMatch.swipeUp() } else { app.webViews.firstMatch.swipeDown() }
                 settle(0.4)
             }
@@ -2671,9 +2721,16 @@ final class WrapperTests: XCTestCase {
         /// Close button, or the web view's edge-swipe back gesture.
         func back() {
             let button = web(.button, exact("Back"))
-            let close = web(.button, exact("Close"))
+            // The first "Close" can be a sheet's full-screen backdrop; the ✕ is the small one.
+            let close = app.webViews.buttons.matching(NSPredicate(format: "label == %@", "Close")).allElementsBoundByIndex
+                .first { $0.frame.width > 0 && $0.frame.width < 100 } ?? web(.button, exact("Close"))
             if button.exists && button.isHittable { button.tap() }
-            else if close.exists && close.isHittable { close.tap() }
+            else if close.exists {
+                // WebKit can report a sheet's ✕ as not hittable while it is on
+                // top; tap its centre as a person would.
+                app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
+                    .withOffset(CGVector(dx: close.frame.midX, dy: close.frame.midY)).tap()
+            }
             else {
                 let from = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.5))
                 from.press(forDuration: 0.05, thenDragTo: from.withOffset(CGVector(dx: 260, dy: 0)))
@@ -2683,7 +2740,11 @@ final class WrapperTests: XCTestCase {
         let tabNames = ["Notes", "Tutor", "Flashcards", "Podcast", "Quiz", "Mindmap", "Palace", "Test", "Speed read", "Transcript"]
         func tab(_ name: String) -> Bool {
             let chip = web(.button, exact(name))
-            guard chip.waitForExistence(timeout: 10) else { problems.append("tab \(name): missing"); return false }
+            // Only recorded and audio notes have a transcript.
+            guard chip.waitForExistence(timeout: name == "Transcript" ? 3 : 10) else {
+                if name != "Transcript" { problems.append("tab \(name): missing") }
+                return false
+            }
             let width = app.windows.firstMatch.frame.width
             func onScreen() -> Bool { chip.frame.minX >= 0 && chip.frame.maxX <= width && chip.isHittable }
             for _ in 0..<6 where !onScreen() {
@@ -2721,13 +2782,14 @@ final class WrapperTests: XCTestCase {
         if tap("New note", newNote) {
             snap("New note")
             if !tap("Close new-note paywall", web(.button, contains("Close the subscription offer")), timeout: 5, required: false) {
-                tap("Cancel new note", web(.button, exact("Cancel")), timeout: 5, required: false)
+                // The sheet closes with its ✕ ("Close"); "Cancel" was the old label.
+                back()
             }
             _ = newNote.waitForExistence(timeout: 15)
         }
 
         // ---- Note ----------------------------------------------------------
-        if tap("Existing note", web(.any, contains("Plant Life Cycle"))) {
+        if tap("Existing note", web(.any, contains(ProcessInfo.processInfo.environment["MEMO_QA_NOTE_TITLE"] ?? "Plant Life Cycle"))) {
             _ = web(.button, exact("Flashcards")).waitForExistence(timeout: 30)
             snap("Note top")
             app.webViews.firstMatch.swipeUp(); settle(); snap("Note scrolled")
@@ -2753,12 +2815,16 @@ final class WrapperTests: XCTestCase {
                 if field.waitForExistence(timeout: 5) {
                     field.tap(); settle(); snap("Chat keyboard")
                     // The sheet header must still be reachable with the keyboard up.
-                    if !web(.button, contains("Close chat")).exists { problems.append("Chat close button hidden behind the keyboard") }
+                    // The sheet's ✕ is labelled "Close" and must stay above the keys.
+                    let keyboardTop = app.keyboards.firstMatch.exists ? app.keyboards.firstMatch.frame.minY : app.windows.firstMatch.frame.maxY
+                    let chatClose = app.webViews.buttons.matching(exact("Close")).allElementsBoundByIndex
+                        .first { $0.frame.width > 0 && $0.frame.width < 100 }
+                    if chatClose == nil || chatClose!.frame.maxY > keyboardTop { problems.append("Chat close button hidden behind the keyboard") }
                     let header = web(.staticText, exact("Chat about this note"))
                     if header.exists { header.tap(); settle() }
                 }
-                tap("Close chat", web(.button, contains("Close chat")), timeout: 5, required: false)
-                if web(.button, contains("Close chat")).exists { app.swipeDown() }
+                back()
+                if web(.staticText, exact("Chat about this note")).exists { problems.append("Chat did not close") }
             }
             if tap("Listen", web(.button, exact("Listen"))) {
                 if web(.button, exact("Pause")).waitForExistence(timeout: 90) { snap("Read aloud playing"); web(.button, exact("Pause")).tap() }
@@ -3121,7 +3187,9 @@ final class WrapperTests: XCTestCase {
         close.tap()
         let note = app.webViews.links.matching(NSPredicate(format: "label CONTAINS %@", original)).firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: 20))
-        note.tap()
+        // WebKit cannot always compute a hit point for a whole-row link.
+        app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: note.frame.midX, dy: note.frame.midY)).tap()
         let chat = button("Chat about this note")
         XCTAssertTrue(chat.waitForExistence(timeout: 30))
         chat.tap()

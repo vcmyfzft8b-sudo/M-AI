@@ -1906,6 +1906,8 @@ export const sr: Messages = {
   /* ---- Tutor usage, limits and top-ups ---- */
   "api.tutorTrialUsed": "Besplatna proba objašnjenja je potrošena. Pretplati se za dnevni pristup.",
   "api.tutorCreditsNeeded": "Za danas je objašnjenja gotovo. Dokupi sat ako želiš da nastaviš.",
+  "api.podcastTrialUsed": "Besplatna proba slušanja je potrošena. Pretplati se za svakodnevno slušanje.",
+  "api.podcastCreditsNeeded": "Za danas je slušanja gotovo. Dokupi sat ako želiš da nastaviš.",
   "tutor.usage.title": "Potrošnja objašnjenja",
   "tutor.usage.credits": "Dokupljeno: {minutes} min",
   "tutor.usage.unlimited": "Bez ograničenja",

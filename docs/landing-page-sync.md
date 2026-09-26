@@ -53,13 +53,25 @@ landing usually follows on its own. **Check it anyway** — the landing componen
 screen's JSX, and a changed structure (a new element, a moved button, a new class) still has to be
 copied across.
 
-One place still copies rather than shares: the app's phone layout for the note tabs is written as
-`@media (max-width: 1099px)` rules under `.memo-note-screen`, which a desktop visitor's window
-never matches and which the landing's phone-sized frames are not inside. The blocks in
-`landing.css` headed with the landing screens' names (`LandingFlashcardsScreen / …`, the podcast,
-mindmap, palace and speed-read block) restate those phone rules for the `.landing-study-frame`
-stand-in. **When you change a note tab's phone layout in `redesign.css`, change the matching
-block in `landing.css` too.**
+Three places still copy rather than share, and have to be kept in step by hand:
+
+- **The hero phone's chrome.** Inside a note tab the hero draws the shared screens, but the phone
+  around them — the nav bar, library rows, create sheet, settings, help, chat sheets — is still an
+  inline-styled transcription in `memo-app-preview.tsx`, with sizes taken from the app's computed
+  styles. A change to any of those app screens needs the same change there.
+- **The note body's marks in the hero.** The heading highlight, callout and read-aloud colours are
+  keyed on the root theme in `globals.css`; the hero restates them as `--hero-*` values in
+  `landing.css` so its own Appearance setting applies. Keep the values in step with `globals.css`.
+- **The note tabs' phone layout.** The app's phone layout for the note tabs is written as
+  `@media (max-width: 1099px)` rules under `.memo-note-screen`, which a desktop visitor's window
+  never matches and which the landing's phone-sized frames are not inside. The blocks in
+  `landing.css` headed with the landing screens' names (`LandingFlashcardsScreen / …`, the
+  podcast, mindmap, palace and speed-read block) restate those phone rules for the
+  `.landing-study-frame` stand-in. **When you change a note tab's phone layout in `redesign.css`,
+  change the matching block in `landing.css` too.**
+
+The hero chrome and the phone layout are the next things to move onto shared markup (a container
+query would let one rule serve both a phone viewport and the landing's phone-sized frame).
 
 ## Where each feature appears on the landing page
 

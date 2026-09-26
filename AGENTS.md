@@ -70,7 +70,8 @@ follow-up before merging.
 
 - The landing renders the app's own markup: `.memo-*` classes inside `LandingAppScope`, and the
   app's own component wherever it is pure. One component per app screen lives in
-  `src/components/landing/app/`. Never add an inline-styled copy of an app screen.
+  `src/components/landing/app/`. Never add an inline-styled copy of an app screen. (The hero
+  phone's chrome and the note tabs' phone layout are still hand-kept copies — the doc lists them.)
 - A new note tab or study mode goes into the hero phone's tabs, the "How it works" study pills and
   the feature list, in `NOTE_TABS` order, with copy in all five catalogues; also update the hero
   lead, the JSON-LD `featureList` and the FAQ if they list features.

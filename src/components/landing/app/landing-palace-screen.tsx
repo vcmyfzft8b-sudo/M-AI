@@ -665,13 +665,30 @@ export function LandingPalaceScreen({
 
     if (stage) observer?.observe(stage);
 
-    const onVisibility = () => gameRef.current?.setPaused(document.hidden || isComplete);
+    /*
+     * On the landing page the game can also be scrolled out of sight while it is open.
+     * The engine listens for the arrow keys on the whole window, so left running it
+     * would keep drawing frames nobody sees and eat the keys that scroll the page.
+     */
+    let onScreen = true;
+    const onVisibility = () =>
+      gameRef.current?.setPaused(document.hidden || isComplete || !onScreen);
+    const sight =
+      stage && typeof IntersectionObserver !== "undefined"
+        ? new IntersectionObserver((entries) => {
+            onScreen = entries.some((entry) => entry.isIntersecting);
+            onVisibility();
+          })
+        : null;
+
+    if (stage) sight?.observe(stage);
 
     onVisibility();
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       observer?.disconnect();
+      sight?.disconnect();
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [isBuilt, isComplete, isOpen]);

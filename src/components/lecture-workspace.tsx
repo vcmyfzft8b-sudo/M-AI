@@ -37,6 +37,7 @@ import {
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
 import { resolveMaterialLanguage } from "@/lib/languages";
+import { resolveNoteSourceNotices } from "@/lib/note-source-notice";
 import { isNoteEnrichmentPending } from "@/lib/note-enrichment-status";
 import { noteEmoji } from "@/lib/note-emoji";
 import { PRACTICE_QUESTION_MAX_SCORE } from "@/lib/practice-test-scoring";
@@ -2081,6 +2082,14 @@ export function LectureWorkspace({
     detail.lecture.status === "ready" &&
     detailSectionFailed(detail, "artifact");
   const noteEnrichmentPending = isNoteEnrichmentPending(detail.artifact?.model_metadata);
+  const noteSourceNotices = useMemo(
+    () =>
+      resolveNoteSourceNotices({
+        artifactMetadata: detail.artifact?.model_metadata,
+        processingMetadata: detail.lecture.processing_metadata,
+      }),
+    [detail.artifact?.model_metadata, detail.lecture.processing_metadata],
+  );
   const studyStage =
     detail.studyAsset?.model_metadata &&
     typeof detail.studyAsset.model_metadata === "object" &&
@@ -4311,6 +4320,11 @@ export function LectureWorkspace({
         <div className="memo-notes-panel">
           {cleanedStructuredNotes && detail.lecture.status === "ready" && !noteEnrichmentPending ? (
             <div className="memo-note-body">
+              {noteSourceNotices.map((notice) => (
+                <p key={notice.key} className="memo-note-source-notice" role="note">
+                  {t(notice.key, notice.params)}
+                </p>
+              ))}
               <div
                 ref={noteAnnotationShellRef}
                 className="markdown lecture-markdown note-annotation-shell"

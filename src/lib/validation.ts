@@ -178,7 +178,8 @@ export const chatQuestionSchema = createSanitizedStringSchema({
 });
 
 export const noteTextSchema = createSanitizedStringSchema({
-  minLength: 120,
+  // A topic name is enough: short material is taught as a topic instead of being refused.
+  minLength: 2,
   // Sized to the source-compression ceiling, not to what the note pipeline reads at once —
   // oversized pastes are condensed server-side. The request body cap is what binds in practice.
   maxLength: 4_000_000,

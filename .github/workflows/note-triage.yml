@@ -1,0 +1,175 @@
+name: Note triage
+
+# Looks for notes that did not finish, every six hours: failed notes (including the ones the
+# learner deleted afterwards, whose material survives in generation_failure_captures) and notes
+# stuck mid-pipeline. For each one whose material could have made a note, Claude reproduces the
+# failure against the current code and opens one PR per root cause. It never merges, never pushes
+# to main, never writes a migration and never touches a learner's lecture.
+# See docs/note-triage-automation.md and .claude/skills/note-triage/SKILL.md.
+#
+# Production is read with the service-role key pulled from Vercel at run time (the same
+# VERCEL_TOKEN error triage uses), so no database secret is stored in GitHub.
+#
+# GitHub only runs scheduled workflows from the default branch, so this file has to be on `main`
+# before the cron fires.
+
+on:
+  schedule:
+    # Every six hours, off the hour and away from error triage's :17.
+    - cron: "43 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "Override the scan start (ISO 8601). Ignores the stored cursor and does not advance it."
+        required: false
+        type: string
+      dry_run:
+        description: "Scan and triage only: no branch, no fix, no PR."
+        required: false
+        type: boolean
+        default: false
+      max_fixes:
+        description: "Maximum fix PRs to open in this run."
+        required: false
+        type: string
+        default: "3"
+
+concurrency:
+  group: note-triage
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+  actions: read
+
+jobs:
+  triage:
+    name: Find unfinished notes, reproduce, fix
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.TRIAGE_GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config --global user.name "memo-note-triage[bot]"
+          git config --global user.email "note-triage@users.noreply.github.com"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Pull production read credentials
+        # Only the three keys the scan and the replays need are kept; the rest of the pulled file is
+        # deleted at once. Values are masked in the log.
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          npm install -g vercel@50.35.0 >/dev/null
+          vercel env pull /tmp/prod.env --environment=production --yes --token "$VERCEL_TOKEN" >/dev/null
+          : > /tmp/note-triage.env
+          for key in NEXT_PUBLIC_SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY GEMINI_API_KEY OPENROUTER_API_KEY; do
+            value="$(grep -E "^${key}=" /tmp/prod.env | head -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//')"
+            if [ -n "$value" ]; then
+              echo "::add-mask::$value"
+              echo "${key}=${value}" >> /tmp/note-triage.env
+            fi
+          done
+          rm -f /tmp/prod.env
+          grep -q '^SUPABASE_SERVICE_ROLE_KEY=' /tmp/note-triage.env || { echo "::error::No service-role key in the production env."; exit 2; }
+
+      - name: Restore triage state
+        env:
+          GH_TOKEN: ${{ secrets.TRIAGE_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p .note-triage
+          names="$(gh variable list --repo "$GITHUB_REPOSITORY" --json name --jq '.[].name')"
+          for pair in "NOTE_TRIAGE_STATE:state.json:{}" 'NOTE_TRIAGE_BACKLOG:backlog.json:{"entries":[]}'; do
+            var="${pair%%:*}"; rest="${pair#*:}"; file="${rest%%:*}"; seed="${rest#*:}"
+            if grep -qx "$var" <<< "$names"; then
+              gh variable get "$var" --repo "$GITHUB_REPOSITORY" > ".note-triage/$file"
+            else
+              printf '%s\n' "$seed" > ".note-triage/$file"
+            fi
+          done
+
+      - name: Scan for unfinished notes
+        id: scan
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/note-triage.env; set +a
+          until="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          if [ -n "${{ inputs.since }}" ]; then
+            since="${{ inputs.since }}"; advance=false
+          else
+            # From the last complete scan, with ten minutes of overlap; a first run looks back a day.
+            since="$(jq -r '.cursor // empty' .note-triage/state.json)"
+            if [ -z "$since" ]; then since="$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)"; fi
+            since="$(date -u -d "$since - 10 minutes" +%Y-%m-%dT%H:%M:%SZ)"
+            advance=true
+          fi
+          node scripts/note-failure-scan.mjs --since "$since" --until "$until" --out /tmp/note-failures.json
+          # Findings already handled in an earlier run are not triaged again.
+          reviewed="$(jq -r '[.entries[].lectureId] | join(" ")' .note-triage/backlog.json)"
+          fresh="$(jq --arg seen " $reviewed " '[.findings[] | select(.triage == "review") | select(($seen | contains(" " + .lectureId + " ")) | not)] | length' /tmp/note-failures.json)"
+          echo "fresh=$fresh" >> "$GITHUB_OUTPUT"
+          echo "until=$until" >> "$GITHUB_OUTPUT"
+          echo "advance=$advance" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Unfinished notes $since → $until"
+            jq -r '"- ready: \(.readyInWindow)\n- failed: \(.failedInWindow)\n- stuck: \(.stuck)"' /tmp/note-failures.json
+            echo "- new to review: $fresh"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install dependencies
+        if: steps.scan.outputs.fresh != '0' && vars.NOTE_TRIAGE_FIXER_ENABLED != 'false'
+        run: npm ci
+
+      - name: Reproduce and fix
+        id: fix
+        if: steps.scan.outputs.fresh != '0' && vars.NOTE_TRIAGE_FIXER_ENABLED != 'false'
+        uses: anthropics/claude-code-action@v1
+        env:
+          NOTE_TRIAGE_ENV: /tmp/note-triage.env
+          NOTE_TRIAGE_REPORT: /tmp/note-failures.json
+          NOTE_TRIAGE_BACKLOG: .note-triage/backlog.json
+          NOTE_TRIAGE_MAX_FIXES: ${{ inputs.max_fixes || '3' }}
+          NOTE_TRIAGE_DRY_RUN: ${{ inputs.dry_run }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.TRIAGE_GITHUB_TOKEN }}
+          prompt: "/note-triage"
+          claude_args: |
+            --model claude-opus-5-5
+            --max-turns 300
+            --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
+
+      - name: Save triage state
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.TRIAGE_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -f /tmp/note-triage.env
+          [ -s .note-triage/state.json ] || exit 0
+          # The backlog only ever holds ids, verdicts and PR links, never learner material.
+          jq '.entries |= (sort_by(.at) | .[-400:])' .note-triage/backlog.json > /tmp/backlog.json
+          gh variable set NOTE_TRIAGE_BACKLOG --repo "$GITHUB_REPOSITORY" < /tmp/backlog.json
+          # The cursor moves only after a complete scan whose fixer (if it ran) finished.
+          if [ "${{ steps.scan.outcome }}" = "success" ] && [ "${{ steps.fix.outcome }}" != "failure" ] && [ "${{ steps.scan.outputs.advance }}" = "true" ]; then
+            jq --arg c "${{ steps.scan.outputs.until }}" '.cursor = $c | .lastRunAt = $c' .note-triage/state.json > /tmp/state.json
+            gh variable set NOTE_TRIAGE_STATE --repo "$GITHUB_REPOSITORY" < /tmp/state.json
+          fi

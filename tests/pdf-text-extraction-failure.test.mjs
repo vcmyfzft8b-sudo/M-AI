@@ -96,14 +96,18 @@ test("the Gemini fallback in extractTextFromPdf classifies an empty answer befor
   );
 
   const guard = PDF_FALLBACK_SOURCE.indexOf("error instanceof GeminiEmptyTextOutputError");
+  const restate = PDF_FALLBACK_SOURCE.indexOf("instructions: restateInstructions");
   const classified = PDF_FALLBACK_SOURCE.indexOf('"pdf_no_text"');
 
   assert.ok(guard > 0, "an empty Gemini answer still leaves extractTextFromPdf as a raw error");
-  assert.ok(classified > guard, "and it has to become an ExpectedLectureInputError to be handled");
   assert.ok(
-    PDF_FALLBACK_SOURCE.indexOf("throw error;", guard) > classified,
+    PDF_FALLBACK_SOURCE.indexOf("throw error;", guard) < restate,
     "every other Gemini failure is still a defect and must keep being rethrown untouched",
   );
+  // An empty answer is usually a withheld copy of published text (RECITATION), not an empty PDF:
+  // the restatement is asked for before the learner is told there is nothing to read.
+  assert.ok(restate > guard, "an empty verbatim answer is followed by a request to restate");
+  assert.ok(classified > restate, "and only an empty restatement becomes pdf_no_text");
 });
 
 // The classification above is an `instanceof` check, so it only works while the retry loop lets

@@ -12,6 +12,7 @@ export const AI_STAGES = [
   "note_extract",
   "note_outline",
   "note_write",
+  "note_topic",
   "coverage_plan",
   "study_items",
   "chat",
@@ -154,6 +155,10 @@ const STAGE_DEFAULTS: Record<AiStage, StageDefaults> = {
     outputHeadroom: 2.5,
     defaultModel: GLM_TEXT_MODEL,
   },
+  // Writes the teaching text for material that names a topic but explains none of it
+  // (notes/topic-notes.ts). One call per such note, and it is prose the note is then made from,
+  // so it reasons like the writer, not like extraction.
+  note_topic: { thinkingLevel: "low", outputHeadroom: 2.5, defaultModel: GLM_TEXT_MODEL },
   coverage_plan: { thinkingLevel: "low", outputHeadroom: 1.6, defaultModel: GLM_TEXT_MODEL },
   study_items: { thinkingLevel: "low", outputHeadroom: 1.6, defaultModel: GLM_TEXT_MODEL },
   /*
@@ -331,6 +336,7 @@ const STAGE_MODEL_ENV_KEYS: Record<AiStage, string> = {
   note_extract: "GEMINI_NOTE_EXTRACT_MODEL",
   note_outline: "GEMINI_NOTE_OUTLINE_MODEL",
   note_write: "GEMINI_NOTE_WRITE_MODEL",
+  note_topic: "GEMINI_NOTE_TOPIC_MODEL",
   coverage_plan: "GEMINI_COVERAGE_MODEL",
   study_items: "GEMINI_STUDY_ITEMS_MODEL",
   chat: "GEMINI_CHAT_MODEL",
@@ -348,6 +354,7 @@ const STAGE_THINKING_ENV_KEYS: Record<AiStage, string> = {
   note_extract: "GEMINI_NOTE_EXTRACT_THINKING",
   note_outline: "GEMINI_NOTE_OUTLINE_THINKING",
   note_write: "GEMINI_NOTE_WRITE_THINKING",
+  note_topic: "GEMINI_NOTE_TOPIC_THINKING",
   coverage_plan: "GEMINI_COVERAGE_THINKING",
   study_items: "GEMINI_STUDY_ITEMS_THINKING",
   chat: "GEMINI_CHAT_THINKING",
@@ -461,6 +468,8 @@ export function resolveStageFallbackModel(stage: AiStage): string | null {
  */
 const STAGE_FALLBACK_MODELS: Partial<Record<AiStage, string>> = {
   note_write: "or/google/gemini-3.7-flash",
+  // Learner-facing teaching prose, like the note itself: the same proven writer as its fallback.
+  note_topic: "or/google/gemini-3.7-flash",
   chat: "or/google/gemini-3.5-flash-lite",
 };
 
@@ -564,6 +573,7 @@ export function applyOutputHeadroom(maxOutputTokens: number | undefined, config:
 const STAGE_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
   note_outline: 240_000,
   note_write: 240_000,
+  note_topic: 240_000,
   // The selector reads ~48k chars and writes only unit numbers; measured runs finish in seconds.
   // A short leash matters because condensation runs inline in intake routes: one stalled call
   // must not eat the invocation that six concurrent chunks share.
@@ -631,6 +641,7 @@ const STAGE_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
 const MANDATORY_REASONING_TIMEOUT_MS: Partial<Record<AiStage, number>> = {
   note_outline: 200_000,
   note_write: 200_000,
+  note_topic: 200_000,
   podcast_script: 200_000,
   // Chat wants the same short leash whichever model runs it: the learner is waiting either
   // way. Named here so the mandatory-reasoning branch cannot quietly restore the 180s default.

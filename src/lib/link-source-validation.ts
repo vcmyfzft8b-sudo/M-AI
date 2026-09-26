@@ -199,3 +199,47 @@ export function isReadableLinkContentType(contentType: string) {
     normalized.trim().length === 0
   );
 }
+
+export type LinkDocumentType = { mimeType: string; extension: string };
+
+const LINK_DOCUMENT_TYPES: Array<LinkDocumentType & { mimeMarkers: string[] }> = [
+  { mimeType: "application/pdf", extension: "pdf", mimeMarkers: ["application/pdf", "application/x-pdf"] },
+  {
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    extension: "docx",
+    mimeMarkers: ["wordprocessingml"],
+  },
+  {
+    mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    extension: "pptx",
+    mimeMarkers: ["presentationml"],
+  },
+];
+
+/**
+ * Whether a link answered with a document we can read like an upload: by its content type, or --
+ * for servers that label every download application/octet-stream -- by the file name in the URL.
+ */
+export function resolveLinkDocumentType(contentType: string, url: URL): LinkDocumentType | null {
+  const normalized = contentType.toLowerCase();
+  const byMime = LINK_DOCUMENT_TYPES.find((type) =>
+    type.mimeMarkers.some((marker) => normalized.includes(marker)),
+  );
+
+  if (byMime) {
+    return { mimeType: byMime.mimeType, extension: byMime.extension };
+  }
+
+  const genericBinary =
+    !normalized.trim() ||
+    normalized.includes("application/octet-stream") ||
+    normalized.includes("binary/octet-stream") ||
+    normalized.includes("application/force-download") ||
+    normalized.includes("application/download");
+  const extension = url.pathname.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
+  const byExtension = LINK_DOCUMENT_TYPES.find((type) => type.extension === extension);
+
+  return genericBinary && byExtension
+    ? { mimeType: byExtension.mimeType, extension: byExtension.extension }
+    : null;
+}

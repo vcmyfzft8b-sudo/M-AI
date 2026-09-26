@@ -57,6 +57,6 @@ test("checkout refuses a second subscription before it creates a session", () =>
 
 test("billing.ts takes its access rule from the tested module", () => {
   const source = readFileSync(new URL("../src/lib/billing.ts", import.meta.url), "utf8");
-  assert.match(source, /import \{ hasPaidAccess \} from "@\/lib\/billing-access"/);
+  assert.match(source, /import \{[^}]*\bhasPaidAccess\b[^}]*\} from "@\/lib\/billing-access"/);
   assert.doesNotMatch(source, /function subscriptionPeriodAllowsAccess/);
 });

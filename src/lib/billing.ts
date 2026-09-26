@@ -1,10 +1,11 @@
 import "server-only";
 
-import { NextResponse } from "next/server";
+import { headers } from "next/headers";
+import { NextResponse, after } from "next/server";
 import { cache } from "react";
 import Stripe from "stripe";
 import { getAppleEntitlement } from "@/lib/mobile/apple";
-import { hasPaidAccess } from "@/lib/billing-access";
+import { CHECKOUT_RETURN_HEADER, hasPaidAccess } from "@/lib/billing-access";
 
 import { PREVIEW_AUTH_BYPASS_USER_ID, getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -230,6 +231,53 @@ async function syncStripeSubscriptionsForCustomer(customerId: string) {
   } while (startingAfter);
 }
 
+/**
+ * Whether this request can leave Stripe reconciliation until after the response.
+ *
+ * Every account that ever opened Checkout has a Stripe customer, and most of them never bought:
+ * on 2026-09-26 that was 2,058 profiles against 195 live subscriptions. Reconciling inline made
+ * each of those accounts wait on Stripe for every screen it opened — the library, a note, the
+ * paywall — to confirm a webhook we had not missed. Speed Insights put `/app` at 1.9s to first
+ * byte for it.
+ *
+ * A page render now reads what the webhook stored and reconciles after the response, so a
+ * missed webhook still heals and shows on the next screen. Two cases keep waiting: the page
+ * Checkout returns a buyer to, which must not show the paywall to somebody who has just paid,
+ * and every API route, whose answer grants or refuses something.
+ */
+async function canReconcileStripeAfterResponse() {
+  let requestHeaders: Headers;
+
+  try {
+    requestHeaders = await headers();
+  } catch {
+    // Outside a request (a job, a script): nothing is waiting on the answer but the caller.
+    return false;
+  }
+
+  const pathname = requestHeaders.get("x-pathname");
+
+  return Boolean(
+    pathname &&
+      !pathname.startsWith("/api/") &&
+      requestHeaders.get(CHECKOUT_RETURN_HEADER) !== "1",
+  );
+}
+
+async function reconcileStripeSubscriptions(userId: string, stripeCustomerId: string) {
+  try {
+    await syncStripeSubscriptionsForCustomer(stripeCustomerId);
+    return true;
+  } catch (error) {
+    console.error("Stripe subscription reconciliation failed", {
+      userId,
+      stripeCustomerId,
+      error,
+    });
+    return false;
+  }
+}
+
 async function resolveUserSubscriptionState(params: {
   userId: string;
   stripeCustomerId: string | null;
@@ -237,18 +285,14 @@ async function resolveUserSubscriptionState(params: {
 }) {
   let subscriptions = params.subscriptions ?? (await getSubscriptionsForUser(params.userId));
   let subscription = getActiveSubscription(subscriptions);
+  const stripeCustomerId = params.stripeCustomerId;
 
-  if (!subscription && params.stripeCustomerId) {
-    try {
-      await syncStripeSubscriptionsForCustomer(params.stripeCustomerId);
+  if (!subscription && stripeCustomerId) {
+    if (await canReconcileStripeAfterResponse()) {
+      after(() => reconcileStripeSubscriptions(params.userId, stripeCustomerId));
+    } else if (await reconcileStripeSubscriptions(params.userId, stripeCustomerId)) {
       subscriptions = await getSubscriptionsForUser(params.userId);
       subscription = getActiveSubscription(subscriptions);
-    } catch (error) {
-      console.error("Stripe subscription reconciliation failed", {
-        userId: params.userId,
-        stripeCustomerId: params.stripeCustomerId,
-        error,
-      });
     }
   }
 
@@ -597,20 +641,6 @@ export const getViewerAppState = cache(async function getViewerAppState() {
   return {
     user,
     ...entitlement,
-  };
-});
-
-/** App state for the paywall, including the one Stripe-only answer it shows. */
-export const getViewerCheckoutState = cache(async function getViewerCheckoutState() {
-  const appState = await getViewerAppState();
-
-  if (!appState) {
-    return null;
-  }
-
-  return {
-    ...appState,
-    subscriptionTrialEligible: await getSubscriptionTrialEligibility(appState.user.id),
   };
 });
 

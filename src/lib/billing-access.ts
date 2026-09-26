@@ -3,6 +3,13 @@ import type { BillingSubscriptionRow } from "@/lib/database.types";
 export const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing", "past_due"]);
 
 /**
+ * Set by the app proxy on the page Stripe Checkout sends a buyer back to, and
+ * overwritten on every request so a browser cannot supply it. It is the one
+ * page render that waits for Stripe: see `resolveUserSubscriptionState`.
+ */
+export const CHECKOUT_RETURN_HEADER = "x-memo-checkout-return";
+
+/**
  * How long a renewing plan keeps access after the period end we last stored.
  *
  * Stripe moves a subscription into its next period a little after the boundary

@@ -20,6 +20,8 @@ import { routeIdParamSchema } from "@/lib/validation";
 import { tr } from "@/lib/i18n/server";
 
 export const maxDuration = 300;
+// Stays in Washington while pages run in Dublin: see docs/performance.md.
+export const preferredRegion = "iad1";
 
 function getManualImportMetadata(processingMetadata: unknown) {
   if (!isRecord(processingMetadata) || !isRecord(processingMetadata.manualImport)) {

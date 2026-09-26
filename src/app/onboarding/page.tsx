@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { OnboardingFlow } from "@/components/onboarding-flow";
 import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
-import { getViewerCheckoutState } from "@/lib/billing";
+import { getViewerAppState } from "@/lib/billing";
 import { hasSeenOnboarding } from "@/lib/onboarding-anonymous";
 import { isNativeUserAgent } from "@/lib/mobile/runtime";
 import { hasPublicSupabaseEnv } from "@/lib/public-env";
@@ -38,7 +38,7 @@ export default async function OnboardingPage() {
   if (hasPublicSupabaseEnv) {
     const user = await getOptionalUserOrPreviewBypass();
     if (user) {
-      const appState = await getViewerCheckoutState();
+      const appState = await getViewerAppState();
       // Already answered: `/app/start` is the screen that decides what comes
       // after, and it will not send them back here.
       if (appState?.onboardingComplete) redirect("/app/start");

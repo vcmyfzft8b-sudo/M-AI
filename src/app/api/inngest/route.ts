@@ -19,6 +19,8 @@ import {
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 
 export const maxDuration = 300;
+// Stays in Washington while pages run in Dublin: see docs/performance.md.
+export const preferredRegion = "iad1";
 const INNGEST_ROUTE_METHODS = "GET, POST, PUT, OPTIONS";
 
 const handlers = serve({

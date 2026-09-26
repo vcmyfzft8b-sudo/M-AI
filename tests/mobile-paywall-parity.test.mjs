@@ -66,11 +66,10 @@ test("iOS and PWA render the same paywall structure, benefits, cards and CTA", (
     assert.ok(ios.includes(className), className);
   }
   assert.doesNotMatch(ios, /memo-native-paywall|€130/);
-  // App Review 3.1.2: the billed amount is the headline, not a monthly equivalent.
-  assert.match(ios, /memo-paywall-plan-price">£124.99<small>\/year<\/small>/);
-  assert.match(ios, /memo-paywall-plan-price">£19.00<small>/);
-  assert.doesNotMatch(ios, /£10.42/);
-  assert.match(ios, /3 days free, then £124.99\/year/);
+  // The yearly card leads with its monthly equivalent and says underneath
+  // what is billed each year.
+  assert.match(ios, /memo-paywall-plan-price">£10.42<small>/);
+  assert.match(ios, /3 days free, then billed yearly: £124.99/);
   assert.match(ios, /Nothing to pay today/);
 });
 test("an ineligible Apple account sees no promised trial or free checkout", () => {
@@ -104,9 +103,9 @@ test("Apple wheel offer keeps the PWA sheet and uses actual first-period prices"
   }
   assert.match(ios, /€64.99, then €129.99/);
   assert.match(ios, /€9.99/);
-  // The headline is the first charge for its whole period, never per week.
-  assert.match(ios, /memo-offer-price">€64.99\/year</);
-  assert.doesNotMatch(ios, /€1.25/);
+  // The yearly headline is weekly; the line beside it says what is billed yearly.
+  assert.match(ios, /memo-offer-price">€1.25\/week</);
+  assert.match(ios, /Billed yearly: €64.99, then €129.99/);
   assert.doesNotMatch(ios, /memo-native-paywall/);
   // The same sheet on both, countdown included: the app records its spin on
   // the same profile column, so the deadline it shows is the server's.

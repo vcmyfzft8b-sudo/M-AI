@@ -5,9 +5,10 @@
 - **Restore (#495, build 20):** Restore reconciles even when `AppStore.sync()`
   fails or is cancelled; a cancel is quiet. Verified on the physical iPhone
   against production: a subscription owned by another Memo account says so.
-- **3.1.2 billed amount (#496):** the app's paywall and wheel offer led with a
-  per-month / per-week figure. They now lead with what Apple bills for the
-  period. Web unchanged. Guarded by `mobile-paywall-parity`.
+- **Paywall prices (owner's choice, after #496):** the yearly card leads with
+  its monthly figure and the wheel with its weekly one, as before; the line
+  underneath says what is billed yearly ("3 days free, then billed yearly:
+  €129.99", "Billed yearly: €64.99, then €129.99").
 - **2.1 reachable IAP (#496):** the tutor hour was only offered after a
   subscriber's 30 daily minutes ran out. Subscribers can now top up from the
   tutor-time meter at any time (web and app); the review notes say where.

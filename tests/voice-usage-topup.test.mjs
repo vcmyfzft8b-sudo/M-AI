@@ -18,6 +18,7 @@ function load(native) {
     "react-dom": { createPortal: node => node },
     "@/lib/mobile/client": { useNativeIOS: () => native, nativeRequest() { throw new Error("No Apple calls during render"); } },
     "@/lib/mobile/billing-notice": { nativeBillingFailureKey: () => "native.verifyFailed" },
+    "@/components/creator-demo/creator-demo-context": { useAppHref: href => href },
     "@/components/instant-link": { InstantLink: ({ children, href, className }) => React.createElement("a", { href, className }, children) },
     "@/components/i18n-provider": { useT: () => t },
     "@/components/memo-portal": { MemoPortal: ({ children }) => children },
@@ -75,4 +76,11 @@ test("a refused tutor start opens the tutor-time sheet instead of seeming to do 
   assert.equal(refusals.length, 3);
   assert.equal((tutor.match(/setBlocked\((payload|refusal)\?\.code/g) ?? []).length, 3);
   assert.match(tutor, /openSignal=\{blockSignal\}/);
+});
+
+test("without a subscription, the offer goes straight to the paywall", () => {
+  const html = render(usage({ hasPaidAccess: false, remainingSeconds: 0, limitSeconds: 60, usedSeconds: 60 }));
+  assert.match(html, /Your trial is used up/);
+  assert.match(html, /href="\/app\/start"[^>]*>See plans/);
+  assert.doesNotMatch(html, /href="\/app\/settings"/);
 });

@@ -77,6 +77,7 @@ export function VoiceUsageSheet({
   buyingCredits,
   onBuyCredits,
   onCreditsAdded,
+  openSignal = 0,
   extra,
 }: {
   usage: VoiceUsage | null;
@@ -92,6 +93,11 @@ export function VoiceUsageSheet({
   onBuyCredits?: () => void;
   /** Called once an App Store hour has been credited, to re-read the meter in place. */
   onCreditsAdded?: () => void;
+  /**
+   * Bumped by the feature when the server refuses it for want of time, so the sheet that
+   * explains why (and offers the way on) opens by itself instead of Start seeming to do nothing.
+   */
+  openSignal?: number;
   /** Settings belonging to the feature this meter is shown on, below the divider. */
   extra?: ReactNode;
 }) {
@@ -105,8 +111,7 @@ export function VoiceUsageSheet({
   const [appleHour, setAppleHour] = useState<{ price: string; quote: string } | null>(null);
   const [appleNotice, setAppleNotice] = useState("");
   const [appleBusy, setAppleBusy] = useState(false);
-  const wantsAppleHour = Boolean(native && usage?.hasPaidAccess
-    && ((!usage.hasUnlimitedUsage && usage.remainingSeconds <= 0) || blocked));
+  const wantsAppleHour = Boolean(native && usage?.hasPaidAccess && (!usage.hasUnlimitedUsage || blocked));
   useEffect(() => {
     if (!wantsAppleHour || (window.memoNative?.version ?? 0) < 6) return;
     let live = true;
@@ -149,6 +154,12 @@ export function VoiceUsageSheet({
   const sheet = useSheet(close);
 
   useEffect(() => {
+    if (openSignal > 0 && menuRef.current && !menuRef.current.open) {
+      menuRef.current.open = true;
+    }
+  }, [openSignal]);
+
+  useEffect(() => {
     if (!isOpen) {
       return;
     }
@@ -179,6 +190,12 @@ export function VoiceUsageSheet({
   /* Red only when nothing is left anywhere — a spent day with credits in hand is fine. */
   const isOutOfTime = Boolean(usage && !usage.hasUnlimitedUsage && usage.remainingSeconds <= 0);
   /*
+   * A subscriber can top up whenever they look at the meter, not only once the day is spent:
+   * running out mid-sentence is a bad moment to discover the option exists.
+   */
+  const canTopUp = Boolean(usage?.hasPaidAccess && !usage.hasUnlimitedUsage);
+  const isSpent = isOutOfTime || Boolean(blocked);
+  /*
    * A share, never a number of minutes. How long somebody has left is a fact about the plan, and
    * putting it on the bar invites the arithmetic instead of the glance it is there for.
    */
@@ -197,7 +214,9 @@ export function VoiceUsageSheet({
   const isPodcast = usage?.feature === "podcast";
   const usageTitle = t(isPodcast ? "podcast.usage.title" : "tutor.usage.title");
   const offerTitle = t(
-    usage?.hasPaidAccess
+    usage?.hasPaidAccess && !isSpent
+      ? "tutor.paywall.moreTitle"
+      : usage?.hasPaidAccess
       ? isPodcast
         ? "podcast.paywall.creditsTitle"
         : "tutor.paywall.creditsTitle"
@@ -206,7 +225,9 @@ export function VoiceUsageSheet({
         : "tutor.paywall.trialTitle",
   );
   const offerBody = t(
-    usage?.hasPaidAccess && native
+    usage?.hasPaidAccess && !isSpent
+      ? native ? "native.tutorHourMoreBody" : "tutor.paywall.moreBody"
+      : usage?.hasPaidAccess && native
       ? "native.tutorHourBody"
       : usage?.hasPaidAccess
       ? isPodcast
@@ -265,9 +286,9 @@ export function VoiceUsageSheet({
       {/*
         * The offer lives in the same sheet as the number that explains why it is being made:
         * shown once there is nothing left, whether they arrived by running out or by opening the
-        * meter to see how much was gone.
+        * meter to see how much was gone — and, for a subscriber, as a top-up at any time.
         */}
-      {(isOutOfTime || blocked) && !(native && usage.hasPaidAccess && !appleHour) ? (
+      {(isSpent || canTopUp) && !(native && usage.hasPaidAccess && !appleHour) ? (
         <>
           <div className="note-read-settings-divider" />
           <div className="memo-tutor-offer">

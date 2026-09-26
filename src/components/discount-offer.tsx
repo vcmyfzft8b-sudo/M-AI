@@ -737,14 +737,15 @@ export function DiscountOffer({
                       })}
                     </span>
                   </span>
+                  {/* In the app the headline is the first charge itself, never a
+                      weekly equivalent: App Review (3.1.2) wants the billed amount
+                      to be the most prominent price. */}
                   <span className="memo-offer-price">
-                    {nativeOffer && offerPlan.id === "yearly" && !product?.introWeeklyPrice
-                      ? product?.introPrice
-                      : t(offerPlan.priceKey, {
-                          amount: nativeOffer
-                            ? (offerPlan.id === "yearly" ? product!.introWeeklyPrice! : product!.introPrice!)
-                            : formatCurrency(offerPlan.headlineAmount, locale),
-                        })}
+                    {nativeOffer
+                      ? offerPlan.id === "yearly"
+                        ? `${product!.introPrice!}/${t("native.year")}`
+                        : t(offerPlan.priceKey, { amount: product!.introPrice! })
+                      : t(offerPlan.priceKey, { amount: formatCurrency(offerPlan.headlineAmount, locale) })}
                   </span>
                 </button>
               ); })}

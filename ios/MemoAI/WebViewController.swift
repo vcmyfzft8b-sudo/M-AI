@@ -510,8 +510,12 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
         let trusted = frame.isMainFrame && frame.request.url.map(AppConfiguration.isInternal) == true
-        // WKWebView plus iOS present the consent prompts; never silently grant.
-        decisionHandler(trusted ? .prompt : .deny)
+        // Memo's own pages get the microphone on the app's behalf, so the only
+        // question is iOS's own "Memo AI would like to access the microphone",
+        // which still decides. `.prompt` stacked WebKit's website-style "Allow
+        // “www.memoai.eu” to use your microphone?" on top of it, again after
+        // every launch. Anything else is refused.
+        decisionHandler(trusted ? .grant : .deny)
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping (Any?, String?) -> Void) {

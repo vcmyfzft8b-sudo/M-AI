@@ -2,6 +2,12 @@ import XCTest
 import UIKit
 import StoreKitTest
 
+/// Staging tests run against a branch Preview or a local server on staging.
+private func isStagingTestHost(_ url: String) -> Bool {
+    guard let host = URL(string: url)?.host else { return false }
+    return host.hasSuffix(".vercel.app") || host == "localhost" || host == "127.0.0.1"
+}
+
 final class WrapperTests: XCTestCase {
     /// Walk the same anonymous onboarding as a fresh PWA install before login.
     /// The working-adult route avoids school-only questions; demo steps keep
@@ -113,7 +119,7 @@ final class WrapperTests: XCTestCase {
     @MainActor func testPreviewPrepareStudyAccount() throws {
         let env = ProcessInfo.processInfo.environment
         guard let preview = env["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              isStagingTestHost(preview),
               let email = env["MEMO_QA_EMAIL"], let code = env["MEMO_QA_CODE"] else {
             throw XCTSkip("Requires a staging Preview and its synthetic review account")
         }
@@ -137,7 +143,10 @@ final class WrapperTests: XCTestCase {
         }
         completeOnboarding(app)
         XCTAssertTrue(app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Continue with Google", "Nadaljuj z Google"])).firstMatch.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Continue with Apple", "Nadaljuj z Apple"])).firstMatch.exists)
+        // A local server has no Sign in with Apple key; Previews and production do.
+        if URL(string: preview)?.host?.hasSuffix(".vercel.app") == true {
+            XCTAssertTrue(app.webViews.buttons.matching(NSPredicate(format: "label IN %@", ["Continue with Apple", "Nadaljuj z Apple"])).firstMatch.exists)
+        }
         XCTAssertTrue(signInWithCode(app, email: email, code: code), "The staging review account must sign in")
         completeOnboarding(app)
         dismissInitialOffer(app)
@@ -238,7 +247,7 @@ final class WrapperTests: XCTestCase {
     // deleted. Seed the photo first: xcrun simctl addmedia <udid> ios/build/synthetic-plant-lesson.png
     @MainActor func testPreviewCreateStudyNoteFromPhoto() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires a staging Preview, synthetic account and seeded lesson photo")
         }
         let app = XCUIApplication()
@@ -431,7 +440,7 @@ final class WrapperTests: XCTestCase {
     // Staging's retained note varies by fixture account; MEMO_QA_NOTE_TITLE picks it.
     @MainActor private func openPreviewStudyNote(title: String = ProcessInfo.processInfo.environment["MEMO_QA_NOTE_TITLE"] ?? "Plant Life Cycle") throws -> XCUIApplication {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires a retained synthetic study note in staging")
         }
         continueAfterFailure = false
@@ -440,12 +449,19 @@ final class WrapperTests: XCTestCase {
         app.launch()
         passConsentGate(app)
         dismissInitialOffer(app)
-        let note = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
-        XCTAssertTrue(note.waitForExistence(timeout: 30))
+        let anyNote = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+        XCTAssertTrue(anyNote.waitForExistence(timeout: 30))
+        // The row's link, when there is one: WebKit can fail to answer
+        // isHittable for the emoji-led text inside it.
+        let link = app.webViews.links.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+        let note = link.exists ? link : anyNote
         // Newer notes push it down behind the dock; bring it into reach first.
         let dockTop = app.webViews.buttons["New note"].firstMatch.exists ? app.webViews.buttons["New note"].firstMatch.frame.minY : app.windows.firstMatch.frame.maxY
-        for _ in 0..<6 where !note.isHittable || note.frame.maxY > dockTop - 8 { app.webViews.firstMatch.swipeUp() }
-        note.tap()
+        for _ in 0..<6 where note.frame.minY < 0 || note.frame.maxY > dockTop - 8 { app.webViews.firstMatch.swipeUp() }
+        // Tap the row's observed centre, as a person would; WebKit cannot always
+        // compute a hit point for a whole-row link.
+        let row = note.frame
+        app.windows.firstMatch.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: row.midX, dy: row.midY)).tap()
         XCTAssertTrue(app.webViews.buttons["Notes"].firstMatch.waitForExistence(timeout: 30))
         dismissNotificationNudge(app)
         return app
@@ -920,7 +936,7 @@ final class WrapperTests: XCTestCase {
     // stops before checkout; a displayed button is not a verified purchase.
     @MainActor func testPreviewRealSubscriptionCatalogue() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires a staging Preview and signed-in synthetic account")
         }
         continueAfterFailure = false
@@ -964,7 +980,7 @@ final class WrapperTests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         guard env["MEMO_QA_GOOGLE_SIGN_IN"] == "1",
               let preview = env["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Explicit staging Google authentication handoff only")
         }
         continueAfterFailure = false
@@ -1034,7 +1050,7 @@ final class WrapperTests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         guard env["MEMO_QA_APPLE_SIGN_IN"] == "1",
               let preview = env["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Explicit Apple authentication inspection only")
         }
         continueAfterFailure = false
@@ -1066,7 +1082,7 @@ final class WrapperTests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         guard env["MEMO_QA_CHECKOUT"] == "1",
               let preview = env["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Explicit Sandbox checkout inspection only")
         }
         continueAfterFailure = false
@@ -1157,7 +1173,7 @@ final class WrapperTests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         guard env["MEMO_QA_COMPLETE_CHECKOUT"] == "1",
               let preview = env["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires an explicitly verified Sandbox purchase")
         }
         continueAfterFailure = false
@@ -1204,7 +1220,7 @@ final class WrapperTests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         guard env["MEMO_QA_COMPLETE_CHECKOUT"] == "1",
               let preview = env["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires a purchase owned by another synthetic account")
         }
         continueAfterFailure = false
@@ -1237,7 +1253,7 @@ final class WrapperTests: XCTestCase {
     // cancels its loads. Coming back must load Memo, not a connection error.
     @MainActor func testPreviewRecoversWhenLeftDuringLaunch() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires a staging Preview")
         }
         let app = XCUIApplication()
@@ -1263,7 +1279,7 @@ final class WrapperTests: XCTestCase {
     @MainActor func testPreviewPurchaseWithCode() throws {
         let env = ProcessInfo.processInfo.environment
         guard env["MEMO_QA_COMPLETE_CHECKOUT"] == "1", let code = env["MEMO_QA_PROMO_CODE"],
-              let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              let preview = env["MEMO_IOS_URL"], isStagingTestHost(preview) else {
             throw XCTSkip("Explicit Sandbox code purchase only")
         }
         continueAfterFailure = false
@@ -1320,7 +1336,7 @@ final class WrapperTests: XCTestCase {
     // This consumes only the synthetic account's daily spin, never a purchase.
     @MainActor func testPreviewWheelShowsRealHalfOffPrices() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires a staging Preview and eligible synthetic account")
         }
         continueAfterFailure = false
@@ -1363,7 +1379,7 @@ final class WrapperTests: XCTestCase {
     @MainActor func testPreviewDeleteSyntheticStudyAccount() throws {
         let env = ProcessInfo.processInfo.environment
         guard let preview = env["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              isStagingTestHost(preview),
               let email = env["MEMO_QA_EMAIL"], email.hasSuffix("@example.com"),
               env["MEMO_QA_DELETE_ACCOUNT"] == email else {
             throw XCTSkip("Requires explicit deletion of a synthetic Preview account")
@@ -1396,7 +1412,7 @@ final class WrapperTests: XCTestCase {
 
     @MainActor func testPreviewStudyNoteFromPublicArticle() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+        guard let preview = env["MEMO_IOS_URL"], isStagingTestHost(preview),
               let link = env["MEMO_QA_PUBLIC_ARTICLE"], URL(string: link)?.scheme == "https" else {
             throw XCTSkip("Requires a staging Preview and a public test article")
         }
@@ -1436,7 +1452,7 @@ final class WrapperTests: XCTestCase {
     // app, and tap the "ready" notification when it arrives.
     @MainActor func testPreviewPushNotificationOpensNote() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+        guard let preview = env["MEMO_IOS_URL"], isStagingTestHost(preview),
               let link = env["MEMO_QA_PUBLIC_ARTICLE"], URL(string: link)?.scheme == "https",
               env["MEMO_QA_PUSH"] == "1" else {
             throw XCTSkip("Requires a device, a staging Preview with APNs and a public article")
@@ -1516,7 +1532,7 @@ final class WrapperTests: XCTestCase {
     @MainActor func testPreviewNotificationTapOpensNoteSimulator() throws {
         let env = ProcessInfo.processInfo.environment
         guard env["MEMO_QA_PUSH_SIM"] == "1", let preview = env["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              isStagingTestHost(preview),
               let title = env["MEMO_QA_NOTE_TITLE"], let link = env["MEMO_QA_PUBLIC_ARTICLE"] else {
             throw XCTSkip("Simulator notification tap only")
         }
@@ -1561,7 +1577,7 @@ final class WrapperTests: XCTestCase {
     @MainActor func testPreviewTutorHourOffer() throws {
         let env = ProcessInfo.processInfo.environment
         guard env["MEMO_QA_TUTOR_HOUR"] == "1", let preview = env["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires an out-of-time synthetic subscriber on staging")
         }
         let config = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Offers", withExtension: "storekit"))
@@ -1635,7 +1651,7 @@ final class WrapperTests: XCTestCase {
     // that note, not on the start page loaded right after it.
     @MainActor func testPreviewNotificationLaunchOpensNote() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+        guard let preview = env["MEMO_IOS_URL"], isStagingTestHost(preview),
               let lecture = env["MEMO_QA_NOTIFICATION_LECTURE"], let title = env["MEMO_QA_NOTE_TITLE"] else {
             throw XCTSkip("Requires a staging note id")
         }
@@ -1658,7 +1674,7 @@ final class WrapperTests: XCTestCase {
     @MainActor func testPreviewPurchaseRefusalShowsReason() throws {
         let env = ProcessInfo.processInfo.environment
         guard env["MEMO_QA_REFUSAL"] == "1", let preview = env["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires a preview that refuses Apple purchases")
         }
         let config = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Offers", withExtension: "storekit"))
@@ -1698,7 +1714,7 @@ final class WrapperTests: XCTestCase {
     @MainActor func testPreviewRestoreCancelledSyncShowsReason() throws {
         let env = ProcessInfo.processInfo.environment
         guard env["MEMO_QA_REFUSAL"] == "1", let preview = env["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires a staging preview and an unpaid synthetic account")
         }
         let app = XCUIApplication()
@@ -1772,7 +1788,7 @@ final class WrapperTests: XCTestCase {
 
     @MainActor private func importCircuitDocument(fixtureName: String) throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires the shared staging Preview")
         }
         continueAfterFailure = false
@@ -1828,7 +1844,7 @@ final class WrapperTests: XCTestCase {
 
     @MainActor func testPreviewStudyNoteFromAudioFile() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+        guard let preview = env["MEMO_IOS_URL"], isStagingTestHost(preview),
               env["MEMO_QA_AUDIO"] == "memo-qa-electric-circuits-audio" else {
             throw XCTSkip("Requires staging, an unused synthetic free note and the seeded synthetic lecture audio")
         }
@@ -1891,7 +1907,7 @@ final class WrapperTests: XCTestCase {
     @MainActor func testPreviewLibrarySearchRenameAndFolders() throws {
         guard ProcessInfo.processInfo.environment["MEMO_QA_LIBRARY_WRITES"] == "1",
               let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires opt-in library writes on the dedicated staging account")
         }
         continueAfterFailure = false
@@ -2007,6 +2023,37 @@ final class WrapperTests: XCTestCase {
         keepStudyScreenshot("Library restored after folder deletion", app: app)
     }
 
+    /// The tutor asks for the microphone only through iOS. WebKit's own
+    /// website-style "Allow “host” to use your microphone?" must never appear.
+    /// (The simulator does not enforce a revoked microphone for WebKit, so
+    /// either the tutor starts or it explains where to allow the microphone.)
+    @MainActor func testPreviewTutorMicrophoneHasNoWebsitePrompt() throws {
+        guard ProcessInfo.processInfo.environment["MEMO_QA_MIC_DENIED"] == "1" else {
+            throw XCTSkip("Requires the synthetic Word account's free tutor minute")
+        }
+        let app = try openPreviewStudyNote(title: "Introduction to Electric Circuits")
+        defer { app.terminate() }
+        openStudyTab("Tutor", in: app)
+        let start = app.webViews.buttons["Start"].firstMatch
+        XCTAssertTrue(start.waitForExistence(timeout: 30))
+        start.tap()
+        let websitePrompt = app.alerts.matching(NSPredicate(format: "label CONTAINS %@", "to use your microphone")).firstMatch
+        let help = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "iOS Settings")).firstMatch
+        let explaining = app.webViews.staticTexts["Explaining"].firstMatch
+        // Out of tutor time, the refusal opens the tutor-time sheet with its offer.
+        let offer = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", ["Your trial is used up", "That's your tutor time for today"])).firstMatch
+        let deadline = Date().addingTimeInterval(40)
+        while Date() < deadline && !help.exists && !explaining.exists && !offer.exists {
+            XCTAssertFalse(websitePrompt.exists, "WebKit's website-style microphone prompt must not appear")
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        keepStudyScreenshot("Tutor start without a website microphone prompt", app: app)
+        XCTAssertFalse(websitePrompt.exists)
+        XCTAssertTrue(help.exists || explaining.exists || offer.exists, "Start must visibly do something: begin, explain the microphone, or offer more time")
+        let end = app.webViews.buttons["End"].firstMatch
+        if end.exists { end.tap() }
+    }
+
     @MainActor func testPreviewLiveTutorSessionControls() throws {
         guard ProcessInfo.processInfo.environment["MEMO_QA_LIVE_TUTOR"] == "1" else {
             throw XCTSkip("Requires an explicitly enabled real staging tutor session")
@@ -2090,7 +2137,7 @@ final class WrapperTests: XCTestCase {
 
     @MainActor func testPreviewWithdrawAndRestoreAIConsent() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+        guard let preview = env["MEMO_IOS_URL"], isStagingTestHost(preview),
               let email = env["MEMO_QA_EMAIL"], email.hasSuffix("@example.com") else {
             throw XCTSkip("Requires a signed-in synthetic account on staging")
         }
@@ -2132,7 +2179,7 @@ final class WrapperTests: XCTestCase {
 
     @MainActor func testPreviewRemainsPortraitWhenDeviceRotates() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires a staging Preview")
         }
         continueAfterFailure = false
@@ -2185,7 +2232,7 @@ final class WrapperTests: XCTestCase {
 
     @MainActor func testPreviewSafeAreaReview() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires a staging Preview and a signed-in synthetic account")
         }
         let app = XCUIApplication()
@@ -2260,7 +2307,7 @@ final class WrapperTests: XCTestCase {
     // APP_REVIEW_LOGIN_CODE for that account); there is no password screen.
     @MainActor func testPreviewSignInScreenAndCodeLogin() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let preview = env["MEMO_IOS_URL"], URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+        guard let preview = env["MEMO_IOS_URL"], isStagingTestHost(preview),
               let email = env["MEMO_QA_EMAIL"], let code = env["MEMO_QA_CODE"] else {
             throw XCTSkip("Requires a staging Preview and a synthetic review account")
         }
@@ -2337,7 +2384,7 @@ final class WrapperTests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         guard env["MEMO_QA_MIC_DENIED"] == "1",
               let preview = env["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              isStagingTestHost(preview),
               let email = env["MEMO_QA_EMAIL"], let code = env["MEMO_QA_CODE"] else {
             throw XCTSkip("Requires denied microphone access on the isolated staging simulator")
         }
@@ -2387,7 +2434,7 @@ final class WrapperTests: XCTestCase {
     @MainActor func testPreviewRecordingSurvivesTheAppLeavingTheScreen() throws {
         let env = ProcessInfo.processInfo.environment
         guard let preview = env["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true,
+              isStagingTestHost(preview),
               let email = env["MEMO_QA_EMAIL"], let code = env["MEMO_QA_CODE"] else {
             throw XCTSkip("Requires a staging Preview and a synthetic review account")
         }
@@ -2568,7 +2615,7 @@ final class WrapperTests: XCTestCase {
     // yields the full set of screenshots to review.
     @MainActor func testPreviewTour() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires a staging Preview and a signed-in synthetic account")
         }
         let app = XCUIApplication()
@@ -2777,7 +2824,7 @@ final class WrapperTests: XCTestCase {
     // Puts the synthetic account back on English after a tour that changed it.
     @MainActor func testPreviewResetLanguageToEnglish() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires a staging Preview and a signed-in synthetic account")
         }
         let app = XCUIApplication()
@@ -2813,7 +2860,7 @@ final class WrapperTests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         guard env["MEMO_QA_EMAIL"] == "ios-pdf-20260922@example.com",
               let preview = env["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires the signed-in synthetic PDF account on staging")
         }
         continueAfterFailure = false
@@ -2900,7 +2947,7 @@ final class WrapperTests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         guard env["MEMO_QA_EMAIL"] == "ios-pdf-20260922@example.com",
               let preview = env["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires the signed-in synthetic PDF account on staging")
         }
         let app = XCUIApplication()
@@ -3019,7 +3066,7 @@ final class WrapperTests: XCTestCase {
 
     @MainActor func testPreviewKeyboardEverywhere() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires the signed-in synthetic staging account")
         }
         continueAfterFailure = false
@@ -3078,7 +3125,7 @@ final class WrapperTests: XCTestCase {
 
     @MainActor func testPreviewAnalyticsChoice() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires the dedicated signed-in staging account")
         }
         continueAfterFailure = false
@@ -3134,7 +3181,7 @@ final class WrapperTests: XCTestCase {
 
     @MainActor func testPreviewSettingsRows() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires a staging Preview and a signed-in synthetic account")
         }
         let app = XCUIApplication()
@@ -3195,7 +3242,7 @@ final class WrapperTests: XCTestCase {
 
     @MainActor func testPreviewHelpUsesAppleBillingInstructions() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires a staging Preview and a signed-in synthetic account")
         }
         let app = XCUIApplication()
@@ -3231,7 +3278,7 @@ final class WrapperTests: XCTestCase {
     // signed in on this simulator. The ordinary fixture suite skips this test.
     @MainActor func testPreviewSettingsScrollAndTheme() throws {
         guard let preview = ProcessInfo.processInfo.environment["MEMO_IOS_URL"],
-              URL(string: preview)?.host?.hasSuffix(".vercel.app") == true else {
+              isStagingTestHost(preview) else {
             throw XCTSkip("Requires a staging Preview and a signed-in synthetic account")
         }
         let app = XCUIApplication()

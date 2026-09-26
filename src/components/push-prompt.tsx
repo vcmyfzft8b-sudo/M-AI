@@ -146,7 +146,7 @@ export function PushPrompt({ active }: { active: boolean }) {
             aria-busy={pending}
           >
             {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-            {t("push.enableAllow")}
+            <span>{t("push.enableAllow")}</span>
           </button>
         </div>
       </div>

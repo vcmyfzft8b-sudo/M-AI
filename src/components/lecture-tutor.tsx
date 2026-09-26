@@ -209,6 +209,8 @@ export function LectureTutor({
   const [previewVoice, setPreviewVoice] = useState<NoteTtsVoice | null>(null);
   const [usage, setUsage] = useState<TutorUsage | null>(null);
   const [blocked, setBlocked] = useState<TutorBlock | null>(null);
+  /* Counts refusals, so each one opens the tutor-time sheet even while already blocked. */
+  const [blockSignal, setBlockSignal] = useState(0);
   const [buyingCredits, setBuyingCredits] = useState(false);
   /** The picker behind the collapsed voice row, open. */
   const [pickingVoice, setPickingVoice] = useState(false);
@@ -559,6 +561,7 @@ export function LectureTutor({
         }
 
         setBlocked(payload?.code ?? "tutor_credits_needed");
+        setBlockSignal((count) => count + 1);
         settleGrant();
         teardown();
         planRef.current = null;
@@ -1008,6 +1011,7 @@ export function LectureTutor({
             }
 
             setBlocked(payload?.code ?? "tutor_credits_needed");
+            setBlockSignal((count) => count + 1);
             settleGrant();
             teardown();
             planRef.current = null;
@@ -1497,6 +1501,7 @@ export function LectureTutor({
           }
 
           setBlocked(refusal?.code ?? "tutor_credits_needed");
+          setBlockSignal((count) => count + 1);
           setPhaseNow("idle");
 
           return;
@@ -2079,6 +2084,7 @@ export function LectureTutor({
         usage={usage}
         slot={headSlot}
         blocked={Boolean(blocked)}
+        openSignal={blockSignal}
         buyingCredits={buyingCredits}
         onBuyCredits={() => void buyCredits()}
         onCreditsAdded={() => { setBlocked(null); void refreshUsage(); }}

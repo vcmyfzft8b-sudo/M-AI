@@ -78,3 +78,15 @@ test("the app never sees Stripe for tutor time, and subscribers alone may open A
   assert.match(sheet, /nativeRequest<\{ status: string \}>\("purchaseTutorHour"/);
   assert.doesNotMatch(sheet.slice(sheet.indexOf("buyAppleHour")), /checkout\.stripe|\/api\/billing\/tutor-credits/);
 });
+
+test("a subscriber can find the top-up before their day runs out, on the web and in the app", () => {
+  // App Review has to be able to reach every purchase it reviews, and nobody
+  // spends the whole daily half hour just to look for it.
+  const sheet = readFileSync(new URL("../src/components/voice-usage-sheet.tsx", import.meta.url), "utf8");
+  assert.match(sheet, /const canTopUp = Boolean\(usage\?\.hasPaidAccess && !usage\.hasUnlimitedUsage\)/);
+  assert.match(sheet, /\{\(isSpent \|\| canTopUp\) && !\(native && usage\.hasPaidAccess && !appleHour\)/);
+  assert.match(sheet, /const wantsAppleHour = Boolean\(native && usage\?\.hasPaidAccess && \(!usage\.hasUnlimitedUsage \|\| blocked\)\)/);
+  // Before the day is spent the offer says so, rather than "that's it for today".
+  assert.match(sheet, /usage\?\.hasPaidAccess && !isSpent\s*\?\s*"tutor\.paywall\.moreTitle"/);
+  assert.match(sheet, /native \? "native\.tutorHourMoreBody" : "tutor\.paywall\.moreBody"/);
+});

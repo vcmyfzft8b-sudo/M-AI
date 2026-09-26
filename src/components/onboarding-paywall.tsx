@@ -227,10 +227,16 @@ export function OnboardingPaywall({
           const yearlySavings = native ? (appleProduct?.yearlySavings ?? 0) : annualizedMonthly > plan.annualizedAmount
             ? Math.round((1 - plan.annualizedAmount / annualizedMonthly) * 100)
             : 0;
+          /*
+           * App Review (3.1.2) wants what Apple actually bills to be the most
+           * prominent price, so the app leads with the charge for the whole
+           * period (the first one, when a code discounts it) rather than a
+           * per-month equivalent. The web keeps its monthly figure.
+           */
           const displayPrice = native
-            ? appleProduct?.monthlyPrice ?? appleProduct?.price ?? "—"
+            ? appleProduct?.introPrice ?? appleProduct?.price ?? "—"
             : formatCurrency(plan.displayAmount ?? plan.amount, locale);
-          const suffix = native && plan.id === "yearly" && !appleProduct?.monthlyPrice
+          const suffix = native && plan.id === "yearly"
             ? `/${t("native.year")}` : t("paywall.perMonth");
           const detail = native
             ? !appleProduct ? t("native.working")

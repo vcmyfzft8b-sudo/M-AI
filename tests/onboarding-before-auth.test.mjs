@@ -286,4 +286,8 @@ test("the first step can go back to the landing page, but only where there is on
   // browser where it would be a hydration mismatch.
   assert.match(page, /backHref=\{native \? undefined : "\/"\}/);
   assert.match(page, /isNativeUserAgent\(\(await headers\(\)\)\.get\("user-agent"\)\)/);
+
+  // Where it has nowhere to go, the arrow is hidden rather than left on screen
+  // doing nothing when tapped. It keeps its space so the progress bar stays put.
+  assert.match(flow, /visibility: v\.backState === "off" \? "hidden" : undefined/);
 });

@@ -1,5 +1,33 @@
 # Memo iOS submission checklist
 
+## App Review pass on 26 September 2026 (#495, #496, build 21)
+
+- **Restore (#495, build 20):** Restore reconciles even when `AppStore.sync()`
+  fails or is cancelled; a cancel is quiet. Verified on the physical iPhone
+  against production: a subscription owned by another Memo account says so.
+- **3.1.2 billed amount (#496):** the app's paywall and wheel offer led with a
+  per-month / per-week figure. They now lead with what Apple bills for the
+  period. Web unchanged. Guarded by `mobile-paywall-parity`.
+- **2.1 reachable IAP (#496):** the tutor hour was only offered after a
+  subscriber's 30 daily minutes ran out. Subscribers can now top up from the
+  tutor-time meter at any time (web and app); the review notes say where.
+- **4.2 website feel (#496, native, build 21):** WebKit's "Allow “host” to use
+  your microphone?" appeared before iOS's own prompt on every launch. Memo's own
+  pages are now granted in WebKit; iOS's permission still decides.
+- **Bugs:** a refused tutor start did nothing visible (now opens the
+  tutor-time sheet); the first onboarding step's dead back arrow is hidden.
+- **Checked, no change needed:** no tracking SDKs (analytics opt-in, first
+  party; no ATT needed); App Privacy labels match; production serves the app
+  both Apple and Google sign-in and no Stripe purchase path; Sign in with Apple
+  grants are stored in production (exchange works with the revoke key);
+  refund/revocation removes access (unit tests); iPad: onboarding, paywall,
+  settings rows, delete sheet, note in portrait and sideways.
+- **Still only the owner can do:** install 1.0.0 (21) from TestFlight, sign in
+  with the review account, listen to the tutor, and say "submit". A real
+  Sign in with Apple revocation needs a spare Apple ID.
+- **Residual judgement risks:** the daily discount wheel always lands on the
+  same Apple introductory offer; the iPad layout is the phone layout, wider.
+
 ## Status on 23 September 2026 (after #476, #477, #478)
 
 - **Production:** #476 (billing lifecycle, creator codes via Apple, keyboard

@@ -5,6 +5,7 @@ import { nativeBillingFailureKey } from "@/lib/mobile/billing-notice";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { useAppHref } from "@/components/creator-demo/creator-demo-context";
 import { InstantLink } from "@/components/instant-link";
 import { useT } from "@/components/i18n-provider";
 import { MemoPortal } from "@/components/memo-portal";
@@ -103,6 +104,8 @@ export function VoiceUsageSheet({
 }) {
   const t = useT();
   const native = useNativeIOS();
+  /* Without a subscription the way on is the paywall itself, not Settings. */
+  const paywallHref = useAppHref("/app/start");
   const [isOpen, setOpen] = useState(false);
   /*
    * The app sells the same hour through Apple (a consumable), never Stripe.
@@ -318,7 +321,7 @@ export function VoiceUsageSheet({
               </button>
             ) : (
               /*
-               * Closing on the way out is what makes the tap visible. Settings
+               * Closing on the way out is what makes the tap visible. The paywall
                * has a loading skeleton, and the overlay that stands in for it
                * is drawn inside the shell content at z-index 90 — under this
                * sheet, which sits at 1190. Without the dismiss the skeleton
@@ -328,7 +331,7 @@ export function VoiceUsageSheet({
                */
               <InstantLink
                 className="memo-tutor-start"
-                href="/app/settings"
+                href={paywallHref}
                 onClick={() => sheet.dismiss()}
               >
                 {t("tutor.paywall.trialCta")}

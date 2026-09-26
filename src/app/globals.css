@@ -287,7 +287,10 @@ a {
   text-decoration: none;
 }
 
-a:visited {
+/* Zero specificity, like `.memo :where(a)`: a plain `a:visited` (0,1,1) beat every
+   single-class link colour once the page had been visited, so a white-on-ink button
+   such as the tutor's "See plans" turned white on white. */
+:where(a:visited) {
   color: inherit;
   text-decoration: none;
 }

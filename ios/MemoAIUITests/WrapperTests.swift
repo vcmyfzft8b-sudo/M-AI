@@ -2052,6 +2052,14 @@ final class WrapperTests: XCTestCase {
         XCTAssertTrue(help.exists || explaining.exists || offer.exists, "Start must visibly do something: begin, explain the microphone, or offer more time")
         let end = app.webViews.buttons["End"].firstMatch
         if end.exists { end.tap() }
+        // Without a subscription the offer's button goes straight to the paywall.
+        let seePlans = app.webViews.links["See plans"].firstMatch
+        if seePlans.exists {
+            seePlans.tap()
+            XCTAssertTrue(app.webViews.buttons["Close the subscription offer"].firstMatch.waitForExistence(timeout: 20),
+                          "See plans must open the paywall")
+            keepStudyScreenshot("See plans opened the paywall", app: app)
+        }
     }
 
     @MainActor func testPreviewLiveTutorSessionControls() throws {

@@ -6305,7 +6305,22 @@ export function LectureWorkspace({
 
           {/* The bottom row: the listen / annotate pill (rendered into the slot
               by NoteReadAloud) and the way into chat. */}
-          <div className="memo-dock">
+          {/* Until hydration there is no slot to portal the listen pill into, so
+              the chat bar would paint full width and then shrink beside the pill
+              once it lands — the note screen's largest layout shift on phones.
+              The dock says a pill is coming, and the bar keeps its room. */}
+          <div
+            className="memo-dock"
+            data-pill-pending={
+              !dockSlot &&
+              activeTabId === "notes" &&
+              cleanedStructuredNotes &&
+              detail.lecture.status === "ready" &&
+              !noteEnrichmentPending
+                ? ""
+                : undefined
+            }
+          >
             <div className="memo-dock-slot" ref={setDockSlot} />
 
             {/* Nothing to bring back on a tab that has no chat column, and the

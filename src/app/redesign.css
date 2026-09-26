@@ -11192,8 +11192,9 @@
       opacity 0.2s ease;
   }
 
-  /* Nothing beside it on this tab: the bar takes the whole row. */
-  .memo-dock:not(:has(.memo-dock-pill)):not(:has(.mobile-study-manage-pill))
+  /* Nothing beside it on this tab: the bar takes the whole row. A pill that is
+     only waiting for hydration (`data-pill-pending`) still counts as beside it. */
+  .memo-dock:not(:has(.memo-dock-pill)):not(:has(.mobile-study-manage-pill)):not([data-pill-pending])
     .memo-m-chatbar {
     width: 100%;
   }

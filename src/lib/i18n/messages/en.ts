@@ -1893,6 +1893,8 @@ export const en: Messages = {
   /* ---- Tutor usage, limits and top-ups ---- */
   "api.tutorTrialUsed": "Your free trial of the tutor is used up. Subscribe for daily access.",
   "api.tutorCreditsNeeded": "You're out of tutor time for today. Top up an hour to carry on.",
+  "api.podcastTrialUsed": "Your free listening trial is used up. Subscribe to listen every day.",
+  "api.podcastCreditsNeeded": "You're out of listening time for today. Top up an hour to carry on.",
   "tutor.usage.title": "Tutor usage",
   "tutor.usage.credits": "Topped up: {minutes} min",
   "tutor.usage.unlimited": "No limit",

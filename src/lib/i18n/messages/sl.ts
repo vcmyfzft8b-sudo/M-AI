@@ -1928,6 +1928,8 @@ export const sl = {
   /* ---- Tutor usage, limits and top-ups ---- */
   "api.tutorTrialUsed": "Brezplačni preizkus inštruktorja je porabljen. Naroči se za dnevno uporabo.",
   "api.tutorCreditsNeeded": "Današnji čas z inštruktorjem je porabljen. Dokupi uro, če želiš nadaljevati.",
+  "api.podcastTrialUsed": "Brezplačni preizkus poslušanja je porabljen. Naroči se za vsakodnevno poslušanje.",
+  "api.podcastCreditsNeeded": "Današnji čas za poslušanje je porabljen. Dokupi uro, če želiš nadaljevati.",
   "tutor.usage.title": "Poraba inštruktorja",
   "tutor.usage.credits": "Dokupljeno: {minutes} min",
   "tutor.usage.unlimited": "Brez omejitve",

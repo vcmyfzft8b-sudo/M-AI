@@ -28,9 +28,9 @@ cannot be imported from a shared constant.
 - `resolveUserSubscriptionState` used to ask Stripe on every render for any account that has a
   Stripe customer and no live subscription. That is everybody who ever opened Checkout and did
   not buy: 2,058 profiles against 195 live subscriptions on 2026-09-26. A page render now
-  reconciles in `after()`, once the response is sent. The page Checkout returns a buyer to
-  (`/app/start?checkout=success`, marked by the proxy with `x-memo-checkout-return`) and every
-  API route still wait for the answer.
+  reconciles in `after()`, once the response is sent. The paywall (`/app/start`) still waits,
+  because it is where Checkout returns a buyer and where every screen sends somebody it believes
+  has not paid, and so do all API routes.
 - The free-trial answer on the paywall (`getSubscriptionTrialEligibility`) is the one read on
   `/app/start` that goes to Stripe. It is only asked once onboarding is complete. The survey shows
   no price, so it never needed the answer.

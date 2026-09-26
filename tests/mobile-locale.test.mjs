@@ -40,7 +40,6 @@ test("first native login uses exactly the same country language and persistent c
         "@/lib/public-env": { getPublicEnv: () => ({ supabaseUrl: "https://staging.invalid", supabaseAnonKey: "synthetic" }) },
         "@/lib/mobile/account-lifecycle": { accountDeletionRequested: () => false },
         "@/lib/verified-page-user": { VERIFIED_PAGE_USER_HEADER: "x-memo-user" },
-        "@/lib/billing-access": { CHECKOUT_RETURN_HEADER: "x-memo-checkout-return" },
       });
       await middleware.updateSession(req);
       assert.equal(writes[0][0], "memo-locale");
@@ -91,7 +90,6 @@ test("anonymous offline shells preserve a validated locale without adding accoun
       "@/lib/public-env": { getPublicEnv: () => ({ supabaseUrl: "https://staging.invalid", supabaseAnonKey: "synthetic" }) },
       "@/lib/mobile/account-lifecycle": { accountDeletionRequested: () => false },
       "@/lib/verified-page-user": { VERIFIED_PAGE_USER_HEADER: "x-memo-user" },
-      "@/lib/billing-access": { CHECKOUT_RETURN_HEADER: "x-memo-checkout-return" },
     });
     await middleware.updateSession(req);
     const forwardedRequest = new NextRequest(req.url, { headers: forwarded });

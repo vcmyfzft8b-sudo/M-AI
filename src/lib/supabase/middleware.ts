@@ -11,7 +11,6 @@ import {
 } from "@/lib/i18n/locales";
 import { getPublicEnv } from "@/lib/public-env";
 import { accountDeletionRequested } from "@/lib/mobile/account-lifecycle";
-import { CHECKOUT_RETURN_HEADER } from "@/lib/billing-access";
 import {
   serializeVerifiedPageUser,
   VERIFIED_PAGE_USER_HEADER,
@@ -61,13 +60,6 @@ export async function updateSession(request: NextRequest) {
   // requests get a fresh value below only after Supabase validates the cookie;
   // API routes deliberately get none and authenticate inside their handler.
   requestHeaders.delete(VERIFIED_PAGE_USER_HEADER);
-  requestHeaders.delete(CHECKOUT_RETURN_HEADER);
-  if (
-    request.nextUrl.pathname === "/app/start" &&
-    request.nextUrl.searchParams.get("checkout") === "success"
-  ) {
-    requestHeaders.set(CHECKOUT_RETURN_HEADER, "1");
-  }
 
   if (!env.supabaseUrl || !env.supabaseAnonKey) {
     return seedLocaleCookie(

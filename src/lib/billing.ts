@@ -5,7 +5,7 @@ import { NextResponse, after } from "next/server";
 import { cache } from "react";
 import Stripe from "stripe";
 import { getAppleEntitlement } from "@/lib/mobile/apple";
-import { CHECKOUT_RETURN_HEADER, hasPaidAccess } from "@/lib/billing-access";
+import { hasPaidAccess } from "@/lib/billing-access";
 
 import { PREVIEW_AUTH_BYPASS_USER_ID, getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -241,9 +241,11 @@ async function syncStripeSubscriptionsForCustomer(customerId: string) {
  * byte for it.
  *
  * A page render now reads what the webhook stored and reconciles after the response, so a
- * missed webhook still heals and shows on the next screen. Two cases keep waiting: the page
- * Checkout returns a buyer to, which must not show the paywall to somebody who has just paid,
- * and every API route, whose answer grants or refuses something.
+ * missed webhook still heals and shows on the next screen. Two cases keep waiting. The paywall,
+ * because it is where a stale answer sells something: it is where Checkout returns a buyer, and
+ * where every screen sends somebody it believes has not paid. Somebody still answering the
+ * survey there has never opened Checkout, so has no customer to ask about. And every API route,
+ * whose answer grants or refuses something.
  */
 async function canReconcileStripeAfterResponse() {
   let requestHeaders: Headers;
@@ -257,11 +259,7 @@ async function canReconcileStripeAfterResponse() {
 
   const pathname = requestHeaders.get("x-pathname");
 
-  return Boolean(
-    pathname &&
-      !pathname.startsWith("/api/") &&
-      requestHeaders.get(CHECKOUT_RETURN_HEADER) !== "1",
-  );
+  return Boolean(pathname && !pathname.startsWith("/api/") && pathname !== getPaywallPath());
 }
 
 async function reconcileStripeSubscriptions(userId: string, stripeCustomerId: string) {

@@ -40,6 +40,37 @@ The `x-vercel-id` header is not enough, because it names where the proxy ran.
   `/app/start` that goes to Stripe. It is only asked once onboarding is complete. The survey shows
   no price, so it never needed the answer.
 
+## Layout shift and first paint
+
+Only Chromium reports CLS and LCP, so every CLS number here comes from Chrome, mostly Android.
+FCP also comes from Safari and the iOS app.
+
+- **Note dock (phone).** The listen pill is portalled into the dock after hydration, so the chat
+  bar used to paint full width and then shrink beside it: 0.42 CLS at p75. The dock carries
+  `data-pill-pending` until the slot exists.
+- **Content column (desktop).** Going between a note and any other page moves `main` about
+  200 px, because the rail collapses and the chat column opens. A click excuses that, but
+  browser back and forward do not: about 0.1 CLS each time. `main` is keyed on the committed
+  route's layout, so it is a new element at that commit, and an inserted element is never a
+  shift. The page inside changes segment at the same moment, so nothing extra is remounted.
+  The navigation overlay looks for that column while rendering, so it re-renders from a layout
+  effect when the one it drew into has left the page. Otherwise a slow click would drop it and
+  expose the destination's own loading skeleton.
+- **Note skeleton (phone).** Every shape in it is a gradient, which the browser does not count as
+  content, so first paint waited for the note itself: mobile FCP 5.1 s against a 1.1 s TTFB. Its
+  back control is now the real link, which works before hydration and is content once the
+  Material Symbols font is available (`display=block`: immediately for a returning reader, after
+  the font download on a first visit).
+- **Survey mascot.** It was the `/app/start` LCP element: a raw 140 KB PNG with no intrinsic size,
+  fetched apart from the optimised copy the root layout preloads. It now uses that URL and its
+  size.
+- **Not fixed: the sign-in card on Android** (`/auth/email-entry` 0.33, `/auth/check-email` 0.13).
+  The card is centred in the viewport minus `--memo-kb`, so the keyboard moves it through
+  layout. Closing the keyboard with the back gesture involves no input, so the whole movement
+  counts. The fix is to move it with a transform, but that changes how the keyboard system
+  behaves on iOS Safari, which it was tuned for. Do it only with a real Android keyboard to test
+  on.
+
 ## Measured before the change (production, 2026-09-19 to 2026-09-26, p75)
 
 | | desktop | mobile |

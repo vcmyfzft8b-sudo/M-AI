@@ -11,14 +11,16 @@ export function appleEnvironment(): Environment.PRODUCTION | Environment.SANDBOX
   return process.env.VERCEL_ENV === "production" ? Environment.PRODUCTION : Environment.SANDBOX;
 }
 
-function sandboxReviewer(userId: string) {
-  // Explicit synthetic review/TestFlight accounts only, never a request flag or UA.
-  return (process.env.APPLE_SANDBOX_REVIEW_USER_IDS || "").split(",").map(id => id.trim().toLowerCase()).includes(userId.toLowerCase());
-}
-
-export function appleAccountEnvironments(userId: string) {
-  return appleEnvironment() === Environment.PRODUCTION
-    ? sandboxReviewer(userId) ? ["production", "sandbox"] : ["production"] : ["sandbox"];
+/**
+ * TestFlight and App Review buy in Apple's Sandbox while talking to the production server, and
+ * App Review may register its own account rather than use the demo one, so production honours a
+ * sandbox purchase for any account. Only a build signed by our team (TestFlight, App Review, a
+ * developer's Xcode run) can make a sandbox purchase Apple signs for our bundle id; an App Store
+ * download always buys in production. Until 27 September 2026 this was limited to the accounts
+ * on APPLE_SANDBOX_REVIEW_USER_IDS, and every other TestFlight purchase answered 503.
+ */
+export function appleAccountEnvironments() {
+  return appleEnvironment() === Environment.PRODUCTION ? ["production", "sandbox"] : ["sandbox"];
 }
 
 function assertDatabaseEnvironment() {
@@ -67,16 +69,19 @@ async function verifyTransaction(jws: string, userId?: string) {
   let verified: JWSTransactionDecodedPayload;
   try { verified = await appleVerifier(environment).verifyAndDecodeTransaction(jws); }
   catch (error) {
-    if (environment !== Environment.PRODUCTION || userId && !sandboxReviewer(userId)
-        || !process.env.APPLE_SANDBOX_REVIEW_USER_IDS) throw error;
+    // Only a payload the production verifier read and found to be Sandbox gets a second look: an
+    // OCSP or chain failure must stay that failure, not become a sandbox verdict on a real purchase.
+    if (environment !== Environment.PRODUCTION || !(error instanceof VerificationException)
+        || error.status !== VerificationStatus.INVALID_ENVIRONMENT) throw error;
     environment = Environment.SANDBOX;
     verified = await appleVerifier(environment).verifyAndDecodeTransaction(jws);
     // A TestFlight Apple ID can still hold a purchase made for another Memo
-    // account; say that, rather than refusing it as an unknown sandbox buyer.
+    // account; say that, rather than granting it to whoever sent it.
     if (userId && verified.appAccountToken && verified.appAccountToken.toLowerCase() !== userId.toLowerCase()) {
       throw new AppleAccountMismatch();
     }
-    if (!verified.appAccountToken || !sandboxReviewer(verified.appAccountToken)) throw new AppleNotificationRejected("Sandbox account not allowed");
+    // Our app always names the buyer; a sandbox purchase that names nobody was not made in it.
+    if (!verified.appAccountToken) throw new AppleNotificationRejected("Sandbox purchase names no Memo account");
   }
   return { environment, verified };
 }
@@ -84,9 +89,9 @@ async function verifyTransaction(jws: string, userId?: string) {
 /**
  * Apple sends Sandbox notifications — its own connectivity test, and every TestFlight and App
  * Review purchase event — to the production server URL, so production must be able to READ one.
- * Reading is not authorising: the allowlist still decides what a sandbox payload may grant, in
- * verifyTransaction below. Gating the decode on it made every sandbox notification a 503, which
- * Apple then retried at 1, 12, 24, 48 and 72 hours.
+ * What a sandbox payload may grant is decided in verifyTransaction above. Gating the decode on
+ * the old reviewer allowlist made every sandbox notification a 503, which Apple then retried at
+ * 1, 12, 24, 48 and 72 hours.
  */
 export async function verifyAppleNotification(jws: string) {
   try { return await appleVerifier().verifyAndDecodeNotification(jws); }
@@ -212,7 +217,7 @@ export async function getAppleEntitlement(userId: string) {
   assertDatabaseEnvironment();
   const { data, error } = await createSupabaseServiceRoleClient()
     .from("mobile_app_store_entitlements").select("product_id,expires_at")
-    .eq("user_id", userId).in("environment", appleAccountEnvironments(userId))
+    .eq("user_id", userId).in("environment", appleAccountEnvironments())
     .eq("status", "active").gt("expires_at", new Date().toISOString())
     .order("expires_at", { ascending: false }).limit(1).maybeSingle();
   if (error) throw new Error("Apple entitlement lookup failed", { cause: error });

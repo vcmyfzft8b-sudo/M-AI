@@ -5,6 +5,8 @@ import {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
+  useReducer,
   useRef,
   useState,
   useTransition,
@@ -309,6 +311,17 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
     // so an overlay would only flash over content that stays put — and offline
     // a document navigation here would reload the screen the reader is on.
     if (disabled || targetPathname === currentPathname) {
+      /*
+       * Unless another page is still loading: then a tap back to this one is a
+       * change of mind — the back arrow on a note's own skeleton, pressed while
+       * the note loads — so the pending navigation goes, overlay and all, along
+       * with the push it may still be waiting a frame to make.
+       */
+      if (pending) {
+        cancelPaintWaitRef.current?.();
+        setPending(null);
+      }
+
       router.push(href);
       return;
     }
@@ -362,6 +375,21 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
     pending && typeof document !== "undefined"
       ? document.querySelector<HTMLElement>(".app-shell-content")
       : null;
+
+  /*
+   * The host is looked up while rendering, so it is the one that was on the page before this
+   * commit. The shell puts a new one in when the layout changes between a note and any other
+   * page (see `AppShell`), and the commit that lands such a navigation takes the old host, and
+   * the overlay inside it, off the page — exposing the destination's own loading.tsx, the
+   * skeleton-switch this provider exists to prevent. A layout effect runs before that frame
+   * paints, so rendering again here puts the overlay into the new host with no gap.
+   */
+  const [, refreshHost] = useReducer((count: number) => count + 1, 0);
+  useLayoutEffect(() => {
+    if (contentHost && !contentHost.isConnected) {
+      refreshHost();
+    }
+  });
   const overlay =
     pending && !skeleton
       ? /*

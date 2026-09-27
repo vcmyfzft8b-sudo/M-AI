@@ -39,6 +39,7 @@ test("first native login uses exactly the same country language and persistent c
         "@/lib/i18n/locales": locales,
         "@/lib/public-env": { getPublicEnv: () => ({ supabaseUrl: "https://staging.invalid", supabaseAnonKey: "synthetic" }) },
         "@/lib/mobile/account-lifecycle": { accountDeletionRequested: () => false },
+        "@/lib/supabase/auth-user": { isTransientAuthError: () => false },
         "@/lib/verified-page-user": { VERIFIED_PAGE_USER_HEADER: "x-memo-user" },
       });
       await middleware.updateSession(req);
@@ -89,6 +90,7 @@ test("anonymous offline shells preserve a validated locale without adding accoun
       "@/lib/i18n/locales": locales,
       "@/lib/public-env": { getPublicEnv: () => ({ supabaseUrl: "https://staging.invalid", supabaseAnonKey: "synthetic" }) },
       "@/lib/mobile/account-lifecycle": { accountDeletionRequested: () => false },
+      "@/lib/supabase/auth-user": { isTransientAuthError: () => false },
       "@/lib/verified-page-user": { VERIFIED_PAGE_USER_HEADER: "x-memo-user" },
     });
     await middleware.updateSession(req);

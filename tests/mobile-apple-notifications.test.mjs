@@ -32,7 +32,7 @@ function run(source, modules) {
  * recorder whose verdict each test dictates, so what is under test is our own decision about
  * which verifier to try and what a failure means.
  */
-function loadApple({ vercelEnv = "production", allowlist, verdicts }) {
+function loadApple({ vercelEnv = "production", verdicts }) {
   const constructed = [];
   class SignedDataVerifier {
     constructor(_roots, _online, environment, bundleId, appAppleId) {
@@ -56,7 +56,6 @@ function loadApple({ vercelEnv = "production", allowlist, verdicts }) {
       ? "https://zrcwmhuwwvguiekzmcdj.supabase.co" : "https://yviipoccwsndxyrhtcjm.supabase.co",
     APPLE_BUNDLE_ID: "eu.memoai.memo", APPLE_APP_ID: "6812409212",
     APPLE_IAP_PRIVATE_KEY: "key", APPLE_IAP_KEY_ID: "kid", APPLE_IAP_ISSUER_ID: "iss",
-    ...(allowlist === undefined ? {} : { APPLE_SANDBOX_REVIEW_USER_IDS: allowlist }),
   };
   const exports = run(transpile("lib/mobile/apple.ts"), {
     env,
@@ -78,9 +77,8 @@ const wrongEnvironment = () => new VerificationException(VerificationStatus.INVA
 
 // The regression. Apple's sandbox test notification reached production on 18 September with the
 // allowlist not yet deployed, and the decode was refused because of it.
-test("production reads a sandbox notification with no reviewer allowlist set", async () => {
+test("production reads a sandbox notification", async () => {
   const apple = loadApple({
-    allowlist: undefined,
     verdicts: { [Environment.PRODUCTION]: wrongEnvironment(), [Environment.SANDBOX]: TEST_NOTIFICATION },
   });
   const notification = await apple.verifyAppleNotification("ey.sandbox");
@@ -88,17 +86,8 @@ test("production reads a sandbox notification with no reviewer allowlist set", a
   assert.deepEqual(apple.constructed.map(v => v.environment), [Environment.PRODUCTION, Environment.SANDBOX]);
 });
 
-test("production still reads a sandbox notification when the allowlist is set", async () => {
-  const apple = loadApple({
-    allowlist: "0d3e5149-7b2c-4a1e-9f3d-2c8b6e5a4d10",
-    verdicts: { [Environment.PRODUCTION]: wrongEnvironment(), [Environment.SANDBOX]: TEST_NOTIFICATION },
-  });
-  assert.equal((await apple.verifyAppleNotification("ey.sandbox")).notificationType, "TEST");
-});
-
 test("a production notification never reaches the sandbox verifier", async () => {
   const apple = loadApple({
-    allowlist: undefined,
     verdicts: { [Environment.PRODUCTION]: { notificationType: "DID_RENEW" }, [Environment.SANDBOX]: wrongEnvironment() },
   });
   assert.equal((await apple.verifyAppleNotification("ey.production")).notificationType, "DID_RENEW");
@@ -109,7 +98,7 @@ test("a production notification never reaches the sandbox verifier", async () =>
 // repeat it, and a preview must never silently accept a production payload.
 test("a preview does not retry a failed notification against another environment", async () => {
   const apple = loadApple({
-    vercelEnv: "preview", allowlist: undefined,
+    vercelEnv: "preview",
     verdicts: { [Environment.SANDBOX]: wrongEnvironment(), [Environment.PRODUCTION]: TEST_NOTIFICATION },
   });
   await assert.rejects(apple.verifyAppleNotification("ey.production"),
@@ -119,7 +108,6 @@ test("a preview does not retry a failed notification against another environment
 
 test("the production verifier carries the app id and the sandbox one does not", async () => {
   const apple = loadApple({
-    allowlist: undefined,
     verdicts: { [Environment.PRODUCTION]: wrongEnvironment(), [Environment.SANDBOX]: TEST_NOTIFICATION },
   });
   await apple.verifyAppleNotification("ey.sandbox");
@@ -132,7 +120,7 @@ test("the production verifier carries the app id and the sandbox one does not", 
 // Whether to ask Apple to send it again. Wrong on the permanent side costs three days of 5xx;
 // wrong on the acknowledged side loses a purchase, so anything unrecognised must stay retryable.
 test("a payload that belongs to somebody else is not worth another attempt", () => {
-  const apple = loadApple({ allowlist: undefined, verdicts: {} });
+  const apple = loadApple({ verdicts: {} });
   for (const status of ["INVALID_APP_IDENTIFIER", "INVALID_ENVIRONMENT", "INVALID_CHAIN_LENGTH"]) {
     assert.equal(apple.appleNotificationRetryable(new VerificationException(VerificationStatus[status])), false, status);
   }
@@ -144,7 +132,7 @@ test("a payload that belongs to somebody else is not worth another attempt", () 
 // acknowledging those would discard real billing notifications during an outage we could recover
 // from, so they keep the retry even though a forged payload also lands here.
 test("a failure that could be ours, and anything unrecognised, is retryable", () => {
-  const apple = loadApple({ allowlist: undefined, verdicts: {} });
+  const apple = loadApple({ verdicts: {} });
   for (const status of ["VERIFICATION_FAILURE", "FAILURE", "RETRYABLE_VERIFICATION_FAILURE", "INVALID_CERTIFICATE"]) {
     assert.equal(apple.appleNotificationRetryable(new VerificationException(VerificationStatus[status])), true, status);
   }
@@ -243,11 +231,47 @@ test("with Apple billing off nothing is verified at all", async () => {
 // another Memo account got "could not be confirmed yet, try again" (503) forever, because the
 // sandbox allowlist was checked before ownership. Ownership now answers first.
 test("a sandbox purchase made for another Memo account is reported as such, not as retryable", async () => {
-  const reviewer = "0d3e5149-7b2c-4a1e-9f3d-2c8b6e5a4d10";
+  const buyer = "0d3e5149-7b2c-4a1e-9f3d-2c8b6e5a4d10";
   const other = "11111111-2222-4333-8444-555555555555";
   const apple = loadApple({
-    allowlist: reviewer,
     verdicts: { [Environment.PRODUCTION]: wrongEnvironment(), [Environment.SANDBOX]: { appAccountToken: other, productId: "eu.memoai.premium.yearly" } },
   });
-  await assert.rejects(apple.saveAppleTransaction("ey.sandbox", reviewer, true), (error) => error.name === "AppleAccountMismatch");
+  await assert.rejects(apple.saveAppleTransaction("ey.sandbox", buyer, true), (error) => error.name === "AppleAccountMismatch");
+});
+
+// 27 September: TestFlight purchases from any account but three allowlisted ones answered 503,
+// so a device recording App Review asked for — a new account that subscribes — could not be made,
+// and a reviewer who registered their own account would have met the same wall.
+test("production accepts a TestFlight purchase from any account", async () => {
+  const buyer = "3f6c2a1e-8b4d-4c7e-9a2f-1d5e6b7c8a90";
+  const apple = loadApple({
+    verdicts: { [Environment.PRODUCTION]: wrongEnvironment(), [Environment.SANDBOX]: { appAccountToken: buyer, productId: "eu.memoai.premium.monthly" } },
+  });
+  // Verification passes and the purchase goes on to be stored; the stub has no database.
+  await assert.rejects(apple.saveAppleTransaction("ey.sandbox", buyer), /no database in this test/);
+  assert.deepEqual(apple.constructed.map(v => v.environment).slice(0, 2), [Environment.PRODUCTION, Environment.SANDBOX]);
+  assert.deepEqual([...apple.appleAccountEnvironments()], ["production", "sandbox"]);
+});
+
+test("a preview holds sandbox entitlements only", () => {
+  const apple = loadApple({ vercelEnv: "preview", verdicts: {} });
+  assert.deepEqual([...apple.appleAccountEnvironments()], ["sandbox"]);
+});
+
+// An OCSP or chain failure on a real purchase must surface as itself; read as sandbox it would
+// come back INVALID_ENVIRONMENT, which the notification route treats as never worth a retry.
+test("only a wrong-environment verdict sends a purchase to the sandbox verifier", async () => {
+  const apple = loadApple({
+    verdicts: { [Environment.PRODUCTION]: new VerificationException(VerificationStatus.FAILURE), [Environment.SANDBOX]: { appAccountToken: "x" } },
+  });
+  await assert.rejects(apple.saveAppleTransaction("ey.production", "x"),
+    error => error instanceof VerificationException && error.status === VerificationStatus.FAILURE);
+  assert.deepEqual(apple.constructed.map(v => v.environment), [Environment.PRODUCTION]);
+});
+
+test("a sandbox purchase that names no Memo account grants nothing", async () => {
+  const apple = loadApple({
+    verdicts: { [Environment.PRODUCTION]: wrongEnvironment(), [Environment.SANDBOX]: { productId: "eu.memoai.premium.monthly" } },
+  });
+  await assert.rejects(apple.saveAppleTransaction("ey.sandbox"), error => error.name === "AppleNotificationRejected");
 });

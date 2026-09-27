@@ -46,7 +46,7 @@ Draft review notes:
 >
 > Memo Premium Monthly and Yearly are auto-renewable products in one subscription group. Restore Purchases is available on the subscription screen and in Settings. Existing paid users can access their account without purchasing again.
 
-Use an allowlisted synthetic account for Apple Sandbox purchases in the Release app. Verify that review login and subscription access work before writing that they work here.
+Apple Sandbox purchases in the Release app work for any account (since 27 September 2026). Verify that review login and subscription access work before writing that they work here.
 
 ## Privacy and compliance review
 

@@ -148,7 +148,7 @@ In App Store Connect, **Users and Access → Integrations → In-App Purchase**,
   key and never falls back to web checkout credentials. Production may retain
   its existing Stripe key until the restricted catalogue key is configured.
   See [Stripe restricted keys](https://docs.stripe.com/keys/restricted-api-keys).
-- `APPLE_SANDBOX_REVIEW_USER_IDS`: optional comma-separated UUIDs of explicitly chosen synthetic TestFlight/App Review accounts
+- `APPLE_SANDBOX_REVIEW_USER_IDS`: no longer read (since 27 September 2026); production accepts a sandbox purchase from any account. Safe to delete from Vercel.
 
 Do not place secrets in Swift, `NEXT_PUBLIC_*`, Git, or chat. The [official Apple server library](https://github.com/apple/app-store-server-library-node) handles JWS verification and API authentication. Public root certificates in `src/lib/mobile/apple-roots.json` come from [Apple PKI](https://www.apple.com/certificateauthority/).
 
@@ -157,7 +157,7 @@ Do not place secrets in Swift, `NEXT_PUBLIC_*`, Git, or chat. The [official Appl
 - Vercel Production: `VERCEL_ENV=production`, production Supabase `zrcwmhuwwvguiekzmcdj`.
 - Local/Vercel Preview: Apple's Sandbox and shared staging Supabase `yviipoccwsndxyrhtcjm` only. No branch-specific Supabase environment overrides.
 - The backend rejects a mismatched database host. Apple billing disabled leaves existing web billing working normally.
-- Real TestFlight/App Review use Apple's Sandbox even with the Release app pointed at production. Only explicitly allowlisted synthetic production accounts can receive those sandbox entitlements. Other production users can receive only production transactions. This exception does **not** authorize preview testing against production.
+- Real TestFlight/App Review use Apple's Sandbox even with the Release app pointed at production, and App Review may register its own account, so production accepts a sandbox purchase from **any** account (only builds signed by our team can make one; App Store downloads always buy in production). The purchase must name the buyer's Memo account (`appAccountToken`); one naming another account answers 409. Sandbox entitlements are stored with `environment = 'sandbox'`. This does **not** authorize preview testing against production.
 - Configure Notifications V2 production URL: `https://memoai.eu/api/mobile/notifications`. Use the staging preview URL for sandbox testing first. When validating the actual Release app for TestFlight/review, switch the sandbox notification URL to the production endpoint in a coordinated test window; only the allowlisted synthetic accounts are accepted there. Restore the intended sandbox target after the window. Never assume two independently configured sandbox webhook targets both receive events.
 - Keep the chosen preview available to Apple, including its webhook. Vercel deployment protection can block device login and Apple callbacks; configure access deliberately for synthetic staging tests.
 
@@ -323,7 +323,7 @@ These are shared PWA changes; no separate native library UI was introduced.
 ## 7. Archive, TestFlight, and submit
 
 1. Ship the tested web/backend branch through the normal local → authorized push → Vercel Preview → authorized merge process. Confirm `memoai.eu` serves these changes. A local build alone does not update the wrapped website.
-2. Complete the physical-device and Apple Sandbox checks above, then test the actual Release app using explicitly allowlisted synthetic accounts.
+2. Complete the physical-device and Apple Sandbox checks above, then test the actual Release app using synthetic accounts.
 3. In Xcode select **Any iOS Device (arm64)** and **Product → Archive**.
 4. In Organizer, **Validate App**, then **Distribute App → App Store Connect → Upload**. Use Apple's validation results as the final signing/package check.
 5. Test the processed build through TestFlight before selecting it for the App Store version.

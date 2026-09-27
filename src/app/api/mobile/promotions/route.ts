@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     }
     stage = "apple_history";
     const history = await createSupabaseServiceRoleClient().from("mobile_app_store_entitlements")
-      .select("original_transaction_id").eq("user_id", user.id).in("environment", appleAccountEnvironments(user.id)).limit(1);
+      .select("original_transaction_id").eq("user_id", user.id).in("environment", appleAccountEnvironments()).limit(1);
     if (history.error) throw new Error("Apple history unavailable");
     const mode = history.data?.length ? "promotional" : "introductory";
     // Apple's purchase never carries our code, so remember it now for the

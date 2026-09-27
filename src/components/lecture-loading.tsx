@@ -1,10 +1,13 @@
 "use client";
 
 /*
- * A client component only so the one string on it — the screen reader's label —
- * can be read in the reader's language. Everything else here is static markup.
+ * A client component for the reader's language (the screen reader's label and
+ * the back control's) and for the back control itself. Everything else here is
+ * static markup.
  */
 import { useT } from "@/components/i18n-provider";
+import { InstantLink } from "@/components/instant-link";
+import { Msym } from "@/components/msym";
 
 const SKELETON_TABS = [0, 1, 2, 3, 4];
 const SKELETON_PARAGRAPHS = [
@@ -93,9 +96,18 @@ export function LectureWorkspaceLoading() {
       aria-label={t("note.loading")}
       aria-busy="true"
     >
-      {/* Phone: back, the note's emoji, actions. */}
+      {/* Phone: back, the note's emoji, actions.
+
+          Back is the real control, not its shape. It is the one thing on this
+          screen that does not depend on the note, it works as a plain link
+          before any script has run, and it is the only element here a browser
+          counts as content: on a phone every other shape is a gradient, so the
+          first paint used to wait for the whole note to stream in behind it
+          (5 s at p75, against 1 s for the first byte). */}
       <div className="memo-m-navbar memo-only-mobile flex">
-        <span className="memo-m-navbtn app-loading-pill" />
+        <InstantLink href="/app" aria-label={t("common.back")} className="memo-m-navbtn">
+          <Msym name="arrow_back" size="1.5rem" fill={false} weight={500} />
+        </InstantLink>
         <span
           className="app-loading-pill"
           style={{ display: "block", height: "1.5rem", width: "1.5rem", borderRadius: "999px" }}

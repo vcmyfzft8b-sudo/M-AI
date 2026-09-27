@@ -74,12 +74,6 @@ test("the client that verified the learner queries with the token it refreshed",
   assert.equal(data?.id, "lecture");
 });
 
-// The chat routes sign in through getOptionalUser, which does not hand back its client.
-const OWNERSHIP_ON_A_FRESH_CLIENT = new Set([
-  "src/app/api/lectures/[id]/chat/route.ts",
-  "src/app/api/lectures/[id]/chat/stream/route.ts",
-]);
-
 function apiRoutes(dir = new URL("../src/app/api/", import.meta.url)) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const url = new URL(entry.name + (entry.isDirectory() ? "/" : ""), dir);
@@ -94,17 +88,16 @@ test("API routes check ownership on the client that verified the learner", () =>
     const path = decodeURIComponent(url.pathname).slice(root.length);
     const source = fs.readFileSync(url, "utf8");
     for (const [call] of source.matchAll(/ensureUserOwnsLecture\(\{[^}]*\}\)/g)) {
-      if (OWNERSHIP_ON_A_FRESH_CLIENT.has(path)) continue;
       checked += 1;
       assert.match(call, /\bsupabase\b/, `${path}: ${call.replace(/\s+/g, " ")}`);
     }
   }
-  assert.ok(checked >= 37, `expected every lecture route, checked ${checked}`);
+  assert.ok(checked >= 39, `expected every lecture route, checked ${checked}`);
 });
 
-test("tutor routes pass the client getRouteUser verified", () => {
-  for (const name of ["turn", "plan", "session"]) {
-    const source = fs.readFileSync(new URL(`../src/app/api/lectures/[id]/tutor/${name}/route.ts`, import.meta.url), "utf8");
-    assert.match(source, /ensureUserOwnsLecture\(\{ lectureId: id, user, supabase: auth\.supabase \}\)/, name);
+test("tutor and chat routes pass the client getRouteUser verified", () => {
+  for (const name of ["tutor/turn", "tutor/plan", "tutor/session", "chat", "chat/stream"]) {
+    const source = fs.readFileSync(new URL(`../src/app/api/lectures/[id]/${name}/route.ts`, import.meta.url), "utf8");
+    assert.match(source, /ensureUserOwnsLecture\(\{\s*lectureId: id,\s*user,\s*supabase: auth\.supabase,?\s*\}\)/, name);
   }
 });

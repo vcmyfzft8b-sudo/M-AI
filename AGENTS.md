@@ -134,6 +134,31 @@ each wrote to production's migration history from an unmerged branch and cost an
 - The automation opens pull requests and never merges them. It must not push to `main`, stack one fix branch on another, or write a database migration.
 - The operating procedure is [.claude/skills/error-triage/SKILL.md](/.claude/skills/error-triage/SKILL.md); setup and troubleshooting are in [docs/error-triage-automation.md](/docs/error-triage-automation.md).
 
+## Supabase Sessions In API Routes
+
+Fixed on 2026-09-27 (Sentry MEMOAI-WEB-4N and 149778206; PRs #511, #512, #513, last merged
+23:01 UTC). A tutor walkthrough answered **"Ni najdeno." (404) for the learner's own note**, and
+Auth logged `AuthApiError: Request rate limit reached` (429 `over_request_rate_limit`). Treat
+either symptom as this incident first, and only as new if it recurs after that merge.
+
+- **The proxy renews an expired session for API requests too** (`refreshApiSession` in
+  `src/lib/supabase/middleware.ts`): once, only when the token has expired, and the new session
+  goes to both the handler and the browser. Routes that set a session themselves (`/api/mobile/`,
+  `/api/admin/impersonate`, `/api/account/delete`) are skipped; add any new such route to
+  `SESSION_WRITING_API_ROUTES`, or `tests/api-session-refresh.test.mjs` fails.
+- **Never write a sign-out from a refused refresh.** supabase-js answers every failed refresh,
+  including a 429, by dropping the session. The proxy ignores that removal on API requests, and on
+  pages when the error was transient. Do not "fix" this by making `createSupabaseServerClient`'s
+  `setAll` write cookies (the documented `@supabase/ssr` pattern): it would sign learners out
+  during a rate limit and let a second client overwrite a session an auth route just set.
+- **Check ownership on the client that verified the learner.** Pass it into
+  `ensureUserOwnsLecture({ lectureId, user, supabase })`: `auth.supabase` from `getRouteUser` /
+  `getRouteUserOrPreviewBypass`, or the route's own `supabase`. A second client built from the
+  same cookie refreshes again and, if refused, queries as anon, so RLS reads an owned note as 404.
+  `tests/supabase-refreshed-session-reuse.test.mjs` fails on any API route that omits it.
+- A 503 `auth_unavailable` (`x-memo-retry: auth`) after this is the designed answer to Auth
+  being briefly unavailable, not a bug.
+
 ## Unfinished-Note Triage
 
 - A note must come out whenever the learner gave us anything learnable. Material that names a topic

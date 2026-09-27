@@ -117,6 +117,13 @@ regression deserves a new PR. Then check for existing PRs:
 gh pr list --state open --search "fix/auto" --json number,title,headRefName,url
 ```
 
+**Known and already fixed: expired sessions on API routes.** "Ni najdeno." / 404 on a note the
+learner owns during a tutor, podcast or chat session, and `AuthApiError: Request rate limit
+reached` on an API route, were fixed by #511, #512 and #513 (merged by 2026-09-27T23:01:01Z).
+Before 23:01Z they are this incident; record them `fixed`. After it, read "Supabase Sessions In API
+Routes" in `AGENTS.md` before writing a fix, and never make `createSupabaseServerClient` write
+cookies. That section says why.
+
 **Rank what survives** by blast radius: distinct users affected (Sentry `userCount`),
 then occurrence count, then whether it breaks a core flow (recording, upload,
 transcription, note generation, auth, billing) over a peripheral one.

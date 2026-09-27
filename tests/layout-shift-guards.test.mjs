@@ -47,3 +47,21 @@ test("the survey mascot is the preloaded, sized image rather than the raw PNG", 
   assert.doesNotMatch(flow, /<img src="\/memo-mascot\.png"/);
   assert.equal(flow.match(/<img src=\{MASCOT\.src\} srcSet=\{MASCOT\.srcSet\} width=\{MASCOT\.width\} height=\{MASCOT\.height\}/g)?.length, 2);
 });
+
+test("the navigation overlay follows the content column into its replacement", () => {
+  const nav = read("../src/components/navigation-loading.tsx");
+
+  // Found while rendering, so it is the column from before the commit that replaced it.
+  assert.match(nav, /useLayoutEffect\(\(\) => \{\s*if \(contentHost && !contentHost\.isConnected\) \{\s*refreshHost\(\);/);
+});
+
+test("the chat column is only read on note routes", () => {
+  const shell = read("../src/components/app-shell.tsx");
+  assert.match(shell, /const showsChatColumn = isNoteSkeleton \|\| \(isNote && chatOpen === true\);/);
+});
+
+test("a tap back to the current page while another is loading drops that navigation", () => {
+  const nav = read("../src/components/navigation-loading.tsx");
+  const same = nav.slice(nav.indexOf("if (disabled || targetPathname === currentPathname) {"));
+  assert.match(same, /^[^]*?if \(pending\) \{\s*cancelPaintWaitRef\.current\?\.\(\);\s*setPending\(null\);\s*\}\s*router\.push\(href\);\s*return;/);
+});

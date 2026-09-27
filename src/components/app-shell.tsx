@@ -153,7 +153,10 @@ export function AppShell({
          * real screen mounted.
          */
         const showsNoteLayout = isNote || isNoteSkeleton;
-        const showsChatColumn = isNoteSkeleton || chatOpen === true;
+        // `chatOpen` belongs to the note screen and is only cleared when it unmounts, so on the
+        // first commit after leaving a note it can still say true. Read it on note routes only,
+        // or that commit lays the next page out beside a chat column and then widens it.
+        const showsChatColumn = isNoteSkeleton || (isNote && chatOpen === true);
         const chatIsLoading = isNoteSkeleton && chatOpen !== true;
         const railCollapsed = showsNoteLayout && showsChatColumn;
 

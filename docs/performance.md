@@ -53,9 +53,14 @@ FCP also comes from Safari and the iOS app.
   browser back and forward do not: about 0.1 CLS each time. `main` is keyed on the committed
   route's layout, so it is a new element at that commit, and an inserted element is never a
   shift. The page inside changes segment at the same moment, so nothing extra is remounted.
+  The navigation overlay looks for that column while rendering, so it re-renders from a layout
+  effect when the one it drew into has left the page. Otherwise a slow click would drop it and
+  expose the destination's own loading skeleton.
 - **Note skeleton (phone).** Every shape in it is a gradient, which the browser does not count as
   content, so first paint waited for the note itself: mobile FCP 5.1 s against a 1.1 s TTFB. Its
-  back control is now the real link, which is content and works before hydration.
+  back control is now the real link, which works before hydration and is content once the
+  Material Symbols font is available (`display=block`: immediately for a returning reader, after
+  the font download on a first visit).
 - **Survey mascot.** It was the `/app/start` LCP element: a raw 140 KB PNG with no intrinsic size,
   fetched apart from the optimised copy the root layout preloads. It now uses that URL and its
   size.

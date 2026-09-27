@@ -558,7 +558,8 @@
 }
 
 .memo button,
-.memo-portal button {
+.memo-portal button,
+.memo a.memo-m-navbtn {
   font-family: inherit;
   -webkit-tap-highlight-color: transparent;
 }

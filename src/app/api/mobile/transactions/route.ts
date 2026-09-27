@@ -1,3 +1,4 @@
+import { VerificationException, VerificationStatus } from "@apple/app-store-server-library";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AppleAccountMismatch, saveAppleTransaction } from "@/lib/mobile/apple";
@@ -25,8 +26,10 @@ export async function POST(request: Request) {
       return applyCookies(NextResponse.json({ error: await tr("native.otherAccount") }, { status: 409 }));
     }
     // The type only: no transaction, account or Apple payload in the log.
+    // Apple's VerificationException has no message, only a numeric status (VerificationStatus).
     console.error("Apple transaction not saved", { error: error instanceof Error ? error.name : typeof error,
-      message: error instanceof Error ? error.message.slice(0, 120) : undefined });
+      message: error instanceof Error ? error.message.slice(0, 120) : undefined,
+      status: error instanceof VerificationException ? VerificationStatus[error.status] : undefined });
     return applyCookies(NextResponse.json({ error: await tr("native.verifyFailed") }, { status: 503 }));
   }
 }

@@ -230,7 +230,21 @@ export function AppShell({
                 * Without the hook the overlay falls back to a fixed layer over
                 * the whole window, which covers the rail while a page loads.
                 */}
-              <main className="memo-main app-shell-content">{children}</main>
+              {/*
+                * Keyed on the committed route's layout, so going between a note and
+                * any other page puts a new column in rather than moving this one.
+                * The move is 200px sideways on desktop (the rail collapses, the chat
+                * column opens), and when it follows browser back or forward there is
+                * no click to excuse it: Speed Insights scored it 0.1 of layout shift
+                * every time. An element that is inserted is never a shift. Nothing
+                * is lost by it, because the page inside changes segment at that same
+                * commit and is remounted anyway. Deliberately not keyed on
+                * `isNavigatingToNote`: a click already excuses its own shift, and
+                * swapping the column then would remount the page being left.
+                */}
+              <main key={isNote ? "note" : "page"} className="memo-main app-shell-content">
+                {children}
+              </main>
 
               {/* Third grid column; the note screen portals its chat panel here, and
                   the skeleton stands in its shape until that arrives. */}

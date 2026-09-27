@@ -71,3 +71,17 @@ test("cancelling during credential loading releases both the stream and the late
   assert.equal(h.state.microphoneStops, 1);
   assert.equal(h.audio.length, 0);
 });
+
+test("a browser without Web Audio is told so before anything is asked for or reported", async () => {
+  const h = sessionHarness();
+  let permissionRequests = 0;
+  h.state.webAudio = false;
+  h.state.requestMicrophone = async () => { permissionRequests += 1; throw new Error("unexpected"); };
+  await h.start();
+  assert.equal(permissionRequests, 0);
+  assert.equal(h.state.sessionCalls, 0);
+  assert.equal(h.audio.length, 0);
+  assert.deepEqual(h.errors, [], "a device setting is not a fault to report (MEMOAI-WEB-4M)");
+  assert.equal(h.state.updates.includes("tutor.error.unsupported"), true);
+  assert.equal(h.state.updates.includes("tutor.error.connection"), false);
+});

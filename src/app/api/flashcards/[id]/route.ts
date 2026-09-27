@@ -23,6 +23,7 @@ const flashcardPayloadSchema = z.object({
 async function getOwnedFlashcard(params: {
   flashcardId: string;
   user: User;
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
 }) {
   const service = createSupabaseServiceRoleClient();
   const { data: flashcard, error } = await service
@@ -44,6 +45,7 @@ async function getOwnedFlashcard(params: {
   const lecture = await ensureUserOwnsLecture({
     lectureId: row.lecture_id,
     user: params.user,
+    supabase: params.supabase,
   });
 
   return lecture ? row : null;
@@ -90,6 +92,7 @@ export async function PATCH(
   const existing = await getOwnedFlashcard({
     flashcardId: parsedParams.data.id,
     user,
+    supabase,
   });
 
   if (!existing) {
@@ -166,6 +169,7 @@ export async function DELETE(
   const existing = await getOwnedFlashcard({
     flashcardId: parsedParams.data.id,
     user,
+    supabase,
   });
 
   if (!existing) {

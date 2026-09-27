@@ -55,6 +55,7 @@ export async function GET(
   const lecture = await ensureUserOwnsLecture({
     lectureId: id,
     user,
+    supabase,
   });
 
   if (!lecture) {

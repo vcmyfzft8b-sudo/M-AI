@@ -50,6 +50,7 @@ export async function DELETE(
   const lecture = await ensureUserOwnsLecture({
     lectureId: id,
     user,
+    supabase,
   });
 
   if (!lecture) {

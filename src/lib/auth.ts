@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import { isPreviewAuthBypassEnabled } from "@/lib/preview-mode";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getRouteUser } from "@/lib/supabase/server";
 import {
   parseVerifiedPageUser,
   VERIFIED_PAGE_USER_HEADER,
@@ -69,6 +69,22 @@ export const getOptionalUserOrPreviewBypass = cache(async function getOptionalUs
 
   return null;
 });
+
+/**
+ * `getRouteUser` for an API route that also lets the preview bypass in, keeping the client
+ * that verified the learner. Queries that must run as the learner belong on that client: a
+ * second one built from the same expired cookie refreshes again, and if Auth refuses that
+ * refresh it asks as anon, so RLS reads the learner's own note as missing.
+ */
+export async function getRouteUserOrPreviewBypass(context: { route: string; request: Request }) {
+  const auth = await getRouteUser(context);
+
+  if (auth.user || auth.response.status !== 401 || !(await isPreviewAuthBypassEnabled())) {
+    return auth;
+  }
+
+  return { supabase: null, user: getPreviewAuthBypassUser(), response: null };
+}
 
 export const requireUser = cache(async function requireUser() {
   const user = await getOptionalUserOrPreviewBypass();

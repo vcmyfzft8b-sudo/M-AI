@@ -22,7 +22,7 @@ the fix being proved, not the bug recurring. Check the tag and the release befor
   Vercel `uncaught:POST /api/lectures/<id>/tutor/report:[tutor-client] session failed:
   SpeechOutputError: This browser has no Web Audio support. (… phase connect)` (200, the browser reporting it)
 - **Route:** `/app/lectures/:id` (client-side), tutor start, `tutorStage: session`, `tutorPhase: connect`
-- **Resolution:** open PR on branch `fix/auto-tutor-no-web-audio`; no production cutoff yet
+- **Resolution:** [PR #507](https://github.com/vcmyfzft8b-sudo/M-AI/pull/507) (open, branch `fix/auto-tutor-no-web-audio`); no production cutoff yet
 - **Regression test:** the Web Audio test in `tests/tutor-permission-startup.test.mjs`
 
 The device had no `AudioContext` at all — on a current iOS WebKit that is Lockdown Mode, which

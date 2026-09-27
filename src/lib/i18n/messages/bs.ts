@@ -116,7 +116,7 @@ export const bs: Messages = {
 
   /* ---- Landing page ---- */
   "landing.hero.title": "Nikad više ne piši bilješke!",
-  "landing.hero.lead": "Memo AI je tvoj AI notetaker za predavanja. Iz audiosnimaka, PDF-ova, dokumenata i linkova pravi bilješke, transkripte, kartice, kvizove, testove i AI chat.",
+  "landing.hero.lead": "Memo AI je tvoj AI notetaker za predavanja. Iz audiosnimaka, PDF-ova, dokumenata i linkova pravi bilješke, transkripte, kartice, kvizove, testove, mentalne mape i podcaste, uz objašnjenje gradiva naglas i AI chat.",
   "landing.cta.tryFree": "Probaj za 0 €",
   "landing.cta.signIn": "Prijavi se",
   "landing.hero.previewLabel": "Pregled aplikacije {brand}",
@@ -124,6 +124,7 @@ export const bs: Messages = {
   "landing.features.title": "Snimi, sredi i uči brže",
   "landing.tutor.title": "Predavanje koje ti neko objasni",
   "tutorDemo.heard1": "Čekaj, a šta ako nešto ne razumijem?",
+  "tutorDemo.topic": "Uvod",
   "landing.faq.title": "Česta pitanja",
   "landing.finalCta.title": "Učitaj prvo predavanje.",
   "landing.finalCta.lead": "Predavanje od sat vremena obrađeno je za nekoliko minuta – transkript, bilješke, kartice i kviz nastaju zajedno.",
@@ -143,6 +144,11 @@ export const bs: Messages = {
   "landing.seo.featureQuizzes": "Kvizovi i testovi za učenje",
   "landing.seo.featureTutor": "Objašnjenje bilježaka naglas",
   "landing.seo.featureChat": "AI chat s tvojim gradivom",
+  "landing.seo.featureReadAloud": "Čitanje bilješki naglas",
+  "landing.seo.featurePodcast": "Podcast epizode o tvojim bilješkama",
+  "landing.seo.featureMindmap": "Mentalne mape bilješki",
+  "landing.seo.featurePalace": "Palača sjećanja za učenje",
+  "landing.seo.featureSpeedRead": "Brzo čitanje",
 
   /* ---- Landing FAQ ---- */
   "landing.faq.processing.q": "Koliko traje obrada predavanja?",
@@ -1350,62 +1356,11 @@ export const bs: Messages = {
   "api.scanNoTextInFile": "Na fotografiji \"{name}\" nije bilo moguće pronaći čitljiv tekst.",
 
   /* ---- Landing preview — app chrome ---- */
-  "preview.quick.recordDetail": "Počni jednim dodirom",
-  "preview.quick.uploadLabel": "Učitaj zvuk",
-  "preview.quick.textLabel": "Učitaj PDF ili dokument",
-  "preview.quick.textDetail": "Pretvori gradivo u strukturirane bilješke",
-  "preview.quick.linkDetail": "Web članak ili izvor",
-  "preview.sheet.recordCardLabel": "Snimak je spreman",
-  "preview.sheet.recordMeta": "48:12 • snimljeno u aplikaciji",
-  "preview.sheet.recordAgain": "Snimi ponovo",
-  "preview.sheet.pickAnotherFile": "Odaberi drugu datoteku",
-  "preview.sheet.pickAnotherDocument": "Odaberi drugi dokument",
-  "preview.sheet.pasteAnotherLink": "Zalijepi drugi link",
   "preview.sheet.pageCount": "24 stranice • 3,1 MB",
-  "preview.sheet.slideCount": "42 slajda • 8,4 MB",
-  "preview.sheet.webArticle": "Web članak • slovenski",
-  "preview.sheet.wikipedia": "Wikipedija • slovenski",
-  "preview.tab.study": "Učenje",
-  "preview.theme.system": "Sistem",
-  "preview.folder.businessIs": "Poslovni IS",
-  "preview.folder.biology": "Biologija",
-  "preview.folder.economics": "Ekonomija",
 
   /* ---- Landing preview — remaining chrome ---- */
-  "preview.searchByTitle": "Traži po naslovu",
-  "preview.emptyBody": "Pokušaj s kraćim pojmom ili očisti pretragu.",
-  "preview.keyPoints": "Ključne tačke",
-  "preview.showAnswer": "Pokaži odgovor",
-  "preview.backToQuestion": "Nazad na pitanje",
-  "preview.correct": "Tačno",
-  "preview.incorrect": "Netačno",
-  "preview.finish": "Završi",
-  "preview.answerPlaceholder": "Ovdje napiši svoj odgovor...",
-  "preview.askAboutLecture": "Pitaj o ovom predavanju",
-  "preview.planName": "Memo AI Pro (aktivno)",
   "preview.planUntil": "Aktivno do 12. septembra 2026.",
   "preview.managePlan": "Upravljaj pretplatom",
-  "preview.noteTitleField": "Naslov",
-  "preview.renameHint": "Daj ovoj bilješci jasniji naslov bez napuštanja stranice.",
-  "preview.answersStayWithLecture": "Odgovori ostaju vezani uz ovo predavanje.",
-  "preview.attemptOne": "Pokušaj 1",
-
-  /* ---- Landing preview — delete confirmation ---- */
-  "preview.deleteBefore": "Izbriši ",
-  "preview.deleteAfter": "? To se ne može poništiti.",
-
-  /* ---- Landing preview — help screen ---- */
-  "preview.help.family.body": "Jedan paket ne možeš dijeliti između više računa. Svaki student ima vlastitu biblioteku bilježaka.",
-  "preview.help.gift.title": "Mogu li pokloniti Memo AI?",
-  "preview.help.gift.body": "Da. Kupiš kod, pošalješ ga prijatelju, a on ga iskoristi u postavkama.",
-  "preview.help.language.body": "Podržavamo slovenski, engleski, njemački, bosanski i još 20 jezika.",
-  "preview.help.feature.body": "Piši nam na info@memoai.eu. Prijedloge studenata uvrštavamo u plan razvoja.",
-  "preview.help.video.body": "Linkovi na videa (YouTube, Drive) nisu podržani. Učitaj zvuk ili dokument.",
-  "preview.help.audio.body": "Datoteka mora biti kraća od 3 sata i manja od 300 MB. Upotrijebi MP3, M4A, WAV ili WEBM.",
-  "preview.help.transcript.body": "Približi telefon predavaču i izbjegavaj buku. Kraće datoteke daju tačniji transkript.",
-  "preview.help.redeem.body": "Otvori Postavke, odaberi Iskoristi kod i unesi 8-znamenkasti kod.",
-  "preview.help.terms.body": "Memo AI je namijenjen ličnom korištenju za učenje. Gradivo nemoj dijeliti dalje bez dozvole autora.",
-  "preview.help.privacy.body": "Snimci i bilješke su tvoji. Čuvamo ih šifrirano, a brisanje je trenutno i trajno.",
 
   /* ---- Landing preview — help titles ---- */
   "preview.help.familyTitle": "Porodični paket?",
@@ -1414,9 +1369,6 @@ export const bs: Messages = {
   "preview.help.videoTitle": "Link na video ne radi",
   "preview.help.audioTitle": "Ne mogu učitati zvuk",
   "preview.help.transcriptTitle": "Transkript je prekratak ili netačan",
-
-  /* ---- Landing preview — second recording ---- */
-  "preview.sheet.recordMeta2": "31:47 • snimljeno u aplikaciji",
 
   /* ---- Landing feature showcase ---- */
   "showcase.captureTitle": "Snimi ili učitaj",
@@ -1433,6 +1385,18 @@ export const bs: Messages = {
   "showcase.testsDesc": "Vježbaj duže odgovore i pripremu za provjeru znanja.",
   "showcase.listenTitle": "Slušaj bilješke",
   "showcase.listenDesc": "Aplikacija ti bilješke čita naglas, i bez gledanja u ekran.",
+  "showcase.podcastTitle": "Podcast iz bilješki",
+  "showcase.podcastDesc": "Dva voditelja razgovaraju o tvojim bilješkama – za autobus ili teretanu.",
+  "showcase.mindmapTitle": "Mentalna mapa",
+  "showcase.mindmapDesc": "Pokazuje kako su teme u tvojim bilješkama međusobno povezane.",
+  "showcase.palaceTitle": "Palača sjećanja",
+  "showcase.palaceDesc": "Prošetaj gradićem u kojem je svaka stanica pitanje iz tvojih bilješki.",
+  "showcase.speedTitle": "Brzo čitanje",
+  "showcase.speedDesc": "Bilješke riječ po riječ, brzinom koja ti odgovara.",
+  "showcase.chatTitle": "Pitaj svoje bilješke",
+  "showcase.chatDesc": "Razgovaraj o jednoj bilješci ili pitaj sve odjednom.",
+  "showcase.chat.question": "Koja je razlika između transakcijskog sistema i sistema za odlučivanje?",
+  "showcase.chat.answer": "**Transakcijski sistem** bilježi svakodnevne poslovne događaje, a **sistem za odlučivanje** te podatke analizira za upravu.\n\n- Transakcijski: mnogo malih, rutinskih unosa\n- Odlučivanje: scenariji i izvještaji za odluke",
 
   /* ---- Landing flow demo — app chrome only ---- */
   "flowDemo.kindAudio": "Zvuk",
@@ -1443,20 +1407,7 @@ export const bs: Messages = {
     few: "{count} stranice",
     other: "{count} stranica",
   },
-  "flowDemo.today": "danas",
-  "flowDemo.yesterday": "jučer",
-  "flowDemo.onTuesday": "u utorak",
-  "flowDemo.onFriday": "u petak",
-  "flowDemo.lastWeek": "prošle sedmice",
-  "flowDemo.libraryLabel": "Bilješke",
-  "flowDemo.noteCount": {
-    one: "{count} bilješka",
-    few: "{count} bilješke",
-    other: "{count} bilježaka",
-  },
-  "flowDemo.dropTitle": "Ispusti izvor ovdje",
   "flowDemo.dropSubtitle": "Zvuk, PDF, dokument ili fotografija",
-  "flowDemo.newNote": "Nova bilješka",
   "flowDemo.step1Title": "Snimi ili učitaj",
   "flowDemo.statusDragOrClick": "Povuci ili klikni",
   "flowDemo.statusTranscribing": "Prepisujem…",
@@ -1465,14 +1416,6 @@ export const bs: Messages = {
   "flowDemo.statusWritingNotes": "Pišem bilješke…",
   "flowDemo.statusNotesReady": "Bilješke su spremne",
   "flowDemo.step3Title": "Ponavljaj gradivo",
-  "flowDemo.tabCards": "Kartice",
-  "flowDemo.tabQuiz": "Kviz",
-  "flowDemo.tabTest": "Test",
-  "flowDemo.showAnswer": "Pokaži odgovor",
-  "flowDemo.swipeHint": "Povuci lijevo ili desno",
-  "flowDemo.answerPlaceholder": "Tvoj odgovor",
-  "flowDemo.next": "Dalje",
-  "flowDemo.check": "Provjeri",
   "flowDemo.statusBuildingMaterial": "Pripremam gradivo…",
   "flowDemo.statusMaterialReady": "Gradivo je spremno",
 
@@ -1545,15 +1488,8 @@ export const bs: Messages = {
   /* ---- Landing — try callout and showcase chrome ---- */
   "landing.tryItHere": "Isprobaj odmah ovdje",
   "flowDemo.dragSourceToStep": "Povuci izvor u prvi korak",
-  "showcase.transcribing": "Prepisivanje",
 
   /* ---- Landing preview — redesigned capture and create sheet ---- */
-  "preview.create.record": "Snimi zvuk",
-  "preview.create.upload": "Učitaj zvuk",
-  "preview.create.file": "PDF, datoteka ili tekst",
-  "preview.create.link": "Web link",
-  "preview.capture.stopAndCreate": "Zaustavi i napravi bilješku",
-  "preview.capture.create": "Napravi bilješku",
   "preview.capture.fileFormats": "PDF, DOCX, PPTX ili slika",
   "preview.noteTitle.record": "Nova snimka predavanja",
   "preview.noteTitle.upload": "Učitana snimka",
@@ -1562,33 +1498,14 @@ export const bs: Messages = {
   "preview.chatGreeting": "Zdravo! Pitaj me bilo šta o ovoj bilješci.",
   "preview.help.giftTitle": "Mogu li pokloniti Memo?",
   "preview.help.redeemTitle": "Iskoristi kod",
-  "preview.subScreen.test": "Vježbeni test",
 
   /* ---- Landing preview — redesigned note and study screens ---- */
-  "preview.noteActions": "Radnje bilješke",
   "preview.folderEmptyTitle": "Ova mapa je prazna",
   "preview.folderEmptyBody": "Dodaj bilješke u ovu mapu ili se vrati na sve.",
-  "preview.playReading": "Pokreni čitanje",
-  "preview.dictate": "Diktiraj",
-  "preview.submitTest": "Predaj test",
-  "preview.play": "Pokreni",
   "preview.folderOptions": "Opcije mape",
-  "preview.thisNote": "Ova bilješka",
-
-  /* ---- Landing preview — capture screen actions ---- */
-  "preview.pickAnother": "Odaberi drugo",
 
   /* ---- Landing preview — cards, player and support ---- */
-  "preview.cards.again": "Još jednom",
-  "preview.cards.know": "Znam",
-  "preview.back10": "Nazad 10 s",
-  "preview.forward10": "Naprijed 10 s",
-  "preview.correctAnswerValue": "Tačan odgovor: {answer}",
-  "preview.recent": "nedavno",
-  "preview.durationHoursMinutes": "{hours} h {minutes} min",
   "preview.planMonthly": "Mjesečno (aktivno)",
-  "preview.support.greeting": "Zdravo! Ovdje je Memo AI tim.",
-  "preview.support.checkSources": "Za najbrži odgovor provjeri izvore ispod.",
 
   /* ---- Landing nav — mobile menu ---- */
   "nav.openMenu": "Otvori meni",
@@ -1616,6 +1533,31 @@ export const bs: Messages = {
   "flowDemo.note.bullet3Rest": "– povezuje procese u jedinstveni model podataka.",
   "flowDemo.note.keyLabel": "Ključno",
   "flowDemo.note.keyBody": "Bez kvalitetnih podataka ni najbolji sistem ne donosi dobre odluke.",
+
+  /* ---- Landing mindmap — the sample note drawn as a map ---- */
+  "landingMindmap.transactionalDetail": "Bilježi svakodnevne poslovne događaje, poput narudžbi i plaćanja.",
+  "landingMindmap.supportDetail": "Analizira podatke i priprema scenarije za upravu.",
+  "landingMindmap.erpDetail": "Povezuje procese preduzeća u jedinstveni model podataka.",
+  "landingMindmap.connects": "Šta ERP povezuje",
+  "landingMindmap.connectsDetail": "Svi odjeli rade iz jedne zajedničke baze, pa se ništa ne unosi dvaput.",
+  "landingMindmap.finance": "Finansije",
+  "landingMindmap.purchasing": "Nabavka",
+  "landingMindmap.production": "Proizvodnja",
+  "landingMindmap.sales": "Prodaja",
+  "landingMindmap.hr": "Ljudski resursi",
+  "landingMindmap.data": "Kvalitet podataka",
+  "landingMindmap.goodData": "Dobri podaci, dobre odluke",
+  "landingMindmap.oneSource": "Jedan izvor istine",
+  "landingMindmap.oneSourceDetail": "Svi izvještaji čitaju iste podatke, pa se uvijek slažu.",
+  "landingMindmap.rollout": "Uvođenje",
+  "landingMindmap.redesign": "Prvo preoblikuj procese",
+  "landingMindmap.redesignDetail": "Informatika u lošem procesu loš proces samo ubrzava.",
+  "landingMindmap.training": "Obuka korisnika",
+  "landingMindmap.exam": "Za ispit",
+  "landingMindmap.compare": "Funkcionalni naspram integrisanih",
+  "landingMindmap.compareDetail": "Znaj ih uporediti na primjeru.",
+  "landingMindmap.speed": "Od događaja do odluke za nekoliko minuta",
+  "landingMindmap.speedDetail": "Integrisani sistem skraćuje put od poslovnog događaja do odluke.",
 
   /* ---- Landing flow demo — the sample study set ---- */
   "flowDemo.card1Q": "Šta je transakcijski informacioni sistem?",
@@ -1656,27 +1598,10 @@ export const bs: Messages = {
   "flowDemo.test2Keys": "podat,zapis,transakcij,izvješ",
   "flowDemo.test3Keys": "analiz,scenarij,odluk,predviđ,pored",
 
-  /* ---- Landing feature showcase — the sample material ---- */
-  "showcase.note.line1": "prikupljaju i obrađuju informacije,",
-  "showcase.note.line2Before": "koje podržavaju",
-  "showcase.note.decision": "odlučivanje",
-  "showcase.note.keyBody": "Integrisani sistem drži sve podatke na jednom mjestu.",
-  "showcase.card.front": "Šta znači ERP?",
-  "showcase.card.back": "Planiranje resursa preduzeća",
-  "showcase.quizCounter": "1 / 4 · Kviz",
-  "showcase.quizA": "Transakcijski",
-  "showcase.quizB": "Za odlučivanje",
-  "showcase.quizC": "Ekspertni",
-  "showcase.testQuestionNo": "1. pitanje",
-  "showcase.testPrompt": "Navedi jednu prednost ERP sistema.",
-  "showcase.testAnswer": "Jedinstveni podaci za sve odjele",
-  "showcase.testCorrect": "Tačno",
-  "showcase.read.keyTypes": "Ključne vrste",
-  "showcase.read.lead": "Model podataka povezuje procese u jedinstveni sistem koji podržava odlučivanje u preduzećima.",
-  "showcase.read.bullet1": "Transakcijski – bilježi svakodnevne poslovne događaje.",
-  "showcase.read.bullet2": "Za odlučivanje – analize i scenariji za upravu.",
-  "showcase.read.bullet3": "ERP – povezuje procese u jedinstveni model podataka.",
-  "showcase.read.keyBody": "Bez kvalitetnih podataka ni najbolji sistem ne donosi dobre odluke.",
+  /* ---- Landing practice screens — the demo grader's explanation ---- */
+  "landingStudy.test.feedbackFull": "Odgovor obuhvata suštinu očekivanog odgovora.",
+  "landingStudy.test.feedbackPartial": "Odgovor dotiče suštinu, ali dio izostavlja.",
+  "landingStudy.test.feedbackMissed": "Odgovor promašuje suštinu. Uporedi ga s očekivanim odgovorom.",
 
   /* ---- Landing preview — sample note: business information systems ---- */
   "pv.is.card1F": "Šta je transakcijski informacioni sistem?",
@@ -1685,8 +1610,6 @@ export const bs: Messages = {
   "pv.is.card2B": "Finansije, nabavku, proizvodnju, prodaju i kadrove u zajedničku bazu podataka.",
   "pv.is.card3F": "Zašto je preoblikovanje procesa važno?",
   "pv.is.card3B": "Jer uvođenje informatike u loš proces samo ubrzava loše prakse.",
-  "pv.is.practice1": "Uporedi funkcijske i integrisane informacione sisteme.",
-  "pv.is.practice2": "Objasni zašto je preoblikovanje poslovnih procesa uslov za uspješno uvođenje ERP-a.",
   "pv.is.quiz1Q": "Koja je glavna prednost integrisanih IS pred funkcijskim?",
   "pv.is.quiz1O1": "Zajednička baza podataka i manje dupliranja",
   "pv.is.quiz1O2": "Niža cijena licenci",
@@ -1714,8 +1637,6 @@ export const bs: Messages = {
   "pv.micro.card2B": "Kada je koeficijent veći od 1 – tada rast cijene snižava ukupni prihod.",
   "pv.micro.card3F": "Šta utiče na elastičnost?",
   "pv.micro.card3B": "Broj supstituta, udio izdatka u budžetu i dužina perioda.",
-  "pv.micro.practice1": "Izračunaj koeficijent elastičnosti i objasni učinak na ukupni prihod.",
-  "pv.micro.practice2": "Uporedi elastičnost nužnih i luksuznih dobara i obrazloži razliku.",
   "pv.micro.quiz1Q": "Šta vrijedi kod elastične potražnje?",
   "pv.micro.quiz1O1": "Rast cijene snižava ukupni prihod",
   "pv.micro.quiz1O2": "Rast cijene povećava prihod",
@@ -1743,8 +1664,6 @@ export const bs: Messages = {
   "pv.anatomy.card2B": "Ubrzava provođenje impulsa skokovima između Ranvierovih čvorova.",
   "pv.anatomy.card3F": "Šta obuhvata centralni nervni sistem?",
   "pv.anatomy.card3B": "Mozak i kičmenu moždinu.",
-  "pv.anatomy.practice1": "Opiši put podražaja od receptora do efektora.",
-  "pv.anatomy.practice2": "Objasni princip sve ili ništa kod akcionog potencijala.",
   "pv.anatomy.quiz1Q": "Gdje se signal između dva neurona prenosi hemijski?",
   "pv.anatomy.quiz1O1": "U sinapsi",
   "pv.anatomy.quiz1O2": "U dendritu",
@@ -1772,8 +1691,6 @@ export const bs: Messages = {
   "pv.stats.card2B": "Vjerovatnoću da bismo uz važeću nultu hipotezu dobili ovako ili još ekstremniji rezultat.",
   "pv.stats.card3F": "Kada odbacujemo nultu hipotezu?",
   "pv.stats.card3B": "Kada je p-vrijednost manja od odabranog nivoa značajnosti, obično 0,05.",
-  "pv.stats.practice1": "Objasni razliku između greške prve i druge vrste.",
-  "pv.stats.practice2": "Objasni zašto niska p-vrijednost sama po sebi ne dokazuje velik učinak.",
   "pv.stats.quiz1Q": "Šta znači p-vrijednost 0,03 uz nivo značajnosti 0,05?",
   "pv.stats.quiz1O1": "Odbacujemo nultu hipotezu",
   "pv.stats.quiz1O2": "Prihvatamo nultu hipotezu kao dokazanu",
@@ -1839,10 +1756,6 @@ export const bs: Messages = {
   "pv.note5Title": "Statistika – testiranje hipoteza",
   "pv.folderLectures": "Predavanja",
   "pv.folderExams": "Ispiti",
-  "pv.tourAnswer": "Ravnotežna cijena je cijena pri kojoj je ponuđena količina jednaka traženoj.",
-
-  /* ---- Landing preview — delete confirmation body ---- */
-  "preview.deleteBody": "„{title}” bit će trajno izbrisana. To se ne može poništiti.",
 
   /* ---- Landing nav — menu links ---- */
   "nav.howItWorks": "Kako radi",

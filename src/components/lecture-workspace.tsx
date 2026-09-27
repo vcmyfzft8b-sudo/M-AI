@@ -25,6 +25,7 @@ import {
   parseApiResponse,
   redirectToBillingIfNeeded,
 } from "@/lib/billing-client";
+import { NOTE_TABS, type NoteTabId } from "@/lib/note-tabs";
 import type { FlashcardConfidenceBucket, StudyAssetStatus } from "@/lib/database.types";
 import { canRetryLectureFailure, lectureFailureMessage } from "@/lib/lecture-failure-codes";
 import {
@@ -250,109 +251,6 @@ function ignoreBackgroundRequestError() {
   return null;
 }
 
-/**
- * The redesign's pill row. Study is three peers rather than one tab with an
- * inner switch, and chat has left the row entirely — it is the side panel on
- * desktop and the bar at the foot of the note on the phone.
- *
- * Each pill carries its own tint, which the active state mixes into its
- * background and border.
- */
-const NOTE_TABS = [
-  { id: "notes", view: null, labelKey: "note.tab.notes", icon: "description", tint: "#f45f5a" },
-  /*
-   * The spoken walkthrough, second because it is the other way to take in the note
-   * itself rather than a fourth kind of study material — you read it, or you have it
-   * explained. The three practice screens follow.
-   */
-  {
-    id: "tutor",
-    view: null,
-    labelKey: "note.tab.tutor",
-    icon: "graphic_eq",
-    tint: "oklch(0.66 0.15 50)",
-  },
-  {
-    id: "flashcards",
-    view: "flashcards",
-    labelKey: "note.tab.flashcards",
-    icon: "style",
-    tint: "oklch(0.66 0.15 295)",
-  },
-  /*
-   * The episode, after the cards: it is the third way of taking in the note itself — read it, have it
-   * explained, or listen to it argued — and it belongs beside the walkthrough rather than among
-   * the practice screens, which are about testing yourself rather than about taking it in.
-   */
-  {
-    id: "podcast",
-    view: null,
-    labelKey: "note.tab.podcast",
-    icon: "podcasts",
-    tint: "oklch(0.66 0.15 20)",
-  },
-  { id: "quiz", view: "quiz", labelKey: "note.tab.quiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
-  /*
-   * Last of the revision pills and immediately before the test, because that is the order the
-   * work is done in: cards, then questions, then the map you check the whole shape against —
-   * and then you sit the test.
-   */
-  {
-    id: "mindmap",
-    view: null,
-    labelKey: "note.tab.mindmap",
-    icon: "account_tree",
-    tint: "oklch(0.66 0.15 200)",
-  },
-  /*
-   * The same material again, walked through rather than read: it sits with the
-   * revision pills, after the map you check the shape against and before the
-   * test you sit at the end.
-   */
-  {
-    id: "palace",
-    view: null,
-    labelKey: "note.tab.palace",
-    icon: "explore",
-    tint: "oklch(0.66 0.15 100)",
-  },
-  {
-    id: "test",
-    view: "practice_test",
-    labelKey: "note.tab.test",
-    icon: "assignment",
-    tint: "oklch(0.66 0.15 150)",
-  },
-  /*
-   * Another way through the note itself — one word at a time, held still, for a
-   * reader who wants the whole thing at pace rather than explained. It sits at
-   * the end of the row rather than beside the walkthrough: the three practice
-   * screens are what the row is mostly reached for, and a fourth pill between
-   * them and the note pushed them along by one.
-   */
-  {
-    id: "speed",
-    view: null,
-    labelKey: "note.tab.speed",
-    icon: "bolt",
-    tint: "oklch(0.66 0.15 275)",
-  },
-  {
-    id: "transcript",
-    view: null,
-    labelKey: "note.tab.transcript",
-    icon: "text_snippet",
-    tint: "oklch(0.66 0.15 250)",
-  },
-] as const satisfies ReadonlyArray<{
-  id: string;
-  view: StudyMaterialView | null;
-  labelKey: MessageKey;
-  icon: string;
-  tint: string;
-}>;
-
-type NoteTabId = (typeof NOTE_TABS)[number]["id"];
 
 /**
  * Tabs that take the chat's column while they are on screen.

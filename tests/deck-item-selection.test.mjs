@@ -152,6 +152,22 @@ test("a maths answer of one character is valid", () => {
   );
 });
 
+test("a flashcard front that carries its own context is valid", () => {
+  // The prompt makes a front stand alone and tell confusable answers apart, which in an inflected
+  // language runs past 160 characters. That cap rejected a whole production batch, and one
+  // rejected batch fails the deck.
+  assert.doesNotThrow(() =>
+    generatedFlashcardSchema.parse({
+      itemId: 0,
+      front:
+        "Kolikšna je vrednost naravnega logaritma števila e, kadar logaritem računamo pri osnovi e " +
+        "in ne pri osnovi 10, ki jo uporablja desetiški logaritem v inženirskih tabelah?",
+      back: "1",
+      difficulty: "medium",
+    }),
+  );
+});
+
 test("the outline's selection is bounded mechanically", async () => {
   const { enforceOutlineRetentionBounds } = await import("../src/lib/notes/note-prompts.ts");
   const mk = (id, importance, kind = "fact") => ({ id, importance, kind, sectionTitle: "T" });

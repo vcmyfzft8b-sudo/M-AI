@@ -44,7 +44,6 @@ test("the formerly hard-coded UI controls resolve through the catalogue", () => 
     ["src/components/note-source-modal.tsx", "capture.recordAgain"],
     ["src/components/recording-player.tsx", "recording.backSeconds"],
     ["src/components/note-read-aloud.tsx", "t(color.labelKey)"],
-    ["src/components/landing/memo-app-preview.tsx", "preview.correctAnswerValue"],
     ["src/components/impersonation-banner.tsx", "impersonation.viewingAs"],
   ];
 

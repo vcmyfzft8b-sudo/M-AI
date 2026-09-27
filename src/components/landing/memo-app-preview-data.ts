@@ -1,6 +1,5 @@
-import type { CSSProperties } from "react";
-
 import type { MessageKey } from "@/lib/i18n/messages/keys";
+import { NOTE_TABS, type NoteTabId } from "@/lib/note-tabs";
 import type { Translate } from "@/lib/i18n/translate";
 
 export type SourceKind = "audio" | "pdf" | "text" | "link";
@@ -24,7 +23,15 @@ export type PreviewNote = {
    */
   date: string;
   status: NoteStatus;
+  /**
+   * What the app prints after the source — "47 min" for a recording, "24
+   * pages" for a document — as `getLectureSourceDetail` measures it. A link or
+   * pasted text carries none.
+   */
+  detail?: SourceDetail;
 };
+
+export type SourceDetail = { minutes: number } | { pages: number };
 
 export type PreviewFolder = {
   id: string;
@@ -43,16 +50,16 @@ export type CaptureMode = "record" | "upload" | "file" | "link";
  * it was written in however the interface is set.
  */
 
-/* The create sheet's four rows, as `createOptions` lists them. */
+/* The create sheet's four rows, as `MOBILE_CREATE_OPTIONS` in home-dashboard.tsx lists them. */
 export const CREATE_OPTIONS: Array<{ id: CaptureMode; emoji: string; labelKey: MessageKey }> = [
-  { id: "record", emoji: "🎙️", labelKey: "preview.create.record" },
-  { id: "upload", emoji: "🔊", labelKey: "preview.create.upload" },
-  { id: "file", emoji: "📚", labelKey: "preview.create.file" },
-  { id: "link", emoji: "🔗", labelKey: "preview.create.link" },
+  { id: "record", emoji: "🎙️", labelKey: "library.create.record" },
+  { id: "upload", emoji: "🔊", labelKey: "library.quickAction.audio" },
+  { id: "file", emoji: "📚", labelKey: "library.create.text" },
+  { id: "link", emoji: "🔗", labelKey: "library.create.link" },
 ];
 
 /*
- * The capture screen each option opens, from the design's own `CAPTURE` table.
+ * The capture screen each option opens, titled as note-source-modal.tsx titles it.
  * `noteTitle` is the title the finished note takes, as `addNote` sets it.
  */
 export const CAPTURE: Record<
@@ -72,38 +79,43 @@ export const CAPTURE: Record<
     pickedMeta?: string;
     pickedMetaKey?: MessageKey;
     pickedText?: string;
+    detail?: SourceDetail;
   }
 > = {
   record: {
-    titleKey: "preview.create.record",
-    ctaKey: "preview.capture.stopAndCreate",
+    titleKey: "library.quickAction.record",
+    ctaKey: "capture.stopAndCreate",
     emoji: "🎙️",
     source: "audio",
     noteTitleKey: "preview.noteTitle.record",
+    detail: { minutes: 1 },
   },
   upload: {
-    titleKey: "preview.create.upload",
-    ctaKey: "preview.capture.create",
+    titleKey: "library.quickAction.audio",
+    ctaKey: "capture.createNote",
     emoji: "🔊",
     placeholderKey: "capture.audioFormats",
     source: "audio",
     noteTitleKey: "preview.noteTitle.upload",
     pickedName: "Predavanje-IS-4.m4a",
-    pickedMeta: "51,2 MB • 47:38",
+    /* The clock the app prints under a chosen recording (`formatTimestamp`). */
+    pickedMeta: "47:38",
+    detail: { minutes: 48 },
   },
   file: {
-    titleKey: "preview.create.file",
-    ctaKey: "preview.capture.create",
+    titleKey: "capture.title.text",
+    ctaKey: "capture.createNote",
     emoji: "📚",
     placeholderKey: "preview.capture.fileFormats",
     source: "pdf",
     noteTitleKey: "preview.noteTitle.file",
     pickedName: "Poslovni-IS-skripta.pdf",
     pickedMetaKey: "preview.sheet.pageCount",
+    detail: { pages: 24 },
   },
   link: {
-    titleKey: "preview.create.link",
-    ctaKey: "preview.capture.create",
+    titleKey: "library.quickAction.link",
+    ctaKey: "capture.createNote",
     emoji: "🔗",
     placeholder: "https://…",
     source: "link",
@@ -149,101 +161,42 @@ export const THEME_OPTIONS = [
 export type PreviewTheme = (typeof THEME_OPTIONS)[number]["value"];
 
 /*
- * The mockup's palette: the `.phone` token block from the redesign's phone
- * artboard, verbatim. The names keep an `--m-` prefix because the mockup
- * renders inside the landing page, where `--surface` and friends already belong
- * to something else. `landing.css` states the same pair for the system theme;
- * these are what the in-mockup theme switch writes inline.
+ * The note's pill row is the app's own (`NOTE_TABS` in src/lib/note-tabs.ts), in its
+ * order, with its icons and tints. The app drops Transcript from notes that have no
+ * recording, and so does the replica (`showsTranscript`).
  */
-export const LIGHT_TOKENS: Record<string, string> = {
-  "--m-bg": "#f1f1f5",
-  "--m-surface": "#ffffff",
-  "--m-label": "#000000",
-  "--m-second": "#8e8e95",
-  "--m-tile": "rgba(0,0,0,0.05)",
-  "--m-field": "rgba(0,0,0,0.07)",
-  "--m-line": "rgba(0,0,0,0.09)",
-  "--m-shadow": "0 2px 10px rgba(0,0,0,0.05)",
-  "--m-shadow-lg": "0 -12px 40px rgba(0,0,0,0.18)",
-  "--m-promo": "#5b21e0",
-  "--m-scrim": "rgba(0,0,0,0.28)",
-  "--m-focus-ring": "rgba(0,0,0,0.22)",
-  "--m-head-hl": "color-mix(in srgb, #2563eb 24%, transparent)",
-  "--m-callout-definition-line": "color-mix(in srgb, #2563eb 20%, var(--m-line))",
-  "--m-callout-definition-bg": "color-mix(in srgb, #dbeafe 44%, var(--m-surface))",
-  "--m-callout-example-line": "color-mix(in srgb, #16a34a 20%, var(--m-line))",
-  "--m-callout-example-bg": "color-mix(in srgb, #dcfce7 40%, var(--m-surface))",
-  "--m-callout-mistake-line": "color-mix(in srgb, #dc2626 20%, var(--m-line))",
-  "--m-callout-mistake-bg": "color-mix(in srgb, #fee2e2 38%, var(--m-surface))",
-  "--m-callout-takeaway-line": "color-mix(in srgb, #f59e0b 22%, var(--m-line))",
-  "--m-callout-takeaway-bg": "color-mix(in srgb, #fef3c7 44%, var(--m-surface))",
-  "--m-drag-easy-bg": "rgba(230,246,234,0.9)",
-  "--m-drag-easy-ink": "#16a34a",
-  "--m-drag-again-bg": "rgba(253,233,230,0.9)",
-  "--m-drag-again-ink": "#dc2626",
-  "--m-exit-easy-bg": "#e6f6ea",
-  "--m-exit-easy-line": "#67d48a",
-  "--m-exit-again-bg": "#fde9e6",
-  "--m-exit-again-line": "#f28b82",
-};
+export const TABS = NOTE_TABS;
 
-export const DARK_TOKENS: Record<string, string> = {
-  "--m-bg": "#000000",
-  "--m-surface": "#1c1c1e",
-  "--m-label": "#ffffff",
-  "--m-second": "#8e8e95",
-  "--m-tile": "rgba(255,255,255,0.09)",
-  "--m-field": "rgba(255,255,255,0.12)",
-  "--m-line": "rgba(255,255,255,0.14)",
-  "--m-shadow": "0 2px 10px rgba(0,0,0,0.5)",
-  "--m-shadow-lg": "0 -12px 40px rgba(0,0,0,0.75)",
-  "--m-promo": "#b18bff",
-  "--m-scrim": "rgba(0,0,0,0.5)",
-  "--m-focus-ring": "rgba(255,255,255,0.28)",
-  "--m-head-hl": "color-mix(in srgb, #2563eb 42%, transparent)",
-  "--m-callout-definition-line": "color-mix(in srgb, #2563eb 28%, var(--m-line))",
-  "--m-callout-definition-bg": "color-mix(in srgb, #1d4ed8 22%, var(--m-surface))",
-  "--m-callout-example-line": "color-mix(in srgb, #16a34a 28%, var(--m-line))",
-  "--m-callout-example-bg": "color-mix(in srgb, #15803d 22%, var(--m-surface))",
-  "--m-callout-mistake-line": "color-mix(in srgb, #dc2626 28%, var(--m-line))",
-  "--m-callout-mistake-bg": "color-mix(in srgb, #b91c1c 20%, var(--m-surface))",
-  "--m-callout-takeaway-line": "color-mix(in srgb, #f59e0b 30%, var(--m-line))",
-  "--m-callout-takeaway-bg": "color-mix(in srgb, #b45309 22%, var(--m-surface))",
-  "--m-drag-easy-bg": "color-mix(in srgb, var(--m-surface) 78%, #32d74b)",
-  "--m-drag-easy-ink": "#32d74b",
-  "--m-drag-again-bg": "color-mix(in srgb, var(--m-surface) 78%, #ff453a)",
-  "--m-drag-again-ink": "#ff453a",
-  "--m-exit-easy-bg": "color-mix(in srgb, var(--m-surface) 82%, #32d74b)",
-  "--m-exit-easy-line": "color-mix(in srgb, #32d74b 45%, rgba(255,255,255,0.25))",
-  "--m-exit-again-bg": "color-mix(in srgb, var(--m-surface) 82%, #ff453a)",
-  "--m-exit-again-line": "color-mix(in srgb, #ff453a 45%, rgba(255,255,255,0.25))",
-};
+export type NoteTab = NoteTabId;
 
-export const TABS = [
-  { id: "notes", labelKey: "note.tab.notes", icon: "description", tint: "#f45f5a" },
-  /*
-   * The spoken walkthrough, second because it is the other way to take in the
-   * note itself rather than a fourth kind of study material — you read it, or
-   * you have it explained. The app's own row is ordered the same way.
-   */
-  { id: "tutor", labelKey: "note.tab.tutor", icon: "graphic_eq", tint: "oklch(0.66 0.15 50)" },
-  { id: "flashcards", labelKey: "note.tab.flashcards", icon: "style", tint: "oklch(0.66 0.15 295)" },
-  { id: "quiz", labelKey: "note.tab.quiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
-  { id: "test", labelKey: "note.tab.test", icon: "assignment", tint: "oklch(0.66 0.15 150)" },
-  { id: "transcript", labelKey: "note.tab.transcript", icon: "text_snippet", tint: "oklch(0.66 0.15 250)" },
-] as const satisfies ReadonlyArray<{ id: string; labelKey: MessageKey; icon: string; tint: string }>;
-
-export type NoteTab = (typeof TABS)[number]["id"];
-
-/** What the phone's nav bar names each screen behind the note. */
+/** What the phone's nav bar names each tab in place of the note's emoji (`SUB_SCREEN_TITLE_KEYS`). */
 export const SUB_SCREEN_TITLE_KEYS: Record<NoteTab, MessageKey | null> = {
   notes: null,
   tutor: "tutor.subScreenTitle",
   flashcards: "note.tab.flashcards",
+  podcast: "note.tab.podcast",
   quiz: "note.tab.quiz",
-  test: "preview.subScreen.test",
+  mindmap: "note.tab.mindmap",
+  palace: "palace.title",
+  test: "note.subScreen.test",
+  speed: "note.tab.speed",
   transcript: "note.tab.transcript",
 };
+
+/*
+ * `TABS_WITHOUT_CHAT`: the tabs that are watched, listened to or played rather than
+ * read, where the phone shows no chat bar at the foot.
+ */
+export const TABS_WITHOUT_CHAT: ReadonlySet<NoteTab> = new Set<NoteTab>([
+  "mindmap",
+  "palace",
+  "tutor",
+  "speed",
+  "podcast",
+]);
+
+/* The practice screens the phone's dock gives an edit pill beside the chat bar. */
+export const TABS_WITH_MANAGE_PILL: ReadonlySet<NoteTab> = new Set<NoteTab>(["flashcards", "quiz"]);
 
 export type NoteThemeKey = "is" | "micro" | "anatomy" | "stats";
 
@@ -251,7 +204,6 @@ export type ChatMessage = { role: "assistant" | "user"; text: string };
 
 export type ThemeStudy = {
   cards: Array<{ front: string; back: string }>;
-  practice: Array<{ id: string; prompt: string }>;
   quiz: Array<{ question: string; options: string[]; correct: number; explanation: string }>;
   transcript: Array<{ time: string; text: string }>;
   chat: ChatMessage[];
@@ -266,7 +218,6 @@ export type ThemeStudy = {
  */
 export type ThemeStudyKeys = {
   cards: Array<{ frontKey: MessageKey; backKey: MessageKey }>;
-  practice: Array<{ id: string; promptKey: MessageKey }>;
   quiz: Array<{
     questionKey: MessageKey;
     optionKeys: MessageKey[];
@@ -297,10 +248,6 @@ export const THEME_STUDY_KEYS: Record<NoteThemeKey, ThemeStudyKeys> = {
       { frontKey: "pv.is.card1F", backKey: "pv.is.card1B" },
       { frontKey: "pv.is.card2F", backKey: "pv.is.card2B" },
       { frontKey: "pv.is.card3F", backKey: "pv.is.card3B" },
-    ],
-    practice: [
-      { id: "p1", promptKey: "pv.is.practice1" },
-      { id: "p2", promptKey: "pv.is.practice2" },
     ],
     quiz: [
       {
@@ -335,10 +282,6 @@ export const THEME_STUDY_KEYS: Record<NoteThemeKey, ThemeStudyKeys> = {
       { frontKey: "pv.micro.card2F", backKey: "pv.micro.card2B" },
       { frontKey: "pv.micro.card3F", backKey: "pv.micro.card3B" },
     ],
-    practice: [
-      { id: "p1", promptKey: "pv.micro.practice1" },
-      { id: "p2", promptKey: "pv.micro.practice2" },
-    ],
     quiz: [
       {
         questionKey: "pv.micro.quiz1Q",
@@ -371,10 +314,6 @@ export const THEME_STUDY_KEYS: Record<NoteThemeKey, ThemeStudyKeys> = {
       { frontKey: "pv.anatomy.card1F", backKey: "pv.anatomy.card1B" },
       { frontKey: "pv.anatomy.card2F", backKey: "pv.anatomy.card2B" },
       { frontKey: "pv.anatomy.card3F", backKey: "pv.anatomy.card3B" },
-    ],
-    practice: [
-      { id: "p1", promptKey: "pv.anatomy.practice1" },
-      { id: "p2", promptKey: "pv.anatomy.practice2" },
     ],
     quiz: [
       {
@@ -409,10 +348,6 @@ export const THEME_STUDY_KEYS: Record<NoteThemeKey, ThemeStudyKeys> = {
       { frontKey: "pv.stats.card2F", backKey: "pv.stats.card2B" },
       { frontKey: "pv.stats.card3F", backKey: "pv.stats.card3B" },
     ],
-    practice: [
-      { id: "p1", promptKey: "pv.stats.practice1" },
-      { id: "p2", promptKey: "pv.stats.practice2" },
-    ],
     quiz: [
       {
         questionKey: "pv.stats.quiz1Q",
@@ -443,9 +378,8 @@ export const THEME_STUDY_KEYS: Record<NoteThemeKey, ThemeStudyKeys> = {
 };
 
 /*
- * A note body, in the blocks the design's own renderer takes: a highlighted
- * heading, bulleted lines, plain lines and the four callouts. `blockStyle`
- * below is the artboard's function, transcribed.
+ * A note body, in the blocks the app's markdown renders it as: a highlighted heading,
+ * a list, a paragraph and the four callouts (`data-callout-kind`).
  */
 export type NoteBlockKind =
   | "h2"
@@ -459,54 +393,17 @@ export type NoteBlockKind =
 export type NoteBlock = { text: string; kind: NoteBlockKind };
 
 /*
- * The left rule stays one colour in both themes; the fill and the hairline
- * change with it, so each callout reads as a tint of its own colour rather
- * than a washed-out block on a dark page. The pairs live in landing.css.
+ * The callouts' left rule, which stays one colour in both appearances — the app's own
+ * values from `.lecture-markdown blockquote[data-callout-kind]` in globals.css. The
+ * fill and hairline change with the appearance and live in landing.css
+ * (`--hero-callout-*`), keyed on the hero phone's own Appearance setting.
  */
-const CALLOUTS: Record<string, { edge: string; token: string }> = {
+export const CALLOUT_EDGE: Record<string, { edge: string; token: string }> = {
   definition: { edge: "#2563eb", token: "definition" },
   example: { edge: "#16a34a", token: "example" },
   common_mistake: { edge: "#dc2626", token: "mistake" },
   key_takeaway: { edge: "#f59e0b", token: "takeaway" },
 };
-
-export function blockStyle(kind: NoteBlockKind): CSSProperties {
-  if (kind === "h2") {
-    return {
-      display: "inline-block",
-      margin: "30.4px 0 11.2px",
-      padding: "1.6px 5.12px",
-      borderRadius: "6.72px",
-      background: "var(--m-head-hl)",
-      color: "var(--m-label)",
-      fontSize: "21.12px",
-      fontWeight: 800,
-      letterSpacing: "-0.035em",
-    };
-  }
-  if (kind.startsWith("callout-")) {
-    const c = CALLOUTS[kind.slice(8)] ?? CALLOUTS.definition;
-    return {
-      margin: "16px 0",
-      padding: "13.6px 16px 13.6px 18.4px",
-      borderRadius: "14px",
-      border: `1px solid var(--m-callout-${c.token}-line)`,
-      borderLeft: `4px solid ${c.edge}`,
-      background: `var(--m-callout-${c.token}-bg)`,
-      fontSize: "16.96px",
-      lineHeight: 1.82,
-      letterSpacing: "-0.015em",
-    };
-  }
-  return {
-    position: "relative",
-    margin: "0 0 8.8px",
-    paddingLeft: "16.8px",
-    fontSize: "16.96px",
-    lineHeight: 1.82,
-    letterSpacing: "-0.015em",
-  };
-}
 
 export type NoteBlockKeys = { textKey: MessageKey; kind: NoteBlockKind };
 
@@ -565,30 +462,10 @@ export const NOTE_BODY_KEYS: Record<NoteThemeKey, NoteBlockKeys[]> = {
   ],
 };
 
-/*
- * Read-aloud highlighting, matching `.note-read-word` in globals.css exactly:
- * a pale wash behind everything already spoken, a solid marker with a thin ring
- * on the word being read, and its own dark pair for each. The span wraps the
- * word alone — the spaces between words sit outside it, which is what keeps the
- * marks as tight word-shaped chips instead of one ragged band.
- */
-const READ_HL = {
-  readBg: "#ffedd5",
-  readColor: "#7c2d12",
-  currentBg: "#fb923c",
-  currentColor: "#431407",
-  currentRing: "rgba(251, 146, 60, 0.28)",
-  darkReadBg: "rgba(251, 146, 60, 0.22)",
-  darkReadColor: "#fed7aa",
-  darkCurrentBg: "#c2410c",
-  darkCurrentColor: "#fff7ed",
-  darkCurrentRing: "rgba(251, 146, 60, 0.36)",
-};
-
 export type BodyWord = { index: number; text: string };
 export type BodyLine = { kind: NoteBlockKind; words: BodyWord[] };
 
-/** Splits a body into words carrying one running index, as the design does. */
+/** Splits a body into words carrying one running index, as the read-aloud tokenizer does. */
 export function tokenizeBody(blocks: NoteBlock[]): BodyLine[] {
   let index = 0;
   return blocks.map((block) => ({
@@ -600,30 +477,19 @@ export function tokenizeBody(blocks: NoteBlock[]): BodyLine[] {
   }));
 }
 
-export function readWordStyle(state: "cur" | "read" | "", dark: boolean): CSSProperties {
-  const base: CSSProperties = {
-    borderRadius: "4.48px",
-    padding: "0.48px 1.6px",
-    boxDecorationBreak: "clone",
-    WebkitBoxDecorationBreak: "clone",
-    transition: "background-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease",
-  };
-  if (state === "read") {
-    return {
-      ...base,
-      background: dark ? READ_HL.darkReadBg : READ_HL.readBg,
-      color: dark ? READ_HL.darkReadColor : READ_HL.readColor,
-    };
-  }
-  if (state === "cur") {
-    return {
-      ...base,
-      background: dark ? READ_HL.darkCurrentBg : READ_HL.currentBg,
-      color: dark ? READ_HL.darkCurrentColor : READ_HL.currentColor,
-      boxShadow: `0 0 0 1.76px ${dark ? READ_HL.darkCurrentRing : READ_HL.currentRing}`,
-    };
-  }
-  return base;
+/*
+ * The same body as markdown, for the speed reader, which takes the note's own text
+ * (`note-speed-reader.tsx` reads the markdown the notes tab renders).
+ */
+export function noteBodyMarkdown(blocks: NoteBlock[]): string {
+  return blocks
+    .map((block) => {
+      if (block.kind === "h2") return `## ${block.text}`;
+      if (block.kind === "li") return `- ${block.text}`;
+      if (block.kind.startsWith("callout-")) return `> ${block.text}`;
+      return block.text;
+    })
+    .join("\n\n");
 }
 
 /**
@@ -641,10 +507,11 @@ export const INITIAL_NOTE_SEEDS: Array<{
   source: SourceKind;
   date: string;
   status: NoteStatus;
+  detail?: SourceDetail;
 }> = [
-  { id: "n1", emoji: "📊", titleKey: "pv.note1Title", theme: "is", source: "audio", date: "2026-08-28", status: "ready" },
-  { id: "n2", emoji: "📈", titleKey: "pv.note2Title", theme: "micro", source: "pdf", date: "2026-08-27", status: "ready" },
-  { id: "n3", emoji: "🧠", titleKey: "pv.note3Title", theme: "anatomy", source: "audio", date: "2026-08-26", status: "ready" },
+  { id: "n1", emoji: "📊", titleKey: "pv.note1Title", theme: "is", source: "audio", date: "2026-08-28", status: "ready", detail: { minutes: 72 } },
+  { id: "n2", emoji: "📈", titleKey: "pv.note2Title", theme: "micro", source: "pdf", date: "2026-08-27", status: "ready", detail: { pages: 24 } },
+  { id: "n3", emoji: "🧠", titleKey: "pv.note3Title", theme: "anatomy", source: "audio", date: "2026-08-26", status: "ready", detail: { minutes: 47 } },
   { id: "n4", emoji: "⚖️", titleKey: "pv.note4Title", theme: "is", source: "link", date: "2026-08-24", status: "ready" },
   { id: "n5", emoji: "🎲", titleKey: "pv.note5Title", theme: "stats", source: "text", date: "2026-08-20", status: "ready" },
 ];
@@ -658,13 +525,14 @@ export function initialNotes(t: Translate<MessageKey>): PreviewNote[] {
     source: seed.source,
     date: seed.date,
     status: seed.status,
+    detail: seed.detail,
   }));
 }
 
 export function initialFolders(t: Translate<MessageKey>): PreviewFolder[] {
   return [
-    { id: "f1", name: t("pv.folderLectures"), icon: "📘", noteIds: ["n1", "n3"] },
-    { id: "f2", name: t("pv.folderExams"), icon: "🎓", noteIds: ["n2", "n4", "n5"] },
+    { id: "f1", name: t("pv.folderLectures"), icon: "📁", noteIds: ["n1", "n3"] },
+    { id: "f2", name: t("pv.folderExams"), icon: "📁", noteIds: ["n2", "n4", "n5"] },
   ];
 }
 
@@ -675,12 +543,42 @@ export const SOURCE_LABEL_KEYS: Record<SourceKind, MessageKey> = {
   link: "source.link",
 };
 
-/** The percentage a results screen reports, clamped and rounded. */
-export function completionPct(done: number, total: number): number {
-  if (!total) return 0;
-  return Math.max(0, Math.min(100, Math.round((done / total) * 100)));
+/**
+ * "Audio, 47 min", "PDF, 24 pages", "Link": the source and what the app measured
+ * of it, as `sourceMeta` in home-dashboard.tsx and `getLectureSourceDetail` print it.
+ */
+export function sourceMeta(note: Pick<PreviewNote, "source" | "detail">, t: Translate<MessageKey>): string {
+  const label = t(SOURCE_LABEL_KEYS[note.source]);
+  const detail = note.detail;
+  if (!detail) return label;
+  if ("pages" in detail) return `${label}, ${t("source.pages", { count: detail.pages })}`;
+  const hours = Math.floor(detail.minutes / 60);
+  const minutes = detail.minutes % 60;
+  const time = !hours
+    ? t("source.duration.minutes", { minutes: detail.minutes })
+    : minutes
+      ? t("source.duration.hoursMinutes", { hours, minutes })
+      : t("source.duration.hours", { hours });
+  return `${label}, ${time}`;
 }
 
+/* The study material, in the shapes the landing's app screens take. */
+export function themeFlashcards(theme: NoteThemeKey, t: Translate<MessageKey>) {
+  return THEME_STUDY_KEYS[theme].cards.map((card, index) => ({
+    id: `${theme}-card-${index + 1}`,
+    front: t(card.frontKey),
+    back: t(card.backKey),
+  }));
+}
+
+export function themeQuiz(theme: NoteThemeKey, t: Translate<MessageKey>) {
+  return THEME_STUDY_KEYS[theme].quiz.map((question, index) => ({
+    id: `${theme}-quiz-${index + 1}`,
+    prompt: t(question.questionKey),
+    options: question.optionKeys.map((key) => t(key)),
+    correct_option_idx: question.correct,
+  }));
+}
 
 /** The reader's-language view of a theme's study material. */
 export function resolveThemeStudy(theme: NoteThemeKey, t: Translate<MessageKey>): ThemeStudy {
@@ -688,7 +586,6 @@ export function resolveThemeStudy(theme: NoteThemeKey, t: Translate<MessageKey>)
 
   return {
     cards: keys.cards.map((card) => ({ front: t(card.frontKey), back: t(card.backKey) })),
-    practice: keys.practice.map((item) => ({ id: item.id, prompt: t(item.promptKey) })),
     quiz: keys.quiz.map((question) => ({
       question: t(question.questionKey),
       options: question.optionKeys.map((key) => t(key)),

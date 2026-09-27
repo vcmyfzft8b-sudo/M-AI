@@ -462,8 +462,18 @@
   --btn-round-glyph: 1.45rem;
 }
 
-:root[data-theme="dark"] .memo,
-:root[data-theme="dark"] .memo-portal {
+/*
+ * The app drawn on the marketing page, which ignores the saved `data-theme`:
+ *
+ * - `.memo-os-theme` follows the operating system only, as the landing does (see
+ *   landing.css) — dark from the media block below, never from a saved preference,
+ *   which would otherwise paint a light card on a dark homepage.
+ * - `.memo-theme-light` / `.memo-theme-dark` pin one appearance, for the hero phone,
+ *   whose own Appearance setting a visitor can change inside the demo.
+ */
+:root[data-theme="dark"] .memo:not(.memo-os-theme):not(.memo-theme-light),
+:root[data-theme="dark"] .memo-portal,
+.memo.memo-theme-dark {
   /*
    * The design's dark page is pure black, but the app nests recessed panels
    * inside cards where the design only ever puts them on the page — a #1c1c1e
@@ -496,10 +506,11 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) .memo,
+  :root:not([data-theme]) .memo:not(.memo-theme-light),
   :root:not([data-theme]) .memo-portal,
-  :root[data-theme="system"] .memo,
-  :root[data-theme="system"] .memo-portal {
+  :root[data-theme="system"] .memo:not(.memo-theme-light),
+  :root[data-theme="system"] .memo-portal,
+  .memo.memo-os-theme:not(.memo-theme-light) {
     /* Mirrors the explicit dark block above; see the note there. */
     --bg: #121214;
     --surface: #1f1f22;
@@ -546,6 +557,22 @@
 .memo {
   min-height: 100vh;
   background: var(--bg);
+}
+
+/* Embedded on the landing page (LandingAppScope): the app's tokens and components,
+   not its screen. */
+.memo.memo-embed {
+  min-height: 0;
+  background: none;
+}
+
+/* A pinned appearance pins the native controls inside it too (checkboxes, sliders). */
+.memo.memo-theme-light {
+  color-scheme: light;
+}
+
+.memo.memo-theme-dark {
+  color-scheme: dark;
 }
 
 .memo *,
@@ -5365,11 +5392,22 @@
   letter-spacing: -0.025em;
 }
 
-.memo-result-actions > :first-child {
+/*
+ * Weighted past globals.css, whose light `.lecture-study-refresh` gradient
+ * (`:root:not([data-theme]) .lecture-study-refresh`, three classes' worth) beat
+ * the two-class rule this used to be and painted the ink button white on white.
+ */
+.memo-result .memo-result-actions.memo-result-actions > :first-child {
   background: var(--text);
   color: var(--bg);
+  box-shadow: none;
   font-size: 1.08rem;
   font-weight: 750;
+}
+
+/* An edge, not production's lift. */
+.memo-result .memo-result-actions.memo-result-actions > :first-child:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
 }
 
 .memo-result-actions > :first-child .msym {
@@ -19198,14 +19236,18 @@
    The bare `:root:not([data-theme="light"])` half of this pair belongs inside the
    media query below and nowhere else: outside it, it matches a light page whose
    theme attribute is simply absent, which is most of them. */
-:root[data-theme="dark"] .memo-mm-stage {
+/* The landing's scopes (`.memo-os-theme`, `.memo-theme-*`) pick their own appearance; see the
+   token blocks at the top of this file. */
+:root[data-theme="dark"] .memo-mm-stage:not(:is(.memo-os-theme, .memo-theme-light) *),
+.memo-theme-dark .memo-mm-stage {
   background:
     radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.08) 1px, transparent 0) 0 0 / 26px 26px,
     var(--sunken);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .memo-mm-stage {
+  :root:not([data-theme="light"]) .memo-mm-stage:not(.memo-theme-light *),
+  .memo-os-theme .memo-mm-stage {
     background:
       radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.08) 1px, transparent 0) 0 0 / 26px 26px,
       var(--sunken);
@@ -19494,12 +19536,14 @@
   cursor: default;
 }
 
-:root[data-theme="dark"] .memo-mm-save {
+:root[data-theme="dark"] .memo-mm-save:not(:is(.memo-os-theme, .memo-theme-light) *),
+.memo-theme-dark .memo-mm-save {
   color: #121214;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .memo-mm-save {
+  :root:not([data-theme="light"]) .memo-mm-save:not(.memo-theme-light *),
+  .memo-os-theme .memo-mm-save {
     color: #121214;
   }
 }

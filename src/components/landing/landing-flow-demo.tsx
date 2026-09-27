@@ -1,15 +1,28 @@
 "use client";
 
-import type { CSSProperties, DragEvent, PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, DragEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { Component } from "react";
 
-import { useT } from "@/components/i18n-provider";
-import { Msym } from "@/components/msym";
+import { useTranslations } from "@/components/i18n-provider";
+import { Emoji, Msym } from "@/components/msym";
+import { NOTE_STUDY_TABS } from "@/lib/note-tabs";
+import type { Locale } from "@/lib/i18n/locales";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
 
-import { LandingStudyResult } from "./landing-study-result";
+import { LandingAppScope } from "./app/landing-app-scope";
+import { landingNoteMeta, landingNoteTitleMeta } from "./app/landing-note-meta";
+import { LandingFlashcardsScreen } from "./app/landing-flashcards-screen";
+import { LandingMindmapScreen } from "./app/landing-mindmap-screen";
+import { LandingPalaceScreen } from "./app/landing-palace-screen";
+import { LandingPodcastScreen } from "./app/landing-podcast-screen";
+import { LandingQuizScreen } from "./app/landing-quiz-screen";
+import { LandingSpeedReadScreen } from "./app/landing-speed-read-screen";
+import { LandingTestScreen } from "./app/landing-test-screen";
+import { LandingSampleNote } from "./landing-sample-note";
+import { LandingScaledFrame } from "./landing-scaled-frame";
 import { LandingTutorDemo } from "./landing-tutor-demo";
+import type { SourceDetail, SourceKind } from "./memo-app-preview-data";
 
 /*
  * The interface around the demo is translated; the material inside it is not.
@@ -17,27 +30,26 @@ import { LandingTutorDemo } from "./landing-tutor-demo";
  * questions all stand in for the learner's own coursework, which stays in the
  * language it was written in whatever the interface is set to. Same boundary
  * as memo-app-preview-data.ts — see the note at the top of that file.
+ *
+ * Each step's card is the app itself, not a drawing of it: the home screen's
+ * drop zone and note rows, the note tab's rendered note, and the note's pill
+ * row over the real study screens (`./app/`), each drawn at phone width and
+ * scaled into the card by `LandingScaledFrame`.
  */
 
 /*
- * The study tabs, from the redesign's note screen: one pill per mode, each with
- * its own Material Symbol and its own tint, which the active one wears as a
- * wash and a ring. Sized down for this card — the shapes are the app's, the
- * scale is the marketing page's.
+ * The note's study pills: the app's own row (`NOTE_TABS`), minus the note it hangs
+ * off and the transcript, which is the source rather than something to revise with.
  */
-const STUDY_TABS = [
-  /* The spoken walkthrough leads, as it does in the app's own pill row: it is
-     the other way to take in the note, ahead of the three practice screens. */
-  { id: "tutor", labelKey: "note.tab.tutor", icon: "graphic_eq", tint: "oklch(0.66 0.15 50)" },
-  { id: "cards", labelKey: "flowDemo.tabCards", icon: "style", tint: "oklch(0.66 0.15 295)" },
-  { id: "quiz", labelKey: "flowDemo.tabQuiz", icon: "quiz", tint: "oklch(0.66 0.15 340)" },
-  { id: "test", labelKey: "flowDemo.tabTest", icon: "assignment", tint: "oklch(0.66 0.15 150)" },
-] as const satisfies ReadonlyArray<{
-  id: "tutor" | "cards" | "quiz" | "test";
-  labelKey: MessageKey;
-  icon: string;
-  tint: string;
-}>;
+const STUDY_TABS = NOTE_STUDY_TABS;
+
+type StudyTabId = (typeof STUDY_TABS)[number]["id"];
+
+/* The card opens on the flashcards, the pill most people reach for first. */
+const FIRST_STUDY_TAB: StudyTabId = "flashcards";
+
+/* The width the app screens inside the cards are laid out at: a phone's. */
+const SCREEN_WIDTH = 390;
 
 type FlowSource = {
   id: string;
@@ -47,7 +59,8 @@ type FlowSource = {
   label: string;
   sub: (t: Translate<MessageKey>) => string;
   noteTitleKey: MessageKey;
-  noteSub: (t: Translate<MessageKey>) => string;
+  /** The note it becomes, as the library row and the note's title line describe it. */
+  note: { source: SourceKind; detail: SourceDetail };
 };
 
 const FLOW_SOURCES: FlowSource[] = [
@@ -60,7 +73,7 @@ const FLOW_SOURCES: FlowSource[] = [
     label: "predavanje-4.mp3",
     sub: (t) => `${t("flowDemo.kindAudio")} · 48:12`,
     noteTitleKey: "flowDemo.noteTitle.audio",
-    noteSub: (t) => `${t("flowDemo.kindAudio")} · ${t("flowDemo.today")}`,
+    note: { source: "audio", detail: { minutes: 48 } },
   },
   {
     id: "pdf",
@@ -70,7 +83,7 @@ const FLOW_SOURCES: FlowSource[] = [
     label: "skripta-IS.pdf",
     sub: (t) => `${t("flowDemo.kindPdf")} · ${t("flowDemo.pages", { count: 24 })}`,
     noteTitleKey: "flowDemo.noteTitle.pdf",
-    noteSub: (t) => `${t("flowDemo.kindPdf")} · ${t("flowDemo.today")}`,
+    note: { source: "pdf", detail: { pages: 24 } },
   },
   {
     id: "doc",
@@ -80,84 +93,35 @@ const FLOW_SOURCES: FlowSource[] = [
     label: "seminarska-erp.docx",
     sub: (t) => `${t("flowDemo.kindWord")} · ${t("flowDemo.pages", { count: 12 })}`,
     noteTitleKey: "flowDemo.noteTitle.doc",
-    noteSub: (t) => `${t("flowDemo.kindWord")} · ${t("flowDemo.today")}`,
+    /* A Word file is imported as a document, which the app files and labels as a PDF. */
+    note: { source: "pdf", detail: { pages: 12 } },
   },
 ];
-
-const STUDY_CARDS = [
-  { qKey: "flowDemo.card1Q", aKey: "flowDemo.card1A" },
-  { qKey: "flowDemo.card2Q", aKey: "flowDemo.card2A" },
-  { qKey: "flowDemo.card3Q", aKey: "flowDemo.card3A" },
-] as const satisfies ReadonlyArray<{ qKey: MessageKey; aKey: MessageKey }>;
-
-const STUDY_QUIZ = [
-  {
-    qKey: "flowDemo.quiz1Q",
-    optionKeys: ["flowDemo.quiz1O1", "flowDemo.quiz1O2", "flowDemo.quiz1O3", "flowDemo.quiz1O4"],
-    correct: 0,
-  },
-  {
-    qKey: "flowDemo.quiz2Q",
-    optionKeys: ["flowDemo.quiz2O1", "flowDemo.quiz2O2", "flowDemo.quiz2O3", "flowDemo.quiz2O4"],
-    correct: 1,
-  },
-  {
-    qKey: "flowDemo.quiz3Q",
-    optionKeys: ["flowDemo.quiz3O1", "flowDemo.quiz3O2", "flowDemo.quiz3O3", "flowDemo.quiz3O4"],
-    correct: 2,
-  },
-  {
-    qKey: "flowDemo.quiz4Q",
-    optionKeys: ["flowDemo.quiz4O1", "flowDemo.quiz4O2", "flowDemo.quiz4O3", "flowDemo.quiz4O4"],
-    correct: 2,
-  },
-] as const satisfies ReadonlyArray<{
-  qKey: MessageKey;
-  optionKeys: readonly MessageKey[];
-  correct: number;
-}>;
-
-/*
- * The attempts the demo learner already has behind them. The app reports a
- * submitted test against its own history, and a demo with none would show that
- * panel empty.
- */
-const FLOW_TEST_HISTORY = [64, 82];
-
-/*
- * `keysKey` holds the word stems an answer is matched against, comma separated
- * — they have to be the reader's language, because the answer they type is.
- */
-const STUDY_TEST = [
-  { qKey: "flowDemo.test1Q", keysKey: "flowDemo.test1Keys", aKey: "flowDemo.test1A" },
-  { qKey: "flowDemo.test2Q", keysKey: "flowDemo.test2Keys", aKey: "flowDemo.test2A" },
-  { qKey: "flowDemo.test3Q", keysKey: "flowDemo.test3Keys", aKey: "flowDemo.test3A" },
-] as const satisfies ReadonlyArray<{ qKey: MessageKey; keysKey: MessageKey; aKey: MessageKey }>;
 
 const PAST_NOTES: Array<{
   icon: string;
   titleKey: MessageKey;
-  sub: (t: Translate<MessageKey>) => string;
+  note: { source: SourceKind; detail: SourceDetail; daysAgo: number };
 }> = [
   {
     icon: "🎙️",
     titleKey: "flowDemo.past.lecture3",
-    sub: (t) => `${t("flowDemo.kindAudio")} · ${t("flowDemo.yesterday")}`,
+    note: { source: "audio", detail: { minutes: 52 }, daysAgo: 1 },
   },
   {
     icon: "📄",
     titleKey: "flowDemo.past.script2",
-    sub: (t) => `${t("flowDemo.kindPdf")} · ${t("flowDemo.onTuesday")}`,
+    note: { source: "pdf", detail: { pages: 18 }, daysAgo: 3 },
   },
   {
     icon: "📝",
     titleKey: "flowDemo.past.seminar",
-    sub: (t) => `${t("flowDemo.kindWord")} · ${t("flowDemo.onFriday")}`,
+    note: { source: "pdf", detail: { pages: 9 }, daysAgo: 7 },
   },
   {
     icon: "🎙️",
     titleKey: "flowDemo.past.lecture2",
-    sub: (t) => `${t("flowDemo.kindAudio")} · ${t("flowDemo.lastWeek")}`,
+    note: { source: "audio", detail: { minutes: 1 * 60 + 5 }, daysAgo: 8 },
   },
 ];
 
@@ -179,8 +143,6 @@ const STATUS_BASE: CSSProperties = {
   fontWeight: 500,
   transition: "color 300ms ease, opacity 300ms ease",
 };
-
-const NOTE_IN = "memo-note-in 260ms cubic-bezier(0.22,1,0.36,1) both";
 
 /* Must track landing.css: the grid goes three-across at min-width 806px.
    Below that the steps wrap, so they need the per-step scroll gating. */
@@ -262,6 +224,7 @@ type FlowDemoProps = {
   storyAutoplay?: boolean;
   /** Injected by the wrapper below, because a class cannot call a hook. */
   t: Translate<MessageKey>;
+  locale: Locale;
 };
 
 type FlowDemoState = {
@@ -272,29 +235,9 @@ type FlowDemoState = {
   flowSource: FlowSource | null;
   flowGhost: FlowGhost | null;
   flowDrag: string | null;
-  sTab: "tutor" | "cards" | "quiz" | "test";
-  sIdx: number;
-  sFlip: boolean;
-  sDx: number;
-  sOut: boolean;
-  sEnter: boolean;
-  sKnown: number;
-  /* Which items were missed this round, so "repeat the ones you missed" can
-     start a second round over exactly those — the app's own rule. */
-  sMissed: number[];
-  sCycle: number;
-  sQueue: number[] | null;
-  sQIdx: number;
-  sQPick: number | null;
-  sQScore: number;
-  sQMissed: number[];
-  sQCycle: number;
-  sQQueue: number[] | null;
-  sTIdx: number;
-  sTVal: string;
-  sTShown: boolean;
-  sTScore: number;
-  sTOk: boolean;
+  sTab: StudyTabId;
+  /* Bumped when a new source restarts the story, so every study screen starts over. */
+  studyRun: number;
   touchGhost: { icon: string; label: string; x: number; y: number } | null;
 };
 
@@ -307,27 +250,8 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
     flowSource: null,
     flowGhost: null,
     flowDrag: null,
-    sTab: "cards",
-    sIdx: 0,
-    sFlip: false,
-    sDx: 0,
-    sOut: false,
-    sEnter: false,
-    sKnown: 0,
-    sMissed: [],
-    sCycle: 1,
-    sQueue: null,
-    sQIdx: 0,
-    sQPick: null,
-    sQScore: 0,
-    sQMissed: [],
-    sQCycle: 1,
-    sQQueue: null,
-    sTIdx: 0,
-    sTVal: "",
-    sTShown: false,
-    sTScore: 0,
-    sTOk: false,
+    sTab: FIRST_STUDY_TAB,
+    studyRun: 0,
     touchGhost: null,
   };
 
@@ -338,9 +262,8 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
   private flowTimers: number[] = [];
   private flowUserActed = false;
   private flowStarted = false;
-  private studyTimer: number | undefined;
-  private cardStart: { x: number; y: number; moved: boolean } | null = null;
-  private studyTouched = false;
+  private tabRow: HTMLDivElement | null = null;
+  private tabEls: Partial<Record<StudyTabId, HTMLButtonElement | null>> = {};
   private touchDrag: { chip: FlowSource; startX: number; startY: number; moved: boolean } | null = null;
   private suppressChipClick = false;
   private stepEls: Array<HTMLElement | null> = [];
@@ -384,7 +307,6 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
 
   componentWillUnmount() {
     this.clearFlowTimers();
-    window.clearTimeout(this.studyTimer);
     window.clearTimeout(this.stallTimer);
     window.clearTimeout(this.safetyTimer);
     window.clearTimeout(this.measureFrame);
@@ -674,8 +596,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
     if (byUser) this.flowUserActed = true;
     // A new source restarts the whole story, study material included, so the
     // deck animates in from the first card again.
-    this.studyTouched = false;
-    this.setState({
+    this.setState((p) => ({
       flowStage: 1,
       flowOver: false,
       flowLabel: source.label,
@@ -683,28 +604,11 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
       flowGhost: null,
       flowDrag: null,
       noteStep: 0,
-      sTab: "cards",
-      sIdx: 0,
-      sFlip: false,
-      sDx: 0,
-      sOut: false,
-      sEnter: false,
-      sKnown: 0,
-      sMissed: [],
-      sCycle: 1,
-      sQueue: null,
-      sQIdx: 0,
-      sQPick: null,
-      sQScore: 0,
-      sQMissed: [],
-      sQCycle: 1,
-      sQQueue: null,
-      sTIdx: 0,
-      sTVal: "",
-      sTShown: false,
-      sTScore: 0,
-      sTOk: false,
-    });
+      sTab: FIRST_STUDY_TAB,
+      studyRun: p.studyRun + 1,
+    }));
+    // The row starts at its first pill again, as the app's does on a fresh note.
+    this.tabRow?.scrollTo({ left: 0 });
     if (this.isCompact()) {
       this.advancing = false;
       // Re-measure rather than reuse: the reader may have scrolled on to the
@@ -808,7 +712,6 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
   }
 
   studyTouch() {
-    this.studyTouched = true;
     if (this.flowUserActed && this.state.flowStage >= 3) return;
     this.flowUserActed = true;
     this.clearFlowTimers();
@@ -822,51 +725,6 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
       flowDrag: null,
     });
   }
-
-  gradeCard(known: boolean) {
-    if (this.state.sOut) return;
-    const cardId = this.cardQueue()[this.state.sIdx];
-    this.setState({ sOut: true, sDx: known ? 300 : -300 });
-    window.clearTimeout(this.studyTimer);
-    this.studyTimer = window.setTimeout(() => {
-      this.setState((p) => ({
-        sIdx: p.sIdx + 1,
-        sKnown: p.sKnown + (known ? 1 : 0),
-        sMissed: known ? p.sMissed : [...p.sMissed, cardId],
-        sFlip: false,
-        sDx: 0,
-        sOut: false,
-        sEnter: true,
-      }));
-      window.setTimeout(() => this.setState({ sEnter: false }), 40);
-    }, 230);
-  }
-
-  onCardDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    this.studyTouch();
-    if (this.state.sOut) return;
-    this.cardStart = { x: e.clientX, y: e.clientY, moved: false };
-    if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
-  };
-
-  onCardMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!this.cardStart || this.state.sOut) return;
-    const dx = e.clientX - this.cardStart.x;
-    if (Math.abs(dx) > 4) this.cardStart.moved = true;
-    this.setState({ sDx: dx });
-  };
-
-  onCardUp = () => {
-    if (!this.cardStart) return;
-    const moved = this.cardStart.moved;
-    this.cardStart = null;
-    const dx = this.state.sDx;
-    if (Math.abs(dx) > 52) {
-      this.gradeCard(dx > 0);
-      return;
-    }
-    this.setState((p) => ({ sDx: 0, sFlip: moved ? p.sFlip : !p.sFlip }));
-  };
 
   // Touch devices never fire HTML5 drag events, so dragging a source onto the
   // first step is driven by pointer events instead.
@@ -940,97 +798,21 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
     this.runFlow(src, true);
   };
 
-  /* The cards this round asks about: the whole deck, or just the missed ones. */
-  cardQueue(): number[] {
-    return this.state.sQueue ?? STUDY_CARDS.map((_, i) => i);
-  }
-
-  quizQueue(): number[] {
-    return this.state.sQQueue ?? STUDY_QUIZ.map((_, i) => i);
-  }
-
-  /* Back to the whole set, first round. */
-  restartStudy = () => {
-    this.studyTouch();
-    const tab = this.state.sTab;
-    if (tab === "cards") {
-      this.setState({ sIdx: 0, sKnown: 0, sMissed: [], sCycle: 1, sQueue: null, sFlip: false, sDx: 0, sOut: false, sEnter: true });
-      window.setTimeout(() => this.setState({ sEnter: false }), 40);
-    } else if (tab === "quiz") {
-      this.setState({ sQIdx: 0, sQScore: 0, sQPick: null, sQMissed: [], sQCycle: 1, sQQueue: null });
-    } else {
-      this.setState({ sTIdx: 0, sTScore: 0, sTVal: "", sTShown: false, sTOk: false });
-    }
-  };
-
-  /* A second round over just the ones that were missed, as the app runs it. */
-  repeatMissed = () => {
-    this.studyTouch();
-    if (this.state.sTab === "cards") {
-      this.setState((p) => ({
-        sQueue: p.sMissed,
-        sCycle: p.sCycle + 1,
-        sIdx: 0,
-        sKnown: 0,
-        sMissed: [],
-        sFlip: false,
-        sDx: 0,
-        sOut: false,
-        sEnter: true,
-      }));
-      window.setTimeout(() => this.setState({ sEnter: false }), 40);
-      return;
-    }
-    this.setState((p) => ({
-      sQQueue: p.sQMissed,
-      sQCycle: p.sQCycle + 1,
-      sQIdx: 0,
-      sQScore: 0,
-      sQMissed: [],
-      sQPick: null,
-    }));
-  };
-
-  submitTest = () => {
-    this.studyTouch();
-    const t = STUDY_TEST[Math.min(this.state.sTIdx, STUDY_TEST.length - 1)];
-    if (!this.state.sTShown) {
-      if (!this.state.sTVal.trim()) return;
-      const low = this.state.sTVal.toLowerCase();
-      const ok = this.props
-        .t(t.keysKey)
-        .split(",")
-        .some((stem) => low.indexOf(stem.trim().toLowerCase()) >= 0);
-      this.setState((p) => ({ sTShown: true, sTScore: p.sTScore + (ok ? 1 : 0), sTOk: ok }));
-      return;
-    }
-    this.setState((p) => ({ sTIdx: p.sTIdx + 1, sTVal: "", sTShown: false, sTOk: false }));
-  };
-
-  tabStyle(id: FlowDemoState["sTab"], tint: string): CSSProperties {
-    const on = this.state.sTab === id;
-    return {
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: "5px",
-      flex: "0 0 auto",
-      height: "28px",
-      padding: "0 10px",
-      border: 0,
-      borderRadius: "999px",
-      background: on ? `color-mix(in oklch, ${tint} 16%, var(--l-surface))` : "var(--l-surface)",
-      boxShadow: on ? `inset 0 0 0 1.5px ${tint}` : "var(--l-shadow)",
-      color: "var(--l-label)",
-      fontFamily: "inherit",
-      cursor: "pointer",
-      transition: "background 180ms ease, box-shadow 180ms ease",
-    };
-  }
-
-  selectTab(id: FlowDemoState["sTab"]) {
+  selectTab(id: StudyTabId) {
     this.studyTouch();
     this.setState({ sTab: id });
+    this.scrollTabIntoView(id);
+  }
+
+  /* The pill row scrolls itself to the pill that was chosen, as the app's does.
+     The row is scrolled, never the page: scrollIntoView would drag the whole
+     landing along with it. */
+  scrollTabIntoView(id: StudyTabId) {
+    const row = this.tabRow;
+    const pill = this.tabEls[id];
+    if (!row || !pill) return;
+    const left = pill.offsetLeft - (row.clientWidth - pill.offsetWidth) / 2;
+    row.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
   }
 
   nodeStyle(doneAt: number, options?: { pulse?: boolean; over?: boolean }): CSSProperties {
@@ -1055,62 +837,37 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
     };
   }
 
+  /* The shell each step's card shares: the landing's card, the app's page inside it. */
+  renderScreen(children: ReactNode, fade = true) {
+    return (
+      <LandingAppScope className={`landing-v2-flow-screen ${fade ? "landing-v2-flow-fade" : ""}`.trim()}>
+        <LandingScaledFrame fill width={SCREEN_WIDTH}>
+          {children}
+        </LandingScaledFrame>
+      </LandingAppScope>
+    );
+  }
+
+  renderStepHead(step: 1 | 2 | 3, titleKey: MessageKey) {
+    return (
+      <>
+        <span style={this.nodeStyle(step === 2 ? 1 : step, step === 1 ? { pulse: true, over: true } : undefined)} />
+        <h3 style={{ margin: "0.35rem 0 0", color: "var(--l-label)", fontSize: "1.35rem", fontWeight: 600, lineHeight: 1.25 }}>
+          {this.props.t(titleKey)}
+        </h3>
+      </>
+    );
+  }
+
+  /*
+   * Step one is the home screen: the capture sheet's drop zone over the library,
+   * where the dropped source lands as a new note row that is still being written.
+   */
   renderStep1() {
     const s = this.state;
     const stage = s.flowStage;
-    const over = s.flowOver;
-
-    const dropCardStyle: CSSProperties = {
-      display: "grid",
-      alignContent: "start",
-      gap: "8px",
-      width: "100%",
-      maxWidth: "100%",
-      minWidth: 0,
-      boxSizing: "border-box",
-      minHeight: "23rem",
-      overflow: "hidden",
-      alignSelf: "stretch",
-      padding: "13px 14px",
-      borderRadius: "20px",
-      background: "var(--l-surface)",
-      border: over ? "1px solid var(--l-flow)" : "1px solid var(--l-line)",
-      boxShadow: over ? "0 0 0 6px var(--l-flow-soft), var(--l-shadow)" : "var(--l-shadow)",
-      transform: over ? "scale(1.03)" : "scale(1)",
-      cursor: "pointer",
-      transition:
-        "transform 260ms cubic-bezier(0.34,1.4,0.5,1), box-shadow 260ms ease, border-color 260ms ease",
-    };
-
-    const dropRowStyle: CSSProperties = {
-      display: "flex",
-      flexWrap: "wrap",
-      alignItems: "center",
-      gap: "8px 11px",
-      minWidth: 0,
-      minHeight: "58px",
-      padding: "10px 11px",
-      borderRadius: "18px",
-      boxSizing: "border-box",
-      background: stage >= 1 ? "var(--l-surface-62)" : "transparent",
-      border: stage >= 1 ? "1px solid var(--l-line)" : "1px dashed var(--l-line)",
-      transition: "background 300ms ease, border-color 300ms ease",
-    };
-
-    const dropIcon = stage >= 1 ? (s.flowSource ? s.flowSource.icon : "🎙️") : "⬇️";
-    const t = this.props.t;
-    const dropTitle =
-      stage >= 1
-        ? s.flowSource
-          ? t(s.flowSource.noteTitleKey)
-          : t("flowDemo.newNote")
-        : t("flowDemo.dropTitle");
-    const dropSubtitle =
-      stage >= 1
-        ? s.flowSource
-          ? s.flowSource.noteSub(t)
-          : t("flowDemo.today")
-        : t("flowDemo.dropSubtitle");
+    const { t, locale } = this.props;
+    const source = s.flowSource;
 
     return (
       <article
@@ -1119,20 +876,9 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
         ref={(el) => {
           this.stepEls[0] = el;
         }}
-        style={{
-          position: "relative",
-          display: "grid",
-          gridTemplateRows: "auto auto 1fr auto",
-          justifyItems: "center",
-          gap: "0.85rem",
-          minWidth: 0,
-          textAlign: "center",
-        }}
+        className="landing-v2-flow-step"
       >
-        <span style={this.nodeStyle(1, { pulse: true, over: true })} />
-        <h3 style={{ margin: "0.35rem 0 0", color: "var(--l-label)", fontSize: "1.35rem", fontWeight: 600, lineHeight: 1.25 }}>
-          {t("flowDemo.step1Title")}
-        </h3>
+        {this.renderStepHead(1, "flowDemo.step1Title")}
         <div
           ref={(el) => {
             this.flowTile = el;
@@ -1141,130 +887,49 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
           onDragLeave={this.onFlowDragLeave}
           onDrop={this.onFlowDrop}
           onClick={() => this.runFlow(FLOW_SOURCES[0], true)}
-          style={dropCardStyle}
+          className="landing-v2-flow-card is-target"
+          data-over={s.flowOver ? "true" : "false"}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
-            <span style={{ fontSize: "10.6px", fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--l-second)" }}>
-              {t("flowDemo.libraryLabel")}
-            </span>
-            <span style={{ fontSize: "10.6px", fontWeight: 600, color: "var(--l-second)" }}>
-              {t("flowDemo.noteCount", { count: stage >= 1 ? 5 : 4 })}
-            </span>
-          </div>
-          <div style={dropRowStyle}>
-            {/* The library row, in the redesign's shape: the emoji on a tile
-                rather than a hairline circle, and its heavier title. */}
-            <span
-              style={{
-                display: "inline-flex",
-                width: "36px",
-                height: "36px",
-                flexShrink: 0,
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: "999px",
-                background: "var(--m-tile)",
-                fontSize: "15px",
-              }}
-            >
-              {dropIcon}
-            </span>
-            <span style={{ display: "grid", gap: "3px", minWidth: 0, flex: 1, textAlign: "left" }}>
-              <span
-                style={{
-                  fontSize: "14.7px",
-                  fontWeight: 650,
-                  letterSpacing: "-0.025em",
-                  color: "var(--l-label)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {dropTitle}
-              </span>
-              <span style={{ fontSize: "12.5px", lineHeight: 1.3, letterSpacing: "-0.015em", color: "var(--l-second)" }}>
-                {dropSubtitle}
-              </span>
-            </span>
-            {/* Laid out in every stage, shown only while the source is being
-                processed. Adding and removing it changed this card's height,
-                and since all three sit in one grid row, the other two grew
-                and shrank with it. */}
-            <span
-              aria-hidden={stage === 1 ? undefined : true}
-              style={{
-                flexBasis: "100%",
-                minWidth: 0,
-                marginTop: "2px",
-                padding: "4px 9px",
-                borderRadius: "999px",
-                background: "var(--l-line)",
-                color: "var(--l-second)",
-                fontSize: "9.2px",
-                fontWeight: 700,
-                letterSpacing: "0.05em",
-                textTransform: "uppercase",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                textAlign: "center",
-                visibility: stage === 1 ? "visible" : "hidden",
-              }}
-            >
-              {this.props.t("flowDemo.statusWritingNotes")}
-            </span>
-          </div>
-          {PAST_NOTES.map((row) => (
-            <div
-              key={row.titleKey}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                minWidth: 0,
-                padding: "8px 11px",
-                borderRadius: "18px",
-                boxSizing: "border-box",
-                border: "1px solid var(--l-line)",
-                background: "var(--l-surface-62)",
-                // Recedes behind the live row without dropping its label text
-                // below the AA threshold, which 0.6 did.
-                opacity: 0.9,
-              }}
-            >
-              <span
-                style={{
-                  display: "inline-flex",
-                  width: "30px",
-                  height: "30px",
-                  flexShrink: 0,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: "50%",
-                  background: "var(--l-line)",
-                  fontSize: "13px",
-                }}
-              >
-                {row.icon}
-              </span>
-              <span style={{ display: "grid", gap: "3px", minWidth: 0, flex: 1, textAlign: "left" }}>
-                <span
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    color: "var(--l-label)",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {t(row.titleKey)}
+          {this.renderScreen(
+            <div className="landing-v2-flow-pad">
+              <div className="memo-dropzone">
+                <Msym name="cloud_upload" className="memo-dropzone-icon" />
+                <span className="memo-dropzone-lead">{t("capture.pickFile")}</span>
+                <span className="memo-dropzone-title">{t("flowDemo.dropSubtitle")}</span>
+                <span className="memo-dropzone-hint">
+                  {t("capture.dropHint", { action: t("capture.pickFile") })}
                 </span>
-                <span style={{ fontSize: "11.4px", lineHeight: 1.3, color: "var(--l-second)" }}>{row.sub(t)}</span>
-              </span>
-            </div>
-          ))}
+              </div>
+              <div className="memo-note-list">
+                {stage >= 1 && source ? (
+                  <div key={`${source.id}-${s.studyRun}`} className="memo-note-row landing-v2-flow-new-row">
+                    <span className="memo-note-emoji">
+                      <Emoji symbol={source.icon} size="1.3rem" />
+                    </span>
+                    <span className="memo-note-copy">
+                      <span className="memo-note-title">{t(source.noteTitleKey)}</span>
+                      <span className="memo-note-meta">
+                        {landingNoteMeta(t, locale, { ...source.note, writing: stage === 1 })}
+                      </span>
+                    </span>
+                    <Msym name="chevron_right" size="1.55rem" fill={false} weight={400} />
+                  </div>
+                ) : null}
+                {PAST_NOTES.map((row) => (
+                  <div key={row.titleKey} className="memo-note-row">
+                    <span className="memo-note-emoji">
+                      <Emoji symbol={row.icon} size="1.3rem" />
+                    </span>
+                    <span className="memo-note-copy">
+                      <span className="memo-note-title">{t(row.titleKey)}</span>
+                      <span className="memo-note-meta">{landingNoteMeta(t, locale, row.note)}</span>
+                    </span>
+                    <Msym name="chevron_right" size="1.55rem" fill={false} weight={400} />
+                  </div>
+                ))}
+              </div>
+            </div>,
+          )}
         </div>
         <p style={{ ...STATUS_BASE, color: stage >= 2 ? "var(--l-label)" : "var(--l-second)" }}>
           {stage === 0
@@ -1277,58 +942,13 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
     );
   }
 
+  /* Step two is the note tab: the note the source became, written out block by block. */
   renderStep2() {
     const s = this.state;
     const stage = s.flowStage;
-    const noteVis = stage >= 2 ? 7 : stage === 1 ? s.noteStep : 0;
-
-    /* Every line is in the layout from the start and only becomes visible when
-       it is written, so the note fills in downwards from the top and nothing
-       already on screen moves. Rendering the lines as they arrive instead
-       would re-centre the block on each one, which reads as the earlier lines
-       animating a second time. */
-    const written = (shown: boolean): CSSProperties => ({
-      animation: shown ? NOTE_IN : "none",
-      visibility: shown ? "visible" : "hidden",
-    });
-
-    const noteCardStyle: CSSProperties = {
-      display: "grid",
-      gap: "9px",
-      // The note never fills the card's 23rem, so centring the block leaves
-      // equal space above and below rather than a gap under the last line.
-      alignContent: "center",
-      width: "100%",
-      maxWidth: "100%",
-      minWidth: 0,
-      boxSizing: "border-box",
-      minHeight: "23rem",
-      overflow: "hidden",
-      alignSelf: "stretch",
-      padding: "15px 14px",
-      borderRadius: "20px",
-      border: "1px solid var(--l-line)",
-      background: "var(--l-surface)",
-      boxShadow: "var(--l-shadow)",
-    };
-
-    const bullet = (shown: boolean, bold: string, rest: string) => (
-      <span
-        style={{
-          ...written(shown),
-          display: "grid",
-          gridTemplateColumns: "12px 1fr",
-          fontSize: "12.6px",
-          lineHeight: 1.5,
-          color: "var(--l-label)",
-        }}
-      >
-        <span style={{ opacity: 0.72 }}>•</span>
-        <span>
-          <span style={{ fontWeight: 600 }}>{bold}</span> {rest}
-        </span>
-      </span>
-    );
+    const { t, locale } = this.props;
+    const source = s.flowSource ?? FLOW_SOURCES[0];
+    const written = stage >= 2 ? 7 : stage === 1 ? s.noteStep : 0;
 
     return (
       <article
@@ -1337,305 +957,73 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
         ref={(el) => {
           this.stepEls[1] = el;
         }}
-        style={{
-          position: "relative",
-          display: "grid",
-          gridTemplateRows: "auto auto 1fr auto",
-          justifyItems: "center",
-          gap: "0.85rem",
-          minWidth: 0,
-          textAlign: "center",
-        }}
+        className="landing-v2-flow-step"
       >
-        <span style={this.nodeStyle(1)} />
-        <h3 style={{ margin: "0.35rem 0 0", color: "var(--l-label)", fontSize: "1.35rem", fontWeight: 600, lineHeight: 1.25 }}>
-          {this.props.t("flowDemo.step2Title")}
-        </h3>
-        <div style={noteCardStyle}>
-          <span
-            style={{
-              ...written(noteVis >= 1),
-              display: "inline-block",
-              justifySelf: "start",
-              padding: "1.6px 5.1px",
-              borderRadius: "6.7px",
-              background: "var(--m-head-hl)",
-              fontSize: "15px",
-              fontWeight: 700,
-              color: "var(--l-label)",
-            }}
-          >
-            {this.props.t("flowDemo.note.overview")}
-          </span>
-          <p
-            style={{
-              ...written(noteVis >= 2),
-              margin: 0,
-              fontSize: "13.5px",
-              lineHeight: 1.62,
-              color: "var(--l-label)",
-              textAlign: "left",
-            }}
-          >
-              <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "var(--m-marker)" }}>
-                {this.props.t("flowDemo.note.leadA")}
-              </span>{" "}
-              {this.props.t("flowDemo.note.leadMid")}{" "}
-              <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "var(--m-head-hl)" }}>
-                {this.props.t("flowDemo.note.leadB")}
-              </span>
-              .
-            </p>
-          <span
-            style={{
-              ...written(noteVis >= 3),
-              display: "inline-block",
-              justifySelf: "start",
-              padding: "1.6px 5.1px",
-              borderRadius: "6.7px",
-              background: "var(--m-head-hl)",
-              fontSize: "13.4px",
-              fontWeight: 700,
-              color: "var(--l-label)",
-            }}
-          >
-            {this.props.t("flowDemo.note.typesHeading")}
-          </span>
-          <div style={{ display: "grid", gap: "5.5px", textAlign: "left" }}>
-            {bullet(
-              noteVis >= 4,
-              this.props.t("flowDemo.note.bullet1Term"),
-              this.props.t("flowDemo.note.bullet1Rest"),
-            )}
-            {bullet(
-              noteVis >= 5,
-              this.props.t("flowDemo.note.bullet2Term"),
-              this.props.t("flowDemo.note.bullet2Rest"),
-            )}
-            {bullet(
-              noteVis >= 6,
-              this.props.t("flowDemo.note.bullet3Term"),
-              this.props.t("flowDemo.note.bullet3Rest"),
-            )}
-          </div>
-          <div
-            style={{
-              ...written(noteVis >= 7),
-              display: "grid",
-              gap: "2px",
-              padding: "8px 10px",
-              border: "1px solid var(--m-callout-takeaway-line)",
-              borderLeft: "3px solid #f59e0b",
-              borderRadius: "14px",
-              background: "var(--m-callout-takeaway-bg)",
-              textAlign: "left",
-            }}
-          >
-            <span style={{ fontSize: "10.6px", fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--l-label)" }}>
-              {this.props.t("flowDemo.note.keyLabel")}
-            </span>
-            <span style={{ fontSize: "12.4px", lineHeight: 1.45, color: "var(--l-label)" }}>
-              {this.props.t("flowDemo.note.keyBody")}
-            </span>
-          </div>
-          {/* Reserved like the lines above it, so the note does not settle
-              when the caret retires at the end of the writing. */}
-          <span
-            style={{
-              visibility: stage === 1 && noteVis < 7 ? "visible" : "hidden",
-              justifySelf: "start",
-              width: "8px",
-              height: "14px",
-              borderRadius: "2px",
-              background: "var(--l-label)",
-              animation: "memo-caret 900ms steps(1, end) infinite",
-            }}
-          />
+        {this.renderStepHead(2, "flowDemo.step2Title")}
+        <div className="landing-v2-flow-card">
+          {this.renderScreen(
+            <div className="landing-v2-flow-pad">
+              <LandingSampleNote
+                t={t}
+                emoji={source.icon}
+                title={t(source.noteTitleKey)}
+                meta={landingNoteTitleMeta(t, locale, source.note)}
+                written={written}
+              />
+            </div>,
+          )}
         </div>
         <p style={{ ...STATUS_BASE, color: stage >= 2 ? "var(--l-label)" : "var(--l-second)" }}>
-          {stage >= 2
-            ? this.props.t("flowDemo.statusNotesReady")
-            : stage === 1
-              ? this.props.t("flowDemo.statusWritingNotes")
-              : ""}
+          {stage >= 2 ? t("flowDemo.statusNotesReady") : stage === 1 ? t("flowDemo.statusWritingNotes") : ""}
         </p>
       </article>
     );
   }
 
-  /*
-   * The spoken walkthrough, scaled into the story card. Drawn at its own size
-   * and shrunk as a whole rather than re-laid-out smaller, so the sphere keeps
-   * the proportions the app gives it.
-   */
-  renderStudyTutor() {
-    return (
-      <div style={{ position: "relative", height: "100%", minHeight: "196px", overflow: "hidden" }}>
-        {/* Centred by the transform rather than by the box: the panel is drawn
-            at its own size, which is taller than the card it goes into, and a
-            box that has to centre something bigger than itself aligns it to the
-            start instead. */}
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            width: "330px",
-            transform: "translate(-50%, -50%) scale(0.62)",
-          }}
-        >
-          <LandingTutorDemo />
-        </div>
-      </div>
-    );
-  }
-
-  /*
-   * The results screen the app draws when a round ends — same card, same rules,
-   * scaled to the story card. A clean round says the set is finished; anything
-   * missed turns into a second round over just those.
-   */
-  renderStudyDone() {
+  /* The body under the chosen pill: the app's own screen for it. */
+  renderStudyScreen() {
     const s = this.state;
-    const t = this.props.t;
-    const scale = { "--lr-s": 0.62 } as CSSProperties;
+    const autoplay = s.flowStage >= 3;
+    const key = `${s.sTab}-${s.studyRun}`;
 
-    if (s.sTab === "cards") {
-      const total = this.cardQueue().length;
-      const missed = s.sMissed.length;
-      return (
-        <LandingStudyResult
-          style={scale}
-          eyebrow={missed === 0 ? t("study.completed") : t("study.roundCompleted", { cycle: s.sCycle })}
-          title={t(missed === 0 ? "study.cards.allDone" : "study.cards.repeatMissed")}
-          percentage={missed === 0 ? 100 : Math.round((s.sKnown / total) * 100)}
-          percentageLabel={t(missed === 0 ? "study.setCompleted" : "study.roundScore")}
-          primaryMetric={{ label: t("study.correctThisRound"), value: `${s.sKnown}/${total}` }}
-          actions={
-            missed === 0 ? (
-              <button type="button" onClick={this.restartStudy}>
-                <Msym name="replay" size="1.2rem" fill={false} weight={500} />
-                <span>{t("study.restartSet")}</span>
-              </button>
-            ) : (
-              <button type="button" onClick={this.repeatMissed}>
-                <Msym name="replay" size="1.2rem" fill={false} weight={500} />
-                <span>{t("study.repeatMissedCards", { count: missed })}</span>
-              </button>
-            )
-          }
-        />
-      );
+    switch (s.sTab) {
+      case "tutor":
+        return <LandingTutorDemo key={key} />;
+      case "flashcards":
+        return <LandingFlashcardsScreen key={key} autoplay={autoplay} />;
+      case "podcast":
+        return (
+          <LandingPodcastScreen
+            key={key}
+            autoplay={autoplay}
+            title={this.props.t((s.flowSource ?? FLOW_SOURCES[0]).noteTitleKey)}
+          />
+        );
+      case "quiz":
+        return <LandingQuizScreen key={key} autoplay={autoplay} />;
+      case "mindmap":
+        return <LandingMindmapScreen key={key} autoplay={autoplay} />;
+      case "palace":
+        return <LandingPalaceScreen key={key} autoplay={autoplay} />;
+      case "test":
+        return <LandingTestScreen key={key} autoplay={autoplay} />;
+      case "speed":
+        return <LandingSpeedReadScreen key={key} autoplay={autoplay} />;
     }
-
-    if (s.sTab === "quiz") {
-      const total = this.quizQueue().length;
-      const missed = s.sQMissed.length;
-      return (
-        <LandingStudyResult
-          style={scale}
-          eyebrow={missed === 0 ? t("study.completed") : t("study.roundCompleted", { cycle: s.sQCycle })}
-          title={t(missed === 0 ? "quiz.allDone" : "quiz.repeatMissed")}
-          percentage={missed === 0 ? 100 : Math.round((s.sQScore / total) * 100)}
-          percentageLabel={t(missed === 0 ? "study.setCompleted" : "study.roundScore")}
-          primaryMetric={{
-            label: t(missed === 0 ? "quiz.questionsDone" : "study.correctThisRound"),
-            value:
-              missed === 0
-                ? `${STUDY_QUIZ.length}/${STUDY_QUIZ.length}`
-                : `${s.sQScore}/${total}`,
-          }}
-          actions={
-            missed === 0 ? (
-              <button type="button" onClick={this.restartStudy}>
-                <Msym name="replay" size="1.2rem" fill={false} weight={500} />
-                <span>{t("quiz.restart")}</span>
-              </button>
-            ) : (
-              <button type="button" onClick={this.repeatMissed}>
-                <Msym name="replay" size="1.2rem" fill={false} weight={500} />
-                <span>{t("quiz.repeatMissedQuestions", { count: missed })}</span>
-              </button>
-            )
-          }
-        />
-      );
-    }
-
-    /* A submitted test, reported against the attempts before it. */
-    const percentage = Math.round((s.sTScore / STUDY_TEST.length) * 100);
-    const history = [...FLOW_TEST_HISTORY, percentage];
-    const average = Math.round(history.reduce((sum, value) => sum + value, 0) / history.length);
-
-    return (
-      <LandingStudyResult
-        style={scale}
-        eyebrow=""
-        title=""
-        subtitle={t("test.attemptN", { count: history.length })}
-        percentage={percentage}
-        percentageLabel={t("study.score")}
-        primaryMetric={{ label: t("test.pointsScored"), value: `${s.sTScore}/${STUDY_TEST.length}` }}
-        secondaryMetrics={[
-          { label: t("test.average"), value: `${average}%` },
-          { label: t("test.best"), value: `${Math.max(...history)}%` },
-          { label: t("test.lowest"), value: `${Math.min(...history)}%` },
-          { label: t("test.attempts"), value: String(history.length) },
-        ]}
-        actions={
-          <button type="button" onClick={this.restartStudy}>
-            <Msym name="replay" size="1.2rem" fill={false} weight={500} />
-            <span>{t("study.test.startNew")}</span>
-          </button>
-        }
-      />
-    );
   }
 
+  /*
+   * Step three is the note's study side: the app's pill row, every study pill in
+   * the app's order and scrollable as it is there, over the screen of the one
+   * chosen.
+   */
   renderStep3() {
     const s = this.state;
     const stage = s.flowStage;
-    const test = STUDY_TEST;
-    const cardIds = this.cardQueue();
-    const quizIds = this.quizQueue();
-    const card = STUDY_CARDS[cardIds[Math.min(s.sIdx, cardIds.length - 1)]];
-    const questionId = quizIds[Math.min(s.sQIdx, quizIds.length - 1)];
-    const q = STUDY_QUIZ[questionId];
-    const t = test[Math.min(s.sTIdx, test.length - 1)];
-    const cardsDone = s.sIdx >= cardIds.length;
-    const quizDone = s.sQIdx >= quizIds.length;
-    const testDone = s.sTIdx >= test.length;
-    const cardHint =
-      !this.studyTouched && s.sTab === "cards" && s.sIdx === 0 && !s.sFlip && s.sDx === 0 && !s.sOut && !s.sEnter;
-    const doneNow =
-      s.sTab === "cards" ? cardsDone : s.sTab === "quiz" ? quizDone : s.sTab === "test" ? testDone : false;
+    const t = this.props.t;
     const done3 = stage >= 3;
 
-    const studyCardStyle: CSSProperties = {
-      display: "grid",
-      gridTemplateRows: "minmax(0, 1fr)",
-      alignContent: "stretch",
-      width: "100%",
-      maxWidth: "100%",
-      minWidth: 0,
-      boxSizing: "border-box",
-      minHeight: "23rem",
-      overflow: "visible",
-      alignSelf: "stretch",
-      padding: "14px",
-      borderRadius: "20px",
-      border: "1px solid var(--l-line)",
-      background: "var(--l-surface)",
-      boxShadow: "var(--l-shadow)",
-      textAlign: "center",
-    };
-
-    const studyBodyStyle: CSSProperties = {
-      display: "grid",
-      gap: "10px",
-      gridTemplateRows: "auto minmax(0, 1fr)",
-      height: "100%",
-      minHeight: 0,
+    const bodyStyle: CSSProperties = {
       opacity: done3 ? 1 : 0,
       transform: done3 ? "translateY(0)" : "translateY(8px)",
       pointerEvents: done3 ? "auto" : "none",
@@ -1646,47 +1034,6 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
       transition: `opacity ${Math.max(140, Math.round(520 * this.dragScale()))}ms ease, transform ${Math.max(160, Math.round(620 * this.dragScale()))}ms cubic-bezier(0.22,1,0.36,1)`,
     };
 
-    const cardStyle: CSSProperties = {
-      position: "absolute",
-      inset: 0,
-      zIndex: 1,
-      animation: cardHint ? "memo-card-nudge 4.2s cubic-bezier(0.33,1,0.68,1) 0.9s infinite" : "none",
-      perspective: "900px",
-      cursor: "grab",
-      userSelect: "none",
-      WebkitUserSelect: "none",
-      touchAction: "none",
-      transform: s.sEnter
-        ? "translate3d(0,18px,0) scale(0.94)"
-        : `translate3d(${s.sDx}px,0,0) rotate(${s.sDx * 0.035}deg)`,
-      opacity: s.sOut || s.sEnter ? 0 : 1,
-      transition: s.sOut
-        ? "transform 230ms cubic-bezier(0.32,0,0.67,0), opacity 230ms ease"
-        : s.sEnter
-          ? "none"
-          : s.sDx === 0
-            ? "transform 320ms cubic-bezier(0.2,0.85,0.3,1), opacity 300ms ease"
-            : "none",
-      willChange: "transform",
-    };
-
-    const faceBase: CSSProperties = {
-      position: "absolute",
-      inset: 0,
-      display: "grid",
-      alignContent: "space-between",
-      gap: "8px",
-      padding: "14px 12px",
-      boxSizing: "border-box",
-      border: "1px solid var(--l-line)",
-      borderRadius: "18px",
-      background: "var(--l-surface-62)",
-      backfaceVisibility: "hidden",
-      WebkitBackfaceVisibility: "hidden",
-    };
-
-    const cardCounter = `${Math.min(s.sIdx + 1, cardIds.length)} / ${cardIds.length}`;
-
     return (
       <article
         data-scroll-reveal=""
@@ -1694,274 +1041,47 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
         ref={(el) => {
           this.stepEls[2] = el;
         }}
-        style={{
-          position: "relative",
-          display: "grid",
-          gridTemplateRows: "auto auto 1fr auto",
-          justifyItems: "center",
-          gap: "0.85rem",
-          minWidth: 0,
-          textAlign: "center",
-        }}
+        className="landing-v2-flow-step"
       >
-        <span style={this.nodeStyle(3)} />
-        <h3 style={{ margin: "0.35rem 0 0", color: "var(--l-label)", fontSize: "1.35rem", fontWeight: 600, lineHeight: 1.25 }}>
-          {this.props.t("flowDemo.step3Title")}
-        </h3>
-        <div style={studyCardStyle}>
-          <div style={studyBodyStyle}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", width: "100%" }}>
-              {STUDY_TABS.map((tab) => (
-                <button key={tab.id} type="button" onClick={() => this.selectTab(tab.id)} style={this.tabStyle(tab.id, tab.tint)}>
-                  <Msym name={tab.icon} size="14px" fill={false} weight={500} style={{ color: tab.tint }} />
-                  <span style={{ fontSize: "12.5px", fontWeight: 750, letterSpacing: "-0.025em", whiteSpace: "nowrap" }}>
-                    {this.props.t(tab.labelKey)}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            {s.sTab === "tutor" ? this.renderStudyTutor() : null}
-
-            {s.sTab === "cards" && !cardsDone ? (
-              <div style={{ position: "relative", height: "100%", minHeight: "196px", touchAction: "pan-y" }}>
+        {this.renderStepHead(3, "flowDemo.step3Title")}
+        <div className="landing-v2-flow-card">
+          {this.renderScreen(
+            <div className="landing-v2-flow-study" style={bodyStyle}>
+              <div className="landing-v2-flow-pills">
                 <div
-                  onPointerDown={this.onCardDown}
-                  onPointerMove={this.onCardMove}
-                  onPointerUp={this.onCardUp}
-                  onPointerCancel={this.onCardUp}
-                  style={cardStyle}
-                >
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      zIndex: 2,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderRadius: "18px",
-                      fontSize: "30px",
-                      pointerEvents: "none",
-                      background:
-                        s.sDx < 0
-                          ? "color-mix(in srgb, var(--l-red) 22%, transparent)"
-                          : "color-mix(in srgb, var(--l-green) 22%, transparent)",
-                      opacity: s.sEnter ? 0 : Math.min(1, Math.abs(s.sDx) / 60),
-                      transition: s.sDx === 0 ? "opacity 190ms ease" : "none",
-                    }}
-                  >
-                    {s.sDx < 0 ? "❌" : "✅"}
-                  </div>
-                  <div
-                    style={{
-                      position: "relative",
-                      width: "100%",
-                      height: "100%",
-                      transformStyle: "preserve-3d",
-                      WebkitTransformStyle: "preserve-3d",
-                      transform: `rotateY(${s.sFlip ? 180 : 0}deg)`,
-                      transition: "transform 520ms cubic-bezier(0.34,1.12,0.44,1)",
-                      animation: cardHint ? "memo-card-peek 4.2s cubic-bezier(0.33,1,0.68,1) 0.9s infinite" : "none",
-                    }}
-                  >
-                    <div style={faceBase}>
-                      <span style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--l-second)", textAlign: "left" }}>{cardCounter}</span>
-                      <span style={{ fontSize: "15px", fontWeight: 600, lineHeight: 1.35, color: "var(--l-label)" }}>{this.props.t(card.qKey)}</span>
-                      <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--l-second)" }}>{this.props.t("flowDemo.showAnswer")}</span>
-                    </div>
-                    <div style={{ ...faceBase, transform: "rotateY(180deg)" }}>
-                      <span style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--l-second)", textAlign: "left" }}>{cardCounter}</span>
-                      <span style={{ fontSize: "13.4px", fontWeight: 500, lineHeight: 1.45, color: "var(--l-label)" }}>{this.props.t(card.aKey)}</span>
-                      <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--l-second)" }}>{this.props.t("flowDemo.swipeHint")}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {s.sTab === "quiz" && !quizDone ? (
-              <div
-                style={{
-                  display: "grid",
-                  alignContent: "center",
-                  gap: "12px",
-                  height: "100%",
-                  minHeight: "196px",
-                  padding: "12px",
-                  boxSizing: "border-box",
-                  border: "1px solid var(--l-line)",
-                  borderRadius: "18px",
-                  background: "var(--l-surface-62)",
-                }}
-              >
-                <div style={{ display: "grid", gap: "7px" }}>
-                  <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--l-second)", textAlign: "left" }}>
-                    {Math.min(s.sQIdx + 1, quizIds.length)} / {quizIds.length}
-                  </span>
-                  <span style={{ fontSize: "14px", fontWeight: 650, lineHeight: 1.32, color: "var(--l-label)", textAlign: "left" }}>
-                    {this.props.t(q.qKey)}
-                  </span>
-                </div>
-                <div style={{ display: "grid", gap: "6px" }}>
-                  {q.optionKeys.map((optionKey, i) => {
-                    const label = this.props.t(optionKey);
-                    const picked = s.sQPick === i;
-                    const reveal = s.sQPick !== null;
-                    const right = i === q.correct;
-                    return (
-                      <button
-                        key={label}
-                        type="button"
-                        onClick={() => {
-                          this.studyTouch();
-                          if (this.state.sQPick !== null) return;
-                          this.setState({ sQPick: i });
-                          window.clearTimeout(this.studyTimer);
-                          this.studyTimer = window.setTimeout(
-                            () =>
-                              this.setState((p) => ({
-                                sQIdx: p.sQIdx + 1,
-                                sQScore: p.sQScore + (right ? 1 : 0),
-                                sQMissed: right ? p.sQMissed : [...p.sQMissed, questionId],
-                                sQPick: null,
-                              })),
-                            950,
-                          );
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          padding: "9px 10px",
-                          textAlign: "left",
-                          fontFamily: "inherit",
-                          fontSize: "12.8px",
-                          fontWeight: 600,
-                          lineHeight: 1.25,
-                          borderRadius: "10px",
-                          cursor: reveal ? "default" : "pointer",
-                          border: `1px solid ${reveal && right ? "var(--l-green)" : picked ? "var(--l-red)" : "var(--l-line)"}`,
-                          background: reveal && right ? "rgba(50,215,75,0.16)" : picked ? "rgba(255,69,58,0.14)" : "var(--l-surface)",
-                          color: "var(--l-label)",
-                          transition: "background 200ms ease, border-color 200ms ease",
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            flexShrink: 0,
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: "19px",
-                            height: "19px",
-                            borderRadius: "6px",
-                            background: reveal && right ? "rgba(50,215,75,0.3)" : picked ? "rgba(255,69,58,0.26)" : "var(--l-line)",
-                            fontSize: "11px",
-                            fontWeight: 800,
-                            color: "var(--l-label)",
-                          }}
-                        >
-                          {String.fromCharCode(65 + i)}
-                        </span>
-                        <span>{label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
-
-            {s.sTab === "test" && !testDone ? (
-              <div
-                style={{
-                  display: "grid",
-                  alignContent: "center",
-                  gap: "12px",
-                  height: "100%",
-                  minHeight: "196px",
-                  padding: "12px",
-                  boxSizing: "border-box",
-                  border: "1px solid var(--l-line)",
-                  borderRadius: "18px",
-                  background: "var(--l-surface-62)",
-                }}
-              >
-                <div style={{ display: "grid", gap: "7px" }}>
-                  <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--l-second)", textAlign: "left" }}>
-                    {Math.min(s.sTIdx + 1, test.length)} / {test.length}
-                  </span>
-                  <span style={{ fontSize: "14px", fontWeight: 650, lineHeight: 1.32, color: "var(--l-label)", textAlign: "left" }}>
-                    {this.props.t(t.qKey)}
-                  </span>
-                </div>
-                <input
-                  type="text"
-                  value={s.sTVal}
-                  onChange={(e) => {
-                    this.studyTouch();
-                    this.setState({ sTVal: e.target.value });
-                  }}
-                  placeholder={this.props.t("flowDemo.answerPlaceholder")}
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    minHeight: "62px",
-                    padding: "12px 12px",
-                    border: "1px solid var(--l-line)",
-                    borderRadius: "12px",
-                    background: "var(--l-surface)",
-                    color: "var(--l-label)",
-                    fontFamily: "inherit",
-                    fontSize: "13px",
-                    lineHeight: 1.3,
-                    outline: "none",
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: "11.8px",
-                    fontWeight: 600,
-                    lineHeight: 1.32,
-                    textAlign: "left",
-                    minHeight: "16px",
-                    color: s.sTShown && s.sTOk ? "var(--l-green)" : "var(--l-second)",
-                    opacity: s.sTShown ? 1 : 0,
-                    transition: "opacity 200ms ease",
+                  className="memo-tabs memo-chiprow"
+                  data-overflow="true"
+                  ref={(el) => {
+                    this.tabRow = el;
                   }}
                 >
-                  {s.sTShown ? (s.sTOk ? `✓ ${this.props.t(t.aKey)}` : this.props.t(t.aKey)) : ""}
-                </span>
-                <button
-                  type="button"
-                  onClick={this.submitTest}
-                  style={{
-                    justifySelf: "start",
-                    padding: "9px 16px",
-                    border: "none",
-                    borderRadius: "999px",
-                    background: "var(--l-label)",
-                    color: "var(--l-page)",
-                    fontFamily: "inherit",
-                    fontSize: "12.4px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  {s.sTShown ? this.props.t("flowDemo.next") : this.props.t("flowDemo.check")}
-                </button>
+                  {STUDY_TABS.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      ref={(el) => {
+                        this.tabEls[tab.id] = el;
+                      }}
+                      onClick={() => this.selectTab(tab.id)}
+                      className={`memo-tab ${s.sTab === tab.id ? "active" : ""}`.trim()}
+                      style={{ "--tab-tint": tab.tint } as CSSProperties}
+                      aria-current={s.sTab === tab.id ? "page" : undefined}
+                    >
+                      <Msym name={tab.icon} size="1.2rem" fill={false} weight={500} />
+                      <span>{t(tab.labelKey)}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            ) : null}
-
-            {doneNow ? this.renderStudyDone() : null}
-          </div>
+              <div className="landing-v2-flow-study-body" data-note-tab={s.sTab}>
+                {this.renderStudyScreen()}
+              </div>
+            </div>,
+            false,
+          )}
         </div>
         <p style={{ ...STATUS_BASE, color: done3 ? "var(--l-label)" : "var(--l-second)" }}>
-          {done3
-            ? this.props.t("flowDemo.statusMaterialReady")
-            : stage === 2
-              ? this.props.t("flowDemo.statusBuildingMaterial")
-              : ""}
+          {done3 ? t("flowDemo.statusMaterialReady") : stage === 2 ? t("flowDemo.statusBuildingMaterial") : ""}
         </p>
       </article>
     );
@@ -2113,6 +1233,7 @@ class LandingFlowDemoView extends Component<FlowDemoProps, FlowDemoState> {
   }
 }
 
-export function LandingFlowDemo(props: Omit<FlowDemoProps, "t">) {
-  return <LandingFlowDemoView {...props} t={useT()} />;
+export function LandingFlowDemo(props: Omit<FlowDemoProps, "t" | "locale">) {
+  const { t, locale } = useTranslations();
+  return <LandingFlowDemoView {...props} t={t} locale={locale} />;
 }

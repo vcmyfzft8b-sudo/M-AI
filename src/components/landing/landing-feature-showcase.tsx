@@ -1,641 +1,569 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
-import { Fragment, useState } from "react";
+import Image from "next/image";
+import type { ComponentType, ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
-import { useT } from "@/components/i18n-provider";
+import { ChatMarkdown } from "@/components/chat-markdown";
+import { useT, useTranslations } from "@/components/i18n-provider";
+import { Emoji, Msym } from "@/components/msym";
+import { TypingDots } from "@/components/typing-dots";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 
+import { LandingAppScope } from "./app/landing-app-scope";
+import { landingNoteMeta, landingNoteTitleMeta } from "./app/landing-note-meta";
+import { LandingFlashcardsScreen } from "./app/landing-flashcards-screen";
+import { LandingMindmapScreen } from "./app/landing-mindmap-screen";
+import { LandingPalaceScreen } from "./app/landing-palace-screen";
+import { LandingPodcastScreen } from "./app/landing-podcast-screen";
+import { LandingQuizScreen } from "./app/landing-quiz-screen";
+import { LandingSpeedReadScreen } from "./app/landing-speed-read-screen";
+import { LandingTestScreen } from "./app/landing-test-screen";
+import { LandingSampleNote, SAMPLE_NOTE_BLOCKS, sampleNoteWordCount } from "./landing-sample-note";
+import { LandingScaledFrame } from "./landing-scaled-frame";
 import { LandingTutorDemo } from "./landing-tutor-demo";
+import type { SourceDetail, SourceKind } from "./memo-app-preview-data";
 
 /*
- * The seven things the product does, each with a small animated illustration.
+ * What the product does, one row per feature, each beside the app doing it.
  *
- * The captions are product copy and are translated. What the illustrations
- * *contain* — a sample lecture on business information systems, its bullet
- * points and its quiz — is left in Slovenian: it stands in for the learner's
- * own material, which is in their own language whatever the interface is set
- * to. See the note at the top of memo-app-preview-data.ts.
+ * The captions are product copy. Every illustration is the app's own markup —
+ * the New note screen, the rendered note, the read-aloud dock, the library chat
+ * and, for the study features, the shared screens in `./app/` — drawn at phone
+ * width inside a phone-sized screen and scaled to fit, never a drawing of it.
+ * What they *contain* is the landing's sample lecture on business information
+ * systems, which stands in for the learner's own material.
+ *
+ * The order is the app's: capture, the note and the two things its screen does
+ * besides being read (listen, and the tutor), the study pills in the order the
+ * note's pill row lists them, and last the chat, which reaches across every note.
  */
 const FEATURES = [
-  { titleKey: "showcase.captureTitle", descKey: "showcase.captureDesc" },
-  { titleKey: "showcase.notesTitle", descKey: "showcase.notesDesc" },
-  /* Third, where the app puts it: once the note exists, the other way to take
-     it in is to have it explained rather than to practise it. */
-  { titleKey: "showcase.tutorTitle", descKey: "showcase.tutorDesc" },
-  { titleKey: "showcase.cardsTitle", descKey: "showcase.cardsDesc" },
-  { titleKey: "showcase.quizTitle", descKey: "showcase.quizDesc" },
-  { titleKey: "showcase.testsTitle", descKey: "showcase.testsDesc" },
-  { titleKey: "showcase.listenTitle", descKey: "showcase.listenDesc" },
-] as const satisfies ReadonlyArray<{ titleKey: MessageKey; descKey: MessageKey }>;
+  { id: "capture", titleKey: "showcase.captureTitle", descKey: "showcase.captureDesc" },
+  { id: "notes", titleKey: "showcase.notesTitle", descKey: "showcase.notesDesc" },
+  { id: "listen", titleKey: "showcase.listenTitle", descKey: "showcase.listenDesc" },
+  { id: "tutor", titleKey: "showcase.tutorTitle", descKey: "showcase.tutorDesc" },
+  { id: "flashcards", titleKey: "showcase.cardsTitle", descKey: "showcase.cardsDesc" },
+  { id: "podcast", titleKey: "showcase.podcastTitle", descKey: "showcase.podcastDesc" },
+  { id: "quiz", titleKey: "showcase.quizTitle", descKey: "showcase.quizDesc" },
+  { id: "mindmap", titleKey: "showcase.mindmapTitle", descKey: "showcase.mindmapDesc" },
+  { id: "palace", titleKey: "showcase.palaceTitle", descKey: "showcase.palaceDesc" },
+  { id: "test", titleKey: "showcase.testsTitle", descKey: "showcase.testsDesc" },
+  { id: "speed", titleKey: "showcase.speedTitle", descKey: "showcase.speedDesc" },
+  { id: "chat", titleKey: "showcase.chatTitle", descKey: "showcase.chatDesc" },
+] as const satisfies ReadonlyArray<{ id: string; titleKey: MessageKey; descKey: MessageKey }>;
 
-function readWord(text: string, delay: number, bold?: boolean): ReactNode {
-  return (
-    <span
-      key={`${text}-${delay}`}
-      style={{
-        padding: "1.4px 3.6px",
-        borderRadius: "6px",
-        fontWeight: bold ? 700 : undefined,
-        animation: `memo-fx-read 7.2s ease-in-out ${delay.toFixed(2)}s infinite both`,
-      }}
-    >
-      {text}
-    </span>
-  );
+type FeatureId = (typeof FEATURES)[number]["id"];
+
+/* Only the panel on screen is mounted, so `active` is always true for it; the
+   study screens take it as their autoplay switch. */
+type PanelProps = { active: boolean };
+
+const SCREEN_WIDTH = 390;
+
+/* The sample note's source, for its title line: the recording it was made from. */
+const SAMPLE_NOTE_META = { source: "audio", detail: { minutes: 48 } } as const;
+
+/* Whether scripted motion may run: never under reduced motion. */
+function useMotionAllowed() {
+  const [allowed, setAllowed] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setAllowed(!query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  return allowed;
 }
 
-function readSequence(words: string[], startDelay: number, boldFirst?: boolean): ReactNode[] {
-  const out: ReactNode[] = [];
-  words.forEach((word, i) => {
-    if (i > 0) out.push(" ");
-    out.push(readWord(word, startDelay + i * 0.2, boldFirst && i === 0));
-  });
-  return out;
+/* A counter that advances every `ms` while `running`. */
+function useTicker(running: boolean, ms: number) {
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!running) return;
+    const id = window.setInterval(() => setTick((n) => n + 1), ms);
+    return () => window.clearInterval(id);
+  }, [running, ms]);
+
+  return tick;
 }
 
-function WavePanel() {
-  const t = useT();
+/* ── Capture: the New note screen ────────────────────────────── */
+
+/* home-dashboard.tsx's QUICK_ACTIONS, and the note each one makes in this demo. */
+const QUICK_ACTIONS = [
+  {
+    id: "record",
+    labelKey: "library.quickAction.record",
+    icon: "radio_button_checked",
+    accent: "record",
+    emoji: "🎙️",
+    titleKey: "flowDemo.noteTitle.audio",
+    note: { source: "audio", detail: { minutes: 48 } },
+  },
+  {
+    id: "link",
+    labelKey: "library.quickAction.link",
+    icon: "link",
+    accent: "",
+    emoji: "🔗",
+    titleKey: "flowDemo.noteTitle.doc",
+    note: { source: "link" },
+  },
+  {
+    id: "text",
+    labelKey: "library.quickAction.document",
+    icon: "description",
+    accent: "",
+    emoji: "📄",
+    titleKey: "flowDemo.noteTitle.pdf",
+    note: { source: "pdf", detail: { pages: 24 } },
+  },
+  {
+    id: "upload",
+    labelKey: "library.quickAction.audio",
+    icon: "cloud_upload",
+    accent: "",
+    emoji: "🎙️",
+    titleKey: "flowDemo.past.lecture3",
+    note: { source: "audio", detail: { minutes: 52 } },
+  },
+] as const satisfies ReadonlyArray<{
+  id: string;
+  labelKey: MessageKey;
+  icon: string;
+  accent: string;
+  emoji: string;
+  titleKey: MessageKey;
+  note: { source: SourceKind; detail?: SourceDetail };
+}>;
+
+function CapturePanel({ active }: PanelProps) {
+  const { t, locale } = useTranslations();
+  const motion = useMotionAllowed();
+  /* Three beats per source: it is picked, it lands as a note being written, the note is ready. */
+  const tick = useTicker(active && motion, 1300);
+  const cycle = Math.floor(tick / 3);
+  const phase = motion ? tick % 3 : 2;
+  const action = QUICK_ACTIONS[cycle % QUICK_ACTIONS.length];
+  /* While the next source is being picked, the list still shows the last one's note. */
+  const rowCycle = phase === 0 ? cycle - 1 : cycle;
+  const row = rowCycle >= 0 ? QUICK_ACTIONS[rowCycle % QUICK_ACTIONS.length] : null;
 
   return (
-    <div style={{ display: "grid", gap: "12px", width: "100%", maxWidth: "17rem", justifyItems: "center" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", height: "34px" }}>
-        {Array.from({ length: 11 }, (_, i) => (
-          <span
-            key={i}
-            style={{
-              width: "3.5px",
-              height: "100%",
-              borderRadius: "999px",
-              background: "#86868b",
-              opacity: 0.9,
-              transformOrigin: "center",
-              animation: `memo-fx-bar 1.15s ease-in-out ${(i * 0.09).toFixed(2)}s infinite`,
-            }}
-          />
+    <div className="landing-v2-flow-pad landing-v2-fx-capture">
+      <h1 className="memo-home-h1">{t("library.newNote")}</h1>
+      <p className="memo-home-sub">{t("library.newNoteSub")}</p>
+      <div className="memo-quick-grid">
+        {QUICK_ACTIONS.map((quick) => (
+          <div
+            key={quick.id}
+            className={`memo-quick-card ${motion && phase === 0 && quick.id === action.id ? "landing-v2-fx-picked" : ""}`.trim()}
+          >
+            <span className={`memo-quick-tile ${quick.accent}`.trim()}>
+              <Msym name={quick.icon} size="1.45rem" />
+            </span>
+            <span className="memo-quick-label">{t(quick.labelKey)}</span>
+          </div>
         ))}
       </div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "11px",
-          width: "100%",
-          boxSizing: "border-box",
-          padding: "11px 12px",
-          borderRadius: "14px",
-          background: "var(--l-surface)",
-          boxShadow: "var(--l-shadow)",
-        }}
-      >
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "34px",
-            height: "34px",
-            flexShrink: 0,
-            borderRadius: "50%",
-            background: "var(--l-line)",
-            fontSize: "15px",
-          }}
-        >
-          🎙️
-        </span>
-        <span style={{ display: "grid", gap: "3px", minWidth: 0, textAlign: "left" }}>
-          <span
-            style={{
-              fontSize: "13.5px",
-              fontWeight: 600,
-              letterSpacing: "-0.02em",
-              color: "var(--l-label)",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {t("flowDemo.noteTitle.audio")}
-          </span>
-          <span style={{ fontSize: "11.5px", color: "var(--l-second)" }}>
-            {`${t("flowDemo.kindAudio")} · ${t("flowDemo.today")}`}
-          </span>
-        </span>
-      </div>
-      <span
-        style={{
-          padding: "5px 9px",
-          borderRadius: "999px",
-          background: "var(--l-line)",
-          color: "var(--l-second)",
-          fontSize: "9.5px",
-          fontWeight: 700,
-          letterSpacing: "0.06em",
-          textTransform: "uppercase",
-          animation: "memo-fx-fade 3.8s ease-in-out infinite",
-        }}
-      >
-        {t("showcase.transcribing")}
-      </span>
-    </div>
-  );
-}
-
-function NotesPanel() {
-  const t = useT();
-  const writeLine = (delay: number): CSSProperties => ({
-    display: "block",
-    whiteSpace: "nowrap",
-    fontSize: "12.5px",
-    lineHeight: 1.62,
-    color: "var(--l-label)",
-    animation: `memo-fx-write 5.2s linear ${delay}s infinite both`,
-  });
-
-  return (
-    <div style={{ display: "grid", gap: "6px", width: "100%", maxWidth: "17rem", textAlign: "left" }}>
-      <span
-        style={{
-          justifySelf: "start",
-          padding: "2.5px 7px",
-          borderRadius: "6.7px",
-          background: "var(--m-head-hl)",
-          color: "var(--l-label)",
-          fontSize: "12.5px",
-          fontWeight: 700,
-          whiteSpace: "nowrap",
-          animation: "memo-fx-write 5.2s linear 0s infinite both",
-        }}
-      >
-        {t("flowDemo.note.overview")}
-      </span>
-      <span style={writeLine(0.35)}>
-        <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "var(--m-marker)" }}>
-          {t("flowDemo.note.leadA")}
-        </span>
-      </span>
-      <span style={writeLine(0.7)}>{t("showcase.note.line1")}</span>
-      <span style={writeLine(1.05)}>
-        {t("showcase.note.line2Before")}{" "}
-        <span style={{ padding: "1.6px 5.1px", borderRadius: "6.7px", background: "var(--m-marker)" }}>
-          {t("showcase.note.decision")}
-        </span>
-        .
-      </span>
-      <div
-        style={{
-          display: "grid",
-          gap: "4px",
-          marginTop: "3px",
-          padding: "9px 11px",
-          border: "1px solid var(--m-callout-takeaway-line)",
-          borderLeft: "3px solid #f59e0b",
-          borderRadius: "14px",
-          background: "var(--m-callout-takeaway-bg)",
-          animation: "memo-fx-write 5.2s linear 1.45s infinite both",
-        }}
-      >
-        <span style={{ fontSize: "9.5px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--l-flow)" }}>
-          {t("flowDemo.note.keyLabel")}
-        </span>
-        <span style={{ fontSize: "12px", lineHeight: 1.5, color: "var(--l-label)" }}>
-          {t("showcase.note.keyBody")}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function FlashcardPanel() {
-  const t = useT();
-  const face: CSSProperties = {
-    position: "absolute",
-    inset: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: "14px",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "18px",
-    boxSizing: "border-box",
-    border: "1px solid var(--l-line)",
-    borderRadius: "20px",
-    background: "linear-gradient(180deg, var(--l-surface), var(--l-surface))",
-    boxShadow: "var(--l-shadow)",
-    backfaceVisibility: "hidden",
-    overflow: "hidden",
-  };
-
-  return (
-    <div style={{ display: "grid", justifyItems: "center", gap: "10px", width: "100%", maxWidth: "19rem" }}>
-      <div style={{ position: "relative", width: "100%", height: "12.6rem" }}>
-        <div style={{ position: "absolute", inset: 0, animation: "memo-fx-throw 6.4s linear infinite", willChange: "transform, opacity" }}>
-          <div style={{ perspective: "900px", width: "100%", height: "100%" }}>
-            <div
-              style={{
-                position: "relative",
-                width: "100%",
-                height: "100%",
-                transformStyle: "preserve-3d",
-                animation: "memo-fx-flip 6.4s cubic-bezier(0.65,0,0.35,1) infinite",
-              }}
-            >
-              <div style={face}>
-                <span style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--l-second)" }}>1 / 8</span>
-                <span
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "18px",
-                    fontWeight: 600,
-                    lineHeight: 1.4,
-                    color: "var(--l-label)",
-                    textAlign: "center",
-                  }}
-                >
-                  {t("showcase.card.front")}
-                </span>
-                <span style={{ fontSize: "12.5px", fontWeight: 650, color: "var(--l-second)" }}>{t("flowDemo.showAnswer")}</span>
-              </div>
-              <div style={{ ...face, transform: "rotateY(180deg)" }}>
-                <span style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--l-second)" }}>1 / 8</span>
-                <span
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "16px",
-                    fontWeight: 600,
-                    lineHeight: 1.4,
-                    color: "var(--l-label)",
-                    textAlign: "center",
-                  }}
-                >
-                  {t("showcase.card.back")}
-                </span>
-                <span style={{ fontSize: "12.5px", fontWeight: 650, color: "var(--l-second)" }}>{t("preview.backToQuestion")}</span>
-              </div>
-            </div>
+      <div className="memo-note-list">
+        {row ? (
+          <div key={rowCycle} className="memo-note-row landing-v2-flow-new-row">
+            <span className="memo-note-emoji">
+              <Emoji symbol={row.emoji} size="1.3rem" />
+            </span>
+            <span className="memo-note-copy">
+              <span className="memo-note-title">{t(row.titleKey)}</span>
+              <span className="memo-note-meta">
+                {landingNoteMeta(t, locale, { ...row.note, writing: phase === 1 })}
+              </span>
+            </span>
+            <Msym name="chevron_right" size="1.55rem" fill={false} weight={400} />
           </div>
-          <span
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: "20px",
-              background: "rgba(50,215,75,0.22)",
-              fontSize: "36px",
-              pointerEvents: "none",
-              animation: "memo-fx-known 6.4s ease-in-out infinite",
-            }}
-          >
-            ✅
-          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/* ── Notes: the note tab ─────────────────────────────────────── */
+
+function NotesPanel({ active }: PanelProps) {
+  const { t, locale } = useTranslations();
+  const motion = useMotionAllowed();
+  /* Written out once when the row is chosen, then left to be read. */
+  const tick = useTicker(active && motion, 320);
+  const written = motion ? Math.min(SAMPLE_NOTE_BLOCKS, tick + 1) : SAMPLE_NOTE_BLOCKS;
+
+  return (
+    <div className="landing-v2-flow-pad">
+      <LandingSampleNote
+        t={t}
+        emoji="🎙️"
+        title={t("flowDemo.noteTitle.audio")}
+        meta={landingNoteTitleMeta(t, locale, SAMPLE_NOTE_META)}
+        written={written}
+      />
+    </div>
+  );
+}
+
+/* ── Listen: read-aloud over the note ────────────────────────── */
+
+/* Roughly the voice's pace at 1×: about three words a second. */
+const READ_WORD_MS = 320;
+
+function formatClock(seconds: number) {
+  const total = Math.max(0, Math.round(seconds));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function ListenPanel({ active }: PanelProps) {
+  const { t, locale } = useTranslations();
+  const motion = useMotionAllowed();
+  const [playing, setPlaying] = useState(true);
+  const total = sampleNoteWordCount(t);
+  const tick = useTicker(active && motion && playing, READ_WORD_MS);
+  /* A beat of silence at the end, and it starts again. */
+  const word = motion ? tick % (total + 6) : 12;
+  const readWord = word < total ? word : null;
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  /* The note follows the voice, as the app keeps the spoken word in view — by
+     moving this box, never the page. */
+  useEffect(() => {
+    const box = scrollRef.current;
+    if (!box) return;
+    if (readWord === null) {
+      box.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    const el = box.querySelector<HTMLElement>(`[data-word-index="${readWord}"]`);
+    if (!el) return;
+    const top = el.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    if (top > box.clientHeight * 0.55) {
+      box.scrollTo({ top: box.scrollTop + top - box.clientHeight * 0.3, behavior: "smooth" });
+    }
+  }, [readWord]);
+
+  const progress = Math.min(100, Math.round(((readWord ?? total) / total) * 100));
+
+  return (
+    <div className="landing-v2-fx-column">
+      <div ref={scrollRef} className="landing-v2-fx-scroll landing-v2-flow-pad">
+        <LandingSampleNote
+          t={t}
+          emoji="🎙️"
+          title={t("flowDemo.noteTitle.audio")}
+          meta={landingNoteTitleMeta(t, locale, SAMPLE_NOTE_META)}
+          readWord={readWord}
+        />
+      </div>
+      <div className="landing-v2-fx-dock">
+        <div className="memo-dock-pill reading">
+          <div className="memo-dock-layer memo-dock-player on">
+            <button
+              type="button"
+              className="memo-dock-play"
+              onClick={() => setPlaying((current) => !current)}
+              aria-label={t(playing ? "readAloud.pause" : "readAloud.resume")}
+            >
+              <Msym name={playing ? "pause" : "play_arrow"} size="1.35rem" />
+            </button>
+            <span className="memo-dock-track">
+              <span style={{ width: `${progress}%` }} />
+            </span>
+            <span className="memo-dock-time">{formatClock(((readWord ?? total) * READ_WORD_MS) / 1000)}</span>
+            <span className="note-read-usage-menu" aria-hidden="true">
+              <span className="note-read-usage-trigger">
+                <Msym name="tune" size="1.25rem" fill={false} weight={500} />
+              </span>
+            </span>
+            <span className="memo-dock-close" aria-hidden="true">
+              <Msym name="close" size="1.45rem" fill={false} weight={500} />
+            </span>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function QuizPanel() {
-  const t = useT();
-  const option = (letter: string, label: string, animated?: boolean): ReactNode => (
-    <span
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "9px",
-        padding: "11px 12px",
-        boxSizing: "border-box",
-        border: animated ? "1px solid transparent" : "1px solid var(--l-line)",
-        borderRadius: "14px",
-        background: "var(--l-surface)",
-        fontSize: "13px",
-        fontWeight: 600,
-        color: "var(--l-label)",
-        animation: animated ? "memo-fx-pick 2.6s ease-in-out infinite" : undefined,
-      }}
-    >
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: "20px",
-          height: "20px",
-          flexShrink: 0,
-          borderRadius: "6px",
-          background: "var(--l-line)",
-          fontSize: "11px",
-          fontWeight: 800,
-          color: "var(--l-label)",
-        }}
-      >
-        {letter}
-      </span>
-      {label}
-    </span>
-  );
+/* ── Chat: the library chat ──────────────────────────────────── */
 
-  return (
-    <div style={{ display: "grid", gap: "10px", width: "100%", maxWidth: "20rem", textAlign: "left" }}>
-      <span style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--l-second)" }}>{t("showcase.quizCounter")}</span>
-      {option("A", t("showcase.quizA"), true)}
-      {option("B", t("showcase.quizB"))}
-      {option("C", t("showcase.quizC"))}
-    </div>
-  );
-}
-
-function TestPanel() {
-  const t = useT();
-  return (
-    <div
-      style={{
-        display: "grid",
-        gap: "12px",
-        width: "100%",
-        maxWidth: "20rem",
-        boxSizing: "border-box",
-        padding: "16px",
-        borderRadius: "16px",
-        background: "var(--l-surface)",
-        boxShadow: "var(--l-shadow)",
-        textAlign: "left",
-      }}
-    >
-      <span style={{ fontSize: "9.5px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--l-second)" }}>
-        {t("showcase.testQuestionNo")}
-      </span>
-      <span style={{ fontSize: "13px", fontWeight: 600, lineHeight: 1.4, color: "var(--l-label)" }}>
-        {t("showcase.testPrompt")}
-      </span>
-      <span
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "3px",
-          minHeight: "44px",
-          padding: "10px 12px",
-          boxSizing: "border-box",
-          border: "1px solid var(--l-line)",
-          borderRadius: "12px",
-          background: "var(--l-canvas)",
-          fontSize: "12.5px",
-          color: "var(--l-label)",
-          overflow: "hidden",
-        }}
-      >
-        <span
-          style={{
-            display: "inline-block",
-            overflow: "hidden",
-            whiteSpace: "nowrap",
-            animation: "memo-fx-type 4.4s steps(30, end) infinite",
-          }}
-        >
-          {t("showcase.testAnswer")}
-        </span>
-        <span
-          style={{
-            display: "inline-block",
-            width: "1.5px",
-            height: "15px",
-            background: "var(--l-label)",
-            animation: "memo-caret 0.9s steps(1, end) infinite",
-          }}
-        />
-      </span>
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "6px",
-          fontSize: "12px",
-          fontWeight: 700,
-          color: "#32d74b",
-          animation: "memo-fx-fade 4.4s ease-in-out infinite",
-        }}
-      >
-        {`✓ ${t("showcase.testCorrect")}`}
-      </span>
-    </div>
-  );
-}
-
-function ReadPanel() {
-  const t = useT();
-  const chip: CSSProperties = {
-    justifySelf: "start",
-    padding: "2.5px 7px",
-    borderRadius: "6.7px",
-    background: "var(--m-head-hl)",
-    color: "var(--l-label)",
-    fontSize: "12.5px",
-    fontWeight: 700,
-  };
-  const bulletRow: CSSProperties = {
-    display: "flex",
-    gap: "7px",
-    fontSize: "12.6px",
-    lineHeight: 1.8,
-    color: "var(--l-label)",
-  };
-
-  return (
-    <div style={{ display: "grid", gap: "9px", width: "100%", maxWidth: "19rem", textAlign: "left" }}>
-      <span style={chip}>{t("flowDemo.note.overview")}</span>
-      <p style={{ margin: 0, fontSize: "12.8px", lineHeight: 1.8, color: "var(--l-label)" }}>
-        {readSequence(
-          t("showcase.read.lead").split(" "),
-          0,
-        )}
-      </p>
-      <span style={chip}>{t("showcase.read.keyTypes")}</span>
-      <div style={{ display: "grid", gap: "4px" }}>
-        <span style={bulletRow}>
-          <span style={{ color: "var(--l-second)" }}>•</span>
-          <span>{readSequence(t("showcase.read.bullet1").split(" "), 2.4, true)}</span>
-        </span>
-        <span style={bulletRow}>
-          <span style={{ color: "var(--l-second)" }}>•</span>
-          <span>{readSequence(t("showcase.read.bullet2").split(" "), 3.6, true)}</span>
-        </span>
-        <span style={bulletRow}>
-          <span style={{ color: "var(--l-second)" }}>•</span>
-          <span>{readSequence(t("showcase.read.bullet3").split(" "), 5.0, true)}</span>
-        </span>
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gap: "3px",
-          padding: "8px 10px",
-          border: "1px solid var(--m-callout-takeaway-line)",
-          borderLeft: "3px solid #f59e0b",
-          borderRadius: "14px",
-          background: "var(--m-callout-takeaway-bg)",
-        }}
-      >
-        <span style={{ fontSize: "9.5px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--l-flow)" }}>
-          {t("flowDemo.note.keyLabel")}
-        </span>
-        <span style={{ fontSize: "12.2px", lineHeight: 1.6, color: "var(--l-label)" }}>
-          {readSequence(t("showcase.read.keyBody").split(" "), 6.6)}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/* Passed to every panel; only the ones that animate on selection read it. */
-type PanelProps = { active?: boolean };
-
-/*
- * The live tutor, drawn at its own size and shrunk as a whole — the sphere's
- * proportions are the design's, and re-laying it out smaller would lose them.
- *
- * Alone among these panels it does not start by itself: it has a voice now, and a
- * voice may only be started by the visitor. So it waits on its own button, which
- * is also the affordance that says there is something here to press.
- */
-function TutorPanel() {
-  return (
-    <div style={{ position: "relative", width: "100%", maxWidth: "17rem", height: "16rem" }}>
-      {/* Centred by the transform rather than by the box: the panel it is drawn
-          at is taller than the space it is drawn into, and a grid that has to
-          centre something bigger than its own track aligns it to the start. */}
-      <div
-        style={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          width: "330px",
-          transform: "translate(-50%, -50%) scale(0.62)",
-        }}
-      >
-        <LandingTutorDemo />
-      </div>
-    </div>
-  );
-}
-
-const PANELS: Array<(props: PanelProps) => ReactNode> = [
-  WavePanel,
-  NotesPanel,
-  TutorPanel,
-  FlashcardPanel,
-  QuizPanel,
-  TestPanel,
-  ReadPanel,
+const CHAT_SUGGESTIONS: MessageKey[] = [
+  "libraryChat.suggestion.review",
+  "libraryChat.suggestion.links",
+  "libraryChat.suggestion.plan",
 ];
+
+type ChatBeat = { draft: number; sent: boolean; answer: number };
+
+function ChatPanel({ active }: PanelProps) {
+  const t = useT();
+  const motion = useMotionAllowed();
+  const question = t("showcase.chat.question");
+  const answerWords = t("showcase.chat.answer").split(" ");
+  /*
+   * One script: the question is typed into the composer, sent, the dots stand in
+   * while Memo reads the notes, and the answer streams in word by word. It holds,
+   * and plays again. Reduced motion gets the finished exchange.
+   */
+  const [beat, setBeat] = useState<ChatBeat>({ draft: 0, sent: false, answer: 0 });
+
+  useEffect(() => {
+    if (!active || !motion) return;
+    let next: ChatBeat | null = null;
+    let delay = 0;
+
+    if (!beat.sent && beat.draft < question.length) {
+      next = { ...beat, draft: beat.draft + 1 };
+      delay = beat.draft === 0 ? 900 : 38;
+    } else if (!beat.sent) {
+      next = { draft: 0, sent: true, answer: 0 };
+      delay = 450;
+    } else if (beat.answer < answerWords.length) {
+      next = { ...beat, answer: beat.answer + 1 };
+      delay = beat.answer === 0 ? 1300 : 55;
+    } else {
+      next = { draft: 0, sent: false, answer: 0 };
+      delay = 5200;
+    }
+
+    const id = window.setTimeout(() => setBeat(next), delay);
+    return () => window.clearTimeout(id);
+  }, [active, motion, beat, question.length, answerWords.length]);
+
+  const shown: ChatBeat = motion ? beat : { draft: 0, sent: true, answer: answerWords.length };
+  const logRef = useRef<HTMLDivElement>(null);
+
+  /* The log keeps the newest line in view while the answer streams, as the app's does. */
+  useEffect(() => {
+    const log = logRef.current;
+    if (log) log.scrollTop = log.scrollHeight;
+  }, [shown.answer, shown.sent]);
+  const draft = question.slice(0, shown.draft);
+  const streaming = shown.sent && shown.answer < answerWords.length;
+
+  return (
+    <div className="memo-homechat-panel landing-v2-fx-chat">
+      <div className="memo-homechat-head">
+        <span>{t("libraryChat.title")}</span>
+        <span className="memo-homechat-head-btn" aria-hidden="true">
+          <Msym name="refresh" size="1.3rem" fill={false} weight={500} />
+        </span>
+      </div>
+      <div ref={logRef} className="memo-homechat-log">
+        {shown.sent ? (
+          <>
+            <div className="memo-homechat-question">
+              <div>{question}</div>
+            </div>
+            {shown.answer === 0 ? (
+              <TypingDots withAvatar />
+            ) : (
+              <div className="memo-homechat-answer">
+                <span className="memo-avatar">
+                  <Image src="/memo-mascot.png" alt="" width={320} height={288} />
+                </span>
+                <div>
+                  <ChatMarkdown content={answerWords.slice(0, shown.answer).join(" ")} streaming={streaming} />
+                </div>
+              </div>
+            )}
+          </>
+        ) : null}
+      </div>
+      <div className="memo-homechat-foot">
+        <div className="memo-chip-row memo-chiprow">
+          {CHAT_SUGGESTIONS.map((key) => (
+            <span key={key} className="memo-chip round">
+              {t(key)}
+            </span>
+          ))}
+        </div>
+        <div className="memo-homechat-composer">
+          <input
+            value={draft}
+            readOnly
+            tabIndex={-1}
+            placeholder={t("libraryChat.askAboutNotes")}
+            aria-label={t("libraryChat.askAboutNotes")}
+          />
+          <div className="memo-homechat-composer-row">
+            <span className="memo-homechat-scope">
+              <span>{t("libraryChat.scope.recent")}</span>
+              <span className="memo-scope-detail">{t("libraryChat.withTranscripts")}</span>
+              <Msym name="expand_more" size="1.2rem" />
+            </span>
+            <span className={`memo-send ${draft ? "ready" : "mic"}`} aria-hidden="true">
+              <Msym name={draft ? "arrow_upward" : "mic"} size="1.4rem" />
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── The study screens ───────────────────────────────────────── */
+
+function TutorPanel() {
+  /* It does not start by itself: it has a voice, and a voice may only be started
+     by the visitor, so it waits on its own button. */
+  return <LandingTutorDemo />;
+}
+
+const PANELS: Record<FeatureId, ComponentType<PanelProps>> = {
+  capture: CapturePanel,
+  notes: NotesPanel,
+  listen: ListenPanel,
+  tutor: TutorPanel,
+  flashcards: ({ active }) => <LandingFlashcardsScreen autoplay={active} />,
+  podcast: ({ active }) => <LandingPodcastScreen autoplay={active} />,
+  quiz: ({ active }) => <LandingQuizScreen autoplay={active} />,
+  mindmap: ({ active }) => <LandingMindmapScreen autoplay={active} />,
+  palace: ({ active }) => <LandingPalaceScreen autoplay={active} />,
+  test: ({ active }) => <LandingTestScreen autoplay={active} />,
+  speed: ({ active }) => <LandingSpeedReadScreen autoplay={active} />,
+  chat: ChatPanel,
+};
+
+/* Screens that are a full note tab get the note's side inset; the chat panel and
+   the tab bodies that carry their own chrome do not. */
+const PADDED: ReadonlySet<FeatureId> = new Set([
+  "tutor",
+  "flashcards",
+  "podcast",
+  "quiz",
+  "mindmap",
+  "palace",
+  "test",
+  "speed",
+]);
+
+/* One phone-sized screen holding the app. */
+function FeatureScreen({ id }: { id: FeatureId }) {
+  const Panel = PANELS[id];
+  let body: ReactNode = <Panel active />;
+
+  if (PADDED.has(id)) {
+    body = <div className="landing-v2-fx-scroll landing-v2-fx-tab">{body}</div>;
+  }
+
+  return (
+    <div className="landing-v2-fx-phone">
+      <LandingAppScope className="landing-v2-fx-screen">
+        <LandingScaledFrame fill width={SCREEN_WIDTH}>
+          {body}
+        </LandingScaledFrame>
+      </LandingAppScope>
+    </div>
+  );
+}
+
+/* Must track landing.css: the side stage takes over at min-width 900px. */
+const SIDE_STAGE_QUERY = "(min-width: 900px)";
 
 export function LandingFeatureShowcase() {
   const t = useT();
   const [active, setActive] = useState(0);
+  const activeId = FEATURES[active].id;
+  /*
+   * Which of the two places shows the screen. Only one is mounted: the screens
+   * run their own walkthroughs, and a copy under `display: none` would play one
+   * nobody can see. Unknown until mounted, so the server renders neither.
+   */
+  const [wide, setWide] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const query = window.matchMedia(SIDE_STAGE_QUERY);
+    const sync = () => setWide(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
 
   return (
     <div className="landing-v2-fx-layout">
       <div style={{ display: "grid", alignContent: "start", gap: "2px" }}>
         {FEATURES.map((feature, i) => {
           const on = active === i;
-          const Panel = PANELS[i];
           return (
-            <Fragment key={feature.titleKey}>
-            <button
-              type="button"
-              onClick={() => setActive(i)}
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: "0.85rem",
-                width: "100%",
-                padding: "0.95rem 0.5rem",
-                border: "none",
-                borderBottom: "1px solid var(--l-line-faint)",
-                background: "transparent",
-                fontFamily: "inherit",
-                textAlign: "left",
-                cursor: "pointer",
-              }}
-            >
-              <span
+            <Fragment key={feature.id}>
+              <button
+                type="button"
+                onClick={() => setActive(i)}
+                aria-expanded={on}
                 style={{
-                  flexShrink: 0,
-                  width: "3px",
-                  height: "1.9rem",
-                  marginTop: "0.15rem",
-                  borderRadius: "999px",
-                  background: on ? "var(--l-label)" : "transparent",
-                  transition: "background 260ms ease",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "0.85rem",
+                  width: "100%",
+                  padding: "0.95rem 0.5rem",
+                  border: "none",
+                  borderBottom: "1px solid var(--l-line-faint)",
+                  background: "transparent",
+                  fontFamily: "inherit",
+                  textAlign: "left",
+                  cursor: "pointer",
                 }}
-              />
-              <span style={{ display: "grid", gap: "3px", textAlign: "left" }}>
+              >
                 <span
                   style={{
-                    color: on ? "var(--l-label)" : "var(--l-second)",
-                    fontSize: "1.05rem",
-                    fontWeight: 700,
-                    lineHeight: 1.25,
-                    transition: "color 260ms ease",
+                    flexShrink: 0,
+                    width: "3px",
+                    height: "1.9rem",
+                    marginTop: "0.15rem",
+                    borderRadius: "999px",
+                    background: on ? "var(--l-label)" : "transparent",
+                    transition: "background 260ms ease",
                   }}
-                >
-                  {t(feature.titleKey)}
+                />
+                <span style={{ display: "grid", gap: "3px", textAlign: "left" }}>
+                  <span
+                    style={{
+                      color: on ? "var(--l-label)" : "var(--l-second)",
+                      fontSize: "1.05rem",
+                      fontWeight: 700,
+                      lineHeight: 1.25,
+                      transition: "color 260ms ease",
+                    }}
+                  >
+                    {t(feature.titleKey)}
+                  </span>
+                  {/* The title's colour already marks the active row; dimming
+                      this line as well pushed it under 3:1 against the page. */}
+                  <span style={{ color: "var(--l-second)", fontSize: "0.9rem", lineHeight: 1.45 }}>
+                    {t(feature.descKey)}
+                  </span>
                 </span>
-                {/* The title's colour already marks the active row; dimming
-                    this line as well pushed it under 3:1 against the page. */}
-                <span
-                  style={{
-                    color: "var(--l-second)",
-                    fontSize: "0.9rem",
-                    lineHeight: 1.45,
-                  }}
-                >
-                  {t(feature.descKey)}
-                </span>
-              </span>
-            </button>
+              </button>
 
-            {/* Stacked layouts show the demo right under its feature; the
-                side stage takes over from the two-column breakpoint up. */}
-            <div className="landing-v2-fx-inline" data-open={on ? "true" : "false"} aria-hidden={!on}>
-              <div className="landing-v2-fx-inline-panel" data-fx-still={on ? "false" : "true"}>
-                {on ? <Panel active={on} /> : null}
+              {/* Stacked layouts show the demo right under its feature; the
+                  side stage takes over from the two-column breakpoint up. Only
+                  the chosen feature's screen is mounted in either place. */}
+              <div className="landing-v2-fx-inline" data-open={on ? "true" : "false"} aria-hidden={!on}>
+                <div className="landing-v2-fx-inline-panel">
+                  {on && wide === false ? <FeatureScreen id={feature.id} /> : null}
+                </div>
               </div>
-            </div>
             </Fragment>
           );
         })}
       </div>
 
       <div className="landing-v2-fx-stage">
-        {PANELS.map((Panel, i) => {
-          const on = active === i;
-          return (
-            <div
-              key={i}
-              data-fx-still={on ? "false" : "true"}
-              style={{
-                position: on ? "relative" : "absolute",
-                inset: on ? "auto" : 0,
-                display: "grid",
-                placeItems: "center",
-                width: "100%",
-                opacity: on ? 1 : 0,
-                transform: `scale(var(--fx-scale, 1)) translateY(${on ? 0 : 8}px)`,
-                pointerEvents: on ? "auto" : "none",
-                transition: "opacity 320ms ease, transform 320ms cubic-bezier(0.22,1,0.36,1)",
-              }}
-            >
-              <Panel active={on} />
-            </div>
-          );
-        })}
+        {wide ? (
+          <div key={activeId} className="landing-v2-fx-stage-item">
+            <FeatureScreen id={activeId} />
+          </div>
+        ) : null}
       </div>
     </div>
   );

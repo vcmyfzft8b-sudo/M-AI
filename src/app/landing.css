@@ -10,7 +10,6 @@
   --l-nav: rgba(233, 233, 237, 0.88);
   --l-surface: #ffffff;
   --l-surface-76: rgba(255, 255, 255, 0.76);
-  --l-surface-62: rgba(255, 255, 255, 0.62);
   --l-label: #000000;
   /* Darker than the mockup's #86868b: that grey is only 2.9:1 on --l-page. */
   --l-second: #66666d;
@@ -18,56 +17,10 @@
   --l-line-soft: rgba(0, 0, 0, 0.044);
   --l-line-faint: rgba(0, 0, 0, 0.032);
   --l-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
-  --l-tint: #0066cc;
   --l-flow: #d9552f;
   --l-flow-soft: rgba(217, 85, 47, 0.14);
   --l-green: #34c759;
-  --l-red: #ff3b30;
 
-  /*
-   * Phone-preview (mockup) tokens — the `.phone` block from the redesign's own
-   * phone artboard (`MemoMobile.dc.html`), verbatim, so the demo in the hero is
-   * painted from the design's numbers rather than an approximation of them.
-   * The mockup re-states these inline when the visitor picks a theme inside it;
-   * these are the system-follows-the-OS defaults.
-   */
-  --m-bg: #f1f1f5;
-  --m-surface: #ffffff;
-  --m-label: #000000;
-  --m-second: #8e8e95;
-  --m-tile: rgba(0, 0, 0, 0.05);
-  --m-field: rgba(0, 0, 0, 0.07);
-  --m-line: rgba(0, 0, 0, 0.09);
-  --m-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  --m-shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.18);
-  --m-promo: #5b21e0;
-  --m-scrim: rgba(0, 0, 0, 0.28);
-  /* Focus is shown on the field itself, not as the UA's blue box. */
-  --m-focus-ring: rgba(0, 0, 0, 0.22);
-  /* The app's own marker orange, as read-aloud paints a spoken word. */
-  --m-marker: #ffedd5;
-  /*
-   * The note body's callouts and the flashcard's swipe verdicts. These are the
-   * app's own pairs from globals.css, not a light palette dimmed: dark uses a
-   * deep saturated fill over the surface, where light uses a pale wash.
-   */
-  --m-head-hl: color-mix(in srgb, #2563eb 24%, transparent);
-  --m-callout-definition-line: color-mix(in srgb, #2563eb 20%, var(--m-line));
-  --m-callout-definition-bg: color-mix(in srgb, #dbeafe 44%, var(--m-surface));
-  --m-callout-example-line: color-mix(in srgb, #16a34a 20%, var(--m-line));
-  --m-callout-example-bg: color-mix(in srgb, #dcfce7 40%, var(--m-surface));
-  --m-callout-mistake-line: color-mix(in srgb, #dc2626 20%, var(--m-line));
-  --m-callout-mistake-bg: color-mix(in srgb, #fee2e2 38%, var(--m-surface));
-  --m-callout-takeaway-line: color-mix(in srgb, #f59e0b 22%, var(--m-line));
-  --m-callout-takeaway-bg: color-mix(in srgb, #fef3c7 44%, var(--m-surface));
-  --m-drag-easy-bg: rgba(230, 246, 234, 0.9);
-  --m-drag-easy-ink: #16a34a;
-  --m-drag-again-bg: rgba(253, 233, 230, 0.9);
-  --m-drag-again-ink: #dc2626;
-  --m-exit-easy-bg: #e6f6ea;
-  --m-exit-easy-line: #67d48a;
-  --m-exit-again-bg: #fde9e6;
-  --m-exit-again-line: #f28b82;
   --phone-shadow: 0 18px 44px rgba(0, 0, 0, 0.16), 0 3px 8px rgba(0, 0, 0, 0.06),
     inset 0 0 0 1px rgba(255, 255, 255, 0.16);
 
@@ -129,49 +82,15 @@
     --l-nav: rgba(0, 0, 0, 0.88);
     --l-surface: #1c1c1e;
     --l-surface-76: rgba(28, 28, 30, 0.76);
-    --l-surface-62: rgba(28, 28, 30, 0.62);
     --l-label: #ffffff;
     --l-second: #a1a1a8;
     --l-line: rgba(255, 255, 255, 0.105);
     --l-line-soft: rgba(255, 255, 255, 0.082);
     --l-line-faint: rgba(255, 255, 255, 0.06);
     --l-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-    --l-tint: #0a84ff;
     --l-flow: #ff7d4d;
     --l-flow-soft: rgba(255, 125, 77, 0.16);
     --l-green: #32d74b;
-    --l-red: #ff453a;
-
-    --m-bg: #000000;
-    --m-surface: #1c1c1e;
-    --m-label: #ffffff;
-    --m-second: #8e8e95;
-    --m-tile: rgba(255, 255, 255, 0.09);
-    --m-field: rgba(255, 255, 255, 0.12);
-    --m-line: rgba(255, 255, 255, 0.14);
-    --m-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
-    --m-shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.75);
-    --m-promo: #b18bff;
-    --m-scrim: rgba(0, 0, 0, 0.5);
-    --m-focus-ring: rgba(255, 255, 255, 0.28);
-    --m-marker: rgba(251, 146, 60, 0.22);
-    --m-head-hl: color-mix(in srgb, #2563eb 42%, transparent);
-    --m-callout-definition-line: color-mix(in srgb, #2563eb 28%, var(--m-line));
-    --m-callout-definition-bg: color-mix(in srgb, #1d4ed8 22%, var(--m-surface));
-    --m-callout-example-line: color-mix(in srgb, #16a34a 28%, var(--m-line));
-    --m-callout-example-bg: color-mix(in srgb, #15803d 22%, var(--m-surface));
-    --m-callout-mistake-line: color-mix(in srgb, #dc2626 28%, var(--m-line));
-    --m-callout-mistake-bg: color-mix(in srgb, #b91c1c 20%, var(--m-surface));
-    --m-callout-takeaway-line: color-mix(in srgb, #f59e0b 30%, var(--m-line));
-    --m-callout-takeaway-bg: color-mix(in srgb, #b45309 22%, var(--m-surface));
-    --m-drag-easy-bg: color-mix(in srgb, var(--m-surface) 78%, #32d74b);
-    --m-drag-easy-ink: #32d74b;
-    --m-drag-again-bg: color-mix(in srgb, var(--m-surface) 78%, #ff453a);
-    --m-drag-again-ink: #ff453a;
-    --m-exit-easy-bg: color-mix(in srgb, var(--m-surface) 82%, #32d74b);
-    --m-exit-easy-line: color-mix(in srgb, #32d74b 45%, rgba(255, 255, 255, 0.25));
-    --m-exit-again-bg: color-mix(in srgb, var(--m-surface) 82%, #ff453a);
-    --m-exit-again-line: color-mix(in srgb, #ff453a 45%, rgba(255, 255, 255, 0.25));
     --phone-shadow: 0 1.6rem 4rem rgba(0, 0, 0, 0.42), 0 2px 6px rgba(0, 0, 0, 0.28),
       inset 0 0 0 1px rgba(255, 255, 255, 0.16);
   }
@@ -183,19 +102,11 @@
 }
 
 /* ── Keyframes ─────────────────────────────────────────────── */
+/* The app's own (memo-fade-in, memo-sheet-up, …) come from redesign.css, which
+   every page loads; never redeclare one here, or it replaces the app's. */
 @keyframes memo-node-pulse {
   0% { box-shadow: 0 0 0 0 rgba(10, 132, 255, 0.35); }
   100% { box-shadow: 0 0 0 14px rgba(10, 132, 255, 0); }
-}
-@keyframes memo-card-nudge {
-  0%, 46% { transform: translate3d(0, 0, 0) rotate(0deg); }
-  62% { transform: translate3d(34px, 0, 0) rotate(2.2deg); }
-  78%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-}
-@keyframes memo-card-peek {
-  0%, 8% { transform: rotateY(0deg); }
-  24% { transform: rotateY(-26deg); }
-  40%, 100% { transform: rotateY(0deg); }
 }
 @keyframes memo-note-in {
   from { opacity: 0; transform: translateY(6px); }
@@ -208,63 +119,6 @@
 @keyframes memo-try-point {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(2.5px); }
-}
-@keyframes memo-fx-bar {
-  0%, 100% { transform: scaleY(0.22); }
-  50% { transform: scaleY(1); }
-}
-@keyframes memo-fx-write {
-  0%, 4% { clip-path: inset(0 100% 0 0); }
-  17%, 100% { clip-path: inset(0 0 0 0); }
-}
-@keyframes memo-fx-flip {
-  0%, 14% { transform: rotateY(0deg); }
-  28%, 50% { transform: rotateY(180deg); }
-  55%, 100% { transform: rotateY(0deg); }
-}
-@keyframes memo-fx-throw {
-  0%, 40% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); opacity: 1; }
-  42% { transform: translate3d(8%, -0.6%, 0) rotate(1.2deg) scale(1.015); opacity: 1; }
-  44% { transform: translate3d(26%, -1.2%, 0) rotate(3.2deg) scale(1.015); opacity: 1; }
-  46% { transform: translate3d(58%, -2%, 0) rotate(6deg) scale(1.008); opacity: 1; }
-  48% { transform: translate3d(104%, -2.8%, 0) rotate(9deg) scale(1); opacity: 0.6; }
-  50% { transform: translate3d(162%, -3.6%, 0) rotate(12deg) scale(0.98); opacity: 0; }
-  51%, 58% { transform: translate3d(0, 34px, 0) rotate(0deg) scale(0.9); opacity: 0; }
-  64% { transform: translate3d(0, 15px, 0) rotate(0deg) scale(0.95); opacity: 0.6; }
-  70% { transform: translate3d(0, 4px, 0) rotate(0deg) scale(0.99); opacity: 0.94; }
-  75%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); opacity: 1; }
-}
-@keyframes memo-fx-known {
-  0%, 36% { opacity: 0; }
-  39%, 47% { opacity: 1; }
-  51%, 100% { opacity: 0; }
-}
-@keyframes memo-fx-pick {
-  0%, 14% { background: var(--l-surface); border-color: var(--l-line); }
-  60%, 92% { background: rgba(50, 215, 75, 0.18); border-color: #32d74b; }
-  96%, 100% { background: var(--l-surface); border-color: rgba(255, 255, 255, 0.15); }
-}
-@keyframes memo-fx-type {
-  0%, 6% { width: 0ch; }
-  52%, 100% { width: 22.3ch; }
-}
-@keyframes memo-fx-fade {
-  0%, 55% { opacity: 0; }
-  70%, 92% { opacity: 1; }
-  100% { opacity: 0; }
-}
-@keyframes memo-fx-read {
-  0%, 4% { background: transparent; color: var(--l-label); box-shadow: none; }
-  8%, 14% { background: rgba(251, 146, 60, 0.85); color: var(--l-label); box-shadow: 0 0 0 1.8px rgba(251, 146, 60, 0.36); }
-  20%, 88% { background: rgba(251, 146, 60, 0.22); color: var(--l-label); box-shadow: none; }
-  94%, 100% { background: transparent; color: var(--l-label); box-shadow: none; }
-}
-@keyframes memo-caret {
-  0%, 45% { opacity: 1; }
-  55%, 100% { opacity: 0; }
-}
-@keyframes memo-spin {
-  to { transform: rotate(360deg); }
 }
 @keyframes memo-cta-shine {
   0%, 45% { left: -55%; }
@@ -282,36 +136,9 @@
 }
 /* The mockup's own motion, transcribed from the phone artboard's stylesheet
    (`MemoMobile.dc.html`) so the demo moves the way the app does. */
-@keyframes memo-sheet-up {
-  0% { transform: translateY(22%); opacity: 0.5; }
-  70% { transform: translateY(-0.6%); opacity: 1; }
-  100% { transform: translateY(0); opacity: 1; }
-}
-@keyframes memo-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes memo-row-in {
-  from { opacity: 0; transform: translateY(10px) scale(0.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-@keyframes memo-pop-in {
-  from { opacity: 0; transform: scale(0.94); }
-  to { opacity: 1; transform: scale(1); }
-}
-@keyframes memo-q-in-a {
-  from { opacity: 0; transform: translateX(22px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-@keyframes memo-q-in-b {
-  from { opacity: 0; transform: translateX(22px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-@keyframes memo-prize-pop {
-  0% { opacity: 0; transform: scale(0.6) rotate(-6deg); }
-  60% { opacity: 1; transform: scale(1.12) rotate(2deg); }
-  100% { opacity: 1; transform: scale(1) rotate(0); }
-}
+/* No `memo-pop-in`, `memo-q-in-a/b` or `memo-prize-pop` here: redesign.css
+   defines them, and a second copy on this page silently replaced the app's
+   (the results badge landed untilted). */
 /* The swipe-out continues from where the finger let go, so the card carries on
    rather than snapping back to centre first: --ex/--ey/--er are the release
    position, set by `swipeCard`. */
@@ -358,10 +185,6 @@
     opacity: 0;
     transform: translate3d(calc(var(--ex, 0%) - 18%), calc(var(--ey, 0%) - 4%), 0) rotate(calc(var(--er, 0deg) - 6deg)) scale(1.02);
   }
-}
-
-[data-fx-still="true"] * {
-  animation: none !important;
 }
 
 [data-memo-app],
@@ -1051,6 +874,102 @@
   }
 }
 
+/*
+ * The hero phone (memo-app-preview.tsx) — `.landing-hero-app` is its LandingAppScope.
+ *
+ * The note body's marks. The app keys these on the root theme in globals.css
+ * (`.lecture-markdown blockquote[data-callout-kind]`, `.lecture-heading-highlight`,
+ * `.note-read-content`), which is the visitor's saved appearance, not the phone's; the
+ * phone has an Appearance setting of its own, so the same values are keyed on its
+ * scope instead. The `--note-read-*` names are the app's own, read by the real
+ * `.note-read-word.read` / `.current` rules. Keep the values in step with globals.css.
+ */
+.landing-hero-app {
+  --hero-heading-mark: color-mix(in srgb, #2563eb 24%, transparent);
+  --hero-bullet: color-mix(in srgb, var(--text) 72%, transparent);
+  --hero-callout-definition-line: color-mix(in srgb, #2563eb 20%, var(--line));
+  --hero-callout-definition-bg: color-mix(in srgb, #dbeafe 44%, var(--surface));
+  --hero-callout-example-line: color-mix(in srgb, #16a34a 20%, var(--line));
+  --hero-callout-example-bg: color-mix(in srgb, #dcfce7 40%, var(--surface));
+  --hero-callout-mistake-line: color-mix(in srgb, #dc2626 20%, var(--line));
+  --hero-callout-mistake-bg: color-mix(in srgb, #fee2e2 38%, var(--surface));
+  --hero-callout-takeaway-line: color-mix(in srgb, #f59e0b 22%, var(--line));
+  --hero-callout-takeaway-bg: color-mix(in srgb, #fef3c7 44%, var(--surface));
+  --note-read-read-bg: #ffedd5;
+  --note-read-read-color: #7c2d12;
+  --note-read-current-bg: #fb923c;
+  --note-read-current-color: #431407;
+  --note-read-current-ring: rgba(251, 146, 60, 0.28);
+}
+
+.landing-hero-app.memo-theme-dark {
+  --hero-heading-mark: color-mix(in srgb, #2563eb 42%, transparent);
+  --hero-bullet: color-mix(in srgb, var(--text) 78%, transparent);
+  --hero-callout-definition-line: color-mix(in srgb, #2563eb 28%, var(--line));
+  --hero-callout-definition-bg: color-mix(in srgb, #1d4ed8 22%, var(--surface));
+  --hero-callout-example-line: color-mix(in srgb, #16a34a 28%, var(--line));
+  --hero-callout-example-bg: color-mix(in srgb, #15803d 22%, var(--surface));
+  --hero-callout-mistake-line: color-mix(in srgb, #dc2626 28%, var(--line));
+  --hero-callout-mistake-bg: color-mix(in srgb, #b91c1c 20%, var(--surface));
+  --hero-callout-takeaway-line: color-mix(in srgb, #f59e0b 30%, var(--line));
+  --hero-callout-takeaway-bg: color-mix(in srgb, #b45309 22%, var(--surface));
+  --note-read-read-bg: rgba(251, 146, 60, 0.22);
+  --note-read-read-color: #fed7aa;
+  --note-read-current-bg: #c2410c;
+  --note-read-current-color: #fff7ed;
+  --note-read-current-ring: rgba(251, 146, 60, 0.36);
+}
+
+@media (prefers-color-scheme: dark) {
+  .landing-hero-app.memo-os-theme {
+    --hero-heading-mark: color-mix(in srgb, #2563eb 42%, transparent);
+    --hero-bullet: color-mix(in srgb, var(--text) 78%, transparent);
+    --hero-callout-definition-line: color-mix(in srgb, #2563eb 28%, var(--line));
+    --hero-callout-definition-bg: color-mix(in srgb, #1d4ed8 22%, var(--surface));
+    --hero-callout-example-line: color-mix(in srgb, #16a34a 28%, var(--line));
+    --hero-callout-example-bg: color-mix(in srgb, #15803d 22%, var(--surface));
+    --hero-callout-mistake-line: color-mix(in srgb, #dc2626 28%, var(--line));
+    --hero-callout-mistake-bg: color-mix(in srgb, #b91c1c 20%, var(--surface));
+    --hero-callout-takeaway-line: color-mix(in srgb, #f59e0b 30%, var(--line));
+    --hero-callout-takeaway-bg: color-mix(in srgb, #b45309 22%, var(--surface));
+    --note-read-read-bg: rgba(251, 146, 60, 0.22);
+    --note-read-read-color: #fed7aa;
+    --note-read-current-bg: #c2410c;
+    --note-read-current-color: #fff7ed;
+    --note-read-current-ring: rgba(251, 146, 60, 0.36);
+  }
+}
+
+/* `.lecture-heading-highlight` */
+.landing-hero-app .landing-hero-heading-mark {
+  display: inline;
+  padding: 0.1rem 0.32rem;
+  border-radius: 0.42rem;
+  background: var(--hero-heading-mark);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* `.lecture-markdown li::before` */
+.landing-hero-app .landing-hero-bullet {
+  position: absolute;
+  top: 0.14em;
+  left: 0;
+  color: var(--hero-bullet);
+  font-size: 0.72em;
+  font-weight: 850;
+  line-height: inherit;
+}
+
+/*
+ * A study tab's screen under the phone's dock: the app keeps 6.4rem under these tabs
+ * so the last control is not drawn under the floating chat bar (redesign.css, phone
+ * block, `.memo-note-scroll` on the study tabs).
+ */
+.landing-hero-app .landing-hero-tabbody.has-dock .landing-study-frame {
+  padding-bottom: 6.4rem;
+}
+
 .landing-v2-try-callout .landing-v2-try-finger {
   display: inline-block;
   font-size: 0.82rem;
@@ -1260,9 +1179,139 @@
   }
 }
 
+.landing-v2-flow-step {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  justify-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+  text-align: center;
+}
+
+/*
+ * A step's card: the landing's frame around a phone-width app screen. The
+ * screen inside is the app — its own page colour, rows and type — drawn at 390px
+ * and scaled to the card by LandingScaledFrame, so all three cards share one
+ * height whatever the note, the list or the study screen would ask for.
+ */
+.landing-v2-flow-card {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  /* Tall enough for the tallest study screen (a quiz question and its four
+     answers, the palace and its button) at the card's scale. */
+  height: 37rem;
+  border-radius: 22px;
+  box-shadow: var(--l-shadow);
+  transition:
+    transform 260ms cubic-bezier(0.34, 1.4, 0.5, 1),
+    box-shadow 260ms ease;
+}
+
+.landing-v2-flow-card.is-target {
+  cursor: pointer;
+}
+
+/* The hairline sits over the screen, not under it: the app's rows run to its edges. */
+.landing-v2-flow-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--l-line);
+  pointer-events: none;
+  transition: box-shadow 260ms ease;
+}
+
+.landing-v2-flow-card[data-over="true"] {
+  transform: scale(1.03);
+  box-shadow:
+    0 0 0 6px var(--l-flow-soft),
+    var(--l-shadow);
+}
+
+.landing-v2-flow-card[data-over="true"]::after {
+  box-shadow: inset 0 0 0 1px var(--l-flow);
+}
+
+/* A file held over the card lights the drop zone the way the pointer does in the app. */
+.landing-v2-flow-card[data-over="true"] .memo-dropzone {
+  border-color: var(--hover-ring);
+  background: var(--tile);
+}
+
+.landing-v2 .memo.landing-v2-flow-screen,
+.landing-v2 .memo.landing-v2-fx-screen {
+  height: 100%;
+  border-radius: inherit;
+  overflow: hidden;
+  background: var(--bg);
+  text-align: left;
+}
+
+/* The phone scroller's own inset. */
+.landing-v2-flow-pad {
+  padding: 1.15rem 1.15rem 0;
+}
+
+/*
+ * Content that runs past the card fades out, as the app's lists do under their
+ * chrome. A wash of the page colour rather than a mask: a mask over the scaled
+ * (transformed) screen was dropped from the paint altogether in Chrome.
+ */
+.landing-v2 .memo.landing-v2-flow-fade {
+  position: relative;
+}
+
+.landing-v2 .memo.landing-v2-flow-fade::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 3.5rem;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+  pointer-events: none;
+}
+
+.landing-v2-flow-new-row {
+  animation: memo-row-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.landing-v2-flow-study {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* The row bleeds to the screen's edges on a phone (redesign.css pulls it out by
+   the scroller's inset), so it sits in that inset here too. */
+.landing-v2-flow-pills {
+  flex: 0 0 auto;
+  padding: 0.6rem 1.15rem 0;
+}
+
+.landing-v2-flow-study-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 1.15rem 1.15rem;
+}
+
+/*
+ * The note's body rules (`.lecture-markdown`, `.markdown` in globals.css) are
+ * written in the legacy token names, which follow the saved app theme rather
+ * than the landing's. Inside an embedded app screen they take the scope's own.
+ */
+.landing-v2 .memo .lecture-markdown {
+  --label: var(--text);
+  --separator: var(--line);
+  --surface-solid: var(--surface);
+  --surface-muted: var(--sunken);
+}
+
 /* ── Feature showcase ──────────────────────────────────────── */
 .landing-v2-fx-layout {
-  --fx-scale: 1.05;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 2rem;
@@ -1313,7 +1362,6 @@
 
 @media (min-width: 900px) {
   .landing-v2-fx-layout {
-    --fx-scale: 1.22;
     grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
     gap: 3.5rem;
   }
@@ -1334,185 +1382,104 @@
   }
 }
 
-/* ── Live tutor demo ───────────────────────────────────────── */
-/* Moved to landing-tutor.css, imported at the top of this file: the
-   interactive onboarding mounts the same component. */
-
-/* ── Study results ─────────────────────────────────────────── */
 /*
- * The app's results screen — `.memo-result` in redesign.css — as the demos draw
- * it: the tinted orb with the outcome emoji, the score pinned to it on a tilted
- * badge, the headline, and the way onward. Ported for the same reason the tutor
- * is, and with the same two knobs: `--lr-*` for the palette, and `--lr-s` for a
- * host that has less room than a phone screen. Every length is the app's own
- * number multiplied by that one factor, so a shrunk card keeps the design's
- * proportions rather than being re-drawn smaller.
+ * The screen each feature is shown on: a phone's width and a phone's
+ * proportions, holding the app at 390px (LandingScaledFrame) — the same shell
+ * as the flow demo's cards.
  */
-.landing-result {
-  --lr-u: calc(1rem * var(--lr-s, 1));
-  --lr-text: var(--l-label);
-  --lr-muted: var(--l-second);
-  --lr-tile: var(--l-line);
-  --lr-sunken: var(--l-line-soft);
-  --lr-surface: var(--l-surface);
-  --lr-ink: var(--l-label);
-  --lr-on-ink: var(--l-surface);
-  display: grid;
-  justify-items: center;
-  width: 100%;
-  max-width: calc(30 * var(--lr-u));
-  margin: 0 auto;
-  padding: calc(1.6 * var(--lr-u)) 0 0;
-  box-sizing: border-box;
-  color: var(--lr-text);
-  text-align: center;
-  animation: memo-pop-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.landing-result-orb-wrap {
+.landing-v2-fx-phone {
   position: relative;
-  display: grid;
-  place-items: center;
-  width: calc(12 * var(--lr-u));
-  height: calc(12 * var(--lr-u));
+  width: 100%;
+  max-width: 24.4rem;
+  /* Room for the tallest study screen — a flashcard with its grading row, a
+     question with four answers — without it scrolling. */
+  height: 39rem;
+  border-radius: 26px;
+  box-shadow: var(--l-shadow);
 }
 
-.landing-result-orb {
-  display: grid;
-  place-items: center;
-  width: calc(9.4 * var(--lr-u));
-  height: calc(9.4 * var(--lr-u));
-  border-radius: 999px;
-  background: var(--lr-tile);
-}
-
-.landing-result-badge {
+.landing-v2-fx-phone::after {
+  content: "";
   position: absolute;
-  top: calc(0.2 * var(--lr-u));
-  right: 0;
-  padding: calc(0.45 * var(--lr-u)) calc(0.8 * var(--lr-u));
-  border-radius: calc(0.875 * var(--lr-u));
-  transform: rotate(-8deg);
-  background: color-mix(in srgb, var(--lr-tint) 16%, var(--lr-surface));
-  color: var(--lr-tint);
-  font-size: calc(1.5 * var(--lr-u));
-  font-weight: 850;
-  letter-spacing: -0.03em;
-  white-space: nowrap;
-  animation: memo-prize-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both 0.12s;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--l-line);
+  pointer-events: none;
 }
 
-.landing-result-eyebrow {
-  margin-top: calc(1.2 * var(--lr-u));
-  color: var(--lr-muted);
-  font-size: calc(0.78 * var(--lr-u));
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+@media (max-width: 899px) {
+  .landing-v2-fx-phone {
+    height: 37rem;
+  }
 }
 
-.landing-result-title {
-  margin-top: calc(1.4 * var(--lr-u));
-  font-size: calc(1.75 * var(--lr-u));
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 1.15;
-  text-wrap: pretty;
+/* The list is far taller than one screen, so the screen rides along beside it
+   rather than sitting in the middle of a column most of which is off-screen. */
+.landing-v2-fx-stage {
+  align-items: start;
 }
 
-.landing-result-eyebrow + .landing-result-title {
-  margin-top: calc(0.5 * var(--lr-u));
-}
-
-.landing-result-line {
-  margin-top: calc(0.7 * var(--lr-u));
-  color: var(--lr-muted);
-  font-size: calc(1.1 * var(--lr-u));
-  font-weight: 650;
-  line-height: 1.3;
-}
-
-.landing-result-line + .landing-result-line {
-  margin-top: calc(0.25 * var(--lr-u));
-}
-
-.landing-result-score {
-  color: var(--lr-tint);
-  font-weight: 800;
-}
-
-.landing-result-metrics {
+.landing-v2-fx-stage-item {
+  position: sticky;
+  top: 6.5rem;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: calc(0.7 * var(--lr-u));
+  place-items: center;
   width: 100%;
-  margin-top: calc(1.8 * var(--lr-u));
+  animation: memo-note-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.landing-result-metric {
-  display: grid;
-  gap: calc(0.2 * var(--lr-u));
-  padding: calc(0.9 * var(--lr-u)) calc(1.1 * var(--lr-u));
-  border-radius: calc(1.125 * var(--lr-u));
-  background: var(--lr-sunken);
-  text-align: left;
+/* The New note screen's quick actions, one per row as the phone's sheet lists
+   them: at a phone's width the desktop's two columns wrap every label. */
+.landing-v2-fx-capture .memo-quick-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.85rem;
 }
 
-.landing-result-metric span {
-  color: var(--lr-muted);
-  font-size: calc(0.78 * var(--lr-u));
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.landing-v2-fx-column {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
-.landing-result-metric strong {
-  font-size: calc(1.15 * var(--lr-u));
-  font-weight: 800;
-  letter-spacing: -0.03em;
+/* A screen's one scroller. */
+.landing-v2-fx-scroll {
+  height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
-.landing-result-actions {
-  display: grid;
-  gap: calc(0.7 * var(--lr-u));
-  width: 100%;
-  margin-top: calc(2.4 * var(--lr-u));
+.landing-v2-fx-column > .landing-v2-fx-scroll {
+  flex: 1 1 auto;
+  height: auto;
 }
 
-/*
- * The design's pair: the first action is the filled one, anything after it is
- * the quiet tile.
- */
-.landing-result-actions > * {
-  display: inline-flex;
-  align-items: center;
+/* A study tab's body, in the phone note screen's side inset. */
+.landing-v2-fx-tab {
+  padding: 1.15rem 1.15rem 1.15rem;
+}
+
+.landing-v2-fx-dock {
+  flex: 0 0 auto;
+  display: flex;
   justify-content: center;
-  gap: calc(0.5 * var(--lr-u));
+  padding: 0.6rem 1.15rem 1.15rem;
+}
+
+/* The library chat's panel, filling the screen rather than floating over a page. */
+.landing-v2 .memo-homechat-panel.landing-v2-fx-chat {
   width: 100%;
-  min-height: calc(3.6 * var(--lr-u));
-  padding: calc(0.4 * var(--lr-u)) calc(1.4 * var(--lr-u));
-  border: 0;
-  border-radius: 999px;
-  background: var(--lr-tile);
-  color: var(--lr-text);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: calc(1.05 * var(--lr-u));
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.2;
+  height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
 }
 
-.landing-result-actions > :first-child {
-  background: var(--lr-ink);
-  color: var(--lr-on-ink);
-  font-size: calc(1.08 * var(--lr-u));
-  font-weight: 750;
-}
-
-.landing-result-actions > * .msym {
-  color: inherit;
-  font-size: calc(1.2 * var(--lr-u));
+/* The quick card being picked wears the app's own hover edge. */
+.landing-v2 .memo-quick-card.landing-v2-fx-picked {
+  box-shadow:
+    var(--shadow),
+    inset 0 0 0 1px var(--hover-ring);
 }
 
 /* ── Final CTA ─────────────────────────────────────────────── */
@@ -1833,4 +1800,824 @@
     padding: 0;
   }
 }
+
+/* ==========================================================================
+ * LandingPodcastScreen / LandingMindmapScreen / LandingPalaceScreen /
+ * LandingSpeedReadScreen
+ * (src/components/landing/app/landing-{podcast,mindmap,palace,speed-read}-screen.tsx)
+ *
+ * The note's four newer tabs, in the same `.landing-study-frame[data-note-tab]`
+ * stand-in for the note screen as the practice tabs below, and for the same two
+ * reasons: the app keys their layout on `.memo-note-screen[data-note-tab]`, and
+ * on the phone media query a desktop window never matches. So the phone's rules
+ * are restated here unconditionally — and where the desktop block of
+ * redesign.css (`min-width: 1100px`) changes one of these screens, its phone
+ * value is restated too, at a specificity that wins at every width. Every `vh`
+ * is resolved at the 390x844 phone. Keep in step with redesign.css (search it
+ * for `data-note-tab="podcast"`, `"mindmap"`, `"palace"`, `"speed"`).
+ *
+ * `.landing-feature-screen` is the positioning box for what the app puts in a
+ * portal: the podcast's chooser sheet and the palace's game stage are drawn
+ * inside the screen and pinned to its edges instead of the viewport's.
+ * ======================================================================== */
+
+.landing-feature-screen {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* -- podcast -------------------------------------------------------------- */
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast {
+  position: static;
+  flex: 1;
+  min-height: 0;
+}
+
+.landing-study-frame[data-note-tab="podcast"] :is(.memo-podcast-stage, .memo-podcast-hero) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-stage {
+  max-width: none;
+  margin: 0;
+  gap: 0.95rem;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-shelf {
+  width: 100%;
+  max-width: none;
+  margin: auto;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-cover {
+  flex: 0 1 auto;
+  min-height: 4.5rem;
+  max-height: var(--cover-h);
+  max-width: 100%;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-cover.playing {
+  --cover-w: 16.8rem;
+  --cover-h: 11.9rem;
+  --body-a: 7.15rem;
+  --body-b: 5.9rem;
+  --glow-a: 10.65rem;
+  --glow-b: 8.95rem;
+  --a-left: 2.15rem;
+  --a-top: 2.3rem;
+  --b-right: 1.8rem;
+  --b-top: 3.55rem;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-stage .memo-podcast-title {
+  max-width: 17rem;
+  font-size: 1.3rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.32;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-subtitle {
+  font-size: 0.92rem;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-scrubber {
+  gap: 0.6rem;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-clock {
+  min-width: 2.6rem;
+  font-size: 0.92rem;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-controls {
+  gap: 1rem;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-episode {
+  min-height: 4.6rem;
+  padding: 0.8rem 1.15rem;
+  gap: 1.1rem;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-episode.resumable {
+  min-height: 5.1rem;
+}
+
+/* The phone's row title wraps rather than truncating. */
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-episode .memo-note-title {
+  font-size: 1.08rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-meta-phone {
+  display: block;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-episode-art {
+  width: 2.7rem;
+  height: 2.5rem;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-episode-art .memo-orb-body {
+  --orb-size: 2.1rem;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-episode-art .memo-orb-body.b {
+  --orb-size: 1.75rem;
+  top: 0.55rem;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-new {
+  padding: 0;
+}
+
+/* The chooser: the phone's bottom sheet, on the screen's own bottom edge. */
+.landing-study-frame[data-note-tab="podcast"] .memo-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: var(--scrim);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-confirm-fixed.memo-podcast-chooser {
+  position: absolute;
+  top: auto;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 21;
+  display: flex;
+  flex-direction: column;
+  width: auto;
+  max-height: calc(100% - 2rem);
+  overflow-y: auto;
+  padding: 0.7rem 1.25rem 1.3rem;
+  border: 0;
+  border-radius: 34px 34px 0 0;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  transform: none;
+  animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-chooser .memo-grab {
+  display: block;
+  flex: none;
+  width: 2.6rem;
+  height: 0.32rem;
+  margin: 0 auto 0.9rem;
+  border-radius: 999px;
+  background: var(--muted);
+  opacity: 0.5;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-chooser .memo-podcast-form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-height: 0;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-chooser .memo-podcast-form > * {
+  flex: none;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-chooser .memo-podcast-picker {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-chooser .memo-podcast-voice-options {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-shows {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* The phone stacks the length segment over the cast, three names to a row. */
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-cast {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-voices {
+  min-height: 4rem;
+  padding: 0.7rem 1.15rem;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-voice-options {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-actions {
+  display: block;
+  margin-top: 0;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-actions .memo-podcast-primary {
+  width: 100%;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-chooser .memo-podcast-usage {
+  font-size: 0.92rem;
+  text-align: center;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-show {
+  gap: 0.45rem;
+  padding: 0 0.6rem;
+}
+
+.landing-study-frame[data-note-tab="podcast"] .memo-podcast-chooser .memo-podcast-show-hint {
+  min-height: 2.6rem;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* -- mindmap -------------------------------------------------------------- */
+
+.landing-study-frame[data-note-tab="mindmap"] .memo-mm-stage {
+  flex: 1;
+  height: auto;
+  min-height: 18rem;
+  margin-top: 0;
+  border-radius: 1.25rem;
+}
+
+/* Full screen: the app's overlay, over the landing's phone instead of the window. */
+.landing-study-frame[data-note-tab="mindmap"] .memo-mm-overlay {
+  position: absolute;
+  z-index: 20;
+  padding: 0.6rem;
+}
+
+.landing-study-frame[data-note-tab="mindmap"] .memo-mm-overlay .memo-mm-stage {
+  height: 100%;
+}
+
+.landing-study-frame[data-note-tab="mindmap"] .memo-mm-placeholder {
+  flex: 1;
+  height: auto;
+  min-height: 18rem;
+  margin-top: 0;
+  border-radius: 1.25rem;
+}
+
+.landing-study-frame[data-note-tab="mindmap"] .memo-mm-toolbar {
+  inset: 0.7rem;
+  display: block;
+}
+
+.landing-study-frame[data-note-tab="mindmap"] .memo-mm-tools {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.landing-study-frame[data-note-tab="mindmap"] .memo-mm-save {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2.6rem;
+}
+
+.landing-study-frame[data-note-tab="mindmap"] .memo-mm-search-input {
+  width: 6.5rem;
+}
+
+.landing-study-frame[data-note-tab="mindmap"] .memo-mm-trail {
+  top: 4.2rem;
+  left: 0.7rem;
+  max-width: calc(100% - 1.4rem);
+}
+
+.landing-study-frame[data-note-tab="mindmap"] .memo-mm-detail {
+  top: auto;
+  right: 0.85rem;
+  bottom: 4.4rem;
+  width: fit-content;
+  max-width: none;
+}
+
+/* -- memory palace -------------------------------------------------------- */
+
+.landing-study-frame[data-note-tab="palace"] .memo-palace-intro {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.844rem;
+  min-height: 0;
+  max-height: none;
+  margin: 1.055rem auto 0;
+  /* The app keeps 5.5rem clear for its chat dock; the landing has no dock here. */
+  padding-bottom: 0;
+}
+
+/* As tall as the app draws it on the 390x844 phone, where its dock takes the foot of the card. */
+.landing-study-frame[data-note-tab="palace"] .memo-palace-hero {
+  flex: 1 1 auto;
+  min-height: 6rem;
+  max-height: 14.75rem;
+}
+
+.landing-study-frame[data-note-tab="palace"] .memo-palace-lede {
+  margin-top: 1.055rem;
+}
+
+/* Never the short-window ladder: the screen is always a 844pt phone. */
+.landing-study-frame[data-note-tab="palace"] .memo-palace-lede p {
+  display: block;
+}
+
+.landing-study-frame[data-note-tab="palace"] .memo-palace-lede h2 {
+  font-size: 1.371rem;
+}
+
+.landing-study-frame[data-note-tab="palace"] .memo-palace-intro-actions {
+  display: grid;
+}
+
+.landing-study-frame[data-note-tab="palace"] .memo-palace-enter {
+  width: 100%;
+  flex: none;
+  min-height: 3.165rem;
+}
+
+/* The game stage fills the screen rather than the window. */
+.landing-study-frame[data-note-tab="palace"] .memo-palace-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+}
+
+.landing-study-frame[data-note-tab="palace"] .memo-palace-knob {
+  position: absolute;
+}
+
+.landing-study-frame[data-note-tab="palace"] .memo-palace-map canvas {
+  width: 6.4rem;
+  height: 6.4rem;
+}
+
+/* The phone's HUD: the way out in the top corner as an icon, the score beside it. */
+.landing-study-frame[data-note-tab="palace"] .memo-palace-exit {
+  top: 0.9rem;
+  right: 0.9rem;
+  bottom: auto;
+  left: auto;
+  width: 2.8rem;
+  height: 2.8rem;
+  padding: 0;
+  justify-content: center;
+}
+
+.landing-study-frame[data-note-tab="palace"] .memo-palace-exit-label {
+  display: none;
+}
+
+.landing-study-frame[data-note-tab="palace"] .memo-palace-hud-top {
+  top: 0.9rem;
+  right: 4.2rem;
+}
+
+.landing-study-frame[data-note-tab="palace"] .memo-palace-stage .memo-palace-hint {
+  display: block;
+  right: 1rem;
+  bottom: 4.4rem;
+  left: auto;
+  max-width: 12rem;
+  translate: none;
+  font-size: 0.65rem;
+  text-align: center;
+}
+
+/* A stop on a touch screen: the phone's bottom sheet, on the stage's edge rather than the window's. */
+.landing-study-frame[data-note-tab="palace"] .memo-palace-panel[data-presentation="sheet"] {
+  position: absolute;
+  inset: auto 0 0 0;
+  translate: none;
+  width: 100%;
+  max-height: calc(100% - 7rem);
+  padding: 1.1rem 1.15rem 1.5rem;
+  border: 0;
+  border-radius: 30px 30px 0 0;
+  --panel-paint: var(--surface);
+  background: var(--panel-paint);
+  box-shadow: var(--shadow-lg);
+}
+
+/* -- speed read ------------------------------------------------------------ */
+
+.landing-study-frame[data-note-tab="speed"] {
+  overflow-y: hidden;
+}
+
+.landing-study-frame[data-note-tab="speed"] .memo-speedread {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  gap: 1.16rem;
+}
+
+.landing-study-frame[data-note-tab="speed"] .memo-speedread-word {
+  font-size: calc(2.4375rem * var(--speedread-word-scale, 1));
+}
+
+/* ==========================================================================
+ * LandingFlashcardsScreen / LandingQuizScreen / LandingTestScreen
+ * (src/components/landing/app/landing-{flashcards,quiz,test}-screen.tsx)
+ *
+ * The note's three practice tabs, drawn with the app's own markup. The app lays
+ * them out with two kinds of rule the landing cannot inherit:
+ *
+ * - rules keyed on `.memo-note-screen[data-note-tab]`, which is the app's
+ *   full-screen note (`position: fixed` on a phone) and cannot sit in a page;
+ * - rules inside `@media (max-width: 1099px)`, the phone layout, which a desktop
+ *   visitor's window never matches even though these screens are always phones.
+ *
+ * So `.landing-study-frame[data-note-tab]` stands in for the note screen and
+ * restates those rules here, in the app's source order, unconditionally. Every
+ * `vh` in the app's clamps is resolved at the 390x844 phone the screens are
+ * drawn at: a demo scaled into a slot should not change with the visitor's
+ * window height. Keep this block in step with redesign.css (search it for
+ * `data-note-tab="flashcards"`, `"quiz"`, `"test"`).
+ * ======================================================================== */
+
+/* Past redesign.css's `.memo.memo-os-theme { min-height: 0; background: none }`. */
+.memo.landing-study-screen:is(.memo-os-theme, .memo-theme-light, .memo-theme-dark) {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 37rem;
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+}
+
+/* The note screen's scroller: the phone's 1.15rem gutter, one scroller, no bar. */
+.landing-study-frame {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 1.1rem 1.15rem 1.4rem;
+  overflow-x: clip;
+  overflow-y: auto;
+}
+
+.landing-study-frame .memo-panel.study {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 0;
+}
+
+.landing-study-frame :is(.workspace-panel-stack, .lecture-study-shell, .lecture-practice-shell) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.landing-study-frame .memo-progress > div {
+  background: var(--coral);
+}
+
+/* A thrown card leaves the screen instead of being sliced off at its edge. */
+.landing-study-frame[data-note-tab="flashcards"]:has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card),
+.landing-study-frame[data-note-tab="flashcards"] :is(.memo-panel, .workspace-panel-stack, .lecture-study-shell, .lecture-flashcard-stage):has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card) {
+  overflow: visible;
+}
+
+/* -- flashcards (redesign.css "The card is the thing that gives") -- */
+
+.landing-study-frame[data-note-tab="flashcards"] .lecture-flashcard-stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  justify-content: center;
+  align-items: center;
+  max-height: 22rem;
+}
+
+.landing-study-frame[data-note-tab="flashcards"] .lecture-flashcard-stage-card {
+  flex: 0 1 auto;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  aspect-ratio: 5 / 3;
+}
+
+.landing-study-frame[data-note-tab="flashcards"] :is(.lecture-flashcard, .lecture-flashcard-rotator) {
+  height: 100%;
+}
+
+.landing-study-frame[data-note-tab="flashcards"] .lecture-flashcard-face {
+  padding: 1.4rem 1.5rem;
+  overflow: hidden;
+}
+
+.landing-study-frame[data-note-tab="flashcards"] .lecture-flashcard-content {
+  font-size: 1.27rem;
+}
+
+.landing-study-frame[data-note-tab="flashcards"] .lecture-flashcard-toolbar {
+  margin-top: 1.1rem;
+}
+
+.landing-study-frame[data-note-tab="flashcards"] .memo-progress {
+  margin-top: 0.85rem;
+}
+
+/* The phone's: the card gives back the dock's height, and yields rather than overflows. */
+.landing-study-frame[data-note-tab="flashcards"] .memo-panel .lecture-flashcard-stage {
+  margin-top: 2.2rem;
+}
+
+/* globals.css's own phone block (max-width: 639px), which the redesign leaves standing. */
+.landing-study-frame[data-note-tab="flashcards"] .lecture-flashcard {
+  border-radius: 20px;
+}
+
+.landing-study-frame[data-note-tab="flashcards"] :is(.lecture-flashcard-nav-button, .lecture-flashcard-review-button) {
+  min-height: 3rem;
+}
+
+.landing-study-frame[data-note-tab="flashcards"] .memo-panel .lecture-flashcard,
+.landing-study-frame[data-note-tab="flashcards"] .memo-panel .lecture-flashcard-rotator,
+.landing-study-frame[data-note-tab="flashcards"] .memo-panel .lecture-flashcard-face {
+  min-height: min(20rem, 100%);
+}
+
+/* -- quiz: the phone's head, bare question and letterless options -- */
+
+.landing-study-frame[data-note-tab="quiz"] .memo-quiz-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.landing-study-frame[data-note-tab="quiz"] .memo-quiz-count {
+  color: var(--text);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.landing-study-frame[data-note-tab="quiz"] .memo-quiz-total {
+  color: var(--muted);
+  font-size: 0.98rem;
+  font-weight: 650;
+}
+
+.landing-study-frame[data-note-tab="quiz"] :is(.memo-quiz-eyebrow, .lecture-quiz-option-label) {
+  display: none;
+}
+
+.landing-study-frame[data-note-tab="quiz"] .lecture-quiz-option {
+  min-height: 4.2rem;
+  padding: 0 1.2rem;
+  border-radius: 18px;
+  font-weight: 650;
+}
+
+.landing-study-frame[data-note-tab="quiz"] .lecture-quiz-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.landing-study-frame[data-note-tab="quiz"] .memo-panel .lecture-quiz-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.landing-study-frame[data-note-tab="quiz"] :is(.memo-panel.study, .workspace-panel-stack, .lecture-study-shell, .lecture-quiz-stage, .lecture-quiz-card) {
+  flex: 1 0 auto;
+  min-height: auto;
+}
+
+.landing-study-frame[data-note-tab="quiz"] .memo-progress.quiz {
+  margin: 0.84rem 0 1.05rem;
+}
+
+.landing-study-frame[data-note-tab="quiz"] .lecture-quiz-stage:has(.memo-quiz-result) .memo-progress.quiz {
+  margin-bottom: 0.7rem;
+}
+
+.landing-study-frame[data-note-tab="quiz"] .lecture-quiz-options {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  gap: 0.47rem;
+}
+
+.landing-study-frame[data-note-tab="quiz"] .lecture-quiz-option {
+  flex: 1 0 auto;
+  min-height: 3.4rem;
+  max-height: none;
+  padding-block: 0.7rem;
+  font-size: 1rem;
+}
+
+/* The letter comes back once the verdict names it. */
+.landing-study-frame[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-option-label {
+  display: inline-flex;
+}
+
+.landing-study-frame[data-note-tab="quiz"] .lecture-quiz-prompt {
+  margin-bottom: 0.7rem;
+  font-size: 1.12rem;
+  font-weight: 750;
+  line-height: 1.28;
+}
+
+.landing-study-frame[data-note-tab="quiz"] .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-prompt {
+  margin-bottom: 0.6rem;
+}
+
+.landing-study-frame[data-note-tab="quiz"] .memo-quiz-result {
+  margin-top: auto;
+  gap: 0.6rem 0.75rem;
+  padding-top: 0.7rem;
+}
+
+.landing-study-frame[data-note-tab="quiz"] .memo-quiz-result-actions {
+  flex: 0 0 auto;
+}
+
+.landing-study-frame[data-note-tab="quiz"] .memo-quiz-result-title {
+  font-size: 1.02rem;
+}
+
+.landing-study-frame[data-note-tab="quiz"] .memo-quiz-result-badge {
+  width: 2rem;
+  height: 2rem;
+}
+
+.landing-study-frame[data-note-tab="quiz"] :is(.memo-quiz-result-ghost, .memo-quiz-result-primary) {
+  height: 2.7rem;
+  padding: 0 1rem;
+  font-size: 0.98rem;
+}
+
+/* -- test: the answer box is what gives -- */
+
+.landing-study-frame[data-note-tab="test"] .lecture-practice-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.landing-study-frame[data-note-tab="test"] .lecture-practice-textarea {
+  flex: 1 1 auto;
+  min-height: 5.5rem;
+}
+
+.landing-study-frame .memo-study-empty-orb {
+  width: 7.39rem;
+  height: 7.39rem;
+}
+
+/* -- the results card, at the phone's size -- */
+
+.landing-study-frame .memo-result {
+  padding-top: 0.74rem;
+}
+
+.landing-study-frame .memo-result-orb-wrap {
+  width: 10.02rem;
+  height: 10.02rem;
+}
+
+.landing-study-frame .memo-result-orb {
+  width: 78%;
+  height: 78%;
+}
+
+.landing-study-frame .memo-result-badge {
+  padding: 0.42rem 0.74rem;
+  border-radius: 14px;
+  font-size: 1.37rem;
+}
+
+.landing-study-frame .memo-result-eyebrow {
+  margin-top: 0.84rem;
+}
+
+.landing-study-frame .memo-result-title {
+  margin-top: 0.47rem;
+  font-size: 1.75rem;
+}
+
+.landing-study-frame .memo-result-eyebrow + .memo-result-title {
+  margin-top: 0.47rem;
+}
+
+.landing-study-frame .memo-result-line {
+  margin-top: 0.58rem;
+  font-size: 1.1rem;
+}
+
+.landing-study-frame .memo-result-actions {
+  margin-top: 1.58rem;
+}
+
+.landing-study-frame .memo-result-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/*
+ * A pinned appearance (the hero phone's Appearance setting).
+ *
+ * globals.css still paints the card, the options and the grade buttons from the
+ * page root's scheme (`:root[data-theme]`, `prefers-color-scheme`), not from the
+ * `.memo` scope — so a screen pinned dark on a light OS came out with light cards.
+ * Pinned, these screens take the redesign's own declarations instead, whatever
+ * the OS says. Following the OS they are left alone and match the app exactly.
+ */
+.memo:is(.memo-theme-dark, .memo-theme-light) .landing-study-frame .lecture-flashcard {
+  background: transparent;
+  box-shadow: none;
+}
+
+.memo:is(.memo-theme-dark, .memo-theme-light) .landing-study-frame .lecture-flashcard-face {
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo:is(.memo-theme-dark, .memo-theme-light) .landing-study-frame .lecture-flashcard-face-answer {
+  box-shadow: var(--shadow), inset 0 0 0 1px var(--line);
+}
+
+.memo:is(.memo-theme-dark, .memo-theme-light) .landing-study-frame :is(.lecture-flashcard-content, .lecture-quiz-prompt, .lecture-quiz-option-copy, .lecture-practice-breakdown summary) {
+  color: var(--text);
+}
+
+.memo:is(.memo-theme-dark, .memo-theme-light) .landing-study-frame .lecture-flashcard-review-button {
+  border-color: color-mix(in srgb, currentColor 50%, transparent);
+  background: color-mix(in srgb, currentColor 13%, transparent);
+  box-shadow: none;
+}
+
+.memo:is(.memo-theme-dark, .memo-theme-light) .landing-study-frame .lecture-flashcard-review-button.selected {
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+
+.memo:is(.memo-theme-dark, .memo-theme-light) .landing-study-frame .lecture-quiz-option {
+  border-color: transparent;
+  background: var(--sunken);
+  box-shadow: none;
+  color: var(--text);
+}
+
+/* Light `--sunken` is the page's own grey, so a light option is a card, as the app draws it. */
+.memo.memo-theme-light .landing-study-frame .lecture-quiz-option {
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo:is(.memo-theme-dark, .memo-theme-light) .landing-study-frame .lecture-quiz-option.incorrect {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+.memo:is(.memo-theme-dark, .memo-theme-light) .landing-study-frame .lecture-quiz-option:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
 

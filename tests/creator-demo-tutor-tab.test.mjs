@@ -32,6 +32,8 @@ const read = (relative) =>
 
 const demoApi = read("../src/lib/creator-demo/api.ts");
 const workspace = read("../src/components/lecture-workspace.tsx");
+/* The pill row itself, shared with the landing page's demos of it. */
+const noteTabs = read("../src/lib/note-tabs.ts");
 const tutor = read("../src/components/lecture-tutor.tsx");
 
 /** The body of a `function <name>(` declaration, matched by brace depth. */
@@ -112,7 +114,7 @@ test("the tutor is still offered everywhere else", () => {
 
   // Guards the fix against overshooting into the real app, where the walkthrough
   // is the second pill in the row and must stay there.
-  assert.match(workspace, /id: "tutor",/, "the tutor pill has left NOTE_TABS entirely");
+  assert.match(noteTabs, /id: "tutor",/, "the tutor pill has left NOTE_TABS entirely");
   assert.ok(
     !/tab\.id !== "tutor"(?!\s*\|\| !isCreatorDemo)/.test(tabs),
     "the tutor pill is filtered on something other than the demo flag",

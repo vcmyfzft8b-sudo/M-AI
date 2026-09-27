@@ -30,10 +30,12 @@ async function getOwnedQuestion(params: {
   lectureId: string;
   questionId: string;
   user: User;
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
 }) {
   const lecture = await ensureUserOwnsLecture({
     lectureId: params.lectureId,
     user: params.user,
+    supabase: params.supabase,
   });
 
   if (!lecture) {
@@ -97,6 +99,7 @@ export async function PATCH(
     lectureId: parsedParams.data.id,
     questionId: parsedParams.data.questionId,
     user,
+    supabase,
   });
 
   if (!existing) {
@@ -172,6 +175,7 @@ export async function DELETE(
     lectureId: parsedParams.data.id,
     questionId: parsedParams.data.questionId,
     user,
+    supabase,
   });
 
   if (!existing) {

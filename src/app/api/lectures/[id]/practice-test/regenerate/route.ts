@@ -51,6 +51,7 @@ export async function POST(
   const lecture = await ensureUserOwnsLecture({
     lectureId: parsedParams.data.id,
     user,
+    supabase,
   });
 
   if (!lecture) {

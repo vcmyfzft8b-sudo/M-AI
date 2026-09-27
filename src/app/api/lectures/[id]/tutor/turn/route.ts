@@ -112,7 +112,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   const { id } = parsedParams.data;
   const [lecture, access] = await Promise.all([
-    ensureUserOwnsLecture({ lectureId: id, user }),
+    ensureUserOwnsLecture({ lectureId: id, user, supabase: auth.supabase }),
     canUseLectureFeatures(user.id, id, "chat"),
   ]);
 

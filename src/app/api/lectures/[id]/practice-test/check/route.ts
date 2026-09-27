@@ -79,7 +79,7 @@ export async function POST(
     return parsed.response;
   }
 
-  const lecture = await ensureUserOwnsLecture({ lectureId: id, user });
+  const lecture = await ensureUserOwnsLecture({ lectureId: id, user, supabase });
 
   if (!lecture) {
     return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });

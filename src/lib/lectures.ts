@@ -1280,6 +1280,10 @@ export async function getLectureDetailForUser(params: {
 export async function ensureUserOwnsLecture(params: {
   lectureId: string;
   user: User;
+  // The client that verified `user` (getRouteUser's). API routes skip the proxy's session
+  // refresh, so with an expired cookie a fresh client refreshes a second time, and if that
+  // refresh fails it queries as anon and RLS turns an owned note into a 404.
+  supabase?: Awaited<ReturnType<typeof createSupabaseServerClient>> | null;
 }): Promise<LectureRow | null> {
   if (!uuidSchema.safeParse(params.lectureId).success) {
     return null;
@@ -1292,7 +1296,7 @@ export async function ensureUserOwnsLecture(params: {
     return detail?.lecture ?? null;
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = params.supabase ?? (await createSupabaseServerClient());
   const { data, error } = await supabase
     .from("lectures")
     .select("*")

@@ -34,7 +34,7 @@ import { LISTEN_RETRY_STABLE_MS, listeningRetryMayRun, nextListeningRetryDelay }
 import { PreparedTutorReply, preparedReplyKey } from "@/lib/tutor/prepared-reply";
 import { TutorClipPlayer } from "@/lib/tutor/clip-player";
 import { reportTutorFailure, resetTutorFailureReports } from "@/lib/tutor/report";
-import { SpeechOutputError, TutorSpeechOutput } from "@/lib/tutor/speech-output";
+import { SpeechOutputError, TutorSpeechOutput, hasWebAudio } from "@/lib/tutor/speech-output";
 import { credentialsExpireAt, isFinalSlice, nextSliceDueAt } from "@/lib/tutor/slice";
 import { appendSpokenSoFar } from "@/lib/tutor/spoken-so-far";
 import { voiceHue } from "@/lib/tutor/voice-colors";
@@ -1391,6 +1391,16 @@ export function LectureTutor({
      */
     stopPreview();
     closePicker();
+
+    /*
+     * A browser with no Web Audio can never speak, so it is told so before a microphone
+     * prompt, a reserved slice or a minted key — not "the connection dropped", which
+     * invites a retry that fails the same way every time.
+     */
+    if (!hasWebAudio()) {
+      setError(t("tutor.error.unsupported"));
+      return;
+    }
 
     /* A new session gets a clean slate: last session's failures are not this one's. */
     resetTutorFailureReports();

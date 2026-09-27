@@ -39,6 +39,7 @@ export function sessionHarness({ source } = {}) {
     updates: [], request: async () => response(), input: null, output: null,
     socketOpen: true, open: async () => { state.socketOpen = true; },
     sessionCalls: 0,
+    webAudio: true,
     sessionResponse: null,
     usageReports: [],
     microphoneStops: 0,
@@ -96,7 +97,7 @@ export function sessionHarness({ source } = {}) {
     "@/lib/tutor/listening-retry": { ...listeningRetry, nextListeningRetryDelay: (reason, attempt) => listeningRetry.nextListeningRetryDelay(reason, attempt, () => 0.5) },
     "@/lib/tutor/spoken-so-far": spokenSoFar,
     "@/lib/tutor/speech-input": { TutorSpeechInput: Input, SpeechInputError: class extends Error {}, requestTutorMicrophone: () => state.requestMicrophone() },
-    "@/lib/tutor/speech-output": { TutorSpeechOutput: Output, SpeechOutputError },
+    "@/lib/tutor/speech-output": { TutorSpeechOutput: Output, SpeechOutputError, hasWebAudio: () => state.webAudio },
     "@/lib/tutor/report": { reportTutorFailure: (error) => errors.push(error), resetTutorFailureReports() {} },
     // No credentials expiry, so no renewal alarm: these tests are about turn-taking, and a
     // session that reached for its next slice mid-test would be answering a different question.

@@ -200,6 +200,26 @@ export class SpeechOutputError extends Error {
   }
 }
 
+function audioContextClass() {
+  return (
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext ??
+    null
+  );
+}
+
+/**
+ * Whether this browser can play the tutor's voice at all.
+ *
+ * Not every current browser can: iOS Lockdown Mode switches Web Audio off in Safari and in
+ * every other iOS browser with it (MEMOAI-WEB-4M, Chrome on iOS 26). That is the device's
+ * setting rather than a fault of ours, and no retry changes it, so it is asked before a
+ * session is started instead of being discovered — and reported — halfway into one.
+ */
+export function hasWebAudio() {
+  return audioContextClass() !== null;
+}
+
 export class TutorSpeechOutput {
   private socket: WebSocket | null = null;
   private context: AudioContext | null = null;
@@ -258,9 +278,7 @@ export class TutorSpeechOutput {
    * `resumeAudio` first. Everything slow (the socket handshake) has happened by then.
    */
   async connect() {
-    const AudioContextClass =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const AudioContextClass = audioContextClass();
 
     if (!AudioContextClass) {
       throw new SpeechOutputError("This browser has no Web Audio support.", null);

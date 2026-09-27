@@ -15,6 +15,24 @@ provokes the very error it is fixing — and that event lands in the same Sentry
 `environment: preview` on a release that is the fix branch's head rather than a merge commit. It is
 the fix being proved, not the bug recurring. Check the tag and the release before opening anything.
 
+## 2026-09-27 — A browser with no Web Audio was told the connection dropped
+
+- **Sentry:** `MEMOAI-WEB-4M`, issue `149705154`, two events `2026-09-27T11:52:50Z` and
+  `11:52:54Z`, Chrome Mobile iOS 153 on iOS 26.6.1, release `fa9ff712e86e0bafa26cbd38340b1d7cf0b0a485`;
+  Vercel `uncaught:POST /api/lectures/<id>/tutor/report:[tutor-client] session failed:
+  SpeechOutputError: This browser has no Web Audio support. (… phase connect)` (200, the browser reporting it)
+- **Route:** `/app/lectures/:id` (client-side), tutor start, `tutorStage: session`, `tutorPhase: connect`
+- **Resolution:** [PR #507](https://github.com/vcmyfzft8b-sudo/M-AI/pull/507) (open, branch `fix/auto-tutor-no-web-audio`); no production cutoff yet
+- **Regression test:** the Web Audio test in `tests/tutor-permission-startup.test.mjs`
+
+The device had no `AudioContext` at all — on a current iOS WebKit that is Lockdown Mode, which
+turns Web Audio off in every iOS browser. `TutorSpeechOutput.connect` threw only after the
+microphone prompt, the session reservation and the key mint, and `startSession` reported it to
+Sentry and showed `tutor.error.connection`, so the learner tapped Start again and failed the same way.
+The tutor now asks `hasWebAudio()` first and shows `tutor.error.unsupported` without reporting.
+After the cutoff this message should no longer reach Sentry at all; if it does, the pre-check is
+being bypassed.
+
 ## 2026-09-25 — A Supabase read reset mid-response failed the whole /app render
 
 - **Sentry:** `MEMOAI-WEB-4E` (issue `149223961`, server render) and `MEMOAI-WEB-4D` (issue

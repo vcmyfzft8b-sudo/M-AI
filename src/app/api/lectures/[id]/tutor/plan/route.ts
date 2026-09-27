@@ -50,7 +50,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
 
   const { id } = parsedParams.data;
-  const lecture = await ensureUserOwnsLecture({ lectureId: id, user });
+  const lecture = await ensureUserOwnsLecture({ lectureId: id, user, supabase: auth.supabase });
 
   if (!lecture) {
     return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
+import { getRouteUserOrPreviewBypass } from "@/lib/auth";
 import { canSendTrialChatMessage, createBillingRequiredResponse } from "@/lib/billing";
 import { answerLectureChat } from "@/lib/pipeline";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
@@ -27,11 +27,13 @@ export async function POST(
    * actually open the chat. Without it every preview answered 401 at the first
    * question, which is not something a reviewer should have to discover.
    */
-  const user = await getOptionalUserOrPreviewBypass();
+  const auth = await getRouteUserOrPreviewBypass({ route: "POST /api/lectures/[id]/chat", request });
 
-  if (!user) {
-    return NextResponse.json({ error: await tr("api.unauthorized") }, { status: 401 });
+  if (!auth.user) {
+    return auth.response;
   }
+
+  const { user } = auth;
 
   const limited = await enforceRateLimit({
     request,
@@ -62,6 +64,7 @@ export async function POST(
   const lecture = await ensureUserOwnsLecture({
     lectureId: id,
     user,
+    supabase: auth.supabase,
   });
 
   if (!lecture) {

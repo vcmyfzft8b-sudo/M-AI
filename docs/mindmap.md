@@ -59,6 +59,17 @@ Maps from an older generation version are still shown and cost nothing to open. 
 `outdated` flag offers “draw again” with a coverage-upgrade notice, rather than falsely claiming
 the note changed. A redraw remains an explicit action using the existing entitlement check.
 
+**A queued map is the poll's responsibility.** The screen starts a map only when there is no row
+and polls a queued one for as long as it is open, so a queued map whose runner never comes would
+spin forever. On 2026-09-28 one did: asked for as its note finished, it waited three minutes
+behind that note's study jobs on Inngest's Hobby plan, the run it got never drew, and four older
+maps (the first from 6 September) were stuck the same way. `GET /api/lectures/[id]/mindmap` now
+calls `claimStalledMindmap`: a map queued for 30 s is started directly on the deployment
+(`startLectureMindmapDirectly`, the internal route previews use), and one still `generating` after
+10 minutes, whose invocation was killed, is marked failed so the screen offers another try. Only one
+poll wins the claim, because the update is conditional on the `generated_at` it read. If the late
+Inngest run does arrive, it finds a ready map with the same hash and returns without a call.
+
 An edited note does **not** invalidate the stored map. It is still a map of most of the note, and
 throwing it away on the reader's behalf would replace something they can read with a spinner they
 did not ask for — so it is drawn, labelled "your note has changed", and a redraw is one tap away.

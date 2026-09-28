@@ -1,9 +1,10 @@
 import { after, NextResponse } from "next/server";
 
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
-import { enqueueLectureMindmapGeneration } from "@/lib/jobs";
+import { enqueueLectureMindmapGeneration, startLectureMindmapDirectly } from "@/lib/jobs";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import {
+  claimStalledMindmap,
   describeMindmapError,
   loadLectureMindmap,
   queueLectureMindmapGeneration,
@@ -67,10 +68,24 @@ export async function GET(
 
   const mindmap = await loadLectureMindmap({ lectureId: id });
 
+  /*
+   * The screen polls this while a map is queued or drawing, and nothing else ever looks at a
+   * queued map again, so this is where one whose runner never came gets started (or, if its run
+   * died mid-draw, marked failed so the screen offers another try instead of spinning).
+   */
+  const stalled = await claimStalledMindmap(id, mindmap);
+
+  if (stalled === "restart") {
+    after(async () => {
+      await startLectureMindmapDirectly(id);
+    });
+  }
+
   return NextResponse.json({
     lectureId: id,
     lectureStatus: lecture.status,
     ...mindmap,
+    ...(stalled === "failed" ? { status: "failed" as const, errorMessage: null } : {}),
   });
 }
 

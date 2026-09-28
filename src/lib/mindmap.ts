@@ -282,6 +282,69 @@ async function readMindmapRow(lectureId: string) {
  * they can read with a spinner they did not ask for — so it is drawn, labelled, and a redraw is
  * one tap away.
  */
+/**
+ * How long a queued map waits for its runner before a look at it starts one directly.
+ *
+ * Nothing else ever picks a queued map up again: the screen starts a map only when there is no row,
+ * and polls a queued one for as long as it stays open. Two things leave a row queued with no runner.
+ * Inngest on the Hobby plan runs a few steps at a time, so a map asked for as a note finishes waits
+ * behind that note's study, quiz and practice-test jobs (three minutes on 2026-09-28, and the run it
+ * finally got never drew); and an interrupted run puts its row back to queued on purpose. Five maps
+ * were sitting queued that day, the oldest since 6 September.
+ */
+export const MINDMAP_QUEUE_STALL_MS = 30_000;
+
+/**
+ * A run is one invocation of at most 300 s, and every attempt writes `generating` afresh. A row
+ * still `generating` well past that has no runner left: the invocation was killed before it could
+ * write anything else.
+ */
+export const MINDMAP_RUN_STALL_MS = 10 * 60_000;
+
+/**
+ * Takes over a map whose runner is gone, for exactly one of the polls that notice it.
+ *
+ * Returns "restart" for a queued map that waited too long (the caller starts it directly) and
+ * "failed" for a run that died mid-draw, which is written as failed so the screen offers another try
+ * rather than spinning; restarting that one automatically could spend on a map that dies every time.
+ * The update is conditional on the `generated_at` this poll read, so of the polls that arrive every
+ * 2.5 s only one wins, and a runner that wrote in the meantime is left alone.
+ */
+export async function claimStalledMindmap(
+  lectureId: string,
+  mindmap: Pick<LectureMindmap, "status" | "generatedAt">,
+  now = Date.now(),
+): Promise<"restart" | "failed" | null> {
+  const since = mindmap.generatedAt ? Date.parse(mindmap.generatedAt) : Number.NaN;
+
+  if (!Number.isFinite(since)) {
+    return null;
+  }
+
+  const outcome = mindmap.status === "queued" && now - since >= MINDMAP_QUEUE_STALL_MS
+    ? "restart" as const
+    : mindmap.status === "generating" && now - since >= MINDMAP_RUN_STALL_MS
+      ? "failed" as const
+      : null;
+
+  if (!outcome) {
+    return null;
+  }
+
+  const { data, error } = await createSupabaseServiceRoleClient()
+    .from("lecture_mindmap_assets")
+    .update((outcome === "restart"
+      ? { generated_at: new Date(now).toISOString() }
+      // No message: the screen then shows its own translated "could not draw" copy.
+      : { status: "failed", error_message: null, generated_at: new Date(now).toISOString() }) as never)
+    .eq("lecture_id", lectureId)
+    .eq("status", mindmap.status!)
+    .eq("generated_at", mindmap.generatedAt!)
+    .select("lecture_id");
+
+  return !error && (data?.length ?? 0) > 0 ? outcome : null;
+}
+
 export async function loadLectureMindmap(params: {
   lectureId: string;
 }): Promise<LectureMindmap> {

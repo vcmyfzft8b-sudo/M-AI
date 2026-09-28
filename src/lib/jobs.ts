@@ -369,6 +369,14 @@ export async function enqueueLectureMindmapGeneration(lectureId: string, regener
     return;
   }
 
+  await startLectureMindmapDirectly(lectureId, regenerate);
+}
+
+/**
+ * Starts a map on this deployment, skipping Inngest: the path previews always take, and the one
+ * production takes for a queued map whose Inngest run never came (see `claimStalledMindmap`).
+ */
+export async function startLectureMindmapDirectly(lectureId: string, regenerate = false) {
   if (
     await tryEnqueueInternalLectureJob({
       lectureId,

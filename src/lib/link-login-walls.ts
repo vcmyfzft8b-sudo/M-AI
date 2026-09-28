@@ -63,10 +63,19 @@ const IDENTITY_PROVIDER_HOSTS = [
   "sts.windows.net",
 ];
 
+// Apps whose content is never readable without a sign-in, however the link is shaped. A
+// Teams message or channel link answers a cookieless fetch with a 200 "Join conversation"
+// launcher page that holds no text, so without this the learner is told the page is thin.
+const SIGN_IN_ONLY_APP_HOSTS = [
+  "teams.cloud.microsoft",
+  "teams.live.com",
+  "teams.microsoft.com",
+];
+
 function isIdentityProviderHost(hostname: string) {
   const normalized = hostname.trim().toLowerCase().replace(/\.$/, "");
 
-  return IDENTITY_PROVIDER_HOSTS.some(
+  return [...IDENTITY_PROVIDER_HOSTS, ...SIGN_IN_ONLY_APP_HOSTS].some(
     (host) => normalized === host || normalized.endsWith(`.${host}`),
   );
 }

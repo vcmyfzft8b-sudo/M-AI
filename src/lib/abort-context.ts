@@ -63,6 +63,25 @@ export function throwIfCurrentWorkAborted() {
   }
 }
 
+/**
+ * True when a model call was aborted by its own attempt timeout rather than by the invocation
+ * budget. `@google/genai` relays whichever signal fires by calling `abort()` on a controller of its
+ * own, without a reason, so the attempt's `AbortSignal.timeout` reaches the caller as a bare
+ * `AbortError: This operation was aborted` — indistinguishable by shape from the budget ending.
+ * Only the budget's own signal can tell them apart: if it has not fired, the budget did not end.
+ *
+ * Read as the budget, one slow OCR attempt on 2026-09-28 (Sentry MEMOAI-WEB-4R) skipped its retry
+ * with most of the budget unspent, and the scan was failed as an overrun 100 seconds into a
+ * 280-second budget.
+ */
+export function isAttemptTimeoutAbort(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.name === "AbortError" &&
+    !isCurrentWorkAborted()
+  );
+}
+
 export function isWorkAbortedError(error: unknown) {
   return (
     error instanceof WorkAbortedError ||

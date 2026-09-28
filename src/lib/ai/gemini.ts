@@ -12,6 +12,7 @@ import { z } from "zod";
 import {
   WorkAbortedError,
   getCurrentAbortSignal,
+  isAttemptTimeoutAbort,
   getRemainingBudgetMs,
   isWorkAbortedError,
 } from "@/lib/abort-context";
@@ -131,6 +132,17 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
   // without a handler that late rejection would surface as an unhandled one.
   promise.catch(() => undefined);
 
+  // The attempt's own timeout comes back from the SDK as an AbortError, which every caller would
+  // otherwise read as the budget ending and stop retrying. Say what it was: a timed-out attempt,
+  // which `isRetryableAiError` retries while the budget lasts.
+  const attempt = promise.catch((error: unknown) => {
+    if (isAttemptTimeoutAbort(error)) {
+      throw new Error(`${label} attempt timed out.`);
+    }
+
+    throw error;
+  });
+
   const timeoutPromise = new Promise<T>((_, reject) => {
     timeoutId = setTimeout(() => {
       reject(new Error(`${label} timed out after ${timeoutMs}ms.`));
@@ -138,7 +150,7 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
   });
 
   try {
-    return await Promise.race([promise, timeoutPromise]);
+    return await Promise.race([attempt, timeoutPromise]);
   } finally {
     if (timeoutId) {
       clearTimeout(timeoutId);

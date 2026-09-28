@@ -51,6 +51,23 @@ test("catches the identity providers a campus link hands off to", () => {
   assert.equal(isLoginWallUrl("https://wayf.aai.arnes.si/WAYF/index.php"), true);
 });
 
+test("a Microsoft Teams link is always behind a sign-in", () => {
+  // Teams answers a cookieless fetch with a 200 launcher page that holds no text.
+  assert.equal(
+    isLoginWallUrl(
+      "https://teams.microsoft.com/l/message/19:abc@thread.tacv2/1700000000000?tenantId=00000000-0000-0000-0000-000000000000",
+    ),
+    true,
+  );
+  assert.equal(
+    isLoginWallUrl("https://teams.microsoft.com/dl/launcher/launcher.html?type=message"),
+    true,
+  );
+  assert.equal(isLoginWallUrl("https://teams.live.com/l/message/19:abc/1"), true);
+  assert.equal(isLoginWallUrl("https://teams.cloud.microsoft/l/channel/19:abc/General"), true);
+  assert.equal(isLoginWallUrl("https://learn.microsoft.com/en-us/microsoftteams/"), false);
+});
+
 test("matches an identity provider only as the host or its parent domain", () => {
   // A lookalike host must not inherit the provider's meaning.
   assert.equal(isLoginWallUrl("https://notaccounts.google.com.evil.test/x"), false);

@@ -200,6 +200,16 @@ export async function saveAppleTransaction(signedTransaction: string, userId?: s
   const row = { ...entitlement, signed_transaction_jws: signedTransaction, raw_payload: JSON.parse(JSON.stringify(verified)) };
   const table = () => service.from("mobile_app_store_entitlements");
   if (claimed) {
+    /*
+     * Apple keeps one subscription under one original transaction across plan changes, so a
+     * resubscribe by another account (a new Monthly after a deleted account's Yearly) shares it.
+     * Only a subscription nobody existing holds any part of is free to take; rows of deleted
+     * accounts cascade away, so any row still here belongs to someone.
+     */
+    const holder = await table().select("user_id").eq("original_transaction_id", row.original_transaction_id)
+      .neq("user_id", userId!.toLowerCase()).limit(1).maybeSingle();
+    if (holder.error) throw new Error("Apple entitlement lookup failed", { cause: holder.error });
+    if (holder.data) throw new AppleAccountMismatch();
     row.user_id = userId!.toLowerCase();
   } else if (!userId && !await memoAccountExists(service, row.user_id)) {
     /*

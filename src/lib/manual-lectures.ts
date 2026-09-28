@@ -11,7 +11,7 @@ import { applyAiHighlightsToNote } from "@/lib/notes/ai-highlights";
 import JSZip from "jszip";
 import mammoth from "mammoth";
 
-import { toUserFacingAiErrorMessage } from "@/lib/ai/errors";
+import { isRetryableAiError, toUserFacingAiErrorMessage } from "@/lib/ai/errors";
 import {
   GeminiEmptyTextOutputError,
   generateTextWithGeminiFile,
@@ -479,6 +479,11 @@ const MAX_PPTX_VISION_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_PPTX_VISION_TOTAL_BYTES = 64 * 1024 * 1024;
 /** Cost ceiling: one cheap vision call per image, never more than this many per deck. */
 const MAX_PPTX_VISION_IMAGES = 24;
+/**
+ * A second attempt only when the first fails. Google's 503 "high demand" answers are transient
+ * and unbilled, and a single one used to drop that image's text from the note (MEMOAI-WEB-4Q).
+ */
+const PPTX_VISION_MAX_ATTEMPTS = 2;
 const PPTX_VISION_IMAGE_MAX_OUTPUT_TOKENS = 2000;
 const PPTX_VISION_CONCURRENCY = 3;
 const PPTX_VISION_NO_CONTENT_MARKER = "NO_STUDY_CONTENT";
@@ -586,7 +591,7 @@ async function extractVisualTextFromPptxSlideImages(
             }),
             model: env.GEMINI_OCR_MODEL,
             maxOutputTokens: PPTX_VISION_IMAGE_MAX_OUTPUT_TOKENS,
-            maxAttempts: 1,
+            maxAttempts: PPTX_VISION_MAX_ATTEMPTS,
             thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_MODEL),
             mediaResolution: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM,
             // Up to 24 vision calls per deck; without a stage they land as anonymous
@@ -602,6 +607,17 @@ async function extractVisualTextFromPptxSlideImages(
         } catch (error) {
           // One unreadable image must not sink the deck; the merge simply sees less.
           results[index] = null;
+
+          // The provider was still busy after the retry. Every failed attempt is already a row in
+          // ai_usage_events, and the deck continues without this image, so a handled capacity
+          // outage is not a code defect and does not open one in Sentry. Anything else does.
+          if (isRetryableAiError(error)) {
+            console.warn("PPTX slide image provider was temporarily unavailable; skipping the image.", {
+              mediaPath: candidate.mediaPath,
+            });
+            continue;
+          }
+
           captureBackgroundError(error, {
             operation: "pptx_slide_image_extraction",
             extra: { mediaPath: candidate.mediaPath, byteLength: candidate.bytes.byteLength },

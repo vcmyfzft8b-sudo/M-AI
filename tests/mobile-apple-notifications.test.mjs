@@ -32,7 +32,7 @@ function run(source, modules) {
  * recorder whose verdict each test dictates, so what is under test is our own decision about
  * which verifier to try and what a failure means.
  */
-function loadApple({ vercelEnv = "production", verdicts }) {
+function loadApple({ vercelEnv = "production", verdicts, db }) {
   const constructed = [];
   class SignedDataVerifier {
     constructor(_roots, _online, environment, bundleId, appAppleId) {
@@ -63,13 +63,54 @@ function loadApple({ vercelEnv = "production", verdicts }) {
     "@apple/app-store-server-library": {
       AppStoreServerAPIClient: class {}, Environment, SignedDataVerifier, VerificationException, VerificationStatus,
     },
-    "@/lib/supabase/server": { createSupabaseServiceRoleClient: () => { throw new Error("no database in this test"); } },
-    "@/lib/mobile/transaction": { entitlementFromVerifiedTransaction: () => ({ plan: "monthly" }) },
-    "@/lib/mobile/code-attribution": { attributeAppleCodePurchase: async () => {} },
+    "@/lib/supabase/server": { createSupabaseServiceRoleClient: () => { if (!db) throw new Error("no database in this test"); return db.client; } },
+    "@/lib/mobile/transaction": { entitlementFromVerifiedTransaction: (tx, expected) => {
+      if (expected.userId && tx.appAccountToken !== expected.userId) throw new Error("Invalid Apple entitlement");
+      return { plan: "monthly", user_id: tx.appAccountToken, product_id: tx.productId, transaction_id: "2",
+        original_transaction_id: tx.originalTransactionId, environment: "sandbox", purchased_at: "2026-09-28T00:00:00.000Z" };
+    } },
+    "@/lib/mobile/code-attribution": { attributeAppleCodePurchase: async (_tx, row) => { db?.attributed.push(row.user_id); } },
     "@/lib/mobile/runtime": { isAppleConsumable: (value) => value === "eu.memoai.tutor.hour" },
     "@/lib/mobile/apple-roots.json": { default: ["cm9vdA=="] },
   });
   return { ...exports, constructed };
+}
+
+/**
+ * A database with the accounts that exist and the entitlement rows there are: enough for
+ * saveAppleTransaction's ownership decisions, which are what these tests are about.
+ */
+function fakeDatabase({ users = [], rows = [] } = {}) {
+  const db = { rows, attributed: [], client: null };
+  db.client = {
+    auth: { admin: { getUserById: async (id) => users.includes(id)
+      ? { data: { user: { id } }, error: null }
+      : { data: { user: null }, error: { status: 404, code: "user_not_found" } } } },
+    from(table) {
+      let op = "select";
+      const filters = {};
+      const query = {
+        select() { return query; }, is() { return query; }, or() { return query; }, limit() { return query; },
+        single() { return query; }, maybeSingle() { return query; },
+        eq(column, value) { filters[column] = value; return query; },
+        update() { op = "update"; return query; },
+        upsert(value) {
+          op = "upsert";
+          if (table === "mobile_app_store_entitlements" && !rows.some((row) =>
+            row.original_transaction_id === value.original_transaction_id && row.product_id === value.product_id)) rows.push({ ...value });
+          return query;
+        },
+        then(resolve, reject) {
+          const data = op === "select" && table === "mobile_app_store_entitlements"
+            ? rows.find((row) => Object.entries(filters).every(([key, value]) => row[key] === value)) ?? null
+            : null;
+          return Promise.resolve({ data, error: null }).then(resolve, reject);
+        },
+      };
+      return query;
+    },
+  };
+  return db;
 }
 
 const TEST_NOTIFICATION = { notificationType: "TEST", data: { bundleId: "eu.memoai.memo", environment: "Sandbox" } };
@@ -235,8 +276,44 @@ test("a sandbox purchase made for another Memo account is reported as such, not 
   const other = "11111111-2222-4333-8444-555555555555";
   const apple = loadApple({
     verdicts: { [Environment.PRODUCTION]: wrongEnvironment(), [Environment.SANDBOX]: { appAccountToken: other, productId: "eu.memoai.premium.yearly" } },
+    db: fakeDatabase({ users: [buyer, other] }),
   });
   await assert.rejects(apple.saveAppleTransaction("ey.sandbox", buyer, true), (error) => error.name === "AppleAccountMismatch");
+});
+
+// 28 September: Restore on a TestFlight Apple ID answered "belongs to a different Memo account" for
+// eight subscription transactions bought for two test accounts deleted since. Nothing ever finished
+// them, so every restore and every launch repeated it. A purchase whose account is gone now moves
+// to the account restoring it.
+const deleted = "06ffecc9-0268-4ad1-aa4c-d0284bc3169b";
+const restorer = "3f6c2a1e-8b4d-4c7e-9a2f-1d5e6b7c8a90";
+const leftBehind = { appAccountToken: deleted, productId: "eu.memoai.premium.trial.yearly", originalTransactionId: "2000001240464328" };
+
+test("a purchase whose Memo account was deleted moves to the account restoring it", async () => {
+  const db = fakeDatabase({ users: [restorer] });
+  const apple = loadApple({ verdicts: { [Environment.PRODUCTION]: wrongEnvironment(), [Environment.SANDBOX]: leftBehind }, db });
+  const saved = await apple.saveAppleTransaction("ey.sandbox", restorer);
+  assert.equal(saved.user_id, restorer);
+  assert.deepEqual(db.rows.map((row) => row.user_id), [restorer]);
+  assert.deepEqual(db.attributed, [], "no creator credit for a purchase the restorer did not make");
+});
+
+test("once taken over, it is not taken again by a third account", async () => {
+  const third = "99999999-8888-4777-8666-555555555555";
+  const db = fakeDatabase({ users: [restorer, third], rows: [{ ...leftBehind, user_id: restorer,
+    original_transaction_id: leftBehind.originalTransactionId, product_id: leftBehind.productId, environment: "sandbox" }] });
+  const apple = loadApple({ verdicts: { [Environment.PRODUCTION]: wrongEnvironment(), [Environment.SANDBOX]: leftBehind }, db });
+  await assert.rejects(apple.saveAppleTransaction("ey.sandbox", third), (error) => error.name === "AppleAccountMismatch");
+});
+
+test("a renewal of a taken-over purchase follows its new owner; with no owner it is acknowledged", async () => {
+  const owned = fakeDatabase({ users: [restorer], rows: [{ user_id: restorer, original_transaction_id: leftBehind.originalTransactionId,
+    product_id: leftBehind.productId, environment: "sandbox" }] });
+  const renewal = loadApple({ verdicts: { [Environment.PRODUCTION]: wrongEnvironment(), [Environment.SANDBOX]: leftBehind }, db: owned });
+  assert.equal((await renewal.saveAppleTransaction("ey.sandbox")).user_id, restorer);
+
+  const orphan = loadApple({ verdicts: { [Environment.PRODUCTION]: wrongEnvironment(), [Environment.SANDBOX]: leftBehind }, db: fakeDatabase() });
+  assert.equal(await orphan.saveAppleTransaction("ey.sandbox"), null);
 });
 
 // 27 September: TestFlight purchases from any account but three allowlisted ones answered 503,

@@ -64,7 +64,7 @@ export class AppleNotificationRejected extends Error {
   constructor(message: string, options?: { cause?: unknown }) { super(message, options); this.name = "AppleNotificationRejected"; }
 }
 
-async function verifyTransaction(jws: string, userId?: string) {
+async function verifyTransaction(jws: string) {
   let environment = appleEnvironment();
   let verified: JWSTransactionDecodedPayload;
   try { verified = await appleVerifier(environment).verifyAndDecodeTransaction(jws); }
@@ -75,11 +75,6 @@ async function verifyTransaction(jws: string, userId?: string) {
         || error.status !== VerificationStatus.INVALID_ENVIRONMENT) throw error;
     environment = Environment.SANDBOX;
     verified = await appleVerifier(environment).verifyAndDecodeTransaction(jws);
-    // A TestFlight Apple ID can still hold a purchase made for another Memo
-    // account; say that, rather than granting it to whoever sent it.
-    if (userId && verified.appAccountToken && verified.appAccountToken.toLowerCase() !== userId.toLowerCase()) {
-      throw new AppleAccountMismatch();
-    }
     // Our app always names the buyer; a sandbox purchase that names nobody was not made in it.
     if (!verified.appAccountToken) throw new AppleNotificationRejected("Sandbox purchase names no Memo account");
   }
@@ -133,7 +128,7 @@ export function appleNotificationRetryable(error: unknown) {
  * the purchase belongs to another Memo account.
  */
 export async function verifyAppleConsumable(signedTransaction: string, userId: string) {
-  const checked = await verifyTransaction(signedTransaction, userId);
+  const checked = await verifyTransaction(signedTransaction);
   let verified = checked.verified;
   const bundleId = process.env.APPLE_BUNDLE_ID || "eu.memoai.memo";
   if (verified.bundleId !== bundleId || verified.environment !== checked.environment
@@ -157,19 +152,42 @@ export async function verifyAppleConsumable(signedTransaction: string, userId: s
   };
 }
 
+/**
+ * Whether the Memo account a purchase names still exists. Apple writes the buyer's account id into
+ * every transaction of a subscription (appAccountToken) for good, so a purchase outlives the Memo
+ * account it was made for when that account is deleted and the Apple subscription is not.
+ */
+async function memoAccountExists(service: ReturnType<typeof createSupabaseServiceRoleClient>, id: string) {
+  const account = await service.auth.admin.getUserById(id);
+  if (account.error?.status === 404 || account.error?.code === "user_not_found") return false;
+  if (account.error || !account.data.user) throw new Error("Apple account lookup failed");
+  return true;
+}
+
 export async function saveAppleTransaction(signedTransaction: string, userId?: string, refresh = false) {
-  const checked = await verifyTransaction(signedTransaction, userId);
+  const checked = await verifyTransaction(signedTransaction);
   let verified = checked.verified;
   // Tutor hours are consumables: credited once by /api/mobile/tutor-credits,
   // never an entitlement. A server notification about one (a refund, Apple's
   // consumption request) is acknowledged rather than retried for three days.
   if (isAppleConsumable(verified.productId)) return null;
   const verifier = appleVerifier(checked.environment);
-  const expected = { bundleId: process.env.APPLE_BUNDLE_ID || "eu.memoai.memo", environment: checked.environment, userId };
-  if (userId && verified.appAccountToken && verified.appAccountToken.toLowerCase() !== userId.toLowerCase()) {
-    throw new AppleAccountMismatch();
+  const service = createSupabaseServiceRoleClient();
+  /*
+   * A purchase made for another Memo account is refused, unless that account no longer exists: then
+   * the Apple subscription it left behind is taken over by the account restoring it. Otherwise every
+   * restore, and every launch, on an Apple ID that once bought for a deleted account answers "this
+   * belongs to a different Memo account" for good, because nothing ever finishes those transactions
+   * (28 Sep 2026: eight of them from two deleted test accounts on one TestFlight Apple ID).
+   */
+  const buyer = verified.appAccountToken?.toLowerCase();
+  let claimed = false;
+  if (userId && buyer && buyer !== userId.toLowerCase()) {
+    if (await memoAccountExists(service, buyer)) throw new AppleAccountMismatch();
+    claimed = true;
   }
-  // Validate ownership before contacting Apple or touching the database.
+  const expected = { bundleId: process.env.APPLE_BUNDLE_ID || "eu.memoai.memo", environment: checked.environment, userId: claimed ? undefined : userId };
+  // Validate the payload before contacting Apple or touching the database.
   entitlementFromVerifiedTransaction(verified, expected);
   if (refresh) {
     // A replayed, previously valid receipt must not re-enable a refunded purchase.
@@ -180,13 +198,19 @@ export async function saveAppleTransaction(signedTransaction: string, userId?: s
   }
   const { plan, ...entitlement } = entitlementFromVerifiedTransaction(verified, expected);
   const row = { ...entitlement, signed_transaction_jws: signedTransaction, raw_payload: JSON.parse(JSON.stringify(verified)) };
-  const service = createSupabaseServiceRoleClient();
-  if (!userId) {
-    const account = await service.auth.admin.getUserById(row.user_id);
-    if (account.error?.status === 404 || account.error?.code === "user_not_found") return null;
-    if (account.error || !account.data.user) throw new Error("Apple account lookup failed");
-  }
   const table = () => service.from("mobile_app_store_entitlements");
+  if (claimed) {
+    row.user_id = userId!.toLowerCase();
+  } else if (!userId && !await memoAccountExists(service, row.user_id)) {
+    /*
+     * A notification (a renewal, a refund) about a purchase whose buyer's account is gone follows
+     * whoever took the subscription over; with nobody, there is nothing to update.
+     */
+    const taken = await table().select("user_id").eq("original_transaction_id", row.original_transaction_id).limit(1).maybeSingle();
+    if (taken.error) throw new Error("Apple entitlement lookup failed", { cause: taken.error });
+    if (!taken.data) return null;
+    row.user_id = (taken.data as { user_id: string }).user_id;
+  }
   const { error: insertError } = await table().upsert(row as never, {
     onConflict: "original_transaction_id,product_id", ignoreDuplicates: true,
   });
@@ -205,10 +229,13 @@ export async function saveAppleTransaction(signedTransaction: string, userId?: s
   const history = await service.from("profiles").update({ subscription_trial_started_at: row.purchased_at } as never)
     .eq("id", row.user_id).is("subscription_trial_started_at", null);
   if (history.error) throw new Error("Apple subscription history update failed", { cause: history.error });
-  // Creator credit is bookkeeping: it must never withhold the entitlement.
-  await attributeAppleCodePurchase(verified, row).catch(() => {
-    console.error("Apple code attribution unavailable", { stage: "attach_purchase" });
-  });
+  // Creator credit is bookkeeping: it must never withhold the entitlement. A purchase taken over
+  // from a deleted account was not bought with the restoring account's code, so it earns none.
+  if (!claimed) {
+    await attributeAppleCodePurchase(verified, row).catch(() => {
+      console.error("Apple code attribution unavailable", { stage: "attach_purchase" });
+    });
+  }
   return { ...row, plan };
 }
 

@@ -275,14 +275,6 @@ async function readMindmapRow(lectureId: string) {
 }
 
 /**
- * The map to put on screen, whatever state it is in.
- *
- * `stale` is surfaced rather than acted on. A map of a note the learner has since edited is
- * still a useful map of most of it, and throwing it away on their behalf would replace something
- * they can read with a spinner they did not ask for — so it is drawn, labelled, and a redraw is
- * one tap away.
- */
-/**
  * How long a queued map waits for its runner before a look at it starts one directly.
  *
  * Nothing else ever picks a queued map up again: the screen starts a map only when there is no row,
@@ -345,6 +337,14 @@ export async function claimStalledMindmap(
   return !error && (data?.length ?? 0) > 0 ? outcome : null;
 }
 
+/**
+ * The map to put on screen, whatever state it is in.
+ *
+ * `stale` is surfaced rather than acted on. A map of a note the learner has since edited is
+ * still a useful map of most of it, and throwing it away on their behalf would replace something
+ * they can read with a spinner they did not ask for — so it is drawn, labelled, and a redraw is
+ * one tap away.
+ */
 export async function loadLectureMindmap(params: {
   lectureId: string;
 }): Promise<LectureMindmap> {

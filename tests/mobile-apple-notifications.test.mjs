@@ -93,6 +93,7 @@ function fakeDatabase({ users = [], rows = [] } = {}) {
         select() { return query; }, is() { return query; }, or() { return query; }, limit() { return query; },
         single() { return query; }, maybeSingle() { return query; },
         eq(column, value) { filters[column] = value; return query; },
+        neq(column, value) { filters[column] = { not: value }; return query; },
         update() { op = "update"; return query; },
         upsert(value) {
           op = "upsert";
@@ -102,7 +103,8 @@ function fakeDatabase({ users = [], rows = [] } = {}) {
         },
         then(resolve, reject) {
           const data = op === "select" && table === "mobile_app_store_entitlements"
-            ? rows.find((row) => Object.entries(filters).every(([key, value]) => row[key] === value)) ?? null
+            ? rows.find((row) => Object.entries(filters).every(([key, value]) =>
+              value && typeof value === "object" ? row[key] !== value.not : row[key] === value)) ?? null
             : null;
           return Promise.resolve({ data, error: null }).then(resolve, reject);
         },
@@ -351,4 +353,16 @@ test("a sandbox purchase that names no Memo account grants nothing", async () =>
     verdicts: { [Environment.PRODUCTION]: wrongEnvironment(), [Environment.SANDBOX]: { productId: "eu.memoai.premium.monthly" } },
   });
   await assert.rejects(apple.saveAppleTransaction("ey.sandbox"), error => error.name === "AppleNotificationRejected");
+});
+
+// Seen on production the same day: the recording account's new Monthly shared its original
+// transaction with the deleted account's Yearly. Taking the Yearly would split one Apple
+// subscription between two Memo accounts, so it stays refused while that account exists.
+test("a subscription an existing account already holds part of is not taken over", async () => {
+  const recording = "9f3d519c-ee62-4db5-b91f-b2cc1f43f071";
+  const db = fakeDatabase({ users: [restorer, recording], rows: [{ user_id: recording, product_id: "eu.memoai.premium.trial.monthly",
+    original_transaction_id: leftBehind.originalTransactionId, environment: "sandbox" }] });
+  const apple = loadApple({ verdicts: { [Environment.PRODUCTION]: wrongEnvironment(), [Environment.SANDBOX]: leftBehind }, db });
+  await assert.rejects(apple.saveAppleTransaction("ey.sandbox", restorer), (error) => error.name === "AppleAccountMismatch");
+  assert.equal(db.rows.length, 1, "nothing written");
 });

@@ -63,5 +63,6 @@ test("the chat column is only read on note routes", () => {
 test("a tap back to the current page while another is loading drops that navigation", () => {
   const nav = read("../src/components/navigation-loading.tsx");
   const same = nav.slice(nav.indexOf("if (disabled || targetPathname === currentPathname) {"));
-  assert.match(same, /^[^]*?if \(pending\) \{\s*cancelPaintWaitRef\.current\?\.\(\);\s*setPending\(null\);\s*\}\s*router\.push\(href\);\s*return;/);
+  // A `refresh` navigation may queue its refresh behind the push before returning.
+  assert.match(same, /^[^]*?if \(pending\) \{\s*cancelPaintWaitRef\.current\?\.\(\);\s*setPending\(null\);\s*\}\s*router\.push\(href\);\s*(?:(?:\/\/[^\n]*\s*)*if \(options\?\.refresh\) \{[^}]*\}\s*)?return;/);
 });

@@ -118,7 +118,7 @@ export function createPalaceGame({
   const city = buildCity(layout);
   const avatar = createAvatar();
 
-  scene.add(city.group, avatar.root);
+  scene.add(city.group, avatar.root, avatar.effects);
   lighting.follow(layout.spawn.x, layout.spawn.z);
 
   /*
@@ -161,6 +161,8 @@ export function createPalaceGame({
   };
 
   const collected = new Set(collectedIds);
+  /* Stops answered wrongly since they opened: a relocation is a miss. */
+  const missedStationIds = new Set<string>();
   const collectionPulses = new Map<string, number>();
 
   /*
@@ -498,6 +500,7 @@ export function createPalaceGame({
     relocateStation: (station) => {
       const visual = findVisual(station.id);
       if (!visual || visual.collected) return;
+      missedStationIds.add(station.id);
       visual.station = station;
       visual.token.position.set(station.x, 1.65, station.z);
       visual.ring.position.set(station.x, 0.11, station.z);
@@ -509,6 +512,12 @@ export function createPalaceGame({
       if (nearStationId && collected.has(nearStationId) && !reducedMotion) {
         collectionPulses.set(nearStationId, performance.now());
       }
+      /* The walker acts out how it went, as the card goes: a cheer or a shrug. */
+      if (nearStationId && !reducedMotion) {
+        if (collected.has(nearStationId)) avatar.react("cheer");
+        else if (missedStationIds.has(nearStationId)) avatar.react("miss");
+      }
+      if (nearStationId) missedStationIds.delete(nearStationId);
       suppressedStationId = nearStationId ?? suppressedStationId;
       nearStationId = null;
       interacting = false;

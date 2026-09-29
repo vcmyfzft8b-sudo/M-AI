@@ -19054,6 +19054,8 @@
 
 .memo-palace-finish .memo-result {
   width: min(28rem, 100%);
+  /* The stage is white type for its HUD; the card is the app's own surface. */
+  color: var(--text);
   background: var(--bg);
   border-radius: 26px;
   padding: 1.6rem 1.4rem 1.4rem;

@@ -20,12 +20,41 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
  * everything below it is local, facing +Z.
  */
 
+export type AvatarReaction = "cheer" | "miss";
+
 export type Avatar = {
   root: THREE.Group;
+  /**
+   * World-space effects (the dust kicked up by a sprint). Added to the scene
+   * beside `root`, not under it, so a puff stays where it was kicked up.
+   */
+  effects: THREE.Group;
   /** Advance the walk cycle. `speed` is metres per second on the ground. */
   update: (speed: number, airborne: boolean, delta: number) => void;
+  /** A beat of acting after a stop: a jump and a twirl, or a shrug. */
+  react: (reaction: AvatarReaction) => void;
   dispose: () => void;
 };
+
+/*
+ * A thin warm rim round the silhouette, brightest where the surface turns away
+ * from the camera. It is what lifts the figure off a busy street behind it —
+ * the trick every third-person game uses on its hero — and costs one line of
+ * shader per material.
+ */
+function withRim<Material extends THREE.MeshStandardMaterial>(material: Material, strength = 0.4) {
+  material.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <emissivemap_fragment>",
+      `#include <emissivemap_fragment>
+      float avatarRim = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+      totalEmissiveRadiance += vec3(1.0, 0.93, 0.8) * pow(avatarRim, 3.0) * ${strength.toFixed(2)};`,
+    );
+  };
+  material.customProgramCacheKey = () => `avatar-rim-${strength.toFixed(2)}`;
+
+  return material;
+}
 
 /* Walk and sprint speeds from `movement.ts`, for blending the gaits. */
 const WALK_SPEED = 7.37;
@@ -53,7 +82,7 @@ export function createAvatar(): Avatar {
     return item;
   };
   const material = (color: THREE.ColorRepresentation, roughness = 0.72) =>
-    track(new THREE.MeshStandardMaterial({ color, roughness }));
+    track(withRim(new THREE.MeshStandardMaterial({ color, roughness })));
 
   const skin = material(SKIN, 0.6);
   const hair = material(HAIR, 0.85);
@@ -65,11 +94,11 @@ export function createAvatar(): Avatar {
   const backpackShade = material(BACKPACK_SHADE, 0.6);
   const shoe = material(SHOE, 0.5);
   const sole = material(SOLE, 0.8);
-  const eyeMaterial = material(EYE, 0.15);
   const white = track(new THREE.MeshBasicMaterial({ color: 0xffffff }));
   const cheek = track(
     new THREE.MeshStandardMaterial({ color: CHEEK, roughness: 0.9, transparent: true, opacity: 0.75 }),
   );
+  const eyeMaterial = track(new THREE.MeshStandardMaterial({ color: EYE, roughness: 0.15 }));
 
   const sphereGeometry = track(new THREE.SphereGeometry(1, 28, 20));
   const lowSphere = track(new THREE.SphereGeometry(1, 12, 10));
@@ -138,8 +167,11 @@ export function createAvatar(): Avatar {
   /* ---- head ---- */
   const head = new THREE.Group();
   const HEAD_RADIUS = 0.27;
+  const HEAD_Y = 0.845;
 
-  head.position.y = 0.82;
+  /* A touch larger than life: a bigger head is most of what reads as friendly. */
+  head.position.y = HEAD_Y;
+  head.scale.setScalar(1.1);
   spine.add(head);
   mesh(capsule(0.07, 0.06), skin, spine, [0, 0.63, 0]);
   mesh(sphereGeometry, skin, head, [0, 0, 0], [HEAD_RADIUS, HEAD_RADIUS * 0.95, HEAD_RADIUS * 0.96]);
@@ -197,6 +229,31 @@ export function createAvatar(): Avatar {
   );
 
   mesh(track(smile), eyeMaterial, head, [0, 0, 0]);
+
+  /* Brows, which do most of the acting: up for a cheer, knitted for a miss. */
+  const browGeometry = capsule(0.011, 0.05);
+  const brows = [-1, 1].map((side) => {
+    const { point, rotation } = onFace(side * 0.097, 0.07, 0.004);
+    const socket = new THREE.Group();
+    const brow = mesh(browGeometry, hair, socket, [0, 0, 0]);
+
+    socket.position.copy(point);
+    socket.quaternion.copy(rotation);
+    head.add(socket);
+
+    return { socket, brow, side, rest: point.clone() };
+  });
+
+  /* Tufts escaping the cap at the back and over the ears. */
+  for (const [x, y, z, size] of [
+    [0, -0.02, -0.255, 0.07],
+    [-0.08, -0.04, -0.235, 0.055],
+    [0.08, -0.04, -0.235, 0.055],
+    [-0.24, 0.04, -0.07, 0.05],
+    [0.24, 0.04, -0.07, 0.05],
+  ] as const) {
+    mesh(lowSphere, hair, head, [x, y, z], [size, size * 0.8, size]);
+  }
 
   /* The cap: a dome, a brim that shades the eyes, a button on top. */
   const capGroup = new THREE.Group();
@@ -290,6 +347,57 @@ export function createAvatar(): Avatar {
     if (part instanceof THREE.Mesh && part !== shadow) part.castShadow = true;
   });
 
+  /*
+   * Dust from a sprint: a small pool of soft puffs, one kicked up at each
+   * footfall and left behind in the world to swell and fade.
+   */
+  const effects = new THREE.Group();
+  const puffCanvas = document.createElement("canvas");
+
+  puffCanvas.width = puffCanvas.height = 64;
+  const puffContext = puffCanvas.getContext("2d");
+
+  if (puffContext) {
+    const gradient = puffContext.createRadialGradient(32, 32, 0, 32, 32, 32);
+
+    gradient.addColorStop(0, "rgba(255, 250, 240, 0.9)");
+    gradient.addColorStop(0.5, "rgba(240, 232, 218, 0.45)");
+    gradient.addColorStop(1, "rgba(240, 232, 218, 0)");
+    puffContext.fillStyle = gradient;
+    puffContext.fillRect(0, 0, 64, 64);
+  }
+
+  const puffTexture = track(new THREE.CanvasTexture(puffCanvas));
+  const puffs = Array.from({ length: 14 }, () => {
+    const puffMaterial = track(
+      new THREE.SpriteMaterial({ map: puffTexture, transparent: true, depthWrite: false, opacity: 0 }),
+    );
+    const sprite = new THREE.Sprite(puffMaterial);
+
+    sprite.visible = false;
+    effects.add(sprite);
+
+    return { sprite, material: puffMaterial, age: 1, drift: new THREE.Vector3() };
+  });
+  let nextPuff = 0;
+  const kickDust = (sideways: number) => {
+    const puff = puffs[nextPuff];
+
+    nextPuff = (nextPuff + 1) % puffs.length;
+
+    const facing = root.rotation.y;
+    const back = -0.15;
+
+    puff.sprite.position.set(
+      root.position.x + Math.sin(facing) * back + Math.cos(facing) * sideways,
+      root.position.y + 0.12,
+      root.position.z + Math.cos(facing) * back - Math.sin(facing) * sideways,
+    );
+    puff.drift.set(-Math.sin(facing) * 0.6 + (Math.random() - 0.5) * 0.4, 0.5, -Math.cos(facing) * 0.6 + (Math.random() - 0.5) * 0.4);
+    puff.age = 0;
+    puff.sprite.visible = true;
+  };
+
   /* About human height: everything else in the town — cars, doors, benches — is real size. */
   root.scale.setScalar(1.02);
 
@@ -301,9 +409,19 @@ export function createAvatar(): Avatar {
   let lastFacing: number | null = null;
   let turnLean = 0;
   let airborneBlend = 0;
+  let lastStep = 0;
+  /* The acting after a stop: which beat, and how far into it. */
+  let reaction: AvatarReaction | null = null;
+  let reactionTime = 0;
+  const REACTION_LENGTH = { cheer: 1.3, miss: 1.0 } as const;
 
   return {
     root,
+    effects,
+    react: (next) => {
+      reaction = next;
+      reactionTime = 0;
+    },
     update: (speed, airborne, delta) => {
       clock += delta;
       easedSpeed += (speed - easedSpeed) * (1 - Math.exp(-delta * 10));
@@ -369,7 +487,7 @@ export function createAvatar(): Avatar {
       const lookAbout = Math.min(1, Math.max(0, idleTime - 2.5) / 1.5);
 
       torso.scale.y = 1 + breath;
-      head.position.y = 0.82 + breath * 0.6;
+      head.position.y = HEAD_Y + breath * 0.6;
       head.rotation.y = Math.sin(clock * 0.55) * 0.45 * lookAbout + Math.max(-0.3, Math.min(0.3, turnRate * 0.06)) * walk;
       head.rotation.x = -spine.rotation.x * 0.6 + Math.sin(phase * 2) * 0.025 * moving + Math.sin(clock * 0.4) * 0.05 * lookAbout;
       backpack.rotation.x = -Math.cos(phase * 2) * 0.05 * moving;
@@ -381,11 +499,94 @@ export function createAvatar(): Avatar {
       eyes.scale.y = nextBlink < 0 ? 0.12 : 1;
       eyes.position.y = nextBlink < 0 ? 0.004 : 0;
 
-      shadow.scale.setScalar(1 - airborneBlend * 0.4 - Math.max(0, root.position.y) * 0.12);
+      /* Each footfall squashes the body a little; a sprint's footfalls kick up dust. */
+      const step = Math.floor(phase / Math.PI);
+      const landing = Math.pow(Math.abs(swing), 6) * moving;
+
+      body.scale.set(1 + landing * 0.025, 1 - landing * 0.035, 1 + landing * 0.025);
+      if (step !== lastStep) {
+        lastStep = step;
+        if (run > 0.35 && !airborne) kickDust(step % 2 === 0 ? 0.11 : -0.11);
+      }
+
+      puffs.forEach((puff) => {
+        if (!puff.sprite.visible) return;
+        puff.age += delta / 0.7;
+        if (puff.age >= 1) {
+          puff.sprite.visible = false;
+
+          return;
+        }
+        puff.sprite.position.addScaledVector(puff.drift, delta);
+        puff.sprite.scale.setScalar(0.25 + puff.age * 0.6);
+        puff.material.opacity = (1 - puff.age) * 0.55;
+      });
+
+      /*
+       * The acting after a stop, laid over the gait and faded in and out so it
+       * never snaps. A cheer: a hop, a full twirl and both fists up, brows
+       * raised. A miss: shoulders drop, the head shakes, the brows knit.
+       */
+      let hop = 0;
+
+      brows.forEach(({ socket, brow, side, rest }) => {
+        socket.position.copy(rest);
+        brow.rotation.z = Math.PI / 2 + side * 0.12;
+      });
+
+      if (reaction) {
+        reactionTime += delta;
+
+        const length = REACTION_LENGTH[reaction];
+        const t = reactionTime / length;
+
+        if (t >= 1) {
+          reaction = null;
+        } else {
+          const weight = Math.min(1, t * 6, (1 - t) * 5);
+
+          if (reaction === "cheer") {
+            const jump = t < 0.55 ? Math.sin((t / 0.55) * Math.PI) : 0;
+
+            hop = jump * 0.45;
+            body.rotation.y += Math.min(1, t / 0.55) * Math.PI * 2 * (1 - Math.min(1, moving));
+            arms.forEach(({ shoulder, elbow }, index) => {
+              const pump = Math.sin(t * Math.PI * 6) * 0.15;
+
+              shoulder.rotation.x += (-2.7 + pump - shoulder.rotation.x) * weight;
+              shoulder.rotation.z += ((index === 0 ? -0.35 : 0.35) - shoulder.rotation.z) * weight;
+              elbow.rotation.x += (-0.5 - elbow.rotation.x) * weight;
+            });
+            legs.forEach(({ knee }) => {
+              knee.rotation.x += jump * 0.7 * weight;
+            });
+            brows.forEach(({ socket }) => {
+              socket.position.y += 0.025 * weight;
+            });
+            eyes.scale.y = 1 - weight * 0.55;
+          } else {
+            head.rotation.y += Math.sin(t * Math.PI * 5) * 0.35 * weight;
+            head.rotation.x += 0.15 * weight;
+            spine.rotation.x += 0.12 * weight;
+            arms.forEach(({ shoulder }, index) => {
+              shoulder.rotation.z += ((index === 0 ? 0.18 : -0.18) - shoulder.rotation.z) * weight;
+              shoulder.rotation.x += (0.15 - shoulder.rotation.x) * weight;
+            });
+            brows.forEach(({ socket, brow, side }) => {
+              brow.rotation.z = Math.PI / 2 + side * (0.12 - 0.47 * weight);
+              socket.position.y -= 0.008 * weight;
+            });
+          }
+        }
+      }
+
+      body.position.y += hop;
+      shadow.scale.setScalar(1 - airborneBlend * 0.4 - Math.max(0, root.position.y + hop) * 0.25);
     },
     dispose: () => {
       disposables.forEach((item) => item.dispose());
       root.clear();
+      effects.clear();
     },
   };
 }

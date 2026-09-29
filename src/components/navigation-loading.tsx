@@ -103,10 +103,15 @@ function routeSkeletonStillMounted() {
 
 type NavigateOptions = {
   /**
-   * Drop every payload the router holds before going. `staleTimes.dynamic` keeps a page for a
-   * minute, so after a fetch that changed the data (deleting the note being read) the destination
-   * would otherwise come from before the change — the deleted note back in the library, one tap
-   * from a screen whose every request answers 404.
+   * Refresh the destination once it has landed, holding the overlay until the fresh copy is on
+   * screen. `staleTimes.dynamic` keeps a page for a minute, so after a fetch that changed the data
+   * (deleting the note being read) the destination would otherwise come from before the change —
+   * the deleted note back in the library, one tap from a screen whose every request answers 404.
+   *
+   * After arrival, not before: a refresh dispatched just ahead of the push is discarded by it, and
+   * a discarded refresh leaves the router's copy of the page being returned to in place, so the
+   * library still drew the deleted note (measured on a preview, 2026-09-29). Refreshing first and
+   * waiting would instead re-render the deleted note as not-found on the way out.
    */
   refresh?: boolean;
 };
@@ -180,6 +185,9 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
   const demoBasePath = useCreatorDemoBasePath();
   const cancelPaintWaitRef = useRef<(() => void) | null>(null);
   const [isRouting, startRouting] = useTransition();
+  // The pathname a `refresh` navigation still has to refresh once it lands, and the refresh itself.
+  const refreshOnArrivalRef = useRef<string | null>(null);
+  const [isArrivalRefreshing, startArrivalRefresh] = useTransition();
   // Whether the transition below has actually begun, so that the ~two frames
   // between the click and `router.push` are not read as a finished navigation.
   const [routingStarted, setRoutingStarted] = useState(false);
@@ -225,7 +233,14 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
     pending != null && getPathnameFromHref(pending.href) === currentPathname;
 
   useEffect(() => {
-    if (!landedOnTarget) {
+    // While the arrival refresh runs the overlay stays, so the stale copy is never what shows.
+    if (!landedOnTarget || isArrivalRefreshing) {
+      return;
+    }
+
+    if (refreshOnArrivalRef.current === currentPathname) {
+      refreshOnArrivalRef.current = null;
+      startArrivalRefresh(() => router.refresh());
       return;
     }
 
@@ -245,7 +260,7 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
     return () => {
       window.cancelAnimationFrame(frameId);
     };
-  }, [landedOnTarget]);
+  }, [currentPathname, isArrivalRefreshing, landedOnTarget, router]);
 
   useEffect(() => {
     if (!pending) {
@@ -315,19 +330,9 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
 
   function navigateWithFeedback(rawHref: string, options?: NavigateOptions) {
     const href = mapAppHref(rawHref, demoBasePath);
-    /*
-     * A refresh purges the whole router cache the moment it is dispatched, and a push dispatched
-     * in the same tick discards the refresh's own render — so the page being left is never
-     * re-rendered (a deleted note would render as not-found), and the push fetches afresh.
-     */
-    const push = () => {
-      if (options?.refresh) {
-        router.refresh();
-      }
-
-      router.push(href);
-    };
     const targetPathname = getPathnameFromHref(href);
+
+    refreshOnArrivalRef.current = options?.refresh ? targetPathname : null;
 
     // Same page (e.g. only the query changes): nothing is going to be replaced,
     // so an overlay would only flash over content that stays put — and offline
@@ -344,7 +349,15 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
         setPending(null);
       }
 
-      push();
+      router.push(href);
+
+      // No overlay and no arrival here, so the refresh follows the push directly. Queued behind
+      // the navigation rather than discarded by it.
+      if (options?.refresh) {
+        refreshOnArrivalRef.current = null;
+        router.refresh();
+      }
+
       return;
     }
 
@@ -385,7 +398,7 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
 
     // Two frames: enough for the overlay to be on screen before the router
     // starts competing for the main thread.
-    afterPaint(() => startRouting(push));
+    afterPaint(() => startRouting(() => router.push(href)));
   }
 
   const skeleton = pending ? getNavigationSkeleton(pending.href, demoBasePath) : null;

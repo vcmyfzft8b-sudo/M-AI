@@ -39,23 +39,30 @@ test("the router keeps dynamic pages long enough for a deleted note to come back
   assert.match(NEXT_CONFIG_SOURCE, /staleTimes:\s*\{\s*dynamic:\s*[1-9]/);
 });
 
-test("deleting the note being read leaves with the router cache cleared", () => {
+test("deleting the note being read leaves with a refresh of the library", () => {
   const body = functionBody(WORKSPACE_SOURCE, "async function deleteNote()");
 
   assert.match(body, /navigateWithFeedback\(homeHref,\s*\{\s*refresh:\s*true\s*\}\)/);
 });
 
-test("a refreshing navigation dispatches the refresh and the push in the same tick", () => {
+test("a refreshing navigation refreshes on arrival, behind the overlay", () => {
   const body = functionBody(NAVIGATION_SOURCE, "function navigateWithFeedback(");
-  const push = body.slice(body.indexOf("const push = () =>"));
-  const refreshAt = push.indexOf("router.refresh()");
-  const pushAt = push.indexOf("router.push(href)");
 
-  // Refresh first: it purges the cache as it is dispatched, and the push that follows discards
-  // its render, so the page being left (a deleted note) is never re-rendered as not-found.
-  assert.ok(refreshAt !== -1 && pushAt !== -1 && refreshAt < pushAt);
-  assert.match(push.slice(0, pushAt), /if \(options\?\.refresh\)/);
+  // Not before the push: a refresh dispatched ahead of a navigation is discarded by it, and the
+  // router kept its copy of the library, so the deleted note was still drawn (preview, 2026-09-29).
+  assert.match(body, /refreshOnArrivalRef\.current = options\?\.refresh \? targetPathname : null/);
+  assert.match(body, /afterPaint\(\(\) => startRouting\(\(\) => router\.push\(href\)\)\)/);
+  assert.doesNotMatch(body.slice(body.indexOf("afterPaint(")), /router\.refresh\(\)/);
 
-  // The delayed push away from this page is the one that goes through it.
-  assert.match(body, /afterPaint\(\(\) => startRouting\(push\)\)/);
+  // On arrival the overlay is held while the refresh runs, so the stale copy never shows.
+  const release = NAVIGATION_SOURCE.slice(
+    NAVIGATION_SOURCE.indexOf("const landedOnTarget ="),
+    NAVIGATION_SOURCE.indexOf("function afterPaint("),
+  );
+  const guard = release.indexOf("if (!landedOnTarget || isArrivalRefreshing)");
+  const refresh = release.indexOf("startArrivalRefresh(() => router.refresh())");
+  const releaseOverlay = release.indexOf("setPending(null)");
+
+  assert.ok(guard > 0, "the overlay must be held while the arrival refresh runs");
+  assert.ok(refresh > guard && refresh < releaseOverlay, "refresh before the overlay is released");
 });

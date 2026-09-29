@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
+import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 
 /**
  * The character you steer: a young man at real human proportions — about 1.78
@@ -27,6 +27,25 @@ import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
  */
 
 export type AvatarReaction = "cheer" | "miss";
+
+/**
+ * How someone looks. The player uses the defaults; the people walking the
+ * pavements get their own clothes, skin, hair and build from these, and a
+ * lighter `detail` that leaves out what cannot be seen from across a street.
+ */
+export type AvatarLook = {
+  skin?: number;
+  hair?: number;
+  hairStyle?: "short" | "long";
+  top?: number;
+  trousers?: number;
+  shoes?: number;
+  /** A backpack colour, or null for none. */
+  backpack?: number | null;
+  /** Height as a multiple of the player's 1.78 m. */
+  scale?: number;
+  detail?: "full" | "low";
+};
 
 export type Avatar = {
   root: THREE.Group;
@@ -203,8 +222,61 @@ function withRim<Material extends THREE.MeshStandardMaterial>(material: Material
   return material;
 }
 
-export function createAvatar(): Avatar {
+/**
+ * Fewer draws: every joint's pieces that share a material become one mesh.
+ * A figure is a hundred small shapes, and a hundred draws each for a crowd of
+ * them is what a phone notices. Parts that move on their own (marked `keep`)
+ * stay separate.
+ */
+function mergeStatic(root: THREE.Object3D, track: <Item extends { dispose: () => void }>(item: Item) => Item) {
+  const joints: THREE.Object3D[] = [];
+
+  root.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) joints.push(object);
+  });
+
+  for (const joint of joints) {
+    const byMaterial = new Map<THREE.Material, THREE.Mesh[]>();
+
+    for (const child of joint.children) {
+      if (!(child instanceof THREE.Mesh) || child.userData.keep || Array.isArray(child.material)) continue;
+
+      const list = byMaterial.get(child.material) ?? [];
+
+      list.push(child);
+      byMaterial.set(child.material, list);
+    }
+
+    for (const [material, meshes] of byMaterial) {
+      if (meshes.length < 2) continue;
+
+      const withUv = meshes.every((mesh) => mesh.geometry.getAttribute("uv"));
+      const pieces = meshes.map((mesh) => {
+        mesh.updateMatrix();
+
+        let piece = mesh.geometry.clone().applyMatrix4(mesh.matrix);
+
+        if (!withUv) piece.deleteAttribute("uv");
+        if (piece.index) piece = piece.toNonIndexed();
+
+        return piece;
+      });
+      const merged = mergeGeometries(pieces);
+
+      pieces.forEach((piece) => piece.dispose());
+      if (!merged) continue;
+
+      const mesh = new THREE.Mesh(track(merged), material);
+
+      meshes.forEach((old) => joint.remove(old));
+      joint.add(mesh);
+    }
+  }
+}
+
+export function createAvatar(look: AvatarLook = {}): Avatar {
   const root = new THREE.Group();
+  const full = look.detail !== "low";
   const disposables: { dispose: () => void }[] = [];
   const track = <Item extends { dispose: () => void }>(item: Item) => {
     disposables.push(item);
@@ -229,7 +301,7 @@ export function createAvatar(): Avatar {
   const skin = track(
     withRim(
       new THREE.MeshPhysicalMaterial({
-        color: SKIN,
+        color: look.skin ?? SKIN,
         roughness: 0.55,
         sheen: 0.4,
         sheenColor: new THREE.Color(0xffc8b0),
@@ -239,15 +311,24 @@ export function createAvatar(): Avatar {
     ),
   );
   const lip = material(LIP, 0.45);
-  const hair = material(HAIR, 0.75, knit, 1.4);
-  const hoodie = material(HOODIE, 0.9, knit);
-  const rib = material(HOODIE_RIB, 0.95, knit, 1.2);
-  const jeans = material(JEANS, 0.85, denim, 0.8);
-  const sneaker = material(SNEAKER, 0.5);
+  const hair = material(look.hair ?? HAIR, 0.75, knit, 1.4);
+  const hoodie = material(look.top ?? HOODIE, 0.9, knit);
+  const rib = material(
+    look.top === undefined ? HOODIE_RIB : new THREE.Color(look.top).multiplyScalar(0.82).getHex(),
+    0.95,
+    knit,
+    1.2,
+  );
+  const jeans = material(look.trousers ?? JEANS, 0.85, denim, 0.8);
+  const sneaker = material(look.shoes ?? SNEAKER, 0.5);
   const sole = material(SOLE, 0.7);
   const accent = material(SNEAKER_ACCENT, 0.5);
-  const pack = material(BACKPACK, 0.6);
-  const packShade = material(BACKPACK_SHADE, 0.65);
+  const packColor = look.backpack === undefined ? BACKPACK : look.backpack;
+  const pack = material(packColor ?? BACKPACK, 0.6);
+  const packShade = material(
+    look.backpack === undefined ? BACKPACK_SHADE : new THREE.Color(packColor ?? BACKPACK).multiplyScalar(0.8).getHex(),
+    0.65,
+  );
   const strap = material(0x2a2a2e, 0.7);
   const white = track(new THREE.MeshStandardMaterial({ color: 0xf6f2ee, roughness: 0.3 }));
   const iris = track(new THREE.MeshStandardMaterial({ color: IRIS, roughness: 0.2 }));
@@ -319,6 +400,8 @@ export function createAvatar(): Avatar {
   ] as const;
   const torso = add(track(lathe(torsoProfile, 28)), hoodie, spine, [0, 0, 0], [1.02, 1, 0.64]);
 
+  torso.userData.keep = true;
+
   /* The ribbed hem and the kangaroo pocket. */
   add(track(lathe([[0.165, -0.1], [0.166, -0.05], [0.0, -0.05]], 28)), rib, spine, [0, 0, 0], [1.03, 1, 0.655]);
   add(track(new RoundedBoxGeometry(0.22, 0.13, 0.04, 2, 0.015)), rib, spine, [0, 0.07, 0.098], [1, 1, 1], [-0.08, 0, 0]);
@@ -336,22 +419,27 @@ export function createAvatar(): Avatar {
     [Math.PI / 2 + 0.25, 0, Math.PI * 0.375 + Math.PI],
   );
   add(sphere, hoodie, spine, [0, 0.57, -0.1], [0.1, 0.07, 0.055]);
-  for (const side of [-1, 1]) {
-    add(track(new THREE.CylinderGeometry(0.004, 0.004, 0.16, 6)), white, spine, [side * 0.035, 0.44, 0.117], [1, 1, 1], [0.15, 0, side * 0.05]);
-    add(sphere, white, spine, [side * 0.036, 0.36, 0.123], [0.007, 0.012, 0.007]);
-  }
+  if (full)
+    for (const side of [-1, 1]) {
+      add(track(new THREE.CylinderGeometry(0.004, 0.004, 0.16, 6)), white, spine, [side * 0.035, 0.44, 0.117], [1, 1, 1], [0.15, 0, side * 0.05]);
+      add(sphere, white, spine, [side * 0.036, 0.36, 0.123], [0.007, 0.012, 0.007]);
+    }
 
   /* ---- backpack ---- */
   const backpack = pivot(spine, 0, 0.3, -0.16);
 
-  add(track(new RoundedBoxGeometry(0.3, 0.42, 0.15, 4, 0.05)), pack, backpack);
-  add(track(new RoundedBoxGeometry(0.23, 0.17, 0.06, 3, 0.025)), packShade, backpack, [0, -0.1, -0.09]);
-  add(track(new THREE.TorusGeometry(0.045, 0.012, 6, 14, Math.PI)), strap, backpack, [0, 0.21, 0], [1, 1, 1], [0, Math.PI / 2, 0]);
-  add(track(new THREE.BoxGeometry(0.2, 0.012, 0.01)), strap, backpack, [0, -0.01, -0.121]);
-  for (const side of [-1, 1]) {
-    /* Straps over the shoulders and down the chest. */
-    add(track(new RoundedBoxGeometry(0.045, 0.3, 0.018, 2, 0.006)), strap, spine, [side * 0.1, 0.33, 0.113], [1, 1, 1], [-0.08, 0, 0]);
-    add(track(new RoundedBoxGeometry(0.05, 0.02, 0.26, 2, 0.006)), strap, spine, [side * 0.105, 0.5, -0.005], [1, 1, 1], [0.15, 0, 0]);
+  if (packColor !== null) {
+    add(track(new RoundedBoxGeometry(0.3, 0.42, 0.15, 4, 0.05)), pack, backpack);
+    add(track(new RoundedBoxGeometry(0.23, 0.17, 0.06, 3, 0.025)), packShade, backpack, [0, -0.1, -0.09]);
+    if (full) {
+      add(track(new THREE.TorusGeometry(0.045, 0.012, 6, 14, Math.PI)), strap, backpack, [0, 0.21, 0], [1, 1, 1], [0, Math.PI / 2, 0]);
+      add(track(new THREE.BoxGeometry(0.2, 0.012, 0.01)), strap, backpack, [0, -0.01, -0.121]);
+    }
+    for (const side of [-1, 1]) {
+      /* Straps over the shoulders and down the chest. */
+      add(track(new RoundedBoxGeometry(0.045, 0.3, 0.018, 2, 0.006)), strap, spine, [side * 0.1, 0.33, 0.113], [1, 1, 1], [-0.08, 0, 0]);
+      add(track(new RoundedBoxGeometry(0.05, 0.02, 0.26, 2, 0.006)), strap, spine, [side * 0.105, 0.5, -0.005], [1, 1, 1], [0.15, 0, 0]);
+    }
   }
 
   /* ---- neck and head ---- */
@@ -361,31 +449,45 @@ export function createAvatar(): Avatar {
 
   add(track(headGeometry()), skin, head);
   add(track(hairGeometry()), hair, head);
+  /* Longer hair falls to the shoulders behind. */
+  if (look.hairStyle === "long") {
+    add(track(new RoundedBoxGeometry(0.17, 0.26, 0.07, 3, 0.03)), hair, head, [0, -0.1, -0.075], [1, 1, 1], [0.12, 0, 0]);
+    for (const side of [-1, 1])
+      add(track(new RoundedBoxGeometry(0.04, 0.2, 0.08, 2, 0.018)), hair, head, [side * 0.078, -0.07, -0.03], [1, 1, 1], [0.05, 0, side * -0.08]);
+  }
 
   /* Ears. */
   for (const side of [-1, 1]) add(sphere, skin, head, [side * 0.078, -0.005, -0.006], [0.012, 0.03, 0.02], [0, side * 0.3, 0]);
 
-  /* Eyes: whites, irises, pupils — and lids that close for a blink. */
+  /* Eyes: whites, irises, pupils — and lids that close for a blink. From across a street, dark dots. */
   const lids: THREE.Mesh[] = [];
 
   for (const side of [-1, 1]) {
+    if (!full) {
+      add(sphere, pupil, head, [side * 0.031, 0.01, 0.086], [0.008, 0.008, 0.005]);
+      continue;
+    }
+
     const eye = pivot(head, side * 0.031, 0.01, 0.08);
 
     add(sphere, white, eye, [0, 0, 0], [0.0125, 0.0105, 0.009]);
     add(sphere, iris, eye, [0, 0, 0.0065], [0.0068, 0.0068, 0.0035]);
     add(sphere, pupil, eye, [0, 0, 0.0086], [0.0032, 0.0032, 0.0015]);
-    lids.push(add(sphere, skin, eye, [0, 0.0045, 0.001], [0.0135, 0.0065, 0.0098]));
+    const lid = add(sphere, skin, eye, [0, 0.0045, 0.001], [0.0135, 0.0065, 0.0098]);
+
+    lid.userData.keep = true;
+    lids.push(lid);
     /* Brows. */
     add(track(new RoundedBoxGeometry(0.03, 0.007, 0.008, 2, 0.003)), hair, head, [side * 0.033, 0.034, 0.093], [1, 1, 1], [0.1, side * -0.15, side * -0.06]);
   }
 
   /* Nose: a bridge and a tip. */
-  add(sphere, skin, head, [0, -0.006, 0.098], [0.009, 0.022, 0.012], [0.3, 0, 0]);
+  if (full) add(sphere, skin, head, [0, -0.006, 0.098], [0.009, 0.022, 0.012], [0.3, 0, 0]);
   add(sphere, skin, head, [0, -0.026, 0.103], [0.014, 0.011, 0.012]);
 
   /* Lips. */
-  add(sphere, lip, head, [0, -0.052, 0.094], [0.021, 0.0055, 0.008]);
-  add(sphere, lip, head, [0, -0.061, 0.092], [0.019, 0.0065, 0.008]);
+  add(sphere, lip, head, [0, -0.056, 0.094], [0.021, full ? 0.0055 : 0.009, 0.008]);
+  if (full) add(sphere, lip, head, [0, -0.061, 0.092], [0.019, 0.0065, 0.008]);
 
   /* ---- arms ---- */
   const arms = [-1, 1].map((side) => {
@@ -402,10 +504,12 @@ export function createAvatar(): Avatar {
     /* A hand: palm, fingers curled a little, a thumb. */
     const wrist = pivot(elbow, 0, -FOREARM);
 
-    add(sphere, skin, wrist, [0, -0.005, 0], [0.024, 0.024, 0.02]);
-    add(track(new RoundedBoxGeometry(0.075, 0.085, 0.03, 3, 0.012)), skin, wrist, [side * -0.004, -0.05, 0.004]);
-    add(track(new RoundedBoxGeometry(0.07, 0.07, 0.024, 3, 0.01)), skin, wrist, [side * -0.004, -0.115, 0.014], [1, 1, 1], [0.35, 0, 0]);
-    add(track(new THREE.CapsuleGeometry(0.012, 0.035, 4, 8)), skin, wrist, [side * -0.035, -0.06, 0.022], [1, 1, 1], [0.4, 0, side * 0.5]);
+    add(track(new RoundedBoxGeometry(0.075, full ? 0.085 : 0.15, 0.03, 3, 0.012)), skin, wrist, [side * -0.004, full ? -0.05 : -0.075, 0.004]);
+    if (full) {
+      add(sphere, skin, wrist, [0, -0.005, 0], [0.024, 0.024, 0.02]);
+      add(track(new RoundedBoxGeometry(0.07, 0.07, 0.024, 3, 0.01)), skin, wrist, [side * -0.004, -0.115, 0.014], [1, 1, 1], [0.35, 0, 0]);
+      add(track(new THREE.CapsuleGeometry(0.012, 0.035, 4, 8)), skin, wrist, [side * -0.035, -0.06, 0.022], [1, 1, 1], [0.4, 0, side * 0.5]);
+    }
 
     return { shoulder, elbow, wrist, side };
   });
@@ -425,11 +529,13 @@ export function createAvatar(): Avatar {
     const ankle = pivot(knee, 0, -SHIN);
 
     add(track(new RoundedBoxGeometry(0.1, 0.075, 0.25, 4, 0.03)), sneaker, ankle, [0, -0.035, 0.045]);
-    add(sphere, sneaker, ankle, [0, -0.045, 0.14], [0.05, 0.032, 0.06]);
     add(track(new RoundedBoxGeometry(0.108, 0.03, 0.28, 3, 0.012)), sole, ankle, [0, -0.07, 0.05]);
-    add(track(new RoundedBoxGeometry(0.004, 0.022, 0.12, 2, 0.002)), accent, ankle, [side * 0.051, -0.035, 0.05], [1, 1, 1], [0.12, 0, 0]);
-    for (const step of [0, 1, 2])
-      add(track(new THREE.BoxGeometry(0.045, 0.005, 0.008)), white, ankle, [0, 0.004 - step * 0.008, 0.07 + step * 0.025], [1, 1, 1], [0.35, 0, 0]);
+    if (full) {
+      add(sphere, sneaker, ankle, [0, -0.045, 0.14], [0.05, 0.032, 0.06]);
+      add(track(new RoundedBoxGeometry(0.004, 0.022, 0.12, 2, 0.002)), accent, ankle, [side * 0.051, -0.035, 0.05], [1, 1, 1], [0.12, 0, 0]);
+      for (const step of [0, 1, 2])
+        add(track(new THREE.BoxGeometry(0.045, 0.005, 0.008)), white, ankle, [0, 0.004 - step * 0.008, 0.07 + step * 0.025], [1, 1, 1], [0.35, 0, 0]);
+    }
 
     return { hip, knee, ankle, side };
   });
@@ -462,9 +568,15 @@ export function createAvatar(): Avatar {
   shadow.position.y = 0.012;
   root.add(shadow);
 
-  root.traverse((object) => {
-    if (object instanceof THREE.Mesh && object !== shadow) object.castShadow = true;
-  });
+  shadow.userData.keep = true;
+  mergeStatic(root, track);
+
+  /* Only the player casts a real shadow; a passer-by's contact patch is enough. */
+  if (full)
+    root.traverse((object) => {
+      if (object instanceof THREE.Mesh && object !== shadow) object.castShadow = true;
+    });
+  root.scale.setScalar(look.scale ?? 1);
 
   /*
    * Dust from a sprint: a small pool of soft puffs, one kicked up at each

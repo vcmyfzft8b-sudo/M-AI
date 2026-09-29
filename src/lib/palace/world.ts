@@ -291,40 +291,58 @@ function flatMatrix({
   );
 }
 
-/** One mesh for many copies of a shape — the whole town is a handful of these. */
+/** The side of one tile of town, in metres; see `instanced`. */
+const TILE_SIZE = 90;
+/** Below this many copies a shape stays one mesh: splitting it would cost more draws than it saves. */
+const TILE_THRESHOLD = 300;
+
+/**
+ * Many copies of a shape, drawn as a few instanced meshes — one per tile of
+ * town rather than one for the whole of it.
+ *
+ * A single mesh spanning the town can never be culled, so every column, sphere
+ * and rounded box in it was drawn every frame, and again into the shadow map,
+ * wherever the camera looked: millions of triangles, most of them behind the
+ * player or two blocks away. Split into tiles, each with its own bounds, the
+ * ones off screen are skipped, and the shadow pass (whose camera covers only
+ * the streets round the player) skips nearly all of them.
+ */
 function instanced(
   geometry: THREE.BufferGeometry,
   material: THREE.Material,
   instances: Instance[],
   { shadows = true }: { shadows?: boolean } = {},
 ) {
-  const mesh = new THREE.InstancedMesh(
-    geometry,
-    material,
-    Math.max(instances.length, 1),
-  );
+  const tiles = new Map<string, Instance[]>();
 
-  mesh.castShadow = shadows;
-  mesh.receiveShadow = true;
+  for (const instance of instances) {
+    const x = instance.matrix.elements[12];
+    const z = instance.matrix.elements[14];
+    const key = instances.length < TILE_THRESHOLD ? "all" : `${Math.floor(x / TILE_SIZE)},${Math.floor(z / TILE_SIZE)}`;
+    const tile = tiles.get(key) ?? [];
 
-  instances.forEach((instance, index) => {
-    mesh.setMatrixAt(index, instance.matrix);
-
-    if (instance.color) {
-      mesh.setColorAt(index, instance.color);
-    }
-  });
-
-  mesh.count = instances.length;
-  mesh.instanceMatrix.needsUpdate = true;
-
-  if (mesh.instanceColor) {
-    mesh.instanceColor.needsUpdate = true;
+    tile.push(instance);
+    tiles.set(key, tile);
   }
 
-  mesh.frustumCulled = false;
+  const group = new THREE.Group();
 
-  return mesh;
+  for (const tile of tiles.values()) {
+    const mesh = new THREE.InstancedMesh(geometry, material, tile.length);
+
+    mesh.castShadow = shadows;
+    mesh.receiveShadow = true;
+    tile.forEach((instance, index) => {
+      mesh.setMatrixAt(index, instance.matrix);
+      if (instance.color) mesh.setColorAt(index, instance.color);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    group.add(mesh);
+  }
+
+  return group;
 }
 
 /** Two strips crossing in a double helix: the spiral tower's facade bands. */
@@ -364,9 +382,10 @@ export function buildCity(layout: PalaceLayout): CityBuild {
 
   const boxGeometry = track(new THREE.BoxGeometry(1, 1, 1));
   const planeGeometry = track(new THREE.PlaneGeometry(1, 1));
-  const cylinderGeometry = track(new THREE.CylinderGeometry(0.5, 0.5, 1, 24));
+  /* Modest segment counts: there are thousands of these, and most are small. */
+  const cylinderGeometry = track(new THREE.CylinderGeometry(0.5, 0.5, 1, 14));
   const coneGeometry = track(new THREE.ConeGeometry(0.5, 1, 8));
-  const sphereGeometry = track(new THREE.SphereGeometry(0.5, 12, 10));
+  const sphereGeometry = track(new THREE.SphereGeometry(0.5, 10, 8));
   const solid = (color: number) =>
     track(new THREE.MeshStandardMaterial({ color, roughness: 0.85 }));
   const tinted = () => solid(0xffffff);
@@ -1496,7 +1515,8 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     ),
   );
   group.add(instanced(autoCabin, cityGlassMaterial, carCabins));
-  group.add(instanced(roundedGeometry, carPaint, carTrim));
+  /* Pillars, mirrors and spokes are too small to show a rounded edge. */
+  group.add(instanced(boxGeometry, carPaint, carTrim));
   group.add(instanced(cylinderGeometry, solid(0xffffff), tyres));
   group.add(instanced(cylinderGeometry, cityGlassMaterial, glassCylinders));
   group.add(
@@ -1551,14 +1571,16 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, flatShading: true }),
   );
   const coniferGeometry = track(new THREE.ConeGeometry(0.5, 1, 7));
-  const crownGeometry = track(new THREE.IcosahedronGeometry(0.5, 1));
+  const crownGeometry = track(new THREE.IcosahedronGeometry(0.5, 0));
 
   for (const mesh of [
     instanced(boxGeometry, solid(0xffffff), forest.trunks, { shadows: false }),
     instanced(coniferGeometry, foliage, forest.conifers, { shadows: false }),
     instanced(crownGeometry, foliage, forest.crowns, { shadows: false }),
   ]) {
-    mesh.receiveShadow = false;
+    mesh.traverse((tile) => {
+      tile.receiveShadow = false;
+    });
     group.add(mesh);
   }
 

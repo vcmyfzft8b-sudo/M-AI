@@ -10,12 +10,16 @@ import {
   clampPitch,
   createCharacter,
   nearestStation,
+  resolveCollision,
   stepCharacter,
+  CHARACTER_RADIUS,
   type CharacterState,
 } from "@/lib/palace/movement";
 import { createLighting, UNOCCLUDED_LAYER } from "@/lib/palace/atmosphere";
 import { createPostProcessing, type PostProcessing } from "@/lib/palace/post";
 import { buildCity, type StationVisual } from "@/lib/palace/world";
+import { createTraffic } from "@/lib/palace/traffic";
+import { createCrowd } from "@/lib/palace/crowd";
 
 /**
  * The loop: input in, a frame out.
@@ -119,7 +123,16 @@ export function createPalaceGame({
   const city = buildCity(layout);
   const avatar = createAvatar();
 
-  scene.add(city.group, avatar.root, avatar.effects);
+  /*
+   * The town's life: cars on the streets and people on the pavements. Fewer
+   * of each on a phone, where every figure is another few dozen draws.
+   */
+  const traffic = createTraffic(layout, onAPhone ? 5 : 9);
+  const crowd = createCrowd(layout, onAPhone ? 4 : 10);
+
+  scene.add(city.group, avatar.root, avatar.effects, traffic.group, crowd.group);
+  /* Passers-by cast no shadow and are left out of the occlusion pass: they move, and they are many. */
+  crowd.group.traverse((object) => object.layers.set(UNOCCLUDED_LAYER));
   lighting.follow(layout.spawn.x, layout.spawn.z);
 
   /*
@@ -373,6 +386,18 @@ export function createPalaceGame({
       delta,
     });
 
+    /* The moving things: the cars stop for people, the people wait for the player. */
+    const view = { x: Math.sin(cameraYaw), z: Math.cos(cameraYaw) };
+
+    crowd.update(delta, character, view);
+    traffic.update(delta, [character, ...crowd.colliders], view);
+    if (character.y < 0.5) {
+      let position = { x: character.x, z: character.z };
+
+      for (const moving of [...traffic.colliders, ...crowd.colliders]) position = resolveCollision(position, moving, CHARACTER_RADIUS);
+      character = { ...character, ...position };
+    }
+
     avatar.root.position.set(character.x, character.y, character.z);
     avatar.root.rotation.y = character.facing;
     avatar.update(character.speed, !character.grounded, delta);
@@ -511,6 +536,11 @@ export function createPalaceGame({
   if (process.env.NODE_ENV === "development") {
     debugWindow.__memoPalace = {
       layout,
+      /* Draws and triangles in the last frame, for comparing the cost of a change. */
+      stats: () => ({ ...renderer.info.render, post: Boolean(post) }),
+      scene,
+      people: () => crowd.colliders.map(({ x, z }) => ({ x, z })),
+      cars: () => traffic.colliders.map(({ x, z }) => ({ x, z })),
       houses: layout.houses.map((house, index) => ({ ...house, kind: buildingProfile(house, index).kind })),
       teleport: (x: number, z: number, yaw: number, pitch?: number) => {
         character = createCharacter(x, z, yaw);
@@ -587,6 +617,8 @@ export function createPalaceGame({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       post?.dispose();
+      traffic.dispose();
+      crowd.dispose();
       lighting.dispose();
       avatar.dispose();
       city.dispose();

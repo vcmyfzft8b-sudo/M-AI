@@ -24,6 +24,14 @@ import {
   roomFurniture,
   outdoorFurniture,
   ROOM_DOOR_WIDTH,
+  RAIL_HEIGHT,
+  roomSurfaces,
+  roomUpperColliders,
+  roomUpperFloor,
+  stairStep,
+  UPPER_FLOOR_Y,
+  upperFurniture,
+  type RoomPart,
 } from "./rooms";
 import { createSurfaceMaterial } from "./materials";
 import { UNOCCLUDED_LAYER } from "./atmosphere";
@@ -36,7 +44,7 @@ import {
   type PalaceProp,
   type PalaceStation,
 } from "@/lib/palace/layout";
-import type { Collider } from "@/lib/palace/movement";
+import type { Collider, Surface } from "@/lib/palace/movement";
 
 /**
  * The town, in geometry.
@@ -74,6 +82,8 @@ export type StationVisual = {
 export type CityBuild = {
   group: THREE.Group;
   colliders: Collider[];
+  /** Stairs and galleries: what can be stood on above the ground. */
+  surfaces: Surface[];
   stations: StationVisual[];
   /** Once a frame, for the shimmer running up the beacons. */
   update: (seconds: number) => void;
@@ -344,6 +354,7 @@ function ribbonGeometry() {
 export function buildCity(layout: PalaceLayout): CityBuild {
   const group = new THREE.Group();
   const colliders: Collider[] = [];
+  const surfaces: Surface[] = [];
   const disposables: { dispose: () => void }[] = [];
   const track = <Item extends { dispose: () => void }>(item: Item) => {
     disposables.push(item);
@@ -681,12 +692,89 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         }),
         color: hsl(38, 0.12, 0.82),
       });
-      for (const part of roomFurniture(
-        house,
-        room,
-        house.landmark &&
-          layout.stations[house.landmarkIndex]?.placement === "inside",
-      )) {
+      const memory = house.landmark ? layout.stations[house.landmarkIndex] : undefined;
+      const memoryInside = memory?.placement === "inside";
+      const memoryUpstairs = memoryInside && (memory?.y ?? 0) > 0;
+      const sideways = Math.abs(out.x) > 0.5;
+      /* A box in the room's axes, turned into the world's. */
+      const worldBox = <Box extends { x: number; z: number; width: number; depth: number }>(box: Box) => ({
+        ...box,
+        ...roomPoint(house, box.x, box.z),
+        width: sideways ? box.depth : box.width,
+        depth: sideways ? box.width : box.depth,
+      });
+
+      /* ---- the gallery and its stairs ---- */
+      const upper = roomUpperFloor(house);
+      const floorColor = hsl(32, 0.26, 0.5);
+      const stairColor = hsl(38, 0.12, 0.8);
+      const railColor = new THREE.Color(0x3a3230);
+      const place = (x: number, y: number, z: number, width: number, height: number, depth: number, tiltX = 0) =>
+        boxMatrix({ ...roomPoint(house, x, z), y, width, height, depth, rotation: house.facing, tiltX });
+
+      roomSurfaces(house).forEach((surface) => surfaces.push(worldBox(surface)));
+      roomUpperColliders(house).forEach((collider) => colliders.push(worldBox(collider)));
+
+      for (let index = 0; index < upper.stair.steps; index++) {
+        const step = stairStep(house, index);
+
+        walls.push({ matrix: place(step.x, step.y / 2, step.z, step.width, step.y, step.depth), color: stairColor });
+        woodwork.push({
+          matrix: place(step.x, step.y - 0.02, step.z + 0.015, step.width + 0.02, 0.05, step.depth + 0.03),
+          color: floorColor,
+        });
+      }
+
+      /* The handrail up the open side: posts, and a rail at the stairs' own slope. */
+      const slope = Math.atan2(UPPER_FLOOR_Y, upper.stair.run);
+      const railBottom = stairStep(house, 2);
+      const railLength = Math.hypot(railBottom.z - upper.stair.zTop, UPPER_FLOOR_Y - railBottom.y);
+
+      for (let index = 2; index < upper.stair.steps; index += 3) {
+        const step = stairStep(house, index);
+
+        cylinders.push({ matrix: place(upper.stair.x0 + 0.05, step.y + RAIL_HEIGHT / 2, step.z, 0.06, RAIL_HEIGHT, 0.06), color: railColor });
+      }
+      woodwork.push({
+        matrix: place(
+          upper.stair.x0 + 0.05,
+          (railBottom.y + UPPER_FLOOR_Y) / 2 + RAIL_HEIGHT,
+          (railBottom.z + upper.stair.zTop) / 2,
+          0.09,
+          0.07,
+          railLength,
+          slope,
+        ),
+        color: floorColor,
+      });
+
+      /* The gallery floor, its edge, and its rail. */
+      const galleryZ = -upper.innerZ + upper.galleryDepth / 2;
+
+      woodwork.push({
+        matrix: place(0, UPPER_FLOOR_Y - 0.1, galleryZ, upper.innerX * 2, 0.2, upper.galleryDepth),
+        color: floorColor,
+      });
+      walls.push({
+        matrix: place(0, UPPER_FLOOR_Y - 0.28, upper.edgeZ - 0.06, upper.innerX * 2, 0.36, 0.12),
+        color: stairColor,
+      });
+      const railFrom = -upper.innerX, railTo = upper.stair.x0;
+
+      for (let x = railFrom + 0.1; x <= railTo; x += 0.9)
+        cylinders.push({ matrix: place(x, UPPER_FLOOR_Y + RAIL_HEIGHT / 2, upper.edgeZ, 0.06, RAIL_HEIGHT, 0.06), color: railColor });
+      for (const height of [RAIL_HEIGHT, RAIL_HEIGHT * 0.45])
+        (height === RAIL_HEIGHT ? woodwork : boxes).push({
+          matrix: place((railFrom + railTo) / 2, UPPER_FLOOR_Y + height, upper.edgeZ, railTo - railFrom, height === RAIL_HEIGHT ? 0.07 : 0.035, height === RAIL_HEIGHT ? 0.1 : 0.035),
+          color: height === RAIL_HEIGHT ? floorColor : railColor,
+        });
+
+      const furniture: (RoomPart & { upstairs?: boolean })[] = [
+        ...roomFurniture(house, room, memoryInside && !memoryUpstairs),
+        ...upperFurniture(house, room, Boolean(memoryUpstairs)).map((part) => ({ ...part, upstairs: true })),
+      ];
+
+      for (const part of furniture) {
         const position = roomPoint(house, part.x, part.z);
         const bucket =
           part.shape === "sphere"
@@ -709,11 +797,15 @@ export function buildCity(layout: PalaceLayout): CityBuild {
           }),
           color: new THREE.Color(part.color),
         });
+        /* Furniture blocks only the floor it stands on. */
         if (part.solid)
           colliders.push({
             ...position,
-            width: Math.abs(out.x) > 0.5 ? part.depth : part.width,
-            depth: Math.abs(out.x) > 0.5 ? part.width : part.depth,
+            width: sideways ? part.depth : part.width,
+            depth: sideways ? part.width : part.depth,
+            ...(part.upstairs
+              ? { bottom: UPPER_FLOOR_Y - 0.1, top: UPPER_FLOOR_Y + 2 }
+              : { top: UPPER_FLOOR_Y - 0.6 }),
           });
       }
     } else {
@@ -1575,10 +1667,12 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       ),
     );
 
+    const floor = station.y ?? 0;
+
     token.scale.set(1.15 * MASCOT_ASPECT, 1.15, 1);
-    token.position.set(station.x, 1.65, station.z);
+    token.position.set(station.x, floor + 1.65, station.z);
     ring.rotation.x = -Math.PI / 2;
-    ring.position.set(station.x, 0.11, station.z);
+    ring.position.set(station.x, floor + 0.11, station.z);
 
     const materials = beaconMaterial(station.kind);
     const beacon = new THREE.Group();
@@ -1592,7 +1686,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     glow.position.y = 0.07;
     glow.renderOrder = 1;
     beacon.add(beam, glow);
-    beacon.position.set(station.x, 0, station.z);
+    beacon.position.set(station.x, floor, station.z);
     for (const unoccluded of [token, ring, beam, glow]) unoccluded.layers.set(UNOCCLUDED_LAYER);
 
     group.add(token, ring, beacon);
@@ -1602,6 +1696,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
   return {
     group,
     colliders,
+    surfaces,
     stations,
     update: (seconds) => {
       beaconUniforms.uTime.value = seconds;

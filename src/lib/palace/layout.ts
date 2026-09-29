@@ -1,6 +1,6 @@
 // Imported by its real filename so the Node test runner can load the layout
 // directly; it cannot resolve the "@/" alias.
-import { roomIdentity, roomPoint } from "./rooms.ts";
+import { roomIdentity, roomPoint, stationIsUpstairs, UPPER_FLOOR_Y, upperStationPoint } from "./rooms.ts";
 import { createRandom, seedFromString, type Random } from "./rng.ts";
 
 /**
@@ -123,6 +123,8 @@ export type PalaceStation = {
   placement: "inside" | "outside";
   x: number;
   z: number;
+  /** The floor it stands on: the gallery's height upstairs, absent (0) on the ground. */
+  y?: number;
   hue: number;
   /** The house it belongs to, so the renderer can mark it. */
   houseIndex: number;
@@ -1119,6 +1121,20 @@ export function buildPalaceLayout({
   const pyramidHouse = houses.filter((house) => !house.landmark)
     .sort((a,b) => Math.hypot(a.x,a.z)-Math.hypot(b.x,b.z))[0];
   if (pyramidHouse) pyramidHouse.monument = "pyramid";
+
+  /*
+   * Every other indoor stop waits upstairs, on its house's gallery: a climb is
+   * one more thing to remember the place by. Moved within its own room, so the
+   * spread across the town is untouched.
+   */
+  stations.forEach((station, index) => {
+    if (station.placement !== "inside" || !stationIsUpstairs(station.index)) return;
+
+    const house = houses[station.houseIndex];
+    const local = upperStationPoint(house, roomIdentity(station.index));
+
+    stations[index] = { ...station, ...roomPoint(house, local.x, local.z), y: UPPER_FLOOR_Y };
+  });
 
   const first = stations[0];
   const firstHouse = first ? houses[first.houseIndex] : null;

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
-import { insideHouse } from "./rooms";
+import { insideHouse, UPPER_FLOOR_Y } from "./rooms";
+import { LOBBY_HEIGHT } from "./architecture";
 import { createAvatar } from "@/lib/palace/avatar";
 import type { PalaceLayout } from "@/lib/palace/layout";
 import {
@@ -367,6 +368,7 @@ export function createPalaceGame({
       input,
       cameraYaw,
       colliders: city.colliders,
+      surfaces: city.surfaces,
       bounds: layout.bounds,
       delta,
     });
@@ -384,12 +386,35 @@ export function createPalaceGame({
       yaw: cameraYaw,
       pitch: activePitch,
       maxDistance: indoors ? 4 : portrait ? CAMERA_DISTANCE_PORTRAIT : CAMERA_DISTANCE,
+      minDistance: indoors ? 0.7 : 3,
       colliders: city.colliders,
     });
     const desired = cameraPosition({ target: eye, yaw: cameraYaw, pitch: activePitch, distance });
 
     /* The camera trails rather than tracks, which is what makes running feel fast. */
-    cameraTarget.set(desired.x, Math.max(desired.y, 1.2), desired.z);
+    /*
+     * Indoors the camera stays under the ceiling of the floor you are on — the
+     * gallery's underside downstairs, the room's ceiling upstairs — blending
+     * between the two as you climb, so it never looks down through a floor.
+     */
+    const climbed = Math.max(0, Math.min(1, character.y / UPPER_FLOOR_Y));
+    const ceiling = indoors
+      ? UPPER_FLOOR_Y - 0.35 + climbed * (LOBBY_HEIGHT - 0.6 - (UPPER_FLOOR_Y - 0.35))
+      : Number.POSITIVE_INFINITY;
+
+    cameraTarget.set(desired.x, Math.min(ceiling, Math.max(desired.y, character.y + 1.2)), desired.z);
+
+    /*
+     * Indoors the camera can sit a hand's breadth from a wall, and a near plane
+     * sized for streets would slice through it and show the pavement outside.
+     * Outdoors it goes back out, where depth precision on the road paint matters.
+     */
+    const near = indoors ? 0.12 : 0.5;
+
+    if (camera.near !== near) {
+      camera.near = near;
+      camera.updateProjectionMatrix();
+    }
     // A wall can move closer faster than an eased camera; snap inward to avoid
     // crossing its face while keeping the character visible in third person.
     camera.position.lerp(cameraTarget, indoors || reducedMotion ? 1 : 1 - Math.pow(0.0025, delta));
@@ -417,7 +442,7 @@ export function createPalaceGame({
        * mascot bobs instead, each one out of step with its neighbours so a
        * plaza does not pulse as one.
        */
-      visual.token.position.y = 1.65 + (reducedMotion ? 0 : Math.sin(seconds * 2 + visual.station.index) * 0.1);
+      visual.token.position.y = (visual.station.y ?? 0) + 1.65 + (reducedMotion ? 0 : Math.sin(seconds * 2 + visual.station.index) * 0.1);
       /* The ring breathes with it, so a waiting stop reads as live. */
       visual.ring.scale.setScalar(reducedMotion ? 1 : 1 + Math.sin(seconds * 2.4 + visual.station.index) * 0.06);
     });
@@ -502,11 +527,11 @@ export function createPalaceGame({
       if (!visual || visual.collected) return;
       missedStationIds.add(station.id);
       visual.station = station;
-      visual.token.position.set(station.x, 1.65, station.z);
-      visual.ring.position.set(station.x, 0.11, station.z);
+      visual.token.position.set(station.x, (station.y ?? 0) + 1.65, station.z);
+      visual.ring.position.set(station.x, (station.y ?? 0) + 0.11, station.z);
       visual.plaque.position.set(station.x, 0.4, station.z + 0.61);
       visual.plaque.rotation.y = 0;
-      visual.beacon.position.set(station.x, 0, station.z);
+      visual.beacon.position.set(station.x, station.y ?? 0, station.z);
     },
     releaseStation: () => {
       if (nearStationId && collected.has(nearStationId) && !reducedMotion) {

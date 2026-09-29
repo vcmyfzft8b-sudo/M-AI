@@ -12,6 +12,14 @@ Study controls are shared with the main app: `StudyFlashcard`, `StudyQuizQuestio
 
 Before entering, notes missing a study bank offer **Prepare study game**. This queues only absent flashcard, quiz or practice banks through the existing authenticated generation routes. Pending banks are awaited, existing questions are reused, and partial detail reads are refreshed instead of regenerated. The game opens once all three banks have content. Selection reserves room for quizzes and tests and gives unused slots to other available questions.
 
+## Upper floors
+
+Every house's ground-floor room has a gallery across its back at `UPPER_FLOOR_Y` (2.7 m), reached by a solid staircase up the right-hand wall with a handrail; the front of the room stays double height, so the entrance is unchanged. The geometry is described once in `rooms.ts` (`roomUpperFloor`, `stairStep`, `roomSurfaces`, `roomUpperColliders`, `upperFurniture`) and shared by the renderer, collision and tests.
+
+Movement is height-aware: `Surface`s are what you stand on (each tread and the gallery), the feet follow a floor up or down within `STEP_UP` (0.6 m) and fall beyond it, and a `Collider` may carry `top` (you can step onto it from near that height; from the floor a staircase is a wall) and `bottom` (you walk underneath it; the gallery rail exists only upstairs). Ground furniture blocks only the ground floor and gallery furniture only the gallery. Anything standing where the stairs go is left out as a whole piece, and each room is scaled down just enough to clear the gallery's underside.
+
+Every other indoor stop (`stationIsUpstairs`) waits on the gallery with its own display stand, and `station.y` carries its floor. A stop opens only for a walker on its own floor, and relocation sends a missed stop to the pavement at ground level. Indoors the camera stays under the ceiling of the current floor, blending as you climb, may come as close as 0.7 m in a corner, and uses a 0.12 m near plane so it never looks through a wall. `tests/palace-upper-floor.test.mjs` walks every house of a 60-stop town from the door, up the stairs, to the upstairs stop and back down.
+
 ## Atmosphere and finish
 
 - **Sky** (`atmosphere.ts`): one shader dome with a zenith-to-horizon gradient, the sun disc where the shadows say it is, and drifting fbm clouds. The same sky is rendered once into a PMREM environment map (at half saturation, so shade on the pavement is not blue) for reflections on glass and cars. Fog runs 95–560 m in the horizon's colour, so distance fades into the sky. The sun direction lives in `sun.ts` as plain numbers, shared with the intro card.

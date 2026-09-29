@@ -109,8 +109,11 @@ export async function POST(
   const hasPendingDocumentImport = hasPendingDocument(lecture.processing_metadata);
   const hasPendingLinkImport = hasPendingLink(lecture.processing_metadata);
   // A scan that failed while its photos were still being read has no `manualImport` yet; the
-  // photos it was reading are all it has to retry from.
-  const hasPendingScanImport = hasPendingScanImages(lecture.processing_metadata);
+  // photos it was reading are all it has to retry from. Only once it has failed: the photo list
+  // is written when the upload URLs are issued, so on an unfinished upload it names photos that
+  // have not arrived (lecture-stall-plan.ts).
+  const hasPendingScanImport =
+    lecture.status === "failed" && hasPendingScanImages(lecture.processing_metadata);
   const effectiveSourceType = getEffectiveLectureSourceType(lecture);
 
   if (

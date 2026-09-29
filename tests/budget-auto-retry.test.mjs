@@ -290,6 +290,12 @@ test("a scan still reading its photos is retried by both the pipeline and the re
   const route = readSource("src/app/api/lectures/[id]/retry/route.ts");
 
   assert.match(route, /!hasPendingLinkImport &&\s*!hasPendingScanImport\s*\)/);
+  // The photo list exists from the moment upload URLs are issued; only a failed scan has a run
+  // behind it whose photos are really in storage.
+  assert.match(
+    route,
+    /hasPendingScanImport =\s*lecture\.status === "failed" && hasPendingScanImages\(/,
+  );
 
   const scanRetry = route.indexOf("if (hasPendingScanImport && !hasManualImport)");
 

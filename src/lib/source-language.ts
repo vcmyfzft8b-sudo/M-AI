@@ -2,7 +2,12 @@ import "server-only";
 import { generateStructuredObject } from "@/lib/ai/json";
 import { detectSourceLanguage, normalizeContentLanguageCode, resolveMaterialLanguage } from "@/lib/languages";
 import { generationCacheKey, stageModelCacheKeyPart, withGenerationCheckpoint } from "@/lib/notes/generation-cache";
-import { sampleSourceLanguage, sourceLanguageSchema, SOURCE_LANGUAGE_INSTRUCTIONS } from "@/lib/source-language-policy";
+import {
+  isContradictedBySpelling,
+  sampleSourceLanguage,
+  sourceLanguageSchema,
+  SOURCE_LANGUAGE_INSTRUCTIONS,
+} from "@/lib/source-language-policy";
 
 /** Resolve once per exact material version, across all consumers. Never cache a guessed fallback. */
 export async function resolveSourceLanguage(params: {
@@ -16,25 +21,37 @@ export async function resolveSourceLanguage(params: {
   const known = metadata?.sourceLanguage;
   if (known?.version === 1 && known.notesHash === generationCacheKey([params.text])) {
     const code = normalizeContentLanguageCode(known.code);
-    if (code) return code;
+    // A note stored as Estonian before the 2026-09-29 fix is re-detected rather than trusted.
+    if (code && !isContradictedBySpelling(code, params.text)) return code;
   }
   const input = JSON.stringify({ hint: normalizeContentLanguageCode(params.hint), material: sampleSourceLanguage(params.text) });
-  try {
-    const result = await withGenerationCheckpoint({
+  const detect = (instructions: string, version: string) =>
+    withGenerationCheckpoint({
       lectureId: params.lectureId,
       stage: "source_language",
-      cacheKey: generationCacheKey(["source-language-v1", params.text, input, stageModelCacheKeyPart("source_language")]),
+      cacheKey: generationCacheKey([version, params.text, input, stageModelCacheKeyPart("source_language")]),
       schema: sourceLanguageSchema,
       generate: () => generateStructuredObject({
         schema: sourceLanguageSchema,
         stage: "source_language",
-        instructions: SOURCE_LANGUAGE_INSTRUCTIONS,
+        instructions,
         input,
         maxOutputTokens: 128,
         usageContext: { lectureId: params.lectureId, userId: params.userId },
       }),
     });
-    return normalizeContentLanguageCode(result.language)!;
+  try {
+    const first = normalizeContentLanguageCode((await detect(SOURCE_LANGUAGE_INSTRUCTIONS, "source-language-v2")).language)!;
+    if (!isContradictedBySpelling(first, params.text)) return first;
+
+    // The material cannot be written in the language named; ask once more with that stated.
+    const second = normalizeContentLanguageCode((await detect(
+      `${SOURCE_LANGUAGE_INSTRUCTIONS} The material lacks the letters ${first} is always written with, so it is not ${first}.`,
+      `source-language-v2-not-${first}`,
+    )).language)!;
+    if (!isContradictedBySpelling(second, params.text)) return second;
+    console.warn("[source-language] model twice named a language the spelling rules out; using local evidence");
+    return resolveMaterialLanguage(params.text, isContradictedBySpelling(params.hint, params.text) ? null : params.hint);
   } catch (error) {
     if (detectSourceLanguage(params.text)) {
       console.warn("[source-language] detection unavailable; using existing language evidence");

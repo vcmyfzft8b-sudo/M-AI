@@ -101,8 +101,18 @@ function routeSkeletonStillMounted() {
   );
 }
 
+type NavigateOptions = {
+  /**
+   * Drop every payload the router holds before going. `staleTimes.dynamic` keeps a page for a
+   * minute, so after a fetch that changed the data (deleting the note being read) the destination
+   * would otherwise come from before the change — the deleted note back in the library, one tap
+   * from a screen whose every request answers 404.
+   */
+  refresh?: boolean;
+};
+
 type NavigationFeedback = {
-  navigateWithFeedback: (href: string) => void;
+  navigateWithFeedback: (href: string, options?: NavigateOptions) => void;
   isNavigating: boolean;
   /**
    * Pathname the pending navigation is headed for, or null when none is in
@@ -303,8 +313,20 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
     });
   }
 
-  function navigateWithFeedback(rawHref: string) {
+  function navigateWithFeedback(rawHref: string, options?: NavigateOptions) {
     const href = mapAppHref(rawHref, demoBasePath);
+    /*
+     * A refresh purges the whole router cache the moment it is dispatched, and a push dispatched
+     * in the same tick discards the refresh's own render — so the page being left is never
+     * re-rendered (a deleted note would render as not-found), and the push fetches afresh.
+     */
+    const push = () => {
+      if (options?.refresh) {
+        router.refresh();
+      }
+
+      router.push(href);
+    };
     const targetPathname = getPathnameFromHref(href);
 
     // Same page (e.g. only the query changes): nothing is going to be replaced,
@@ -363,7 +385,7 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
 
     // Two frames: enough for the overlay to be on screen before the router
     // starts competing for the main thread.
-    afterPaint(() => startRouting(() => router.push(href)));
+    afterPaint(() => startRouting(push));
   }
 
   const skeleton = pending ? getNavigationSkeleton(pending.href, demoBasePath) : null;

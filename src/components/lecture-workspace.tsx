@@ -5596,9 +5596,10 @@ export function LectureWorkspace({
       }
 
       // The note is gone, so there is nothing to come back to: leave for the
-      // library rather than closing the sheet onto a dead screen.
+      // library rather than closing the sheet onto a dead screen. Refreshing, because the
+      // router still holds the library (and this note) from before the delete.
       setIsNoteActionBusy(false);
-      navigateWithFeedback(homeHref);
+      navigateWithFeedback(homeHref, { refresh: true });
     } catch (error) {
       setNoteActionError(
         error instanceof Error ? error.message : t("library.error.deleteFailed"),

@@ -447,6 +447,16 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       }),
       color: new THREE.Color(part.color),
     });
+    if (part.solid) {
+      const turned = Math.abs(Math.sin(house.facing + (part.rotation ?? 0))) > 0.5;
+
+      colliders.push({
+        ...position,
+        width: turned ? part.depth : part.width,
+        depth: turned ? part.width : part.depth,
+        top: part.y + part.height / 2,
+      });
+    }
   };
 
   /* Ground, footpaths, tarmac, paint — flat planes, stacked in that order. */

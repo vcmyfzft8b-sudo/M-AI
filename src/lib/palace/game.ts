@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 import { insideHouse, UPPER_FLOOR_Y } from "./rooms";
-import { LOBBY_HEIGHT } from "./architecture";
+import { buildingProfile, LOBBY_HEIGHT } from "./architecture";
 import { createAvatar } from "@/lib/palace/avatar";
 import type { PalaceLayout } from "@/lib/palace/layout";
 import {
@@ -501,6 +501,26 @@ export function createPalaceGame({
 
   frame = requestAnimationFrame(tick);
 
+  /*
+   * Local QA only: a way to stand anywhere in the town from the console or a
+   * screenshot script, since walking to the far side of a sixty-stop town is
+   * two minutes a check. Never present in a production build.
+   */
+  const debugWindow = window as unknown as { __memoPalace?: unknown };
+
+  if (process.env.NODE_ENV === "development") {
+    debugWindow.__memoPalace = {
+      layout,
+      houses: layout.houses.map((house, index) => ({ ...house, kind: buildingProfile(house, index).kind })),
+      teleport: (x: number, z: number, yaw: number, pitch?: number) => {
+        character = createCharacter(x, z, yaw);
+        cameraYaw = yaw;
+        if (pitch !== undefined) cameraPitch = clampPitch(pitch);
+        camera.position.set(x - Math.sin(yaw) * 8, 5, z - Math.cos(yaw) * 8);
+      },
+    };
+  }
+
   const findVisual = (stationId: string): StationVisual | undefined =>
     city.stations.find((visual) => visual.station.id === stationId);
 
@@ -559,6 +579,7 @@ export function createPalaceGame({
     resize,
     snapshot,
     dispose: () => {
+      delete debugWindow.__memoPalace;
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       canvas.removeEventListener("webglcontextlost", onWebglContextLost);

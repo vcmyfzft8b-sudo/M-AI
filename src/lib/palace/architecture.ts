@@ -1,6 +1,7 @@
 import type { PalaceHouse } from "./layout";
 import { neighborhoodBuilding, type NeighborhoodKind } from "./neighborhood.ts";
 import { landmarkBuilding } from "./landmarks.ts";
+import { isMonument, monumentBuilding } from "./monuments.ts";
 
 export type CityPart = {
   shape: "box" | "rounded" | "cylinder" | "sphere" | "ribbon" | "ring" | "gable" | "bow" | "dome" | "cone" | "sail" | "pyramid";
@@ -16,6 +17,8 @@ export type CityPart = {
   rotation?: number;
   tiltX?: number;
   tiltZ?: number;
+  /** Something at walking height outside the walls that a walker must go round. */
+  solid?: boolean;
 };
 
 export const LOBBY_HEIGHT = 5.8;
@@ -36,6 +39,13 @@ const STUDY_ARCHETYPES = [
   "warehouse",
   "pavilion",
   "windmill",
+  /* Appended, so the first fourteen addresses of every existing town keep their building. */
+  "temple",
+  "pagoda",
+  "castle",
+  "lighthouse",
+  "cathedral",
+  "cafe",
 ] as const;
 export const CITY_ARCHETYPES = [...STUDY_ARCHETYPES, "pyramid"] as const;
 
@@ -46,6 +56,7 @@ const BACKGROUND_KINDS = [
   "courtyard", "townhouse", "observatory", "cottage", "pavilion",
   "warehouse", "pavilion", "houseboat", "townhouse", "greenhouse",
   "terrace", "cottage", "windmill", "clocktower", "townhouse",
+  "cafe", "pavilion", "cafe",
 ] as const;
 
 /** Stable silhouettes give each address a landmark in the skyline. */
@@ -57,7 +68,7 @@ export function buildingProfile(house: PalaceHouse, index: number) {
   // Do not repeat a distinctive skyscraper on every cycle of a large deck.
   // Later questions use other architectural families with different rooflines.
   if (house.landmark && variant >= STUDY_ARCHETYPES.length && ["helix", "spire", "tower"].includes(kind)) {
-    const alternatives = ["townhouse", "warehouse", "pavilion", "observatory", "cottage", "windmill", "greenhouse"] as const;
+    const alternatives = ["townhouse", "temple", "warehouse", "cafe", "pavilion", "observatory", "castle", "cottage", "windmill", "greenhouse"] as const;
     kind = alternatives[(Math.floor(variant / STUDY_ARCHETYPES.length) * 3 + variant) % alternatives.length];
   }
   if (house.monument === "pyramid") kind = "pyramid";
@@ -65,10 +76,15 @@ export function buildingProfile(house: PalaceHouse, index: number) {
   const height = tall ? (house.landmark ? 30 + (variant % 5) * 6 : 18 + (variant % 3) * 6)
     : kind === "terrace" ? 9 + (variant % 2) * 3
     : kind === "courtyard" ? 6 + (variant % 2) * 3
-    : kind === "clocktower" ? 16.5 : kind === "houseboat" || kind === "observatory" ? 10 : 4.6;
+    : kind === "clocktower" ? 16.5 : kind === "houseboat" || kind === "observatory" ? 10
+    : kind === "temple" ? 10.5 : kind === "pagoda" ? 22 : kind === "castle" ? 13.5
+    : kind === "lighthouse" ? 25 : kind === "cathedral" ? 24.5 : kind === "cafe" ? 9.5 : 4.6;
   const palette = [0xe2c8ac,0xb6c8bc,0xd2b3a6,0xcecadb,0xd6cda9];
   const wall = tall || kind === "terrace" || kind === "courtyard" ? 0xeeeede
-    : kind === "pyramid" ? 0xc8a971 : kind === "houseboat" ? 0xe7e1cf : palette[(variant + Math.floor(index/5)) % palette.length];
+    : kind === "pyramid" ? 0xc8a971 : kind === "houseboat" ? 0xe7e1cf
+    : kind === "temple" ? 0xefe9dc : kind === "pagoda" ? 0xb23a2e : kind === "castle" ? 0xa8a397
+    : kind === "lighthouse" ? 0xf4f1ea : kind === "cathedral" ? 0xd8d2c4
+    : palette[(variant + Math.floor(index/5)) % palette.length];
   return { kind, height, wall, variant,
     glass: [0x48c1e8, 0x76aebc, 0x65b4bd, 0x608b9e, 0x78b9b0][variant % 5],
   };
@@ -80,6 +96,9 @@ export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
   const profile = buildingProfile(house, index);
   if (["townhouse", "greenhouse", "warehouse", "pavilion", "windmill", "pyramid"].includes(profile.kind)) {
     return neighborhoodBuilding(house, profile.kind as NeighborhoodKind, LOBBY_HEIGHT, profile.variant);
+  }
+  if (isMonument(profile.kind)) {
+    return monumentBuilding(house, profile.kind, LOBBY_HEIGHT, profile.variant);
   }
   if (["cottage", "houseboat", "clocktower", "observatory"].includes(profile.kind)) {
     return landmarkBuilding(house, profile.kind as "cottage" | "houseboat" | "clocktower" | "observatory", LOBBY_HEIGHT, profile.variant);

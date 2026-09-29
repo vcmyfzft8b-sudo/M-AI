@@ -1,6 +1,8 @@
 import * as THREE from "three";
 
-import { createAvatar, type Avatar, type AvatarLook } from "./avatar";
+import type { Avatar } from "./avatar";
+import { UNOCCLUDED_LAYER } from "./atmosphere";
+import { createHero, type HeroLook } from "./hero";
 import { createRandom, type Random } from "./rng";
 import type { PalaceLayout } from "./layout";
 import type { Collider } from "./movement";
@@ -8,9 +10,8 @@ import type { Collider } from "./movement";
 /**
  * People on the pavements.
  *
- * Each one is the player's own figure in someone else's clothes — a different
- * skin tone, hair, height, a jacket of their own, a bag or none — built at a
- * lower detail, since a passer-by is never closer than across a street. They
+ * Each one is the player's own character model in someone else's clothes — a
+ * different skin tone, hair, height and colours of their own (`hero.ts`). They
  * walk one pavement at an easy pace, on the house side of the lamps and
  * benches, cross at the junctions where the zebra stripes are (the cars stop
  * for them), pause now and then to look about, and turn back at the edge of
@@ -26,7 +27,6 @@ const SKINS = [0xf1c7a5, 0xe2b08c, 0xd9a07c, 0xb57b55, 0x8d5a3b, 0x5e3b27];
 const HAIRS = [0x2e2119, 0x5a3a22, 0xc9a26b, 0x151212, 0x8a4b2a, 0x9a9a98];
 const TOPS = [0xb33b3b, 0x2f6b4f, 0xe0b340, 0x4a4f8c, 0xf0efe9, 0x6b3f75, 0x2b2b2b, 0xd97b3a, 0x7fa7c9];
 const TROUSERS = [0x2f3542, 0x5c6f8a, 0x3e3a33, 0xc9b99a, 0x1f2328, 0x6d7b5a];
-const BAGS = [0x3a3a3a, 0x8a5a3a, 0x2f5d8a, 0xb23a3a];
 /** Distance from a street's centre line to the walking line: inside the pavement, behind the lamps. */
 const WALK_OFFSET = 9.2;
 /** Beyond this, a walker is out of the player's world and is brought back near it. */
@@ -58,17 +58,16 @@ export type Crowd = {
   dispose: () => void;
 };
 
-function lookFor(random: Random): AvatarLook {
+function lookFor(random: Random): HeroLook {
   return {
     skin: random.pick(SKINS),
     hair: random.pick(HAIRS),
-    hairStyle: random.chance(0.45) ? "long" : "short",
     top: random.pick(TOPS),
     trousers: random.pick(TROUSERS),
     shoes: random.chance(0.6) ? 0xf3f3f1 : 0x2a2a2a,
-    backpack: random.chance(0.4) ? random.pick(BAGS) : null,
     scale: random.range(0.92, 1.03),
-    detail: "low",
+    /* Left out of ambient occlusion: they move, and they are many. */
+    layer: UNOCCLUDED_LAYER,
   };
 }
 
@@ -81,7 +80,7 @@ export function createCrowd(layout: PalaceLayout, count: number): Crowd {
   const stops = layout.stations.filter((station) => station.placement === "outside");
 
   const walkers: Walker[] = Array.from({ length: lines.length ? count : 0 }, (_, index) => {
-    const avatar = createAvatar(lookFor(random));
+    const avatar = createHero(lookFor(random));
     const pace = random.range(1.15, 1.65);
 
     group.add(avatar.root);

@@ -4,10 +4,12 @@ import test from "node:test";
 import { buildPalaceLayout } from "../src/lib/palace/layout.ts";
 import {
   CHARACTER_RADIUS,
+  clampCameraDistance,
   colliderApplies,
   createCharacter,
   floorHeight,
   nearestStation,
+  STEP_UP,
   stepCharacter,
 } from "../src/lib/palace/movement.ts";
 import {
@@ -58,7 +60,7 @@ function room(house, index) {
     ...roomUpperColliders(house),
     ...roomFurniture(house, identity, station?.placement === "inside" && !upstairs)
       .filter((part) => part.solid)
-      .map((part) => ({ ...part, top: UPPER_FLOOR_Y - 0.6 })),
+      .map((part) => ({ ...part, top: Math.max(part.y + part.height / 2, STEP_UP + 0.1) })),
     ...upperFurniture(house, identity, upstairs)
       .filter((part) => part.solid)
       .map((part) => ({ ...part, bottom: UPPER_FLOOR_Y - 0.1, top: UPPER_FLOOR_Y + 2 })),
@@ -173,4 +175,38 @@ test("a stop opens only on its own floor", () => {
 
   assert.equal(nearestStation({ x: 0, z: 0.5, y: 0 }, stations, 1.8), null);
   assert.equal(nearestStation({ x: 0, z: 0.5, y: UPPER_FLOOR_Y }, stations, 1.8)?.id, "up");
+});
+
+test("downstairs, the camera never sits inside the staircase, and passes under the gallery rail", () => {
+  layout.houses.slice(0, 12).forEach((house, index) => {
+    const world = room(house, index);
+    const upper = roomUpperFloor(house);
+    const ceiling = UPPER_FLOOR_Y - 0.35;
+    /* Looking at the back wall, so the camera swings out towards the door behind. */
+    const yaw = house.facing + Math.PI;
+    const cameraFrom = (x, z) => {
+      const spot = roomPoint(house, x, z);
+      const target = { x: spot.x, y: 0.9, z: spot.z };
+
+      return { target, distance: clampCameraDistance({ target, yaw, pitch: 0.3, maxDistance: 4, minDistance: 0.7, ceiling, colliders: world.colliders }) };
+    };
+
+    /* Under the gallery in line with the stairs: the stairs are right behind. */
+    const stairs = cameraFrom((upper.stair.x0 + upper.stair.x1) / 2, upper.edgeZ - 1.2);
+
+    for (let along = 0.7; along <= stairs.distance; along += 0.05) {
+      const probe = { x: stairs.target.x - Math.sin(yaw) * along, z: stairs.target.z - Math.cos(yaw) * along };
+
+      for (const step of world.colliders.filter((collider) => collider.top !== undefined && collider.top > ceiling + 0.2 && collider.bottom === undefined))
+        assert.ok(
+          !(Math.abs(probe.x - step.x) < step.width / 2 && Math.abs(probe.z - step.z) < step.depth / 2),
+          `house ${index}: the camera sits inside the stairs`,
+        );
+    }
+
+    /* Under the gallery away from the stairs: the rail overhead does not pull the camera in. */
+    const open = cameraFrom(-upper.innerX + 1.6, upper.edgeZ - 1.2);
+
+    assert.ok(open.distance >= 2.5, `house ${index}: the gallery rail pulled the camera in to ${open.distance}`);
+  });
 });

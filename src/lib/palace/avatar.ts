@@ -42,6 +42,12 @@ export type AvatarLook = {
   shoes?: number;
   /** A backpack colour, or null for none. */
   backpack?: number | null;
+  /** Tracksuit stripes down the sleeves and legs, or null for none. */
+  stripes?: number | null;
+  /** A cap worn backwards, or null for none. */
+  cap?: number | null;
+  /** A round badge on the chest, or null for none. */
+  badge?: number | null;
   /** Height as a multiple of the player's 1.78 m. */
   scale?: number;
   detail?: "full" | "low";
@@ -68,14 +74,18 @@ const RUN_SPEED = 12.21;
 const SKIN = 0xd9a07c;
 const LIP = 0xb87464;
 const HAIR = 0x2e2119;
-const HOODIE = 0x243a5e;
-const HOODIE_RIB = 0x1d3050;
-const JEANS = 0x7c9cc4;
-const SNEAKER = 0xf3f3f1;
-const SOLE = 0xd8d6d0;
-const SNEAKER_ACCENT = 0x243a5e;
-const BACKPACK = 0xe8742c;
-const BACKPACK_SHADE = 0xc55d1d;
+/* The hero's kit: bold, saturated, and a colour apart from the town. */
+const HOODIE = 0x2d6cdf;
+const HOODIE_RIB = 0x2356b8;
+const JEANS = 0x2b2f38;
+const SNEAKER = 0xf6f6f4;
+const SOLE = 0xf0574f;
+const SNEAKER_ACCENT = 0xf0574f;
+const BACKPACK = 0xf28a2e;
+const BACKPACK_SHADE = 0xd06f1a;
+const STRIPES = 0xf7f7f5;
+const CAP = 0xe0463a;
+const BADGE = 0xf49ac1;
 const IRIS = 0x4a3222;
 
 /* Joint heights, in metres. */
@@ -85,7 +95,15 @@ const SHIN = 0.42;
 const SHOULDER_Y = 1.45;
 const UPPER_ARM = 0.29;
 const FOREARM = 0.25;
-const HEAD_Y = 1.665;
+const HEAD_Y = 1.685;
+/*
+ * Game proportions rather than life: a head, hands and feet a size up, and
+ * shoulders a little broader. It is what makes a figure read as a character
+ * from behind at eight metres, and it is how every third-person hero is drawn.
+ */
+const HEAD_SCALE = 1.14;
+const HAND_SCALE = 1.25;
+const SHOULDER_X = 0.215;
 
 /**
  * A limb or a body from its silhouette: radius against height, spun round the
@@ -184,9 +202,9 @@ function hairGeometry() {
     const hairline = 0.42 * front * front - 0.32 * (1 - front) + 0.05 * side - 0.05;
     const covered = point.y > hairline;
     const tuft =
-      0.045 * Math.sin(point.x * 23 + point.z * 7) * Math.sin(point.z * 19 - point.y * 11) +
-      0.03 * Math.sin(point.x * 41 + point.y * 37);
-    const quiff = Math.max(0, point.y - 0.35) * Math.max(0, point.z + 0.1) * 0.55;
+      0.075 * Math.max(0, Math.sin(point.x * 23 + point.z * 7) * Math.sin(point.z * 19 - point.y * 11)) +
+      0.035 * Math.sin(point.x * 41 + point.y * 37);
+    const quiff = Math.max(0, point.y - 0.3) * Math.max(0, point.z + 0.1) * 0.85;
     const grow = covered ? 1.075 + Math.max(0, point.y) * 0.05 + tuft * Math.max(0, point.y + 0.2) + quiff : 0.85;
     const below = Math.max(0, -point.y);
     const jaw = 1 - 0.34 * Math.pow(below, 1.6);
@@ -208,7 +226,7 @@ function hairGeometry() {
  * A thin cool rim round the silhouette, brightest where the surface turns
  * away from the camera: what lifts the figure off a busy street behind it.
  */
-function withRim<Material extends THREE.MeshStandardMaterial>(material: Material, strength = 0.22) {
+function withRim<Material extends THREE.MeshStandardMaterial>(material: Material, strength = 0.32) {
   material.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace(
       "#include <emissivemap_fragment>",
@@ -324,6 +342,11 @@ export function createAvatar(look: AvatarLook = {}): Avatar {
   const sole = material(SOLE, 0.7);
   const accent = material(SNEAKER_ACCENT, 0.5);
   const packColor = look.backpack === undefined ? BACKPACK : look.backpack;
+  const capColor = look.cap === undefined ? CAP : look.cap;
+  const badgeColor = look.badge === undefined ? BADGE : look.badge;
+  const stripe = (look.stripes === undefined ? STRIPES : look.stripes) === null
+    ? null
+    : material(look.stripes ?? STRIPES, 0.7);
   const pack = material(packColor ?? BACKPACK, 0.6);
   const packShade = material(
     look.backpack === undefined ? BACKPACK_SHADE : new THREE.Color(packColor ?? BACKPACK).multiplyScalar(0.8).getHex(),
@@ -398,7 +421,7 @@ export function createAvatar(look: AvatarLook = {}): Avatar {
     [0.08, 0.56],
     [0.0, 0.565],
   ] as const;
-  const torso = add(track(lathe(torsoProfile, 28)), hoodie, spine, [0, 0, 0], [1.02, 1, 0.64]);
+  const torso = add(track(lathe(torsoProfile, 28)), hoodie, spine, [0, 0, 0], [1.1, 1, 0.66]);
 
   torso.userData.keep = true;
 
@@ -407,7 +430,12 @@ export function createAvatar(look: AvatarLook = {}): Avatar {
   add(track(new RoundedBoxGeometry(0.22, 0.13, 0.04, 2, 0.015)), rib, spine, [0, 0.07, 0.098], [1, 1, 1], [-0.08, 0, 0]);
 
   /* Shoulders, rounded into the sleeves. */
-  for (const side of [-1, 1]) add(sphere, hoodie, spine, [side * 0.17, SHOULDER_Y - HIP_Y - 0.035, -0.005], [0.066, 0.05, 0.064]);
+  for (const side of [-1, 1]) add(sphere, hoodie, spine, [side * 0.185, SHOULDER_Y - HIP_Y - 0.04, -0.005], [0.075, 0.048, 0.062]);
+
+  /* A zip down the front, and a badge on the chest. */
+  if (full) add(track(new THREE.BoxGeometry(0.012, 0.5, 0.01)), white, spine, [0, 0.27, 0.124]);
+  if (badgeColor !== null)
+    add(track(new THREE.CylinderGeometry(0.03, 0.03, 0.012, 16)), material(badgeColor, 0.4), spine, [0.08, 0.39, 0.12], [1, 1, 1], [Math.PI / 2 - 0.12, 0, 0]);
 
   /* The hood, lying on the shoulders behind the neck, and its drawstrings. */
   add(
@@ -447,8 +475,22 @@ export function createAvatar(look: AvatarLook = {}): Avatar {
 
   const head = pivot(spine, 0, HEAD_Y - HIP_Y, 0.012);
 
+  head.scale.setScalar(HEAD_SCALE);
+
   add(track(headGeometry()), skin, head);
   add(track(hairGeometry()), hair, head);
+  /* A cap worn backwards: the dome over the crown, the peak over the nape. */
+  if (capColor !== null) {
+    const capMaterial = material(capColor, 0.6);
+    const cap = pivot(head, 0, 0.06, -0.012);
+
+    cap.rotation.x = 0.2;
+    add(track(new THREE.SphereGeometry(1, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.5)), capMaterial, cap, [0, 0, 0], [0.088, 0.085, 0.11]);
+    add(track(new RoundedBoxGeometry(0.15, 0.014, 0.1, 2, 0.006)), capMaterial, cap, [0, 0.004, -0.135], [1, 1, 1], [-0.12, 0, 0]);
+    add(sphere, capMaterial, cap, [0, 0.1, 0], [0.012, 0.008, 0.012]);
+    add(track(new RoundedBoxGeometry(0.05, 0.012, 0.01, 2, 0.004)), white, cap, [0, 0.03, -0.108], [1, 1, 1], [0.5, 0, 0]);
+  }
+
   /* Longer hair falls to the shoulders behind. */
   if (look.hairStyle === "long") {
     add(track(new RoundedBoxGeometry(0.17, 0.26, 0.07, 3, 0.03)), hair, head, [0, -0.1, -0.075], [1, 1, 1], [0.12, 0, 0]);
@@ -491,18 +533,22 @@ export function createAvatar(look: AvatarLook = {}): Avatar {
 
   /* ---- arms ---- */
   const arms = [-1, 1].map((side) => {
-    const shoulder = pivot(spine, side * 0.195, SHOULDER_Y - HIP_Y - 0.02);
+    const shoulder = pivot(spine, side * SHOULDER_X, SHOULDER_Y - HIP_Y - 0.02);
 
     add(track(lathe([[0.062, 0.02], [0.06, -0.08], [0.052, -0.2], [0.046, -UPPER_ARM]], 18)), hoodie, shoulder);
+    if (stripe) add(track(new THREE.BoxGeometry(0.012, UPPER_ARM - 0.02, 0.03)), stripe, shoulder, [side * 0.057, -UPPER_ARM / 2 + 0.01, 0]);
 
     const elbow = pivot(shoulder, 0, -UPPER_ARM);
 
-    add(sphere, hoodie, elbow, [0, 0, 0], [0.044, 0.044, 0.044]);
+    add(sphere, hoodie, elbow, [0, 0, 0], [0.043, 0.043, 0.043]);
     add(track(lathe([[0.046, 0], [0.045, -0.1], [0.04, -FOREARM + 0.05]], 18)), hoodie, elbow);
     add(track(lathe([[0.038, -FOREARM + 0.05], [0.036, -FOREARM + 0.005]], 16)), rib, elbow);
+    if (stripe) add(track(new THREE.BoxGeometry(0.012, FOREARM - 0.06, 0.028)), stripe, elbow, [side * 0.044, -(FOREARM - 0.05) / 2, 0]);
 
     /* A hand: palm, fingers curled a little, a thumb. */
     const wrist = pivot(elbow, 0, -FOREARM);
+
+    wrist.scale.setScalar(HAND_SCALE);
 
     add(track(new RoundedBoxGeometry(0.075, full ? 0.085 : 0.15, 0.03, 3, 0.012)), skin, wrist, [side * -0.004, full ? -0.05 : -0.075, 0.004]);
     if (full) {
@@ -518,15 +564,20 @@ export function createAvatar(look: AvatarLook = {}): Avatar {
   const legs = [-1, 1].map((side) => {
     const hip = pivot(pelvis, side * 0.092, 0);
 
-    add(track(lathe([[0.083, 0.03], [0.08, -0.08], [0.071, -0.25], [0.062, -THIGH + 0.02], [0.06, -THIGH]], 20)), jeans, hip);
+    add(track(lathe([[0.083, 0.03], [0.08, -0.08], [0.071, -0.25], [0.062, -THIGH + 0.02], [0.06, -THIGH]], 20)), jeans, hip, [0, 0, 0], [1.12, 1, 1.12]);
+    if (stripe) add(track(new THREE.BoxGeometry(0.012, THIGH - 0.02, 0.032)), stripe, hip, [side * 0.084, -THIGH / 2, 0]);
 
     const knee = pivot(hip, 0, -THIGH);
 
-    add(sphere, jeans, knee, [0, 0, 0], [0.058, 0.058, 0.058]);
-    add(track(lathe([[0.059, 0], [0.058, -0.14], [0.055, -0.3], [0.054, -SHIN + 0.04], [0.056, -SHIN + 0.02]], 20)), jeans, knee);
+    add(sphere, jeans, knee, [0, 0, 0], [0.063, 0.063, 0.063]);
+    add(track(lathe([[0.059, 0], [0.058, -0.14], [0.055, -0.3], [0.054, -SHIN + 0.04], [0.056, -SHIN + 0.02]], 20)), jeans, knee, [0, 0, 0], [1.12, 1, 1.12]);
+    if (stripe) add(track(new THREE.BoxGeometry(0.012, SHIN - 0.08, 0.03)), stripe, knee, [side * 0.063, -SHIN / 2 + 0.02, 0]);
 
     /* The sneaker: a rounded upper with a toe box, a sole, laces and a side stripe. */
     const ankle = pivot(knee, 0, -SHIN);
+
+    /* Chunky trainers, a size up, as game heroes wear them. */
+    ankle.scale.set(1.18, 1.1, 1.2);
 
     add(track(new RoundedBoxGeometry(0.1, 0.075, 0.25, 4, 0.03)), sneaker, ankle, [0, -0.035, 0.045]);
     add(track(new RoundedBoxGeometry(0.108, 0.03, 0.28, 3, 0.012)), sole, ankle, [0, -0.07, 0.05]);

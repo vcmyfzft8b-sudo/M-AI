@@ -423,8 +423,7 @@ export function LandingPalaceScreen({
 
       if (known) {
         setCollected((current) => new Set(current).add(id));
-        /* The question goes on a sign over the stop, as in the app. */
-        gameRef.current?.markCollected(id, cardsById.get(id)?.front ?? quizById.get(id)?.prompt);
+        gameRef.current?.markCollected(id);
         return;
       }
 
@@ -444,7 +443,7 @@ export function LandingPalaceScreen({
       gameRef.current?.relocateStation(moved);
       setLayout(next);
     },
-    [cardsById, quizById, spots],
+    [spots],
   );
 
   const gradeCard = useCallback(
@@ -506,7 +505,9 @@ export function LandingPalaceScreen({
 
     void (async () => {
       try {
-        const { createPalaceGame } = await import("@/lib/palace/game");
+        const { createPalaceGame, preloadPalaceAssets } = await import("@/lib/palace/game");
+        /* The character model arrives behind the loading screen, as in the app. */
+        await preloadPalaceAssets();
         /* Let the arrival screen paint before the geometry and shader work. */
         await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 

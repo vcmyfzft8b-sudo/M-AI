@@ -78,8 +78,8 @@ export function monumentBuilding(house: PalaceHouse, kind: MonumentKind, base: n
     for (let x = 1.95; x <= w / 2 + 0.35; x += 1.55) columnXs.push(x, -x);
     for (const x of columnXs) {
       add("cylinder", x, 0.14, front + porch - 0.25, 0.86, 0.28, 0.86, shade);
-      add("cylinder", x, 2.75, front + porch - 0.25, 0.62, 5.0, 0.62, marble, { solid: true });
-      box(x, 5.4, front + porch - 0.25, 0.9, 0.3, 0.9, shade);
+      add("cylinder", x, 0.28 + (base - 0.83) / 2, front + porch - 0.25, 0.62, base - 0.83, 0.62, marble, { solid: true });
+      box(x, base - 0.4, front + porch - 0.25, 0.9, 0.3, 0.9, shade);
     }
     for (const side of [-1, 1]) {
       /* Pilasters at the corners of the walls. */
@@ -244,13 +244,13 @@ export function monumentBuilding(house: PalaceHouse, kind: MonumentKind, base: n
     /* Tall stained windows down both sides, between buttresses. */
     for (const side of [-1, 1]) {
       for (const z of [-d * 0.3, 0, d * 0.3]) {
-        box(side * (w / 2 + 0.1), 2.9, z, 0.08, 3.2, 0.9, glassColors[(Math.round(z) + side + 4) % 4], { glass: true });
-        box(side * (w / 2 + 0.1), 4.6, z, 0.08, 0.64, 0.64, glassColors[(Math.round(z) + side + 5) % 4], { glass: true, tiltX: Math.PI / 4 });
+        box(side * (w / 2 + 0.1), 3.4, z, 0.08, 4.2, 0.9, glassColors[(Math.round(z) + side + 4) % 4], { glass: true });
+        box(side * (w / 2 + 0.1), 5.6, z, 0.08, 0.64, 0.64, glassColors[(Math.round(z) + side + 5) % 4], { glass: true, tiltX: Math.PI / 4 });
       }
       for (const z of [-d * 0.45, -d * 0.15, d * 0.15, d * 0.45]) {
-        box(side * (w / 2 + 0.45), 2.3, z, 0.7, 4.6, 0.55, stone, { surface: "stone", solid: true });
-        box(side * (w / 2 + 0.3), 5.0, z, 0.5, 1.6, 0.5, stone, { tiltZ: side * 0.35 });
-        add("cone", side * (w / 2 + 0.45), 5.3, z, 0.45, 1.2, 0.45, slate);
+        box(side * (w / 2 + 0.45), (base - 1.2) / 2, z, 0.7, base - 1.2, 0.55, stone, { surface: "stone", solid: true });
+        box(side * (w / 2 + 0.3), base - 0.8, z, 0.5, 1.6, 0.5, stone, { tiltZ: side * 0.35 });
+        add("cone", side * (w / 2 + 0.45), base - 0.5, z, 0.45, 1.2, 0.45, slate);
       }
     }
 

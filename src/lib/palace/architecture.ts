@@ -21,7 +21,11 @@ export type CityPart = {
   solid?: boolean;
 };
 
-export const LOBBY_HEIGHT = 5.8;
+/*
+ * The ground-floor room's height: tall enough for a gallery with real headroom
+ * under it and over it (see `rooms.ts`).
+ */
+export const LOBBY_HEIGHT = 7.2;
 export const ENTRY_HEIGHT = 3.6;
 
 const STUDY_ARCHETYPES = [
@@ -74,11 +78,11 @@ export function buildingProfile(house: PalaceHouse, index: number) {
   if (house.monument === "pyramid") kind = "pyramid";
   const tall = kind === "helix" || kind === "spire" || kind === "tower";
   const height = tall ? (house.landmark ? 30 + (variant % 5) * 6 : 18 + (variant % 3) * 6)
-    : kind === "terrace" ? 9 + (variant % 2) * 3
-    : kind === "courtyard" ? 6 + (variant % 2) * 3
-    : kind === "clocktower" ? 16.5 : kind === "houseboat" || kind === "observatory" ? 10
-    : kind === "temple" ? 10.5 : kind === "pagoda" ? 22 : kind === "castle" ? 13.5
-    : kind === "lighthouse" ? 25 : kind === "cathedral" ? 24.5 : kind === "cafe" ? 9.5 : 4.6;
+    : kind === "terrace" ? 10.4 + (variant % 2) * 3
+    : kind === "courtyard" ? 7.4 + (variant % 2) * 3
+    : kind === "clocktower" ? 17.9 : kind === "houseboat" || kind === "observatory" ? 11.4
+    : kind === "temple" ? 11.9 : kind === "pagoda" ? 23.4 : kind === "castle" ? 14.9
+    : kind === "lighthouse" ? 26.4 : kind === "cathedral" ? 25.9 : kind === "cafe" ? 10.9 : 7.2;
   const palette = [0xe2c8ac,0xb6c8bc,0xd2b3a6,0xcecadb,0xd6cda9];
   const wall = tall || kind === "terrace" || kind === "courtyard" ? 0xeeeede
     : kind === "pyramid" ? 0xc8a971 : kind === "houseboat" ? 0xe7e1cf

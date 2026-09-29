@@ -292,6 +292,7 @@ export function clampCameraDistance({
   maxDistance,
   colliders,
   minDistance = 3,
+  ceiling = Number.POSITIVE_INFINITY,
 }: {
   target: { x: number; y: number; z: number };
   yaw: number;
@@ -304,17 +305,24 @@ export function clampCameraDistance({
    * than that, and the alternative is a camera outside the wall.
    */
   minDistance?: number;
+  /** How high the camera may go here (indoors, under a floor); obstacles are judged at that height. */
+  ceiling?: number;
 }) {
   const step = 0.25;
   let allowed = minDistance;
 
   for (let distance = allowed; distance <= maxDistance; distance += step) {
     const probe = cameraPosition({ target, yaw, pitch, distance });
-    /* Stairs and rails are low enough to see over; only walls pull the camera in. */
+    /*
+     * Judged at the height the camera will actually be: a staircase or a
+     * bookcase blocks a camera below its top, a gallery rail one at its own
+     * height, and nothing blocks a camera that clears it.
+     */
+    const height = Math.min(probe.y, ceiling);
     const blocked = colliders.some(
       (collider) =>
-        collider.top === undefined &&
-        collider.bottom === undefined &&
+        (collider.top === undefined || height < collider.top + 0.2) &&
+        (collider.bottom === undefined || height > collider.bottom) &&
         Math.abs(probe.x - collider.x) < collider.width / 2 + 0.5 &&
         Math.abs(probe.z - collider.z) < collider.depth / 2 + 0.5,
     );

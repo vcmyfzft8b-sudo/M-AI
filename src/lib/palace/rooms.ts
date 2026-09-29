@@ -395,7 +395,7 @@ export function roomFurniture(
  */
 
 /** The gallery floor: headroom under it, and under the lobby ceiling above it. */
-export const UPPER_FLOOR_Y = 2.7;
+export const UPPER_FLOOR_Y = 3.2;
 const WALL_INSET = 0.12;
 const STAIR_WIDTH = 1.7;
 export const RAIL_HEIGHT = 1.05;

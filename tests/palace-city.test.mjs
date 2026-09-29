@@ -952,7 +952,8 @@ test('background streets are mostly low distinct buildings instead of repeated s
     assert.equal(background.filter(p=>tall.has(p.profile.kind)).length,0,'background lots repeat a landmark skyscraper');
     for(const kind of tall) assert.ok(layout.houses.filter((house,index)=>buildingProfile(house,index).kind===kind).length<=1,`${kind} repeats across the skyline`);
     assert.ok(new Set(background.map(p=>p.profile.kind)).size>=8,'background silhouettes lack variety');
-    for(const {profile} of background) if(['terrace','courtyard'].includes(profile.kind)) assert.ok(profile.height<=12,'a low-rise block became another skyscraper');
+    // Low-rise means a few storeys over the ground-floor room, however tall that room is.
+    for(const {profile} of background) if(['terrace','courtyard'].includes(profile.kind)) assert.ok(profile.height<=LOBBY_HEIGHT+6.2,'a low-rise block became another skyscraper');
   }
 });
 

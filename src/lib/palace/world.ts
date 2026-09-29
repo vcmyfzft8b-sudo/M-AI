@@ -44,7 +44,7 @@ import {
   type PalaceProp,
   type PalaceStation,
 } from "@/lib/palace/layout";
-import type { Collider, Surface } from "@/lib/palace/movement";
+import { STEP_UP, type Collider, type Surface } from "@/lib/palace/movement";
 
 /**
  * The town, in geometry.
@@ -834,7 +834,8 @@ export function buildCity(layout: PalaceLayout): CityBuild {
             depth: sideways ? part.width : part.depth,
             ...(part.upstairs
               ? { bottom: UPPER_FLOOR_Y - 0.1, top: UPPER_FLOOR_Y + 2 }
-              : { top: UPPER_FLOOR_Y - 0.6 }),
+              : /* Its real height, so the camera sees over a desk; never less than a step, so nobody walks over one. */
+                { top: Math.max(part.y + part.height / 2, STEP_UP + 0.1) }),
           });
       }
     } else {

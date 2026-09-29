@@ -1,11 +1,17 @@
 import * as THREE from "three";
 
-import { insideHouse, roomPoint, UPPER_FLOOR_Y } from "./rooms";
-import { alongPath, guidePath } from "./guide";
-import { createStationLabel } from "./labels";
+import { insideHouse, UPPER_FLOOR_Y } from "./rooms";
 import { buildingProfile, LOBBY_HEIGHT } from "./architecture";
-import { createAvatar } from "@/lib/palace/avatar";
-import { STATION_HUE, type PalaceLayout } from "@/lib/palace/layout";
+import { createHero, loadHeroModel } from "@/lib/palace/hero";
+
+/**
+ * Fetch the character model before the town is built, so the loading screen
+ * covers it; the game still starts (with a stand-in figure) if it is slow.
+ */
+export function preloadPalaceAssets(timeout = 8000) {
+  return Promise.race([loadHeroModel(), new Promise((resolve) => setTimeout(resolve, timeout))]);
+}
+import type { PalaceLayout } from "@/lib/palace/layout";
 import {
   cameraPosition,
   clampCameraDistance,
@@ -47,10 +53,7 @@ export type PalaceGame = {
   setMove: (forward: number, right: number) => void;
   /** Drag or mouse look, in pixels. */
   look: (deltaX: number, deltaY: number) => void;
-  /** A right answer: the stop is done, and `label` (its question) goes on a sign over it. */
-  markCollected: (stationId: string, label?: string) => void;
-  /** Where the trail on the pavement leads: a stop picked on the map, or null for the next in route order. */
-  setGuideTarget: (stationId: string | null) => void;
+  markCollected: (stationId: string) => void;
   relocateStation: (station: PalaceLayout["stations"][number]) => void;
   /**
    * Done with the card that is open: the player can walk again, and this
@@ -80,7 +83,6 @@ export function createPalaceGame({
   canvas,
   layout,
   collectedIds,
-  labels = {},
   onNearStation,
   onFrame,
   onContextLost,
@@ -88,8 +90,6 @@ export function createPalaceGame({
   canvas: HTMLCanvasElement;
   layout: PalaceLayout;
   collectedIds: readonly string[];
-  /** The question stored at each collected stop, for the sign over it. */
-  labels?: Readonly<Record<string, string>>;
   /** Fires when the card under the player's nose changes, id or null. */
   onNearStation: (stationId: string | null) => void;
   /** Once a frame, for the minimap and the district name. */
@@ -129,7 +129,7 @@ export function createPalaceGame({
   camera.layers.enable(UNOCCLUDED_LAYER);
   const lighting = createLighting(scene, renderer, onAPhone ? 1024 : 2048);
   const city = buildCity(layout);
-  const avatar = createAvatar();
+  const avatar = createHero({ player: true });
 
   /*
    * The town's life: cars on the streets and people on the pavements. Fewer
@@ -139,8 +139,6 @@ export function createPalaceGame({
   const crowd = createCrowd(layout, onAPhone ? 4 : 10);
 
   scene.add(city.group, avatar.root, avatar.effects, traffic.group, crowd.group);
-  /* Passers-by cast no shadow and are left out of the occlusion pass: they move, and they are many. */
-  crowd.group.traverse((object) => object.layers.set(UNOCCLUDED_LAYER));
   lighting.follow(layout.spawn.x, layout.spawn.z);
 
   /*
@@ -192,8 +190,7 @@ export function createPalaceGame({
    * route through the neighbourhood, and rubbing them out as you go would take
    * the walk with them.
    */
-  const signs = new Map<string, ReturnType<typeof createStationLabel>>();
-  const markVisualCollected = (visual: StationVisual, label?: string) => {
+  const markVisualCollected = (visual: StationVisual) => {
     visual.collected = true;
     visual.token.visible = false;
     visual.beacon.visible = false;
@@ -201,80 +198,13 @@ export function createPalaceGame({
     const ringMaterial = (visual.ring as THREE.Mesh).material as THREE.MeshBasicMaterial;
 
     ringMaterial.opacity = 0.18;
-
-    if (label && !signs.has(visual.station.id)) {
-      const sign = createStationLabel(label, STATION_HUE[visual.station.kind]);
-
-      sign.sprite.position.set(visual.station.x, (visual.station.y ?? 0) + 2.1, visual.station.z);
-      sign.sprite.layers.set(UNOCCLUDED_LAYER);
-      sign.sprite.visible = false;
-      scene.add(sign.sprite);
-      signs.set(visual.station.id, sign);
-    }
   };
 
   city.stations.forEach((visual) => {
     if (collected.has(visual.station.id)) {
-      markVisualCollected(visual, labels[visual.station.id]);
+      markVisualCollected(visual);
     }
   });
-
-  /*
-   * The trail: chevrons on the pavement leading to the next stop, flowing the
-   * way to go. The next stop is the one picked on the map, or else the lowest
-   * number not yet collected — a memory palace is walked in order.
-   */
-  const chevronShape = new THREE.Shape();
-
-  chevronShape.moveTo(0, 0.42);
-  chevronShape.lineTo(0.42, -0.1);
-  chevronShape.lineTo(0.24, -0.1);
-  chevronShape.lineTo(0, 0.18);
-  chevronShape.lineTo(-0.24, -0.1);
-  chevronShape.lineTo(-0.42, -0.1);
-  chevronShape.closePath();
-
-  const chevronGeometry = new THREE.ShapeGeometry(chevronShape);
-
-  /* Lying flat, pointing along +z. */
-  chevronGeometry.rotateX(Math.PI / 2);
-
-  const chevronMaterial = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    transparent: true,
-    opacity: 0.95,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-    toneMapped: false,
-  });
-  const GUIDE_MARKS = 36;
-  const GUIDE_SPACING = 1.7;
-  const trail = new THREE.InstancedMesh(chevronGeometry, chevronMaterial, GUIDE_MARKS);
-
-  trail.frustumCulled = false;
-  trail.renderOrder = 3;
-  trail.count = 0;
-  trail.layers.set(UNOCCLUDED_LAYER);
-  scene.add(trail);
-
-  let guideTargetId: string | null = null;
-  let guidePathPoints: { x: number; z: number }[] = [];
-  let guideRefreshAt = 0;
-  const trailMatrix = new THREE.Matrix4();
-  const trailQuaternion = new THREE.Quaternion();
-  const trailScale = new THREE.Vector3();
-  const trailPosition = new THREE.Vector3();
-  const up = new THREE.Vector3(0, 1, 0);
-
-  const guideTarget = () => {
-    const picked = guideTargetId ? city.stations.find((visual) => visual.station.id === guideTargetId && !visual.collected) : undefined;
-
-    if (picked) return picked;
-
-    return city.stations
-      .filter((visual) => !visual.collected)
-      .reduce<StationVisual | undefined>((first, visual) => (!first || visual.station.index < first.station.index ? visual : first), undefined);
-  };
 
   let character: CharacterState = createCharacter(layout.spawn.x, layout.spawn.z, layout.spawn.yaw);
   let cameraYaw = layout.spawn.yaw;
@@ -482,17 +412,6 @@ export function createPalaceGame({
     const eye = { x: character.x, y: character.y + 0.9, z: character.z };
     const indoors = layout.houses.some((house) => insideHouse(character, house));
     const activePitch = indoors ? Math.max(0.08, Math.min(cameraPitch, 0.42)) : cameraPitch;
-    const distance = clampCameraDistance({
-      target: eye,
-      yaw: cameraYaw,
-      pitch: activePitch,
-      maxDistance: indoors ? 4 : portrait ? CAMERA_DISTANCE_PORTRAIT : CAMERA_DISTANCE,
-      minDistance: indoors ? 0.7 : 3,
-      colliders: city.colliders,
-    });
-    const desired = cameraPosition({ target: eye, yaw: cameraYaw, pitch: activePitch, distance });
-
-    /* The camera trails rather than tracks, which is what makes running feel fast. */
     /*
      * Indoors the camera stays under the ceiling of the floor you are on — the
      * gallery's underside downstairs, the room's ceiling upstairs — blending
@@ -502,6 +421,17 @@ export function createPalaceGame({
     const ceiling = indoors
       ? UPPER_FLOOR_Y - 0.35 + climbed * (LOBBY_HEIGHT - 0.6 - (UPPER_FLOOR_Y - 0.35))
       : Number.POSITIVE_INFINITY;
+    const distance = clampCameraDistance({
+      target: eye,
+      yaw: cameraYaw,
+      pitch: activePitch,
+      maxDistance: indoors ? 4 : portrait ? CAMERA_DISTANCE_PORTRAIT : CAMERA_DISTANCE,
+      minDistance: indoors ? 0.7 : 3,
+      ceiling,
+      colliders: city.colliders,
+    });
+    /* The camera trails rather than tracks, which is what makes running feel fast. */
+    const desired = cameraPosition({ target: eye, yaw: cameraYaw, pitch: activePitch, distance });
 
     cameraTarget.set(desired.x, Math.min(ceiling, Math.max(desired.y, character.y + 1.2)), desired.z);
 
@@ -591,53 +521,6 @@ export function createPalaceGame({
       }
     }
 
-    /* The trail, re-routed a few times a second and flowing every frame. */
-    if (time > guideRefreshAt) {
-      guideRefreshAt = time + 300;
-
-      const target = guideTarget();
-
-      if (!target || interacting || indoors || character.y > 0.5) {
-        guidePathPoints = [];
-      } else {
-        const station = target.station;
-        const house = layout.houses[station.houseIndex];
-        /* For a stop indoors, the way to its door. */
-        const goal = station.placement === "inside" && house
-          ? roomPoint(house, 0, house.depth / 2 + 2.5)
-          : { x: station.x, z: station.z };
-
-        guidePathPoints = Math.hypot(goal.x - character.x, goal.z - character.z) < 7 ? [] : guidePath(layout, character, goal);
-        chevronMaterial.color.setHSL(STATION_HUE[station.kind] / 360, 0.95, 0.5);
-      }
-    }
-
-    if (guidePathPoints.length > 1) {
-      const flow = reducedMotion ? 0 : (seconds * 2.2) % GUIDE_SPACING;
-      const marks = alongPath(guidePathPoints, GUIDE_SPACING, 1.6 + flow, GUIDE_MARKS);
-
-      marks.forEach((mark, index) => {
-        const fade = 1.5 * Math.max(0.4, 1 - index / GUIDE_MARKS);
-
-        trailQuaternion.setFromAxisAngle(up, mark.heading);
-        trailScale.setScalar(fade);
-        trailPosition.set(mark.x, 0.07, mark.z);
-        trailMatrix.compose(trailPosition, trailQuaternion, trailScale);
-        trail.setMatrixAt(index, trailMatrix);
-      });
-      trail.count = marks.length;
-      trail.instanceMatrix.needsUpdate = true;
-    } else {
-      trail.count = 0;
-    }
-
-    /* Signs show up close, where they can be read. */
-    signs.forEach((sign) => {
-      sign.sprite.visible =
-        Math.abs(sign.sprite.position.y - 2.1 - character.y) < 1.5 &&
-        Math.hypot(sign.sprite.position.x - character.x, sign.sprite.position.z - character.z) < 26;
-    });
-
     onFrame(snapshot());
 
     draw();
@@ -662,6 +545,7 @@ export function createPalaceGame({
       /* Draws and triangles in the last frame, for comparing the cost of a change. */
       stats: () => ({ ...renderer.info.render, post: Boolean(post) }),
       scene,
+      player: () => ({ x: character.x, y: character.y, z: character.z }),
       people: () => crowd.colliders.map(({ x, z }) => ({ x, z })),
       cars: () => traffic.colliders.map(({ x, z }) => ({ x, z })),
       houses: layout.houses.map((house, index) => ({ ...house, kind: buildingProfile(house, index).kind })),
@@ -687,18 +571,13 @@ export function createPalaceGame({
       cameraYaw -= deltaX * LOOK_SENSITIVITY;
       cameraPitch = clampPitch(cameraPitch + deltaY * LOOK_SENSITIVITY);
     },
-    markCollected: (stationId, label) => {
+    markCollected: (stationId) => {
       const visual = findVisual(stationId);
 
       if (!visual || visual.collected) return;
 
       collected.add(stationId);
-      markVisualCollected(visual, label);
-      guideRefreshAt = 0;
-    },
-    setGuideTarget: (stationId) => {
-      guideTargetId = stationId;
-      guideRefreshAt = 0;
+      markVisualCollected(visual);
     },
     relocateStation: (station) => {
       const visual = findVisual(station.id);
@@ -745,10 +624,6 @@ export function createPalaceGame({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       post?.dispose();
-      signs.forEach((sign) => sign.dispose());
-      chevronGeometry.dispose();
-      chevronMaterial.dispose();
-      trail.dispose();
       traffic.dispose();
       crowd.dispose();
       lighting.dispose();

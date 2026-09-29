@@ -69,6 +69,10 @@ import { normalizeMimeType } from "@/lib/storage";
 import { serializeVector } from "@/lib/utils";
 import { getTranscriptionProvider } from "@/lib/transcription/provider";
 import { NoClearSpeechDetectedError } from "@/lib/transcription/types";
+import {
+  findTranscriptCoverageShortfall,
+  isTranscriptShortfallFatal,
+} from "@/lib/transcript-coverage";
 
 const transcriptionProvider = getTranscriptionProvider();
 const EMBEDDING_BATCH_SIZE = 100;
@@ -301,12 +305,14 @@ async function insertTranscriptSegmentsInBatches(
 }
 
 function assertTranscriptCoverage(params: {
+  lectureId: string;
   transcript: {
     text: string;
     segments: Array<{ startMs: number; endMs: number; text: string }>;
     durationSeconds: number;
   };
   expectedDurationSeconds: number | null;
+  stitchedFromChunks: boolean;
 }) {
   const { transcript, expectedDurationSeconds } = params;
 
@@ -314,22 +320,25 @@ function assertTranscriptCoverage(params: {
     throw new Error("Transcript is empty.");
   }
 
-  if (!expectedDurationSeconds || expectedDurationSeconds < 60) {
+  const shortfall = findTranscriptCoverageShortfall({
+    segments: transcript.segments,
+    expectedDurationSeconds,
+  });
+
+  if (!shortfall) {
     return;
   }
 
-  const expectedEndMs = expectedDurationSeconds * 1000;
-  const lastSegmentEndMs = transcript.segments.reduce(
-    (maxEndMs, segment) => Math.max(maxEndMs, segment.endMs),
-    0,
-  );
-  const allowedGapMs = Math.max(30_000, expectedEndMs * 0.05);
-
-  if (expectedEndMs - lastSegmentEndMs > allowedGapMs) {
+  if (isTranscriptShortfallFatal({ stitchedFromChunks: params.stitchedFromChunks })) {
     throw new Error(
-      `Transcript appears incomplete. Expected about ${expectedDurationSeconds}s but only covered ${Math.round(lastSegmentEndMs / 1000)}s.`,
+      `Transcript appears incomplete. Expected about ${shortfall.expectedSeconds}s but only covered ${shortfall.coveredSeconds}s.`,
     );
   }
+
+  console.warn("[lecture-pipeline] Transcript ends before the recording does", {
+    lectureId: params.lectureId,
+    ...shortfall,
+  });
 }
 
 async function getLectureForPipeline(params: { lectureId: string }) {
@@ -379,8 +388,9 @@ export async function transcribeLectureContent(params: { lectureId: string }) {
       : null,
   ).sort((left, right) => left.index - right.index);
 
+  const stitchedFromChunks = audioChunks.length > 0 && Boolean(transcriptionProvider.transcribeChunks);
   const transcript =
-    audioChunks.length > 0 && transcriptionProvider.transcribeChunks
+    stitchedFromChunks && transcriptionProvider.transcribeChunks
       ? await transcriptionProvider.transcribeChunks({
           chunks: await Promise.all(
             audioChunks.map(async (chunk) => {
@@ -435,8 +445,10 @@ export async function transcribeLectureContent(params: { lectureId: string }) {
         })();
 
   assertTranscriptCoverage({
+    lectureId: lecture.id,
     transcript,
     expectedDurationSeconds: lecture.duration_seconds,
+    stitchedFromChunks,
   });
 
   const embeddings: number[][] = [];

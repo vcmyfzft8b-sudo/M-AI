@@ -405,6 +405,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
   const woodwork: Instance[] = [];
   const glass: Instance[] = [];
   const clearGlass: Instance[] = [];
+  const clearCylinders: Instance[] = [];
   const cones: Instance[] = [];
   const cylinders: Instance[] = [];
   const spheres: Instance[] = [];
@@ -458,7 +459,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       : part.shape === "ribbon" ? ribbons
       : part.shape === "ring" ? rings
       : part.shape === "sphere" ? spheres
-      : part.shape === "cylinder" ? (part.glass ? glassCylinders : cylinders)
+      : part.shape === "cylinder" ? (part.clear ? clearCylinders : part.glass ? glassCylinders : cylinders)
       : part.clear ? clearGlass
       : part.glass ? glass : boxes;
     entries.push({
@@ -623,8 +624,32 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         ? house.landmarkIndex
         : layout.stations.length + layout.houses.indexOf(house),
     );
+    /* A skyscraper's lobby is walled in glass: a stone plinth, clear panes on mullions, a band at the top. */
+    const glassLobby = isTower(house);
     const addWall = (x: number, z: number, width: number, depth: number) => {
       const position = roomPoint(house, x, z);
+
+      if (glassLobby) {
+        const along = width > depth;
+        const length = along ? width : depth;
+        const place = (dx: number, y: number, w: number, h: number, d: number) => ({
+          matrix: boxMatrix({
+            ...roomPoint(house, x + (along ? dx : 0), z + (along ? 0 : dx)),
+            y,
+            width: along ? w : d,
+            height: h,
+            depth: along ? d : w,
+            rotation: house.facing,
+          }),
+          color: wall,
+        });
+
+        walls.push(place(0, 0.25, length, 0.5, 0.3));
+        walls.push(place(0, LOBBY_HEIGHT - 0.3, length, 0.6, 0.3));
+        clearGlass.push({ ...place(0, LOBBY_HEIGHT / 2, length, LOBBY_HEIGHT - 1.1, 0.05), color: new THREE.Color(0xbfe3f0) });
+        for (let mullion = -length / 2; mullion <= length / 2 + 0.01; mullion += length / Math.max(1, Math.round(length / 1.8)))
+          boxes.push({ ...place(mullion, LOBBY_HEIGHT / 2, 0.08, LOBBY_HEIGHT - 1.1, 0.12), color: new THREE.Color(0xc6d5d3) });
+      } else
       walls.push({
         matrix: boxMatrix({
           ...position,
@@ -674,7 +699,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       });
       // A colored back wall and rug link the exterior address to the room.
       const accent = at(-body / 2 + 0.16, 0);
-      boxes.push({
+      if (!glassLobby) boxes.push({
         matrix: boxMatrix({
           ...accent,
           y: (LOBBY_HEIGHT - 0.3) / 2,
@@ -1578,25 +1603,21 @@ export function buildCity(layout: PalaceLayout): CityBuild {
   group.add(instanced(boxGeometry, surface("wood", 0xffffff), woodwork));
   group.add(instanced(boxGeometry, cityGlassMaterial, glass));
   /* A penthouse's walls: glass you see through from both sides. */
-  group.add(
-    instanced(
-      boxGeometry,
-      track(
-        new THREE.MeshPhysicalMaterial({
-          color: 0xffffff,
-          transparent: true,
-          opacity: 0.18,
-          roughness: 0.05,
-          metalness: 0.1,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-          envMapIntensity: 1.3,
-        }),
-      ),
-      clearGlass,
-      { shadows: false },
-    ),
+  const clearMaterial = track(
+    new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.22,
+      roughness: 0.05,
+      metalness: 0.1,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      envMapIntensity: 1.4,
+    }),
   );
+
+  group.add(instanced(boxGeometry, clearMaterial, clearGlass, { shadows: false }));
+  group.add(instanced(cylinderGeometry, clearMaterial, clearCylinders, { shadows: false }));
   group.add(instanced(coneGeometry, tinted(), cones));
   group.add(instanced(cylinderGeometry, tinted(), cylinders));
   group.add(instanced(sphereGeometry, tinted(), spheres));
@@ -1627,13 +1648,67 @@ export function buildCity(layout: PalaceLayout): CityBuild {
    */
   const stations: StationVisual[] = [];
   const ringGeometry = track(new THREE.RingGeometry(0.7, 0.86, 32));
+  /* Crisp and in full colour: drawn over its own glow, untouched by fog or tone mapping. */
   const tokenMaterial = track(
     new THREE.SpriteMaterial({
       transparent: true,
       opacity: 0,
       depthWrite: false,
+      fog: false,
+      toneMapped: false,
     }),
   );
+
+  /*
+   * The glow round Memo: a soft halo in the colour of the stop behind the
+   * sticker, a ripple spreading on the ground, and sparkles rising up the
+   * beam. A stop should look like something worth walking to.
+   */
+  const softDot = (inner: string, stops: [number, string][]) => {
+    const canvas = document.createElement("canvas");
+
+    canvas.width = canvas.height = 128;
+    const context = canvas.getContext("2d");
+
+    if (context) {
+      const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+
+      gradient.addColorStop(0, inner);
+      stops.forEach(([at, color]) => gradient.addColorStop(at, color));
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, 128, 128);
+    }
+
+    const texture = track(new THREE.CanvasTexture(canvas));
+
+    texture.colorSpace = THREE.SRGBColorSpace;
+
+    return texture;
+  };
+  const haloTexture = softDot("rgba(255,255,255,0.95)", [[0.3, "rgba(255,255,255,0.55)"], [0.62, "rgba(255,255,255,0.16)"], [1, "rgba(255,255,255,0)"]]);
+  const sparkTexture = softDot("rgba(255,255,255,1)", [[0.18, "rgba(255,255,255,0.85)"], [0.45, "rgba(255,255,255,0.18)"], [1, "rgba(255,255,255,0)"]]);
+  const haloMaterials = new Map<PalaceStation["kind"], THREE.SpriteMaterial>();
+  const haloMaterial = (kind: PalaceStation["kind"]) => {
+    let material = haloMaterials.get(kind);
+
+    if (!material) {
+      material = track(
+        new THREE.SpriteMaterial({
+          map: haloTexture,
+          color: hsl(STATION_HUE[kind], 0.95, 0.72),
+          transparent: true,
+          depthWrite: false,
+          fog: false,
+          toneMapped: false,
+        }),
+      );
+      haloMaterials.set(kind, material);
+    }
+
+    return material;
+  };
+  const rippleGeometry = track(new THREE.RingGeometry(0.62, 0.8, 40));
+  const SPARKS_PER_STOP = 7;
 
   disposables.push(
     new THREE.TextureLoader().load(MASCOT_TEXTURE_SRC, (loaded) => {
@@ -1752,13 +1827,75 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     glow.scale.setScalar(3.4);
     glow.position.y = 0.07;
     glow.renderOrder = 1;
-    beacon.add(beam, glow);
+    /* A brighter core down the middle of the beam. */
+    const core = new THREE.Mesh(beamGeometry, materials.beam);
+
+    core.scale.set(0.32, BEACON_HEIGHT * 0.8, 0.32);
+    core.renderOrder = 2;
+
+    const halo = new THREE.Sprite(haloMaterial(station.kind));
+
+    halo.scale.setScalar(2.7);
+    halo.position.y = 1.65;
+    halo.renderOrder = 3;
+
+    const ripple = new THREE.Mesh(
+      rippleGeometry,
+      track(
+        new THREE.MeshBasicMaterial({
+          color: hsl(STATION_HUE[station.kind], 0.9, 0.62),
+          transparent: true,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+          fog: false,
+          toneMapped: false,
+        }),
+      ),
+    );
+
+    ripple.rotation.x = -Math.PI / 2;
+    ripple.position.y = 0.09;
+    ripple.renderOrder = 1;
+    token.renderOrder = 5;
+    beacon.add(beam, core, glow, halo, ripple);
     beacon.position.set(station.x, floor, station.z);
-    for (const unoccluded of [token, ring, beam, glow]) unoccluded.layers.set(UNOCCLUDED_LAYER);
+    for (const unoccluded of [token, ring, beam, core, glow, halo, ripple]) unoccluded.layers.set(UNOCCLUDED_LAYER);
 
     group.add(token, ring, beacon);
     stations.push({ station, token, ring, plaque, beacon, collected: false });
   });
+
+  /* Every stop's sparkles in one draw: a point cloud whose points are moved each frame. */
+  const sparkPositions = new Float32Array(stations.length * SPARKS_PER_STOP * 3);
+  const sparkColors = new Float32Array(stations.length * SPARKS_PER_STOP * 3);
+  const sparkGeometry = track(new THREE.BufferGeometry());
+
+  sparkGeometry.setAttribute("position", new THREE.BufferAttribute(sparkPositions, 3));
+  sparkGeometry.setAttribute("color", new THREE.BufferAttribute(sparkColors, 3));
+
+  const sparks = new THREE.Points(
+    sparkGeometry,
+    track(
+      new THREE.PointsMaterial({
+        map: sparkTexture,
+        size: 0.32,
+        vertexColors: true,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        fog: false,
+        toneMapped: false,
+      }),
+    ),
+  );
+
+  sparks.frustumCulled = false;
+  sparks.renderOrder = 4;
+  sparks.layers.set(UNOCCLUDED_LAYER);
+  group.add(sparks);
+
+  const sparkTint = new THREE.Color();
+  const white = new THREE.Color(1, 1, 1);
 
   return {
     group,
@@ -1767,6 +1904,46 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     stations,
     update: (seconds) => {
       beaconUniforms.uTime.value = seconds;
+
+      stations.forEach((visual, index) => {
+        const [halo, ripple] = [visual.beacon.children[3], visual.beacon.children[4] as THREE.Mesh];
+        const beat = Math.sin(seconds * 2.2 + index);
+
+        /* The halo breathes, and bobs with Memo. */
+        halo.scale.setScalar(2.6 + beat * 0.18);
+        halo.position.y = 1.65 + Math.sin(seconds * 2 + visual.station.index) * 0.1;
+
+        /* A ripple spreads out from the ring and fades, every second and a half. */
+        const wave = (seconds / 1.5 + index * 0.13) % 1;
+
+        ripple.scale.setScalar(1 + wave * 1.4);
+        (ripple.material as THREE.MeshBasicMaterial).opacity = (1 - wave) * 0.75;
+
+        /* Sparkles spiral up the beam, fading in and out. */
+        for (let spark = 0; spark < SPARKS_PER_STOP; spark++) {
+          const offset = (index * SPARKS_PER_STOP + spark) * 3;
+
+          if (!visual.beacon.visible) {
+            sparkPositions[offset + 1] = -1000;
+            continue;
+          }
+
+          const rise = (seconds * 0.32 + spark / SPARKS_PER_STOP + index * 0.37) % 1;
+          const angle = spark * 2.4 + seconds * 0.9;
+          const radius = 0.35 + Math.sin(rise * Math.PI) * 0.45;
+          const fade = Math.sin(rise * Math.PI);
+
+          sparkPositions[offset] = visual.beacon.position.x + Math.cos(angle) * radius;
+          sparkPositions[offset + 1] = visual.beacon.position.y + 0.3 + rise * 3.6;
+          sparkPositions[offset + 2] = visual.beacon.position.z + Math.sin(angle) * radius;
+          sparkTint.setHSL(STATION_HUE[visual.station.kind] / 360, 0.9, 0.7).lerp(white, 0.35).multiplyScalar(fade);
+          sparkColors[offset] = sparkTint.r;
+          sparkColors[offset + 1] = sparkTint.g;
+          sparkColors[offset + 2] = sparkTint.b;
+        }
+      });
+      sparkGeometry.attributes.position.needsUpdate = true;
+      sparkGeometry.attributes.color.needsUpdate = true;
     },
     dispose: () => {
       group.traverse((object) => {

@@ -2,7 +2,7 @@ import type { PalaceHouse } from "./layout";
 import { neighborhoodBuilding, type NeighborhoodKind } from "./neighborhood.ts";
 import { landmarkBuilding } from "./landmarks.ts";
 import { isMonument, monumentBuilding } from "./monuments.ts";
-import { towerParts } from "./tower.ts";
+import { LIFT_SIZE, towerParts, towerPlan } from "./tower.ts";
 
 export type CityPart = {
   shape: "box" | "rounded" | "cylinder" | "sphere" | "ribbon" | "ring" | "gable" | "bow" | "dome" | "cone" | "sail" | "pyramid";
@@ -113,6 +113,35 @@ export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
   const white = 0xf2f1e9,
     silver = 0xc6d5d3,
     green = 0x80b84f;
+  const tallKind = profile.kind === "helix" || profile.kind === "spire" || profile.kind === "tower";
+  /* The lift rises through every storey of a skyscraper; the floors leave it a shaft. */
+  const lift = tallKind ? towerPlan(house).lift : null;
+  const slabWithShaft = (y: number, w: number, d: number, color: number) => {
+    if (!lift) {
+      box(0, y, 0, w, 0.24, d, color);
+
+      return;
+    }
+
+    const hole = { x0: lift.x - LIFT_SIZE / 2 - 0.1, x1: lift.x + LIFT_SIZE / 2 + 0.1, z0: lift.z - LIFT_SIZE / 2 - 0.1, z1: lift.z + LIFT_SIZE / 2 + 0.1 };
+    const left = -w / 2, right = w / 2, back = -d / 2, front = d / 2;
+
+    box((left + right) / 2, y, (hole.z1 + front) / 2, w, 0.24, front - hole.z1, color);
+    box((left + right) / 2, y, (back + hole.z0) / 2, w, 0.24, hole.z0 - back, color);
+    box((left + hole.x0) / 2, y, (hole.z0 + hole.z1) / 2, hole.x0 - left, 0.24, hole.z1 - hole.z0, color);
+    box((hole.x1 + right) / 2, y, (hole.z0 + hole.z1) / 2, right - hole.x1, 0.24, hole.z1 - hole.z0, color);
+  };
+  /* A storey you can see into: clear glass all round, a core, desks by the windows, a lit ceiling. */
+  const glassStorey = (y: number, w: number, d: number) => {
+    for (const side of [-1, 1]) {
+      parts.push({ shape: "box", x: 0, y: y + 1.5, z: (side * d) / 2, width: w, height: 2.8, depth: 0.05, color: profile.glass, clear: true });
+      parts.push({ shape: "box", x: (side * w) / 2, y: y + 1.5, z: 0, width: 0.05, height: 2.8, depth: d, color: profile.glass, clear: true });
+      box(side * w * 0.22, y + 0.78, d / 2 - 1.1, 1.6, 0.07, 0.8, 0x6b5440);
+      box(side * w * 0.22, y + 0.4, d / 2 - 1.1, 1.4, 0.7, 0.06, 0x3a3a3a);
+    }
+    box(0.8, y + 1.5, 0.3, w * 0.24, 2.8, d * 0.26, 0xd9d6cc);
+    box(0, y + 2.86, 0, w * 0.62, 0.04, d * 0.62, 0xfff3d4);
+  };
   const base = LOBBY_HEIGHT,
     height = profile.height;
   const width = house.width,
@@ -178,16 +207,18 @@ export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
   // Framed glazing beside the clear 2.8 m entry, and visibly folded glass doors.
   for (const side of [-1, 1]) {
     const panelWidth = Math.max(0.6, (width - 3.4) / 2);
-    box(
-      side * (1.7 + panelWidth / 2),
-      2.6,
-      depth / 2 + 0.14,
-      panelWidth,
-      4.6,
-      0.08,
-      profile.glass,
-      true,
-    );
+    parts.push({
+      shape: "box",
+      x: side * (1.7 + panelWidth / 2),
+      y: 2.6,
+      z: depth / 2 + 0.14,
+      width: panelWidth,
+      height: 4.6,
+      depth: 0.08,
+      color: profile.glass,
+      /* A skyscraper's lobby is glass you can see into. */
+      ...(tallKind ? { clear: true } : { glass: true }),
+    });
     box(
       side * 1.5,
       ENTRY_HEIGHT / 2,
@@ -216,17 +247,13 @@ export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
 
   if (profile.kind === "helix") {
     const diameter = Math.min(width, depth) * 0.88;
-    add(
-      "cylinder",
-      0,
-      base + height / 2,
-      0,
-      diameter,
-      height,
-      diameter,
-      profile.glass,
-      true,
-    );
+    /* See-through glass, round floors at every storey, and a lift core up the middle. */
+    parts.push({ shape: "cylinder", x: 0, y: base + height / 2, z: 0, width: diameter, height, depth: diameter, color: profile.glass, clear: true });
+    add("cylinder", 0, base + height / 2, 0, diameter * 0.26, height, diameter * 0.26, 0xd9d6cc);
+    for (let level = 0; level < height; level += 3) {
+      add("cylinder", 0, base + level + 0.1, 0, diameter - 0.1, 0.22, diameter - 0.1, white);
+      add("cylinder", 0, base + level + 2.86, 0, diameter * 0.62, 0.04, diameter * 0.62, 0xfff3d4);
+    }
     for (let level = 0; level <= height; level += 3)
       add(
         "ring",
@@ -285,8 +312,13 @@ export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
       const x = 0;
       const y = base + floor * 3;
       const floorShape = profile.kind === "courtyard" || profile.kind === "spire" ? "rounded" : "box";
-      add(floorShape, x, y + 1.5, 0, w, 2.8, d, profile.glass, true);
-      add(floorShape, x, y + 0.08, 0, w + 0.35, 0.24, d + 0.35);
+      if (tallKind) {
+        glassStorey(y, w, d);
+        slabWithShaft(y + 0.08, w + 0.35, d + 0.35, white);
+      } else {
+        add(floorShape, x, y + 1.5, 0, w, 2.8, d, profile.glass, true);
+        add(floorShape, x, y + 0.08, 0, w + 0.35, 0.24, d + 0.35);
+      }
       for (const side of [-1, 1]) {
         for (let column = 0; column < 4; column++) {
           const mullionSpread = profile.kind === "courtyard" || profile.kind === "spire" ? 0.62 : 1;

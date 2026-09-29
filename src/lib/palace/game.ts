@@ -73,9 +73,11 @@ export type PalaceGame = {
 /**
  * How close you have to stand for a station to open its study screen. Wide
  * enough that walking up to the front door counts as arriving, since that is
- * what a player aims at rather than the token on the path.
+ * what a player aims at rather than the token on the path — and wide enough
+ * that the corner of an outdoor bench, walked into diagonally (1.7 m), still
+ * counts as arriving.
  */
-export const STATION_REACH = 1.8;
+export const STATION_REACH = 2;
 const LOOK_SENSITIVITY = 0.0042;
 /** How far behind the character the camera rides when nothing is in the way. */
 const CAMERA_DISTANCE = 8.4;
@@ -656,8 +658,8 @@ export function createPalaceGame({
       people: () => crowd.colliders.map(({ x, z }) => ({ x, z })),
       cars: () => traffic.colliders.map(({ x, z }) => ({ x, z })),
       houses: layout.houses.map((house, index) => ({ ...house, kind: buildingProfile(house, index).kind })),
-      teleport: (x: number, z: number, yaw: number, pitch?: number) => {
-        character = createCharacter(x, z, yaw);
+      teleport: (x: number, z: number, yaw: number, pitch?: number, y = 0) => {
+        character = { ...createCharacter(x, z, yaw), y };
         cameraYaw = yaw;
         if (pitch !== undefined) cameraPitch = clampPitch(pitch);
         camera.position.set(x - Math.sin(yaw) * 8, 5, z - Math.cos(yaw) * 8);

@@ -134,7 +134,13 @@ export function createPalaceGame({
   camera.layers.enable(UNOCCLUDED_LAYER);
   const lighting = createLighting(scene, renderer, onAPhone ? 1024 : 2048);
   const city = buildCity(layout);
-  const avatar = createHero({ player: true });
+  /*
+   * Left out of the ambient occlusion: that pass redraws the scene to find
+   * creases, and for a skinned, animated figure it shaded the pose the model
+   * was modelled in rather than the one it is in — a dark smudge between the
+   * legs. The figure still casts its real shadow (see `createLighting`).
+   */
+  const avatar = createHero({ player: true, layer: UNOCCLUDED_LAYER });
 
   /*
    * The town's life: cars on the streets and people on the pavements. Fewer
@@ -233,8 +239,9 @@ export function createPalaceGame({
    * the pass is dropped for good if it is not keeping up.
    */
   const frameTimes: number[] = [];
+  let watchingFrameRate = true;
   const watchFrameRate = (milliseconds: number) => {
-    if (!post || milliseconds <= 0 || milliseconds > 250) return;
+    if (!post || !watchingFrameRate || milliseconds <= 0 || milliseconds > 250) return;
     frameTimes.push(milliseconds);
     if (frameTimes.length < 90) return;
     const average = frameTimes.reduce((sum, value) => sum + value, 0) / frameTimes.length;
@@ -652,6 +659,14 @@ export function createPalaceGame({
       layout,
       /* Draws and triangles in the last frame, for comparing the cost of a change. */
       stats: () => ({ ...renderer.info.render, post: Boolean(post) }),
+      /* Turn the finishing pass back on and stop the frame-rate guard dropping it (a slow headless GPU). */
+      forcePost: () => {
+        watchingFrameRate = false;
+        if (!post) post = createPostProcessing(renderer, scene, camera);
+        resize();
+
+        return true;
+      },
       scene,
       player: () => ({ x: character.x, y: character.y, z: character.z }),
       lifts: () => lifts.map(({ x, z, y, stops, house }) => ({ x, z, y, stops, facing: house.facing })),

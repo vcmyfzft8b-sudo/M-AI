@@ -189,6 +189,11 @@ export function createLighting(
   const sun = new THREE.DirectionalLight(0xffe2b8, 3.5);
 
   sun.castShadow = true;
+  /*
+   * The sun sees the unoccluded layer too, so the people on it — kept out of
+   * the ambient occlusion — still cast their shadows on the street.
+   */
+  sun.shadow.camera.layers.enable(UNOCCLUDED_LAYER);
   sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
   sun.shadow.bias = -0.0006;
   /* Instanced boxes shadow-acne badly without this; it is cheaper than a bias

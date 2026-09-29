@@ -19,6 +19,7 @@ import {
   createCharacter,
   nearestStation,
   resolveCollision,
+  colliderApplies,
   stepCharacter,
   CHARACTER_RADIUS,
   type CharacterState,
@@ -28,6 +29,8 @@ import { createPostProcessing, type PostProcessing } from "@/lib/palace/post";
 import { buildCity, type StationVisual } from "@/lib/palace/world";
 import { createTraffic } from "@/lib/palace/traffic";
 import { createCrowd } from "@/lib/palace/crowd";
+import { createLiftState, stepLifts } from "@/lib/palace/lift";
+import { isTower, LIFT_SIZE, towerPlan } from "@/lib/palace/tower";
 
 /**
  * The loop: input in, a frame out.
@@ -139,6 +142,66 @@ export function createPalaceGame({
   const crowd = createCrowd(layout, onAPhone ? 4 : 10);
 
   scene.add(city.group, avatar.root, avatar.effects, traffic.group, crowd.group);
+
+  /*
+   * The skyscrapers' glass lifts: the logic in `lift.ts`, drawn here. The car's
+   * floor joins the town's walkable surfaces, so riding it is standing on it.
+   */
+  const lifts = createLiftState(layout);
+  const walkable = [...city.surfaces, ...lifts.map((lift) => lift.surface)];
+  const liftDisposables: { dispose: () => void }[] = [];
+  const liftMaterial = (parameters: THREE.MeshStandardMaterialParameters) => {
+    const material = new THREE.MeshStandardMaterial(parameters);
+
+    liftDisposables.push(material);
+
+    return material;
+  };
+  const liftBox = new THREE.BoxGeometry(1, 1, 1);
+  const steel = liftMaterial({ color: 0xc6d5d3, roughness: 0.3, metalness: 0.7 });
+  const liftGlass = liftMaterial({ color: 0xcfe8f2, transparent: true, opacity: 0.25, roughness: 0.05, side: THREE.DoubleSide, depthWrite: false });
+  const liftLight = liftMaterial({ color: 0xfff6e0, emissive: 0xfff1d0, emissiveIntensity: 1.2 });
+
+  liftDisposables.push(liftBox);
+
+  const liftCars = lifts.map((lift) => {
+    const car = new THREE.Group();
+    const piece = (material: THREE.Material, x: number, y: number, z: number, w: number, h: number, d: number, parent: THREE.Object3D = car) => {
+      const mesh = new THREE.Mesh(liftBox, material);
+
+      mesh.position.set(x, y, z);
+      mesh.scale.set(w, h, d);
+      parent.add(mesh);
+
+      return mesh;
+    };
+    const half = LIFT_SIZE / 2;
+    /* Built in the house's axes: the open side faces into the room (+z). */
+    const frame = new THREE.Group();
+
+    frame.rotation.y = lift.house.facing;
+    frame.add(car);
+    frame.position.set(lift.x, 0, lift.z);
+    piece(steel, 0, -0.06, 0, LIFT_SIZE, 0.12, LIFT_SIZE);
+    piece(steel, 0, 2.55, 0, LIFT_SIZE, 0.1, LIFT_SIZE);
+    piece(liftLight, 0, 2.49, 0, LIFT_SIZE * 0.6, 0.03, LIFT_SIZE * 0.6);
+    piece(liftGlass, 0, 1.25, -half, LIFT_SIZE, 2.5, 0.04);
+    piece(liftGlass, -half, 1.25, 0, 0.04, 2.5, LIFT_SIZE);
+    piece(liftGlass, half, 1.25, 0, 0.04, 2.5, LIFT_SIZE);
+    piece(steel, 0, 1.0, -half + 0.08, LIFT_SIZE - 0.3, 0.05, 0.05);
+    for (const [x, z] of [[-half, -half], [half, -half], [-half, half], [half, half]]) {
+      piece(steel, x, 1.28, z, 0.08, 2.6, 0.08);
+      /* The shaft's corner posts in the lobby. */
+      piece(steel, x * 1.04, LOBBY_HEIGHT / 2, z * 1.04, 0.1, LOBBY_HEIGHT, 0.1, frame);
+    }
+    /* A call button beside the door. */
+    piece(liftLight, half * 1.04 + 0.08, 1.2, half * 1.04, 0.05, 0.14, 0.1, frame);
+    scene.add(frame);
+
+    return car;
+  });
+  /* A tower's plan, computed once. */
+  const plans = new Map(layout.houses.filter(isTower).map((house) => [house, towerPlan(house)]));
   lighting.follow(layout.spawn.x, layout.spawn.z);
 
   /*
@@ -318,23 +381,48 @@ export function createPalaceGame({
     return { forward, right };
   };
 
+  /*
+   * Keys held down, kept honest. A browser does not always report a key
+   * coming back up, and a key it never reports up is a walker who runs on by
+   * themselves: on a Mac nothing is released while ⌘ is held (⌘⇧4 for a
+   * screenshot with W down), and a tab switch or a context menu swallows the
+   * release too. So a combination with ⌘, Ctrl or Alt is never movement,
+   * letting go of one of those clears the lot, and so does the page being
+   * hidden or right-clicked. A key still held when a study card closes is
+   * picked up again from its repeats rather than needing a second press.
+   */
   const onKeyDown = (event: KeyboardEvent) => {
     if (paused || interacting || (event.target instanceof HTMLElement &&
       (event.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)))) return;
+    if (event.metaKey || event.ctrlKey || event.altKey) {
+      clearInput();
+
+      return;
+    }
     if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code)) event.preventDefault();
-    if (event.repeat) return;
 
     keysDown.add(event.code);
   };
 
   const onKeyUp = (event: KeyboardEvent) => {
+    if (/^(Meta|Control|Alt|OS)/.test(event.code) || event.key === "Meta") {
+      clearInput();
+
+      return;
+    }
     keysDown.delete(event.code);
   };
 
   const clearInput = () => { keysDown.clear(); move.forward = 0; move.right = 0; };
+  const onVisibilityChange = () => {
+    if (document.hidden) clearInput();
+  };
+
   window.addEventListener("blur", clearInput);
+  window.addEventListener("contextmenu", clearInput);
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
+  document.addEventListener("visibilitychange", onVisibilityChange);
 
   /*
    * A phone that backgrounds the app, or a laptop that switches GPU, can take
@@ -387,9 +475,18 @@ export function createPalaceGame({
       input,
       cameraYaw,
       colliders: city.colliders,
-      surfaces: city.surfaces,
+      surfaces: walkable,
       bounds: layout.bounds,
       delta,
+    });
+
+    /* The lifts move (carrying whoever stands in one), and bar the landings they are not at. */
+    for (const barrier of stepLifts(lifts, character, delta)) {
+      if (!colliderApplies(barrier, character.y)) continue;
+      character = { ...character, ...resolveCollision(character, barrier, CHARACTER_RADIUS) };
+    }
+    lifts.forEach((lift, index) => {
+      liftCars[index].position.y = lift.y;
     });
 
     /* The moving things: the cars stop for people, the people wait for the player. */
@@ -410,7 +507,14 @@ export function createPalaceGame({
     lighting.follow(character.x, character.z);
 
     const eye = { x: character.x, y: character.y + 0.9, z: character.z };
-    const indoors = layout.houses.some((house) => insideHouse(character, house));
+    const house = layout.houses.find((candidate) => insideHouse(character, candidate));
+    const plan = house ? plans.get(house) : undefined;
+    /*
+     * In a skyscraper, the lift shaft between floors and the roof deck are open
+     * air as far as the camera is concerned: it swings out as it does outdoors.
+     */
+    const inTheOpen = plan ? character.y > 1 && (character.y < plan.floor - 0.4 || character.y > plan.roof - 0.4) : false;
+    const indoors = Boolean(house) && !inTheOpen;
     const activePitch = indoors ? Math.max(0.08, Math.min(cameraPitch, 0.42)) : cameraPitch;
     /*
      * Indoors the camera stays under the ceiling of the floor you are on — the
@@ -418,9 +522,11 @@ export function createPalaceGame({
      * between the two as you climb, so it never looks down through a floor.
      */
     const climbed = Math.max(0, Math.min(1, character.y / UPPER_FLOOR_Y));
-    const ceiling = indoors
-      ? UPPER_FLOOR_Y - 0.35 + climbed * (LOBBY_HEIGHT - 0.6 - (UPPER_FLOOR_Y - 0.35))
-      : Number.POSITIVE_INFINITY;
+    const ceiling = !indoors
+      ? Number.POSITIVE_INFINITY
+      : plan
+        ? character.y < 1 ? LOBBY_HEIGHT - 0.6 : plan.roof - 0.6
+        : UPPER_FLOOR_Y - 0.35 + climbed * (LOBBY_HEIGHT - 0.6 - (UPPER_FLOOR_Y - 0.35));
     const distance = clampCameraDistance({
       target: eye,
       yaw: cameraYaw,
@@ -546,6 +652,7 @@ export function createPalaceGame({
       stats: () => ({ ...renderer.info.render, post: Boolean(post) }),
       scene,
       player: () => ({ x: character.x, y: character.y, z: character.z }),
+      lifts: () => lifts.map(({ x, z, y, stops, house }) => ({ x, z, y, stops, facing: house.facing })),
       people: () => crowd.colliders.map(({ x, z }) => ({ x, z })),
       cars: () => traffic.colliders.map(({ x, z }) => ({ x, z })),
       houses: layout.houses.map((house, index) => ({ ...house, kind: buildingProfile(house, index).kind })),
@@ -621,10 +728,13 @@ export function createPalaceGame({
       resizeObserver.disconnect();
       canvas.removeEventListener("webglcontextlost", onWebglContextLost);
       window.removeEventListener("blur", clearInput);
+      window.removeEventListener("contextmenu", clearInput);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       post?.dispose();
       traffic.dispose();
+      liftDisposables.forEach((item) => item.dispose());
       crowd.dispose();
       lighting.dispose();
       avatar.dispose();

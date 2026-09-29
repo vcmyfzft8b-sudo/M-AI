@@ -2,6 +2,7 @@ import type { PalaceHouse } from "./layout";
 import { neighborhoodBuilding, type NeighborhoodKind } from "./neighborhood.ts";
 import { landmarkBuilding } from "./landmarks.ts";
 import { isMonument, monumentBuilding } from "./monuments.ts";
+import { towerParts } from "./tower.ts";
 
 export type CityPart = {
   shape: "box" | "rounded" | "cylinder" | "sphere" | "ribbon" | "ring" | "gable" | "bow" | "dome" | "cone" | "sail" | "pyramid";
@@ -19,13 +20,15 @@ export type CityPart = {
   tiltZ?: number;
   /** Something at walking height outside the walls that a walker must go round. */
   solid?: boolean;
+  /** See-through glass, both sides, for a place you can stand inside (a penthouse). */
+  clear?: boolean;
 };
 
 /*
  * The ground-floor room's height: tall enough for a gallery with real headroom
  * under it and over it (see `rooms.ts`).
  */
-export const LOBBY_HEIGHT = 7.2;
+export const LOBBY_HEIGHT = 8;
 export const ENTRY_HEIGHT = 3.6;
 
 const STUDY_ARCHETYPES = [
@@ -78,11 +81,11 @@ export function buildingProfile(house: PalaceHouse, index: number) {
   if (house.monument === "pyramid") kind = "pyramid";
   const tall = kind === "helix" || kind === "spire" || kind === "tower";
   const height = tall ? (house.landmark ? 30 + (variant % 5) * 6 : 18 + (variant % 3) * 6)
-    : kind === "terrace" ? 10.4 + (variant % 2) * 3
-    : kind === "courtyard" ? 7.4 + (variant % 2) * 3
-    : kind === "clocktower" ? 17.9 : kind === "houseboat" || kind === "observatory" ? 11.4
-    : kind === "temple" ? 11.9 : kind === "pagoda" ? 23.4 : kind === "castle" ? 14.9
-    : kind === "lighthouse" ? 26.4 : kind === "cathedral" ? 25.9 : kind === "cafe" ? 10.9 : 7.2;
+    : kind === "terrace" ? 11.2 + (variant % 2) * 3
+    : kind === "courtyard" ? 8.2 + (variant % 2) * 3
+    : kind === "clocktower" ? 18.7 : kind === "houseboat" || kind === "observatory" ? 12.2
+    : kind === "temple" ? 12.7 : kind === "pagoda" ? 24.2 : kind === "castle" ? 15.7
+    : kind === "lighthouse" ? 27.2 : kind === "cathedral" ? 26.7 : kind === "cafe" ? 11.7 : 8;
   const palette = [0xe2c8ac,0xb6c8bc,0xd2b3a6,0xcecadb,0xd6cda9];
   const wall = tall || kind === "terrace" || kind === "courtyard" ? 0xeeeede
     : kind === "pyramid" ? 0xc8a971 : kind === "houseboat" ? 0xe7e1cf
@@ -263,6 +266,9 @@ export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
       0.48,
       0.3,
     );
+    /* A drum from the crown up to the penthouse. */
+    add("cylinder", 0, base + height + 1.2, 0, diameter * 0.9, 2.4, diameter * 0.9, silver);
+    parts.push(...towerParts(house));
   } else {
     const floors = Math.max(3, Math.round(height / 3));
     for (let floor = 0; floor < floors; floor++) {
@@ -337,7 +343,10 @@ export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
           ? 0.66
           : 1;
     const roofX = 0;
-    if (profile.kind === "courtyard") {
+    if (profile.kind === "spire" || profile.kind === "tower") {
+      /* The skyscrapers end in a glass penthouse and a viewing deck (`tower.ts`). */
+      parts.push(...towerParts(house));
+    } else if (profile.kind === "courtyard") {
       add(
         "rounded",
         0,

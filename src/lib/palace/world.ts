@@ -35,6 +35,7 @@ import {
 } from "./rooms";
 import { createSurfaceMaterial } from "./materials";
 import { UNOCCLUDED_LAYER } from "./atmosphere";
+import { isTower, penthouseFurniture, towerColliders, towerPlan, towerSurfaces } from "./tower";
 import { createRandom } from "./rng";
 
 import {
@@ -403,6 +404,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
   const walls: Instance[] = [];
   const woodwork: Instance[] = [];
   const glass: Instance[] = [];
+  const clearGlass: Instance[] = [];
   const cones: Instance[] = [];
   const cylinders: Instance[] = [];
   const spheres: Instance[] = [];
@@ -457,6 +459,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       : part.shape === "ring" ? rings
       : part.shape === "sphere" ? spheres
       : part.shape === "cylinder" ? (part.glass ? glassCylinders : cylinders)
+      : part.clear ? clearGlass
       : part.glass ? glass : boxes;
     entries.push({
       matrix: boxMatrix({
@@ -733,74 +736,85 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         depth: sideways ? box.width : box.depth,
       });
 
-      /* ---- the gallery and its stairs ---- */
-      const upper = roomUpperFloor(house);
-      const floorColor = hsl(32, 0.26, 0.5);
-      const stairColor = hsl(38, 0.12, 0.8);
-      const railColor = new THREE.Color(0x3a3230);
-      const place = (x: number, y: number, z: number, width: number, height: number, depth: number, tiltX = 0) =>
-        boxMatrix({ ...roomPoint(house, x, z), y, width, height, depth, rotation: house.facing, tiltX });
+      /* ---- the gallery and its stairs; in a skyscraper, the penthouse and roof instead ---- */
+      const tower = isTower(house);
 
-      roomSurfaces(house).forEach((surface) => surfaces.push(worldBox(surface)));
-      roomUpperColliders(house).forEach((collider) => colliders.push(worldBox(collider)));
+      if (tower) {
+        towerSurfaces(house).forEach((surface) => surfaces.push(worldBox(surface)));
+        towerColliders(house).forEach((collider) => colliders.push(worldBox(collider)));
+      } else {
+        /* ---- the gallery and its stairs ---- */
+        const upper = roomUpperFloor(house);
+        const floorColor = hsl(32, 0.26, 0.5);
+        const stairColor = hsl(38, 0.12, 0.8);
+        const railColor = new THREE.Color(0x3a3230);
+        const place = (x: number, y: number, z: number, width: number, height: number, depth: number, tiltX = 0) =>
+          boxMatrix({ ...roomPoint(house, x, z), y, width, height, depth, rotation: house.facing, tiltX });
 
-      for (let index = 0; index < upper.stair.steps; index++) {
-        const step = stairStep(house, index);
+        roomSurfaces(house).forEach((surface) => surfaces.push(worldBox(surface)));
+        roomUpperColliders(house).forEach((collider) => colliders.push(worldBox(collider)));
 
-        walls.push({ matrix: place(step.x, step.y / 2, step.z, step.width, step.y, step.depth), color: stairColor });
+        for (let index = 0; index < upper.stair.steps; index++) {
+          const step = stairStep(house, index);
+
+          walls.push({ matrix: place(step.x, step.y / 2, step.z, step.width, step.y, step.depth), color: stairColor });
+          woodwork.push({
+            matrix: place(step.x, step.y - 0.02, step.z + 0.015, step.width + 0.02, 0.05, step.depth + 0.03),
+            color: floorColor,
+          });
+        }
+
+        /* The handrail up the open side: posts, and a rail at the stairs' own slope. */
+        const slope = Math.atan2(UPPER_FLOOR_Y, upper.stair.run);
+        const railBottom = stairStep(house, 2);
+        const railLength = Math.hypot(railBottom.z - upper.stair.zTop, UPPER_FLOOR_Y - railBottom.y);
+
+        for (let index = 2; index < upper.stair.steps; index += 3) {
+          const step = stairStep(house, index);
+
+          cylinders.push({ matrix: place(upper.stair.x0 + 0.05, step.y + RAIL_HEIGHT / 2, step.z, 0.06, RAIL_HEIGHT, 0.06), color: railColor });
+        }
         woodwork.push({
-          matrix: place(step.x, step.y - 0.02, step.z + 0.015, step.width + 0.02, 0.05, step.depth + 0.03),
+          matrix: place(
+            upper.stair.x0 + 0.05,
+            (railBottom.y + UPPER_FLOOR_Y) / 2 + RAIL_HEIGHT,
+            (railBottom.z + upper.stair.zTop) / 2,
+            0.09,
+            0.07,
+            railLength,
+            slope,
+          ),
           color: floorColor,
         });
-      }
 
-      /* The handrail up the open side: posts, and a rail at the stairs' own slope. */
-      const slope = Math.atan2(UPPER_FLOOR_Y, upper.stair.run);
-      const railBottom = stairStep(house, 2);
-      const railLength = Math.hypot(railBottom.z - upper.stair.zTop, UPPER_FLOOR_Y - railBottom.y);
+        /* The gallery floor, its edge, and its rail. */
+        const galleryZ = -upper.innerZ + upper.galleryDepth / 2;
 
-      for (let index = 2; index < upper.stair.steps; index += 3) {
-        const step = stairStep(house, index);
-
-        cylinders.push({ matrix: place(upper.stair.x0 + 0.05, step.y + RAIL_HEIGHT / 2, step.z, 0.06, RAIL_HEIGHT, 0.06), color: railColor });
-      }
-      woodwork.push({
-        matrix: place(
-          upper.stair.x0 + 0.05,
-          (railBottom.y + UPPER_FLOOR_Y) / 2 + RAIL_HEIGHT,
-          (railBottom.z + upper.stair.zTop) / 2,
-          0.09,
-          0.07,
-          railLength,
-          slope,
-        ),
-        color: floorColor,
-      });
-
-      /* The gallery floor, its edge, and its rail. */
-      const galleryZ = -upper.innerZ + upper.galleryDepth / 2;
-
-      woodwork.push({
-        matrix: place(0, UPPER_FLOOR_Y - 0.1, galleryZ, upper.innerX * 2, 0.2, upper.galleryDepth),
-        color: floorColor,
-      });
-      walls.push({
-        matrix: place(0, UPPER_FLOOR_Y - 0.28, upper.edgeZ - 0.06, upper.innerX * 2, 0.36, 0.12),
-        color: stairColor,
-      });
-      const railFrom = -upper.innerX, railTo = upper.stair.x0;
-
-      for (let x = railFrom + 0.1; x <= railTo; x += 0.9)
-        cylinders.push({ matrix: place(x, UPPER_FLOOR_Y + RAIL_HEIGHT / 2, upper.edgeZ, 0.06, RAIL_HEIGHT, 0.06), color: railColor });
-      for (const height of [RAIL_HEIGHT, RAIL_HEIGHT * 0.45])
-        (height === RAIL_HEIGHT ? woodwork : boxes).push({
-          matrix: place((railFrom + railTo) / 2, UPPER_FLOOR_Y + height, upper.edgeZ, railTo - railFrom, height === RAIL_HEIGHT ? 0.07 : 0.035, height === RAIL_HEIGHT ? 0.1 : 0.035),
-          color: height === RAIL_HEIGHT ? floorColor : railColor,
+        woodwork.push({
+          matrix: place(0, UPPER_FLOOR_Y - 0.1, galleryZ, upper.innerX * 2, 0.2, upper.galleryDepth),
+          color: floorColor,
         });
+        walls.push({
+          matrix: place(0, UPPER_FLOOR_Y - 0.28, upper.edgeZ - 0.06, upper.innerX * 2, 0.36, 0.12),
+          color: stairColor,
+        });
+        const railFrom = -upper.innerX, railTo = upper.stair.x0;
 
+        for (let x = railFrom + 0.1; x <= railTo; x += 0.9)
+          cylinders.push({ matrix: place(x, UPPER_FLOOR_Y + RAIL_HEIGHT / 2, upper.edgeZ, 0.06, RAIL_HEIGHT, 0.06), color: railColor });
+        for (const height of [RAIL_HEIGHT, RAIL_HEIGHT * 0.45])
+          (height === RAIL_HEIGHT ? woodwork : boxes).push({
+            matrix: place((railFrom + railTo) / 2, UPPER_FLOOR_Y + height, upper.edgeZ, railTo - railFrom, height === RAIL_HEIGHT ? 0.07 : 0.035, height === RAIL_HEIGHT ? 0.1 : 0.035),
+            color: height === RAIL_HEIGHT ? floorColor : railColor,
+          });
+      }
+
+      const upperFloor = tower ? towerPlan(house).floor : UPPER_FLOOR_Y;
       const furniture: (RoomPart & { upstairs?: boolean })[] = [
         ...roomFurniture(house, room, memoryInside && !memoryUpstairs),
-        ...upperFurniture(house, room, Boolean(memoryUpstairs)).map((part) => ({ ...part, upstairs: true })),
+        ...(tower ? penthouseFurniture(house, Boolean(memoryUpstairs)) : upperFurniture(house, room, Boolean(memoryUpstairs))).map(
+          (part) => ({ ...part, upstairs: true }),
+        ),
       ];
 
       for (const part of furniture) {
@@ -833,7 +847,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
             width: sideways ? part.depth : part.width,
             depth: sideways ? part.width : part.depth,
             ...(part.upstairs
-              ? { bottom: UPPER_FLOOR_Y - 0.1, top: UPPER_FLOOR_Y + 2 }
+              ? { bottom: upperFloor - 0.1, top: upperFloor + 2 }
               : /* Its real height, so the camera sees over a desk; never less than a step, so nobody walks over one. */
                 { top: Math.max(part.y + part.height / 2, STEP_UP + 0.1) }),
           });
@@ -1563,6 +1577,26 @@ export function buildCity(layout: PalaceLayout): CityBuild {
   group.add(instanced(boxGeometry, surface("plaster", 0xffffff), walls));
   group.add(instanced(boxGeometry, surface("wood", 0xffffff), woodwork));
   group.add(instanced(boxGeometry, cityGlassMaterial, glass));
+  /* A penthouse's walls: glass you see through from both sides. */
+  group.add(
+    instanced(
+      boxGeometry,
+      track(
+        new THREE.MeshPhysicalMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.18,
+          roughness: 0.05,
+          metalness: 0.1,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          envMapIntensity: 1.3,
+        }),
+      ),
+      clearGlass,
+      { shadows: false },
+    ),
+  );
   group.add(instanced(coneGeometry, tinted(), cones));
   group.add(instanced(cylinderGeometry, tinted(), cylinders));
   group.add(instanced(sphereGeometry, tinted(), spheres));

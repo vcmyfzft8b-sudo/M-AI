@@ -21,6 +21,7 @@ import {
   roomUpperColliders,
   roomUpperFloor,
   roomWalls,
+  hasGallery,
   UPPER_FLOOR_Y,
   upperFurniture,
   upperStationPoint,
@@ -95,6 +96,7 @@ function walkTo(character, house, local, world, frames = 400) {
 
 test("every house's stairs lead from the door to the gallery", () => {
   layout.houses.forEach((house, index) => {
+    if (!hasGallery(house)) return;
     const world = room(house, index);
     const upper = roomUpperFloor(house);
     const stairX = (upper.stair.x0 + upper.stair.x1) / 2;
@@ -130,7 +132,7 @@ test("every house's stairs lead from the door to the gallery", () => {
 });
 
 test("the stairs stay clear of the doorway", () => {
-  for (const house of layout.houses) {
+  for (const house of layout.houses.filter(hasGallery)) {
     const { stair } = roomUpperFloor(house);
 
     assert.ok(stair.x0 > ROOM_DOOR_WIDTH / 2 + CHARACTER_RADIUS, "the stairs block the door");
@@ -139,8 +141,8 @@ test("the stairs stay clear of the doorway", () => {
 });
 
 test("downstairs, the gallery is a ceiling, not a wall", () => {
-  const house = layout.houses[0];
-  const world = room(house, 0);
+  const house = layout.houses.find(hasGallery);
+  const world = room(house, layout.houses.indexOf(house));
   const upper = roomUpperFloor(house);
   const underneath = roomPoint(house, -upper.innerX + 1.2, upper.edgeZ - 0.5);
 
@@ -154,7 +156,7 @@ test("downstairs, the gallery is a ceiling, not a wall", () => {
 });
 
 test("half the indoor stops wait upstairs, on their own house's gallery", () => {
-  const inside = layout.stations.filter((station) => station.placement === "inside");
+  const inside = layout.stations.filter((station) => station.placement === "inside" && hasGallery(layout.houses[station.houseIndex]));
   const upstairs = inside.filter((station) => (station.y ?? 0) > 0);
 
   assert.ok(upstairs.length >= Math.floor(inside.length / 2) - 1, "too few stops upstairs");
@@ -178,7 +180,7 @@ test("a stop opens only on its own floor", () => {
 });
 
 test("downstairs, the camera never sits inside the staircase, and passes under the gallery rail", () => {
-  layout.houses.slice(0, 12).forEach((house, index) => {
+  layout.houses.filter(hasGallery).slice(0, 12).forEach((house, index) => {
     const world = room(house, index);
     const upper = roomUpperFloor(house);
     const ceiling = UPPER_FLOOR_Y - 0.35;

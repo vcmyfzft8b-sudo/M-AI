@@ -1,6 +1,7 @@
 // Imported by its real filename so the Node test runner can load the layout
 // directly; it cannot resolve the "@/" alias.
 import { roomIdentity, roomPoint, stationIsUpstairs, UPPER_FLOOR_Y, upperStationPoint } from "./rooms.ts";
+import { isTower, penthouseStationPoint, towerPlan } from "./tower.ts";
 import { createRandom, seedFromString, type Random } from "./rng.ts";
 
 /**
@@ -1128,9 +1129,20 @@ export function buildPalaceLayout({
    * spread across the town is untouched.
    */
   stations.forEach((station, index) => {
-    if (station.placement !== "inside" || !stationIsUpstairs(station.index)) return;
+    if (station.placement !== "inside") return;
 
     const house = houses[station.houseIndex];
+
+    /* A stop in a skyscraper waits in its penthouse, at the top of the lift. */
+    if (isTower(house)) {
+      const local = penthouseStationPoint(house);
+
+      stations[index] = { ...station, ...roomPoint(house, local.x, local.z), y: towerPlan(house).floor };
+
+      return;
+    }
+    if (!stationIsUpstairs(station.index)) return;
+
     const local = upperStationPoint(house, roomIdentity(station.index));
 
     stations[index] = { ...station, ...roomPoint(house, local.x, local.z), y: UPPER_FLOOR_Y };

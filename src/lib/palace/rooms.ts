@@ -1,4 +1,5 @@
 import type { PalaceHouse } from "./layout";
+import { isTower, LIFT_SIZE, towerPlan } from "./tower.ts";
 
 export const ROOM_THEMES = [
   "library",
@@ -362,15 +363,22 @@ export function roomFurniture(
    * gallery's underside — the whole room together, so a bookcase and its books
    * still match.
    */
+  /* A skyscraper's lobby has a lift in its corner instead, and no gallery over it. */
+  const tower = isTower(house);
   const { stair } = roomUpperFloor(house);
+  const lift = tower ? towerPlan(house).lift : null;
+  /* The lift and a clear approach to its door, which faces into the room. */
+  const keepClear = lift
+    ? { x: lift.x, z: lift.z + 1.2, width: LIFT_SIZE, depth: LIFT_SIZE + 2.4 }
+    : { x: (stair.x0 + stair.x1) / 2, z: (stair.zTop + stair.zBottom) / 2, width: stair.x1 - stair.x0, depth: stair.zBottom - stair.zTop };
   const clearance = 0.6;
-  const inStairs = (part: RoomPart) =>
-    Math.abs(part.x - (stair.x0 + stair.x1) / 2) < (stair.x1 - stair.x0 + part.width) / 2 + clearance &&
-    Math.abs(part.z - (stair.zTop + stair.zBottom) / 2) < (stair.zBottom - stair.zTop + part.depth) / 2 + clearance;
-  const cleared = new Set(parts.filter(inStairs).map((part) => part.group));
+  const inTheWay = (part: RoomPart) =>
+    Math.abs(part.x - keepClear.x) < (keepClear.width + part.width) / 2 + clearance &&
+    Math.abs(part.z - keepClear.z) < (keepClear.depth + part.depth) / 2 + clearance;
+  const cleared = new Set(parts.filter(inTheWay).map((part) => part.group));
   const kept = parts.filter((part) => !cleared.has(part.group));
   const tallest = Math.max(...kept.map((part) => part.y + part.height / 2));
-  const squeeze = Math.min(1, (UPPER_FLOOR_Y - 0.35) / tallest);
+  const squeeze = tower ? 1 : Math.min(1, (UPPER_FLOOR_Y - 0.35) / tallest);
 
   return kept.map((part) =>
     squeeze === 1 ? part : { ...part, y: part.y * squeeze, height: part.height * squeeze },
@@ -476,6 +484,11 @@ export function upperStationPoint(house: PalaceHouse, identity: RoomIdentity) {
   const { innerX, innerZ, galleryDepth } = roomUpperFloor(house);
 
   return { x: -innerX * 0.45 + identity.anchorX * 0.5, z: -innerZ + galleryDepth * 0.55 };
+}
+
+/** Whether a room has the gallery and stairs: every house but a skyscraper, which has a lift. */
+export function hasGallery(house: PalaceHouse) {
+  return !isTower(house);
 }
 
 /** Which stops wait upstairs: every other indoor one. */

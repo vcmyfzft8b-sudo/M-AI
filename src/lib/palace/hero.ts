@@ -138,6 +138,8 @@ export function createHero(look: HeroLook = {}): Avatar {
   let wave: THREE.AnimationAction | null = null;
   let hit: THREE.AnimationAction | null = null;
   let disposed = false;
+  const faded: THREE.MeshStandardMaterial[] = [];
+  let opacity = 1;
 
   const attach = (gltf: GLTF) => {
     if (disposed) return;
@@ -178,6 +180,7 @@ export function createHero(look: HeroLook = {}): Avatar {
       else if (name === "eyebrows") material.color.set(colours.hair).multiplyScalar(0.7);
       else if (name === "white") material.color.set(0xf2f2f0);
       object.material = material;
+      faded.push(material);
       object.castShadow = player;
       object.receiveShadow = player;
       /* A skinned mesh's bounds are its bind pose; culling on them loses a running figure's limbs. */
@@ -232,6 +235,21 @@ export function createHero(look: HeroLook = {}): Avatar {
   return {
     root,
     effects,
+    setOpacity: (next) => {
+      const value = Math.round(next * 20) / 20;
+
+      if (value === opacity) return;
+      /* Only a faded figure is sorted as transparent; a solid one stays in the opaque pass. */
+      const toggled = (value < 1) !== (opacity < 1);
+
+      opacity = value;
+      for (const material of faded) {
+        material.opacity = value;
+        material.transparent = value < 1;
+        material.depthWrite = value >= 1;
+        if (toggled) material.needsUpdate = true;
+      }
+    },
     react: (next: AvatarReaction) => {
       standIn?.react(next);
 

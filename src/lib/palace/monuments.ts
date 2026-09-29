@@ -223,7 +223,7 @@ export function monumentBuilding(house: PalaceHouse, kind: MonumentKind, base: n
 
     add("cylinder", 0, top + 0.15, tz, 4.4, 0.3, 4.4, dark);
     add("ring", 0, top + 0.75, tz, 4.2, 0.9, 4.2, dark);
-    add("cylinder", 0, top + 1.35, tz, 2.3, 2.2, 2.3, 0x9fd3e0, { glass: true });
+    add("cylinder", 0, top + 1.35, tz, 2.3, 2.2, 2.3, 0x9fd3e0, { clear: true });
     add("cylinder", 0, top + 1.35, tz, 0.8, 1.2, 0.8, 0xfff0a0);
     add("dome", 0, top + 2.45, tz, 2.7, 1.4, 2.7, red);
     add("cone", 0, top + 4.1, tz, 0.3, 0.6, 0.3, dark);
@@ -286,7 +286,8 @@ export function monumentBuilding(house: PalaceHouse, kind: MonumentKind, base: n
       const span = w / 2 - 2.2;
 
       /* A big shop window, and a striped awning over it. */
-      box(cx, 1.9, front + 0.1, span - 0.3, 2.3, 0.08, 0x8ec1cf, { glass: true });
+      /* A shop window you can see into the café through (its wall behind is glass too). */
+      box(cx, 1.9, front + 0.1, span - 0.3, 2.3, 0.04, 0x8ec1cf, { clear: true });
       box(cx, 1.9, front + 0.07, span, 2.6, 0.08, trim);
       box(cx, 0.45, front + 0.2, span, 0.9, 0.3, trim);
       const count = Math.max(4, Math.round(span / 0.4));

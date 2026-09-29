@@ -69,12 +69,12 @@ export function neighborhoodBuilding(house: PalaceHouse, kind: NeighborhoodKind,
     const angle=Math.atan2(rise,w/2);
     for(const side of [-1,1]) {
       // Close both triangular ends; the slopes alone leave a visible hole.
-      parts.push({shape:"gable",x:0,y:base+rise/2,z:side*d/2,width:w,height:rise,depth:.14,color:0x83c4c0,glass:true});
+      parts.push({shape:"gable",x:0,y:base+rise/2,z:side*d/2,width:w,height:rise,depth:.14,color:0x83c4c0,clear:true});
       box(0,base+rise/2,side*(d/2+.09),.14,rise,.14,0x806a44);
       box(0,base+.08,side*(d/2+.09),w,.16,.16,trim);
     }
     for(const side of [-1,1]) {
-      box(side*w/4,base+rise/2+.1,0,Math.hypot(w/2,rise),.12,d,0x83c4c0,{glass:true,tiltZ:-side*angle});
+      box(side*w/4,base+rise/2+.1,0,Math.hypot(w/2,rise),.12,d,0x83c4c0,{clear:true,tiltZ:-side*angle});
       for(let rib=0;rib<7;rib++) box(side*w/4,base+rise/2+.2,(rib/6-.5)*d,Math.hypot(w/2,rise)+.25,.13,.12,0x806a44,{tiltZ:-side*angle});
       box(side*w*.2,base+.5,0,1.6,.8,d*.75,paint);
       for(let plant=0;plant<5;plant++) parts.push({shape:"sphere",x:side*w*.2,y:base+1.05,z:(plant/4-.5)*d*.6,width:1.05,height:.75,depth:1.05,color:0x6f9549});

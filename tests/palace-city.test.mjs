@@ -967,7 +967,7 @@ test('conservatory roofs close both triangular ends without crossing the doorway
     assert.equal(ends.length,2);
     for(const side of [-1,1]) {
       const end=ends.find(part=>Math.sign(part.z)===side);
-      assert.ok(end.glass);
+      assert.ok(end.glass || end.clear, 'a conservatory end is not glass');
       assert.equal(end.width,house.width);
       assert.equal(end.height,3.8);
       assert.ok(Math.abs(end.y-end.height/2-LOBBY_HEIGHT)<1e-9);

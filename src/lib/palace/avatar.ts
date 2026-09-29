@@ -64,6 +64,8 @@ export type Avatar = {
   update: (speed: number, airborne: boolean, delta: number) => void;
   /** A beat of acting after a stop: a jump and a fist pump, or a head shake. */
   react: (reaction: AvatarReaction) => void;
+  /** Fade the figure (1 solid), for a camera pressed up behind it. */
+  setOpacity?: (opacity: number) => void;
   dispose: () => void;
 };
 

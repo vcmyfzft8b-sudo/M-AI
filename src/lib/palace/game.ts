@@ -29,8 +29,9 @@ import { createPostProcessing, type PostProcessing } from "@/lib/palace/post";
 import { buildCity, type StationVisual } from "@/lib/palace/world";
 import { createTraffic } from "@/lib/palace/traffic";
 import { createCrowd } from "@/lib/palace/crowd";
-import { createLiftState, stepLifts } from "@/lib/palace/lift";
-import { isTower, LIFT_SIZE, towerPlan } from "@/lib/palace/tower";
+import { createLiftState, liftCarrying, stepLifts } from "@/lib/palace/lift";
+import { createLiftVisual } from "@/lib/palace/lift-visual";
+import { isTower, towerPlan } from "@/lib/palace/tower";
 
 /**
  * The loop: input in, a frame out.
@@ -157,57 +158,9 @@ export function createPalaceGame({
    */
   const lifts = createLiftState(layout);
   const walkable = [...city.surfaces, ...lifts.map((lift) => lift.surface)];
-  const liftDisposables: { dispose: () => void }[] = [];
-  const liftMaterial = (parameters: THREE.MeshStandardMaterialParameters) => {
-    const material = new THREE.MeshStandardMaterial(parameters);
+  const liftVisuals = lifts.map((lift) => createLiftVisual(lift));
 
-    liftDisposables.push(material);
-
-    return material;
-  };
-  const liftBox = new THREE.BoxGeometry(1, 1, 1);
-  const steel = liftMaterial({ color: 0xc6d5d3, roughness: 0.3, metalness: 0.7 });
-  const liftGlass = liftMaterial({ color: 0xcfe8f2, transparent: true, opacity: 0.25, roughness: 0.05, side: THREE.DoubleSide, depthWrite: false });
-  const liftLight = liftMaterial({ color: 0xfff6e0, emissive: 0xfff1d0, emissiveIntensity: 1.2 });
-
-  liftDisposables.push(liftBox);
-
-  const liftCars = lifts.map((lift) => {
-    const car = new THREE.Group();
-    const piece = (material: THREE.Material, x: number, y: number, z: number, w: number, h: number, d: number, parent: THREE.Object3D = car) => {
-      const mesh = new THREE.Mesh(liftBox, material);
-
-      mesh.position.set(x, y, z);
-      mesh.scale.set(w, h, d);
-      parent.add(mesh);
-
-      return mesh;
-    };
-    const half = LIFT_SIZE / 2;
-    /* Built in the house's axes: the open side faces into the room (+z). */
-    const frame = new THREE.Group();
-
-    frame.rotation.y = lift.house.facing;
-    frame.add(car);
-    frame.position.set(lift.x, 0, lift.z);
-    piece(steel, 0, -0.06, 0, LIFT_SIZE, 0.12, LIFT_SIZE);
-    piece(steel, 0, 2.55, 0, LIFT_SIZE, 0.1, LIFT_SIZE);
-    piece(liftLight, 0, 2.49, 0, LIFT_SIZE * 0.6, 0.03, LIFT_SIZE * 0.6);
-    piece(liftGlass, 0, 1.25, -half, LIFT_SIZE, 2.5, 0.04);
-    piece(liftGlass, -half, 1.25, 0, 0.04, 2.5, LIFT_SIZE);
-    piece(liftGlass, half, 1.25, 0, 0.04, 2.5, LIFT_SIZE);
-    piece(steel, 0, 1.0, -half + 0.08, LIFT_SIZE - 0.3, 0.05, 0.05);
-    for (const [x, z] of [[-half, -half], [half, -half], [-half, half], [half, half]]) {
-      piece(steel, x, 1.28, z, 0.08, 2.6, 0.08);
-      /* The shaft's corner posts in the lobby. */
-      piece(steel, x * 1.04, LOBBY_HEIGHT / 2, z * 1.04, 0.1, LOBBY_HEIGHT, 0.1, frame);
-    }
-    /* A call button beside the door. */
-    piece(liftLight, half * 1.04 + 0.08, 1.2, half * 1.04, 0.05, 0.14, 0.1, frame);
-    scene.add(frame);
-
-    return car;
-  });
+  liftVisuals.forEach((visual) => scene.add(visual.group));
   /* A tower's plan, computed once. */
   const plans = new Map(layout.houses.filter(isTower).map((house) => [house, towerPlan(house)]));
   lighting.follow(layout.spawn.x, layout.spawn.z);
@@ -300,6 +253,19 @@ export function createPalaceGame({
   let lastTime = 0;
   let districtRefreshAt = 0;
   let portrait = false;
+  /* The camera's distance, held so it eases back out after a wall pushed it in. */
+  let heldDistance = CAMERA_DISTANCE;
+  /* 0 outdoors, 1 indoors, eased: the wider lens and the fill light fade in as you enter. */
+  let indoorBlend = 0;
+  /*
+   * A warm fill that follows you inside. Rooms stand in their building's
+   * shadow and were lit only by the sky, so they read as gloomy. Always in the
+   * scene — at zero outdoors — so turning it on never recompiles a shader.
+   */
+  const fill = new THREE.PointLight(0xfff0dc, 0, 16, 2);
+  const headPoint = new THREE.Vector3();
+
+  scene.add(fill);
 
   const resize = () => {
     const width = canvas.clientWidth || window.innerWidth;
@@ -316,7 +282,7 @@ export function createPalaceGame({
      * closer instead (see `cameraDistance`).
      */
     portrait = camera.aspect < 1;
-    camera.fov = portrait ? 66 : 58;
+    camera.fov = (portrait ? 66 : 58) + indoorBlend * 8;
     camera.updateProjectionMatrix();
     post?.setSize(width, height);
     /*
@@ -494,9 +460,21 @@ export function createPalaceGame({
       if (!colliderApplies(barrier, character.y)) continue;
       character = { ...character, ...resolveCollision(character, barrier, CHARACTER_RADIUS) };
     }
-    lifts.forEach((lift, index) => {
-      liftCars[index].position.y = lift.y;
-    });
+    lifts.forEach((lift, index) => liftVisuals[index].update(lift));
+
+    /*
+     * In a lift, the camera comes round to the doorway and looks in, the way a
+     * game shows a ride: from behind, it was pressed against the car's back
+     * wall with the rider faded out in front of it.
+     */
+    const carrying = liftCarrying(lifts, character);
+
+    if (carrying && !reducedMotion) {
+      const lookIn = carrying.house.facing + Math.PI;
+      const turn = Math.atan2(Math.sin(lookIn - cameraYaw), Math.cos(lookIn - cameraYaw));
+
+      cameraYaw += turn * (1 - Math.exp(-delta * 3));
+    }
 
     /* The moving things: the cars stop for people, the people wait for the player. */
     const view = { x: Math.sin(cameraYaw), z: Math.cos(cameraYaw) };
@@ -545,8 +523,16 @@ export function createPalaceGame({
       ceiling,
       colliders: city.colliders,
     });
+    /*
+     * Indoors, a wall passing behind snaps the camera in at once — it must
+     * never go through one — but it eases back out, rather than popping in
+     * and out as you walk past a doorway or a bookcase.
+     */
+    heldDistance = !indoors || distance < heldDistance || reducedMotion
+      ? distance
+      : heldDistance + (distance - heldDistance) * (1 - Math.exp(-delta * 3.5));
     /* The camera trails rather than tracks, which is what makes running feel fast. */
-    const desired = cameraPosition({ target: eye, yaw: cameraYaw, pitch: activePitch, distance });
+    const desired = cameraPosition({ target: eye, yaw: cameraYaw, pitch: activePitch, distance: heldDistance });
 
     cameraTarget.set(desired.x, Math.min(ceiling, Math.max(desired.y, character.y + 1.2)), desired.z);
 
@@ -565,6 +551,22 @@ export function createPalaceGame({
     // crossing its face while keeping the character visible in third person.
     camera.position.lerp(cameraTarget, indoors || reducedMotion ? 1 : 1 - Math.pow(0.0025, delta));
     camera.lookAt(eye.x, eye.y + 0.7 + (indoors ? 0 : Math.max(0, -activePitch) * 8), eye.z);
+
+    /* A wider lens indoors, so a room is a room rather than a wall and a back. */
+    indoorBlend += ((indoors ? 1 : 0) - indoorBlend) * (1 - Math.exp(-delta * 4));
+    const fov = (portrait ? 66 : 58) + indoorBlend * 8;
+
+    if (Math.abs(camera.fov - fov) > 0.05) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+    }
+    fill.intensity = indoorBlend * 7;
+    fill.position.set(character.x, Math.min(character.y + 4, ceiling - 0.3), character.z);
+
+    /* Pressed up behind the figure in a tight corner, see through it to the room. */
+    const closeness = camera.position.distanceTo(headPoint.set(eye.x, eye.y + 0.4, eye.z));
+
+    avatar.setOpacity?.(Math.max(0.25, Math.min(1, (closeness - 0.6) / 0.9)));
 
     const seconds = time / 1000;
 
@@ -751,7 +753,7 @@ export function createPalaceGame({
       window.removeEventListener("keyup", onKeyUp);
       post?.dispose();
       traffic.dispose();
-      liftDisposables.forEach((item) => item.dispose());
+      liftVisuals.forEach((visual) => visual.dispose());
       crowd.dispose();
       lighting.dispose();
       avatar.dispose();

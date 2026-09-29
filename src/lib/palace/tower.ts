@@ -24,6 +24,10 @@ export const TOWER_KINDS = ["helix", "spire", "tower"] as const;
 export const PENTHOUSE_HEIGHT = 5.2;
 /** The lift car's floor, square. */
 export const LIFT_SIZE = 2.2;
+/** The shaft round it, half-width to the centre of its walls. */
+export const SHAFT_HALF = LIFT_SIZE / 2 + 0.12;
+/** How far the shaft rises above the roof deck: the car's height and a cap. */
+export const SHAFT_CROWN = 3.1;
 const RAIL = 1.15;
 
 /** Only a study landmark is ever a skyscraper (see `buildingProfile`). */
@@ -58,7 +62,7 @@ export function towerSurfaces(house: PalaceHouse): RoomSurface[] {
   ]);
 }
 
-/** The glass walls of the penthouse, the rail round the roof deck, and the side of the lift shaft. */
+/** The glass walls of the penthouse, the rail round the roof deck, and the lift shaft's walls. */
 export function towerColliders(house: PalaceHouse): RoomCollider[] {
   const { floor, roof, width, depth, lift } = towerPlan(house);
   const ring = (bottom: number, top: number): RoomCollider[] => [
@@ -71,8 +75,12 @@ export function towerColliders(house: PalaceHouse): RoomCollider[] {
   return [
     ...ring(floor - 0.3, roof),
     ...ring(roof - 0.3, roof + RAIL + 0.2),
-    /* The shaft's glass side, from the penthouse up through the roof kiosk. */
-    { x: lift.x + LIFT_SIZE / 2 + 0.05, z: (-depth / 2 + lift.z + LIFT_SIZE / 2) / 2, width: 0.1, depth: lift.z + LIFT_SIZE / 2 + depth / 2, bottom: floor - 0.3, top: roof + 2.8 },
+    /* The shaft's walls — back, left, right — from the lobby floor to the top of the lift. */
+    ...[
+      { x: lift.x, z: lift.z - SHAFT_HALF, width: SHAFT_HALF * 2, depth: 0.12 },
+      { x: lift.x - SHAFT_HALF, z: lift.z, width: 0.12, depth: SHAFT_HALF * 2 },
+      { x: lift.x + SHAFT_HALF, z: lift.z, width: 0.12, depth: SHAFT_HALF * 2 },
+    ].map((wall) => ({ ...wall, bottom: -1, top: roof + SHAFT_CROWN })),
   ];
 }
 
@@ -85,7 +93,7 @@ export function penthouseStationPoint(house: PalaceHouse) {
 
 /** The shell: floor and ceiling slabs, glass walls on their mullions, and the roof deck with its telescopes. */
 export function towerParts(house: PalaceHouse): CityPart[] {
-  const { floor, roof, width, depth, lift } = towerPlan(house);
+  const { floor, roof, width, depth } = towerPlan(house);
   const parts: CityPart[] = [];
   const white = 0xf2f1e9;
   const silver = 0xc6d5d3;
@@ -110,13 +118,6 @@ export function towerParts(house: PalaceHouse): CityPart[] {
       box((side * width) / 2, floor + wallHeight / 2, along, 0.1, wallHeight, 0.08, silver);
   }
 
-  /* The lift shaft's glass side, and the frame of its door. */
-  const shaftX = lift.x + LIFT_SIZE / 2 + 0.05;
-  const shaftDepth = lift.z + LIFT_SIZE / 2 + depth / 2;
-
-  box(shaftX, floor + wallHeight / 2, -depth / 2 + shaftDepth / 2, 0.05, wallHeight, shaftDepth, 0xbfe3f0, { clear: true });
-  box(shaftX, floor + wallHeight / 2, lift.z + LIFT_SIZE / 2, 0.14, wallHeight, 0.14, silver);
-
   /* The roof: decking, a glass balustrade with a steel rail, telescopes at the front corners, a bench. */
   box(0, roof + 0.07, 0, width - 0.1, 0.1, depth - 0.1, 0x9c7a55, { surface: "wood" });
   for (const side of [-1, 1]) {
@@ -134,13 +135,6 @@ export function towerParts(house: PalaceHouse): CityPart[] {
   }
   box(0, roof + 0.55, depth / 2 - 2.6, 2.2, 0.12, 0.6, 0x9c7a55, { surface: "wood" });
   box(0, roof + 0.3, depth / 2 - 2.6, 1.9, 0.45, 0.12, dark);
-
-  /* The lift's rooftop kiosk: a roof over the car, open at the front. */
-  const kioskTop = roof + 2.8;
-
-  box(lift.x, kioskTop, lift.z, LIFT_SIZE + 0.6, 0.18, LIFT_SIZE + 0.6, white);
-  box(shaftX, roof + 1.4, -depth / 2 + shaftDepth / 2, 0.06, 2.6, shaftDepth, 0xbfe3f0, { clear: true });
-  box(-width / 2 + 0.05, roof + 1.4, lift.z, 0.06, 2.6, LIFT_SIZE + 0.4, 0xbfe3f0, { clear: true });
 
   return parts;
 }

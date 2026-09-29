@@ -406,6 +406,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
   const glass: Instance[] = [];
   const clearGlass: Instance[] = [];
   const clearCylinders: Instance[] = [];
+  const clearGables: Instance[] = [];
   const cones: Instance[] = [];
   const cylinders: Instance[] = [];
   const spheres: Instance[] = [];
@@ -449,7 +450,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     const entries = part.surface === "wood" ? woodwork
       : part.surface === "stone" ? walls
       : part.surface === "water" ? water
-      : part.shape === "gable" ? (part.glass ? glassGables : gables)
+      : part.shape === "gable" ? (part.clear ? clearGables : part.glass ? glassGables : gables)
       : part.shape === "pyramid" ? pyramids
       : part.shape === "bow" ? bows
       : part.shape === "dome" ? domes
@@ -626,10 +627,10 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     );
     /* A skyscraper's lobby is walled in glass: a stone plinth, clear panes on mullions, a band at the top. */
     const glassLobby = isTower(house);
-    const addWall = (x: number, z: number, width: number, depth: number) => {
+    const addWall = (x: number, z: number, width: number, depth: number, glazed = glassLobby) => {
       const position = roomPoint(house, x, z);
 
-      if (glassLobby) {
+      if (glazed) {
         const along = width > depth;
         const length = along ? width : depth;
         const place = (dx: number, y: number, w: number, h: number, d: number) => ({
@@ -669,8 +670,9 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       });
     };
     if (room) {
-      roomWalls(house).forEach((part) =>
-        addWall(part.x, part.z, part.width, part.depth),
+      /* A café's shop front is glass either side of the door, so its windows look into the room. */
+      roomWalls(house).forEach((part, index) =>
+        addWall(part.x, part.z, part.width, part.depth, glassLobby || (profile.kind === "cafe" && index >= 3)),
       );
       // Lintel above an open doorway; no ground collider across the opening.
       const lintel = at(body / 2, 0);
@@ -1603,21 +1605,26 @@ export function buildCity(layout: PalaceLayout): CityBuild {
   group.add(instanced(boxGeometry, surface("wood", 0xffffff), woodwork));
   group.add(instanced(boxGeometry, cityGlassMaterial, glass));
   /* A penthouse's walls: glass you see through from both sides. */
+  /*
+   * Glass you see through: faintly tinted, crisply reflective, and one-sided —
+   * a pane is a thin box, so from either side you look through exactly one of
+   * its faces. Drawing both doubled the haze and made every window milky.
+   */
   const clearMaterial = track(
     new THREE.MeshPhysicalMaterial({
-      color: 0xffffff,
+      color: 0xf2fafc,
       transparent: true,
-      opacity: 0.22,
-      roughness: 0.05,
-      metalness: 0.1,
-      side: THREE.DoubleSide,
+      opacity: 0.12,
+      roughness: 0.02,
+      metalness: 0,
       depthWrite: false,
-      envMapIntensity: 1.4,
+      envMapIntensity: 1.1,
     }),
   );
 
   group.add(instanced(boxGeometry, clearMaterial, clearGlass, { shadows: false }));
   group.add(instanced(cylinderGeometry, clearMaterial, clearCylinders, { shadows: false }));
+  group.add(instanced(gableGeometry, clearMaterial, clearGables, { shadows: false }));
   group.add(instanced(coneGeometry, tinted(), cones));
   group.add(instanced(cylinderGeometry, tinted(), cylinders));
   group.add(instanced(sphereGeometry, tinted(), spheres));

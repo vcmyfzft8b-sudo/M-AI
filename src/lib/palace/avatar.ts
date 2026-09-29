@@ -1,23 +1,24 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 
 /**
- * The character you steer: a small, rounded figure in a sunny hoodie, a coral
- * cap and a periwinkle backpack, built from a handful of primitives and moved
- * by a procedural walk cycle rather than an animation clip.
+ * The character you steer: Memo, the app's own mascot — the pink brain with a
+ * face, a pen in one hand and its MEMO notepad in the other — stood up on two
+ * short legs and walked through the town.
  *
- * Built for being looked at from behind and a little above, which is where the
- * camera spends its life: the cap, the hood and the backpack are the
- * silhouette, and the colours are the ones nothing else in the town wears —
- * the figure is what the eye tracks across a city of pale buildings, so it
- * must never borrow the local colour and disappear into it. The face is for
- * the moments the camera swings round: big eyes that blink, cheeks, a smile.
+ * It is built to look like the sticker the rest of the app uses: a soft pink
+ * body with its folds shaded darker in the grooves, the dark outline the
+ * artwork has (an inverted hull, one extra draw per part), big glossy eyes,
+ * blush and a small smile. The camera spends its life behind and a little
+ * above, so the back of the brain — the two hemispheres and the groove between
+ * them — is the part drawn with the most care.
  *
- * The motion is what makes it read as someone rather than something: hips and
- * shoulders counter-rotate, knees bend on the swing, elbows bend more as it
- * runs, the body leans into speed and rolls into turns, and standing still it
- * breathes and looks about. `avatar.root` is what the controller moves;
- * everything below it is local, facing +Z.
+ * The motion is a bouncy waddle: the body squashes as each foot lands and
+ * stretches between steps, rocks side to side, leans into a sprint and rolls
+ * into turns; standing still it breathes, blinks and looks about. After a stop
+ * it acts out how it went (`react`). `avatar.root` is what the controller
+ * moves; everything below it is local, facing +Z.
  */
 
 export type AvatarReaction = "cheer" | "miss";
@@ -31,24 +32,130 @@ export type Avatar = {
   effects: THREE.Group;
   /** Advance the walk cycle. `speed` is metres per second on the ground. */
   update: (speed: number, airborne: boolean, delta: number) => void;
-  /** A beat of acting after a stop: a jump and a twirl, or a shrug. */
+  /** A beat of acting after a stop: a hop and a twirl, or a droop. */
   react: (reaction: AvatarReaction) => void;
   dispose: () => void;
 };
 
+/* Walk and sprint speeds from `movement.ts`, for blending the gaits. */
+const WALK_SPEED = 7.37;
+const RUN_SPEED = 12.21;
+
+/* The sticker's colours. */
+const BRAIN_RIDGE = new THREE.Color(0xf2afb6);
+const BRAIN_GROOVE = new THREE.Color(0xc9788a);
+const LIMB = 0xeb9fa9;
+const OUTLINE = 0x4a2436;
+const EYE = 0x2a1a24;
+const CHEEK = 0xf08c9c;
+const SHOE = 0xf7f5f7;
+const SOLE = 0xd9667a;
+
+/** The brain's half-extents, before its folds: wider than tall, longer than wide. */
+const BRAIN = { x: 0.56, y: 0.46, z: 0.6 };
+/** Where the brain sits over the hips. */
+const BODY_Y = 0.8;
+const HIP_Y = 0.46;
+
+/*
+ * A small deterministic 3D value noise, enough to fold a brain. The grooves
+ * are drawn along one contour of it — where it crosses the middle — so they
+ * come out as the thin, winding lines the sticker has, with rounded folds
+ * between them rather than lumps.
+ */
+function hash3(x: number, y: number, z: number) {
+  const value = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
+
+  return value - Math.floor(value);
+}
+
+function noise3(x: number, y: number, z: number) {
+  const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+  const fx = x - ix, fy = y - iy, fz = z - iz;
+  const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy), uz = fz * fz * (3 - 2 * fz);
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+  const corner = (dx: number, dy: number, dz: number) => hash3(ix + dx, iy + dy, iz + dz);
+
+  return lerp(
+    lerp(lerp(corner(0, 0, 0), corner(1, 0, 0), ux), lerp(corner(0, 1, 0), corner(1, 1, 0), ux), uy),
+    lerp(lerp(corner(0, 0, 1), corner(1, 0, 1), ux), lerp(corner(0, 1, 1), corner(1, 1, 1), ux), uy),
+    uz,
+  );
+}
+
+function smoothstep(edge0: number, edge1: number, value: number) {
+  const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * The brain's surface in a given direction: the ellipsoid, flattened
+ * underneath, pushed out along its folds and pinched in along the groove
+ * between the hemispheres. The face is kept nearly smooth, as it is on the
+ * sticker. Returns the point and how much of a ridge it sits on (0 groove, 1
+ * crest), which colours it.
+ */
+function brainSurface(direction: THREE.Vector3) {
+  const d = direction;
+  const foldNoise =
+    noise3(d.x * 4.2 + 11, d.y * 4.2 + 3, d.z * 4.2 + 7) * 0.85 +
+    noise3(d.x * 9 + 5, d.y * 9 + 13, d.z * 9 + 2) * 0.15;
+  /* 0 on a groove, rising to 1 across the fold. */
+  const ridge = Math.sqrt(Math.min(1, Math.abs(foldNoise * 2 - 1) * 3.2));
+  /* The face: the front, a little below the middle. */
+  const face = smoothstep(0.55, 0.85, d.z) * (1 - smoothstep(0.25, 0.6, Math.abs(d.y + 0.05)));
+  const folds = 0.05 * ridge * (1 - face * 0.85);
+  /* The longitudinal fissure, over the top and down the back, fading at the face. */
+  const fissure =
+    Math.exp(-((d.x / 0.07) ** 2)) * smoothstep(-0.35, 0.15, d.y) * (1 - smoothstep(0.35, 0.75, d.z));
+  const radius = 1 + folds - fissure * 0.1 - (1 - face * 0.85) * 0.03;
+  const point = new THREE.Vector3(d.x * BRAIN.x, d.y * BRAIN.y * (d.y < 0 ? 0.82 : 1), d.z * BRAIN.z).multiplyScalar(
+    radius,
+  );
+
+  return { point, ridge: Math.min(1, ridge * (1 - fissure) + face * 0.8) };
+}
+
+function brainGeometry() {
+  let geometry: THREE.BufferGeometry = new THREE.SphereGeometry(1, 120, 84);
+
+  geometry.deleteAttribute("uv");
+  geometry.deleteAttribute("normal");
+  geometry = mergeVertices(geometry);
+
+  const positions = geometry.getAttribute("position");
+  const colors: number[] = [];
+  const direction = new THREE.Vector3();
+  const color = new THREE.Color();
+
+  for (let index = 0; index < positions.count; index++) {
+    direction.fromBufferAttribute(positions, index).normalize();
+
+    const { point, ridge } = brainSurface(direction);
+
+    positions.setXYZ(index, point.x, point.y, point.z);
+    color.copy(BRAIN_GROOVE).lerp(BRAIN_RIDGE, smoothstep(0.1, 0.55, ridge));
+    colors.push(color.r, color.g, color.b);
+  }
+
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+
+  return geometry;
+}
+
 /*
  * A thin warm rim round the silhouette, brightest where the surface turns away
- * from the camera. It is what lifts the figure off a busy street behind it —
- * the trick every third-person game uses on its hero — and costs one line of
- * shader per material.
+ * from the camera: what lifts the figure off a busy street behind it.
  */
-function withRim<Material extends THREE.MeshStandardMaterial>(material: Material, strength = 0.4) {
+function withRim<Material extends THREE.MeshStandardMaterial>(material: Material, strength = 0.35) {
   material.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace(
       "#include <emissivemap_fragment>",
       `#include <emissivemap_fragment>
       float avatarRim = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
-      totalEmissiveRadiance += vec3(1.0, 0.93, 0.8) * pow(avatarRim, 3.0) * ${strength.toFixed(2)};`,
+      totalEmissiveRadiance += vec3(1.0, 0.9, 0.9) * pow(avatarRim, 3.0) * ${strength.toFixed(2)};`,
     );
   };
   material.customProgramCacheKey = () => `avatar-rim-${strength.toFixed(2)}`;
@@ -56,22 +163,41 @@ function withRim<Material extends THREE.MeshStandardMaterial>(material: Material
   return material;
 }
 
-/* Walk and sprint speeds from `movement.ts`, for blending the gaits. */
-const WALK_SPEED = 7.37;
-const RUN_SPEED = 12.21;
+/** The notepad's page: MEMO at the top, a few ruled lines, as on the sticker. */
+function notepadTexture() {
+  const canvas = document.createElement("canvas");
 
-const SKIN = 0xf2c6a0;
-const HAIR = 0x4a2f22;
-const HOODIE = 0xf7b733;
-const HOODIE_SHADE = 0xde9420;
-const CAP = 0xf0574f;
-const PANTS = 0x2f3b5c;
-const BACKPACK = 0x6f7fe0;
-const BACKPACK_SHADE = 0x5462c4;
-const SHOE = 0xf5f5f7;
-const SOLE = 0x3a3f4a;
-const EYE = 0x1f1a24;
-const CHEEK = 0xf49a9a;
+  canvas.width = 192;
+  canvas.height = 240;
+
+  const context = canvas.getContext("2d");
+
+  if (context) {
+    context.fillStyle = "#fbfafc";
+    context.fillRect(0, 0, 192, 240);
+    context.fillStyle = "#3b2a3a";
+    context.font = "bold 44px system-ui, -apple-system, sans-serif";
+    context.textAlign = "center";
+    /* The brand name, as drawn on the mascot; not user-facing copy. */
+    context.fillText("MEMO", 96, 78);
+    context.strokeStyle = "#5b4a5a";
+    context.lineWidth = 7;
+    context.lineCap = "round";
+    for (const [y, length] of [[118, 120], [150, 132], [182, 104], [212, 70]] as const) {
+      context.beginPath();
+      context.moveTo(30, y);
+      context.lineTo(30 + length, y);
+      context.stroke();
+    }
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+
+  return texture;
+}
 
 export function createAvatar(): Avatar {
   const root = new THREE.Group();
@@ -81,40 +207,76 @@ export function createAvatar(): Avatar {
 
     return item;
   };
-  const material = (color: THREE.ColorRepresentation, roughness = 0.72) =>
+  const material = (color: THREE.ColorRepresentation, roughness = 0.6) =>
     track(withRim(new THREE.MeshStandardMaterial({ color, roughness })));
 
-  const skin = material(SKIN, 0.6);
-  const hair = material(HAIR, 0.85);
-  const hoodie = material(HOODIE, 0.78);
-  const hoodieShade = material(HOODIE_SHADE, 0.8);
-  const cap = material(CAP, 0.6);
-  const pants = material(PANTS, 0.85);
-  const backpackMaterial = material(BACKPACK, 0.55);
-  const backpackShade = material(BACKPACK_SHADE, 0.6);
-  const shoe = material(SHOE, 0.5);
-  const sole = material(SOLE, 0.8);
+  const limb = material(LIMB, 0.55);
+  const shoe = material(SHOE, 0.45);
+  const sole = material(SOLE, 0.6);
+  const outline = track(new THREE.MeshBasicMaterial({ color: OUTLINE, side: THREE.BackSide }));
+  const eyeMaterial = track(new THREE.MeshStandardMaterial({ color: EYE, roughness: 0.12 }));
   const white = track(new THREE.MeshBasicMaterial({ color: 0xffffff }));
   const cheek = track(
-    new THREE.MeshStandardMaterial({ color: CHEEK, roughness: 0.9, transparent: true, opacity: 0.75 }),
+    new THREE.MeshStandardMaterial({ color: CHEEK, roughness: 0.9, transparent: true, opacity: 0.7 }),
   );
-  const eyeMaterial = track(new THREE.MeshStandardMaterial({ color: EYE, roughness: 0.15 }));
+  const brainMaterial = track(
+    withRim(
+      new THREE.MeshPhysicalMaterial({
+        vertexColors: true,
+        roughness: 0.5,
+        clearcoat: 0.35,
+        clearcoatRoughness: 0.45,
+        sheen: 0.6,
+        sheenColor: new THREE.Color(0xffc9d2),
+        sheenRoughness: 0.5,
+      }),
+      0.3,
+    ),
+  );
 
-  const sphereGeometry = track(new THREE.SphereGeometry(1, 28, 20));
-  const lowSphere = track(new THREE.SphereGeometry(1, 12, 10));
+  const sphere = track(new THREE.SphereGeometry(1, 24, 18));
   const capsule = (radius: number, length: number) =>
-    track(new THREE.CapsuleGeometry(radius, length, 6, 16));
-  const rounded = (width: number, height: number, depth: number, radius = 0.35) =>
-    track(new RoundedBoxGeometry(width, height, depth, 3, Math.min(width, height, depth) * radius));
+    track(new THREE.CapsuleGeometry(radius, length, 6, 14));
 
-  const mesh = (
+  /** The sticker's outline for a mesh: itself again, a touch larger, inside out. */
+  const addOutline = (surface: THREE.Mesh, width: number, scale: number) => {
+    surface.geometry.computeBoundingSphere();
+
+    const size = surface.geometry.boundingSphere?.radius ?? 1;
+    const hull = new THREE.Mesh(surface.geometry, outline);
+
+    hull.scale.setScalar(1 + width / (size * scale));
+    hull.userData.outline = true;
+    surface.parent?.add(hull);
+  };
+
+  const part = (
     geometry: THREE.BufferGeometry,
-    meshMaterial: THREE.Material,
+    partMaterial: THREE.Material,
+    parent: THREE.Object3D,
+    position: [number, number, number],
+    scale: [number, number, number] = [1, 1, 1],
+    outlineWidth = 0.022,
+  ) => {
+    const group = new THREE.Group();
+    const surface = new THREE.Mesh(geometry, partMaterial);
+
+    group.position.set(...position);
+    group.scale.set(...scale);
+    group.add(surface);
+    parent.add(group);
+    if (outlineWidth > 0) addOutline(surface, outlineWidth, Math.max(...scale));
+
+    return group;
+  };
+  const plain = (
+    geometry: THREE.BufferGeometry,
+    partMaterial: THREE.Material,
     parent: THREE.Object3D,
     position: [number, number, number],
     scale: [number, number, number] = [1, 1, 1],
   ) => {
-    const created = new THREE.Mesh(geometry, meshMaterial);
+    const created = new THREE.Mesh(geometry, partMaterial);
 
     created.position.set(...position);
     created.scale.set(...scale);
@@ -124,157 +286,75 @@ export function createAvatar(): Avatar {
   };
 
   /*
-   * body   — everything, bobs on each step
-   * └ spine — pivots at the hips: the upper body leans, twists and breathes
-   *   └ head — nods and looks about
+   * body  — bobs, rocks and squashes with each step
+   * └ brain — the head that is also the body: leans, twists, nods
    */
   const body = new THREE.Group();
-  const spine = new THREE.Group();
-  const HIP_Y = 0.7;
+  const brain = new THREE.Group();
 
-  spine.position.y = HIP_Y;
-  body.add(spine);
+  brain.position.y = BODY_Y;
+  body.add(brain);
   root.add(body);
 
-  /* ---- torso: a hoodie with a front pocket, drawstrings and a hood ---- */
-  const torso = mesh(rounded(0.45, 0.56, 0.3, 0.42), hoodie, spine, [0, 0.3, 0]);
+  part(track(brainGeometry()), brainMaterial, brain, [0, 0, 0], [1, 1, 1], 0.028);
 
-  mesh(rounded(0.28, 0.12, 0.05), hoodieShade, spine, [0, 0.21, 0.155]);
-  mesh(rounded(0.465, 0.045, 0.31, 0.45), hoodieShade, spine, [0, 0.04, 0]);
-  mesh(lowSphere, hoodie, spine, [0, 0.58, -0.1], [0.19, 0.1, 0.13]);
-  for (const side of [-1, 1]) {
-    const string = mesh(capsule(0.012, 0.09), white, spine, [side * 0.05, 0.47, 0.16]);
+  /* ---- the face ---- */
+  const onBrain = (x: number, y: number, lift = 0) => {
+    const direction = new THREE.Vector3(x, y, 1).normalize();
+    const { point } = brainSurface(direction);
+    const normal = new THREE.Vector3(
+      point.x / BRAIN.x ** 2,
+      point.y / BRAIN.y ** 2,
+      point.z / BRAIN.z ** 2,
+    ).normalize();
 
-    string.rotation.x = -0.25;
-  }
-
-  /* ---- backpack, with straps over the shoulders and a Memo-pink patch ---- */
-  const backpack = new THREE.Group();
-
-  backpack.position.set(0, 0.34, -0.22);
-  spine.add(backpack);
-  mesh(rounded(0.34, 0.4, 0.17), backpackMaterial, backpack, [0, 0, 0]);
-  mesh(rounded(0.26, 0.15, 0.06), backpackShade, backpack, [0, -0.09, -0.09]);
-  mesh(lowSphere, material(0xf6a4bf, 0.7), backpack, [0.07, 0.07, -0.088], [0.045, 0.045, 0.012]);
-  const handle = mesh(track(new THREE.TorusGeometry(0.05, 0.014, 6, 14, Math.PI)), backpackShade, backpack, [0, 0.2, 0]);
-
-  handle.rotation.y = Math.PI / 2;
-  for (const side of [-1, 1]) {
-    mesh(rounded(0.05, 0.34, 0.025, 0.4), backpackShade, spine, [side * 0.12, 0.36, 0.16]);
-    mesh(rounded(0.055, 0.03, 0.34, 0.4), backpackShade, spine, [side * 0.13, 0.585, -0.02]);
-  }
-
-  /* ---- head ---- */
-  const head = new THREE.Group();
-  const HEAD_RADIUS = 0.27;
-  const HEAD_Y = 0.845;
-
-  /* A touch larger than life: a bigger head is most of what reads as friendly. */
-  head.position.y = HEAD_Y;
-  head.scale.setScalar(1.1);
-  spine.add(head);
-  mesh(capsule(0.07, 0.06), skin, spine, [0, 0.63, 0]);
-  mesh(sphereGeometry, skin, head, [0, 0, 0], [HEAD_RADIUS, HEAD_RADIUS * 0.95, HEAD_RADIUS * 0.96]);
-  /* Hair shows at the nape and the sides, under the cap. */
-  mesh(sphereGeometry, hair, head, [0, 0.02, -0.035], [0.276, 0.25, 0.265]);
-
-  /* A point on the face, with the orientation of the skin there. */
-  const onFace = (x: number, y: number, lift = 0) => {
-    const normal = new THREE.Vector3(x / HEAD_RADIUS, y / HEAD_RADIUS, 0);
-    normal.z = Math.sqrt(Math.max(0, 1 - normal.x ** 2 - normal.y ** 2));
-    const point = new THREE.Vector3(normal.x, normal.y * 0.95, normal.z * 0.96).multiplyScalar(HEAD_RADIUS + lift);
+    point.addScaledVector(normal, lift);
 
     return { point, rotation: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal) };
   };
-  const decal = (
+  const onFace = (
     geometry: THREE.BufferGeometry,
-    decalMaterial: THREE.Material,
+    faceMaterial: THREE.Material,
+    parent: THREE.Object3D,
     x: number,
     y: number,
     scale: [number, number, number],
-    parent: THREE.Object3D = head,
     lift = 0,
   ) => {
-    const { point, rotation } = onFace(x, y, lift);
-    const created = mesh(geometry, decalMaterial, parent, [point.x, point.y, point.z], scale);
+    const { point, rotation } = onBrain(x, y, lift);
+    const created = plain(geometry, faceMaterial, parent, [point.x, point.y, point.z], scale);
 
     created.quaternion.copy(rotation);
 
     return created;
   };
 
+  const face = new THREE.Group();
   const eyes = new THREE.Group();
 
-  head.add(eyes);
+  brain.add(face);
+  face.add(eyes);
   for (const side of [-1, 1]) {
-    decal(sphereGeometry, eyeMaterial, side * 0.095, 0.0, [0.042, 0.06, 0.024], eyes, -0.004);
-    decal(lowSphere, white, side * 0.095 + 0.016, 0.024, [0.014, 0.014, 0.008], eyes, 0.015);
-    decal(lowSphere, cheek, side * 0.155, -0.07, [0.045, 0.028, 0.01], head, -0.002);
-    /* Ears. */
-    mesh(lowSphere, skin, head, [side * 0.262, -0.01, 0], [0.04, 0.065, 0.055]);
+    onFace(sphere, eyeMaterial, eyes, side * 0.2, 0.02, [0.05, 0.07, 0.03], -0.008);
+    onFace(sphere, white, eyes, side * 0.2 + 0.035, 0.07, [0.016, 0.016, 0.01], 0.014);
+    onFace(sphere, cheek, face, side * 0.33, -0.1, [0.06, 0.036, 0.012], -0.004);
   }
-  decal(lowSphere, material(0xe7ab86, 0.6), 0, -0.035, [0.026, 0.022, 0.02], head, -0.004);
-  const smile = new THREE.TubeGeometry(
-    new THREE.CatmullRomCurve3(
-      [-0.05, 0, 0.05].map((x) => {
-        const { point } = onFace(x, -0.095 - (x === 0 ? 0.022 : 0), 0.002);
 
-        return point;
-      }),
+  const smileGeometry = track(
+    new THREE.TubeGeometry(
+      new THREE.CatmullRomCurve3(
+        [-0.07, -0.035, 0, 0.035, 0.07].map((x) => onBrain(x, -0.1 - (0.0049 - x * x) * 5.2, 0.004).point),
+      ),
+      18,
+      0.011,
+      6,
+      false,
     ),
-    14,
-    0.009,
-    6,
-    false,
   );
 
-  mesh(track(smile), eyeMaterial, head, [0, 0, 0]);
+  plain(smileGeometry, eyeMaterial, face, [0, 0, 0]);
 
-  /* Brows, which do most of the acting: up for a cheer, knitted for a miss. */
-  const browGeometry = capsule(0.011, 0.05);
-  const brows = [-1, 1].map((side) => {
-    const { point, rotation } = onFace(side * 0.097, 0.07, 0.004);
-    const socket = new THREE.Group();
-    const brow = mesh(browGeometry, hair, socket, [0, 0, 0]);
-
-    socket.position.copy(point);
-    socket.quaternion.copy(rotation);
-    head.add(socket);
-
-    return { socket, brow, side, rest: point.clone() };
-  });
-
-  /* Tufts escaping the cap at the back and over the ears. */
-  for (const [x, y, z, size] of [
-    [0, -0.02, -0.255, 0.07],
-    [-0.08, -0.04, -0.235, 0.055],
-    [0.08, -0.04, -0.235, 0.055],
-    [-0.24, 0.04, -0.07, 0.05],
-    [0.24, 0.04, -0.07, 0.05],
-  ] as const) {
-    mesh(lowSphere, hair, head, [x, y, z], [size, size * 0.8, size]);
-  }
-
-  /* The cap: a dome, a brim that shades the eyes, a button on top. */
-  const capGroup = new THREE.Group();
-
-  capGroup.position.set(0, 0.06, -0.005);
-  capGroup.rotation.x = -0.12;
-  head.add(capGroup);
-  mesh(
-    track(new THREE.SphereGeometry(1, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.52)),
-    cap,
-    capGroup,
-    [0, 0, 0],
-    [0.285, 0.27, 0.285],
-  );
-  const brim = mesh(track(new THREE.CylinderGeometry(0.19, 0.2, 0.026, 28)), cap, capGroup, [0, 0.01, 0.25], [1, 1, 0.95]);
-
-  brim.rotation.x = 0.2;
-  mesh(lowSphere, material(0xffffff, 0.5), capGroup, [0, 0.27, 0], [0.03, 0.02, 0.03]);
-  mesh(rounded(0.1, 0.07, 0.02), white, capGroup, [0, 0.14, 0.247]).rotation.x = -0.57;
-
-  /* ---- limbs: pivots at shoulder, elbow, hip and knee ---- */
+  /* ---- arms: pen on the left of the face, notepad on the right, as drawn ---- */
   const pivot = (parent: THREE.Object3D, x: number, y: number, z = 0) => {
     const group = new THREE.Group();
 
@@ -285,34 +365,67 @@ export function createAvatar(): Avatar {
   };
 
   const arms = [-1, 1].map((side) => {
-    const shoulder = pivot(spine, side * 0.29, 0.47);
-    mesh(capsule(0.072, 0.15), hoodie, shoulder, [0, -0.13, 0]);
-    const elbow = pivot(shoulder, 0, -0.26);
+    const shoulder = pivot(brain, side * 0.47, -0.14, 0.12);
+    const arm = pivot(shoulder, 0, 0);
 
-    mesh(capsule(0.066, 0.1), hoodie, elbow, [0, -0.09, 0]);
-    mesh(track(new THREE.CylinderGeometry(0.07, 0.07, 0.05, 16)), hoodieShade, elbow, [0, -0.17, 0]);
-    mesh(sphereGeometry, skin, elbow, [0, -0.24, 0.005], [0.068, 0.078, 0.07]);
-    return { shoulder, elbow };
+    arm.rotation.set(-0.9, 0, side * 0.35);
+    part(capsule(0.068, 0.17), limb, arm, [0, -0.12, 0]);
+    part(sphere, limb, arm, [0, -0.25, 0.01], [0.092, 0.092, 0.092], 0.02);
+
+    return { arm, side };
   });
 
+  /* The pen, in the hand on the face's left. */
+  const pen = new THREE.Group();
+
+  pen.position.set(0, -0.27, 0.07);
+  pen.scale.setScalar(1.35);
+  pen.rotation.set(0.5, 0, -0.7);
+  arms[0].arm.add(pen);
+  part(track(new THREE.CylinderGeometry(0.018, 0.018, 0.26, 12)), material(0xf4f1fa, 0.35), pen, [0, 0.06, 0], [1, 1, 1], 0.008);
+  part(track(new THREE.ConeGeometry(0.018, 0.05, 12)), material(0x9a8cc8, 0.4), pen, [0, -0.095, 0], [1, 1, 1], 0.006).rotation.x = Math.PI;
+  plain(track(new THREE.CylinderGeometry(0.02, 0.02, 0.05, 12)), material(0xb8a9e6, 0.4), pen, [0, 0.17, 0]);
+
+  /* The notepad, in the other hand, its page facing out. */
+  const notepad = new THREE.Group();
+
+  notepad.position.set(0.03, -0.3, 0.1);
+  notepad.scale.setScalar(1.35);
+  notepad.rotation.set(0.75, -0.35, 0.15);
+  arms[1].arm.add(notepad);
+
+  const pageMaterial = track(new THREE.MeshStandardMaterial({ map: track(notepadTexture()), roughness: 0.8 }));
+  const coverMaterial = material(0xe9e4ef, 0.8);
+  /* RoundedBoxGeometry's groups run +x, -x, +y, -y, +z, -z: the page is the +z face. */
+  const pad = new THREE.Mesh(track(new RoundedBoxGeometry(0.2, 0.25, 0.022, 2, 0.008)), [
+    coverMaterial,
+    coverMaterial,
+    coverMaterial,
+    coverMaterial,
+    pageMaterial,
+    coverMaterial,
+  ]);
+
+  notepad.add(pad);
+  addOutline(pad, 0.01, 1);
+  for (const x of [-0.06, -0.02, 0.02, 0.06]) {
+    const ring = plain(track(new THREE.TorusGeometry(0.012, 0.004, 6, 12)), material(0x8a8595, 0.3), notepad, [x, 0.125, 0]);
+
+    ring.rotation.y = Math.PI / 2;
+  }
+
+  /* ---- legs, short, with little sneakers ---- */
   const legs = [-1, 1].map((side) => {
-    const hip = pivot(body, side * 0.105, HIP_Y);
+    const hip = pivot(body, side * 0.17, HIP_Y);
 
-    mesh(capsule(0.092, 0.14), pants, hip, [0, -0.15, 0]);
-    const knee = pivot(hip, 0, -0.31);
+    part(capsule(0.1, 0.12), limb, hip, [0, -0.13, 0]);
+    const ankle = pivot(hip, 0, -0.3);
 
-    mesh(capsule(0.082, 0.16), pants, knee, [0, -0.14, 0]);
-    const ankle = pivot(knee, 0, -0.3);
+    part(track(new RoundedBoxGeometry(0.21, 0.13, 0.3, 3, 0.055)), shoe, ankle, [0, -0.07, 0.05], [1, 1, 1], 0.016);
+    plain(track(new RoundedBoxGeometry(0.215, 0.04, 0.31, 2, 0.014)), sole, ankle, [0, -0.13, 0.05]);
 
-    mesh(rounded(0.17, 0.12, 0.29), shoe, ankle, [0, -0.02, 0.045]);
-    mesh(rounded(0.18, 0.04, 0.3, 0.4), sole, ankle, [0, -0.07, 0.045]);
-    mesh(rounded(0.176, 0.028, 0.12, 0.4), cap, ankle, [0, 0.0, 0.02]);
-
-    return { hip, knee, ankle };
+    return { hip, ankle };
   });
-
-  /* Hips: the top of the trousers, joining the legs to the hoodie. */
-  mesh(rounded(0.36, 0.18, 0.25, 0.45), pants, body, [0, HIP_Y + 0.02, 0]);
 
   /*
    * A soft contact patch under the feet: a shadow map at this distance cannot
@@ -326,9 +439,9 @@ export function createAvatar(): Avatar {
   if (shadowContext) {
     const gradient = shadowContext.createRadialGradient(32, 32, 0, 32, 32, 32);
 
-    gradient.addColorStop(0, "rgba(20, 30, 20, 0.5)");
-    gradient.addColorStop(0.6, "rgba(20, 30, 20, 0.22)");
-    gradient.addColorStop(1, "rgba(20, 30, 20, 0)");
+    gradient.addColorStop(0, "rgba(40, 20, 30, 0.5)");
+    gradient.addColorStop(0.6, "rgba(40, 20, 30, 0.22)");
+    gradient.addColorStop(1, "rgba(40, 20, 30, 0)");
     shadowContext.fillStyle = gradient;
     shadowContext.fillRect(0, 0, 64, 64);
   }
@@ -337,15 +450,18 @@ export function createAvatar(): Avatar {
   const shadowMaterial = track(
     new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, depthWrite: false }),
   );
-  const shadow = new THREE.Mesh(track(new THREE.PlaneGeometry(1.2, 1.2)), shadowMaterial);
+  const shadow = new THREE.Mesh(track(new THREE.PlaneGeometry(1.4, 1.4)), shadowMaterial);
 
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.13;
   root.add(shadow);
 
-  root.traverse((part) => {
-    if (part instanceof THREE.Mesh && part !== shadow) part.castShadow = true;
+  root.traverse((object) => {
+    if (object instanceof THREE.Mesh && object !== shadow && !object.userData.outline) object.castShadow = true;
   });
+
+  /* About a metre and a half: a friendly size next to real cars and doors. */
+  root.scale.setScalar(1.22);
 
   /*
    * Dust from a sprint: a small pool of soft puffs, one kicked up at each
@@ -398,9 +514,6 @@ export function createAvatar(): Avatar {
     puff.sprite.visible = true;
   };
 
-  /* About human height: everything else in the town — cars, doors, benches — is real size. */
-  root.scale.setScalar(1.02);
-
   let phase = 0;
   let easedSpeed = 0;
   let clock = 0;
@@ -413,7 +526,7 @@ export function createAvatar(): Avatar {
   /* The acting after a stop: which beat, and how far into it. */
   let reaction: AvatarReaction | null = null;
   let reactionTime = 0;
-  const REACTION_LENGTH = { cheer: 1.3, miss: 1.0 } as const;
+  const REACTION_LENGTH = { cheer: 1.3, miss: 1.1 } as const;
 
   return {
     root,
@@ -430,8 +543,8 @@ export function createAvatar(): Avatar {
       const run = Math.max(0, Math.min(1, (easedSpeed - WALK_SPEED) / (RUN_SPEED - WALK_SPEED)));
       const moving = Math.min(1, easedSpeed / 1.2);
 
-      /* Steps quicken with speed, but less than proportionally: a run is a longer stride too. */
-      phase += delta * (2 + easedSpeed * 1.05);
+      /* Short legs take quick steps. */
+      phase += delta * (2.4 + easedSpeed * 1.25);
       idleTime = moving > 0.2 ? 0 : idleTime + delta;
 
       /* How fast the controller is turning the body, for leaning into it. */
@@ -447,66 +560,56 @@ export function createAvatar(): Avatar {
 
       lastFacing = facing;
       turnLean += (Math.max(-0.2, Math.min(0.2, -turnRate * 0.035 * walk)) - turnLean) * (1 - Math.exp(-delta * 8));
-
       airborneBlend += ((airborne ? 1 : 0) - airborneBlend) * (1 - Math.exp(-delta * 14));
 
       const swing = Math.sin(phase);
       const lift = Math.cos(phase);
-      const legReach = (0.55 + run * 0.35) * moving;
-      const armReach = (0.45 + run * 0.4) * moving;
+      const legReach = (0.6 + run * 0.3) * moving;
 
-      legs.forEach(({ hip, knee, ankle }, index) => {
+      legs.forEach(({ hip, ankle }, index) => {
         const direction = index === 0 ? 1 : -1;
-        const stride = swing * direction;
-        /* The knee bends on the swing forward, not while the foot is planted. */
-        const swingForward = Math.max(0, lift * direction);
 
-        hip.rotation.x = -stride * legReach * (1 - airborneBlend) + airborneBlend * (index === 0 ? -0.6 : 0.2);
-        knee.rotation.x = (0.08 + swingForward * (0.9 + run * 0.5)) * moving * (1 - airborneBlend) + airborneBlend * 0.9;
-        ankle.rotation.x = -hip.rotation.x * 0.35 - knee.rotation.x * 0.25;
+        hip.rotation.x = -swing * direction * legReach * (1 - airborneBlend) + airborneBlend * 0.4;
+        /* The foot lifts on the swing forward, and stays flat on the ground. */
+        hip.position.y = HIP_Y + Math.max(0, lift * direction) * 0.07 * moving;
+        ankle.rotation.x = -hip.rotation.x;
       });
 
-      arms.forEach(({ shoulder, elbow }, index) => {
+      arms.forEach(({ arm, side }, index) => {
         const direction = index === 0 ? -1 : 1;
-        const idleSway = Math.sin(clock * 1.6 + index) * 0.04 * (1 - moving);
+        const idleSway = Math.sin(clock * 1.6 + index) * 0.05 * (1 - moving);
 
-        shoulder.rotation.x = -swing * direction * armReach * (1 - airborneBlend) - airborneBlend * 2.4 + idleSway;
-        shoulder.rotation.z = (index === 0 ? -1 : 1) * (0.08 + run * 0.08 + airborneBlend * 0.3);
-        elbow.rotation.x = -(0.15 + walk * 0.35 + run * 0.75) * (1 - airborneBlend * 0.6);
+        arm.rotation.x = -0.9 - swing * direction * (0.3 + run * 0.3) * moving - airborneBlend * 1.2 + idleSway;
+        arm.rotation.z = side * (0.35 + run * 0.15);
       });
 
-      /* Lowest as the feet land, highest as one passes the other. */
-      body.position.y = (1 - Math.abs(swing)) * (0.035 + run * 0.03) * moving;
-      body.rotation.y = swing * 0.07 * moving;
-      spine.rotation.y = -swing * (0.14 + run * 0.06) * moving;
-      spine.rotation.x = (0.05 * walk + 0.16 * run) * (1 - airborneBlend);
-      body.rotation.z = turnLean + Math.sin(phase) * 0.015 * moving;
+      /* A waddle: up between steps, down and squashed as each foot lands. */
+      const landing = Math.pow(Math.abs(swing), 4) * moving;
+      const breath = Math.sin(clock * 2.1) * 0.018 * (1 - moving);
 
-      /* Standing still it breathes, and after a moment it looks about. */
-      const breath = Math.sin(clock * 2.1) * 0.012 * (1 - moving);
+      body.position.y = (1 - Math.abs(swing)) * (0.06 + run * 0.04) * moving;
+      body.rotation.z = turnLean + swing * 0.07 * moving;
+      body.rotation.y = swing * 0.05 * moving;
+      body.scale.set(1 + landing * 0.05 - breath * 0.4, 1 - landing * 0.07 + breath, 1 + landing * 0.05 - breath * 0.4);
+      brain.rotation.x = (0.05 * walk + 0.16 * run) * (1 - airborneBlend);
+
+      /* Standing still it looks about. */
       const lookAbout = Math.min(1, Math.max(0, idleTime - 2.5) / 1.5);
 
-      torso.scale.y = 1 + breath;
-      head.position.y = HEAD_Y + breath * 0.6;
-      head.rotation.y = Math.sin(clock * 0.55) * 0.45 * lookAbout + Math.max(-0.3, Math.min(0.3, turnRate * 0.06)) * walk;
-      head.rotation.x = -spine.rotation.x * 0.6 + Math.sin(phase * 2) * 0.025 * moving + Math.sin(clock * 0.4) * 0.05 * lookAbout;
-      backpack.rotation.x = -Math.cos(phase * 2) * 0.05 * moving;
-      backpack.position.y = 0.34 + Math.abs(swing) * 0.012 * moving;
+      brain.rotation.y = Math.sin(clock * 0.55) * 0.4 * lookAbout + Math.max(-0.25, Math.min(0.25, turnRate * 0.05)) * walk;
+      brain.rotation.z = Math.sin(clock * 0.8) * 0.05 * lookAbout;
 
       /* Blink every few seconds. */
       nextBlink -= delta;
       if (nextBlink < -0.12) nextBlink = 2.2 + Math.abs(Math.sin(clock * 12.9898)) * 2.8;
-      eyes.scale.y = nextBlink < 0 ? 0.12 : 1;
-      eyes.position.y = nextBlink < 0 ? 0.004 : 0;
+      eyes.scale.y = nextBlink < 0 ? 0.15 : 1;
 
-      /* Each footfall squashes the body a little; a sprint's footfalls kick up dust. */
+      /* Each footfall of a sprint kicks up dust. */
       const step = Math.floor(phase / Math.PI);
-      const landing = Math.pow(Math.abs(swing), 6) * moving;
 
-      body.scale.set(1 + landing * 0.025, 1 - landing * 0.035, 1 + landing * 0.025);
       if (step !== lastStep) {
         lastStep = step;
-        if (run > 0.35 && !airborne) kickDust(step % 2 === 0 ? 0.11 : -0.11);
+        if (run > 0.35 && !airborne) kickDust(step % 2 === 0 ? 0.17 : -0.17);
       }
 
       puffs.forEach((puff) => {
@@ -524,21 +627,15 @@ export function createAvatar(): Avatar {
 
       /*
        * The acting after a stop, laid over the gait and faded in and out so it
-       * never snaps. A cheer: a hop, a full twirl and both fists up, brows
-       * raised. A miss: shoulders drop, the head shakes, the brows knit.
+       * never snaps. A cheer: a hop, a full twirl, pen and pad held high and
+       * eyes squeezed happy. A miss: a droop, a shake of the whole head.
        */
       let hop = 0;
-
-      brows.forEach(({ socket, brow, side, rest }) => {
-        socket.position.copy(rest);
-        brow.rotation.z = Math.PI / 2 + side * 0.12;
-      });
 
       if (reaction) {
         reactionTime += delta;
 
-        const length = REACTION_LENGTH[reaction];
-        const t = reactionTime / length;
+        const t = reactionTime / REACTION_LENGTH[reaction];
 
         if (t >= 1) {
           reaction = null;
@@ -548,33 +645,23 @@ export function createAvatar(): Avatar {
           if (reaction === "cheer") {
             const jump = t < 0.55 ? Math.sin((t / 0.55) * Math.PI) : 0;
 
-            hop = jump * 0.45;
-            body.rotation.y += Math.min(1, t / 0.55) * Math.PI * 2 * (1 - Math.min(1, moving));
-            arms.forEach(({ shoulder, elbow }, index) => {
+            hop = jump * 0.5;
+            body.rotation.y += Math.min(1, t / 0.55) * Math.PI * 2 * (1 - moving);
+            body.scale.y *= 1 + jump * 0.08;
+            arms.forEach(({ arm, side }) => {
               const pump = Math.sin(t * Math.PI * 6) * 0.15;
 
-              shoulder.rotation.x += (-2.7 + pump - shoulder.rotation.x) * weight;
-              shoulder.rotation.z += ((index === 0 ? -0.35 : 0.35) - shoulder.rotation.z) * weight;
-              elbow.rotation.x += (-0.5 - elbow.rotation.x) * weight;
+              arm.rotation.x += (-2.9 + pump - arm.rotation.x) * weight;
+              arm.rotation.z += (side * 0.2 - arm.rotation.z) * weight;
             });
-            legs.forEach(({ knee }) => {
-              knee.rotation.x += jump * 0.7 * weight;
-            });
-            brows.forEach(({ socket }) => {
-              socket.position.y += 0.025 * weight;
-            });
-            eyes.scale.y = 1 - weight * 0.55;
+            eyes.scale.y = Math.min(eyes.scale.y, 1 - weight * 0.6);
           } else {
-            head.rotation.y += Math.sin(t * Math.PI * 5) * 0.35 * weight;
-            head.rotation.x += 0.15 * weight;
-            spine.rotation.x += 0.12 * weight;
-            arms.forEach(({ shoulder }, index) => {
-              shoulder.rotation.z += ((index === 0 ? 0.18 : -0.18) - shoulder.rotation.z) * weight;
-              shoulder.rotation.x += (0.15 - shoulder.rotation.x) * weight;
-            });
-            brows.forEach(({ socket, brow, side }) => {
-              brow.rotation.z = Math.PI / 2 + side * (0.12 - 0.47 * weight);
-              socket.position.y -= 0.008 * weight;
+            brain.rotation.y += Math.sin(t * Math.PI * 5) * 0.3 * weight;
+            brain.rotation.x += 0.18 * weight;
+            body.scale.y *= 1 - 0.05 * weight;
+            arms.forEach(({ arm, side }) => {
+              arm.rotation.x += (-0.25 - arm.rotation.x) * weight;
+              arm.rotation.z += (side * 0.15 - arm.rotation.z) * weight;
             });
           }
         }

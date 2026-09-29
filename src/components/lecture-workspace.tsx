@@ -253,25 +253,22 @@ function ignoreBackgroundRequestError() {
 
 
 /**
- * Tabs that take the chat's column while they are on screen.
+ * Tabs that show no chat bar at the foot of the phone's screen.
  *
- * Chat beside the note is the point of the note tab: you read a paragraph and
- * ask about it. These five are not reading — they are a thing you watch, listen
- * to, walk through or play, and each of them was worse for having a conversation
- * bolted to its side:
+ * On the phone the bar shares the dock with each tab's own controls, and these
+ * five are not reading — they are a thing you watch, listen to, walk through or
+ * play, and a bar at the foot competes with what they put there:
  *
- * - the map and the palace are drawn, and a drawing squeezed into the ~300px the
- *   chat leaves is the unreadable single column they exist to be better than;
- * - the tutor is already a conversation, so a second one beside it asks the
- *   reader which of the two to talk to;
- * - the speed reader wants one word held still in the middle of an empty screen,
- *   which is the one thing a panel of text beside it undoes;
- * - the podcast is audio, and there is nothing on screen to ask about.
+ * - the map and the palace are drawn, and want the whole short screen;
+ * - the tutor is already a conversation, with its own microphone;
+ * - the speed reader wants one word held still in the middle of an empty screen;
+ * - the podcast's dock holds the listening allowance on its own.
  *
- * The list decides both surfaces: the desktop column and the phone's bar at the
- * foot. Chat is one pill away on any of them.
+ * Desktop is not on this list: its chat column stands beside every tab, so
+ * moving between them never makes the screen jump by a column. Dismissing it
+ * (the ✕ in its head) is the reader's choice, and holds across tabs.
  */
-const TABS_WITHOUT_CHAT = new Set<NoteTabId>([
+const TABS_WITHOUT_CHAT_BAR = new Set<NoteTabId>([
   "mindmap",
   "palace",
   "tutor",
@@ -5714,10 +5711,9 @@ export function LectureWorkspace({
    * portalled into the slot the shell renders (see AppLayoutProvider). The
    * phone shows the same body as a full-height sheet.
    *
-   * It is open beside the reading tabs and gone on the ones in
-   * TABS_WITHOUT_CHAT. The quiz keeps it but withholds the button that brings
-   * it back: it owns the bottom of the screen with its own result sheet, and
-   * "Preglej zakaj" is the way into chat from there.
+   * It is open beside every tab until the reader dismisses it, and a dismissed
+   * column stays dismissed across tabs with the same pill to bring it back on
+   * each, so stepping through the tabs never adds or removes a column.
    *
    * It also closes the moment a navigation away starts. The panel is portalled
    * into the shell's third grid column, outside the content area the loading
@@ -5725,15 +5721,13 @@ export function LectureWorkspace({
    * standing beside the library's skeleton until the route committed.
    */
   const isLeavingNote = navigatingTo != null && navigatingTo !== notePathname;
-  const showChatPanel =
-    !isChatDismissed && !isLeavingNote && !TABS_WITHOUT_CHAT.has(activeTabId);
+  const showChatPanel = !isChatDismissed && !isLeavingNote;
   /*
-   * The phone's bar at the foot follows the same list. It is not the same
-   * control as the desktop column — it is a bar that opens a sheet, and
-   * dismissing the column has never hidden it — so it only asks whether this
-   * tab has a chat at all.
+   * The phone's bar at the foot is not the same control as the desktop
+   * column — it is a bar that opens a sheet, and dismissing the column has
+   * never hidden it — so it only asks whether this tab has room for it.
    */
-  const showsChatBar = !TABS_WITHOUT_CHAT.has(activeTabId);
+  const showsChatBar = !TABS_WITHOUT_CHAT_BAR.has(activeTabId);
 
   useEffect(() => {
     setChatOpen(showChatPanel);
@@ -6222,9 +6216,7 @@ export function LectureWorkspace({
           >
             <div className="memo-dock-slot" ref={setDockSlot} />
 
-            {/* Nothing to bring back on a tab that has no chat column, and the
-                quiz has its own way in ("Preglej zakaj"). */}
-            {isChatDismissed && activeTabId !== "quiz" && !TABS_WITHOUT_CHAT.has(activeTabId) ? (
+            {isChatDismissed ? (
               <button
                 type="button"
                 aria-label={t("chat.open")}
@@ -6236,9 +6228,8 @@ export function LectureWorkspace({
               </button>
             ) : null}
 
-            {/* The phone's way into chat, on the same tabs the desktop column
-                appears on: a screen that is watched, listened to or played is
-                not one you ask questions about, at either width. */}
+            {/* The phone's way into chat, on every tab whose dock has room for
+                it (see TABS_WITHOUT_CHAT_BAR). */}
             {showsChatBar ? (
               <button
                 type="button"

@@ -5,7 +5,7 @@ import ts from 'typescript';
 import { normalizeContentLanguageCode, normalizeNoteLanguage, normalizeSpokenLanguageCode, resolveMaterialLanguage, detectSourceLanguage, buildGeneratedContentLanguageInstruction } from '../src/lib/languages.ts';
 import { judgeHeard } from '../src/lib/tutor/turn-audio.ts';
 import { SONIOX_LANGUAGES, resolveSpeechLanguage, needsEnglishSpeechFallback, toSpeechScript } from '../src/lib/speech-language.ts';
-import { sourceLanguageSchema, sampleSourceLanguage, SOURCE_LANGUAGE_INSTRUCTIONS } from '../src/lib/source-language-policy.ts';
+import { sourceLanguageSchema, sampleSourceLanguage, SOURCE_LANGUAGE_INSTRUCTIONS, isContradictedBySpelling } from '../src/lib/source-language-policy.ts';
 import { generationCacheKey } from '../src/lib/notes/generation-cache-key.ts';
 import { buildSourceNoteInstructions, normalizeNoteCalloutLanguage } from '../src/lib/notes/note-prompts.ts';
 
@@ -62,11 +62,11 @@ test('language sampling covers the body and tail, with a bounded model input',()
 });
 
 function loadResolver(generate) {
-  const source=fs.readFileSync(new URL('../src/lib/source-language.ts',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace('export async function','async function');
+  const source=fs.readFileSync(new URL('../src/lib/source-language.ts',import.meta.url),'utf8').replace(/^import [\s\S]*?;\n/gm,'').replace('export async function','async function');
   const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
   const entries=new Map();
   const checkpoint=async(p)=>{ const old=p.schema.safeParse(entries.get(p.cacheKey));if(old.success)return old.data;const result=p.schema.parse(await p.generate());entries.set(p.cacheKey,result);return result; };
-  return new Function('generateStructuredObject','detectSourceLanguage','normalizeContentLanguageCode','resolveMaterialLanguage','generationCacheKey','stageModelCacheKeyPart','withGenerationCheckpoint','sampleSourceLanguage','sourceLanguageSchema','SOURCE_LANGUAGE_INSTRUCTIONS',js+'\nreturn resolveSourceLanguage;')(generate,detectSourceLanguage,normalizeContentLanguageCode,resolveMaterialLanguage,generationCacheKey,()=> 'fixture-model',checkpoint,sampleSourceLanguage,sourceLanguageSchema,SOURCE_LANGUAGE_INSTRUCTIONS);
+  return new Function('generateStructuredObject','detectSourceLanguage','normalizeContentLanguageCode','resolveMaterialLanguage','generationCacheKey','stageModelCacheKeyPart','withGenerationCheckpoint','sampleSourceLanguage','sourceLanguageSchema','SOURCE_LANGUAGE_INSTRUCTIONS','isContradictedBySpelling',js+'\nreturn resolveSourceLanguage;')(generate,detectSourceLanguage,normalizeContentLanguageCode,resolveMaterialLanguage,generationCacheKey,()=> 'fixture-model',checkpoint,sampleSourceLanguage,sourceLanguageSchema,SOURCE_LANGUAGE_INSTRUCTIONS,isContradictedBySpelling);
 }
 test('the actual server resolver trusts matching metadata without a model call, but re-detects edits',async()=>{
   let calls=0;
@@ -78,6 +78,37 @@ test('the actual server resolver trusts matching metadata without a model call, 
   assert.equal(calls,1);
   await resolve({text:ESTONIAN,metadata,hint:'sl',lectureId:'fixture'});
   assert.equal(calls,1);
+});
+// A photographed history textbook page that production labelled Estonian on 2026-09-17.
+const SLOVENIAN_SCAN = 'Poleg navigacijskih inštrumentov je daljše plovbe omogočil tudi napredek v razvoju ladij. Pomembno vlogo pri čezoceanskih potovanjih so imele nove ladje - karavele, ki so uveljavile v 15. stoletju. Pri odkrivanju novih pomorskih poti v Azijo so imeli pomembno vlogo vladarji. Prvi je pomembnost novih poti spoznal portugalski princ Henrik Pomorščak.';
+
+test('Estonian needs its own letters; Slovenian without them is never Estonian',()=>{
+  assert.equal(isContradictedBySpelling('et',SLOVENIAN_SCAN),true);
+  assert.equal(isContradictedBySpelling('et',ESTONIAN),false);
+  assert.equal(isContradictedBySpelling('sl',SLOVENIAN_SCAN),false);
+  assert.equal(isContradictedBySpelling('et','Kaj je to?'),false);
+});
+test('the prompt names Slovenian and tells it apart from Estonian by its letters',()=>{
+  assert.match(SOURCE_LANGUAGE_INSTRUCTIONS,/Slovenian is sl \(never et or sk\)/);
+  assert.match(SOURCE_LANGUAGE_INSTRUCTIONS,/Estonian writes õ, ä, ö, ü/);
+});
+test('a model answer of Estonian for Slovenian material is asked again, not trusted',async()=>{
+  const prompts=[];
+  const resolve=loadResolver(async(p)=>{prompts.push(p.instructions);return {language:prompts.length===1?'et':'sl'};});
+  assert.equal(await resolve({text:SLOVENIAN_SCAN,hint:'et',lectureId:'fixture'}),'sl');
+  assert.equal(prompts.length,2);
+  assert.match(prompts[1],/not et/);
+});
+test('a stored Estonian label on Slovenian material is re-detected instead of reused',async()=>{
+  let calls=0;
+  const resolve=loadResolver(async()=>{calls++;return {language:'sl'};});
+  const metadata={sourceLanguage:{version:1,code:'et',notesHash:generationCacheKey([SLOVENIAN_SCAN])}};
+  assert.equal(await resolve({text:SLOVENIAN_SCAN,metadata,hint:'et'}),'sl');
+  assert.equal(calls,1);
+});
+test('a model that insists on Estonian falls back to the material, never the stale et hint',async()=>{
+  const resolve=loadResolver(async()=>({language:'et'}));
+  assert.notEqual(await resolve({text:SLOVENIAN_SCAN,hint:'et'}),'et');
 });
 test('provider failure on unknown material never silently changes it to English or an old hint',async()=>{
   const resolve=loadResolver(async()=>{throw Error('provider unavailable');});

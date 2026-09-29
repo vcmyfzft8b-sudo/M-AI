@@ -36,6 +36,7 @@ import {
 } from "@/lib/lecture-processing-errors";
 import { detectSourceLanguage } from "@/lib/languages";
 import { getEffectiveLectureSourceType } from "@/lib/lecture-source-metadata";
+import { hasPendingScanImages } from "@/lib/lecture-stall-plan";
 import { captureBackgroundError, captureRouteError } from "@/lib/monitoring";
 import {
   buildSyntheticTranscriptFromTextSource,
@@ -196,6 +197,16 @@ async function enqueueBudgetOverrunRetry(params: {
     !Array.isArray(params.metadata.manualImport)
   ) {
     await jobs.enqueueLectureNotesGeneration(params.lectureId);
+    return true;
+  }
+
+  // A scan that died while its photos were still being read. `manualImport` is written only once
+  // every photo is read, so such a scan matched nothing above and was failed with the retry left
+  // to the learner (the follow-up to Sentry MEMOAI-WEB-4R, 2026-09-28). Checked after
+  // `manualImport` because the photo list stays on the row after reading: a scan whose text is
+  // already prepared resumes at the notes, not by paying to read every photo again.
+  if (hasPendingScanImages(params.metadata)) {
+    await jobs.enqueueLectureScanProcessing(params.lectureId);
     return true;
   }
 

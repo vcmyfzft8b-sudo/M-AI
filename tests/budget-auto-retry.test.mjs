@@ -257,17 +257,44 @@ test("the retry job mirrors the manual retry route's choices", () => {
 
   const body = PIPELINE_SOURCE.slice(start, PIPELINE_SOURCE.indexOf("\n}\n", start));
   // Same order and same jobs as src/app/api/lectures/[id]/retry: a pending document or link
-  // re-runs its extraction, audio re-runs the full pipeline, a manual import regenerates notes —
-  // and anything the route would refuse (a scan mid-OCR) is refused here too, by returning false.
+  // re-runs its extraction, audio re-runs the full pipeline, a manual import regenerates notes, a
+  // scan still at its photos reads them again — and anything else is refused, by returning false.
   for (const call of [
     "enqueueLectureDocumentProcessing",
     "enqueueLectureLinkProcessing",
     "enqueueLectureProcessing",
     "enqueueLectureNotesGeneration",
+    "enqueueLectureScanProcessing",
   ]) {
     assert.ok(body.includes(call), call);
   }
   assert.ok(body.includes("return false"));
+});
+
+/**
+ * Sentry MEMOAI-WEB-4R, 2026-09-28: a photo note died on its budget while its photos were being
+ * read. It had `pendingScanImages` and no `manualImport` yet, so neither the automatic retry nor
+ * the learner's retry button (400 "retry unavailable") could start it again.
+ */
+test("a scan still reading its photos is retried by both the pipeline and the retry button", () => {
+  const start = PIPELINE_SOURCE.indexOf("async function enqueueBudgetOverrunRetry");
+  const body = PIPELINE_SOURCE.slice(start, PIPELINE_SOURCE.indexOf("\n}\n", start));
+  const notes = body.indexOf("enqueueLectureNotesGeneration");
+  const scan = body.indexOf("hasPendingScanImages(params.metadata)");
+
+  assert.ok(scan > 0, "the pipeline must retry a pending scan");
+  // The photo list stays on the row after reading, so prepared text must win or a scan that died
+  // in note generation would pay to read every photo again.
+  assert.ok(notes < scan, "a prepared manual import must win over the photo list");
+
+  const route = readSource("src/app/api/lectures/[id]/retry/route.ts");
+
+  assert.match(route, /!hasPendingLinkImport &&\s*!hasPendingScanImport\s*\)/);
+
+  const scanRetry = route.indexOf("if (hasPendingScanImport && !hasManualImport)");
+
+  assert.ok(scanRetry > 0, "the retry button must re-read a scan that has no text yet");
+  assert.match(route.slice(scanRetry, scanRetry + 120), /enqueueLectureScanProcessing\(id\)/);
 });
 
 test("between retries the learner sees queued, written before the enqueue", () => {

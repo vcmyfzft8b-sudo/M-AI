@@ -6,12 +6,14 @@ import {
   enqueueLectureLinkProcessing,
   enqueueLectureNotesGeneration,
   enqueueLectureProcessing,
+  enqueueLectureScanProcessing,
 } from "@/lib/jobs";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import {
   getEffectiveLectureSourceType,
   isRecord,
 } from "@/lib/lecture-source-metadata";
+import { hasPendingScanImages } from "@/lib/lecture-stall-plan";
 import { fetchReadableWebpage, prepareLectureFromTextSource } from "@/lib/manual-lectures";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -106,13 +108,17 @@ export async function POST(
   const hasManualImport = Boolean(getManualImportMetadata(lecture.processing_metadata));
   const hasPendingDocumentImport = hasPendingDocument(lecture.processing_metadata);
   const hasPendingLinkImport = hasPendingLink(lecture.processing_metadata);
+  // A scan that failed while its photos were still being read has no `manualImport` yet; the
+  // photos it was reading are all it has to retry from.
+  const hasPendingScanImport = hasPendingScanImages(lecture.processing_metadata);
   const effectiveSourceType = getEffectiveLectureSourceType(lecture);
 
   if (
     effectiveSourceType !== "audio" &&
     !hasManualImport &&
     !hasPendingDocumentImport &&
-    !hasPendingLinkImport
+    !hasPendingLinkImport &&
+    !hasPendingScanImport
   ) {
     return NextResponse.json(
       { error: await tr("api.retryUnavailable") },
@@ -199,6 +205,13 @@ export async function POST(
 
       if (hasPendingLinkImport) {
         await enqueueLectureLinkProcessing(id);
+        return;
+      }
+
+      // Prepared text wins: the photo list stays on the row after the photos are read, and
+      // reading them again would pay for text the note already has.
+      if (hasPendingScanImport && !hasManualImport) {
+        await enqueueLectureScanProcessing(id);
         return;
       }
 

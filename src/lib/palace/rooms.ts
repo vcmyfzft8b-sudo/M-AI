@@ -1,5 +1,5 @@
 import type { PalaceHouse } from "./layout";
-import { isTower, LIFT_SIZE, towerPlan } from "./tower.ts";
+import { isTower, LIFT_SIZE, SHAFT_OPENING } from "./tower.ts";
 
 export const ROOM_THEMES = [
   "library",
@@ -363,13 +363,12 @@ export function roomFurniture(
    * gallery's underside — the whole room together, so a bookcase and its books
    * still match.
    */
-  /* A skyscraper's lobby has a lift in its corner instead, and no gallery over it. */
+  /* A skyscraper's lobby has a lift in its middle instead, and no gallery over it. */
   const tower = isTower(house);
   const { stair } = roomUpperFloor(house);
-  const lift = tower ? towerPlan(house).lift : null;
-  /* The lift and a clear approach to its door, which faces into the room. */
-  const keepClear = lift
-    ? { x: lift.x, z: lift.z + 1.2, width: LIFT_SIZE, depth: LIFT_SIZE + 2.4 }
+  /* The lift and the whole way from the front door to it: the lobby's furniture stands to the sides. */
+  const keepClear = tower
+    ? { x: 0, z: (house.depth / 2 - SHAFT_OPENING) / 2, width: LIFT_SIZE + 0.4, depth: house.depth / 2 + SHAFT_OPENING }
     : { x: (stair.x0 + stair.x1) / 2, z: (stair.zTop + stair.zBottom) / 2, width: stair.x1 - stair.x0, depth: stair.zBottom - stair.zTop };
   const clearance = 0.6;
   const inTheWay = (part: RoomPart) =>

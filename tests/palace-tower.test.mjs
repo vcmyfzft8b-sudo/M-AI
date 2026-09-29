@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { buildingProfile } from "../src/lib/palace/architecture.ts";
 import { buildPalaceLayout } from "../src/lib/palace/layout.ts";
-import { createLiftState, stepLifts } from "../src/lib/palace/lift.ts";
+import { createLiftState, liftTravel, stepLifts } from "../src/lib/palace/lift.ts";
 import { CHARACTER_RADIUS, colliderApplies, createCharacter, resolveCollision, stepCharacter } from "../src/lib/palace/movement.ts";
 import { roomFurniture, roomIdentity, roomPoint, roomWalls } from "../src/lib/palace/rooms.ts";
 import {
@@ -17,7 +17,7 @@ import {
 } from "../src/lib/palace/tower.ts";
 
 /*
- * The skyscrapers can be gone up: a glass lift from the lobby to a penthouse,
+ * The skyscrapers can be gone up: a glass lift up their middle, from the lobby to a penthouse,
  * and on to a viewing deck on the roof. These ride it in every tower of a
  * large town, with the same boxes the renderer builds.
  */
@@ -91,10 +91,11 @@ test("a large town has each skyscraper once, and every one can be gone up", () =
     walker = go(walker, house, scene, lifts, plan.lift, 900, (state) => state.y > plan.floor - 0.01);
     assert.ok(Math.abs(walker.y - plan.floor) < 0.01, `${kind}: the lift did not reach the penthouse (at ${walker.y.toFixed(2)} m)`);
 
-    /* Out to the stop by the front windows. */
+    /* Out of the door and across to the stop in the front corner. */
     const stop = penthouseStationPoint(house);
 
-    walker = go(walker, house, scene, lifts, { x: stop.x, z: stop.z - 1.4 }, 400);
+    walker = go(walker, house, scene, lifts, { x: plan.lift.x, z: plan.lift.z + 2.2 }, 200);
+    walker = go(walker, house, scene, lifts, { x: stop.x + 1.3, z: stop.z }, 400);
     const reached = roomPoint(house, stop.x, stop.z);
 
     assert.ok(Math.hypot(walker.x - reached.x, walker.z - reached.z) < 1.8, `${kind}: the penthouse stop is out of reach`);
@@ -137,4 +138,31 @@ test("an empty shaft is barred at the landings the car is not at", () => {
 
   assert.equal(barriers.length, 2, "the penthouse and roof landings are open with the car in the lobby");
   assert.ok(barriers.every((barrier) => colliderApplies(barrier, barrier.bottom + 0.3)));
+});
+
+test("the car sets off and stops without a jolt, on long rides and short", () => {
+  for (const distance of [0.8, 5.2, 50, 72]) {
+    const { duration } = liftTravel(distance, 0);
+    const step = 1 / 240;
+    let last = 0;
+    let lastSpeed = 0;
+    let top = 0;
+
+    assert.ok(duration > 0);
+    for (let time = step; time <= duration + step; time += step) {
+      const { covered } = liftTravel(distance, time);
+      const speed = (covered - last) / step;
+
+      assert.ok(covered >= last - 1e-9, `${distance} m: the car went backwards`);
+      /* No step change in speed: acceleration stays within what a passenger lift does. */
+      assert.ok(Math.abs(speed - lastSpeed) / step < 7, `${distance} m: a jolt of ${((speed - lastSpeed) / step).toFixed(1)} m/s² at ${time.toFixed(2)} s`);
+      top = Math.max(top, speed);
+      last = covered;
+      lastSpeed = speed;
+    }
+    assert.ok(Math.abs(last - distance) < 1e-9, `${distance} m: the car stopped short`);
+    assert.ok(lastSpeed < 0.01, `${distance} m: the car was still moving at the stop`);
+    assert.ok(top <= 7 + 1e-6, `${distance} m: over the top speed`);
+    assert.ok(liftTravel(distance, step).covered < 0.001, `${distance} m: the car lurched off`);
+  }
 });

@@ -2,10 +2,10 @@ import type { PalaceHouse } from "./layout";
 import { neighborhoodBuilding, type NeighborhoodKind } from "./neighborhood.ts";
 import { landmarkBuilding } from "./landmarks.ts";
 import { isMonument, monumentBuilding } from "./monuments.ts";
-import { LIFT_SIZE, towerParts, towerPlan } from "./tower.ts";
+import { aroundShaft, SHAFT_OPENING, towerParts } from "./tower.ts";
 
 export type CityPart = {
-  shape: "box" | "rounded" | "cylinder" | "sphere" | "ribbon" | "ring" | "gable" | "bow" | "dome" | "cone" | "sail" | "pyramid";
+  shape: "box" | "rounded" | "cylinder" | "sphere" | "ribbon" | "ring" | "gable" | "bow" | "dome" | "cone" | "sail" | "pyramid" | "disc";
   surface?: "wood" | "stone" | "water";
   x: number;
   y: number;
@@ -22,6 +22,8 @@ export type CityPart = {
   solid?: boolean;
   /** See-through glass, both sides, for a place you can stand inside (a penthouse). */
   clear?: boolean;
+  /** A `disc` (a round slab) has a square opening this wide through its middle, for a lift. */
+  hole?: number;
 };
 
 /*
@@ -66,15 +68,22 @@ const BACKGROUND_KINDS = [
   "cafe", "pavilion", "cafe",
 ] as const;
 
+/** The building a study address would have by its place in the route, before the town picks its skyscrapers. */
+export function studyArchetype(landmarkIndex: number) {
+  return STUDY_ARCHETYPES[landmarkIndex % STUDY_ARCHETYPES.length];
+}
+
 /** Stable silhouettes give each address a landmark in the skyline. */
 export function buildingProfile(house: PalaceHouse, index: number) {
   const variant = house.landmark ? house.landmarkIndex : index + house.districtIndex * 7;
   let kind: typeof CITY_ARCHETYPES[number] = house.landmark
-    ? STUDY_ARCHETYPES[variant % STUDY_ARCHETYPES.length]
+    ? studyArchetype(variant)
     : BACKGROUND_KINDS[variant % BACKGROUND_KINDS.length];
-  // Do not repeat a distinctive skyscraper on every cycle of a large deck.
-  // Later questions use other architectural families with different rooflines.
-  if (house.landmark && variant >= STUDY_ARCHETYPES.length && ["helix", "spire", "tower"].includes(kind)) {
+  // The skyscrapers are wherever the town put them (`placeSkyscrapers`), spread
+  // across it; an address whose turn in the route would have made it one gets
+  // another architectural family instead.
+  if (house.skyscraper) kind = house.skyscraper;
+  else if (house.landmark && ["helix", "spire", "tower"].includes(kind)) {
     const alternatives = ["townhouse", "temple", "warehouse", "cafe", "pavilion", "observatory", "castle", "cottage", "windmill", "greenhouse"] as const;
     kind = alternatives[(Math.floor(variant / STUDY_ARCHETYPES.length) * 3 + variant) % alternatives.length];
   }
@@ -114,24 +123,16 @@ export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
     silver = 0xc6d5d3,
     green = 0x80b84f;
   const tallKind = profile.kind === "helix" || profile.kind === "spire" || profile.kind === "tower";
-  /* The lift rises through every storey of a skyscraper; the floors leave it a shaft. */
-  const lift = tallKind ? towerPlan(house).lift : null;
-  const slabWithShaft = (y: number, w: number, d: number, color: number) => {
-    if (!lift) {
-      box(0, y, 0, w, 0.24, d, color);
+  /* The lift rises up the middle of a skyscraper; every floor it passes leaves it an opening. */
+  const slabWithShaft = (y: number, w: number, d: number, color: number, thickness = 0.24) => {
+    if (!tallKind) {
+      box(0, y, 0, w, thickness, d, color);
 
       return;
     }
-
-    const hole = { x0: lift.x - LIFT_SIZE / 2 - 0.1, x1: lift.x + LIFT_SIZE / 2 + 0.1, z0: lift.z - LIFT_SIZE / 2 - 0.1, z1: lift.z + LIFT_SIZE / 2 + 0.1 };
-    const left = -w / 2, right = w / 2, back = -d / 2, front = d / 2;
-
-    box((left + right) / 2, y, (hole.z1 + front) / 2, w, 0.24, front - hole.z1, color);
-    box((left + right) / 2, y, (back + hole.z0) / 2, w, 0.24, hole.z0 - back, color);
-    box((left + hole.x0) / 2, y, (hole.z0 + hole.z1) / 2, hole.x0 - left, 0.24, hole.z1 - hole.z0, color);
-    box((hole.x1 + right) / 2, y, (hole.z0 + hole.z1) / 2, right - hole.x1, 0.24, hole.z1 - hole.z0, color);
+    aroundShaft(w, d).forEach((piece) => box(piece.x, y, piece.z, piece.width, thickness, piece.depth, color));
   };
-  /* A storey you can see into: clear glass all round, a core, desks by the windows, a lit ceiling. */
+  /* A storey you can see into: clear glass all round, desks by the windows, a lit ceiling round the lift. */
   const glassStorey = (y: number, w: number, d: number) => {
     for (const side of [-1, 1]) {
       parts.push({ shape: "box", x: 0, y: y + 1.5, z: (side * d) / 2, width: w, height: 2.8, depth: 0.05, color: profile.glass, clear: true });
@@ -139,8 +140,7 @@ export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
       box(side * w * 0.22, y + 0.78, d / 2 - 1.1, 1.6, 0.07, 0.8, 0x6b5440);
       box(side * w * 0.22, y + 0.4, d / 2 - 1.1, 1.4, 0.7, 0.06, 0x3a3a3a);
     }
-    box(0.8, y + 1.5, 0.3, w * 0.24, 2.8, d * 0.26, 0xd9d6cc);
-    box(0, y + 2.86, 0, w * 0.62, 0.04, d * 0.62, 0xfff3d4);
+    aroundShaft(w * 0.62, d * 0.62, SHAFT_OPENING + 0.3).forEach((piece) => box(piece.x, y + 2.86, piece.z, piece.width, 0.04, piece.depth, 0xfff3d4));
   };
   const base = LOBBY_HEIGHT,
     height = profile.height;
@@ -243,17 +243,20 @@ export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
     box(side * (width / 2 - 0.3), base / 2, depth / 2 + 0.25, 0.45, base, 0.45);
   }
   box(0, ENTRY_HEIGHT + 0.2, depth / 2 + 0.8, 3.8, 0.16, 1.6);
-  box(0, base, 0, width + 0.4, 0.35, depth + 0.4);
+  slabWithShaft(base, width + 0.4, depth + 0.4, white, 0.35);
 
   if (profile.kind === "helix") {
     const diameter = Math.min(width, depth) * 0.88;
-    /* See-through glass, round floors at every storey, and a lift core up the middle. */
+    /* See-through glass, and round floors at every storey with the lift rising through the middle. */
+    const disc = (y: number, size: number, thick: number, color: number, hole = SHAFT_OPENING * 2) =>
+      parts.push({ shape: "disc", x: 0, y, z: 0, width: size, height: thick, depth: size, color, hole });
+
     parts.push({ shape: "cylinder", x: 0, y: base + height / 2, z: 0, width: diameter, height, depth: diameter, color: profile.glass, clear: true });
-    add("cylinder", 0, base + height / 2, 0, diameter * 0.26, height, diameter * 0.26, 0xd9d6cc);
     for (let level = 0; level < height; level += 3) {
-      add("cylinder", 0, base + level + 0.1, 0, diameter - 0.1, 0.22, diameter - 0.1, white);
-      add("cylinder", 0, base + level + 2.86, 0, diameter * 0.62, 0.04, diameter * 0.62, 0xfff3d4);
+      disc(base + level + 0.1, diameter - 0.1, 0.22, white);
+      disc(base + level + 2.86, diameter * 0.62, 0.04, 0xfff3d4, SHAFT_OPENING * 2 + 0.6);
     }
+    disc(base + height, diameter - 0.1, 0.22, white);
     for (let level = 0; level <= height; level += 3)
       add(
         "ring",
@@ -293,8 +296,8 @@ export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
       0.48,
       0.3,
     );
-    /* A drum from the crown up to the penthouse. */
-    add("cylinder", 0, base + height + 1.2, 0, diameter * 0.9, 2.4, diameter * 0.9, silver);
+    /* A drum from the crown up to the penthouse: a wall round the outside, open in the middle for the lift. */
+    add("ring", 0, base + height + 1.2, 0, diameter * 0.9, 2.4, diameter * 0.9, silver);
     parts.push(...towerParts(house));
   } else {
     const floors = Math.max(3, Math.round(height / 3));
@@ -396,16 +399,11 @@ export function cityBuilding(house: PalaceHouse, index: number): CityPart[] {
         depth * roofScale,
         roofX,
       );
+    /* The glass tower stands on four corner piers, so its sides are glass you can see through too. */
     if (profile.kind === "tower")
-      for (const side of [-1, 1])
-        box(
-          (side * width) / 2,
-          base + floors * 1.5,
-          0,
-          0.45,
-          floors * 3 + 1,
-          depth + 0.35,
-        );
+      for (const sideX of [-1, 1])
+        for (const sideZ of [-1, 1])
+          box((sideX * width) / 2, base + floors * 1.5, (sideZ * depth) / 2, 0.55, floors * 3 + 1, 0.55);
   }
   return parts;
 }

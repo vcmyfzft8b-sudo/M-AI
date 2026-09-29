@@ -1,6 +1,7 @@
 // Imported by its real filename so the Node test runner can load the layout
 // directly; it cannot resolve the "@/" alias.
 import { roomIdentity, roomPoint, stationIsUpstairs, UPPER_FLOOR_Y, upperStationPoint } from "./rooms.ts";
+import { studyArchetype } from "./architecture.ts";
 import { isTower, penthouseStationPoint, towerPlan } from "./tower.ts";
 import { createRandom, seedFromString, type Random } from "./rng.ts";
 
@@ -100,6 +101,8 @@ export type PalaceHouse = {
   features: HouseFeature[];
   /** True for the houses a study item waits outside. */
   landmark: boolean;
+  /** A study address the town has made one of its skyscrapers (see `placeSkyscrapers`). */
+  skyscraper?: SkyscraperKind;
   /**
    * Which landmark this is, counted across the whole town. Its colour, roof and
    * garden ornament are all derived from it, so no two houses you have to
@@ -533,6 +536,52 @@ function makeHouse({
     ornament: landmark ? ORNAMENTS[landmarkIndex % ORNAMENTS.length] : null,
     districtIndex,
   };
+}
+
+export type SkyscraperKind = "helix" | "spire" | "tower";
+
+/*
+ * Study addresses that always keep their own building: the cottage and the
+ * moored boat are two of a short route's three places, and a boat cannot
+ * become a tower.
+ */
+const KEEP_LOW = new Set(["cottage", "houseboat"]);
+
+/**
+ * The skyscrapers — the spiral, the needle and the glass tower, one of each at
+ * most — stand at study addresses spread across the whole town rather than
+ * wherever the route's order put them (which was the first stop, then two
+ * side by side). The first goes to a seeded address; each next one to one of
+ * the three addresses farthest from those already standing, so the skyline
+ * has a tower in each part of town and every town's differs. Their own
+ * random stream, so choosing them moves nothing else.
+ */
+function placeSkyscrapers(houses: PalaceHouse[], seedSource: string) {
+  const random = createRandom(seedFromString(`${seedSource}:skyline`));
+  const candidates = houses.filter(
+    (house) => house.landmark && !house.monument && !KEEP_LOW.has(studyArchetype(house.landmarkIndex)),
+  );
+  const count = Math.min(candidates.length, candidates.length >= 9 ? 3 : candidates.length >= 5 ? 2 : 1);
+  const kinds: SkyscraperKind[] = ["helix", "spire", "tower"];
+
+  for (let index = kinds.length - 1; index > 0; index--) {
+    const other = random.int(0, index);
+
+    [kinds[index], kinds[other]] = [kinds[other], kinds[index]];
+  }
+
+  const chosen: PalaceHouse[] = [];
+
+  for (let index = 0; index < count; index++) {
+    const open = candidates.filter((house) => !chosen.includes(house));
+    const spacing = (house: PalaceHouse) =>
+      Math.min(...chosen.map((other) => Math.hypot(house.x - other.x, house.z - other.z)));
+    const pool = chosen.length === 0 ? open : [...open].sort((a, b) => spacing(b) - spacing(a)).slice(0, 3);
+    const house = random.pick(pool);
+
+    house.skyscraper = kinds[index];
+    chosen.push(house);
+  }
 }
 
 export function buildPalaceLayout({
@@ -1122,6 +1171,7 @@ export function buildPalaceLayout({
   const pyramidHouse = houses.filter((house) => !house.landmark)
     .sort((a,b) => Math.hypot(a.x,a.z)-Math.hypot(b.x,b.z))[0];
   if (pyramidHouse) pyramidHouse.monument = "pyramid";
+  placeSkyscrapers(houses, seedSource);
 
   /*
    * Every other indoor stop waits upstairs, on its house's gallery: a climb is

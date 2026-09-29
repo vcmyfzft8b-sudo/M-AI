@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 import type { Lift } from "./lift";
-import { LIFT_SIZE, SHAFT_CROWN, SHAFT_HALF } from "./tower";
+import { LIFT_SIZE, SHAFT_CROWN, SHAFT_HALF, SHAFT_OPENING } from "./tower";
 
 /**
  * What a skyscraper's lift looks like: a glass shaft on a steel frame from the
@@ -10,8 +10,9 @@ import { LIFT_SIZE, SHAFT_CROWN, SHAFT_HALF } from "./tower";
  * and a floor indicator — with sliding doors on the car and at every landing
  * that part as it arrives and close before it leaves.
  *
- * Built in the building's own axes (the doors face +z, into the room) and
- * placed at the lift. The car's ceiling is a single downward-facing plane, so
+ * Built in the building's own axes (the doors face +z, towards the front
+ * door) and placed at the lift, in the middle of the building, where every
+ * floor it passes has an opening for it (`aroundShaft`). The car's ceiling is a single downward-facing plane, so
  * a camera looking in from above sees the rider rather than the roof of the
  * car.
  */
@@ -113,6 +114,8 @@ export function createLiftVisual(lift: Lift): LiftVisual {
 
     for (const side of [-1, 1]) piece(frame, darkSteel, side * (DOOR_WIDTH / 2 + sideWidth / 2), stop + CAR_HEIGHT / 2, half, sideWidth, CAR_HEIGHT, 0.08);
     piece(frame, darkSteel, 0, stop + DOOR_HEIGHT + (CAR_HEIGHT - DOOR_HEIGHT) / 2, half, DOOR_WIDTH, CAR_HEIGHT - DOOR_HEIGHT, 0.08);
+    /* A steel sill across the threshold, from the car's floor to the edge of the floor's opening. */
+    piece(frame, steel, 0, stop - 0.01, (LIFT_SIZE / 2 + SHAFT_OPENING) / 2 + 0.01, DOOR_WIDTH + 0.2, 0.03, SHAFT_OPENING - LIFT_SIZE / 2 + 0.02);
 
     const doors = [-1, 1].map((side) => {
       const door = new THREE.Group();
@@ -203,8 +206,8 @@ export function createLiftVisual(lift: Lift): LiftVisual {
     update: (state) => {
       car.position.y = state.y;
 
-      /* Each door panel slides out to its side by the width of the other. */
-      const slide = (DOOR_WIDTH / 2) * state.doors;
+      /* Each door panel slides out to its side by the width of the other, easing in and out of its travel. */
+      const slide = (DOOR_WIDTH / 2) * (state.doors * state.doors * (3 - 2 * state.doors));
 
       carDoors.forEach(({ door, side }) => {
         door.position.x = side * (DOOR_WIDTH / 4 + slide);

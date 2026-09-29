@@ -255,6 +255,8 @@ export function createPalaceGame({
   let portrait = false;
   /* The camera's distance, held so it eases back out after a wall pushed it in. */
   let heldDistance = CAMERA_DISTANCE;
+  /* The pitch the camera is shown at: eased into the indoor range and out of it, never jumped. */
+  let shownPitch = cameraPitch;
   /* 0 outdoors, 1 indoors, eased: the wider lens and the fill light fade in as you enter. */
   let indoorBlend = 0;
   /*
@@ -455,10 +457,22 @@ export function createPalaceGame({
       delta,
     });
 
-    /* The lifts move (carrying whoever stands in one), and bar the landings they are not at. */
+    /*
+     * The lifts move, and bar the landings they are not at. A rider goes with
+     * the car this frame, not the next — standing on last frame's floor left
+     * them a hand's breadth behind it, bobbing — and so does the camera, which
+     * would otherwise trail a car going up at seven metres a second.
+     */
+    const boarded = liftCarrying(lifts, character);
+    const carFrom = boarded?.y ?? 0;
+
     for (const barrier of stepLifts(lifts, character, delta)) {
       if (!colliderApplies(barrier, character.y)) continue;
       character = { ...character, ...resolveCollision(character, barrier, CHARACTER_RADIUS) };
+    }
+    if (boarded && character.grounded && liftCarrying(lifts, character) === boarded) {
+      character = { ...character, y: boarded.y, velocityY: 0 };
+      camera.position.y += boarded.y - carFrom;
     }
     lifts.forEach((lift, index) => liftVisuals[index].update(lift));
 
@@ -500,9 +514,14 @@ export function createPalaceGame({
      * In a skyscraper, the lift shaft between floors and the roof deck are open
      * air as far as the camera is concerned: it swings out as it does outdoors.
      */
-    const inTheOpen = plan ? character.y > 1 && (character.y < plan.floor - 0.4 || character.y > plan.roof - 0.4) : false;
+    const inTheOpen = plan
+      ? Boolean(carrying) || (character.y > 1 && (character.y < plan.floor - 0.4 || character.y > plan.roof - 0.4))
+      : false;
     const indoors = Boolean(house) && !inTheOpen;
-    const activePitch = indoors ? Math.max(0.08, Math.min(cameraPitch, 0.42)) : cameraPitch;
+    const wantedPitch = indoors ? Math.max(0.08, Math.min(cameraPitch, 0.42)) : cameraPitch;
+
+    shownPitch = reducedMotion ? wantedPitch : shownPitch + (wantedPitch - shownPitch) * (1 - Math.exp(-delta * 10));
+    const activePitch = shownPitch;
     /*
      * Indoors the camera stays under the ceiling of the floor you are on — the
      * gallery's underside downstairs, the room's ceiling upstairs — blending

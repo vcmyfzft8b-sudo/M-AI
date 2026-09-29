@@ -35,7 +35,7 @@ import {
 } from "./rooms";
 import { createSurfaceMaterial } from "./materials";
 import { UNOCCLUDED_LAYER } from "./atmosphere";
-import { isTower, penthouseFurniture, towerColliders, towerPlan, towerSurfaces } from "./tower";
+import { aroundShaft, isTower, penthouseFurniture, towerColliders, towerPlan, towerSurfaces } from "./tower";
 import { createRandom } from "./rng";
 
 import {
@@ -445,9 +445,20 @@ export function buildCity(layout: PalaceLayout): CityBuild {
   bowGeometry.rotateX(-Math.PI/2);
   const domeGeometry = track(new THREE.SphereGeometry(.5,24,12,0,Math.PI*2,0,Math.PI/2));
   domeGeometry.scale(1,2,1);
+  /* Round slabs with a square opening for a lift, one geometry per proportion of opening to slab. */
+  const discs = new Map<number, Instance[]>();
+  const discEntries = (part: CityPart) => {
+    const ratio = Math.round(((part.hole ?? 0) / part.width) * 1000) / 1000;
+    const entries = discs.get(ratio) ?? [];
+
+    discs.set(ratio, entries);
+
+    return entries;
+  };
   const addCityPart = (part: CityPart, house: PalaceHouse) => {
     const position = roomPoint(house, part.x, part.z);
-    const entries = part.surface === "wood" ? woodwork
+    const entries = part.shape === "disc" ? discEntries(part)
+      : part.surface === "wood" ? woodwork
       : part.surface === "stone" ? walls
       : part.surface === "water" ? water
       : part.shape === "gable" ? (part.clear ? clearGables : part.glass ? glassGables : gables)
@@ -712,8 +723,9 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         }),
         color: hsl(room.hue, room.color === "ivory" ? 0.1 : 0.32, 0.52),
       });
+      /* A skyscraper's lobby has its lift where the rug would be. */
       const rug = at(room.anchorZ, room.anchorX);
-      boxes.push({
+      if (!glassLobby) boxes.push({
         matrix: boxMatrix({
           ...rug,
           y: 0.085,
@@ -724,7 +736,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         }),
         color: hsl(room.hue, 0.36, 0.33),
       });
-      for (const side of [-1, 1]) {
+      for (const side of glassLobby ? [] : [-1, 1]) {
         const edge = at(room.anchorZ + side * 1.5, room.anchorX);
         boxes.push({
           matrix: boxMatrix({
@@ -739,18 +751,19 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         });
       }
       // Ceiling and trim give a real enclosed ground floor, lit by skylight ambience.
-      boxes.push({
-        matrix: boxMatrix({
-          x: house.x,
-          y: LOBBY_HEIGHT - 0.22,
-          z: house.z,
-          width: house.width - 0.15,
-          height: 0.12,
-          depth: body - 0.15,
-          rotation: house.facing,
-        }),
-        color: hsl(38, 0.12, 0.82),
-      });
+      // A skyscraper's is open in the middle, where the lift goes up through it.
+      for (const piece of glassLobby ? aroundShaft(house.width - 0.15, body - 0.15) : [{ x: 0, z: 0, width: house.width - 0.15, depth: body - 0.15 }])
+        boxes.push({
+          matrix: boxMatrix({
+            ...roomPoint(house, piece.x, piece.z),
+            y: LOBBY_HEIGHT - 0.22,
+            width: piece.width,
+            height: 0.12,
+            depth: piece.depth,
+            rotation: house.facing,
+          }),
+          color: hsl(38, 0.12, 0.82),
+        });
       const memory = house.landmark ? layout.stations[house.landmarkIndex] : undefined;
       const memoryInside = memory?.placement === "inside";
       const memoryUpstairs = memoryInside && (memory?.y ?? 0) > 0;
@@ -1627,6 +1640,22 @@ export function buildCity(layout: PalaceLayout): CityBuild {
   group.add(instanced(gableGeometry, clearMaterial, clearGables, { shadows: false }));
   group.add(instanced(coneGeometry, tinted(), cones));
   group.add(instanced(cylinderGeometry, tinted(), cylinders));
+  if (discs.size) {
+    const discMaterial = tinted();
+
+    for (const [ratio, entries] of discs) {
+      const outline = new THREE.Shape().absarc(0, 0, 0.5, 0, Math.PI * 2, false);
+      const half = Math.min(0.45, ratio / 2);
+
+      if (half > 0) outline.holes.push(new THREE.Path().moveTo(-half, -half).lineTo(-half, half).lineTo(half, half).lineTo(half, -half).closePath());
+
+      const geometry = track(new THREE.ExtrudeGeometry(outline, { depth: 1, bevelEnabled: false, curveSegments: 40 }));
+
+      geometry.rotateX(-Math.PI / 2);
+      geometry.translate(0, -0.5, 0);
+      group.add(instanced(geometry, discMaterial, entries));
+    }
+  }
   group.add(instanced(sphereGeometry, tinted(), spheres));
 
   const forest = forestInstances(layout);

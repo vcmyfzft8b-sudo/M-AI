@@ -914,7 +914,9 @@ test('short memory routes include a skyscraper, cottage and accessible moored bo
   const {marinaBarriers}=await import('../src/lib/palace/landmarks.ts');
   const {roomPoint}=await import('../src/lib/palace/rooms.ts');
   const layout=buildPalaceLayout({seedSource:'distinctive-places',items:Array.from({length:3},(_,i)=>({id:`place-${i}`,kind:'card',sectionId:null})),sections:[]});
-  assert.deepEqual(layout.stations.map(s=>buildingProfile(layout.houses[s.houseIndex],s.houseIndex).kind),['helix','cottage','houseboat']);
+  const kinds=layout.stations.map(s=>buildingProfile(layout.houses[s.houseIndex],s.houseIndex).kind);
+  assert.ok(['helix','spire','tower'].includes(kinds[0]),`no skyscraper on a short route: ${kinds}`);
+  assert.deepEqual(kinds.slice(1),['cottage','houseboat']);
   const boat=layout.houses[layout.stations[2].houseIndex];
   const parts=cityBuilding(boat,layout.stations[2].houseIndex);
   assert.ok(parts.some(p=>p.surface==='water'));

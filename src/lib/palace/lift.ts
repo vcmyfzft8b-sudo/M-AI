@@ -16,7 +16,10 @@ import { isTower, LIFT_SIZE, towerPlan } from "./tower.ts";
  * is barred, so nobody steps into an empty shaft or a closing door.
  */
 
-const SPEED = 6.5;
+/** Top speed, metres a second. */
+const SPEED = 7;
+/** Seconds to reach top speed from a stop, and to come to one. */
+const RAMP = 1.8;
 /** How long you stand in the car before it goes. */
 const BOARDING_TIME = 0.9;
 /** How long the car waits at a stop before it will leave again: time to step out. */
@@ -39,6 +42,8 @@ export type Lift = {
   boarding: number;
   /** How far the doors are open, 0 shut to 1 open. */
   doors: number;
+  /** Seconds since the car left its stop, on the way to `target`. */
+  travelled: number;
   /** What you stand on in the car: the same object every frame, its height updated. */
   surface: Surface;
 };
@@ -58,6 +63,7 @@ export function createLiftState(layout: Pick<PalaceLayout, "houses">): Lift[] {
       dwell: 0,
       boarding: 0,
       doors: 1,
+      travelled: 0,
       surface: { ...centre, width: LIFT_SIZE, depth: LIFT_SIZE, y: 0 },
     };
   });
@@ -65,6 +71,30 @@ export function createLiftState(layout: Pick<PalaceLayout, "houses">): Lift[] {
 
 function inCar(lift: Lift, player: { x: number; z: number }) {
   return Math.abs(player.x - lift.x) < LIFT_SIZE / 2 - 0.15 && Math.abs(player.z - lift.z) < LIFT_SIZE / 2 - 0.15;
+}
+
+/**
+ * How far along a trip of `distance` metres the car is after `time` seconds,
+ * and how long the whole trip takes. The speed rises from rest along half a
+ * cosine, holds, and falls away the same way — no jolt as it sets off or
+ * stops, however long or short the trip — so a rider feels a lift rather
+ * than a platform being dragged.
+ */
+export function liftTravel(distance: number, time: number) {
+  /* A short hop never reaches top speed: it rises and falls at the same gentle acceleration instead. */
+  const accel = (SPEED * Math.PI) / (2 * RAMP);
+  const ramp = distance >= SPEED * RAMP ? RAMP : Math.sqrt((Math.PI * distance) / (2 * accel));
+  const speed = ramp > 0 ? Math.min(SPEED, distance / ramp) : SPEED;
+  const duration = ramp > 0 ? distance / speed + ramp : 0;
+  const rampDistance = (t: number) => (speed / 2) * (t - (ramp / Math.PI) * Math.sin((Math.PI * t) / ramp));
+  const t = Math.max(0, Math.min(duration, time));
+  const covered = t < ramp
+    ? rampDistance(t)
+    : t < duration - ramp
+      ? (speed * ramp) / 2 + speed * (t - ramp)
+      : distance - rampDistance(duration - t);
+
+  return { covered: Math.min(distance, covered), duration };
 }
 
 /** The lift whose car the player is standing in, if any. */
@@ -86,19 +116,21 @@ export function stepLifts(lifts: readonly Lift[], player: { x: number; y: number
       /* The doors shut first; only then does the car move. */
       lift.doors = Math.max(0, lift.doors - DOOR_SPEED * delta);
     } else if (lift.target !== null) {
+      const from = lift.stops[lift.at];
       const goal = lift.stops[lift.target];
-      const remaining = goal - lift.y;
-      /* Ease in and out of each stop, rather than slamming into it. */
-      const speed = Math.min(SPEED, 0.6 + Math.abs(remaining) * 2.2, 0.6 + Math.abs(lift.y - lift.stops[lift.at]) * 2.2);
-      const travel = Math.sign(remaining) * Math.min(Math.abs(remaining), speed * delta);
 
-      lift.y += travel;
-      if (Math.abs(goal - lift.y) < 1e-3) {
+      lift.travelled += delta;
+
+      const { covered, duration } = liftTravel(Math.abs(goal - from), lift.travelled);
+
+      lift.y = from + Math.sign(goal - from) * covered;
+      if (lift.travelled >= duration) {
         lift.y = goal;
         lift.at = lift.target;
         lift.target = null;
         lift.dwell = DWELL;
         lift.boarding = 0;
+        lift.travelled = 0;
       }
     } else {
       lift.doors = Math.min(1, lift.doors + DOOR_SPEED * delta);

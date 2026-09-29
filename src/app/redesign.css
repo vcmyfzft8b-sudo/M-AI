@@ -14353,12 +14353,26 @@
  *
  * Offering a second place to ask a question — with a second microphone button — beside a
  * tutor that is already listening is two answers to one question, and that emptying is
- * TABS_WITHOUT_CHAT's doing rather than this file's. What is left is the usage pill, and
+ * TABS_WITHOUT_CHAT_BAR's doing rather than this file's. What is left is the usage pill, and
  * that has moved up beside the note's title: nothing remains in the band at all, so the
  * band goes with it.
  */
 .memo-note-screen[data-note-tab="tutor"] .memo-dock {
   display: none;
+}
+
+/*
+ * Except for the desktop pill that brings a closed chat column back, which every tab offers.
+ * The walkthrough does not scroll, so the band takes no height: the pill hangs up from the
+ * band's sticky edge into the corner, clear of the centred controls.
+ */
+@media (min-width: 1100px) {
+  .memo-note-screen[data-note-tab="tutor"] .memo-dock:has(.memo-chat-fab) {
+    display: flex;
+    align-items: flex-end;
+    height: 0;
+    margin-top: 0;
+  }
 }
 
 /* The episode's own meter is still in there, on its own, where the listen pill sits. */
@@ -20383,7 +20397,7 @@
 
 /*
  * The reader owns the screen. There is nothing to ask a question with while a
- * word is being held still under the eye — that is TABS_WITHOUT_CHAT's doing —
+ * word is being held still under the eye — on the phone that is TABS_WITHOUT_CHAT_BAR's doing —
  * and the note's own heading goes the same way.
  *
  * The scroller is left alone, though: unlike the walkthrough, this screen has

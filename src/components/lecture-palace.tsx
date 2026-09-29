@@ -178,7 +178,11 @@ export function LecturePalace({
   const [results, setResults] = useState<Record<string, "again" | "easy">>({});
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
   const selectedMapRef = useRef<string | null>(null);
-  useEffect(() => { selectedMapRef.current = selectedMapId; }, [selectedMapId]);
+  useEffect(() => {
+    selectedMapRef.current = selectedMapId;
+    /* The trail on the pavement leads to whatever is picked on the map. */
+    gameRef.current?.setGuideTarget(selectedMapId);
+  }, [selectedMapId]);
   const [hasMoved, setHasMoved] = useState(false);
   const movementOriginRef = useRef<{ x: number; z: number } | null>(null);
   const movementStartedRef = useRef(false);
@@ -645,6 +649,7 @@ export function LecturePalace({
         canvas,
         layout,
         collectedIds: [...collectedRef.current],
+        labels: Object.fromEntries([...collectedRef.current].map((id) => [id, labelForRef.current(id)])),
         onNearStation: openStation,
         onContextLost: () => {
           gameRef.current?.dispose();
@@ -667,6 +672,7 @@ export function LecturePalace({
           }
         },
       });
+      gameRef.current.setGuideTarget(selectedMapRef.current);
       setIsBuilt(true);
     } catch (error) {
       /* A device without WebGL, or a chunk that never arrived. */
@@ -1008,6 +1014,23 @@ export function LecturePalace({
     dismissStation();
   }, [clearDismiss, dismissStation]);
 
+  /*
+   * What a stop's sign says once it is collected: the question asked there, in
+   * plain text. The cue, not the answer — the sign is for remembering that
+   * this place holds this thing.
+   */
+  const labelFor = useCallback(
+    (id: string) => {
+      const raw = cardsById.get(id)?.front ?? quizById.get(id)?.prompt ?? testById.get(id)?.prompt ?? "";
+
+      return raw.replace(/[*_`#>$\\]/g, "").replace(/\s+/g, " ").trim();
+    },
+    [cardsById, quizById, testById],
+  );
+  const labelForRef = useRef(labelFor);
+
+  labelForRef.current = labelFor;
+
   /** Only a successful recall removes a marker from the active route. */
   const collect = useCallback(
     (stationId: string) => {
@@ -1019,7 +1042,7 @@ export function LecturePalace({
 
         return next;
       });
-      gameRef.current?.markCollected(stationId);
+      gameRef.current?.markCollected(stationId, labelForRef.current(stationId));
     },
     [lectureId],
   );

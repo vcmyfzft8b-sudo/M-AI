@@ -74,13 +74,22 @@ export function createTraffic(layout: PalaceLayout, count: number): Traffic {
   const glass = track(
     new THREE.MeshPhysicalMaterial({ color: 0x24566a, roughness: 0.08, metalness: 0.2, clearcoat: 1, envMapIntensity: 1.4 }),
   );
-  const frameMaterial = track(new THREE.MeshStandardMaterial({ color: 0x2b3033, roughness: 0.4, side: THREE.DoubleSide }));
   const rubber = track(new THREE.MeshStandardMaterial({ color: 0x1d2124, roughness: 0.9 }));
   const alloy = track(new THREE.MeshStandardMaterial({ color: 0xc6d1d1, roughness: 0.3, metalness: 0.8 }));
   const headlight = track(new THREE.MeshStandardMaterial({ color: 0xf4faf5, emissive: 0xfff6d8, emissiveIntensity: 0.6 }));
   const taillight = track(new THREE.MeshStandardMaterial({ color: 0xeb453e, emissive: 0xb0201a, emissiveIntensity: 0.5 }));
+  /* Double-sided: the roof frame is a thin shell seen from inside through the glass. */
   const paints = PAINTS.map((color) =>
-    track(new THREE.MeshPhysicalMaterial({ color, roughness: 0.28, metalness: 0.45, clearcoat: 1, clearcoatRoughness: 0.12 })),
+    track(
+      new THREE.MeshPhysicalMaterial({
+        color,
+        roughness: 0.28,
+        metalness: 0.45,
+        clearcoat: 1,
+        clearcoatRoughness: 0.12,
+        side: THREE.DoubleSide,
+      }),
+    ),
   );
 
   /* The streets, from the roads: each value is the centre line of one across and one down. */
@@ -104,7 +113,7 @@ export function createTraffic(layout: PalaceLayout, count: number): Traffic {
 
     add(body, paint);
     add(roof, paint);
-    add(frame, frameMaterial);
+    add(frame, paint);
     add(cabin, glass);
 
     const wheels: THREE.Object3D[] = [];

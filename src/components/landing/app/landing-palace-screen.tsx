@@ -423,7 +423,8 @@ export function LandingPalaceScreen({
 
       if (known) {
         setCollected((current) => new Set(current).add(id));
-        gameRef.current?.markCollected(id);
+        /* The question goes on a sign over the stop, as in the app. */
+        gameRef.current?.markCollected(id, cardsById.get(id)?.front ?? quizById.get(id)?.prompt);
         return;
       }
 
@@ -443,7 +444,7 @@ export function LandingPalaceScreen({
       gameRef.current?.relocateStation(moved);
       setLayout(next);
     },
-    [spots],
+    [cardsById, quizById, spots],
   );
 
   const gradeCard = useCallback(

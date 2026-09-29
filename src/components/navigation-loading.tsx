@@ -344,7 +344,7 @@ function useInstantNavigationState(options?: { disabled?: boolean }) {
         setPending(null);
       }
 
-      router.push(href);
+      push();
       return;
     }
 

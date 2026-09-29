@@ -2,13 +2,22 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 
 /**
- * The character you steer: a jointed figure built out of boxes, with a walk
- * cycle driven by a sine wave rather than an animation clip.
+ * The character you steer: a small, rounded figure in a sunny hoodie, a coral
+ * cap and a periwinkle backpack, built from a handful of primitives and moved
+ * by a procedural walk cycle rather than an animation clip.
  *
- * Deliberately a silhouette rather than a portrait — a cap, a backpack and a
- * pair of swinging arms read as "you" at the camera distance this game uses,
- * and cost nothing to download. `avatar.root` is what the controller moves;
- * everything below it is local.
+ * Built for being looked at from behind and a little above, which is where the
+ * camera spends its life: the cap, the hood and the backpack are the
+ * silhouette, and the colours are the ones nothing else in the town wears —
+ * the figure is what the eye tracks across a city of pale buildings, so it
+ * must never borrow the local colour and disappear into it. The face is for
+ * the moments the camera swings round: big eyes that blink, cheeks, a smile.
+ *
+ * The motion is what makes it read as someone rather than something: hips and
+ * shoulders counter-rotate, knees bend on the swing, elbows bend more as it
+ * runs, the body leans into speed and rolls into turns, and standing still it
+ * breathes and looks about. `avatar.root` is what the controller moves;
+ * everything below it is local, facing +Z.
  */
 
 export type Avatar = {
@@ -18,262 +27,361 @@ export type Avatar = {
   dispose: () => void;
 };
 
+/* Walk and sprint speeds from `movement.ts`, for blending the gaits. */
+const WALK_SPEED = 7.37;
+const RUN_SPEED = 12.21;
+
+const SKIN = 0xf2c6a0;
+const HAIR = 0x4a2f22;
+const HOODIE = 0xf7b733;
+const HOODIE_SHADE = 0xde9420;
+const CAP = 0xf0574f;
+const PANTS = 0x2f3b5c;
+const BACKPACK = 0x6f7fe0;
+const BACKPACK_SHADE = 0x5462c4;
+const SHOE = 0xf5f5f7;
+const SOLE = 0x3a3f4a;
+const EYE = 0x1f1a24;
+const CHEEK = 0xf49a9a;
+
 export function createAvatar(): Avatar {
   const root = new THREE.Group();
   const disposables: { dispose: () => void }[] = [];
-  const material = (color: THREE.ColorRepresentation) => {
-    const created = new THREE.MeshStandardMaterial({ color, roughness: 0.82 });
+  const track = <Item extends { dispose: () => void }>(item: Item) => {
+    disposables.push(item);
 
-    disposables.push(created);
+    return item;
+  };
+  const material = (color: THREE.ColorRepresentation, roughness = 0.72) =>
+    track(new THREE.MeshStandardMaterial({ color, roughness }));
+
+  const skin = material(SKIN, 0.6);
+  const hair = material(HAIR, 0.85);
+  const hoodie = material(HOODIE, 0.78);
+  const hoodieShade = material(HOODIE_SHADE, 0.8);
+  const cap = material(CAP, 0.6);
+  const pants = material(PANTS, 0.85);
+  const backpackMaterial = material(BACKPACK, 0.55);
+  const backpackShade = material(BACKPACK_SHADE, 0.6);
+  const shoe = material(SHOE, 0.5);
+  const sole = material(SOLE, 0.8);
+  const eyeMaterial = material(EYE, 0.15);
+  const white = track(new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  const cheek = track(
+    new THREE.MeshStandardMaterial({ color: CHEEK, roughness: 0.9, transparent: true, opacity: 0.75 }),
+  );
+
+  const sphereGeometry = track(new THREE.SphereGeometry(1, 28, 20));
+  const lowSphere = track(new THREE.SphereGeometry(1, 12, 10));
+  const capsule = (radius: number, length: number) =>
+    track(new THREE.CapsuleGeometry(radius, length, 6, 16));
+  const rounded = (width: number, height: number, depth: number, radius = 0.35) =>
+    track(new RoundedBoxGeometry(width, height, depth, 3, Math.min(width, height, depth) * radius));
+
+  const mesh = (
+    geometry: THREE.BufferGeometry,
+    meshMaterial: THREE.Material,
+    parent: THREE.Object3D,
+    position: [number, number, number],
+    scale: [number, number, number] = [1, 1, 1],
+  ) => {
+    const created = new THREE.Mesh(geometry, meshMaterial);
+
+    created.position.set(...position);
+    created.scale.set(...scale);
+    parent.add(created);
 
     return created;
   };
-  const box = (width: number, height: number, depth: number) => {
-    const geometry = new RoundedBoxGeometry(
-      width,
-      height,
-      depth,
-      2,
-      Math.min(width, height, depth) * 0.28,
-    );
-
-    disposables.push(geometry);
-
-    return geometry;
-  };
-
-  const skin = material(0xf0c9a4);
-  /*
-   * One outfit, whatever district you are in: the character is the thing your
-   * eye tracks across a city of pale buildings, so it stays the same saturated
-   * indigo rather than borrowing the local colour and disappearing into it.
-   */
-  const shirt = material(0x5265a8);
-  const jeans = material(0x354355);
-  const shoes = material(0xf2f2f4);
-  const capColor = material(0xe0483c);
-
-  const torso = new THREE.Mesh(box(0.78, 0.86, 0.44), shirt);
-  const head = new THREE.Mesh(box(0.56, 0.54, 0.54), skin);
-  const cap = new THREE.Mesh(box(0.62, 0.2, 0.6), capColor);
-  const brim = new THREE.Mesh(box(0.6, 0.08, 0.34), capColor);
-  const backpack = new THREE.Mesh(box(0.5, 0.6, 0.22), jeans);
 
   /*
-   * The figure faces local +Z, because that is the way the controller walks.
-   * `facing` moves the character along `(sin facing, cos facing)` and the
-   * camera sits at the negative of that, behind the head — so a figure built
-   * facing -Z, as this one was, is turned exactly half a circle from the way it
-   * is going, and the whole town is walked backwards with the brim of the cap
-   * leading and the backpack pointed where the player is looking.
+   * body   — everything, bobs on each step
+   * └ spine — pivots at the hips: the upper body leans, twists and breathes
+   *   └ head — nods and looks about
    */
-  torso.position.y = 1.16;
-  head.position.y = 1.86;
-  cap.position.set(0, 2.18, 0);
-  brim.position.set(0, 2.12, 0.42);
-  backpack.position.set(0, 1.2, -0.3);
+  const body = new THREE.Group();
+  const spine = new THREE.Group();
+  const HIP_Y = 0.7;
 
-  // The original red-cap silhouette, with a simple friendly block-avatar face.
-  const faceMaterial = material(0x302d35);
-  const eyeGeometry = new THREE.SphereGeometry(0.028, 10, 8);
-  disposables.push(eyeGeometry);
+  spine.position.y = HIP_Y;
+  body.add(spine);
+  root.add(body);
+
+  /* ---- torso: a hoodie with a front pocket, drawstrings and a hood ---- */
+  const torso = mesh(rounded(0.45, 0.56, 0.3, 0.42), hoodie, spine, [0, 0.3, 0]);
+
+  mesh(rounded(0.28, 0.12, 0.05), hoodieShade, spine, [0, 0.21, 0.155]);
+  mesh(rounded(0.465, 0.045, 0.31, 0.45), hoodieShade, spine, [0, 0.04, 0]);
+  mesh(lowSphere, hoodie, spine, [0, 0.58, -0.1], [0.19, 0.1, 0.13]);
   for (const side of [-1, 1]) {
-    const eye = new THREE.Mesh(eyeGeometry, faceMaterial);
-    eye.position.set(side * 0.105, 1.93, 0.266);
-    eye.scale.set(0.8, 1.2, 0.35);
-    root.add(eye);
-  }
-  const smileCurve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(-0.105, 1.83, 0.273),
-    new THREE.Vector3(0, 1.775, 0.279),
-    new THREE.Vector3(0.105, 1.83, 0.273),
-  ]);
-  const smileGeometry = new THREE.TubeGeometry(smileCurve, 12, 0.011, 6, false);
-  disposables.push(smileGeometry);
-  root.add(new THREE.Mesh(smileGeometry, faceMaterial));
+    const string = mesh(capsule(0.012, 0.09), white, spine, [side * 0.05, 0.47, 0.16]);
 
-  /*
-   * Limbs hang from pivots at the shoulder and hip, so rotating the pivot
-   * swings the limb the way a limb swings instead of spinning it about its
-   * middle.
-   */
-  const limb = (
-    width: number,
-    height: number,
-    depth: number,
-    limbMaterial: THREE.Material,
+    string.rotation.x = -0.25;
+  }
+
+  /* ---- backpack, with straps over the shoulders and a Memo-pink patch ---- */
+  const backpack = new THREE.Group();
+
+  backpack.position.set(0, 0.34, -0.22);
+  spine.add(backpack);
+  mesh(rounded(0.34, 0.4, 0.17), backpackMaterial, backpack, [0, 0, 0]);
+  mesh(rounded(0.26, 0.15, 0.06), backpackShade, backpack, [0, -0.09, -0.09]);
+  mesh(lowSphere, material(0xf6a4bf, 0.7), backpack, [0.07, 0.07, -0.088], [0.045, 0.045, 0.012]);
+  const handle = mesh(track(new THREE.TorusGeometry(0.05, 0.014, 6, 14, Math.PI)), backpackShade, backpack, [0, 0.2, 0]);
+
+  handle.rotation.y = Math.PI / 2;
+  for (const side of [-1, 1]) {
+    mesh(rounded(0.05, 0.34, 0.025, 0.4), backpackShade, spine, [side * 0.12, 0.36, 0.16]);
+    mesh(rounded(0.055, 0.03, 0.34, 0.4), backpackShade, spine, [side * 0.13, 0.585, -0.02]);
+  }
+
+  /* ---- head ---- */
+  const head = new THREE.Group();
+  const HEAD_RADIUS = 0.27;
+
+  head.position.y = 0.82;
+  spine.add(head);
+  mesh(capsule(0.07, 0.06), skin, spine, [0, 0.63, 0]);
+  mesh(sphereGeometry, skin, head, [0, 0, 0], [HEAD_RADIUS, HEAD_RADIUS * 0.95, HEAD_RADIUS * 0.96]);
+  /* Hair shows at the nape and the sides, under the cap. */
+  mesh(sphereGeometry, hair, head, [0, 0.02, -0.035], [0.276, 0.25, 0.265]);
+
+  /* A point on the face, with the orientation of the skin there. */
+  const onFace = (x: number, y: number, lift = 0) => {
+    const normal = new THREE.Vector3(x / HEAD_RADIUS, y / HEAD_RADIUS, 0);
+    normal.z = Math.sqrt(Math.max(0, 1 - normal.x ** 2 - normal.y ** 2));
+    const point = new THREE.Vector3(normal.x, normal.y * 0.95, normal.z * 0.96).multiplyScalar(HEAD_RADIUS + lift);
+
+    return { point, rotation: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal) };
+  };
+  const decal = (
+    geometry: THREE.BufferGeometry,
+    decalMaterial: THREE.Material,
     x: number,
     y: number,
+    scale: [number, number, number],
+    parent: THREE.Object3D = head,
+    lift = 0,
   ) => {
-    const pivot = new THREE.Group();
-    const mesh = new THREE.Mesh(box(width, height, depth), limbMaterial);
+    const { point, rotation } = onFace(x, y, lift);
+    const created = mesh(geometry, decalMaterial, parent, [point.x, point.y, point.z], scale);
 
-    mesh.position.y = -height / 2;
-    pivot.position.set(x, y, 0);
-    pivot.add(mesh);
-    root.add(pivot);
+    created.quaternion.copy(rotation);
 
-    return pivot;
+    return created;
   };
 
-  const leftArm = limb(0.24, 0.62, 0.26, shirt, -0.51, 1.5);
-  const rightArm = limb(0.24, 0.62, 0.26, shirt, 0.51, 1.5);
-  const leftLeg = limb(0.28, 0.36, 0.3, jeans, -0.2, 0.78);
-  const rightLeg = limb(0.28, 0.36, 0.3, jeans, 0.2, 0.78);
-  const leftKnee = limb(0.27, 0.34, 0.29, jeans, 0, -0.36);
-  const rightKnee = limb(0.27, 0.34, 0.29, jeans, 0, -0.36);
-  leftLeg.add(leftKnee);
-  rightLeg.add(rightKnee);
-  const leftShoe = new THREE.Mesh(box(0.3, 0.16, 0.42), shoes);
-  const rightShoe = new THREE.Mesh(box(0.3, 0.16, 0.42), shoes);
+  const eyes = new THREE.Group();
 
-  /* Toes lead, so they point the way the figure faces. */
-  leftShoe.position.set(0, -0.34, 0.07);
-  rightShoe.position.set(0, -0.34, 0.07);
-  leftKnee.add(leftShoe);
-  rightKnee.add(rightShoe);
+  head.add(eyes);
+  for (const side of [-1, 1]) {
+    decal(sphereGeometry, eyeMaterial, side * 0.095, 0.0, [0.042, 0.06, 0.024], eyes, -0.004);
+    decal(lowSphere, white, side * 0.095 + 0.016, 0.024, [0.014, 0.014, 0.008], eyes, 0.015);
+    decal(lowSphere, cheek, side * 0.155, -0.07, [0.045, 0.028, 0.01], head, -0.002);
+    /* Ears. */
+    mesh(lowSphere, skin, head, [side * 0.262, -0.01, 0], [0.04, 0.065, 0.055]);
+  }
+  decal(lowSphere, material(0xe7ab86, 0.6), 0, -0.035, [0.026, 0.022, 0.02], head, -0.004);
+  const smile = new THREE.TubeGeometry(
+    new THREE.CatmullRomCurve3(
+      [-0.05, 0, 0.05].map((x) => {
+        const { point } = onFace(x, -0.095 - (x === 0 ? 0.022 : 0), 0.002);
 
-  /* A painted blob instead of a shadow map: the same read, none of the cost. */
-  const shadowGeometry = new THREE.CircleGeometry(0.62, 20);
-  const shadowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x1a2a12,
-    transparent: true,
-    opacity: 0.28,
+        return point;
+      }),
+    ),
+    14,
+    0.009,
+    6,
+    false,
+  );
+
+  mesh(track(smile), eyeMaterial, head, [0, 0, 0]);
+
+  /* The cap: a dome, a brim that shades the eyes, a button on top. */
+  const capGroup = new THREE.Group();
+
+  capGroup.position.set(0, 0.06, -0.005);
+  capGroup.rotation.x = -0.12;
+  head.add(capGroup);
+  mesh(
+    track(new THREE.SphereGeometry(1, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.52)),
+    cap,
+    capGroup,
+    [0, 0, 0],
+    [0.285, 0.27, 0.285],
+  );
+  const brim = mesh(track(new THREE.CylinderGeometry(0.19, 0.2, 0.026, 28)), cap, capGroup, [0, 0.01, 0.25], [1, 1, 0.95]);
+
+  brim.rotation.x = 0.2;
+  mesh(lowSphere, material(0xffffff, 0.5), capGroup, [0, 0.27, 0], [0.03, 0.02, 0.03]);
+  mesh(rounded(0.1, 0.07, 0.02), white, capGroup, [0, 0.14, 0.247]).rotation.x = -0.57;
+
+  /* ---- limbs: pivots at shoulder, elbow, hip and knee ---- */
+  const pivot = (parent: THREE.Object3D, x: number, y: number, z = 0) => {
+    const group = new THREE.Group();
+
+    group.position.set(x, y, z);
+    parent.add(group);
+
+    return group;
+  };
+
+  const arms = [-1, 1].map((side) => {
+    const shoulder = pivot(spine, side * 0.29, 0.47);
+    mesh(capsule(0.072, 0.15), hoodie, shoulder, [0, -0.13, 0]);
+    const elbow = pivot(shoulder, 0, -0.26);
+
+    mesh(capsule(0.066, 0.1), hoodie, elbow, [0, -0.09, 0]);
+    mesh(track(new THREE.CylinderGeometry(0.07, 0.07, 0.05, 16)), hoodieShade, elbow, [0, -0.17, 0]);
+    mesh(sphereGeometry, skin, elbow, [0, -0.24, 0.005], [0.068, 0.078, 0.07]);
+    return { shoulder, elbow };
   });
-  const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
 
-  disposables.push(shadowGeometry, shadowMaterial);
+  const legs = [-1, 1].map((side) => {
+    const hip = pivot(body, side * 0.105, HIP_Y);
+
+    mesh(capsule(0.092, 0.14), pants, hip, [0, -0.15, 0]);
+    const knee = pivot(hip, 0, -0.31);
+
+    mesh(capsule(0.082, 0.16), pants, knee, [0, -0.14, 0]);
+    const ankle = pivot(knee, 0, -0.3);
+
+    mesh(rounded(0.17, 0.12, 0.29), shoe, ankle, [0, -0.02, 0.045]);
+    mesh(rounded(0.18, 0.04, 0.3, 0.4), sole, ankle, [0, -0.07, 0.045]);
+    mesh(rounded(0.176, 0.028, 0.12, 0.4), cap, ankle, [0, 0.0, 0.02]);
+
+    return { hip, knee, ankle };
+  });
+
+  /* Hips: the top of the trousers, joining the legs to the hoodie. */
+  mesh(rounded(0.36, 0.18, 0.25, 0.45), pants, body, [0, HIP_Y + 0.02, 0]);
+
+  /*
+   * A soft contact patch under the feet: a shadow map at this distance cannot
+   * resolve where the shoes meet the ground, and without it the figure floats.
+   */
+  const shadowCanvas = document.createElement("canvas");
+
+  shadowCanvas.width = shadowCanvas.height = 64;
+  const shadowContext = shadowCanvas.getContext("2d");
+
+  if (shadowContext) {
+    const gradient = shadowContext.createRadialGradient(32, 32, 0, 32, 32, 32);
+
+    gradient.addColorStop(0, "rgba(20, 30, 20, 0.5)");
+    gradient.addColorStop(0.6, "rgba(20, 30, 20, 0.22)");
+    gradient.addColorStop(1, "rgba(20, 30, 20, 0)");
+    shadowContext.fillStyle = gradient;
+    shadowContext.fillRect(0, 0, 64, 64);
+  }
+
+  const shadowTexture = track(new THREE.CanvasTexture(shadowCanvas));
+  const shadowMaterial = track(
+    new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, depthWrite: false }),
+  );
+  const shadow = new THREE.Mesh(track(new THREE.PlaneGeometry(1.2, 1.2)), shadowMaterial);
+
   shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.14;
+  shadow.position.y = 0.13;
+  root.add(shadow);
 
-  const strapMaterial = material(0x222d41);
-  for (const side of [-1, 1]) {
-    const strap = new THREE.Mesh(box(0.09, 0.72, 0.06), strapMaterial);
-    strap.position.set(side * 0.25, 1.22, 0.245);
-    root.add(strap);
-    const hand = new THREE.Mesh(box(0.17, 0.22, 0.18), skin);
-    hand.position.y = -0.69;
-    (side === -1 ? leftArm : rightArm).add(hand);
-  }
-  const detailMaterial = material(0xc7d5d7);
-  const seamMaterial = material(0x394f85);
-  const addDetail = (
-    parent: THREE.Group | THREE.Mesh,
-    w: number,
-    h: number,
-    d: number,
-    x: number,
-    y: number,
-    z: number,
-    mat: THREE.Material,
-  ) => {
-    const mesh = new THREE.Mesh(box(w, h, d), mat);
-    mesh.position.set(x, y, z);
-    parent.add(mesh);
-    return mesh;
-  };
-  // Jacket seams and collar, fitted cuffs, and rounded mitten-style hands.
-  addDetail(root, 0.025, 0.65, 0.015, 0, 1.17, 0.229, detailMaterial);
-  addDetail(
-    root,
-    0.12,
-    0.075,
-    0.06,
-    -0.09,
-    1.57,
-    0.21,
-    seamMaterial,
-  ).rotation.z = -0.3;
-  addDetail(
-    root,
-    0.12,
-    0.075,
-    0.06,
-    0.09,
-    1.57,
-    0.21,
-    seamMaterial,
-  ).rotation.z = 0.3;
-  for (const side of [-1, 1]) {
-    const arm = side === -1 ? leftArm : rightArm;
-    addDetail(arm, 0.245, 0.08, 0.27, 0, -0.59, 0, seamMaterial);
-    addDetail(arm, 0.065, 0.12, 0.1, -side * 0.1, -0.69, 0.05, skin);
-    addDetail(root, 0.14, 0.12, 0.025, side * 0.19, 1.01, 0.235, seamMaterial);
-    // Ears and hair beneath the cap retain the simple, friendly face.
-    addDetail(root, 0.065, 0.13, 0.12, side * 0.28, 1.86, 0, skin);
-    addDetail(root, 0.025, 0.09, 0.25, side * 0.273, 2.06, -0.05, faceMaterial);
-    const knee = side === -1 ? leftKnee : rightKnee;
-    addDetail(knee, 0.31, 0.045, 0.43, 0, -0.397, 0.07, detailMaterial);
-    for (const lace of [0, 0.055, 0.11])
-      addDetail(knee, 0.19, 0.016, 0.019, 0, -0.252, 0.07 + lace, seamMaterial);
-  }
-  addDetail(root, 0.39, 0.065, 0.03, 0, 2.08, -0.274, faceMaterial);
-  addDetail(root, 0.12, 0.085, 0.015, 0, 2.19, 0.305, shoes);
-  addDetail(root, 0.032, 0.047, 0.022, 0, 2.19, 0.315, capColor);
-  const zip = new THREE.Mesh(box(0.29, 0.025, 0.025), detailMaterial);
-  zip.position.set(0, 1.24, -0.5);
-  const handle = new THREE.Mesh(box(0.18, 0.08, 0.06), jeans);
-  handle.position.set(0, 1.56, -0.3);
-  root.add(zip, handle);
-  const pocket = new THREE.Mesh(box(0.38, 0.25, 0.1), shirt);
-  pocket.position.set(0, 1.1, -0.44);
-  root.add(torso, head, cap, brim, backpack, pocket, shadow);
-  // Move the whole rig together: the jacket no longer bounces away from the
-  // head and backpack. The ground contact shadow stays planted.
-  const rig = new THREE.Group();
-  for (const child of [...root.children]) if (child !== shadow) rig.add(child);
-  root.add(rig);
-  /*
-   * The figure is built at about two metres and then taken down to human
-   * height: everything else in the town — a car, a door, a bench — is at its
-   * real size, and the character was quietly making all of it look like toys.
-   */
-  root.scale.setScalar(0.86);
-  /* The character casts a real shadow now; the painted blob under it stays as
-     the contact patch a shadow map at this distance cannot resolve. */
   root.traverse((part) => {
-    if (part instanceof THREE.Mesh && part !== shadow) {
-      part.castShadow = true;
-    }
+    if (part instanceof THREE.Mesh && part !== shadow) part.castShadow = true;
   });
+
+  /* About human height: everything else in the town — cars, doors, benches — is real size. */
+  root.scale.setScalar(1.02);
 
   let phase = 0;
   let easedSpeed = 0;
+  let clock = 0;
+  let idleTime = 0;
+  let nextBlink = 2.5;
+  let lastFacing: number | null = null;
+  let turnLean = 0;
+  let airborneBlend = 0;
 
   return {
     root,
     update: (speed, airborne, delta) => {
-      easedSpeed += (speed - easedSpeed) * (1 - Math.exp(-delta * 12));
-      phase += delta * (2.4 + easedSpeed * 1.15);
+      clock += delta;
+      easedSpeed += (speed - easedSpeed) * (1 - Math.exp(-delta * 10));
 
-      if (airborne) {
-        /* Tuck in the air, so a jump reads as a jump from behind. */
-        leftArm.rotation.x = -1.9;
-        rightArm.rotation.x = -1.9;
-        leftLeg.rotation.x = 0.5;
-        rightLeg.rotation.x = -0.35;
-        shadow.scale.setScalar(Math.max(0.4, 1 - root.position.y * 0.16));
+      const walk = Math.min(1, easedSpeed / WALK_SPEED);
+      const run = Math.max(0, Math.min(1, (easedSpeed - WALK_SPEED) / (RUN_SPEED - WALK_SPEED)));
+      const moving = Math.min(1, easedSpeed / 1.2);
 
-        return;
+      /* Steps quicken with speed, but less than proportionally: a run is a longer stride too. */
+      phase += delta * (2 + easedSpeed * 1.05);
+      idleTime = moving > 0.2 ? 0 : idleTime + delta;
+
+      /* How fast the controller is turning the body, for leaning into it. */
+      const facing = root.rotation.y;
+      let turnRate = 0;
+
+      if (lastFacing !== null && delta > 0) {
+        let change = facing - lastFacing;
+
+        change = Math.atan2(Math.sin(change), Math.cos(change));
+        turnRate = change / delta;
       }
 
-      const stride = Math.min(1, easedSpeed / 7);
-      const swing = Math.sin(phase) * Math.min(0.85, easedSpeed * 0.1);
+      lastFacing = facing;
+      turnLean += (Math.max(-0.2, Math.min(0.2, -turnRate * 0.035 * walk)) - turnLean) * (1 - Math.exp(-delta * 8));
 
-      leftArm.rotation.x = swing;
-      rightArm.rotation.x = -swing;
-      leftLeg.rotation.x = -swing;
-      rightLeg.rotation.x = swing;
-      leftKnee.rotation.x = Math.max(0, Math.sin(phase)) * 0.65 * stride;
-      rightKnee.rotation.x = Math.max(0, -Math.sin(phase)) * 0.65 * stride;
-      leftArm.rotation.z = 0.035 + stride * 0.04;
-      rightArm.rotation.z = -0.035 - stride * 0.04;
-      /* A small bounce on each step; standing still, it settles. */
-      rig.position.y =
-        Math.abs(Math.sin(phase)) * Math.min(0.045, easedSpeed * 0.006);
-      rig.rotation.z = Math.sin(phase) * 0.012 * stride;
-      backpack.rotation.x = Math.sin(phase * 2) * 0.015 * stride;
-      shadow.scale.setScalar(1);
+      airborneBlend += ((airborne ? 1 : 0) - airborneBlend) * (1 - Math.exp(-delta * 14));
+
+      const swing = Math.sin(phase);
+      const lift = Math.cos(phase);
+      const legReach = (0.55 + run * 0.35) * moving;
+      const armReach = (0.45 + run * 0.4) * moving;
+
+      legs.forEach(({ hip, knee, ankle }, index) => {
+        const direction = index === 0 ? 1 : -1;
+        const stride = swing * direction;
+        /* The knee bends on the swing forward, not while the foot is planted. */
+        const swingForward = Math.max(0, lift * direction);
+
+        hip.rotation.x = -stride * legReach * (1 - airborneBlend) + airborneBlend * (index === 0 ? -0.6 : 0.2);
+        knee.rotation.x = (0.08 + swingForward * (0.9 + run * 0.5)) * moving * (1 - airborneBlend) + airborneBlend * 0.9;
+        ankle.rotation.x = -hip.rotation.x * 0.35 - knee.rotation.x * 0.25;
+      });
+
+      arms.forEach(({ shoulder, elbow }, index) => {
+        const direction = index === 0 ? -1 : 1;
+        const idleSway = Math.sin(clock * 1.6 + index) * 0.04 * (1 - moving);
+
+        shoulder.rotation.x = -swing * direction * armReach * (1 - airborneBlend) - airborneBlend * 2.4 + idleSway;
+        shoulder.rotation.z = (index === 0 ? -1 : 1) * (0.08 + run * 0.08 + airborneBlend * 0.3);
+        elbow.rotation.x = -(0.15 + walk * 0.35 + run * 0.75) * (1 - airborneBlend * 0.6);
+      });
+
+      /* Lowest as the feet land, highest as one passes the other. */
+      body.position.y = (1 - Math.abs(swing)) * (0.035 + run * 0.03) * moving;
+      body.rotation.y = swing * 0.07 * moving;
+      spine.rotation.y = -swing * (0.14 + run * 0.06) * moving;
+      spine.rotation.x = (0.05 * walk + 0.16 * run) * (1 - airborneBlend);
+      body.rotation.z = turnLean + Math.sin(phase) * 0.015 * moving;
+
+      /* Standing still it breathes, and after a moment it looks about. */
+      const breath = Math.sin(clock * 2.1) * 0.012 * (1 - moving);
+      const lookAbout = Math.min(1, Math.max(0, idleTime - 2.5) / 1.5);
+
+      torso.scale.y = 1 + breath;
+      head.position.y = 0.82 + breath * 0.6;
+      head.rotation.y = Math.sin(clock * 0.55) * 0.45 * lookAbout + Math.max(-0.3, Math.min(0.3, turnRate * 0.06)) * walk;
+      head.rotation.x = -spine.rotation.x * 0.6 + Math.sin(phase * 2) * 0.025 * moving + Math.sin(clock * 0.4) * 0.05 * lookAbout;
+      backpack.rotation.x = -Math.cos(phase * 2) * 0.05 * moving;
+      backpack.position.y = 0.34 + Math.abs(swing) * 0.012 * moving;
+
+      /* Blink every few seconds. */
+      nextBlink -= delta;
+      if (nextBlink < -0.12) nextBlink = 2.2 + Math.abs(Math.sin(clock * 12.9898)) * 2.8;
+      eyes.scale.y = nextBlink < 0 ? 0.12 : 1;
+      eyes.position.y = nextBlink < 0 ? 0.004 : 0;
+
+      shadow.scale.setScalar(1 - airborneBlend * 0.4 - Math.max(0, root.position.y) * 0.12);
     },
     dispose: () => {
       disposables.forEach((item) => item.dispose());

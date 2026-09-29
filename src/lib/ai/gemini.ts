@@ -13,6 +13,7 @@ import {
   WorkAbortedError,
   getCurrentAbortSignal,
   getRemainingBudgetMs,
+  isAttemptTimeoutAbort,
   isWorkAbortedError,
 } from "@/lib/abort-context";
 import { isRetryableAiError } from "@/lib/ai/errors";
@@ -131,6 +132,16 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
   // without a handler that late rejection would surface as an unhandled one.
   promise.catch(() => undefined);
 
+  // The attempt's own timeout aborts the request with the same AbortError the budget does. Say
+  // it timed out, so the callers below retry or fall back instead of cancelling the whole run.
+  const budgetSignal = getCurrentAbortSignal();
+  const request = promise.catch((error: unknown) => {
+    throw isAttemptTimeoutAbort(error, budgetSignal)
+      ? new Error(`${label} timed out after ${timeoutMs}ms.`)
+      : error;
+  });
+  request.catch(() => undefined);
+
   const timeoutPromise = new Promise<T>((_, reject) => {
     timeoutId = setTimeout(() => {
       reject(new Error(`${label} timed out after ${timeoutMs}ms.`));
@@ -138,7 +149,7 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
   });
 
   try {
-    return await Promise.race([promise, timeoutPromise]);
+    return await Promise.race([request, timeoutPromise]);
   } finally {
     if (timeoutId) {
       clearTimeout(timeoutId);

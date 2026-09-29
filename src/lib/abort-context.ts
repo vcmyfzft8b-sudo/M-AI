@@ -70,3 +70,23 @@ export function isWorkAbortedError(error: unknown) {
       (error.name === "WorkAbortedError" || error.name === "AbortError"))
   );
 }
+
+/**
+ * A single model call's own timeout, not the budget. Every Gemini attempt's signal joins the
+ * budget with `AbortSignal.timeout` (src/lib/ai/gemini.ts), and @google/genai reports either one
+ * firing as the same `AbortError: This operation was aborted`. Only the budget's signal tells
+ * them apart.
+ *
+ * Read as a budget abort, one photo that outlasted its 90-second attempt skipped that photo's
+ * rescue reader and failed a whole eight-photo scan 103 seconds into a 295-second budget (note
+ * triage, 2026-09-28). An attempt timeout is an ordinary provider failure: the caller retries it
+ * or falls back like any other.
+ */
+export function isAttemptTimeoutAbort(error: unknown, budgetSignal: AbortSignal | undefined) {
+  return (
+    error instanceof Error &&
+    !(error instanceof WorkAbortedError) &&
+    error.name === "AbortError" &&
+    !budgetSignal?.aborted
+  );
+}

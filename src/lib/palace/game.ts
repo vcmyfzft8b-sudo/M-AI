@@ -12,7 +12,9 @@ import {
   stepCharacter,
   type CharacterState,
 } from "@/lib/palace/movement";
-import { buildCity, createLighting, type StationVisual } from "@/lib/palace/world";
+import { createLighting, UNOCCLUDED_LAYER } from "@/lib/palace/atmosphere";
+import { createPostProcessing, type PostProcessing } from "@/lib/palace/post";
+import { buildCity, type StationVisual } from "@/lib/palace/world";
 
 /**
  * The loop: input in, a frame out.
@@ -105,18 +107,58 @@ export function createPalaceGame({
    * getting warm for no visible gain at that screen size.
    */
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.1;
+  renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(64, 1, 0.5, 720);
-  const lighting = createLighting(scene, onAPhone ? 1024 : 2048);
+  camera.layers.enable(UNOCCLUDED_LAYER);
+  const lighting = createLighting(scene, renderer, onAPhone ? 1024 : 2048);
   const city = buildCity(layout);
   const avatar = createAvatar();
 
   scene.add(city.group, avatar.root);
   lighting.follow(layout.spawn.x, layout.spawn.z);
+
+  /*
+   * The finishing pass (occlusion, grade) is for screens with a GPU to spare. A
+   * phone draws straight to the canvas; so does a desktop that turns out not to
+   * keep up — see `watchFrameRate` below.
+   */
+  let post: PostProcessing | null = null;
+
+  if (!onAPhone) {
+    try {
+      post = createPostProcessing(renderer, scene, camera);
+    } catch {
+      post = null;
+    }
+  }
+
+  const draw = () => {
+    if (post) post.render();
+    else renderer.render(scene, camera);
+  };
+
+  /*
+   * A laptop on battery can take the post pass and still drop to twenty frames
+   * a second, and a walk that stutters is worse than one without shading in
+   * the corners. So the frame time is watched for the first stretch of play and
+   * the pass is dropped for good if it is not keeping up.
+   */
+  const frameTimes: number[] = [];
+  const watchFrameRate = (milliseconds: number) => {
+    if (!post || milliseconds <= 0 || milliseconds > 250) return;
+    frameTimes.push(milliseconds);
+    if (frameTimes.length < 90) return;
+    const average = frameTimes.reduce((sum, value) => sum + value, 0) / frameTimes.length;
+    frameTimes.length = 0;
+    if (average > 26) {
+      post.dispose();
+      post = null;
+    }
+  };
 
   const collected = new Set(collectedIds);
   const collectionPulses = new Map<string, number>();
@@ -129,6 +171,7 @@ export function createPalaceGame({
   const markVisualCollected = (visual: StationVisual) => {
     visual.collected = true;
     visual.token.visible = false;
+    visual.beacon.visible = false;
 
     const ringMaterial = (visual.ring as THREE.Mesh).material as THREE.MeshBasicMaterial;
 
@@ -181,12 +224,13 @@ export function createPalaceGame({
     portrait = camera.aspect < 1;
     camera.fov = portrait ? 66 : 58;
     camera.updateProjectionMatrix();
+    post?.setSize(width, height);
     /*
      * Draw immediately rather than waiting for the loop: a canvas that was
      * measured at zero — mounted mid-transition, or in a tab the browser is not
      * animating — would otherwise stay blank until something else moved.
      */
-    renderer.render(scene, camera);
+    draw();
   };
 
   resize();
@@ -222,7 +266,8 @@ export function createPalaceGame({
 
   camera.position.set(spawnCamera.x, Math.max(spawnCamera.y, 1.2), spawnCamera.z);
   camera.lookAt(character.x, character.y + 1.6, character.z);
-  renderer.render(scene, camera);
+  lighting.update(0, camera);
+  draw();
 
   const currentDistrict = () => {
     let closest = 0;
@@ -295,6 +340,8 @@ export function createPalaceGame({
     /* A tab that was in the background comes back with a huge gap; cap it. */
     const delta = Math.min(0.05, lastTime ? (time - lastTime) / 1000 : 0.016);
 
+    if (lastTime) watchFrameRate(time - lastTime);
+
     lastTime = time;
 
     const keyboard = readKeyboard();
@@ -348,6 +395,9 @@ export function createPalaceGame({
 
     const seconds = time / 1000;
 
+    lighting.update(reducedMotion ? 0 : seconds, camera);
+    city.update(reducedMotion ? 0 : seconds);
+
     city.stations.forEach((visual) => {
       if (visual.collected) {
         const started = collectionPulses.get(visual.station.id);
@@ -366,6 +416,8 @@ export function createPalaceGame({
        * plaza does not pulse as one.
        */
       visual.token.position.y = 1.65 + (reducedMotion ? 0 : Math.sin(seconds * 2 + visual.station.index) * 0.1);
+      /* The ring breathes with it, so a waiting stop reads as live. */
+      visual.ring.scale.setScalar(reducedMotion ? 1 : 1 + Math.sin(seconds * 2.4 + visual.station.index) * 0.06);
     });
 
     if (time > districtRefreshAt) {
@@ -413,7 +465,7 @@ export function createPalaceGame({
 
     onFrame(snapshot());
 
-    renderer.render(scene, camera);
+    draw();
   };
 
   const snapshot = (): PalaceSnapshot => ({
@@ -451,6 +503,7 @@ export function createPalaceGame({
       visual.ring.position.set(station.x, 0.11, station.z);
       visual.plaque.position.set(station.x, 0.4, station.z + 0.61);
       visual.plaque.rotation.y = 0;
+      visual.beacon.position.set(station.x, 0, station.z);
     },
     releaseStation: () => {
       if (nearStationId && collected.has(nearStationId) && !reducedMotion) {
@@ -478,6 +531,7 @@ export function createPalaceGame({
       window.removeEventListener("blur", clearInput);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
+      post?.dispose();
       lighting.dispose();
       avatar.dispose();
       city.dispose();

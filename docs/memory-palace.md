@@ -12,6 +12,17 @@ Study controls are shared with the main app: `StudyFlashcard`, `StudyQuizQuestio
 
 Before entering, notes missing a study bank offer **Prepare study game**. This queues only absent flashcard, quiz or practice banks through the existing authenticated generation routes. Pending banks are awaited, existing questions are reused, and partial detail reads are refreshed instead of regenerated. The game opens once all three banks have content. Selection reserves room for quizzes and tests and gives unused slots to other available questions.
 
+## Atmosphere and finish
+
+- **Sky** (`atmosphere.ts`): one shader dome with a zenith-to-horizon gradient, the sun disc where the shadows say it is, and drifting fbm clouds. The same sky is rendered once into a PMREM environment map (at half saturation, so shade on the pavement is not blue) for reflections on glass and cars. Fog runs 95–560 m in the horizon's colour, so distance fades into the sky. The sun direction lives in `sun.ts` as plain numbers, shared with the intro card.
+- **Post-processing** (`post.ts`, desktop only): multisampled half-float target, GTAO ambient occlusion at half resolution, tone mapping, then a light grade and vignette. Phones draw straight to the canvas. A desktop averaging over 26 ms a frame across 90 frames drops the pass for the rest of the session. Sky, beacons, mascots and rings sit on `UNOCCLUDED_LAYER` so the occlusion never shades round a beam of light.
+- **Beacons** (`world.ts`): a 28 m column of light over every waiting stop, in its ring's colour, with a glow at its foot. Blended rather than additive (additive light vanishes against a pale sky) and fog-free, so a stop is visible over the roofs. Hidden once collected; moved with relocation.
+- **Woods**: seeded clumps of conifers and round trees on the hills outside the walkable square, without shadows or collisions. Grass uses world-space value noise for meadow patches.
+
+## Intro card
+
+The palace tab opens on a 2D-canvas isometric model of the note's own town (`diorama.ts`): the walkable square as a slab of turf with soil at the front edges, every building at its real height and colour with the in-game sun's shadows, garden trees, and a beam over each waiting stop. It never loads three.js. The landing page's demo draws the same function, with its walker. The map sheet in the game keeps the flat plan, because its marker buttons are positioned over it with `townMapPoint`.
+
 ## Local verification
 
 Run `npm run dev -- --port 3107` and open `/palace-local-qa`. This development-only route uses synthetic study questions and returns 404 outside development. `?large=1` exercises 60 mixed memories (36 cards, 15 quiz questions and 9 practice questions); `?isolated=1` uses separate local progress, including with the large fixture. `?kind=card`, `?kind=quiz` and `?kind=test` isolate each study interaction. The route does not bypass authentication or replace the actual grading API. A typed answer requires an authenticated lecture for live AI grading; offline feedback uses the answer guide. Declaring an answer unknown yields zero without an AI call, as the normal grader does.

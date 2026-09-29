@@ -109,7 +109,20 @@ export function createSurfaceMaterial(
     );
     shader.fragmentShader = shader.fragmentShader.replace(
       "#include <common>",
-      "#include <common>\nvarying vec3 vSurfacePosition;",
+      `#include <common>
+      varying vec3 vSurfacePosition;
+      float palaceHash(vec2 p) {
+        p = fract(p * vec2(123.34, 456.21));
+        p += dot(p, p + 45.32);
+        return fract(p.x * p.y);
+      }
+      float palaceNoise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(mix(palaceHash(i), palaceHash(i + vec2(1.0, 0.0)), u.x),
+                   mix(palaceHash(i + vec2(0.0, 1.0)), palaceHash(i + vec2(1.0, 1.0)), u.x), u.y);
+      }`,
     );
     shader.fragmentShader = shader.fragmentShader.replace(
       "#include <map_fragment>",
@@ -120,6 +133,16 @@ export function createSurfaceMaterial(
       surfaceUv *= ${kind === "stone" || kind === "wood" ? "0.22" : kind === "roof" ? "0.35" : "0.7"};
       vec4 surfaceSample = texture2D(map, surfaceUv);
       diffuseColor *= mix(vec4(1.0), surfaceSample, ${kind === "stone" ? "0.55" : "0.3"});
+      ${
+        /* Meadow, not carpet: broad patches of lusher and drier grass, and a
+           finer mottle inside them, so a lawn has some ground in it. */
+        kind === "grass"
+          ? `
+        float meadow = palaceNoise(vSurfacePosition.xz * 0.06) * 0.6 + palaceNoise(vSurfacePosition.xz * 0.23) * 0.3 + palaceNoise(vSurfacePosition.xz * 1.1) * 0.1;
+        diffuseColor.rgb *= mix(vec3(0.5, 0.74, 0.46), vec3(1.3, 1.16, 0.7), smoothstep(0.28, 0.72, meadow));
+      `
+          : ""
+      }
       ${
         kind === "stone"
           ? `

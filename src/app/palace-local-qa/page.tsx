@@ -56,7 +56,8 @@ export default async function PalaceLocalQA({
     { id: "qa-neuroscience", title: "The art of remembering" },
   ] as unknown as StudySectionWithProgress[];
   return (
-    <main style={{ padding: 32 }}>
+    /* Inside the app's style scope, so the intro card looks as it does on a note. */
+    <main className="memo" style={{ padding: 32 }}>
       <LecturePalace
         lectureId={`palace-local-synthetic${large ? "-large" : ""}${isolated ? "-isolated" : ""}${kind ? `-${kind}` : ""}`}
         cards={

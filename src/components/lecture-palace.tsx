@@ -19,6 +19,7 @@ import {
 } from "@/lib/study/flashcard-drag";
 import { quizOptionLetter, shuffleIndices } from "@/lib/study/quiz";
 import { minimapMarker, townMapPoint } from "@/lib/palace/navigation";
+import { paintTownDiorama } from "@/lib/palace/diorama";
 import { buildingProfile } from "@/lib/palace/architecture";
 import { roomIdentity, outdoorLandmark } from "@/lib/palace/rooms";
 import { chooseRelocation, parsePalaceLocations, practiceAnswerKnown, relocatedStation, relocationSpots, type PalaceLocations } from "@/lib/palace/relocation";
@@ -804,13 +805,13 @@ export function LecturePalace({
   }, [isComplete, isMapOpen, isOpen, leaveGame, sizeMinimap]);
 
   /*
-   * The whole town on a canvas: every street, and every stop with the colour
-   * its ring has on the ground. Shared by the map sheet and by the card on the
-   * way in, which are the same drawing at two sizes — one with the walker on
-   * it, one without, because on the way in there is no walker yet.
+   * The whole town on a canvas, for the map sheet: every street, every stop in
+   * the colour its ring has on the ground, and the walker. A plan rather than
+   * the model the intro card draws, because the sheet's markers are buttons
+   * laid over it and have to land exactly on their stops.
    */
   const paintTown = useCallback(
-    (canvas: HTMLCanvasElement | null, options?: { walker?: boolean }) => {
+    (canvas: HTMLCanvasElement | null) => {
       if (!canvas || !layout) return;
 
       /*
@@ -892,8 +893,6 @@ export function LecturePalace({
         context.fill();
       });
 
-      if (options?.walker === false) return;
-
       const player = toCanvas(snapshotRef.current?.x ?? 0, snapshotRef.current?.z ?? 0);
 
       context.save();
@@ -931,13 +930,15 @@ export function LecturePalace({
   /*
    * And on the way in, where it is the picture of the thing: a note turned into
    * somewhere with streets and corners, which is the whole claim the screen is
-   * making. Re-measured on resize, because it is a wide card rather than a
-   * square and the width it gets changes with the column.
+   * making — drawn as a model of the town rather than a plan of it, because the
+   * walk is in 3D and a flat grid undersold that. Re-measured on resize,
+   * because it is a wide card rather than a square and the width it gets
+   * changes with the column.
    */
   useEffect(() => {
-    if (isOpen) return;
+    if (isOpen || !layout) return;
 
-    const paint = () => paintTown(introMapRef.current, { walker: false });
+    const paint = () => paintTownDiorama(introMapRef.current, { layout, collected });
 
     paint();
 
@@ -950,7 +951,7 @@ export function LecturePalace({
     observer.observe(canvas);
 
     return () => observer.disconnect();
-  }, [isOpen, paintTown]);
+  }, [collected, isOpen, layout]);
 
   const closeMap = useCallback(() => setIsMapOpen(false), []);
   const mapSheet = useSheet(closeMap, { scrollable: true, presentation: isTouch ? "sheet" : "dialog" });

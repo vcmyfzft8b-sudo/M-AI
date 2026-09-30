@@ -223,8 +223,33 @@ export function createHero(look: HeroLook = {}): Avatar {
     if (!player) mixer.setTime(Math.random() * 2);
   };
 
+  /*
+   * A passer-by whose model never arrives (offline, a failed fetch) is drawn
+   * as the procedural figure instead: otherwise it would be an invisible
+   * obstacle that still blocks the player and stops the traffic.
+   */
+  let fallback: Avatar | null = null;
+  const standInForPasserBy = () => {
+    if (disposed || player) return;
+    fallback = createAvatar({
+      ...colours,
+      scale: look.scale,
+      detail: "low",
+      backpack: null,
+      stripes: null,
+      cap: null,
+      badge: null,
+    });
+    if (look.layer !== undefined) {
+      const layer = look.layer;
+
+      fallback.root.traverse((object) => object.layers.set(layer));
+    }
+    body.add(fallback.root);
+  };
+
   if (loaded) attach(loaded);
-  else void loadHeroModel().then((gltf) => gltf && attach(gltf));
+  else void loadHeroModel().then((gltf) => (gltf ? attach(gltf) : standInForPasserBy()));
 
   let easedSpeed = 0;
   let lastFacing: number | null = null;
@@ -265,6 +290,7 @@ export function createHero(look: HeroLook = {}): Avatar {
     },
     update: (speed, airborne, delta) => {
       standIn?.update(speed, airborne, delta);
+      fallback?.update(speed, airborne, delta);
       if (!mixer) return;
 
       easedSpeed += (speed - easedSpeed) * (1 - Math.exp(-delta * 10));
@@ -315,6 +341,7 @@ export function createHero(look: HeroLook = {}): Avatar {
       disposed = true;
       mixer?.stopAllAction();
       standIn?.dispose();
+      fallback?.dispose();
       disposables.forEach((item) => item.dispose());
       root.clear();
     },

@@ -72,6 +72,8 @@ const STICK_DEADZONE = 6;
 const STICK_RADIUS = 46;
 /** The walkthrough's pace across the intro map. */
 const WALK_LEG_MS = 1_500;
+/* How often the walking dot on the intro map moves: each move repaints the whole map. */
+const WALK_REPAINT_MS = 80;
 const WALK_REST_MS = 700;
 
 type Walker = { x: number; z: number; facing: number };
@@ -753,16 +755,25 @@ export function LandingPalaceScreen({
             const start = walker ?? { x: layout.spawn.x, z: layout.spawn.z, facing: 0 };
             const facing = Math.atan2(nextTarget.x - start.x, nextTarget.z - start.z);
             const began = performance.now();
+            let painted = Number.NEGATIVE_INFINITY;
 
             const frame = (now: number) => {
               const progress = Math.min(1, (now - began) / WALK_LEG_MS);
               const eased = progress < 0.5 ? 2 * progress * progress : 1 - (-2 * progress + 2) ** 2 / 2;
 
-              setWalker({
-                x: start.x + (nextTarget.x - start.x) * eased,
-                z: start.z + (nextTarget.z - start.z) * eased,
-                facing,
-              });
+              /*
+               * Each move repaints the whole diorama (buildings, shadows, trees), so
+               * the dot steps about twelve times a second rather than every frame —
+               * on a map this small it looks the same and costs a fifth.
+               */
+              if (now - painted >= WALK_REPAINT_MS || progress === 1) {
+                painted = now;
+                setWalker({
+                  x: start.x + (nextTarget.x - start.x) * eased,
+                  z: start.z + (nextTarget.z - start.z) * eased,
+                  facing,
+                });
+              }
 
               if (progress < 1) {
                 window.requestAnimationFrame(frame);

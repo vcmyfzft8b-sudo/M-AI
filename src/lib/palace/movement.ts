@@ -310,6 +310,17 @@ export function clampCameraDistance({
 }) {
   const step = 0.25;
   let allowed = minDistance;
+  /*
+   * Only what lies within the camera's reach can block it: one pass over the
+   * town, rather than every collider for each of a dozen probes (every house's
+   * stairs and furniture made that thousands of boxes a probe on a phone).
+   */
+  const reach = maxDistance + 0.6;
+  const nearby = colliders.filter(
+    (collider) =>
+      Math.abs(collider.x - target.x) < collider.width / 2 + reach &&
+      Math.abs(collider.z - target.z) < collider.depth / 2 + reach,
+  );
 
   for (let distance = allowed; distance <= maxDistance; distance += step) {
     const probe = cameraPosition({ target, yaw, pitch, distance });
@@ -319,7 +330,7 @@ export function clampCameraDistance({
      * height, and nothing blocks a camera that clears it.
      */
     const height = Math.min(probe.y, ceiling);
-    const blocked = colliders.some(
+    const blocked = nearby.some(
       (collider) =>
         (collider.top === undefined || height < collider.top + 0.2) &&
         (collider.bottom === undefined || height > collider.bottom) &&

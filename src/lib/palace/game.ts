@@ -391,12 +391,18 @@ export function createPalaceGame({
   };
 
   const clearInput = () => { keysDown.clear(); move.forward = 0; move.right = 0; };
+  /*
+   * A context menu swallows the key-up of whatever was held, so the keys are
+   * dropped — but not the touch stick: Android fires one on a long press, and
+   * a thumb held still on the stick must keep walking.
+   */
+  const clearKeys = () => keysDown.clear();
   const onVisibilityChange = () => {
     if (document.hidden) clearInput();
   };
 
   window.addEventListener("blur", clearInput);
-  window.addEventListener("contextmenu", clearInput);
+  window.addEventListener("contextmenu", clearKeys);
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
   document.addEventListener("visibilitychange", onVisibilityChange);
@@ -615,7 +621,7 @@ export function createPalaceGame({
     const seconds = time / 1000;
 
     lighting.update(reducedMotion ? 0 : seconds, camera);
-    city.update(reducedMotion ? 0 : seconds);
+    city.update(reducedMotion ? 0 : seconds, character);
 
     city.stations.forEach((visual) => {
       if (visual.collected) {
@@ -791,7 +797,7 @@ export function createPalaceGame({
       resizeObserver.disconnect();
       canvas.removeEventListener("webglcontextlost", onWebglContextLost);
       window.removeEventListener("blur", clearInput);
-      window.removeEventListener("contextmenu", clearInput);
+      window.removeEventListener("contextmenu", clearKeys);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);

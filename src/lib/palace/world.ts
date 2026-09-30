@@ -87,7 +87,8 @@ export type CityBuild = {
   surfaces: Surface[];
   stations: StationVisual[];
   /** Once a frame, for the shimmer running up the beacons. */
-  update: (seconds: number) => void;
+  /** Animate the stops; `viewer` is where the player is, so only nearby stops get their full glow. */
+  update: (seconds: number, viewer?: { x: number; z: number }) => void;
   dispose: () => void;
 };
 
@@ -1744,6 +1745,8 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     return material;
   };
   const rippleGeometry = track(new THREE.RingGeometry(0.62, 0.8, 40));
+  /* How near a stop must be for more than its beam: well past where Memo and its halo read as more than a dot. */
+  const STATION_DETAIL_RANGE = 45;
   const SPARKS_PER_STOP = 7;
 
   disposables.push(
@@ -1938,11 +1941,20 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     colliders,
     surfaces,
     stations,
-    update: (seconds) => {
+    update: (seconds, viewer) => {
       beaconUniforms.uTime.value = seconds;
 
       stations.forEach((visual, index) => {
         const [halo, ripple] = [visual.beacon.children[3], visual.beacon.children[4] as THREE.Mesh];
+        /*
+         * The beam is what you see a stop by from across town; the core, glow,
+         * halo, ripple and sparkles are for when you are near. A far stop keeps
+         * only its beam, which in a sixty-stop town saves some two hundred
+         * blended draws a frame on a phone.
+         */
+        const near = !viewer || Math.hypot(visual.beacon.position.x - viewer.x, visual.beacon.position.z - viewer.z) < STATION_DETAIL_RANGE;
+
+        for (let child = 1; child <= 4; child++) visual.beacon.children[child].visible = near;
         const beat = Math.sin(seconds * 2.2 + index);
 
         /* The halo breathes, and bobs with Memo. */
@@ -1959,7 +1971,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         for (let spark = 0; spark < SPARKS_PER_STOP; spark++) {
           const offset = (index * SPARKS_PER_STOP + spark) * 3;
 
-          if (!visual.beacon.visible) {
+          if (!visual.beacon.visible || !near) {
             sparkPositions[offset + 1] = -1000;
             continue;
           }

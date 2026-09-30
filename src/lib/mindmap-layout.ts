@@ -681,8 +681,8 @@ export function approximateMindmapMeasure(text: string, depth: number) {
  * avoid, reproduced on the device where it hurts most.
  */
 export const MINDMAP_REFERENCE_FRAMES = {
-  /* Measured on a 1440x900 laptop with the chat column stood down: 799 x 564. */
-  desktop: { width: 800, height: 560 },
+  /* Measured on a 1440x900 laptop with the chat column beside it: 581 x 564. */
+  desktop: { width: 580, height: 560 },
   /* Measured on a 375x812 phone: 336 x 556. */
   phone: { width: 336, height: 556 },
 } as const;

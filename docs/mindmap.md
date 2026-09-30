@@ -160,8 +160,9 @@ a change to `mindmap-canvas.tsx` in two places. The geometry they share lives in
   opting back in. It floats over whichever tab is open, so while it was empty (which it is on this
   one) it silently swallowed every click on the strip it covers: the map's zoom cluster and "save
   as image" were dead on a 900px-tall laptop.
-- The chat column stands down while this tab is on screen (`showChatPanel` in
-  `lecture-workspace.tsx`). It is the only screen whose usefulness is a function of its width.
+- On desktop the chat column stays beside this tab like every other (`showChatPanel` in
+  `lecture-workspace.tsx`), so the stage is ~580px wide; the reader can close the column with its
+  ✕ for a wider map. The phone shows no chat bar here (`TABS_WITHOUT_CHAT_BAR`).
 - The note's title and date are hidden on this tab: the map draws the title in its own middle.
 
 ### Tapping

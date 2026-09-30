@@ -187,4 +187,6 @@ export interface TranscriptResult {
   text: string;
   durationSeconds: number;
   segments: TranscriptSegmentInput[];
+  /** How much audio the provider says it processed; null when it did not say. */
+  audioDurationMs?: number | null;
 }

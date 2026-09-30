@@ -189,6 +189,7 @@ export class SonioxTranscriptionProvider implements TranscriptionProvider {
       result: {
         text: transcriptText,
         durationSeconds,
+        audioDurationMs: transcription.audio_duration_ms ?? null,
         segments:
           segments.length > 0
             ? segments

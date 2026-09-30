@@ -67,6 +67,7 @@ import { createAiChunkSelector } from "@/lib/source-condensation-ai";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { normalizeMimeType } from "@/lib/storage";
 import { serializeVector } from "@/lib/utils";
+import { findTranscriptCoverageShortfall } from "@/lib/transcription/coverage";
 import { getTranscriptionProvider } from "@/lib/transcription/provider";
 import { NoClearSpeechDetectedError } from "@/lib/transcription/types";
 
@@ -300,38 +301,6 @@ async function insertTranscriptSegmentsInBatches(
   }
 }
 
-function assertTranscriptCoverage(params: {
-  transcript: {
-    text: string;
-    segments: Array<{ startMs: number; endMs: number; text: string }>;
-    durationSeconds: number;
-  };
-  expectedDurationSeconds: number | null;
-}) {
-  const { transcript, expectedDurationSeconds } = params;
-
-  if (transcript.segments.length === 0 || transcript.text.trim().length === 0) {
-    throw new Error("Transcript is empty.");
-  }
-
-  if (!expectedDurationSeconds || expectedDurationSeconds < 60) {
-    return;
-  }
-
-  const expectedEndMs = expectedDurationSeconds * 1000;
-  const lastSegmentEndMs = transcript.segments.reduce(
-    (maxEndMs, segment) => Math.max(maxEndMs, segment.endMs),
-    0,
-  );
-  const allowedGapMs = Math.max(30_000, expectedEndMs * 0.05);
-
-  if (expectedEndMs - lastSegmentEndMs > allowedGapMs) {
-    throw new Error(
-      `Transcript appears incomplete. Expected about ${expectedDurationSeconds}s but only covered ${Math.round(lastSegmentEndMs / 1000)}s.`,
-    );
-  }
-}
-
 async function getLectureForPipeline(params: { lectureId: string }) {
   const supabase = createSupabaseServiceRoleClient();
   const { data: lecture, error: lectureError } = await supabase
@@ -434,10 +403,19 @@ export async function transcribeLectureContent(params: { lectureId: string }) {
           });
         })();
 
-  assertTranscriptCoverage({
+  const coverageShortfall = findTranscriptCoverageShortfall({
     transcript,
     expectedDurationSeconds: lecture.duration_seconds,
   });
+
+  if (coverageShortfall) {
+    // The note is made from what was heard. No "[lecture-pipeline]" prefix: the triage automation
+    // treats every line carrying it as actionable, and this lecture is not failing.
+    console.warn("Transcript ends before the recording does; keeping what was heard", {
+      lectureId: lecture.id,
+      ...coverageShortfall,
+    });
+  }
 
   const embeddings: number[][] = [];
 

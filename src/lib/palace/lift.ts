@@ -150,10 +150,33 @@ export function stepLifts(lifts: readonly Lift[], player: { x: number; y: number
 
     lift.surface.y = lift.y;
 
-    /* Bar every landing but the one the car stands open at — not for someone inside it. */
-    if (inCar(lift, player)) continue;
+    const open = lift.target === null && lift.doors > 0.6;
+
+    /*
+     * Someone inside is held in by the car itself: the shaft's walls on three
+     * sides, and across the doorway whenever the doors are not standing open
+     * at a stop — so nobody steps out between floors, into the building's
+     * slabs or down the shaft.
+     */
+    if (inCar(lift, player)) {
+      if (!open) {
+        const sideways = Math.abs(Math.sin(lift.house.facing)) > 0.5;
+        const reach = LIFT_SIZE / 2 + 0.08;
+
+        barriers.push({
+          x: lift.x + Math.sin(lift.house.facing) * reach,
+          z: lift.z + Math.cos(lift.house.facing) * reach,
+          width: sideways ? 0.16 : LIFT_SIZE + 0.4,
+          depth: sideways ? LIFT_SIZE + 0.4 : 0.16,
+          bottom: lift.y - 0.3,
+          top: lift.y + 2.4,
+        });
+      }
+      continue;
+    }
+    /* Bar every landing but the one the car stands open at. */
     lift.stops.forEach((stop, index) => {
-      if (lift.target === null && lift.at === index && lift.doors > 0.6) return;
+      if (open && lift.at === index) return;
       barriers.push({ x: lift.x, z: lift.z, width: LIFT_SIZE, depth: LIFT_SIZE, bottom: stop - 0.3, top: stop + 2.4 });
     });
   }

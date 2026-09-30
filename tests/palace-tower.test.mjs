@@ -8,6 +8,7 @@ import { CHARACTER_RADIUS, colliderApplies, createCharacter, resolveCollision, s
 import { roomFurniture, roomIdentity, roomPoint, roomWalls } from "../src/lib/palace/rooms.ts";
 import {
   isTower,
+  LIFT_SIZE,
   penthouseFurniture,
   penthouseStationPoint,
   TOWER_KINDS,
@@ -164,5 +165,44 @@ test("the car sets off and stops without a jolt, on long rides and short", () =>
     assert.ok(lastSpeed < 0.01, `${distance} m: the car was still moving at the stop`);
     assert.ok(top <= 7 + 1e-6, `${distance} m: over the top speed`);
     assert.ok(liftTravel(distance, step).covered < 0.001, `${distance} m: the car lurched off`);
+  }
+});
+
+test("a rider cannot walk out of a moving car, whichever way they push", () => {
+  for (const house of towers) {
+    const scene = world(house);
+    const { plan } = scene;
+    const lifts = createLiftState({ houses: [house] });
+    const kind = buildingProfile(house, 0).kind;
+    const centre = roomPoint(house, plan.lift.x, plan.lift.z);
+    let walker = createCharacter(centre.x, centre.z, house.facing);
+    const surfaces = () => [...scene.surfaces, ...lifts.map((lift) => lift.surface)];
+
+    /* Stand still until the car sets off, then keep walking, turning, into every wall of it. */
+    for (let frame = 0; frame < 1200; frame++) {
+      const moving = lifts[0].target !== null;
+      const heading = house.facing + (Math.floor(frame / 40) * Math.PI) / 4;
+
+      walker = stepCharacter({
+        state: walker,
+        input: { forward: moving ? 1 : 0, right: 0, jump: false, sprint: frame % 80 < 40 },
+        cameraYaw: heading,
+        colliders: scene.colliders,
+        surfaces: surfaces(),
+        bounds: layout.bounds,
+        delta: 1 / 60,
+      });
+      for (const barrier of stepLifts(lifts, walker, 1 / 60)) {
+        if (colliderApplies(barrier, walker.y)) walker = { ...walker, ...resolveCollision(walker, barrier, CHARACTER_RADIUS) };
+      }
+      if (moving) {
+        assert.ok(
+          Math.abs(walker.x - lifts[0].x) < LIFT_SIZE / 2 && Math.abs(walker.z - lifts[0].z) < LIFT_SIZE / 2,
+          `${kind}: walked out of the car at ${walker.y.toFixed(1)} m`,
+        );
+      }
+      if (lifts[0].target === null && lifts[0].at === 1) break;
+    }
+    assert.equal(lifts[0].at, 1, `${kind}: the car never reached the penthouse`);
   }
 });

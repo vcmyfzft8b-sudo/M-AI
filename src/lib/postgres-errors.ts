@@ -8,6 +8,9 @@
 /** SQLSTATE 23503: insert or update violated a foreign key constraint. */
 export const FOREIGN_KEY_VIOLATION_CODE = "23503";
 
+/** SQLSTATE 42501: insufficient privilege, which is how a row-level security refusal arrives. */
+export const INSUFFICIENT_PRIVILEGE_CODE = "42501";
+
 function readString(value: unknown, key: string) {
   if (!value || typeof value !== "object") {
     return "";
@@ -35,5 +38,18 @@ export function isMissingLectureReferenceError(error: unknown) {
     details.includes("(lecture_id)") ||
     message.includes("lecture_id_fkey") ||
     details.includes('table "lectures"')
+  );
+}
+
+/**
+ * True when a write through the learner's own client was refused by a row-level security policy.
+ * Policies that require the lecture to be the learner's (`exists (select 1 from lectures …)`) run
+ * before the foreign key, so a write racing the note's deletion is refused here as 42501 and never
+ * reaches the 23503 above. The code alone cannot say the note is gone — re-check before saying so.
+ */
+export function isRowLevelSecurityViolation(error: unknown) {
+  return (
+    readString(error, "code") === INSUFFICIENT_PRIVILEGE_CODE &&
+    readString(error, "message").includes("row-level security")
   );
 }

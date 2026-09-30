@@ -4,7 +4,10 @@ import { z } from "zod";
 import { canAccessLectureContent, createBillingRequiredResponse } from "@/lib/billing";
 import { ensureUserOwnsLecture } from "@/lib/lectures";
 import { captureRouteError } from "@/lib/monitoring";
-import { isMissingLectureReferenceError } from "@/lib/postgres-errors";
+import {
+  isMissingLectureReferenceError,
+  isRowLevelSecurityViolation,
+} from "@/lib/postgres-errors";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -155,6 +158,19 @@ async function updateStudySession(
      * moment later — not a server fault. The TTS chunk route settles the same race the same way.
      */
     if (isMissingLectureReferenceError(error)) {
+      return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
+    }
+
+    /*
+     * Through the learner's client the same race usually arrives as 42501 instead: the insert
+     * policy's `exists (… lectures …)` runs before the foreign key and finds no lecture (production,
+     * 2026-09-30T13:20:24Z, half a second after the DELETE). Ask again on the same client; only a
+     * note that really is gone becomes the 404, so a genuine policy fault still reaches the report.
+     */
+    if (
+      isRowLevelSecurityViolation(error) &&
+      !(await ensureUserOwnsLecture({ lectureId: id, user, supabase }))
+    ) {
       return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
     }
 

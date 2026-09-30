@@ -31,7 +31,7 @@ import { createTraffic } from "@/lib/palace/traffic";
 import { createCrowd } from "@/lib/palace/crowd";
 import { createLiftState, liftCarrying, stepLifts } from "@/lib/palace/lift";
 import { createLiftVisual } from "@/lib/palace/lift-visual";
-import { isTower, towerPlan } from "@/lib/palace/tower";
+import { isTower, SHAFT_CROWN, towerPlan } from "@/lib/palace/tower";
 
 /**
  * The loop: input in, a frame out.
@@ -568,7 +568,32 @@ export function createPalaceGame({
     }
     // A wall can move closer faster than an eased camera; snap inward to avoid
     // crossing its face while keeping the character visible in third person.
-    camera.position.lerp(cameraTarget, indoors || reducedMotion ? 1 : 1 - Math.pow(0.0025, delta));
+    /*
+     * While the car moves, the camera rides in the glass shaft above it,
+     * looking down past the rider: from anywhere outside the shaft, every
+     * floor the car passed slid across the picture between camera and rider.
+     * In the shaft there is nothing but glass, with the storeys going by on
+     * every side. It stops short of the shaft's cap at the top.
+     */
+    const riding = carrying && carrying.target !== null ? carrying : null;
+
+    if (riding) {
+      const top = riding.stops[riding.stops.length - 1] + SHAFT_CROWN - 0.35;
+
+      /* Across the shaft from where the rider stands, so it looks down at them rather than straight down on them. */
+      const awayX = riding.x - character.x;
+      const awayZ = riding.z - character.z;
+      const away = Math.hypot(awayX, awayZ);
+      const across = away > 0.3
+        ? { x: awayX / away, z: awayZ / away }
+        : { x: Math.sin(riding.house.facing), z: Math.cos(riding.house.facing) };
+
+      cameraTarget.set(riding.x + across.x * 1.0, Math.min(character.y + 3.1, top), riding.z + across.z * 1.0);
+    }
+    camera.position.lerp(
+      cameraTarget,
+      reducedMotion || (indoors && !riding) ? 1 : 1 - Math.pow(riding ? 0.03 : 0.0025, delta),
+    );
     camera.lookAt(eye.x, eye.y + 0.7 + (indoors ? 0 : Math.max(0, -activePitch) * 8), eye.z);
 
     /* A wider lens indoors, so a room is a room rather than a wall and a back. */

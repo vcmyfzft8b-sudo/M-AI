@@ -36,7 +36,7 @@ export function parsePalaceLocations(raw: string | null, spots: readonly Relocat
 }
 
 export function relocatedStation(station: PalaceStation, spot: RelocationSpot): PalaceStation {
-  return {...station, ...spot, placement: 'outside', originalLocation: station.originalLocation ?? {x:station.x,z:station.z,placement:station.placement}};
+  return {...station, ...spot, y: undefined, placement: 'outside', originalLocation: station.originalLocation ?? {x:station.x,z:station.z,placement:station.placement}};
 }
 
 /** Random among clear spots, separated from the old location and every other marker. */

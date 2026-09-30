@@ -40,6 +40,24 @@ export type Collider = {
   z: number;
   width: number;
   depth: number;
+  /**
+   * The obstacle's vertical extent, when it has one. Left out, a collider is a
+   * wall from the ground to the sky. With a `top`, you can step onto it from
+   * within `STEP_UP` of that height (a stair); with a `bottom`, you can walk
+   * underneath it (a gallery rail).
+   */
+  bottom?: number;
+  top?: number;
+};
+
+/** Something to stand on above the ground: a stair tread, an upper floor. */
+export type Surface = {
+  x: number;
+  z: number;
+  width: number;
+  depth: number;
+  /** The height of its top. */
+  y: number;
 };
 
 export const WALK_SPEED = 7.37;
@@ -47,6 +65,14 @@ export const SPRINT_SPEED = 12.21;
 export const JUMP_VELOCITY = 9.4;
 export const GRAVITY = 26;
 export const CHARACTER_RADIUS = 0.55;
+/**
+ * How high a step the walker takes without noticing. Three stair risers: a
+ * stride on a staircase spans more than one tread, and a smaller reach had the
+ * walker bumping into the step after next.
+ */
+export const STEP_UP = 0.6;
+/** How tall the walker is, for what it can pass under. */
+export const CHARACTER_HEIGHT = 1.7;
 /** Radians per second the body swings round towards its heading. */
 const TURN_RATE = 12;
 
@@ -96,6 +122,7 @@ export function stepCharacter({
   input,
   cameraYaw,
   colliders,
+  surfaces = [],
   bounds,
   delta,
 }: {
@@ -104,6 +131,8 @@ export function stepCharacter({
   /** Where the camera is looking; movement is relative to it. */
   cameraYaw: number;
   colliders: readonly Collider[];
+  /** Stairs and upper floors; the ground is always there at 0. */
+  surfaces?: readonly Surface[];
   bounds: number;
   /** Seconds since the last frame, already clamped by the caller. */
   delta: number;
@@ -134,47 +163,97 @@ export function stepCharacter({
     z += Math.cos(heading) * speed * delta;
   }
 
-  let velocityY = state.velocityY;
-  let y = state.y;
-
-  if (input.jump && state.grounded) {
-    velocityY = JUMP_VELOCITY;
-  }
-
-  velocityY -= GRAVITY * delta;
-  y += velocityY * delta;
-
-  const grounded = y <= 0;
-
-  if (grounded) {
-    y = 0;
-    velocityY = 0;
-  }
-
   /*
    * Collision runs only against what is nearby: a city has a few hundred boxes
    * in it and all but a handful are irrelevant every frame.
    */
   let position = { x, z };
+  /* Judged from where the feet are about to be, so a stair is climbed, not bumped. */
+  const feet = Math.max(state.y, floorHeight(position, state.y, surfaces));
 
   for (const collider of colliders) {
     if (Math.abs(collider.x - position.x) > collider.width / 2 + 4) continue;
     if (Math.abs(collider.z - position.z) > collider.depth / 2 + 4) continue;
+    if (!colliderApplies(collider, feet)) continue;
 
     position = resolveCollision(position, collider, CHARACTER_RADIUS);
   }
 
   const limit = bounds - 1;
 
-  return {
+  position = {
     x: Math.max(-limit, Math.min(limit, position.x)),
-    y,
     z: Math.max(-limit, Math.min(limit, position.z)),
+  };
+
+  /*
+   * Height. On the ground and walking, the feet follow the floor up a step and
+   * down one, so stairs are climbed rather than fallen down; anything further
+   * below — the edge of a floor — is a fall, with gravity.
+   */
+  const floor = floorHeight(position, state.y, surfaces);
+  let velocityY = state.velocityY;
+  let y = state.y;
+  let grounded: boolean;
+
+  if (input.jump && state.grounded) {
+    velocityY = JUMP_VELOCITY;
+  }
+
+  if (state.grounded && velocityY <= 0 && floor >= state.y - STEP_UP) {
+    y = floor;
+    velocityY = 0;
+    grounded = true;
+  } else {
+    velocityY -= GRAVITY * delta;
+    y += velocityY * delta;
+    grounded = y <= floor;
+
+    if (grounded) {
+      y = floor;
+      velocityY = 0;
+    }
+  }
+
+  return {
+    x: position.x,
+    y,
+    z: position.z,
     velocityY,
     facing,
     speed,
     grounded,
   };
+}
+
+/** Whether an obstacle is in the way of a walker whose feet are at `feet`. */
+export function colliderApplies(collider: Collider, feet: number) {
+  return (
+    (collider.top === undefined || feet + STEP_UP < collider.top) &&
+    (collider.bottom === undefined || feet + CHARACTER_HEIGHT > collider.bottom)
+  );
+}
+
+/**
+ * The highest thing to stand on under a point that is not above the walker's
+ * reach: the ground, a tread one step up, the floor they are already on.
+ */
+export function floorHeight(
+  point: { x: number; z: number },
+  feet: number,
+  surfaces: readonly Surface[],
+) {
+  let floor = 0;
+
+  for (const surface of surfaces) {
+    if (surface.y > feet + STEP_UP || surface.y <= floor) continue;
+    if (Math.abs(point.x - surface.x) > surface.width / 2) continue;
+    if (Math.abs(point.z - surface.z) > surface.depth / 2) continue;
+
+    floor = surface.y;
+  }
+
+  return floor;
 }
 
 /**
@@ -212,23 +291,51 @@ export function clampCameraDistance({
   pitch,
   maxDistance,
   colliders,
+  minDistance = 3,
+  ceiling = Number.POSITIVE_INFINITY,
 }: {
   target: { x: number; y: number; z: number };
   yaw: number;
   pitch: number;
   maxDistance: number;
   colliders: readonly Collider[];
+  /**
+   * Never closer than this, or the camera ends up inside the character's
+   * head. Indoors it is allowed nearer: a corner of a small room is closer
+   * than that, and the alternative is a camera outside the wall.
+   */
+  minDistance?: number;
+  /** How high the camera may go here (indoors, under a floor); obstacles are judged at that height. */
+  ceiling?: number;
 }) {
-  const step = 0.5;
-  /* Never closer than this, or the camera ends up inside the character's head. */
-  let allowed = 3;
+  const step = 0.25;
+  let allowed = minDistance;
+  /*
+   * Only what lies within the camera's reach can block it: one pass over the
+   * town, rather than every collider for each of a dozen probes (every house's
+   * stairs and furniture made that thousands of boxes a probe on a phone).
+   */
+  const reach = maxDistance + 0.6;
+  const nearby = colliders.filter(
+    (collider) =>
+      Math.abs(collider.x - target.x) < collider.width / 2 + reach &&
+      Math.abs(collider.z - target.z) < collider.depth / 2 + reach,
+  );
 
   for (let distance = allowed; distance <= maxDistance; distance += step) {
     const probe = cameraPosition({ target, yaw, pitch, distance });
-    const blocked = colliders.some(
+    /*
+     * Judged at the height the camera will actually be: a staircase or a
+     * bookcase blocks a camera below its top, a gallery rail one at its own
+     * height, and nothing blocks a camera that clears it.
+     */
+    const height = Math.min(probe.y, ceiling);
+    const blocked = nearby.some(
       (collider) =>
-        Math.abs(probe.x - collider.x) < collider.width / 2 + 0.4 &&
-        Math.abs(probe.z - collider.z) < collider.depth / 2 + 0.4,
+        (collider.top === undefined || height < collider.top + 0.2) &&
+        (collider.bottom === undefined || height > collider.bottom) &&
+        Math.abs(probe.x - collider.x) < collider.width / 2 + 0.5 &&
+        Math.abs(probe.z - collider.z) < collider.depth / 2 + 0.5,
     );
 
     if (blocked) {
@@ -249,9 +356,9 @@ export function clampPitch(pitch: number) {
   return Math.max(MIN_PITCH, Math.min(MAX_PITCH, pitch));
 }
 
-/** The station you are close enough to read, or none. */
-export function nearestStation<Station extends { x: number; z: number; id: string }>(
-  position: { x: number; z: number },
+/** The station you are close enough to read, or none — on your own floor. */
+export function nearestStation<Station extends { x: number; z: number; y?: number; id: string }>(
+  position: { x: number; z: number; y?: number },
   stations: readonly Station[],
   reach: number,
 ) {
@@ -259,6 +366,8 @@ export function nearestStation<Station extends { x: number; z: number; id: strin
   let bestDistance = reach;
 
   for (const station of stations) {
+    if (Math.abs((station.y ?? 0) - (position.y ?? 0)) > 1.2) continue;
+
     const distance = Math.hypot(station.x - position.x, station.z - position.z);
 
     if (distance < bestDistance) {

@@ -24,8 +24,19 @@ import {
   roomFurniture,
   outdoorFurniture,
   ROOM_DOOR_WIDTH,
+  RAIL_HEIGHT,
+  roomSurfaces,
+  roomUpperColliders,
+  roomUpperFloor,
+  stairStep,
+  UPPER_FLOOR_Y,
+  upperFurniture,
+  type RoomPart,
 } from "./rooms";
 import { createSurfaceMaterial } from "./materials";
+import { UNOCCLUDED_LAYER } from "./atmosphere";
+import { aroundShaft, isTower, penthouseFurniture, towerColliders, towerPlan, towerSurfaces } from "./tower";
+import { createRandom } from "./rng";
 
 import {
   STATION_HUE,
@@ -34,7 +45,7 @@ import {
   type PalaceProp,
   type PalaceStation,
 } from "@/lib/palace/layout";
-import type { Collider } from "@/lib/palace/movement";
+import { STEP_UP, type Collider, type Surface } from "@/lib/palace/movement";
 
 /**
  * The town, in geometry.
@@ -53,7 +64,7 @@ import type { Collider } from "@/lib/palace/movement";
 const MASCOT_TEXTURE_SRC = "/memo-mascot.png";
 const MASCOT_ASPECT = 320 / 288;
 
-const GRASS_COLOR = 0x77b64b;
+const GRASS_COLOR = 0x6aad44;
 const ROAD_COLOR = 0x535d64;
 const PAVEMENT_COLOR = 0xd3d5cd;
 
@@ -64,15 +75,162 @@ export type StationVisual = {
   token: THREE.Sprite;
   plaque: THREE.Mesh;
   ring: THREE.Mesh;
+  /** The column of light over a waiting stop, and the glow at its foot. */
+  beacon: THREE.Group;
   collected: boolean;
 };
 
 export type CityBuild = {
   group: THREE.Group;
   colliders: Collider[];
+  /** Stairs and galleries: what can be stood on above the ground. */
+  surfaces: Surface[];
   stations: StationVisual[];
+  /** Once a frame, for the shimmer running up the beacons. */
+  /** Animate the stops; `viewer` is where the player is, so only nearby stops get their full glow. */
+  update: (seconds: number, viewer?: { x: number; z: number }) => void;
   dispose: () => void;
 };
+
+/**
+ * A beam of light over every stop still waiting, in the colour of its ring.
+ *
+ * The mascot on the path is the thing you collect, but from two streets away it
+ * is a speck; the beam is what you see over the roofs and walk towards. It
+ * ignores the fog on purpose — a landmark you lose in the haze is not a
+ * landmark — and fades out towards the top so it reads as light rather than as
+ * a pole. It is blended rather than added: added light vanishes against a pale
+ * sky, which is where it most needs to show.
+ */
+const beaconVertex = /* glsl */ `
+  varying vec2 vUv;
+  varying float vFacing;
+  void main() {
+    vUv = uv;
+    vec4 world = modelMatrix * vec4(position, 1.0);
+    vec3 worldNormal = normalize(mat3(modelMatrix) * normal);
+    vec3 toCamera = normalize(cameraPosition - world.xyz);
+    vFacing = abs(dot(normalize(worldNormal.xz), normalize(toCamera.xz + 1e-4)));
+    gl_Position = projectionMatrix * viewMatrix * world;
+  }
+`;
+
+const beaconFragment = /* glsl */ `
+  uniform vec3 uColor;
+  uniform float uTime;
+  varying vec2 vUv;
+  varying float vFacing;
+  void main() {
+    float rise = pow(1.0 - vUv.y, 1.25);
+    float foot = smoothstep(0.0, 0.02, vUv.y);
+    float core = pow(vFacing, 1.6);
+    float shimmer = 0.8 + 0.2 * sin(vUv.y * 42.0 - uTime * 3.2);
+    float alpha = rise * foot * core * shimmer * 0.72;
+    gl_FragColor = vec4(mix(uColor, vec3(1.0), core * 0.35), alpha);
+    #include <colorspace_fragment>
+  }
+`;
+
+const glowFragment = /* glsl */ `
+  uniform vec3 uColor;
+  uniform float uTime;
+  varying vec2 vUv;
+  void main() {
+    float distance = length(vUv - 0.5) * 2.0;
+    float pulse = 0.85 + 0.15 * sin(uTime * 2.4);
+    float alpha = pow(max(0.0, 1.0 - distance), 1.8) * 0.55 * pulse;
+    gl_FragColor = vec4(uColor, alpha);
+    #include <colorspace_fragment>
+  }
+`;
+
+const glowVertex = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const BEACON_HEIGHT = 28;
+
+/**
+ * Woods on the hills round the town.
+ *
+ * The streets end at a green slope, and a slope with nothing on it reads as the
+ * edge of a level. Trees give the horizon a skyline and the haze something to
+ * fade: the nearer ones sharp, the far ones the colour of the air. They are
+ * outside the walkable square, so nothing collides with them, and they cast no
+ * shadow — the sun's shadow map only covers the streets round the player.
+ */
+function forestInstances(layout: PalaceLayout) {
+  const random = createRandom(layout.seed ^ 0x5eed7ee5);
+  const trunks: Instance[] = [];
+  const conifers: Instance[] = [];
+  const crowns: Instance[] = [];
+  const inner = layout.bounds * 1.24;
+  const outer = layout.bounds * 2.5;
+  const spacing = 12.5;
+
+  for (let x = -outer; x <= outer; x += spacing)
+    for (let z = -outer; z <= outer; z += spacing) {
+      const px = x + random.range(-spacing * 0.45, spacing * 0.45);
+      const pz = z + random.range(-spacing * 0.45, spacing * 0.45);
+      const edge = Math.max(Math.abs(px), Math.abs(pz));
+      /* Woods in clumps with clearings between, not a planted grid. */
+      const clump = 0.5 + 0.5 * Math.sin(px * 0.021 + 1.3) * Math.cos(pz * 0.018 - 0.4);
+
+      if (edge < inner || random.next() > 0.25 + clump * 0.7) continue;
+
+      const ground = terrainHeight(px, pz, layout.bounds);
+      const size = random.range(0.8, 1.35) * (edge < inner + 12 ? 0.85 : 1);
+      const yaw = random.range(0, Math.PI * 2);
+
+      trunks.push({
+        matrix: boxMatrix({ x: px, y: ground + 1.4 * size, z: pz, width: 0.55 * size, height: 2.8 * size, depth: 0.55 * size }),
+        color: new THREE.Color().setHSL(0.07, 0.35, random.range(0.2, 0.28)),
+      });
+
+      if (random.chance(0.45)) {
+        const hue = random.range(0.33, 0.39);
+
+        for (let tier = 0; tier < 3; tier++)
+          conifers.push({
+            matrix: boxMatrix({
+              x: px,
+              y: ground + (3.4 + tier * 2.1) * size,
+              z: pz,
+              width: (4.6 - tier * 1.2) * size,
+              height: 3.6 * size,
+              depth: (4.6 - tier * 1.2) * size,
+              rotation: yaw + tier,
+            }),
+            color: new THREE.Color().setHSL(hue, 0.5, 0.17 + tier * 0.03),
+          });
+      } else {
+        const hue = random.range(0.22, 0.31);
+
+        crowns.push({
+          matrix: boxMatrix({ x: px, y: ground + 4.6 * size, z: pz, width: 5.2 * size, height: 4.6 * size, depth: 5.2 * size, rotation: yaw }),
+          color: new THREE.Color().setHSL(hue, 0.55, random.range(0.22, 0.3)),
+        });
+        crowns.push({
+          matrix: boxMatrix({
+            x: px + Math.cos(yaw) * 1.3 * size,
+            y: ground + 6.3 * size,
+            z: pz + Math.sin(yaw) * 1.3 * size,
+            width: 3.4 * size,
+            height: 3.2 * size,
+            depth: 3.4 * size,
+            rotation: -yaw,
+          }),
+          color: new THREE.Color().setHSL(hue + 0.02, 0.58, random.range(0.28, 0.35)),
+        });
+      }
+    }
+
+  return { trunks, conifers, crowns };
+}
 
 function hsl(hue: number, saturation: number, lightness: number) {
   return new THREE.Color().setHSL(
@@ -135,47 +293,61 @@ function flatMatrix({
   );
 }
 
-/** One mesh for many copies of a shape — the whole town is a handful of these. */
+/** The side of one tile of town, in metres; see `instanced`. */
+const TILE_SIZE = 90;
+/** Below this many copies a shape stays one mesh: splitting it would cost more draws than it saves. */
+const TILE_THRESHOLD = 300;
+
+/**
+ * Many copies of a shape, drawn as a few instanced meshes — one per tile of
+ * town rather than one for the whole of it.
+ *
+ * A single mesh spanning the town can never be culled, so every column, sphere
+ * and rounded box in it was drawn every frame, and again into the shadow map,
+ * wherever the camera looked: millions of triangles, most of them behind the
+ * player or two blocks away. Split into tiles, each with its own bounds, the
+ * ones off screen are skipped, and the shadow pass (whose camera covers only
+ * the streets round the player) skips nearly all of them.
+ */
 function instanced(
   geometry: THREE.BufferGeometry,
   material: THREE.Material,
   instances: Instance[],
   { shadows = true }: { shadows?: boolean } = {},
 ) {
-  const mesh = new THREE.InstancedMesh(
-    geometry,
-    material,
-    Math.max(instances.length, 1),
-  );
+  const tiles = new Map<string, Instance[]>();
 
-  mesh.castShadow = shadows;
-  mesh.receiveShadow = true;
+  for (const instance of instances) {
+    const x = instance.matrix.elements[12];
+    const z = instance.matrix.elements[14];
+    const key = instances.length < TILE_THRESHOLD ? "all" : `${Math.floor(x / TILE_SIZE)},${Math.floor(z / TILE_SIZE)}`;
+    const tile = tiles.get(key) ?? [];
 
-  instances.forEach((instance, index) => {
-    mesh.setMatrixAt(index, instance.matrix);
-
-    if (instance.color) {
-      mesh.setColorAt(index, instance.color);
-    }
-  });
-
-  mesh.count = instances.length;
-  mesh.instanceMatrix.needsUpdate = true;
-
-  if (mesh.instanceColor) {
-    mesh.instanceColor.needsUpdate = true;
+    tile.push(instance);
+    tiles.set(key, tile);
   }
 
-  mesh.frustumCulled = false;
+  const group = new THREE.Group();
 
-  return mesh;
+  for (const tile of tiles.values()) {
+    const mesh = new THREE.InstancedMesh(geometry, material, tile.length);
+
+    mesh.castShadow = shadows;
+    mesh.receiveShadow = true;
+    tile.forEach((instance, index) => {
+      mesh.setMatrixAt(index, instance.matrix);
+      if (instance.color) mesh.setColorAt(index, instance.color);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    group.add(mesh);
+  }
+
+  return group;
 }
 
-/**
- * A sky with some depth in it: a two-stop gradient painted into a strip and
- * wrapped round the scene, which costs one small texture and reads far better
- * than the flat blue a single background colour gives.
- */
+/** Two strips crossing in a double helix: the spiral tower's facade bands. */
 function ribbonGeometry() {
   const positions: number[] = [];
   const point = (t: number, phase: number, side: number) => {
@@ -199,94 +371,10 @@ function ribbonGeometry() {
   return geometry;
 }
 
-function skyTexture() {
-  const canvas = document.createElement("canvas");
-
-  canvas.width = 8;
-  canvas.height = 256;
-
-  const context = canvas.getContext("2d");
-
-  if (context) {
-    const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
-
-    gradient.addColorStop(0, "#7daebf");
-    gradient.addColorStop(0.45, "#a9ccd1");
-    gradient.addColorStop(0.62, "#c3dadd");
-    gradient.addColorStop(1, "#d4e2e1");
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, canvas.width, canvas.height);
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
-
-  texture.mapping = THREE.EquirectangularReflectionMapping;
-  texture.colorSpace = THREE.SRGBColorSpace;
-
-  return texture;
-}
-
-export type Lighting = {
-  /** The sun follows the player: a shadow map only covers what is nearby. */
-  follow: (x: number, z: number) => void;
-  dispose: () => void;
-};
-
-export function createLighting(
-  scene: THREE.Scene,
-  shadowMapSize: number,
-): Lighting {
-  const sky = skyTexture();
-
-  scene.background = sky;
-  scene.environment = sky;
-  scene.environmentIntensity = 0.45;
-  /* Fog hides the edge of the world and saves the far half of the town. */
-  scene.fog = new THREE.Fog(0xb9d1d5, 160, 520);
-
-  const ambient = new THREE.HemisphereLight(0xd5eaff, 0x9daf90, 1.6);
-  const sun = new THREE.DirectionalLight(0xfff5e2, 2.4);
-
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
-  sun.shadow.bias = -0.0006;
-  /* Instanced boxes shadow-acne badly without this; it is cheaper than a bias
-     large enough to hide it, which would detach every shadow from its wall. */
-  sun.shadow.normalBias = 0.15;
-
-  const shadowCamera = sun.shadow.camera;
-
-  shadowCamera.left = -70;
-  shadowCamera.right = 70;
-  shadowCamera.top = 70;
-  shadowCamera.bottom = -70;
-  shadowCamera.near = 20;
-  shadowCamera.far = 260;
-  shadowCamera.updateProjectionMatrix();
-
-  scene.add(ambient, sun, sun.target);
-
-  return {
-    follow: (x, z) => {
-      /* Low in the west, so the shadows are long and the town has some relief. */
-      sun.position.set(x - 78, 70, z + 52);
-      sun.target.position.set(x, 0, z);
-      sun.target.updateMatrixWorld();
-    },
-    dispose: () => {
-      scene.remove(ambient, sun, sun.target);
-      scene.background = null;
-      scene.environment = null;
-      sky.dispose();
-      ambient.dispose();
-      sun.dispose();
-    },
-  };
-}
-
 export function buildCity(layout: PalaceLayout): CityBuild {
   const group = new THREE.Group();
   const colliders: Collider[] = [];
+  const surfaces: Surface[] = [];
   const disposables: { dispose: () => void }[] = [];
   const track = <Item extends { dispose: () => void }>(item: Item) => {
     disposables.push(item);
@@ -296,9 +384,10 @@ export function buildCity(layout: PalaceLayout): CityBuild {
 
   const boxGeometry = track(new THREE.BoxGeometry(1, 1, 1));
   const planeGeometry = track(new THREE.PlaneGeometry(1, 1));
-  const cylinderGeometry = track(new THREE.CylinderGeometry(0.5, 0.5, 1, 24));
+  /* Modest segment counts: there are thousands of these, and most are small. */
+  const cylinderGeometry = track(new THREE.CylinderGeometry(0.5, 0.5, 1, 14));
   const coneGeometry = track(new THREE.ConeGeometry(0.5, 1, 8));
-  const sphereGeometry = track(new THREE.SphereGeometry(0.5, 12, 10));
+  const sphereGeometry = track(new THREE.SphereGeometry(0.5, 10, 8));
   const solid = (color: number) =>
     track(new THREE.MeshStandardMaterial({ color, roughness: 0.85 }));
   const tinted = () => solid(0xffffff);
@@ -316,6 +405,9 @@ export function buildCity(layout: PalaceLayout): CityBuild {
   const walls: Instance[] = [];
   const woodwork: Instance[] = [];
   const glass: Instance[] = [];
+  const clearGlass: Instance[] = [];
+  const clearCylinders: Instance[] = [];
+  const clearGables: Instance[] = [];
   const cones: Instance[] = [];
   const cylinders: Instance[] = [];
   const spheres: Instance[] = [];
@@ -354,12 +446,23 @@ export function buildCity(layout: PalaceLayout): CityBuild {
   bowGeometry.rotateX(-Math.PI/2);
   const domeGeometry = track(new THREE.SphereGeometry(.5,24,12,0,Math.PI*2,0,Math.PI/2));
   domeGeometry.scale(1,2,1);
+  /* Round slabs with a square opening for a lift, one geometry per proportion of opening to slab. */
+  const discs = new Map<number, Instance[]>();
+  const discEntries = (part: CityPart) => {
+    const ratio = Math.round(((part.hole ?? 0) / part.width) * 1000) / 1000;
+    const entries = discs.get(ratio) ?? [];
+
+    discs.set(ratio, entries);
+
+    return entries;
+  };
   const addCityPart = (part: CityPart, house: PalaceHouse) => {
     const position = roomPoint(house, part.x, part.z);
-    const entries = part.surface === "wood" ? woodwork
+    const entries = part.shape === "disc" ? discEntries(part)
+      : part.surface === "wood" ? woodwork
       : part.surface === "stone" ? walls
       : part.surface === "water" ? water
-      : part.shape === "gable" ? (part.glass ? glassGables : gables)
+      : part.shape === "gable" ? (part.clear ? clearGables : part.glass ? glassGables : gables)
       : part.shape === "pyramid" ? pyramids
       : part.shape === "bow" ? bows
       : part.shape === "dome" ? domes
@@ -369,7 +472,8 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       : part.shape === "ribbon" ? ribbons
       : part.shape === "ring" ? rings
       : part.shape === "sphere" ? spheres
-      : part.shape === "cylinder" ? (part.glass ? glassCylinders : cylinders)
+      : part.shape === "cylinder" ? (part.clear ? clearCylinders : part.glass ? glassCylinders : cylinders)
+      : part.clear ? clearGlass
       : part.glass ? glass : boxes;
     entries.push({
       matrix: boxMatrix({
@@ -379,6 +483,16 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       }),
       color: new THREE.Color(part.color),
     });
+    if (part.solid) {
+      const turned = Math.abs(Math.sin(house.facing + (part.rotation ?? 0))) > 0.5;
+
+      colliders.push({
+        ...position,
+        width: turned ? part.depth : part.width,
+        depth: turned ? part.width : part.depth,
+        top: part.y + part.height / 2,
+      });
+    }
   };
 
   /* Ground, footpaths, tarmac, paint — flat planes, stacked in that order. */
@@ -485,7 +599,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     }),
   );
   group.add(
-    instanced(planeGeometry, solid(GRASS_COLOR), greens, { shadows: false }),
+    instanced(planeGeometry, surface("grass", GRASS_COLOR), greens, { shadows: false }),
   );
 
   layout.kerbs.forEach((kerb) => {
@@ -523,8 +637,32 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         ? house.landmarkIndex
         : layout.stations.length + layout.houses.indexOf(house),
     );
-    const addWall = (x: number, z: number, width: number, depth: number) => {
+    /* A skyscraper's lobby is walled in glass: a stone plinth, clear panes on mullions, a band at the top. */
+    const glassLobby = isTower(house);
+    const addWall = (x: number, z: number, width: number, depth: number, glazed = glassLobby) => {
       const position = roomPoint(house, x, z);
+
+      if (glazed) {
+        const along = width > depth;
+        const length = along ? width : depth;
+        const place = (dx: number, y: number, w: number, h: number, d: number) => ({
+          matrix: boxMatrix({
+            ...roomPoint(house, x + (along ? dx : 0), z + (along ? 0 : dx)),
+            y,
+            width: along ? w : d,
+            height: h,
+            depth: along ? d : w,
+            rotation: house.facing,
+          }),
+          color: wall,
+        });
+
+        walls.push(place(0, 0.25, length, 0.5, 0.3));
+        walls.push(place(0, LOBBY_HEIGHT - 0.3, length, 0.6, 0.3));
+        clearGlass.push({ ...place(0, LOBBY_HEIGHT / 2, length, LOBBY_HEIGHT - 1.1, 0.05), color: new THREE.Color(0xbfe3f0) });
+        for (let mullion = -length / 2; mullion <= length / 2 + 0.01; mullion += length / Math.max(1, Math.round(length / 1.8)))
+          boxes.push({ ...place(mullion, LOBBY_HEIGHT / 2, 0.08, LOBBY_HEIGHT - 1.1, 0.12), color: new THREE.Color(0xc6d5d3) });
+      } else
       walls.push({
         matrix: boxMatrix({
           ...position,
@@ -544,8 +682,9 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       });
     };
     if (room) {
-      roomWalls(house).forEach((part) =>
-        addWall(part.x, part.z, part.width, part.depth),
+      /* A café's shop front is glass either side of the door, so its windows look into the room. */
+      roomWalls(house).forEach((part, index) =>
+        addWall(part.x, part.z, part.width, part.depth, glassLobby || (profile.kind === "cafe" && index >= 3)),
       );
       // Lintel above an open doorway; no ground collider across the opening.
       const lintel = at(body / 2, 0);
@@ -574,7 +713,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       });
       // A colored back wall and rug link the exterior address to the room.
       const accent = at(-body / 2 + 0.16, 0);
-      boxes.push({
+      if (!glassLobby) boxes.push({
         matrix: boxMatrix({
           ...accent,
           y: (LOBBY_HEIGHT - 0.3) / 2,
@@ -585,8 +724,9 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         }),
         color: hsl(room.hue, room.color === "ivory" ? 0.1 : 0.32, 0.52),
       });
+      /* A skyscraper's lobby has its lift where the rug would be. */
       const rug = at(room.anchorZ, room.anchorX);
-      boxes.push({
+      if (!glassLobby) boxes.push({
         matrix: boxMatrix({
           ...rug,
           y: 0.085,
@@ -597,7 +737,7 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         }),
         color: hsl(room.hue, 0.36, 0.33),
       });
-      for (const side of [-1, 1]) {
+      for (const side of glassLobby ? [] : [-1, 1]) {
         const edge = at(room.anchorZ + side * 1.5, room.anchorX);
         boxes.push({
           matrix: boxMatrix({
@@ -612,24 +752,113 @@ export function buildCity(layout: PalaceLayout): CityBuild {
         });
       }
       // Ceiling and trim give a real enclosed ground floor, lit by skylight ambience.
-      boxes.push({
-        matrix: boxMatrix({
-          x: house.x,
-          y: LOBBY_HEIGHT - 0.22,
-          z: house.z,
-          width: house.width - 0.15,
-          height: 0.12,
-          depth: body - 0.15,
-          rotation: house.facing,
-        }),
-        color: hsl(38, 0.12, 0.82),
+      // A skyscraper's is open in the middle, where the lift goes up through it.
+      for (const piece of glassLobby ? aroundShaft(house.width - 0.15, body - 0.15) : [{ x: 0, z: 0, width: house.width - 0.15, depth: body - 0.15 }])
+        boxes.push({
+          matrix: boxMatrix({
+            ...roomPoint(house, piece.x, piece.z),
+            y: LOBBY_HEIGHT - 0.22,
+            width: piece.width,
+            height: 0.12,
+            depth: piece.depth,
+            rotation: house.facing,
+          }),
+          color: hsl(38, 0.12, 0.82),
+        });
+      const memory = house.landmark ? layout.stations[house.landmarkIndex] : undefined;
+      const memoryInside = memory?.placement === "inside";
+      const memoryUpstairs = memoryInside && (memory?.y ?? 0) > 0;
+      const sideways = Math.abs(out.x) > 0.5;
+      /* A box in the room's axes, turned into the world's. */
+      const worldBox = <Box extends { x: number; z: number; width: number; depth: number }>(box: Box) => ({
+        ...box,
+        ...roomPoint(house, box.x, box.z),
+        width: sideways ? box.depth : box.width,
+        depth: sideways ? box.width : box.depth,
       });
-      for (const part of roomFurniture(
-        house,
-        room,
-        house.landmark &&
-          layout.stations[house.landmarkIndex]?.placement === "inside",
-      )) {
+
+      /* ---- the gallery and its stairs; in a skyscraper, the penthouse and roof instead ---- */
+      const tower = isTower(house);
+
+      if (tower) {
+        towerSurfaces(house).forEach((surface) => surfaces.push(worldBox(surface)));
+        towerColliders(house).forEach((collider) => colliders.push(worldBox(collider)));
+      } else {
+        /* ---- the gallery and its stairs ---- */
+        const upper = roomUpperFloor(house);
+        const floorColor = hsl(32, 0.26, 0.5);
+        const stairColor = hsl(38, 0.12, 0.8);
+        const railColor = new THREE.Color(0x3a3230);
+        const place = (x: number, y: number, z: number, width: number, height: number, depth: number, tiltX = 0) =>
+          boxMatrix({ ...roomPoint(house, x, z), y, width, height, depth, rotation: house.facing, tiltX });
+
+        roomSurfaces(house).forEach((surface) => surfaces.push(worldBox(surface)));
+        roomUpperColliders(house).forEach((collider) => colliders.push(worldBox(collider)));
+
+        for (let index = 0; index < upper.stair.steps; index++) {
+          const step = stairStep(house, index);
+
+          walls.push({ matrix: place(step.x, step.y / 2, step.z, step.width, step.y, step.depth), color: stairColor });
+          woodwork.push({
+            matrix: place(step.x, step.y - 0.02, step.z + 0.015, step.width + 0.02, 0.05, step.depth + 0.03),
+            color: floorColor,
+          });
+        }
+
+        /* The handrail up the open side: posts, and a rail at the stairs' own slope. */
+        const slope = Math.atan2(UPPER_FLOOR_Y, upper.stair.run);
+        const railBottom = stairStep(house, 2);
+        const railLength = Math.hypot(railBottom.z - upper.stair.zTop, UPPER_FLOOR_Y - railBottom.y);
+
+        for (let index = 2; index < upper.stair.steps; index += 3) {
+          const step = stairStep(house, index);
+
+          cylinders.push({ matrix: place(upper.stair.x0 + 0.05, step.y + RAIL_HEIGHT / 2, step.z, 0.06, RAIL_HEIGHT, 0.06), color: railColor });
+        }
+        woodwork.push({
+          matrix: place(
+            upper.stair.x0 + 0.05,
+            (railBottom.y + UPPER_FLOOR_Y) / 2 + RAIL_HEIGHT,
+            (railBottom.z + upper.stair.zTop) / 2,
+            0.09,
+            0.07,
+            railLength,
+            slope,
+          ),
+          color: floorColor,
+        });
+
+        /* The gallery floor, its edge, and its rail. */
+        const galleryZ = -upper.innerZ + upper.galleryDepth / 2;
+
+        woodwork.push({
+          matrix: place(0, UPPER_FLOOR_Y - 0.1, galleryZ, upper.innerX * 2, 0.2, upper.galleryDepth),
+          color: floorColor,
+        });
+        walls.push({
+          matrix: place(0, UPPER_FLOOR_Y - 0.28, upper.edgeZ - 0.06, upper.innerX * 2, 0.36, 0.12),
+          color: stairColor,
+        });
+        const railFrom = -upper.innerX, railTo = upper.stair.x0;
+
+        for (let x = railFrom + 0.1; x <= railTo; x += 0.9)
+          cylinders.push({ matrix: place(x, UPPER_FLOOR_Y + RAIL_HEIGHT / 2, upper.edgeZ, 0.06, RAIL_HEIGHT, 0.06), color: railColor });
+        for (const height of [RAIL_HEIGHT, RAIL_HEIGHT * 0.45])
+          (height === RAIL_HEIGHT ? woodwork : boxes).push({
+            matrix: place((railFrom + railTo) / 2, UPPER_FLOOR_Y + height, upper.edgeZ, railTo - railFrom, height === RAIL_HEIGHT ? 0.07 : 0.035, height === RAIL_HEIGHT ? 0.1 : 0.035),
+            color: height === RAIL_HEIGHT ? floorColor : railColor,
+          });
+      }
+
+      const upperFloor = tower ? towerPlan(house).floor : UPPER_FLOOR_Y;
+      const furniture: (RoomPart & { upstairs?: boolean })[] = [
+        ...roomFurniture(house, room, memoryInside && !memoryUpstairs),
+        ...(tower ? penthouseFurniture(house, Boolean(memoryUpstairs)) : upperFurniture(house, room, Boolean(memoryUpstairs))).map(
+          (part) => ({ ...part, upstairs: true }),
+        ),
+      ];
+
+      for (const part of furniture) {
         const position = roomPoint(house, part.x, part.z);
         const bucket =
           part.shape === "sphere"
@@ -652,11 +881,16 @@ export function buildCity(layout: PalaceLayout): CityBuild {
           }),
           color: new THREE.Color(part.color),
         });
+        /* Furniture blocks only the floor it stands on. */
         if (part.solid)
           colliders.push({
             ...position,
-            width: Math.abs(out.x) > 0.5 ? part.depth : part.width,
-            depth: Math.abs(out.x) > 0.5 ? part.width : part.depth,
+            width: sideways ? part.depth : part.width,
+            depth: sideways ? part.width : part.depth,
+            ...(part.upstairs
+              ? { bottom: upperFloor - 0.1, top: upperFloor + 2 }
+              : /* Its real height, so the camera sees over a desk; never less than a step, so nobody walks over one. */
+                { top: Math.max(part.y + part.height / 2, STEP_UP + 0.1) }),
           });
       }
     } else {
@@ -1337,7 +1571,8 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     ),
   );
   group.add(instanced(autoCabin, cityGlassMaterial, carCabins));
-  group.add(instanced(roundedGeometry, carPaint, carTrim));
+  /* Pillars, mirrors and spokes are too small to show a rounded edge. */
+  group.add(instanced(boxGeometry, carPaint, carTrim));
   group.add(instanced(cylinderGeometry, solid(0xffffff), tyres));
   group.add(instanced(cylinderGeometry, cityGlassMaterial, glassCylinders));
   group.add(
@@ -1383,9 +1618,64 @@ export function buildCity(layout: PalaceLayout): CityBuild {
   group.add(instanced(boxGeometry, surface("plaster", 0xffffff), walls));
   group.add(instanced(boxGeometry, surface("wood", 0xffffff), woodwork));
   group.add(instanced(boxGeometry, cityGlassMaterial, glass));
+  /* A penthouse's walls: glass you see through from both sides. */
+  /*
+   * Glass you see through: faintly tinted, crisply reflective, and one-sided —
+   * a pane is a thin box, so from either side you look through exactly one of
+   * its faces. Drawing both doubled the haze and made every window milky.
+   */
+  const clearMaterial = track(
+    new THREE.MeshPhysicalMaterial({
+      color: 0xf2fafc,
+      transparent: true,
+      opacity: 0.12,
+      roughness: 0.02,
+      metalness: 0,
+      depthWrite: false,
+      envMapIntensity: 1.1,
+    }),
+  );
+
+  group.add(instanced(boxGeometry, clearMaterial, clearGlass, { shadows: false }));
+  group.add(instanced(cylinderGeometry, clearMaterial, clearCylinders, { shadows: false }));
+  group.add(instanced(gableGeometry, clearMaterial, clearGables, { shadows: false }));
   group.add(instanced(coneGeometry, tinted(), cones));
   group.add(instanced(cylinderGeometry, tinted(), cylinders));
+  if (discs.size) {
+    const discMaterial = tinted();
+
+    for (const [ratio, entries] of discs) {
+      const outline = new THREE.Shape().absarc(0, 0, 0.5, 0, Math.PI * 2, false);
+      const half = Math.min(0.45, ratio / 2);
+
+      if (half > 0) outline.holes.push(new THREE.Path().moveTo(-half, -half).lineTo(-half, half).lineTo(half, half).lineTo(half, -half).closePath());
+
+      const geometry = track(new THREE.ExtrudeGeometry(outline, { depth: 1, bevelEnabled: false, curveSegments: 40 }));
+
+      geometry.rotateX(-Math.PI / 2);
+      geometry.translate(0, -0.5, 0);
+      group.add(instanced(geometry, discMaterial, entries));
+    }
+  }
   group.add(instanced(sphereGeometry, tinted(), spheres));
+
+  const forest = forestInstances(layout);
+  const foliage = track(
+    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, flatShading: true }),
+  );
+  const coniferGeometry = track(new THREE.ConeGeometry(0.5, 1, 7));
+  const crownGeometry = track(new THREE.IcosahedronGeometry(0.5, 0));
+
+  for (const mesh of [
+    instanced(boxGeometry, solid(0xffffff), forest.trunks, { shadows: false }),
+    instanced(coniferGeometry, foliage, forest.conifers, { shadows: false }),
+    instanced(crownGeometry, foliage, forest.crowns, { shadows: false }),
+  ]) {
+    mesh.traverse((tile) => {
+      tile.receiveShadow = false;
+    });
+    group.add(mesh);
+  }
 
   /*
    * The stations: Memo's own mascot on the path outside its house, over a ring
@@ -1395,13 +1685,69 @@ export function buildCity(layout: PalaceLayout): CityBuild {
    */
   const stations: StationVisual[] = [];
   const ringGeometry = track(new THREE.RingGeometry(0.7, 0.86, 32));
+  /* Crisp and in full colour: drawn over its own glow, untouched by fog or tone mapping. */
   const tokenMaterial = track(
     new THREE.SpriteMaterial({
       transparent: true,
       opacity: 0,
       depthWrite: false,
+      fog: false,
+      toneMapped: false,
     }),
   );
+
+  /*
+   * The glow round Memo: a soft halo in the colour of the stop behind the
+   * sticker, a ripple spreading on the ground, and sparkles rising up the
+   * beam. A stop should look like something worth walking to.
+   */
+  const softDot = (inner: string, stops: [number, string][]) => {
+    const canvas = document.createElement("canvas");
+
+    canvas.width = canvas.height = 128;
+    const context = canvas.getContext("2d");
+
+    if (context) {
+      const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+
+      gradient.addColorStop(0, inner);
+      stops.forEach(([at, color]) => gradient.addColorStop(at, color));
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, 128, 128);
+    }
+
+    const texture = track(new THREE.CanvasTexture(canvas));
+
+    texture.colorSpace = THREE.SRGBColorSpace;
+
+    return texture;
+  };
+  const haloTexture = softDot("rgba(255,255,255,0.95)", [[0.3, "rgba(255,255,255,0.55)"], [0.62, "rgba(255,255,255,0.16)"], [1, "rgba(255,255,255,0)"]]);
+  const sparkTexture = softDot("rgba(255,255,255,1)", [[0.18, "rgba(255,255,255,0.85)"], [0.45, "rgba(255,255,255,0.18)"], [1, "rgba(255,255,255,0)"]]);
+  const haloMaterials = new Map<PalaceStation["kind"], THREE.SpriteMaterial>();
+  const haloMaterial = (kind: PalaceStation["kind"]) => {
+    let material = haloMaterials.get(kind);
+
+    if (!material) {
+      material = track(
+        new THREE.SpriteMaterial({
+          map: haloTexture,
+          color: hsl(STATION_HUE[kind], 0.95, 0.72),
+          transparent: true,
+          depthWrite: false,
+          fog: false,
+          toneMapped: false,
+        }),
+      );
+      haloMaterials.set(kind, material);
+    }
+
+    return material;
+  };
+  const rippleGeometry = track(new THREE.RingGeometry(0.62, 0.8, 40));
+  /* How near a stop must be for more than its beam: well past where Memo and its halo read as more than a dot. */
+  const STATION_DETAIL_RANGE = 45;
+  const SPARKS_PER_STOP = 7;
 
   disposables.push(
     new THREE.TextureLoader().load(MASCOT_TEXTURE_SRC, (loaded) => {
@@ -1433,6 +1779,39 @@ export function buildCity(layout: PalaceLayout): CityBuild {
     new THREE.MeshBasicMaterial({ map: addressTexture }),
   );
 
+  const beamGeometry = track(new THREE.CylinderGeometry(0.55, 0.8, 1, 24, 1, true));
+  beamGeometry.translate(0, 0.5, 0);
+  const glowGeometry = track(new THREE.PlaneGeometry(1, 1));
+  const beaconUniforms = { uTime: { value: 0 } };
+  const beaconMaterials = new Map<PalaceStation["kind"], { beam: THREE.ShaderMaterial; glow: THREE.ShaderMaterial }>();
+  const beaconMaterial = (kind: PalaceStation["kind"]) => {
+    const existing = beaconMaterials.get(kind);
+    if (existing) return existing;
+    const color = { value: hsl(STATION_HUE[kind], 0.9, 0.6) };
+    const shared = {
+      transparent: true,
+      depthWrite: false,
+      fog: false,
+    };
+    const made = {
+      beam: track(new THREE.ShaderMaterial({
+        ...shared,
+        uniforms: { uColor: color, uTime: beaconUniforms.uTime },
+        vertexShader: beaconVertex,
+        fragmentShader: beaconFragment,
+        side: THREE.DoubleSide,
+      })),
+      glow: track(new THREE.ShaderMaterial({
+        ...shared,
+        uniforms: { uColor: color, uTime: beaconUniforms.uTime },
+        vertexShader: glowVertex,
+        fragmentShader: glowFragment,
+      })),
+    };
+    beaconMaterials.set(kind, made);
+    return made;
+  };
+
   layout.stations.forEach((station) => {
     const house = layout.houses[station.houseIndex];
     const plaqueGeometry = track(new THREE.PlaneGeometry(0.65, 0.65));
@@ -1461,27 +1840,159 @@ export function buildCity(layout: PalaceLayout): CityBuild {
       track(
         new THREE.MeshBasicMaterial({
           /* The ring says which of the three is waiting here. */
-          color: hsl(STATION_HUE[station.kind], 0.7, 0.55),
+          color: hsl(STATION_HUE[station.kind], 0.75, 0.58),
           transparent: true,
-          opacity: 0.55,
+          opacity: 0.85,
           side: THREE.DoubleSide,
         }),
       ),
     );
 
-    token.scale.set(1.15 * MASCOT_ASPECT, 1.15, 1);
-    token.position.set(station.x, 1.65, station.z);
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.set(station.x, 0.11, station.z);
+    const floor = station.y ?? 0;
 
-    group.add(token, ring);
-    stations.push({ station, token, ring, plaque, collected: false });
+    token.scale.set(1.15 * MASCOT_ASPECT, 1.15, 1);
+    token.position.set(station.x, floor + 1.65, station.z);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(station.x, floor + 0.11, station.z);
+
+    const materials = beaconMaterial(station.kind);
+    const beacon = new THREE.Group();
+    const beam = new THREE.Mesh(beamGeometry, materials.beam);
+    const glow = new THREE.Mesh(glowGeometry, materials.glow);
+
+    beam.scale.set(1, BEACON_HEIGHT, 1);
+    beam.renderOrder = 2;
+    glow.rotation.x = -Math.PI / 2;
+    glow.scale.setScalar(3.4);
+    glow.position.y = 0.07;
+    glow.renderOrder = 1;
+    /* A brighter core down the middle of the beam. */
+    const core = new THREE.Mesh(beamGeometry, materials.beam);
+
+    core.scale.set(0.32, BEACON_HEIGHT * 0.8, 0.32);
+    core.renderOrder = 2;
+
+    const halo = new THREE.Sprite(haloMaterial(station.kind));
+
+    halo.scale.setScalar(2.7);
+    halo.position.y = 1.65;
+    halo.renderOrder = 3;
+
+    const ripple = new THREE.Mesh(
+      rippleGeometry,
+      track(
+        new THREE.MeshBasicMaterial({
+          color: hsl(STATION_HUE[station.kind], 0.9, 0.62),
+          transparent: true,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+          fog: false,
+          toneMapped: false,
+        }),
+      ),
+    );
+
+    ripple.rotation.x = -Math.PI / 2;
+    ripple.position.y = 0.09;
+    ripple.renderOrder = 1;
+    token.renderOrder = 5;
+    beacon.add(beam, core, glow, halo, ripple);
+    beacon.position.set(station.x, floor, station.z);
+    for (const unoccluded of [token, ring, beam, core, glow, halo, ripple]) unoccluded.layers.set(UNOCCLUDED_LAYER);
+
+    group.add(token, ring, beacon);
+    stations.push({ station, token, ring, plaque, beacon, collected: false });
   });
+
+  /* Every stop's sparkles in one draw: a point cloud whose points are moved each frame. */
+  const sparkPositions = new Float32Array(stations.length * SPARKS_PER_STOP * 3);
+  const sparkColors = new Float32Array(stations.length * SPARKS_PER_STOP * 3);
+  const sparkGeometry = track(new THREE.BufferGeometry());
+
+  sparkGeometry.setAttribute("position", new THREE.BufferAttribute(sparkPositions, 3));
+  sparkGeometry.setAttribute("color", new THREE.BufferAttribute(sparkColors, 3));
+
+  const sparks = new THREE.Points(
+    sparkGeometry,
+    track(
+      new THREE.PointsMaterial({
+        map: sparkTexture,
+        size: 0.32,
+        vertexColors: true,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        fog: false,
+        toneMapped: false,
+      }),
+    ),
+  );
+
+  sparks.frustumCulled = false;
+  sparks.renderOrder = 4;
+  sparks.layers.set(UNOCCLUDED_LAYER);
+  group.add(sparks);
+
+  const sparkTint = new THREE.Color();
+  const white = new THREE.Color(1, 1, 1);
 
   return {
     group,
     colliders,
+    surfaces,
     stations,
+    update: (seconds, viewer) => {
+      beaconUniforms.uTime.value = seconds;
+
+      stations.forEach((visual, index) => {
+        const [halo, ripple] = [visual.beacon.children[3], visual.beacon.children[4] as THREE.Mesh];
+        /*
+         * The beam is what you see a stop by from across town; the core, glow,
+         * halo, ripple and sparkles are for when you are near. A far stop keeps
+         * only its beam, which in a sixty-stop town saves some two hundred
+         * blended draws a frame on a phone.
+         */
+        const near = !viewer || Math.hypot(visual.beacon.position.x - viewer.x, visual.beacon.position.z - viewer.z) < STATION_DETAIL_RANGE;
+
+        for (let child = 1; child <= 4; child++) visual.beacon.children[child].visible = near;
+        const beat = Math.sin(seconds * 2.2 + index);
+
+        /* The halo breathes, and bobs with Memo. */
+        halo.scale.setScalar(2.6 + beat * 0.18);
+        halo.position.y = 1.65 + Math.sin(seconds * 2 + visual.station.index) * 0.1;
+
+        /* A ripple spreads out from the ring and fades, every second and a half. */
+        const wave = (seconds / 1.5 + index * 0.13) % 1;
+
+        ripple.scale.setScalar(1 + wave * 1.4);
+        (ripple.material as THREE.MeshBasicMaterial).opacity = (1 - wave) * 0.75;
+
+        /* Sparkles spiral up the beam, fading in and out. */
+        for (let spark = 0; spark < SPARKS_PER_STOP; spark++) {
+          const offset = (index * SPARKS_PER_STOP + spark) * 3;
+
+          if (!visual.beacon.visible || !near) {
+            sparkPositions[offset + 1] = -1000;
+            continue;
+          }
+
+          const rise = (seconds * 0.32 + spark / SPARKS_PER_STOP + index * 0.37) % 1;
+          const angle = spark * 2.4 + seconds * 0.9;
+          const radius = 0.35 + Math.sin(rise * Math.PI) * 0.45;
+          const fade = Math.sin(rise * Math.PI);
+
+          sparkPositions[offset] = visual.beacon.position.x + Math.cos(angle) * radius;
+          sparkPositions[offset + 1] = visual.beacon.position.y + 0.3 + rise * 3.6;
+          sparkPositions[offset + 2] = visual.beacon.position.z + Math.sin(angle) * radius;
+          sparkTint.setHSL(STATION_HUE[visual.station.kind] / 360, 0.9, 0.7).lerp(white, 0.35).multiplyScalar(fade);
+          sparkColors[offset] = sparkTint.r;
+          sparkColors[offset + 1] = sparkTint.g;
+          sparkColors[offset + 2] = sparkTint.b;
+        }
+      });
+      sparkGeometry.attributes.position.needsUpdate = true;
+      sparkGeometry.attributes.color.needsUpdate = true;
+    },
     dispose: () => {
       group.traverse((object) => {
         if (object instanceof THREE.InstancedMesh) object.dispose();

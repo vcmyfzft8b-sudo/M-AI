@@ -1,0 +1,185 @@
+import type { PalaceHouse, PalaceLayout } from "./layout.ts";
+import type { Collider, Surface } from "./movement.ts";
+import { roomPoint } from "./rooms.ts";
+import { isTower, LIFT_SIZE, towerPlan } from "./tower.ts";
+
+/**
+ * The skyscrapers' lifts, as logic: where each car is, where it is going, and
+ * what it lets you stand on. The drawing is in `game.ts`; this part is plain
+ * numbers so it can be tested.
+ *
+ * Step into the car and stand still for a moment and it goes to the next stop
+ * — lobby, penthouse, roof deck, and back down to the lobby. Walk up to the
+ * shaft on another floor and the car comes to you. The doors — the car's and
+ * the landing's, which move together — close before the car moves and open
+ * when it arrives; wherever the car is not, or its doors are shut, the landing
+ * is barred, so nobody steps into an empty shaft or a closing door.
+ */
+
+/** Top speed, metres a second. */
+const SPEED = 7;
+/** Seconds to reach top speed from a stop, and to come to one. */
+const RAMP = 1.8;
+/** How long you stand in the car before it goes. */
+const BOARDING_TIME = 0.9;
+/** How long the car waits at a stop before it will leave again: time to step out. */
+const DWELL = 2.5;
+/** How near the shaft counts as waiting for the lift. */
+const CALL_REACH = 3.2;
+/** Doors open or close in about two thirds of a second. */
+const DOOR_SPEED = 1.6;
+
+export type Lift = {
+  house: PalaceHouse;
+  x: number;
+  z: number;
+  stops: readonly number[];
+  /** The car's floor, live. */
+  y: number;
+  at: number;
+  target: number | null;
+  dwell: number;
+  boarding: number;
+  /** How far the doors are open, 0 shut to 1 open. */
+  doors: number;
+  /** Seconds since the car left its stop, on the way to `target`. */
+  travelled: number;
+  /** What you stand on in the car: the same object every frame, its height updated. */
+  surface: Surface;
+};
+
+export function createLiftState(layout: Pick<PalaceLayout, "houses">): Lift[] {
+  return layout.houses.filter(isTower).map((house) => {
+    const plan = towerPlan(house);
+    const centre = roomPoint(house, plan.lift.x, plan.lift.z);
+
+    return {
+      house,
+      ...centre,
+      stops: plan.stops,
+      y: 0,
+      at: 0,
+      target: null,
+      dwell: 0,
+      boarding: 0,
+      doors: 1,
+      travelled: 0,
+      surface: { ...centre, width: LIFT_SIZE, depth: LIFT_SIZE, y: 0 },
+    };
+  });
+}
+
+function inCar(lift: Lift, player: { x: number; z: number }) {
+  return Math.abs(player.x - lift.x) < LIFT_SIZE / 2 - 0.15 && Math.abs(player.z - lift.z) < LIFT_SIZE / 2 - 0.15;
+}
+
+/**
+ * How far along a trip of `distance` metres the car is after `time` seconds,
+ * and how long the whole trip takes. The speed rises from rest along half a
+ * cosine, holds, and falls away the same way — no jolt as it sets off or
+ * stops, however long or short the trip — so a rider feels a lift rather
+ * than a platform being dragged.
+ */
+export function liftTravel(distance: number, time: number) {
+  /* A short hop never reaches top speed: it rises and falls at the same gentle acceleration instead. */
+  const accel = (SPEED * Math.PI) / (2 * RAMP);
+  const ramp = distance >= SPEED * RAMP ? RAMP : Math.sqrt((Math.PI * distance) / (2 * accel));
+  const speed = ramp > 0 ? Math.min(SPEED, distance / ramp) : SPEED;
+  const duration = ramp > 0 ? distance / speed + ramp : 0;
+  const rampDistance = (t: number) => (speed / 2) * (t - (ramp / Math.PI) * Math.sin((Math.PI * t) / ramp));
+  const t = Math.max(0, Math.min(duration, time));
+  const covered = t < ramp
+    ? rampDistance(t)
+    : t < duration - ramp
+      ? (speed * ramp) / 2 + speed * (t - ramp)
+      : distance - rampDistance(duration - t);
+
+  return { covered: Math.min(distance, covered), duration };
+}
+
+/** The lift whose car the player is standing in, if any. */
+export function liftCarrying(lifts: readonly Lift[], player: { x: number; y: number; z: number }) {
+  return lifts.find((lift) => inCar(lift, player) && Math.abs(player.y - lift.y) < 0.5) ?? null;
+}
+
+/**
+ * Advance every lift by `delta` seconds, given where the player is, and return
+ * the barriers across the landings the cars are not at.
+ */
+export function stepLifts(lifts: readonly Lift[], player: { x: number; y: number; z: number }, delta: number): Collider[] {
+  const barriers: Collider[] = [];
+
+  for (const lift of lifts) {
+    const riding = inCar(lift, player) && Math.abs(player.y - lift.y) < 0.4;
+
+    if (lift.target !== null && lift.doors > 0) {
+      /* The doors shut first; only then does the car move. */
+      lift.doors = Math.max(0, lift.doors - DOOR_SPEED * delta);
+    } else if (lift.target !== null) {
+      const from = lift.stops[lift.at];
+      const goal = lift.stops[lift.target];
+
+      lift.travelled += delta;
+
+      const { covered, duration } = liftTravel(Math.abs(goal - from), lift.travelled);
+
+      lift.y = from + Math.sign(goal - from) * covered;
+      if (lift.travelled >= duration) {
+        lift.y = goal;
+        lift.at = lift.target;
+        lift.target = null;
+        lift.dwell = DWELL;
+        lift.boarding = 0;
+        lift.travelled = 0;
+      }
+    } else {
+      lift.doors = Math.min(1, lift.doors + DOOR_SPEED * delta);
+      lift.dwell = Math.max(0, lift.dwell - delta);
+      lift.boarding = riding ? lift.boarding + delta : 0;
+
+      if (riding && lift.boarding >= BOARDING_TIME && lift.dwell === 0) {
+        lift.target = (lift.at + 1) % lift.stops.length;
+      } else if (!riding) {
+        /* Waiting at the shaft on another floor calls the car. */
+        const floor = lift.stops.findIndex((stop) => Math.abs(player.y - stop) < 0.5);
+        const near = Math.hypot(player.x - lift.x, player.z - lift.z) < CALL_REACH;
+
+        if (floor >= 0 && floor !== lift.at && near) lift.target = floor;
+      }
+    }
+
+    lift.surface.y = lift.y;
+
+    const open = lift.target === null && lift.doors > 0.6;
+
+    /*
+     * Someone inside is held in by the car itself: the shaft's walls on three
+     * sides, and across the doorway whenever the doors are not standing open
+     * at a stop — so nobody steps out between floors, into the building's
+     * slabs or down the shaft.
+     */
+    if (inCar(lift, player)) {
+      if (!open) {
+        const sideways = Math.abs(Math.sin(lift.house.facing)) > 0.5;
+        const reach = LIFT_SIZE / 2 + 0.08;
+
+        barriers.push({
+          x: lift.x + Math.sin(lift.house.facing) * reach,
+          z: lift.z + Math.cos(lift.house.facing) * reach,
+          width: sideways ? 0.16 : LIFT_SIZE + 0.4,
+          depth: sideways ? LIFT_SIZE + 0.4 : 0.16,
+          bottom: lift.y - 0.3,
+          top: lift.y + 2.4,
+        });
+      }
+      continue;
+    }
+    /* Bar every landing but the one the car stands open at. */
+    lift.stops.forEach((stop, index) => {
+      if (open && lift.at === index) return;
+      barriers.push({ x: lift.x, z: lift.z, width: LIFT_SIZE, depth: LIFT_SIZE, bottom: stop - 0.3, top: stop + 2.4 });
+    });
+  }
+
+  return barriers;
+}

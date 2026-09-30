@@ -33,14 +33,14 @@ import type { PalaceGame, PalaceSnapshot } from "@/lib/palace/game";
 import {
   buildPalaceLayout,
   mapArrowAngle,
-  mapExtent,
   selectPalaceItems,
   STATION_HUE,
   type PalaceLayout,
   type PalaceStation,
   type StudyKind,
 } from "@/lib/palace/layout";
-import { minimapMarker, townMapPoint } from "@/lib/palace/navigation";
+import { paintTownDiorama } from "@/lib/palace/diorama";
+import { minimapMarker } from "@/lib/palace/navigation";
 import { chooseRelocation, relocatedStation, relocationSpots } from "@/lib/palace/relocation";
 import { outdoorLandmark, roomIdentity } from "@/lib/palace/rooms";
 import { FLASHCARD_EXIT_ANIMATION_MS, type FlashcardBucket } from "@/lib/study/flashcard-drag";
@@ -52,7 +52,7 @@ import { quizOptionLetter, shuffleIndices } from "@/lib/study/quiz";
  * The intro is the tab's JSX, transcribed: the town drawn from the note's own layout with Memo
  * on its edge, the title and the sentence under it, "0 of N collected", and "Start game". The
  * town is the app's — `buildPalaceLayout` over the landing's sample flashcards and quiz (the same
- * ones its Flashcards and Quiz demos use), painted by a transcription of the app's `paintTown`.
+ * ones its Flashcards and Quiz demos use), painted by the app's own `paintTownDiorama`.
  *
  * "Start game" starts the real thing: the app's own 3D engine (`createPalaceGame`, loaded only
  * then, never before), the app's HUD — minimap, score, the way out — and, at a stop, the app's
@@ -72,106 +72,11 @@ const STICK_DEADZONE = 6;
 const STICK_RADIUS = 46;
 /** The walkthrough's pace across the intro map. */
 const WALK_LEG_MS = 1_500;
+/* How often the walking dot on the intro map moves: each move repaints the whole map. */
+const WALK_REPAINT_MS = 80;
 const WALK_REST_MS = 700;
 
 type Walker = { x: number; z: number; facing: number };
-
-/** The app's intro map: every street, every house, every stop in its ring colour. */
-function paintTown(
-  canvas: HTMLCanvasElement | null,
-  layout: PalaceLayout,
-  collected: ReadonlySet<string>,
-  walker: Walker | null,
-) {
-  if (!canvas) return;
-
-  const box = canvas.getBoundingClientRect();
-  /* The element's own size, not its on-screen one: the landing may be showing it scaled. */
-  const width = Math.round(canvas.clientWidth || box.width);
-  const height = Math.round(canvas.clientHeight || box.height);
-
-  if (width === 0 || height === 0) return;
-
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-
-  canvas.width = Math.round(width * dpr);
-  canvas.height = Math.round(height * dpr);
-
-  const context = canvas.getContext("2d");
-
-  if (!context) return;
-
-  context.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  const extent = mapExtent(layout);
-  const scale = Math.min(width, height) / (extent * 2);
-  const toCanvas = (x: number, z: number) => townMapPoint({ x, z }, extent, width, height);
-
-  context.clearRect(0, 0, width, height);
-  context.fillStyle = "rgba(14, 12, 20, 0.9)";
-  context.beginPath();
-  context.roundRect(0, 0, width, height, 18);
-  context.fill();
-
-  context.strokeStyle = "rgba(255, 255, 255, 0.16)";
-  context.lineWidth = Math.max(1.5, 11 * scale);
-  layout.roads.forEach((road) => {
-    const horizontal = road.width > road.depth;
-    const line = toCanvas(road.x, road.z);
-
-    context.beginPath();
-
-    if (horizontal) {
-      context.moveTo(0, line.y);
-      context.lineTo(width, line.y);
-    } else {
-      context.moveTo(line.x, 0);
-      context.lineTo(line.x, height);
-    }
-
-    context.stroke();
-  });
-
-  layout.houses.forEach((house) => {
-    const point = toCanvas(house.x, house.z);
-    context.save();
-    context.translate(point.x, point.y);
-    context.rotate(-house.facing);
-    context.fillStyle = house.landmark ? `hsl(${house.hue} 28% 64% / 0.85)` : "rgba(192, 205, 195, 0.28)";
-    context.fillRect((-house.width * scale) / 2, (-house.depth * scale) / 2, house.width * scale, house.depth * scale);
-    context.restore();
-  });
-
-  layout.stations.forEach((entry) => {
-    const point = toCanvas(entry.x, entry.z);
-    const done = collected.has(entry.id);
-
-    context.fillStyle = done ? "rgba(255, 255, 255, 0.22)" : `hsl(${STATION_HUE[entry.kind]} 80% 62%)`;
-    context.beginPath();
-    context.arc(point.x, point.y, done ? 2.6 : 4.2, 0, Math.PI * 2);
-    context.fill();
-  });
-
-  if (!walker) return;
-
-  const player = toCanvas(walker.x, walker.z);
-
-  context.save();
-  context.translate(player.x, player.y);
-  context.rotate(mapArrowAngle(walker.facing));
-  context.fillStyle = "#ffffff";
-  context.strokeStyle = "rgba(14, 12, 20, 0.9)";
-  context.lineWidth = 1.4;
-  context.beginPath();
-  context.moveTo(0, -7);
-  context.lineTo(5.4, 5.8);
-  context.lineTo(0, 2.6);
-  context.lineTo(-5.4, 5.8);
-  context.closePath();
-  context.fill();
-  context.stroke();
-  context.restore();
-}
 
 export function LandingPalaceScreen({
   theme,
@@ -309,7 +214,7 @@ export function LandingPalaceScreen({
 
   useEffect(() => {
     paintIntroRef.current = () => {
-      if (layout) paintTown(introMapRef.current, layout, shownCollected, shownWalker);
+      if (layout) paintTownDiorama(introMapRef.current, { layout, collected: shownCollected, walker: shownWalker });
     };
     paintIntroRef.current();
   }, [isOpen, layout, shownCollected, shownWalker]);
@@ -602,7 +507,9 @@ export function LandingPalaceScreen({
 
     void (async () => {
       try {
-        const { createPalaceGame } = await import("@/lib/palace/game");
+        const { createPalaceGame, preloadPalaceAssets } = await import("@/lib/palace/game");
+        /* The character model arrives behind the loading screen, as in the app. */
+        await preloadPalaceAssets();
         /* Let the arrival screen paint before the geometry and shader work. */
         await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 
@@ -848,16 +755,25 @@ export function LandingPalaceScreen({
             const start = walker ?? { x: layout.spawn.x, z: layout.spawn.z, facing: 0 };
             const facing = Math.atan2(nextTarget.x - start.x, nextTarget.z - start.z);
             const began = performance.now();
+            let painted = Number.NEGATIVE_INFINITY;
 
             const frame = (now: number) => {
               const progress = Math.min(1, (now - began) / WALK_LEG_MS);
               const eased = progress < 0.5 ? 2 * progress * progress : 1 - (-2 * progress + 2) ** 2 / 2;
 
-              setWalker({
-                x: start.x + (nextTarget.x - start.x) * eased,
-                z: start.z + (nextTarget.z - start.z) * eased,
-                facing,
-              });
+              /*
+               * Each move repaints the whole diorama (buildings, shadows, trees), so
+               * the dot steps about twelve times a second rather than every frame —
+               * on a map this small it looks the same and costs a fifth.
+               */
+              if (now - painted >= WALK_REPAINT_MS || progress === 1) {
+                painted = now;
+                setWalker({
+                  x: start.x + (nextTarget.x - start.x) * eased,
+                  z: start.z + (nextTarget.z - start.z) * eased,
+                  facing,
+                });
+              }
 
               if (progress < 1) {
                 window.requestAnimationFrame(frame);

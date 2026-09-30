@@ -1,4 +1,5 @@
 import type { PalaceHouse } from "./layout";
+import { isTower, LIFT_SIZE, SHAFT_OPENING } from "./tower.ts";
 
 export const ROOM_THEMES = [
   "library",
@@ -144,6 +145,8 @@ export type RoomPart = {
   depth: number;
   color: number;
   solid?: boolean;
+  /** Parts of one piece of furniture share a group. */
+  group?: number;
 };
 
 /** Furniture sits at the edges; the door-to-memory corridor stays clear. */
@@ -153,6 +156,13 @@ export function roomFurniture(
   hasMemory = true,
 ): RoomPart[] {
   const parts: RoomPart[] = [];
+  /*
+   * Parts are grouped — a desk is its top and its legs — so that clearing the
+   * stairs takes a whole piece of furniture away rather than half of one.
+   */
+  let groupCount = 0;
+  let heldGroup: number | null = null;
+  const push = (part: RoomPart) => parts.push({ ...part, group: heldGroup ?? ++groupCount });
   const back = -house.depth / 2 + 0.65;
   const wood = 0x684837,
     brass = 0xb58b43,
@@ -168,9 +178,9 @@ export function roomFurniture(
     color: number,
     solid = false,
   ) =>
-    parts.push({ shape: "box", x, y, z, width, height, depth, color, solid });
+    push({ shape: "box", x, y, z, width, height, depth, color, solid });
   const ball = (x: number, y: number, z: number, size: number, color: number) =>
-    parts.push({
+    push({
       shape: "sphere",
       x,
       y,
@@ -189,7 +199,7 @@ export function roomFurniture(
     color: number,
     solid = false,
   ) =>
-    parts.push({
+    push({
       shape: "cylinder",
       x,
       y,
@@ -201,6 +211,7 @@ export function roomFurniture(
       solid,
     });
   const desk = (x: number, z: number, width = 2.8) => {
+    heldGroup = ++groupCount;
     box(x, 0.85, z, width, 0.16, 1.2, wood, true);
     for (const side of [-1, 1])
       for (const end of [-1, 1])
@@ -213,6 +224,7 @@ export function roomFurniture(
           0.13,
           wood,
         );
+    heldGroup = null;
   };
   if (identity.theme === "library") {
     for (const x of [-2.7, 0, 2.7]) {
@@ -289,7 +301,7 @@ export function roomFurniture(
       ball(side * 2.5, 2.1, back + 0.17, 0.7, cream);
     }
     box(0, 0.55, back + 1.2, 1.2, 1.1, 1.2, cream, true);
-    parts.push({
+    push({
       shape: "cone",
       x: 0,
       y: 1.95,
@@ -314,7 +326,7 @@ export function roomFurniture(
     desk(1.5, back + 0.8, 3.3);
     for (let i = 0; i < 5; i++) {
       const x = 0.3 + i * 0.55;
-      parts.push({
+      push({
         shape: "sphere",
         x,
         y: 1.06,
@@ -343,5 +355,180 @@ export function roomFurniture(
     cylinder(identity.anchorX, 0.4, identity.anchorZ, 0.85, 0.8, cream, true);
     cylinder(identity.anchorX, 0.84, identity.anchorZ, 1.15, 0.08, brass);
   }
+
+  /*
+   * The ground floor now has a gallery over its back half and stairs up one
+   * side. Anything standing where the stairs go is left out, whole; and the
+   * room is scaled down just enough that its tallest piece clears the
+   * gallery's underside — the whole room together, so a bookcase and its books
+   * still match.
+   */
+  /* A skyscraper's lobby has a lift in its middle instead, and no gallery over it. */
+  const tower = isTower(house);
+  const { stair } = roomUpperFloor(house);
+  /* The lift and the whole way from the front door to it: the lobby's furniture stands to the sides. */
+  const keepClear = tower
+    ? { x: 0, z: (house.depth / 2 - SHAFT_OPENING) / 2, width: LIFT_SIZE + 0.4, depth: house.depth / 2 + SHAFT_OPENING }
+    : { x: (stair.x0 + stair.x1) / 2, z: (stair.zTop + stair.zBottom) / 2, width: stair.x1 - stair.x0, depth: stair.zBottom - stair.zTop };
+  const clearance = 0.6;
+  const inTheWay = (part: RoomPart) =>
+    Math.abs(part.x - keepClear.x) < (keepClear.width + part.width) / 2 + clearance &&
+    Math.abs(part.z - keepClear.z) < (keepClear.depth + part.depth) / 2 + clearance;
+  const cleared = new Set(parts.filter(inTheWay).map((part) => part.group));
+  const kept = parts.filter((part) => !cleared.has(part.group));
+  const tallest = Math.max(...kept.map((part) => part.y + part.height / 2));
+  const squeeze = tower ? 1 : Math.min(1, (UPPER_FLOOR_Y - 0.35) / tallest);
+
+  return kept.map((part) =>
+    squeeze === 1 ? part : { ...part, y: part.y * squeeze, height: part.height * squeeze },
+  );
+}
+
+/*
+ * ---- the upper floor ------------------------------------------------------
+ *
+ * Every room has a gallery across its back at `UPPER_FLOOR_Y`, reached by a
+ * solid staircase along its right-hand wall. The front of the room, where the
+ * door is, stays double height, so the way in is unchanged and the gallery is
+ * the first thing you see above you.
+ *
+ * All of it is described once, in the room's own axes (x across the front, +z
+ * out of the door), and used by the renderer, the collision and the tests
+ * alike. Heights make it three-dimensional: walkable `surfaces` say what you
+ * stand on, and colliders carry an optional `bottom`/`top` so the stairs stop
+ * you walking into their side from the floor, the gallery rail stops you
+ * walking off the edge upstairs, and neither is there for someone walking
+ * underneath.
+ */
+
+/** The gallery floor: headroom under it, and under the lobby ceiling above it. */
+export const UPPER_FLOOR_Y = 3.2;
+const WALL_INSET = 0.12;
+const STAIR_WIDTH = 1.7;
+export const RAIL_HEIGHT = 1.05;
+
+export type RoomBox = { x: number; z: number; width: number; depth: number };
+export type RoomSurface = RoomBox & { y: number };
+export type RoomCollider = RoomBox & { bottom?: number; top?: number };
+
+export function roomUpperFloor(house: PalaceHouse) {
+  const innerX = house.width / 2 - WALL_INSET;
+  const innerZ = house.depth / 2 - WALL_INSET;
+  const galleryDepth = Math.min(4.2, house.depth * 0.45);
+  /* The gallery's front edge, where its rail runs and the stairs arrive. */
+  const edgeZ = -innerZ + galleryDepth;
+  /* A metre of landing is left between the foot of the stairs and the front wall. */
+  const run = Math.min(4.4, innerZ - 1.1 - edgeZ);
+  const steps = Math.round(UPPER_FLOOR_Y / 0.19);
+  const stair = { x0: innerX - STAIR_WIDTH, x1: innerX, zTop: edgeZ, zBottom: edgeZ + run, run, steps };
+
+  return { innerX, innerZ, galleryDepth, edgeZ, stair };
+}
+
+/** Step `index`, counted up from the bottom: its footprint and the height of its tread. */
+export function stairStep(house: PalaceHouse, index: number): RoomSurface {
+  const { stair } = roomUpperFloor(house);
+  const tread = stair.run / stair.steps;
+
+  return {
+    x: (stair.x0 + stair.x1) / 2,
+    z: stair.zBottom - (index + 0.5) * tread,
+    width: STAIR_WIDTH,
+    depth: tread,
+    y: ((index + 1) * UPPER_FLOOR_Y) / stair.steps,
+  };
+}
+
+/** What you can stand on inside, above the ground: every step, and the gallery. */
+export function roomSurfaces(house: PalaceHouse): RoomSurface[] {
+  const { innerX, innerZ, galleryDepth, stair } = roomUpperFloor(house);
+
+  return [
+    ...Array.from({ length: stair.steps }, (_, index) => stairStep(house, index)),
+    { x: 0, z: -innerZ + galleryDepth / 2, width: innerX * 2, depth: galleryDepth, y: UPPER_FLOOR_Y },
+  ];
+}
+
+/**
+ * The upper floor's solid parts. Each step blocks anyone whose feet are well
+ * below its tread, so from the floor the stairs are a wall and from the step
+ * below they are a step. The handrail runs up the open side of the stairs; the
+ * gallery rail only exists for someone standing on the gallery.
+ */
+export function roomUpperColliders(house: PalaceHouse): RoomCollider[] {
+  const { innerX, edgeZ, stair } = roomUpperFloor(house);
+  const tread = stair.run / stair.steps;
+  const railFrom = stair.zBottom - tread * 3;
+
+  return [
+    ...Array.from({ length: stair.steps }, (_, index) => {
+      const step = stairStep(house, index);
+
+      return { x: step.x, z: step.z, width: step.width, depth: step.depth, top: step.y };
+    }),
+    { x: stair.x0, z: (railFrom + stair.zTop) / 2, width: 0.08, depth: railFrom - stair.zTop },
+    {
+      x: (-innerX + stair.x0) / 2,
+      z: edgeZ,
+      width: stair.x0 + innerX,
+      depth: 0.1,
+      bottom: UPPER_FLOOR_Y - 0.3,
+      top: UPPER_FLOOR_Y + RAIL_HEIGHT,
+    },
+  ];
+}
+
+/** Where a memory waits upstairs: the middle of the gallery, clear of the stairs. */
+export function upperStationPoint(house: PalaceHouse, identity: RoomIdentity) {
+  const { innerX, innerZ, galleryDepth } = roomUpperFloor(house);
+
+  return { x: -innerX * 0.45 + identity.anchorX * 0.5, z: -innerZ + galleryDepth * 0.55 };
+}
+
+/** Whether a room has the gallery and stairs: every house but a skyscraper, which has a lift. */
+export function hasGallery(house: PalaceHouse) {
+  return !isTower(house);
+}
+
+/** Which stops wait upstairs: every other indoor one. */
+export function stationIsUpstairs(index: number) {
+  return index % 4 === 0;
+}
+
+/**
+ * The gallery's furniture: a rug, a sofa against the back wall, plants in the
+ * corners and a lamp — and, when a memory waits up here, its
+ * display stand. Heights are absolute.
+ */
+export function upperFurniture(house: PalaceHouse, identity: RoomIdentity, hasMemory: boolean): RoomPart[] {
+  const { innerX, innerZ, galleryDepth } = roomUpperFloor(house);
+  const floor = UPPER_FLOOR_Y;
+  const back = -innerZ + 0.5;
+  const parts: RoomPart[] = [];
+  const add = (part: Omit<RoomPart, "y"> & { y: number }) => parts.push({ ...part, y: floor + part.y });
+  const accent = [0x9a5b52, 0x47707a, 0x8a6a9e, 0x5b7a52, 0x3f5d86, 0xb07a3c, 0x7d4f63, 0xa39a86][
+    ROOM_HUES.indexOf(identity.hue as (typeof ROOM_HUES)[number]) % 8
+  ];
+  const sofaX = identity.anchorX < 0 ? 0.6 : -1.4;
+
+  add({ shape: "box", x: -innerX * 0.4, y: 0.02, z: -innerZ + galleryDepth / 2, width: 3.6, height: 0.02, depth: 2.6, color: accent });
+  add({ shape: "box", x: sofaX, y: 0.25, z: back + 0.25, width: 2.6, height: 0.5, depth: 0.9, color: accent, solid: true });
+  add({ shape: "box", x: sofaX, y: 0.7, z: back - 0.1, width: 2.6, height: 0.6, depth: 0.25, color: accent });
+  for (const side of [-1, 1])
+    add({ shape: "box", x: sofaX + side * 1.2, y: 0.5, z: back + 0.25, width: 0.25, height: 0.5, depth: 0.9, color: accent });
+  for (const x of [-innerX + 0.5, innerX - STAIR_WIDTH - 0.6]) {
+    add({ shape: "cylinder", x, y: 0.3, z: back, width: 0.55, height: 0.6, depth: 0.55, color: 0xa26345, solid: true });
+    add({ shape: "sphere", x, y: 0.95, z: back, width: 0.85, height: 0.9, depth: 0.85, color: 0x58764b });
+  }
+  add({ shape: "cylinder", x: sofaX - 1.7, y: 0.75, z: back, width: 0.06, height: 1.5, depth: 0.06, color: 0x29343d });
+  add({ shape: "cone", x: sofaX - 1.7, y: 1.55, z: back, width: 0.55, height: 0.4, depth: 0.55, color: 0xded1b7 });
+
+  if (hasMemory) {
+    const stand = upperStationPoint(house, identity);
+
+    add({ shape: "cylinder", x: stand.x, y: 0.4, z: stand.z, width: 0.85, height: 0.8, depth: 0.85, color: 0xded1b7, solid: true });
+    add({ shape: "cylinder", x: stand.x, y: 0.84, z: stand.z, width: 1.15, height: 0.08, depth: 1.15, color: 0xb58b43 });
+  }
+
   return parts;
 }

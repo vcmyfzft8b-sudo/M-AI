@@ -1,13 +1,19 @@
 /**
- * Refuses a transcript that stops well short of the recording, which is how a provider that
- * dropped part of the audio shows up.
+ * How far a transcript falls short of the recording, when that is more than a pause.
  *
- * A transcript also stops short when the recording simply goes on after the talking ends: a
- * recorder left running in the bag, twenty minutes of typing and chairs after the lecture. That is
- * not a lost transcript, and failing it threw away an hour of lecture. So when the provider reports
- * that it processed the whole recording, the silence after the last word counts as covered.
+ * A transcript stops short when the recording simply goes on after the talking ends: a recorder
+ * left running in the bag, twenty minutes of typing and chairs after the lecture. So when the
+ * provider reports that it processed the whole recording, the silence after the last word counts
+ * as covered, and there is nothing to report.
+ *
+ * What is left is reported, never refused. The recording is transcribed in one request that
+ * either completes or throws, so a completed transcript that still falls short holds everything
+ * the file has to give: retrying pays to transcribe the same file to the same answer (inside the
+ * Inngest step, once per step attempt), and failing throws away every minute that was heard. That
+ * is how lecture 4bdce725 lost 65 minutes of lecture on 2026-09-29 (Sentry MEMOAI-WEB-4T). Only an
+ * empty transcript fails.
  */
-export function assertTranscriptCoverage(params: {
+export function findTranscriptCoverageShortfall(params: {
   transcript: {
     text: string;
     segments: Array<{ startMs: number; endMs: number; text: string }>;
@@ -23,7 +29,7 @@ export function assertTranscriptCoverage(params: {
   }
 
   if (!expectedDurationSeconds || expectedDurationSeconds < 60) {
-    return;
+    return null;
   }
 
   const expectedEndMs = expectedDurationSeconds * 1000;
@@ -34,9 +40,14 @@ export function assertTranscriptCoverage(params: {
   const coveredMs = Math.max(lastSegmentEndMs, transcript.audioDurationMs ?? 0);
   const allowedGapMs = Math.max(30_000, expectedEndMs * 0.05);
 
-  if (expectedEndMs - coveredMs > allowedGapMs) {
-    throw new Error(
-      `Transcript appears incomplete. Expected about ${expectedDurationSeconds}s but only covered ${Math.round(coveredMs / 1000)}s.`,
-    );
+  if (expectedEndMs - coveredMs <= allowedGapMs) {
+    return null;
   }
+
+  return {
+    expectedSeconds: expectedDurationSeconds,
+    lastWordSeconds: Math.round(lastSegmentEndMs / 1000),
+    providerAudioSeconds:
+      transcript.audioDurationMs == null ? null : Math.round(transcript.audioDurationMs / 1000),
+  };
 }

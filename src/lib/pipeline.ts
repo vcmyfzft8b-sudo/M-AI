@@ -67,7 +67,7 @@ import { createAiChunkSelector } from "@/lib/source-condensation-ai";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { normalizeMimeType } from "@/lib/storage";
 import { serializeVector } from "@/lib/utils";
-import { assertTranscriptCoverage } from "@/lib/transcription/coverage";
+import { findTranscriptCoverageShortfall } from "@/lib/transcription/coverage";
 import { getTranscriptionProvider } from "@/lib/transcription/provider";
 import { NoClearSpeechDetectedError } from "@/lib/transcription/types";
 
@@ -403,10 +403,19 @@ export async function transcribeLectureContent(params: { lectureId: string }) {
           });
         })();
 
-  assertTranscriptCoverage({
+  const coverageShortfall = findTranscriptCoverageShortfall({
     transcript,
     expectedDurationSeconds: lecture.duration_seconds,
   });
+
+  if (coverageShortfall) {
+    // The note is made from what was heard. No "[lecture-pipeline]" prefix: the triage automation
+    // treats every line carrying it as actionable, and this lecture is not failing.
+    console.warn("Transcript ends before the recording does; keeping what was heard", {
+      lectureId: lecture.id,
+      ...coverageShortfall,
+    });
+  }
 
   const embeddings: number[][] = [];
 

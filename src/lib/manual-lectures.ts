@@ -74,6 +74,13 @@ import {
   isLoginWallUrl,
   looksLikeLoginPage,
 } from "@/lib/link-login-walls";
+import { stripHtmlForms } from "@/lib/link-html-forms";
+import {
+  findRepositoryDocumentUrl,
+  isRepositoryCatalogueUrl,
+  repositoryDocumentTitle,
+  sessionCookieHeader,
+} from "@/lib/link-repository-documents";
 import { serializeVector } from "@/lib/utils";
 import { looksLikeBotChallenge } from "@/lib/link-bot-challenge";
 import {
@@ -792,7 +799,7 @@ function extractPageMainHtml(html: string) {
 }
 
 function stripNoisyHtml(html: string) {
-  return html
+  const withoutChrome = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
@@ -800,8 +807,9 @@ function stripNoisyHtml(html: string) {
     .replace(/<header[\s\S]*?<\/header>/gi, " ")
     .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
     .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
-    .replace(/<aside[\s\S]*?<\/aside>/gi, " ")
-    .replace(/<form[\s\S]*?<\/form>/gi, " ")
+    .replace(/<aside[\s\S]*?<\/aside>/gi, " ");
+
+  return stripHtmlForms(withoutChrome)
     .replace(/<button[\s\S]*?<\/button>/gi, " ")
     .replace(/<select[\s\S]*?<\/select>/gi, " ")
     .replace(
@@ -1196,6 +1204,8 @@ async function fetchReadableWebpageResponse(
   targetUrl: URL,
   redirectCount = 0,
   sawLoginWall = false,
+  // A session cookie a page set, sent back only to the host that set it.
+  hostCookie: { hostname: string; value: string } | null = null,
 ): Promise<{
   url: URL;
   response: Response;
@@ -1216,6 +1226,9 @@ async function fetchReadableWebpageResponse(
         "User-Agent":
           "Mozilla/5.0 (compatible; MemoAI/1.0; +https://memoai.eu)",
         Accept: LINK_FETCH_ACCEPT,
+        ...(hostCookie?.value && hostCookie.hostname === targetUrl.hostname
+          ? { Cookie: hostCookie.value }
+          : {}),
       },
       redirect: "manual",
       signal: controller.signal,
@@ -1242,6 +1255,7 @@ async function fetchReadableWebpageResponse(
         nextUrl,
         redirectCount + 1,
         sawLoginWall || isLoginWallUrl(nextUrl),
+        hostCookie,
       );
     }
 
@@ -1359,9 +1373,10 @@ async function readWebpageFromResponse(params: {
   url: URL;
   response: Response;
   behindLogin: boolean;
+  html?: string;
 }) {
   const { url, response, behindLogin } = params;
-  const html = await readResponseBodyWithLimit(response, MAX_LINK_FETCH_BYTES);
+  const html = params.html ?? (await readResponseBodyWithLimit(response, MAX_LINK_FETCH_BYTES));
   const pageTitle = extractTitle(html);
 
   if (looksLikeBotChallenge({ html, title: pageTitle, headers: response.headers })) {
@@ -1462,7 +1477,64 @@ export async function fetchLinkSource(params: { url: string }): Promise<LinkSour
     throw expectedInputFailure("unsupported_link_content_type");
   }
 
+  // A digital library's catalogue page links the work itself; read that rather than the card.
+  if (isRepositoryCatalogueUrl(opened.url)) {
+    const html = await readResponseBodyWithLimit(opened.response, MAX_LINK_FETCH_BYTES);
+    const document = await fetchRepositoryDocument({
+      pageUrl: opened.url,
+      html,
+      cookie: sessionCookieHeader(opened.response.headers),
+    });
+
+    return document ?? { kind: "webpage", ...(await readWebpageFromResponse({ ...opened, html })) };
+  }
+
   return { kind: "webpage", ...(await readWebpageFromResponse(opened)) };
+}
+
+/**
+ * The open full text a repository page links to, as a document source, or null when there is
+ * none or it cannot be fetched -- the catalogue page is then read instead, so a restricted item
+ * still fails (or succeeds) exactly as it did before.
+ */
+async function fetchRepositoryDocument(params: {
+  pageUrl: URL;
+  html: string;
+  cookie: string;
+}): Promise<LinkSource | null> {
+  const documentUrl = findRepositoryDocumentUrl(params.pageUrl, params.html);
+
+  if (!documentUrl) {
+    return null;
+  }
+
+  try {
+    const { url, response } = await fetchReadableWebpageResponse(documentUrl, 0, false, {
+      hostname: documentUrl.hostname,
+      value: params.cookie,
+    });
+    const documentType = response.ok
+      ? resolveLinkDocumentType(response.headers.get("content-type") ?? "", url)
+      : null;
+
+    if (!documentType) {
+      await response.body?.cancel().catch(() => null);
+      return null;
+    }
+
+    const bytes = await readResponseBytesWithLimit(response, MAX_LINK_DOCUMENT_BYTES);
+    const title = repositoryDocumentTitle(extractTitle(params.html));
+    const fileName = linkDocumentFileName(url, documentType);
+
+    return {
+      kind: "document",
+      file: new File([bytes], fileName, { type: documentType.mimeType }),
+      finalUrl: url.toString(),
+      title: title || fileName.replace(/\.[a-z0-9]+$/i, ""),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function extractTextFromPdf(file: File) {

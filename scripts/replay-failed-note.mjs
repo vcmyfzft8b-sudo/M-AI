@@ -38,6 +38,7 @@ import {
   PDF_EXTRACT_INSTRUCTIONS,
   PDF_RESTATE_INSTRUCTIONS,
 } from "../src/lib/ocr-prompts.ts";
+import { hasEnoughSourceTextToTeach } from "../src/lib/source-text-gate.ts";
 import { runCase } from "./lib/note-replay.mjs";
 import { countWords, ledger, loadEnv } from "./lib/eval-runtime.mjs";
 
@@ -210,6 +211,10 @@ fs.writeFileSync(path.join(outDir, "source.txt"), sourceText);
 
 if (!sourceText.trim()) {
   report.verdict = files.length ? "unreadable" : "no-material";
+} else if (!hasEnoughSourceTextToTeach(sourceText.replace(/\s+/g, " ").trim())) {
+  // Production stops here with source_too_short before the notes stage ever runs.
+  report.verdict = "no-learnable-topic";
+  report.gate = "source_too_short";
 } else if (writeNote) {
   const result = await runCase({
     id: lectureId,

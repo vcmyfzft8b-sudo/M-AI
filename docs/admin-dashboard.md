@@ -242,6 +242,29 @@ New creators are picked up by the next sync automatically. Follower counts and
 the avatar are filled in immediately from the public TikTok profile page, which
 is free and needs no API key.
 
+## Payouts
+
+`/admin/payouts` records each month's payout run: one line per creator, month
+and **payee** (a pair such as Martin & David or Mija & Megi gets a line each, so
+each half is marked paid on its own), with base, code bonus, a note on how it was
+worked out, and when it was sent. Unpaid lines sort first. The page opens on the
+month that just ended, because creators are paid in arrears.
+
+The amounts are **entered, not computed**. The "Owed this month" estimate above
+is a guide; the run itself comes from a hand count of the videos (the scrape
+reads captions only and misses posts when Apify is out of credit) plus the code
+bonus from Stripe — 20% of cash collected through the code in the month,
+Europe/Ljubljana. Saving the same creator, month and payee again replaces the
+amounts and keeps the paid state.
+
+Where the money goes lives in **Payment details** on each creator's page (free
+text: Flik number, IBAN with name and address, or a Revolut link — one line per
+person for a pair) and is shown beside every line of the run. Like every admin
+table, `ugc_creator_payouts` is service-role only.
+
+`scripts/seed-creator-payouts-2026-09.mjs` recorded the September 2026 run (dry
+run by default, `--apply` to write); copy it for a month you want to load in bulk.
+
 ## How Memo AI posts are detected
 
 Several campaign accounts are personal accounts that only sometimes post about

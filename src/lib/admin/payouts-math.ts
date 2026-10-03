@@ -120,3 +120,24 @@ export function summarizePayouts(payouts: PayoutAmounts[]): PayoutSummary {
 
   return summary;
 }
+
+/** Cents as euros for a status line, e.g. "€6.50". */
+export function formatEuros(cents: number): string {
+  return new Intl.NumberFormat("en-IE", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
+  }).format(cents / 100);
+}
+
+/**
+ * The payee as stored: trimmed, single-spaced, first letter upper-case.
+ *
+ * Payees are part of a line's key, so "david" and "David " must land on the
+ * same line rather than on two.
+ */
+export function normalizePayee(value: string): string {
+  const clean = value.trim().replace(/\s+/g, " ").slice(0, 80);
+
+  return clean ? clean.charAt(0).toLocaleUpperCase("sl") + clean.slice(1) : "";
+}

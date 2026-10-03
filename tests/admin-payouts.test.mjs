@@ -3,8 +3,10 @@ import test from "node:test";
 
 import {
   defaultPayoutPeriod,
+  formatEuros,
   formatPeriod,
   isPeriodKey,
+  normalizePayee,
   periodStart,
   shiftPeriod,
   summarizePayouts,
@@ -88,4 +90,16 @@ test("a paid line moves from owed to paid and nothing else changes", () => {
   assert.equal(summary.paid, 5300);
   assert.equal(summary.owed, 650);
   assert.equal(summary.paidLines, 1);
+});
+
+test("a payee typed two ways lands on the same line", () => {
+  assert.equal(normalizePayee("  david "), "David");
+  assert.equal(normalizePayee("Mija  in   Megi"), "Mija in Megi");
+  assert.equal(normalizePayee("špela"), "Špela");
+  assert.equal(normalizePayee("   "), "");
+});
+
+test("status lines show whole euros plainly and halves exactly", () => {
+  assert.equal(formatEuros(81700), "€817");
+  assert.equal(formatEuros(650), "€6.50");
 });

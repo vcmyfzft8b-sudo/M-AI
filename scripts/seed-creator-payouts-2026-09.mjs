@@ -3,8 +3,8 @@
  *
  * Run once, after migration 0056 is live:
  *
- *   node --experimental-strip-types scripts/seed-creator-payouts-2026-09.mjs          # dry run
- *   node --experimental-strip-types scripts/seed-creator-payouts-2026-09.mjs --apply  # write
+ *   node scripts/seed-creator-payouts-2026-09.mjs          # dry run
+ *   node scripts/seed-creator-payouts-2026-09.mjs --apply  # write
  *
  * The base pay is Klara's hand count of 30 September 2026 ("placilo" note),
  * with Pija's TikTok rate corrected from €5 to €10. The code bonus is 20% of
@@ -107,39 +107,47 @@ async function main() {
 
   let creators = await bySlug();
 
+  // Every creator the run names must exist, or be one this script adds,
+  // before anything is written: failing on line nine would leave the first
+  // eight half-recorded.
+  const known = new Set([...creators.keys(), ...NEW_CREATORS.map((row) => row.slug)]);
+  const missing = [
+    ...new Set(
+      [...PAYOUTS, ...FILL_TERMS, ...EXTRA_ACCOUNTS]
+        .map((entry) => entry.slug)
+        .filter((slug) => !known.has(slug)),
+    ),
+  ];
+
+  if (missing.length > 0) {
+    throw new Error(`No creator with slug ${missing.map((slug) => `"${slug}"`).join(", ")} — nothing written.`);
+  }
+
   for (const entry of NEW_CREATORS) {
     if (creators.has(entry.slug)) {
       continue;
     }
 
-    console.log(`+ creator ${entry.name} (@${entry.account.handle})`);
+    console.log(`+ creator ${entry.name}`);
 
     if (!APPLY) {
       continue;
     }
 
-    const { account, ...row } = entry;
-    const { data, error } = await supabase
-      .from("ugc_creators")
-      .insert({ ...row, status: "active", kind: "creator", created_by: "script:seed-creator-payouts-2026-09" })
-      .select("id")
-      .single();
+    const { error } = await supabase.from("ugc_creators").insert({
+      name: entry.name,
+      slug: entry.slug,
+      promo_codes: entry.promo_codes,
+      rate_kind: entry.rate_kind,
+      rate_amount: entry.rate_amount,
+      revenue_share_percent: entry.revenue_share_percent,
+      status: "active",
+      kind: "creator",
+      created_by: "script:seed-creator-payouts-2026-09",
+    });
 
     if (error) {
       throw new Error(`Could not add ${entry.name}: ${error.message}`);
-    }
-
-    const { error: accountError } = await supabase.from("ugc_creator_accounts").insert({
-      creator_id: data.id,
-      platform: "tiktok",
-      handle: account.handle,
-      profile_url: `https://www.tiktok.com/@${account.handle}`,
-      content_mode: account.content_mode,
-      status: "active",
-    });
-
-    if (accountError) {
-      throw new Error(`Could not add @${account.handle}: ${accountError.message}`);
     }
   }
 
@@ -147,20 +155,34 @@ async function main() {
     creators = await bySlug();
   }
 
-  for (const entry of EXTRA_ACCOUNTS) {
+  // New creators' accounts go through the same idempotent path as the extra
+  // ones, so a failed account insert is retried by the next run instead of
+  // being skipped along with its already-created creator.
+  const accounts = [
+    ...NEW_CREATORS.map((entry) => ({ slug: entry.slug, ...entry.account })),
+    ...EXTRA_ACCOUNTS,
+  ];
+
+  for (const entry of accounts) {
     const creator = creators.get(entry.slug);
-    const { data: existing } = await supabase
+    const name = creator?.name ?? NEW_CREATORS.find((row) => row.slug === entry.slug)?.name;
+    // The unique index is on lower(handle), so the check must ignore case too.
+    const { data: existing, error: lookupError } = await supabase
       .from("ugc_creator_accounts")
       .select("id")
       .eq("platform", "tiktok")
-      .eq("handle", entry.handle)
-      .maybeSingle();
+      .ilike("handle", entry.handle)
+      .limit(1);
 
-    if (!creator || existing) {
+    if (lookupError) {
+      throw new Error(`Could not look up @${entry.handle}: ${lookupError.message}`);
+    }
+
+    if (existing.length > 0) {
       continue;
     }
 
-    console.log(`+ account @${entry.handle} for ${creator.name}`);
+    console.log(`+ account @${entry.handle} for ${name}`);
 
     if (APPLY) {
       const { error } = await supabase.from("ugc_creator_accounts").insert({
@@ -212,10 +234,6 @@ async function main() {
 
     if (!APPLY) {
       continue;
-    }
-
-    if (!creator) {
-      throw new Error(`No creator with slug "${entry.slug}"`);
     }
 
     const { error } = await supabase.from("ugc_creator_payouts").upsert(

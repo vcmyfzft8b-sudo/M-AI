@@ -96,7 +96,9 @@ export default async function CreatorDetailPage({
     listVideos({ creatorId: id, limit: 200, range }),
     loadSalesData().catch(() => null),
     getBaselineCampaignViews(VALUE_BASELINE_DAYS),
-    listPayoutsForCreator(id),
+    // Optional, like Stripe: a missing payouts table (the minutes between a
+    // deploy and its migration) must not take the creator page down with it.
+    listPayoutsForCreator(id).catch(() => []),
   ]);
 
   if (!creator) {

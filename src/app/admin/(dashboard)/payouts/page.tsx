@@ -5,6 +5,7 @@ import {
 import { Disclosure, InlineAction } from "@/components/admin/forms";
 import { PayoutForm } from "@/components/admin/payout-form";
 import { PendingLink } from "@/components/admin/pending-link";
+import { requireAdmin } from "@/lib/admin/auth";
 import {
   Badge,
   EmptyState,
@@ -44,6 +45,10 @@ export default async function PayoutsPage({
 }: {
   searchParams?: SearchParams;
 }) {
+  // The layout checks too, but this page shows bank details: check here as
+  // well rather than rely on a layout guard alone.
+  await requireAdmin();
+
   const params = await searchParams;
   const fallback = defaultPayoutPeriod();
   const period = isPeriodKey(params?.month) ? params.month : fallback;
@@ -51,17 +56,17 @@ export default async function PayoutsPage({
   const [payouts, periods, creators] = await Promise.all([
     listPayoutsForPeriod(period),
     listPayoutPeriods(),
-    listCreators(),
+    // Archived creators can still be owed for a month they worked.
+    listCreators({ includeArchived: true }),
   ]);
 
   const summary = summarizePayouts(payouts);
 
   // The months with something recorded, plus the current run and the one
   // being viewed, so an empty month can still be opened and filled in.
-  const months = [...new Set([fallback, period, ...periods])]
-    .sort()
-    .reverse()
-    .slice(0, 8);
+  const recent = [...new Set([fallback, ...periods])].sort().reverse().slice(0, 7);
+  const months = [...new Set([period, ...recent])].sort().reverse();
+  const earliest = months[months.length - 1];
 
   const rows = [...payouts].sort(
     (a, b) =>
@@ -90,7 +95,7 @@ export default async function PayoutsPage({
             </PendingLink>
           ))}
           <PendingLink
-            href={`/admin/payouts?month=${shiftPeriod(months[months.length - 1], -1)}`}
+            href={`/admin/payouts?month=${shiftPeriod(earliest, -1)}`}
             className="admin-range-item"
           >
             Earlier
@@ -123,7 +128,7 @@ export default async function PayoutsPage({
 
       <Section
         title={`${formatPeriod(period)} run`}
-        hint="Unpaid first. Payment details come from each creator's page — edit them there."
+        hint="Unpaid first. Payment details come from each creator's page — edit them there. A paid line can only be changed or removed after undoing the payment."
       >
         {rows.length === 0 ? (
           <EmptyState title={`Nothing recorded for ${formatPeriod(period)} yet`}>
@@ -189,7 +194,7 @@ export default async function PayoutsPage({
                         )}
                       </td>
                       <td>
-                        <div style={{ display: "flex", gap: "0.25rem" }}>
+                        <div className="admin-row-actions">
                           {payout.paid_at ? (
                             <InlineAction
                               action={setPayoutPaidAction}
@@ -207,14 +212,16 @@ export default async function PayoutsPage({
                               Mark paid
                             </InlineAction>
                           )}
-                          <InlineAction
-                            action={deletePayoutAction}
-                            fields={{ payout_id: payout.id }}
-                            variant="danger"
-                            confirm={`Remove the ${formatPeriod(period)} payout for ${label}?`}
-                          >
-                            Remove
-                          </InlineAction>
+                          {!payout.paid_at && (
+                            <InlineAction
+                              action={deletePayoutAction}
+                              fields={{ payout_id: payout.id }}
+                              variant="danger"
+                              confirm={`Remove the ${formatPeriod(period)} payout for ${label}?`}
+                            >
+                              Remove
+                            </InlineAction>
+                          )}
                         </div>
                       </td>
                     </tr>

@@ -1850,3 +1850,8 @@
   white-space: pre-line;
   min-width: 12rem;
 }
+
+.admin-row-actions {
+  display: flex;
+  gap: 0.25rem;
+}

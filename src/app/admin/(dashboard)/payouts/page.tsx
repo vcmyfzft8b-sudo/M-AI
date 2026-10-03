@@ -21,6 +21,7 @@ import {
   defaultPayoutPeriod,
   formatPeriod,
   isPeriodKey,
+  payoutDetailsFor,
   payoutTotalCents,
   shiftPeriod,
   summarizePayouts,
@@ -182,7 +183,7 @@ export default async function PayoutsPage({
                       </td>
                       <td className="admin-help">{payout.note ?? "—"}</td>
                       <td className="admin-mono admin-payout-details">
-                        {payout.creator?.payout_details ?? (
+                        {payoutDetailsFor(payout.creator?.payout_details ?? null, payout.payee) ?? (
                           <span className="admin-help">not recorded</span>
                         )}
                       </td>

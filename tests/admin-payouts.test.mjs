@@ -7,6 +7,7 @@ import {
   formatPeriod,
   isPeriodKey,
   normalizePayee,
+  payoutDetailsFor,
   periodStart,
   shiftPeriod,
   summarizePayouts,
@@ -102,4 +103,15 @@ test("a payee typed two ways lands on the same line", () => {
 test("status lines show whole euros plainly and halves exactly", () => {
   assert.equal(formatEuros(81700), "€817");
   assert.equal(formatEuros(650), "€6.50");
+});
+
+test("each half of a pair sees only their own payment details", () => {
+  const details = "David: Flik 040 111 222\nMartin: Flik 031 333 444";
+
+  assert.equal(payoutDetailsFor(details, "David"), "David: Flik 040 111 222");
+  assert.equal(payoutDetailsFor(details, "martin"), "Martin: Flik 031 333 444");
+  // No payee, or a payee the details do not name: show everything.
+  assert.equal(payoutDetailsFor(details, ""), details);
+  assert.equal(payoutDetailsFor("Flik 070 000 000", "Mija"), "Flik 070 000 000");
+  assert.equal(payoutDetailsFor(null, "David"), null);
 });

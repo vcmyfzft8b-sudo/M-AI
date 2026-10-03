@@ -141,3 +141,29 @@ export function normalizePayee(value: string): string {
 
   return clean ? clean.charAt(0).toLocaleUpperCase("sl") + clean.slice(1) : "";
 }
+
+/**
+ * The part of a creator's payment details that belongs to one payee.
+ *
+ * A pair keeps both people's details on one creator, a line each, as
+ * "David: Flik …". Each payout line shows only its own person's, so a
+ * transfer cannot go to the other half by mistake; anything that cannot be
+ * matched to the payee is shown whole rather than hidden.
+ */
+export function payoutDetailsFor(details: string | null, payee: string): string | null {
+  if (!details) {
+    return null;
+  }
+
+  const name = payee.trim().toLocaleLowerCase("sl");
+
+  if (!name) {
+    return details;
+  }
+
+  const own = details
+    .split(/\r?\n/)
+    .filter((line) => line.trim().toLocaleLowerCase("sl").startsWith(`${name}:`));
+
+  return own.length > 0 ? own.join("\n") : details;
+}

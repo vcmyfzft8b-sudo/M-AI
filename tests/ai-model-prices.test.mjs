@@ -69,6 +69,10 @@ function modelsTheCodeCalls() {
     }
   }
 
+  // A routed non-Gemini stage with no fallback of its own buys GEMINI_TEXT_MODEL through the
+  // gateway first (json.ts), then direct.
+  models.add(`or/google/${envDefaults.GEMINI_TEXT_MODEL}`);
+
   return [...models].sort();
 }
 
@@ -97,7 +101,8 @@ test("every model the code calls has a price", () => {
  * Model ids written as string literals anywhere under src/, so a new constant or a hardcoded call
  * outside model-config.ts cannot slip past the sweep above.
  */
-const LITERAL_MODEL_ID = /["'`]((?:or\/[a-z0-9-]+\/)?(?:gemini|glm)-\d[a-z0-9.-]*)["'`]/gi;
+const LITERAL_MODEL_ID =
+  /["'`]((?:or\/[a-z0-9-]+\/[a-z0-9][a-z0-9.:-]*)|(?:models\/)?(?:gemini|glm)-\d[a-z0-9.-]*)["'`]/gi;
 
 /** Literals that are not calls the usage log prices, each with the reason. */
 const UNPRICED_LITERALS = new Map([

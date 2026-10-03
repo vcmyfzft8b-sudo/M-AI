@@ -74,8 +74,9 @@ test("a null cost row still counts as a call and never poisons the totals", () =
 });
 
 test("the alarm trips on a runaway day or a runaway lecture, and stays quiet on a healthy one", () => {
-  // The busiest healthy day of September 2026 at corrected prices: $6.19 of model calls (its
-  // biggest lecture $0.98, a long source that finished fine) plus $2.18 of Soniox speech.
+  // The figures of the busiest healthy day of September 2026 at corrected prices (dated to match
+  // row()): $6.19 of model calls, its biggest lecture $0.98 on a long source that finished fine,
+  // plus $2.18 of Soniox speech.
   const [healthy] = summarizeAiUsageByDay(
     [
       row({ estimated_cost_usd: 0.98, lecture_id: "long-source" }),
@@ -101,6 +102,11 @@ test("the alarm trips on a runaway day or a runaway lecture, and stays quiet on 
   assert.match(anomalies[0].message, /21\.70/);
   assert.match(anomalies[0].message, /Soniox \$2\.20/);
   assert.match(anomalies[1].message, /runaway/);
+
+  // A failed Soniox read is said out loud, never shown as free speech.
+  const [unread] = findCostAnomalies(incident, undefined, { sonioxAvailable: false });
+  assert.match(unread.message, /Soniox not counted/);
+  assert.doesNotMatch(unread.message, /Soniox \$/);
 
   // Custom limits override the defaults.
   assert.equal(findCostAnomalies(healthy, { dailyAlertUsd: 1, lectureAlertUsd: 0.3 }).length, 2);

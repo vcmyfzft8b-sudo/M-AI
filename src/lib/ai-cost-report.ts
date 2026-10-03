@@ -540,6 +540,9 @@ export type CostAnomaly = { kind: "daily_total" | "single_lecture"; message: str
  * the lecture figure: Soniox's summary is per day, not per lecture, and transcription is ~$0.10 an
  * hour of audio.
  *
+ * Soniox's summary covers the whole project behind SONIOX_API_KEY, so speech from any other
+ * deployment sharing that key is counted too — an overcount, never a miss.
+ *
  * Both are env-tunable (AI_COST_ALERT_DAILY_USD / AI_COST_ALERT_LECTURE_USD); with spend roughly
  * tripling over September, the daily one wants revisiting each month.
  */
@@ -549,6 +552,11 @@ export const DEFAULT_LECTURE_ALERT_USD = 2.5;
 export function findCostAnomalies(
   day: DailyCostSummary,
   limits?: { dailyAlertUsd?: number; lectureAlertUsd?: number },
+  /**
+   * False when Soniox's summary could not be read. The day's total is then missing speech, and the
+   * message says so rather than printing "Soniox $0.00" as if speech had been free.
+   */
+  options?: { sonioxAvailable?: boolean },
 ): CostAnomaly[] {
   const dailyLimit = limits?.dailyAlertUsd ?? DEFAULT_DAILY_ALERT_USD;
   const lectureLimit = limits?.lectureAlertUsd ?? DEFAULT_LECTURE_ALERT_USD;
@@ -557,7 +565,7 @@ export function findCostAnomalies(
   if (day.totalUsd >= dailyLimit) {
     anomalies.push({
       kind: "daily_total",
-      message: `AI spend on ${day.date} was $${day.totalUsd.toFixed(2)} (limit $${dailyLimit}): Google $${day.googleUsd.toFixed(2)}, OpenRouter $${day.openRouterUsd.toFixed(2)}, Soniox $${day.sonioxUsd.toFixed(2)}, ${day.calls} calls.`,
+      message: `AI spend on ${day.date} was $${day.totalUsd.toFixed(2)} (limit $${dailyLimit}): Google $${day.googleUsd.toFixed(2)}, OpenRouter $${day.openRouterUsd.toFixed(2)}, ${options?.sonioxAvailable === false ? "Soniox not counted (usage summary unavailable)" : `Soniox $${day.sonioxUsd.toFixed(2)}`}, ${day.calls} calls.`,
     });
   }
 

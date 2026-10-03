@@ -298,7 +298,10 @@ export async function GET(request: NextRequest) {
         DEFAULT_LECTURE_ALERT_USD,
       ),
     };
-    const anomalies = yesterday ? findCostAnomalies(yesterday, limits) : [];
+    const sonioxAvailable = sonioxUsage != null;
+    const anomalies = yesterday
+      ? findCostAnomalies(yesterday, limits, { sonioxAvailable })
+      : [];
 
     // The anomaly rides the same Sentry -> email path a failed lecture takes. One line per run
     // in the platform log either way, so the cron's own history is auditable in Vercel logs.
@@ -309,12 +312,13 @@ export async function GET(request: NextRequest) {
         {
           route: "cron:ai-cost-report",
           operation: "dailySpendCheck",
-          extra: { yesterday, limits },
+          extra: { yesterday, limits, sonioxAvailable },
         },
       );
     } else {
       console.log("[ai-cost-report] Daily spend OK", {
         yesterday: yesterday ?? "no usage",
+        sonioxAvailable,
         generation: generationYesterday?.totals ?? "no generations",
       });
     }
@@ -327,7 +331,7 @@ export async function GET(request: NextRequest) {
       anomalies,
       openRouterAccount,
       // False means the daily totals are missing speech, not that speech cost nothing.
-      sonioxAvailable: sonioxUsage != null,
+      sonioxAvailable,
       daily: summary,
       generation: {
         yesterday: generationYesterday,

@@ -2,11 +2,18 @@
 // (tests/ai-cost-report.test.mjs) outside the Next.js runtime.
 
 /**
- * Daily AI-spend summary over `ai_usage_events`, split by who actually bills the call: rows
- * whose model carries the "or/" gateway prefix are paid on OpenRouter's meter, everything else
- * on Google's. The numbers are the app's own estimates (usage-logging.ts prices per attempt),
- * which the 2026-08-25 investigation showed track the provider consoles closely — close enough
- * to watch the trend and catch a runaway day, which is this report's whole job.
+ * Daily AI-spend summary, split by who actually bills the call: rows of `ai_usage_events` whose
+ * model carries the "or/" gateway prefix are paid on OpenRouter's meter, the rest on Google's,
+ * and speech (read-aloud TTS, lecture transcription, the tutor's live STT) on Soniox's.
+ *
+ * Routed calls carry the gateway's own billed figure; direct Gemini calls are priced from
+ * model-prices.ts. Soniox is never written to the usage log — the tutor's sockets run from the
+ * learner's browser on a temporary key, so no server sees what they used — and comes from
+ * Soniox's own usage summary instead, which is per day and per model already.
+ *
+ * Until 2026-10-02 the log missed a large share of September's ~$73 OpenRouter bill and all of
+ * the $42.63 Soniox one: an unpriced model, two stale prices, and no speech at all.
+ * `unpricedCalls` exists so that kind of gap shows up in the next morning's report.
  */
 
 export type AiUsageRow = {
@@ -18,13 +25,25 @@ export type AiUsageRow = {
   lecture_id: string | null;
   error_code: string | null;
   error_message: string | null;
+  /** Read only to tell an unpriced call (tokens, no cost) from one that never got a reply. */
+  prompt_token_count?: number | null;
+};
+
+/** One day of Soniox's own meter: what it billed, and for which model. */
+export type SonioxDayUsage = {
+  usd: number;
+  models: Array<{ model: string; usd: number }>;
 };
 
 export type DailyCostSummary = {
   date: string;
+  /** Everything billed that day: Google + OpenRouter + Soniox. */
   totalUsd: number;
   googleUsd: number;
   openRouterUsd: number;
+  /** Speech on Soniox's meter; 0 when Soniox's summary was unavailable (see the route). */
+  sonioxUsd: number;
+  sonioxModels: Array<{ model: string; usd: number }>;
   calls: number;
   failedCalls: number;
   topStages: Array<{ stage: string; usd: number; calls: number }>;
@@ -33,6 +52,11 @@ export type DailyCostSummary = {
   topCallFailures: CallFailureGroup[];
   /** Every failed call of the day sorted into who has to act, not just the printed groups. */
   callFailureCategories: Array<{ category: FailureCategory; count: number }>;
+  /**
+   * Calls that used tokens but logged no cost: a model missing from model-prices.ts (or set by an
+   * env override the price test cannot see). Anything here means the day's total is low.
+   */
+  unpricedCalls: Array<{ model: string; calls: number }>;
 };
 
 /** A group of failed model calls that share a stage and a root cause. */
@@ -318,24 +342,30 @@ function groupFailureReasons(
     .sort((left, right) => right.count - left.count);
 }
 
-export function summarizeAiUsageByDay(rows: AiUsageRow[]): DailyCostSummary[] {
-  const byDay = new Map<
-    string,
-    {
-      totalUsd: number;
-      googleUsd: number;
-      openRouterUsd: number;
-      calls: number;
-      failedCalls: number;
-      stages: Map<string, { usd: number; calls: number }>;
-      lectures: Map<string, { usd: number; calls: number }>;
-      callFailures: Map<string, Array<{ message: string | null }>>;
-    }
-  >();
+type DayAccumulator = {
+  totalUsd: number;
+  googleUsd: number;
+  openRouterUsd: number;
+  sonioxUsd: number;
+  sonioxModels: Array<{ model: string; usd: number }>;
+  calls: number;
+  failedCalls: number;
+  stages: Map<string, { usd: number; calls: number }>;
+  lectures: Map<string, { usd: number; calls: number }>;
+  callFailures: Map<string, Array<{ message: string | null }>>;
+  unpriced: Map<string, number>;
+};
 
-  for (const row of rows) {
-    const date = row.created_at.slice(0, 10);
-    const usd = row.estimated_cost_usd ?? 0;
+/**
+ * @param soniox Soniox's own per-day meter, keyed by UTC date like the rows. A day with speech
+ *   but no model calls still gets a summary.
+ */
+export function summarizeAiUsageByDay(
+  rows: AiUsageRow[],
+  soniox?: Record<string, SonioxDayUsage> | null,
+): DailyCostSummary[] {
+  const byDay = new Map<string, DayAccumulator>();
+  const dayFor = (date: string) => {
     let day = byDay.get(date);
 
     if (!day) {
@@ -343,17 +373,43 @@ export function summarizeAiUsageByDay(rows: AiUsageRow[]): DailyCostSummary[] {
         totalUsd: 0,
         googleUsd: 0,
         openRouterUsd: 0,
+        sonioxUsd: 0,
+        sonioxModels: [],
         calls: 0,
         failedCalls: 0,
         stages: new Map(),
         lectures: new Map(),
         callFailures: new Map(),
+        unpriced: new Map(),
       };
       byDay.set(date, day);
     }
 
+    return day;
+  };
+
+  for (const [date, usage] of Object.entries(soniox ?? {})) {
+    if (usage.usd <= 0) {
+      continue;
+    }
+
+    const day = dayFor(date);
+    day.sonioxUsd += usage.usd;
+    day.totalUsd += usage.usd;
+    day.sonioxModels = usage.models;
+  }
+
+  for (const row of rows) {
+    const date = row.created_at.slice(0, 10);
+    const usd = row.estimated_cost_usd ?? 0;
+    const day = dayFor(date);
+
     day.totalUsd += usd;
     day.calls += 1;
+
+    if (row.estimated_cost_usd == null && (row.prompt_token_count ?? 0) > 0) {
+      day.unpriced.set(row.model, (day.unpriced.get(row.model) ?? 0) + 1);
+    }
 
     if (!row.success) {
       day.failedCalls += 1;
@@ -395,6 +451,8 @@ export function summarizeAiUsageByDay(rows: AiUsageRow[]): DailyCostSummary[] {
       totalUsd: round(day.totalUsd),
       googleUsd: round(day.googleUsd),
       openRouterUsd: round(day.openRouterUsd),
+      sonioxUsd: round(day.sonioxUsd),
+      sonioxModels: day.sonioxModels,
       calls: day.calls,
       failedCalls: day.failedCalls,
       topStages: [...day.stages.entries()]
@@ -412,22 +470,93 @@ export function summarizeAiUsageByDay(rows: AiUsageRow[]): DailyCostSummary[] {
         .sort((left, right) => right.count - left.count)
         .slice(0, TOP_CALL_FAILURES),
       callFailureCategories: countCategories([...day.callFailures.values()].flat()),
+      unpricedCalls: [...day.unpriced.entries()]
+        .map(([model, calls]) => ({ model, calls }))
+        .sort((left, right) => right.calls - left.calls),
     }));
+}
+
+/**
+ * Soniox's `GET /v1/usage/summary` body as per-day spend. It answers one entry per day in the
+ * requested window, as parallel arrays (`days[i]` billed `cost_usd[i]`), with costs as decimal
+ * strings. Returns null for anything that is not that shape, so a changed API reads as
+ * "unavailable" rather than as a free day.
+ */
+export function parseSonioxUsageSummary(body: unknown): Record<string, SonioxDayUsage> | null {
+  type Series = { model?: string | null; days?: unknown; cost_usd?: unknown };
+  const summary = body as { total?: Series; models?: Series[] } | null;
+  const total = summary?.total;
+
+  if (!total || !Array.isArray(total.days) || !Array.isArray(total.cost_usd)) {
+    return null;
+  }
+
+  const toUsd = (value: unknown) => {
+    const parsed = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const byDay: Record<string, SonioxDayUsage> = {};
+
+  total.days.forEach((date, index) => {
+    byDay[String(date)] = { usd: round(toUsd((total.cost_usd as unknown[])[index])), models: [] };
+  });
+
+  for (const series of summary?.models ?? []) {
+    if (!series.model || !Array.isArray(series.days) || !Array.isArray(series.cost_usd)) {
+      continue;
+    }
+
+    series.days.forEach((date, index) => {
+      const usd = round(toUsd((series.cost_usd as unknown[])[index]));
+      const day = byDay[String(date)];
+
+      if (day && usd > 0) {
+        day.models.push({ model: series.model as string, usd });
+      }
+    });
+  }
+
+  for (const day of Object.values(byDay)) {
+    day.models.sort((left, right) => right.usd - left.usd);
+  }
+
+  return byDay;
 }
 
 export type CostAnomaly = { kind: "daily_total" | "single_lecture"; message: string };
 
 /**
- * The alarm thresholds sit far above the healthy baseline (~$0.5–2/day, worst measured single
- * lecture $0.40) and far below the 2026-08-25 incident ($19.63): tripping one means something is
- * looping again, not that the product had a good day.
+ * The alarm thresholds sit well above the healthy baseline and below a looping day: tripping one
+ * means something is running away, not that the product had a good day.
+ *
+ * Re-measured 2026-10-02 against September at corrected prices and with Soniox included, which
+ * moved the baseline a long way: healthy days ran $1.50-8.40, rising through the month (the last
+ * three were $8.34, $8.37, $7.58), so the old $10 would have fired on ordinary growth within days.
+ * $20 is ~2.4x the busiest healthy day and still trips on a repeat of 2026-08-25, whose $19.63 of
+ * model spend would now land on top of a ~$8 baseline.
+ *
+ * The busiest single lecture at corrected prices was $0.98 (385 calls on a long source, finished
+ * fine; the old meter said ~$0.40), leaving the old $1.50 only 1.5x of headroom. Speech is not in
+ * the lecture figure: Soniox's summary is per day, not per lecture, and transcription is ~$0.10 an
+ * hour of audio.
+ *
+ * Soniox's summary covers the whole project behind SONIOX_API_KEY, so speech from any other
+ * deployment sharing that key is counted too — an overcount, never a miss.
+ *
+ * Both are env-tunable (AI_COST_ALERT_DAILY_USD / AI_COST_ALERT_LECTURE_USD); with spend roughly
+ * tripling over September, the daily one wants revisiting each month.
  */
-export const DEFAULT_DAILY_ALERT_USD = 10;
-export const DEFAULT_LECTURE_ALERT_USD = 1.5;
+export const DEFAULT_DAILY_ALERT_USD = 20;
+export const DEFAULT_LECTURE_ALERT_USD = 2.5;
 
 export function findCostAnomalies(
   day: DailyCostSummary,
   limits?: { dailyAlertUsd?: number; lectureAlertUsd?: number },
+  /**
+   * False when Soniox's summary could not be read. The day's total is then missing speech, and the
+   * message says so rather than printing "Soniox $0.00" as if speech had been free.
+   */
+  options?: { sonioxAvailable?: boolean },
 ): CostAnomaly[] {
   const dailyLimit = limits?.dailyAlertUsd ?? DEFAULT_DAILY_ALERT_USD;
   const lectureLimit = limits?.lectureAlertUsd ?? DEFAULT_LECTURE_ALERT_USD;
@@ -436,7 +565,7 @@ export function findCostAnomalies(
   if (day.totalUsd >= dailyLimit) {
     anomalies.push({
       kind: "daily_total",
-      message: `AI spend on ${day.date} was $${day.totalUsd.toFixed(2)} (limit $${dailyLimit}): Google $${day.googleUsd.toFixed(2)}, OpenRouter $${day.openRouterUsd.toFixed(2)}, ${day.calls} calls.`,
+      message: `AI spend on ${day.date} was $${day.totalUsd.toFixed(2)} (limit $${dailyLimit}): Google $${day.googleUsd.toFixed(2)}, OpenRouter $${day.openRouterUsd.toFixed(2)}, ${options?.sonioxAvailable === false ? "Soniox not counted (usage summary unavailable)" : `Soniox $${day.sonioxUsd.toFixed(2)}`}, ${day.calls} calls.`,
     });
   }
 

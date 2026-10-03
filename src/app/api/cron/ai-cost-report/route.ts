@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import {
   findCostAnomalies,
+  parseSonioxUsageSummary,
   summarizeAiUsageByDay,
   summarizeGenerationByDay,
   DEFAULT_DAILY_ALERT_USD,
@@ -14,8 +15,9 @@ import { captureRouteError } from "@/lib/monitoring";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 /**
- * Daily AI-spend report over `ai_usage_events`, split by billing source (Google direct vs the
- * OpenRouter gateway) — the watch the 2026-08-25 cost spike earned. Two consumers:
+ * Daily AI-spend report over `ai_usage_events` plus Soniox's own usage meter, split by billing
+ * source (Google direct, the OpenRouter gateway, Soniox speech) — the watch the 2026-08-25 cost
+ * spike earned. Two consumers:
  *
  * - Vercel Cron calls it every morning (vercel.json). When yesterday crossed an alarm threshold
  *   it reports the anomaly to Sentry, which the "new production issue" alert turns into an
@@ -119,7 +121,7 @@ async function loadUsageRows(sinceIso: string): Promise<AiUsageRow[]> {
     const { data, error } = await supabase
       .from("ai_usage_events")
       .select(
-        "created_at, model, stage, success, estimated_cost_usd, lecture_id, error_code, error_message",
+        "created_at, model, stage, success, estimated_cost_usd, lecture_id, error_code, error_message, prompt_token_count",
       )
       .gte("created_at", sinceIso)
       .order("created_at", { ascending: true })
@@ -228,6 +230,36 @@ async function fetchOpenRouterCredits() {
   }
 }
 
+/**
+ * Soniox's own meter, per UTC day and model, for the report window. Speech never reaches
+ * `ai_usage_events` (the tutor's sockets run from the browser on a temporary key), so this is the
+ * only place it is counted. Fail-open like the OpenRouter read: null means "unavailable", and the
+ * report says so instead of showing speech as free.
+ */
+async function fetchSonioxUsage(sinceIso: string, untilIso: string) {
+  const apiKey = process.env.SONIOX_API_KEY?.trim();
+
+  if (!apiKey) {
+    return null;
+  }
+
+  try {
+    const query = new URLSearchParams({ start_time: sinceIso, end_time: untilIso });
+    const response = await fetch(`https://api.soniox.com/v1/usage/summary?${query}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return parseSonioxUsageSummary(await response.json());
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
@@ -239,12 +271,13 @@ export async function GET(request: NextRequest) {
   since.setUTCDate(since.getUTCDate() - days);
 
   try {
-    const [rows, generationRows, openRouterAccount] = await Promise.all([
+    const [rows, generationRows, openRouterAccount, sonioxUsage] = await Promise.all([
       loadUsageRows(since.toISOString()),
       loadGenerationRows(since.toISOString()),
       fetchOpenRouterCredits(),
+      fetchSonioxUsage(since.toISOString(), new Date().toISOString()),
     ]);
-    const summary = summarizeAiUsageByDay(rows);
+    const summary = summarizeAiUsageByDay(rows, sonioxUsage);
     const generationSummary = summarizeGenerationByDay(generationRows);
 
     const yesterdayDate = new Date();
@@ -265,7 +298,10 @@ export async function GET(request: NextRequest) {
         DEFAULT_LECTURE_ALERT_USD,
       ),
     };
-    const anomalies = yesterday ? findCostAnomalies(yesterday, limits) : [];
+    const sonioxAvailable = sonioxUsage != null;
+    const anomalies = yesterday
+      ? findCostAnomalies(yesterday, limits, { sonioxAvailable })
+      : [];
 
     // The anomaly rides the same Sentry -> email path a failed lecture takes. One line per run
     // in the platform log either way, so the cron's own history is auditable in Vercel logs.
@@ -276,12 +312,13 @@ export async function GET(request: NextRequest) {
         {
           route: "cron:ai-cost-report",
           operation: "dailySpendCheck",
-          extra: { yesterday, limits },
+          extra: { yesterday, limits, sonioxAvailable },
         },
       );
     } else {
       console.log("[ai-cost-report] Daily spend OK", {
         yesterday: yesterday ?? "no usage",
+        sonioxAvailable,
         generation: generationYesterday?.totals ?? "no generations",
       });
     }
@@ -293,6 +330,8 @@ export async function GET(request: NextRequest) {
       yesterday,
       anomalies,
       openRouterAccount,
+      // False means the daily totals are missing speech, not that speech cost nothing.
+      sonioxAvailable,
       daily: summary,
       generation: {
         yesterday: generationYesterday,

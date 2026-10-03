@@ -63,7 +63,8 @@ type StageDefaults = {
  * The shared default for every text stage since 2026-08-28: GLM 5.3 Flash routed through
  * OpenRouter. The 2026-08-28 bake-off measured it beating the previous per-stage mix on recall
  * (87.6-95.5% against production's 85.8%) at $0.075/$0.25 per million — a quarter of
- * 2.5-flash-lite's card and an eighth of routed 3.7-flash's.
+ * 2.5-flash-lite's card and an eighth of routed 3.7-flash's. By 2026-10-02 the card had doubled to
+ * $0.15/$0.50 (model-prices.ts), which is still far below the Geminis it replaced.
  *
  * What it cannot do decides what stays on Gemini: GLM takes text, image and video only, so every
  * call that sends a PDF page, an office document, a scan or audio to the model (the OCR stages,

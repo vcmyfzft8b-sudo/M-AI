@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Json } from "@/lib/database.types";
+import { getModelPrice } from "@/lib/ai/model-prices";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 export type GeminiUsageMetadata = {
@@ -17,48 +18,6 @@ export type GeminiUsageContext = {
   userId?: string | null;
   lectureId?: string | null;
   metadata?: Record<string, unknown>;
-};
-
-type GeminiModelPrice = {
-  inputUsdPerMillion: number;
-  outputUsdPerMillion: number;
-};
-
-/**
- * Routed models are priced at the gateway's rate, not the provider's — that is the entire point of
- * routing them. Read live from OpenRouter's models API on 2026-08-23: gemini-3.7-flash is on a
- * limited-time promotion at half Google's own price, so the meter has to know which door the call
- * went through or every cost report is double.
- */
-const GEMINI_MODEL_PRICES: Record<string, GeminiModelPrice> = {
-  "or/google/gemini-3.7-flash": { inputUsdPerMillion: 0.375, outputUsdPerMillion: 1.875 },
-  // Z.ai GLM 5.3 Flash, read live from OpenRouter's models API on 2026-08-28. Reasoning is
-  // mandatory on its endpoint and billed inside completion tokens, so the output rate is also
-  // what the thinking costs.
-  "or/z-ai/glm-5.3-flash": { inputUsdPerMillion: 0.075, outputUsdPerMillion: 0.25 },
-  "or/google/gemini-3.6-flash": { inputUsdPerMillion: 0.75, outputUsdPerMillion: 3.75 },
-  "or/google/gemini-2.5-flash-lite": { inputUsdPerMillion: 0.1, outputUsdPerMillion: 0.4 },
-  "gemini-3.7-flash": { inputUsdPerMillion: 0.75, outputUsdPerMillion: 3.75 },
-  "gemini-3.5-flash-lite": {
-    inputUsdPerMillion: 0.3,
-    outputUsdPerMillion: 2.5,
-  },
-  "gemini-3.6-flash": {
-    inputUsdPerMillion: 0.75,
-    outputUsdPerMillion: 3.75,
-  },
-  "gemini-3.1-flash-lite": {
-    inputUsdPerMillion: 0.25,
-    outputUsdPerMillion: 1.5,
-  },
-  "gemini-3-flash-preview": {
-    inputUsdPerMillion: 0.5,
-    outputUsdPerMillion: 3,
-  },
-  "gemini-2.5-flash-lite": {
-    inputUsdPerMillion: 0.1,
-    outputUsdPerMillion: 0.4,
-  },
 };
 
 function toFiniteInteger(value: unknown) {
@@ -121,7 +80,7 @@ export function estimateGeminiCostUsd(
   model: string,
   usageMetadata: GeminiUsageMetadata | null | undefined,
 ) {
-  const prices = GEMINI_MODEL_PRICES[model.toLowerCase().replace(/^models\//, "")];
+  const prices = getModelPrice(model);
 
   if (!prices || !usageMetadata) {
     return null;
@@ -151,8 +110,21 @@ export async function logGeminiUsageEvent(params: {
   context?: GeminiUsageContext;
   metadata?: Record<string, unknown>;
   error?: unknown;
+  /**
+   * What the provider says it charged for this call, in USD. OpenRouter reports it on every
+   * response; when it is present it is the cost, and the price table is only the fallback for a
+   * provider that says nothing (direct Gemini) or a response that never arrived whole.
+   */
+  billedCostUsd?: number | null;
 }) {
   const usage = params.usageMetadata ?? null;
+  const billedCostUsd =
+    typeof params.billedCostUsd === "number" &&
+    Number.isFinite(params.billedCostUsd) &&
+    params.billedCostUsd >= 0
+      ? Math.round(params.billedCostUsd * 100_000_000) / 100_000_000
+      : null;
+  const estimatedCostUsd = billedCostUsd ?? estimateGeminiCostUsd(params.model, usage);
   const promptTokenCount = toFiniteInteger(usage?.promptTokenCount);
   const candidatesTokenCount =
     toFiniteInteger(usage?.candidatesTokenCount) ?? toFiniteInteger(usage?.responseTokenCount);
@@ -181,12 +153,14 @@ export async function logGeminiUsageEvent(params: {
       candidates_token_count: candidatesTokenCount,
       thoughts_token_count: thoughtsTokenCount,
       total_token_count: totalTokenCount,
-      estimated_cost_usd: estimateGeminiCostUsd(params.model, usage),
+      estimated_cost_usd: estimatedCostUsd,
       error_code: params.error ? normalizeErrorCode(params.error) : null,
       error_message: params.error ? normalizeErrorMessage(params.error) : null,
       metadata: sanitizeJson({
         ...(params.context?.metadata ?? {}),
         ...(params.metadata ?? {}),
+        costSource:
+          billedCostUsd != null ? "provider" : estimatedCostUsd != null ? "price_table" : null,
       }),
     } as never);
 

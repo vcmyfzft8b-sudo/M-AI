@@ -28,7 +28,8 @@ import { logGeminiUsageEvent } from "@/lib/ai/usage-logging";
  * the model changes — same weights, same prompts, same schemas — so the measurements that chose it
  * still hold.
  *
- * A gateway is also a second thing that can be down, and a promotional rate is a thing that ends.
+ * A gateway is also a second thing that can be down, and a promotional rate is a thing that ends
+ * (that one had by 2026-10-02: routed 3.7-flash is back at Google's own price, model-prices.ts).
  * Both are handled by the caller falling back to the direct provider rather than failing the
  * lecture (see json.ts), which is why this function throws plainly instead of retrying forever.
  */
@@ -145,6 +146,8 @@ type OpenRouterResponse = {
     completion_tokens?: number;
     total_tokens?: number;
     completion_tokens_details?: { reasoning_tokens?: number };
+    /** What the gateway billed for the call, in USD. Sent on every response and stream end. */
+    cost?: number;
   };
 };
 
@@ -255,6 +258,7 @@ export async function generateStructuredObjectWithOpenRouter<TSchema extends z.Z
       success: true,
       context: params.usageContext,
       usageMetadata: toUsageMetadata(response.usage),
+      billedCostUsd: response.usage?.cost,
       metadata: { maxOutputTokens, gateway: "openrouter", routedModel },
     });
 
@@ -267,6 +271,7 @@ export async function generateStructuredObjectWithOpenRouter<TSchema extends z.Z
       success: false,
       context: params.usageContext,
       usageMetadata: toUsageMetadata(response?.usage),
+      billedCostUsd: response?.usage?.cost,
       metadata: { maxOutputTokens, gateway: "openrouter", routedModel },
       error,
     });
@@ -427,6 +432,7 @@ export async function streamStructuredObjectWithOpenRouter<TSchema extends z.Zod
       success: true,
       context: params.usageContext,
       usageMetadata: toUsageMetadata(usage),
+      billedCostUsd: usage?.cost,
       metadata: { maxOutputTokens, gateway: "openrouter", routedModel, streamed: true },
     });
 
@@ -439,6 +445,7 @@ export async function streamStructuredObjectWithOpenRouter<TSchema extends z.Zod
       success: false,
       context: params.usageContext,
       usageMetadata: toUsageMetadata(usage),
+      billedCostUsd: usage?.cost,
       metadata: { maxOutputTokens, gateway: "openrouter", routedModel, streamed: true },
       error,
     });

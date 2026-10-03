@@ -9,6 +9,7 @@ import {
   failureReasonKey,
   findCostAnomalies,
   isOpenRouterBilledModel,
+  parseSonioxUsageSummary,
   summarizeAiUsageByDay,
   summarizeGenerationByDay,
 } from "../src/lib/ai-cost-report.ts";
@@ -73,28 +74,100 @@ test("a null cost row still counts as a call and never poisons the totals", () =
 });
 
 test("the alarm trips on a runaway day or a runaway lecture, and stays quiet on a healthy one", () => {
-  // Healthy day: well under both defaults (baseline is ~$0.5-2/day, worst measured lecture $0.40).
-  const [healthy] = summarizeAiUsageByDay([
-    row({ estimated_cost_usd: 0.4, lecture_id: "ok" }),
-    row({ estimated_cost_usd: 0.9, lecture_id: null }),
-  ]);
+  // The figures of the busiest healthy day of September 2026 at corrected prices (dated to match
+  // row()): $6.19 of model calls, its biggest lecture $0.98 on a long source that finished fine,
+  // plus $2.18 of Soniox speech.
+  const [healthy] = summarizeAiUsageByDay(
+    [
+      row({ estimated_cost_usd: 0.98, lecture_id: "long-source" }),
+      row({ estimated_cost_usd: 5.21, lecture_id: null }),
+    ],
+    { "2026-08-25": { usd: 2.18, models: [{ model: "tts-rt-v2", usd: 2.18 }] } },
+  );
+  assert.equal(healthy.totalUsd, 8.37);
   assert.deepEqual(findCostAnomalies(healthy), []);
 
-  // The 2026-08-25 shape: a $19 day with a $5 lecture must trip both alarms.
-  const [incident] = summarizeAiUsageByDay([
-    row({ estimated_cost_usd: 14, lecture_id: null }),
-    row({ estimated_cost_usd: 5.5, lecture_id: "runaway" }),
-  ]);
+  // The 2026-08-25 runaway ($19.50 of model calls, one $5.50 lecture) landing on today's
+  // baseline must trip both alarms.
+  const [incident] = summarizeAiUsageByDay(
+    [
+      row({ estimated_cost_usd: 14, lecture_id: null }),
+      row({ estimated_cost_usd: 5.5, lecture_id: "runaway" }),
+    ],
+    { "2026-08-25": { usd: 2.2, models: [] } },
+  );
   const anomalies = findCostAnomalies(incident);
 
   assert.deepEqual(anomalies.map((anomaly) => anomaly.kind), ["daily_total", "single_lecture"]);
-  assert.match(anomalies[0].message, /19\.50/);
+  assert.match(anomalies[0].message, /21\.70/);
+  assert.match(anomalies[0].message, /Soniox \$2\.20/);
   assert.match(anomalies[1].message, /runaway/);
+
+  // A failed Soniox read is said out loud, never shown as free speech.
+  const [unread] = findCostAnomalies(incident, undefined, { sonioxAvailable: false });
+  assert.match(unread.message, /Soniox not counted/);
+  assert.doesNotMatch(unread.message, /Soniox \$/);
 
   // Custom limits override the defaults.
   assert.equal(findCostAnomalies(healthy, { dailyAlertUsd: 1, lectureAlertUsd: 0.3 }).length, 2);
-  assert.ok(DEFAULT_DAILY_ALERT_USD > 2, "the default must sit above the healthy baseline");
-  assert.ok(DEFAULT_LECTURE_ALERT_USD > 0.5, "the default must sit above the worst healthy lecture");
+  assert.ok(DEFAULT_DAILY_ALERT_USD >= 2 * 8.37, "the default must sit well above the busiest healthy day");
+  assert.ok(DEFAULT_LECTURE_ALERT_USD >= 2 * 0.98, "the default must sit well above the busiest healthy lecture");
+});
+
+test("Soniox speech is its own billing line and a speech-only day still gets a summary", () => {
+  const summary = summarizeAiUsageByDay([row({ estimated_cost_usd: 0.5 })], {
+    "2026-08-24": { usd: 1.25, models: [{ model: "tts-rt-v2", usd: 1.25 }] },
+    "2026-08-25": { usd: 0.75, models: [] },
+    "2026-08-26": { usd: 0, models: [] },
+  });
+
+  assert.deepEqual(summary.map((day) => day.date), ["2026-08-24", "2026-08-25"]);
+  assert.equal(summary[0].calls, 0);
+  assert.equal(summary[0].sonioxUsd, 1.25);
+  assert.equal(summary[0].totalUsd, 1.25);
+  assert.deepEqual(summary[0].sonioxModels, [{ model: "tts-rt-v2", usd: 1.25 }]);
+  assert.equal(summary[1].totalUsd, 1.25);
+  assert.equal(summary[1].googleUsd, 0.5);
+
+  // No Soniox data at all (key missing, API down) leaves the model-call days as they were.
+  const [plain] = summarizeAiUsageByDay([row({ estimated_cost_usd: 0.5 })], null);
+  assert.equal(plain.sonioxUsd, 0);
+  assert.equal(plain.totalUsd, 0.5);
+});
+
+test("Soniox's usage summary is read per day and per model, and an unknown shape reads as unavailable", () => {
+  // Trimmed from a real 2026-09-30 response: parallel arrays, costs as decimal strings.
+  const parsed = parseSonioxUsageSummary({
+    total: { model: null, days: ["2026-09-29", "2026-09-30"], cost_usd: ["2.1502", "2.2353155000"] },
+    models: [
+      { model: "stt-async-v5", days: ["2026-09-29", "2026-09-30"], cost_usd: ["0.1", "0.1864105000"] },
+      { model: "tts-rt-v2", days: ["2026-09-29", "2026-09-30"], cost_usd: ["2.0502", "1.9565690000"] },
+      { model: "tts-rt-v1", days: ["2026-09-29", "2026-09-30"], cost_usd: ["0", "0.0000000000"] },
+    ],
+  });
+
+  assert.deepEqual(parsed["2026-09-30"], {
+    usd: 2.2353,
+    models: [
+      { model: "tts-rt-v2", usd: 1.9566 },
+      { model: "stt-async-v5", usd: 0.1864 },
+    ],
+  });
+  assert.equal(parsed["2026-09-29"].usd, 2.1502);
+  assert.equal(parseSonioxUsageSummary({ error: "unauthorized" }), null);
+  assert.equal(parseSonioxUsageSummary(null), null);
+});
+
+test("a call that used tokens but logged no cost is reported as unpriced, by model", () => {
+  const [day] = summarizeAiUsageByDay([
+    row({ model: "or/new/model", estimated_cost_usd: null, prompt_token_count: 1200 }),
+    row({ model: "or/new/model", estimated_cost_usd: null, prompt_token_count: 800 }),
+    // A call that failed before any reply has no tokens and no cost; that is not a pricing gap.
+    row({ estimated_cost_usd: null, prompt_token_count: null, success: false }),
+    row({ estimated_cost_usd: 0.01, prompt_token_count: 500 }),
+  ]);
+
+  assert.deepEqual(day.unpricedCalls, [{ model: "or/new/model", calls: 2 }]);
 });
 
 test("failed calls are grouped by stage and cause, with the provider's own error code kept", () => {

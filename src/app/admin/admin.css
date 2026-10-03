@@ -1842,3 +1842,11 @@
     transform: none;
   }
 }
+
+/* -------------------------------------------------------------- payouts -- */
+
+/* Payment details are typed one person per line; keep the lines. */
+.admin-payout-details {
+  white-space: pre-line;
+  min-width: 12rem;
+}

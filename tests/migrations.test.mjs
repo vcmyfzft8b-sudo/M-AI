@@ -164,6 +164,7 @@ test("every migration applies in order on an empty database", options, async () 
     "ugc_account_stats",
     "ugc_classification_rules",
     "ugc_creator_accounts",
+    "ugc_creator_payouts",
     "ugc_creators",
     "ugc_sync_runs",
     "ugc_video_stats",
@@ -682,6 +683,69 @@ test("a creator's videos and history are removed with them", options, async () =
 
   assert.equal(videos, 0);
   assert.equal(stats, 0);
+});
+
+test("a payout is one line per creator, month and payee", options, async () => {
+  const { db, query } = await migratedDatabase();
+
+  const [creator] = await query(
+    `insert into public.ugc_creators (name, slug, payout_details)
+     values ('Megi','megi','Mija: Flik 1\nMegi: Flik 2') returning id`,
+  );
+
+  // A pair is paid as two lines, each marked paid on its own.
+  await query(
+    `insert into public.ugc_creator_payouts (creator_id, period, payee, bonus_amount)
+     values ($1,'2026-09-01','Mija',6.50), ($1,'2026-09-01','Megi',6.50)`,
+    [creator.id],
+  );
+  await query(
+    `update public.ugc_creator_payouts set paid_at = now()
+     where creator_id = $1 and payee = 'Mija'`,
+    [creator.id],
+  );
+
+  // The dashboard's save is an upsert on the key: a corrected amount replaces
+  // the line and leaves whether it was paid alone.
+  await query(
+    `insert into public.ugc_creator_payouts (creator_id, period, payee, bonus_amount)
+     values ($1,'2026-09-01','Mija',7)
+     on conflict (creator_id, period, payee) do update set bonus_amount = excluded.bonus_amount`,
+    [creator.id],
+  );
+
+  const lines = await query(
+    `select payee, bonus_amount::text as bonus, paid_at is not null as paid
+     from public.ugc_creator_payouts order by payee`,
+  );
+  assert.deepEqual(lines, [
+    { payee: "Megi", bonus: "6.50", paid: false },
+    { payee: "Mija", bonus: "7.00", paid: true },
+  ]);
+
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into public.ugc_creator_payouts (creator_id, period, base_amount)
+         values ($1,'2026-09-15',5)`,
+        [creator.id],
+      ),
+    /check constraint/,
+    "a period is stored as the first of its month",
+  );
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into public.ugc_creator_payouts (creator_id, period, base_amount)
+         values ($1,'2026-10-01',-5)`,
+        [creator.id],
+      ),
+    /check constraint/,
+  );
+
+  await query(`delete from public.ugc_creators where id = $1`, [creator.id]);
+  const [{ left }] = await query(`select count(*)::int as left from public.ugc_creator_payouts`);
+  assert.equal(left, 0, "a removed creator takes their payout lines with them");
 });
 
 test("a bulk upsert of mixed-shape rows would null a not-null column", options, async () => {

@@ -8,6 +8,7 @@ import {
   Settings,
   Users,
   Video,
+  Wallet,
   X,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -21,6 +22,7 @@ import { PendingLink } from "./pending-link";
 export const ADMIN_LINKS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/creators", label: "Creators", icon: Video, badge: "review" },
+  { href: "/admin/payouts", label: "Payouts", icon: Wallet },
   { href: "/admin/finance", label: "Finance", icon: CreditCard },
   { href: "/admin/visitors", label: "Visitors", icon: BarChart3 },
   { href: "/admin/users", label: "Users", icon: Users },

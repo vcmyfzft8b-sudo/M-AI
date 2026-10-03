@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { isMissingLectureReferenceError } from "../src/lib/postgres-errors.ts";
+import {
+  isMissingLectureReferenceError,
+  isRowLevelSecurityViolation,
+} from "../src/lib/postgres-errors.ts";
 
 function readSource(relativePath) {
   return readFileSync(fileURLToPath(new URL(`../${relativePath}`, import.meta.url)), "utf8");
@@ -48,6 +51,41 @@ test("a deleted note answers 404, ahead of the 500 that used to swallow it", () 
     ROUTE_SOURCE.indexOf("isMissingLectureReferenceError(error)") <
       ROUTE_SOURCE.indexOf("status: 500"),
     "the deleted-note branch must sit ahead of the 500",
+  );
+});
+
+/*
+ * The shape production actually produced on 2026-09-30T13:20:24Z (MEMOAI-WEB-4W), half a second
+ * after the learner's DELETE of the same note returned 200. The upsert goes through the learner's
+ * own client, and the insert policy's `exists (select 1 from lectures …)` is checked before the
+ * foreign key, so a deleted note is refused as 42501 and the 23503 branch above never sees it.
+ * Replayed against Postgres 16 with the policies from 0007_study_sessions.sql: same SQLSTATE,
+ * same message, raised from ExecWithCheckOptions.
+ */
+const DELETED_LECTURE_RLS_ERROR = {
+  code: "42501",
+  details: null,
+  hint: null,
+  message: 'new row violates row-level security policy for table "lecture_study_sessions"',
+};
+
+test("the autosave refused by RLS because the note was just deleted is recognised", () => {
+  assert.equal(isRowLevelSecurityViolation(DELETED_LECTURE_RLS_ERROR), true);
+  assert.equal(isMissingLectureReferenceError(DELETED_LECTURE_RLS_ERROR), false);
+  assert.equal(isRowLevelSecurityViolation({ code: "42501", message: "permission denied for table x" }), false);
+  assert.equal(isRowLevelSecurityViolation({ code: "23503", message: "row-level security" }), false);
+  assert.equal(isRowLevelSecurityViolation(null), false);
+});
+
+test("an RLS refusal is a 404 only once the note is confirmed gone, ahead of the 500", () => {
+  assert.match(
+    ROUTE_SOURCE,
+    /isRowLevelSecurityViolation\(error\) &&\s*!\(await ensureUserOwnsLecture\(\{ lectureId: id, user, supabase \}\)\)\s*\) \{\s*return NextResponse\.json\(\{ error: await tr\("api\.notFound"\) \}, \{ status: 404 \}\);/,
+  );
+  assert.ok(
+    ROUTE_SOURCE.indexOf("isRowLevelSecurityViolation(error)") <
+      ROUTE_SOURCE.indexOf("captureRouteError(error, {"),
+    "the deleted-note branch must sit ahead of the report and the 500",
   );
 });
 

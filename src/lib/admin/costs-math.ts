@@ -111,7 +111,17 @@ export function fixedMonthlyCents(cost: FixedCost, eurPerUsd: number): number {
  * Before 3% of the month has passed (the first day) the pace is noise, so no
  * projection is offered rather than multiplying one morning by thirty.
  */
-export function projectMetered(soFar: number | null, window: MonthWindow): number | null {
+export function projectMetered(
+  soFar: number | null,
+  window: MonthWindow,
+  /**
+   * The share of the month this reading actually covers, when it is not the
+   * Ljubljana month up to now — a provider read over the UTC month up to the
+   * last full hour has seen less of it, and dividing by the larger share
+   * would project it low.
+   */
+  covered: number = window.elapsed,
+): number | null {
   if (soFar === null) {
     return null;
   }
@@ -120,23 +130,32 @@ export function projectMetered(soFar: number | null, window: MonthWindow): numbe
     return soFar;
   }
 
-  if (window.elapsed < 0.03) {
+  if (covered < 0.03) {
     return null;
   }
 
-  return Math.round(soFar / window.elapsed);
+  return Math.round(soFar / Math.min(1, covered));
+}
+
+/** The share of `[fromIso, toIso)` that lies before `untilIso`, 0–1. */
+export function shareBefore(fromIso: string, toIso: string, untilIso: string): number {
+  const from = Date.parse(fromIso);
+  const span = Date.parse(toIso) - from;
+
+  return Math.min(1, Math.max(0, (Date.parse(untilIso) - from) / span));
 }
 
 export type CostTotals = {
   soFar: number;
-  projected: number;
+  /** Null while it is too early in the month to say. */
+  projected: number | null;
   /** Lines whose source did not answer, so the totals are a floor. */
   missing: number;
 };
 
 export function totalCosts(lines: CostLine[]): CostTotals {
   let soFar = 0;
-  let projected = 0;
+  let projected: number | null = 0;
   let missing = 0;
 
   for (const line of lines) {
@@ -146,7 +165,14 @@ export function totalCosts(lines: CostLine[]): CostTotals {
       soFar += line.soFar;
     }
 
-    projected += line.projected ?? line.soFar ?? 0;
+    // A line that has a reading but no projection yet (the first hours of a
+    // month) leaves the month's direction unknown: adding its so-far figure
+    // would pass a morning off as a month.
+    if (line.soFar !== null && line.projected === null) {
+      projected = null;
+    } else if (projected !== null) {
+      projected += line.projected ?? 0;
+    }
   }
 
   return { soFar, projected, missing };

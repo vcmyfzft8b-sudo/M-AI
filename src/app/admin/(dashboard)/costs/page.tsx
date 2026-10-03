@@ -45,7 +45,9 @@ export default async function CostsPage({
 
   const params = await searchParams;
   const current = periodOf(todayInReportZone());
-  const period = isPeriodKey(params?.month) ? params.month : current;
+  // A future month has no costs yet, only charges a provider has scheduled.
+  const period =
+    isPeriodKey(params?.month) && params.month <= current ? params.month : current;
   const window = monthWindow(period);
   const costs = await loadRunningCosts(window);
   const totals = totalCosts(costs.lines);
@@ -102,8 +104,12 @@ export default async function CostsPage({
         {window.isCurrent && (
           <StatCard
             label="Heading for"
-            value={formatMoney(totals.projected)}
-            meta="Usage at this month's pace, fixed costs in full, creators at last month's run"
+            value={totals.projected === null ? "—" : formatMoney(totals.projected)}
+            meta={
+              totals.projected === null
+                ? "Too early in the month to project"
+                : "Usage at this month's pace, fixed costs in full, creators at last month's run"
+            }
           />
         )}
         <StatCard
@@ -172,7 +178,9 @@ export default async function CostsPage({
                   </td>
                   {window.isCurrent && (
                     <td className="admin-num">
-                      <strong>{formatMoney(totals.projected)}</strong>
+                      <strong>
+                        {totals.projected === null ? "—" : formatMoney(totals.projected)}
+                      </strong>
                     </td>
                   )}
                   <td className="admin-help">
@@ -191,7 +199,9 @@ export default async function CostsPage({
         title="Fixed costs"
         hint="Subscriptions no API reports. Counted in full every month; a yearly fee as a twelfth."
       >
-        {costs.fixed.length === 0 ? (
+        {costs.fixed === null ? (
+          <Alert tone="error">The fixed costs could not be read, so they are missing from the total.</Alert>
+        ) : costs.fixed.length === 0 ? (
           <Alert tone="info">No fixed costs recorded yet.</Alert>
         ) : (
           <div className="admin-table-wrap">
@@ -220,9 +230,12 @@ export default async function CostsPage({
                     <td className="admin-help">{cost.note ?? "—"}</td>
                     <td>
                       <div className="admin-row-actions">
-                        <Disclosure label="Edit" openLabel="Close">
+                        <details className="admin-row-edit">
+                          <summary className="admin-button" data-variant="ghost" data-size="sm">
+                            Edit
+                          </summary>
                           <FixedCostForm cost={cost} />
-                        </Disclosure>
+                        </details>
                         <InlineAction
                           action={toggleFixedCostAction}
                           fields={{ cost_id: cost.id, active: cost.active ? "0" : "1" }}

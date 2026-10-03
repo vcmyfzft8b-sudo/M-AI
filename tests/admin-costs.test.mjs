@@ -5,6 +5,7 @@ import {
   fixedMonthlyCents,
   monthWindow,
   projectMetered,
+  shareBefore,
   summarizeStripeBalance,
   totalCosts,
   usdToEurCents,
@@ -85,4 +86,23 @@ test("a source that did not answer is missing from the total, not zero", () => {
   ]);
 
   assert.deepEqual(totals, { soFar: 1500, projected: 2500, missing: 1 });
+});
+
+test("a month too young to project says so instead of passing a morning off as a month", () => {
+  const totals = totalCosts([
+    { key: "a", label: "A", kind: "metered", soFar: 300, projected: null, note: "" },
+    { key: "c", label: "C", kind: "fixed", soFar: 500, projected: 500, note: "" },
+  ]);
+
+  assert.equal(totals.projected, null);
+  assert.equal(totals.soFar, 800);
+});
+
+test("a reading that has seen less of the month is projected over what it saw", () => {
+  const window = monthWindow("2026-09", new Date("2026-09-16T10:00:00Z"));
+  const covered = shareBefore(window.utcFromIso, window.utcToIso, "2026-09-16T10:00:00.000Z");
+
+  // 15 days and 10 hours of a 30-day UTC month.
+  assert.ok(Math.abs(covered - (15 + 10 / 24) / 30) < 1e-9);
+  assert.equal(projectMetered(1000, window, covered), Math.round(1000 / covered));
 });

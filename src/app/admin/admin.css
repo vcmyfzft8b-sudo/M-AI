@@ -1855,3 +1855,16 @@
   display: flex;
   gap: 0.25rem;
 }
+
+/* A row's own edit form, opened in place under its buttons. */
+.admin-row-edit > summary {
+  list-style: none;
+}
+
+.admin-row-edit > summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-row-edit[open] {
+  min-width: min(32rem, 80vw);
+}

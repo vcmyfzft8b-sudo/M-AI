@@ -289,8 +289,14 @@ rate if it cannot be fetched).
 Traps found while building it:
 
 - Vercel's charges endpoint answers a window that runs into the future with
-  charges it has only *scheduled* — the whole month's Pro seat appears on the 2nd —
-  so the month in progress is read up to the current hour.
+  charges it has only *scheduled* — the whole month's Pro seat appears on the 2nd.
+  It returns the charge periods (07:00–07:00 UTC) that *finished* inside the
+  window, and a window with none is a 404 `costs_not_found`. So the month in
+  progress is read up to the last UTC midnight: complete periods only, one cold
+  read a day.
+- Always ask Vercel for the month, never day by day: the billed amount for the
+  same period changes with the window, because included usage is spread over it
+  (Sept 2026: $29.39 as a month, $47.69 summed by day).
 - Vercel's `BilledCost` puts the seat on its billing day (Sept showed a partial
   $11.49, October none); its `EffectiveCost` prices plan-included usage at list
   ($52.65 for Sept). Seat at effective + the rest at billed gave $29.39, which

@@ -234,6 +234,23 @@ export function EditCreatorForm({ creator }: { creator: UgcCreatorRow }) {
       </div>
 
       <div className="admin-field" style={{ marginTop: "0.875rem" }}>
+        <label className="admin-label" htmlFor="edit-payout-details">
+          Payment details
+        </label>
+        <textarea
+          id="edit-payout-details"
+          className="admin-textarea"
+          name="payout_details"
+          defaultValue={creator.payout_details ?? ""}
+          placeholder={"Flik 040 123 456\nor IBAN SI56 …, name and address\nor a revolut.me link"}
+        />
+        <span className="admin-help">
+          Where their money goes. One line per person when this row is a pair.
+          Shown next to every payout on the Payouts page.
+        </span>
+      </div>
+
+      <div className="admin-field" style={{ marginTop: "0.875rem" }}>
         <label className="admin-label" htmlFor="edit-notes">
           Notes
         </label>

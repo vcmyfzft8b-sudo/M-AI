@@ -1354,6 +1354,7 @@ export type Database = {
           kind: UgcCreatorKind;
           contact_email: string | null;
           notes: string | null;
+          payout_details: string | null;
           promo_codes: string[];
           rate_amount: number | null;
           rate_currency: string;
@@ -1372,6 +1373,7 @@ export type Database = {
           kind?: UgcCreatorKind;
           contact_email?: string | null;
           notes?: string | null;
+          payout_details?: string | null;
           promo_codes?: string[];
           rate_amount?: number | null;
           rate_currency?: string;
@@ -1387,12 +1389,49 @@ export type Database = {
           kind?: UgcCreatorKind;
           contact_email?: string | null;
           notes?: string | null;
+          payout_details?: string | null;
           promo_codes?: string[];
           rate_amount?: number | null;
           rate_currency?: string;
           rate_kind?: UgcRateKind | null;
           revenue_share_percent?: number | null;
           started_at?: string | null;
+        };
+      };
+      ugc_creator_payouts: {
+        Row: {
+          id: string;
+          creator_id: string;
+          period: string;
+          payee: string;
+          base_amount: number;
+          bonus_amount: number;
+          note: string | null;
+          paid_at: string | null;
+          paid_by: string | null;
+          created_at: string;
+          updated_at: string;
+          created_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          creator_id: string;
+          period: string;
+          payee?: string;
+          base_amount?: number;
+          bonus_amount?: number;
+          note?: string | null;
+          paid_at?: string | null;
+          paid_by?: string | null;
+          created_by?: string | null;
+        };
+        Update: {
+          payee?: string;
+          base_amount?: number;
+          bonus_amount?: number;
+          note?: string | null;
+          paid_at?: string | null;
+          paid_by?: string | null;
         };
       };
       ugc_creator_accounts: {
@@ -1928,6 +1967,8 @@ export type PracticeTestAttemptAnswerRow =
 
 export type AdminUserRow = Database["public"]["Tables"]["admin_users"]["Row"];
 export type UgcCreatorRow = Database["public"]["Tables"]["ugc_creators"]["Row"];
+export type UgcCreatorPayoutRow =
+  Database["public"]["Tables"]["ugc_creator_payouts"]["Row"];
 export type UgcCreatorAccountRow =
   Database["public"]["Tables"]["ugc_creator_accounts"]["Row"];
 export type UgcVideoRow = Database["public"]["Tables"]["ugc_videos"]["Row"];

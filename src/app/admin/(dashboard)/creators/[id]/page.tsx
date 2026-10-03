@@ -3,11 +3,13 @@ import { notFound } from "next/navigation";
 import {
   refreshAccountAction,
   removeAccountAction,
+  setPayoutPaidAction,
   updateAccountAction,
 } from "@/app/admin/(dashboard)/actions";
 import { AreaChart } from "@/components/admin/chart";
 import { AddAccountForm, EditCreatorForm } from "@/components/admin/creator-form";
 import { ActionForm, Disclosure, InlineAction, SubmitButton } from "@/components/admin/forms";
+import { PayoutForm } from "@/components/admin/payout-form";
 import { PendingLink } from "@/components/admin/pending-link";
 import {
   Avatar,
@@ -15,6 +17,7 @@ import {
   Section,
   EmptyState,
   formatCount,
+  formatDate,
   formatExact,
   formatPercent,
   formatRelative,
@@ -32,6 +35,14 @@ import {
   estimateRevenue,
   VALUE_BASELINE_DAYS,
 } from "@/lib/admin/campaign-value";
+import { listPayoutsForCreator } from "@/lib/admin/payouts";
+import {
+  defaultPayoutPeriod,
+  formatPeriod,
+  payoutTotalCents,
+  periodOf,
+  toCents,
+} from "@/lib/admin/payouts-math";
 import {
   CREATOR_RANGE_PRESETS,
   creatorRangePreset,
@@ -73,7 +84,7 @@ export default async function CreatorDetailPage({
   // One batch for everything the page reads.
   const creatorPromise = getCreator(id);
 
-  const [creator, metrics, deltas, videos, salesData, baseline] = await Promise.all([
+  const [creator, metrics, deltas, videos, salesData, baseline, payouts] = await Promise.all([
     creatorPromise,
     getCreatorMetrics(
       creatorPromise.then((row) => (row ? [row] : [])),
@@ -85,6 +96,9 @@ export default async function CreatorDetailPage({
     listVideos({ creatorId: id, limit: 200, range }),
     loadSalesData().catch(() => null),
     getBaselineCampaignViews(VALUE_BASELINE_DAYS),
+    // Optional, like Stripe: a missing payouts table (the minutes between a
+    // deploy and its migration) must not take the creator page down with it.
+    listPayoutsForCreator(id).catch(() => []),
   ]);
 
   if (!creator) {
@@ -366,6 +380,82 @@ export default async function CreatorDetailPage({
           <EditCreatorForm creator={creator} />
         </Section>
       </div>
+
+      <Section
+        title="Payouts"
+        hint={
+          creator.payout_details
+            ? `Sent to: ${creator.payout_details.replace(/\n+/g, " · ")}`
+            : "No payment details yet — add them under Details."
+        }
+      >
+        {payouts.length === 0 ? (
+          <EmptyState title="Nothing paid or owed yet" />
+        ) : (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th className="admin-num">Base</th>
+                  <th className="admin-num">Bonus</th>
+                  <th className="admin-num">Total</th>
+                  <th>How</th>
+                  <th>Status</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {payouts.map((payout) => (
+                  <tr key={payout.id}>
+                    <td>
+                      <PendingLink
+                        className="admin-link"
+                        href={`/admin/payouts?month=${periodOf(payout.period)}`}
+                      >
+                        {formatPeriod(periodOf(payout.period))}
+                      </PendingLink>
+                      {payout.payee && (
+                        <div className="admin-creator-handle">{payout.payee}</div>
+                      )}
+                    </td>
+                    <td className="admin-num">{formatMoney(toCents(payout.base_amount))}</td>
+                    <td className="admin-num">{formatMoney(toCents(payout.bonus_amount))}</td>
+                    <td className="admin-num">
+                      <strong>{formatMoney(payoutTotalCents(payout))}</strong>
+                    </td>
+                    <td className="admin-help">{payout.note ?? "—"}</td>
+                    <td>
+                      {payout.paid_at ? (
+                        <Badge tone="green">Paid {formatDate(payout.paid_at)}</Badge>
+                      ) : (
+                        <Badge tone="red">Owed</Badge>
+                      )}
+                    </td>
+                    <td>
+                      {!payout.paid_at && (
+                        <InlineAction
+                          action={setPayoutPaidAction}
+                          fields={{ payout_id: payout.id, paid: "1" }}
+                          variant="primary"
+                        >
+                          Mark paid
+                        </InlineAction>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="admin-subblock">
+          <Disclosure label="Add a payout">
+            <PayoutForm creators={[]} creatorId={creator.id} period={defaultPayoutPeriod()} />
+          </Disclosure>
+        </div>
+      </Section>
 
       <Section
         title={`Memo AI posts (${memoVideos.length})`}

@@ -21,6 +21,15 @@ import type {
   UgcStatus,
 } from "@/lib/database.types";
 import { insertInto, updateIn } from "@/lib/admin/db";
+import {
+  formatEuros,
+  formatPeriod,
+  isPeriodKey,
+  normalizePayee,
+  payoutTotalCents,
+  periodStart,
+  toCents,
+} from "@/lib/admin/payouts-math";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import {
   isTikTokShortLink,
@@ -227,6 +236,16 @@ function readPayTerms(formData: FormData): PayTerms | { error: string } {
   };
 }
 
+/**
+ * Payment details, only when the form carried the field: the column arrives
+ * with migration 0056, and a form without it must not write it.
+ */
+function readPayoutDetails(formData: FormData): { payout_details?: string | null } {
+  return formData.has("payout_details")
+    ? { payout_details: readOptional(formData, "payout_details") }
+    : {};
+}
+
 // ---------------------------------------------------------------- creators --
 
 export async function createCreatorAction(
@@ -267,6 +286,7 @@ export async function createCreatorAction(
       status: "active",
       contact_email: readOptional(formData, "contact_email"),
       notes: readOptional(formData, "notes"),
+      ...readPayoutDetails(formData),
       promo_codes: readPromoCodes(readOptional(formData, "promo_codes")),
       rate_amount: pay.rateAmount,
       rate_kind: pay.rateKind,
@@ -361,6 +381,7 @@ export async function updateCreatorAction(
       status: status.success ? status.data : "active",
       contact_email: readOptional(formData, "contact_email"),
       notes: readOptional(formData, "notes"),
+      ...readPayoutDetails(formData),
       promo_codes: readPromoCodes(readOptional(formData, "promo_codes")),
       rate_amount: pay.rateAmount,
       rate_kind: pay.rateKind,
@@ -374,6 +395,190 @@ export async function updateCreatorAction(
   }
 
   return ok("Saved.");
+}
+
+// ----------------------------------------------------------------- payouts --
+
+/** Euros from a form field, or an error naming the field. */
+function readEuros(
+  formData: FormData,
+  key: string,
+  label: string,
+): { cents: number } | { error: string } {
+  const cents = toCents(readString(formData, key));
+
+  if (!Number.isFinite(cents) || cents < 0) {
+    return { error: `${label} has to be an amount in euros, 0 or more.` };
+  }
+
+  return { cents };
+}
+
+/**
+ * Adds a payout line, or corrects the one already recorded for the same
+ * creator, month and payee — so re-entering an amount does not leave a second
+ * line behind it.
+ *
+ * A line that has been paid is never changed here: its amount is what was
+ * sent, and quietly replacing it would leave a "Paid" badge on a sum nobody
+ * transferred. Undo the payment first.
+ */
+export async function savePayoutAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const context = await requireAdmin();
+  const serviceRole = createSupabaseServiceRoleClient();
+
+  const creatorId = readString(formData, "creator_id");
+  const period = readString(formData, "period");
+
+  if (!creatorId) {
+    return fail("Pick the creator this payout is for.");
+  }
+
+  if (!isPeriodKey(period)) {
+    return fail("Pick the month this payout is for.");
+  }
+
+  const base = readEuros(formData, "base_amount", "The base");
+  const bonus = readEuros(formData, "bonus_amount", "The code bonus");
+
+  if ("error" in base) {
+    return fail(base.error);
+  }
+
+  if ("error" in bonus) {
+    return fail(bonus.error);
+  }
+
+  if (base.cents + bonus.cents === 0) {
+    return fail("Enter what they are owed — a line of €0 pays nobody.");
+  }
+
+  const payee = normalizePayee(readString(formData, "payee"));
+  const note = readOptional(formData, "note");
+
+  const { data: existingRows, error: readError } = await serviceRole
+    .from("ugc_creator_payouts")
+    .select("id, base_amount, bonus_amount, note, paid_at")
+    .eq("creator_id", creatorId)
+    .eq("period", periodStart(period))
+    .eq("payee", payee)
+    .limit(1);
+
+  if (readError) {
+    return fail(`Could not save the payout: ${readError.message}`);
+  }
+
+  const existing = (existingRows ?? [])[0] as
+    | { id: string; base_amount: number | string; bonus_amount: number | string; note: string | null; paid_at: string | null }
+    | undefined;
+
+  if (existing?.paid_at) {
+    return fail(
+      `${payee || "This creator"} is already marked as paid for ${formatPeriod(period)}. Undo that first if the amount was wrong.`,
+    );
+  }
+
+  if (existing) {
+    const { error } = await updateIn(serviceRole, "ugc_creator_payouts", {
+      base_amount: base.cents / 100,
+      bonus_amount: bonus.cents / 100,
+      // A blank note on a correction keeps the working that was there.
+      note: note ?? existing.note,
+    }).eq("id", existing.id);
+
+    if (error) {
+      return fail(`Could not save the payout: ${error.message}`);
+    }
+
+    return ok(
+      `Replaced ${formatEuros(payoutTotalCents(existing))} with ${formatEuros(
+        base.cents + bonus.cents,
+      )}.`,
+    );
+  }
+
+  const { error } = await insertInto(serviceRole, "ugc_creator_payouts", {
+    creator_id: creatorId,
+    period: periodStart(period),
+    payee,
+    base_amount: base.cents / 100,
+    bonus_amount: bonus.cents / 100,
+    note,
+    created_by: context.user.email ?? null,
+  });
+
+  if (error) {
+    return fail(`Could not save the payout: ${error.message}`);
+  }
+
+  return ok("Payout added.");
+}
+
+export async function setPayoutPaidAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const context = await requireAdmin();
+  const serviceRole = createSupabaseServiceRoleClient();
+
+  const id = readString(formData, "payout_id");
+  const paid = readString(formData, "paid") === "1";
+
+  if (!id) {
+    return fail("Missing payout.");
+  }
+
+  const { data, error } = await updateIn(serviceRole, "ugc_creator_payouts", {
+    paid_at: paid ? new Date().toISOString() : null,
+    paid_by: paid ? (context.user.email ?? null) : null,
+  })
+    .eq("id", id)
+    .select("id");
+
+  if (error) {
+    return fail(`Could not update the payout: ${error.message}`);
+  }
+
+  if (!data || data.length === 0) {
+    return fail("That payout no longer exists — reload the page.");
+  }
+
+  return ok(paid ? "Marked as paid." : "Marked as not paid.");
+}
+
+/** Removes an unpaid line. A paid one is a record of money sent and stays. */
+export async function deletePayoutAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireAdmin();
+  const serviceRole = createSupabaseServiceRoleClient();
+
+  const id = readString(formData, "payout_id");
+
+  if (!id) {
+    return fail("Missing payout.");
+  }
+
+  const { data, error } = await serviceRole
+    .from("ugc_creator_payouts")
+    .delete()
+    .eq("id", id)
+    .is("paid_at", null)
+    .select("id");
+
+  if (error) {
+    return fail(`Could not remove the payout: ${error.message}`);
+  }
+
+  if (!data || data.length === 0) {
+    return fail("Only an unpaid payout can be removed. Undo the payment first.");
+  }
+
+  return ok("Payout removed.");
 }
 
 export async function addAccountAction(

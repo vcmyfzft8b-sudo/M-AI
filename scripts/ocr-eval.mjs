@@ -1,14 +1,16 @@
 /**
- * OCR bake-off over synthetic slides with known ground truth.
+ * OCR bake-off over synthetic photos with known ground truth.
  *
- * Three images: a clean typed slide, the same slide with handwritten margin notes, and a full
- * handwritten page — all Slovenian, with diacritics and a formula. Scores word-level recall
+ * Two kinds of image: the original small fixtures (a typed slide, the slide with handwritten margin
+ * notes, seven large handwritten lines), and full A4 pages of small handwriting shot as a phone
+ * photo at the size the app uploads (scripts/ocr-make-pages.py). Scores word-level recall
  * separately for typed and handwritten content, so "reads the slide but drops the margin notes"
- * is visible instead of averaged away. Font-rendered handwriting is cleaner than real handwriting,
- * so treat these numbers as an upper bound and confirm on real files.
+ * is visible instead of averaged away. Font-rendered handwriting is cleaner than a real hand, so
+ * treat these numbers as an upper bound and confirm on real files.
  *
- *   node scripts/ocr-eval.mjs
- *   node scripts/ocr-eval.mjs --repeat=3
+ *   node --experimental-strip-types scripts/ocr-eval.mjs
+ *   node --experimental-strip-types scripts/ocr-eval.mjs --repeat=3 --images=notes-pharma,notes-history
+ *   node --experimental-strip-types scripts/ocr-eval.mjs --configs=lite/medium,flash-prev/high
  */
 
 import fs from "node:fs";
@@ -26,20 +28,21 @@ loadEnv(ROOT);
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// The exact instruction production sends (manual-lectures.ts extractTextFromImage).
-const INSTRUCTIONS =
-  "Extract all readable text from this photo of notes or printed material. The source is likely Slovenian, so preserve Slovenian characters such as č, š, and ž. Do not translate and do not summarize. Preserve the original language, headings, bullet points, equations, labels, line breaks, and important details. Ignore decorative background elements. If handwriting is uncertain, make the best faithful reading instead of inventing content. Return only the extracted text. Do not include JSON, markdown fences, commentary, or confidence notes.";
+// The instruction production sends, read from the file production reads it from: the copy pasted
+// here before went stale and was missing the orientation sentence.
+const { IMAGE_OCR_INSTRUCTIONS: INSTRUCTIONS } = await import("../src/lib/ocr-prompts.ts");
+
+// Thinking exactly as production sends it, so a change to that rule reaches the bake-off too.
+const { resolveMinimalThinkingConfig } = await import("../src/lib/ai/gemini-models.ts");
 
 const CONFIGS = [
-  // Production primary and rescue, exactly as shipped (thinkingBudget: 0).
-  { name: "3.1-lite/off*", model: "gemini-3.1-flash-lite", thinking: { thinkingBudget: 0 } },
-  { name: "3.1-lite/default", model: "gemini-3.1-flash-lite", thinking: null },
-  { name: "3-flash-prev/off*", model: "gemini-3-flash-preview", thinking: { thinkingBudget: 0 } },
-  // Candidates.
-  { name: "2.5-lite", model: "gemini-2.5-flash-lite", thinking: null },
-  { name: "3.5-lite/minimal", model: "gemini-3.5-flash-lite", thinking: { thinkingLevel: "minimal" } },
-  { name: "3.5-lite/high", model: "gemini-3.5-flash-lite", thinking: { thinkingLevel: "high" } },
-  { name: "3.6-flash/minimal", model: "gemini-3.6-flash", thinking: { thinkingLevel: "minimal" } },
+  // Production: the primary reader, then the rescue that only runs when the primary fails.
+  { name: "lite/medium*", model: "gemini-3.5-flash-lite", resolution: "MEDIA_RESOLUTION_MEDIUM" },
+  { name: "flash-prev/high*", model: "gemini-3-flash-preview", resolution: "MEDIA_RESOLUTION_HIGH" },
+  // Candidates for the primary.
+  { name: "lite/high", model: "gemini-3.5-flash-lite", resolution: "MEDIA_RESOLUTION_HIGH" },
+  { name: "flash-prev/medium", model: "gemini-3-flash-preview", resolution: "MEDIA_RESOLUTION_MEDIUM" },
+  { name: "3.6-flash/high", model: "gemini-3.6-flash", resolution: "MEDIA_RESOLUTION_HIGH" },
 ];
 
 function normalizeWords(value) {
@@ -101,8 +104,9 @@ async function runOcr(config, imagePath, mediaResolution) {
     model: config.model,
     contents: [{ role: "user", parts: [part, { text: INSTRUCTIONS }] }],
     config: {
-      maxOutputTokens: 4000,
-      ...(config.thinking ? { thinkingConfig: config.thinking } : {}),
+      // OCR_RESCUE_MAX_OUTPUT_TOKENS: a dense page must not be cut off by the cap.
+      maxOutputTokens: 6000,
+      thinkingConfig: resolveMinimalThinkingConfig(config.model),
     },
   });
   const usage = response.usageMetadata ?? {};
@@ -124,10 +128,14 @@ const repeats = Number.parseInt(args.find((arg) => arg.startsWith("--repeat="))?
 const truth = JSON.parse(fs.readFileSync(path.join(OCR_DIR, "truth.json"), "utf8"));
 const wantedImages = args.find((arg) => arg.startsWith("--images="))?.split("=")[1]?.split(",");
 const images = Object.keys(truth).filter((image) => !wantedImages || wantedImages.includes(image));
+const wantedConfigs = args.find((arg) => arg.startsWith("--configs="))?.split("=")[1]?.split(",");
+const configs = CONFIGS.filter(
+  (config) => !wantedConfigs || wantedConfigs.includes(config.name.replace(/\*$/, "")),
+);
 const mean = (values) => values.reduce((total, value) => total + value, 0) / values.length;
 const rows = [];
 
-for (const config of CONFIGS) {
+for (const config of configs) {
   for (const image of images) {
     const samples = [];
 
@@ -136,7 +144,7 @@ for (const config of CONFIGS) {
         const imageFile = fs.existsSync(path.join(OCR_DIR, `${image}.png`))
           ? `${image}.png`
           : `${image}.jpg`;
-        const result = await runOcr(config, path.join(OCR_DIR, imageFile), "MEDIA_RESOLUTION_MEDIUM");
+        const result = await runOcr(config, path.join(OCR_DIR, imageFile), config.resolution);
         const truthEntry = truth[image];
 
         samples.push({
@@ -191,5 +199,7 @@ for (const row of rows) {
   );
 }
 
-fs.writeFileSync(path.join(OCR_DIR, "results.json"), JSON.stringify(rows, null, 1));
-console.log("\nfull outputs written to evals/ocr/results.json");
+// Only a full run replaces the committed record; a filtered run must not overwrite it with a subset.
+const resultsFile = wantedImages || wantedConfigs ? "results-partial.json" : "results.json";
+fs.writeFileSync(path.join(OCR_DIR, resultsFile), JSON.stringify(rows, null, 1));
+console.log(`\nfull outputs written to evals/ocr/${resultsFile}`);

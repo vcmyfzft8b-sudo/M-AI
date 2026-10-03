@@ -1741,18 +1741,25 @@ type ImageOcrAttemptPlan = {
 export async function extractTextFromImage(file: File, context?: ImageOcrContext) {
   const env = getServerEnv();
   const attempts: ScanOcrAttemptDiagnostics[] = [];
+  // The stronger reader goes first, at high resolution. A misread page is never caught later: it
+  // passes the length check and becomes the note, so the first answer has to be the best one.
+  // The lite reader at medium resolution misread 1.4 words a page on full A4 handwriting (names
+  // and rare terms: "Matije", "Cerkniško", "milijardi"), against 0 in 15 runs for this order; a
+  // learner reported "Veletryovina" for "Veletrgovina" (scripts/ocr-eval.mjs, Oct 2026). It costs
+  // ~$0.0006 more a photo.
   const plans: ImageOcrAttemptPlan[] = [
     {
       stage: "ocr_primary",
       instructions: IMAGE_OCR_INSTRUCTIONS,
-      model: env.GEMINI_OCR_MODEL,
+      model: env.GEMINI_OCR_RESCUE_MODEL,
       maxOutputTokens: OCR_PRIMARY_MAX_OUTPUT_TOKENS,
-      mediaResolution: "medium",
+      mediaResolution: "high",
     },
+    // The lite reader stays as the fallback when the stronger one is busy or answers nothing.
     {
       stage: "ocr_rescue",
       instructions: IMAGE_OCR_INSTRUCTIONS,
-      model: env.GEMINI_OCR_RESCUE_MODEL,
+      model: env.GEMINI_OCR_MODEL,
       maxOutputTokens: OCR_RESCUE_MAX_OUTPUT_TOKENS,
       mediaResolution: "high",
     },

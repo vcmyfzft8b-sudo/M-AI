@@ -1,171 +1,102 @@
 [
  {
-  "config": "3.1-lite/off*",
-  "image": "handwritten-ugly",
+  "config": "lite/medium*",
+  "image": "slide-typed",
   "samples": [
    {
-    "typed": null,
-    "handwritten": 0.9428571428571428,
+    "typed": 0.975609756097561,
+    "handwritten": null,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 2381,
-    "costUsd": 0.0003195,
-    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptr???\n\nKalcij sproži eksocitozo vezklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+    "elapsedMs": 1664,
+    "costUsd": 0.0004948999999999999,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n• Verični indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100"
    },
    {
-    "typed": null,
-    "handwritten": 0.9714285714285714,
+    "typed": 0.975609756097561,
+    "handwritten": null,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1095,
-    "costUsd": 0.0003195,
-    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptr???\nKalcij sproži eksocitozo veziklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, ojačitev\nEPSP depolarizacija IPSP hiperpolarizacija\nAksonski grič odloča o akcijskem potencialu\nSSRI blokira ponovni privzem serotonina"
-   },
-   {
-    "typed": null,
-    "handwritten": 0.9714285714285714,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 1080,
-    "costUsd": 0.0003195,
-    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptr???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+    "elapsedMs": 911,
+    "costUsd": 0.0004948999999999999,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n• Verični indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100"
    }
   ]
  },
  {
-  "config": "3.1-lite/off*",
-  "image": "slide-annotated-ugly",
+  "config": "lite/medium*",
+  "image": "slide-annotated",
   "samples": [
    {
-    "typed": 1,
-    "handwritten": 0.9473684210526315,
+    "typed": 0.975609756097561,
+    "handwritten": 1,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1663,
-    "costUsd": 0.0004065,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na zpitu vedno napiši obdobje uteži!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+    "elapsedMs": 1638,
+    "costUsd": 0.0006123999999999999,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n• Verični indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
    },
    {
-    "typed": 1,
-    "handwritten": 0.9473684210526315,
+    "typed": 0.975609756097561,
+    "handwritten": 1,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1170,
-    "costUsd": 0.0004065,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na zpitu vedno napiši obdobje utež!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\nGeometrijska sredina = koren iz L krat P"
-   },
-   {
-    "typed": 1,
-    "handwritten": 0.9473684210526315,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 1057,
-    "costUsd": 0.0004065,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na zpitu vedno napiši obdobje uteži!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+    "elapsedMs": 1199,
+    "costUsd": 0.0006123999999999999,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n• Verični indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
    }
   ]
  },
  {
-  "config": "3.1-lite/default",
-  "image": "handwritten-ugly",
+  "config": "lite/medium*",
+  "image": "handwritten-page",
   "samples": [
    {
     "typed": null,
-    "handwritten": 0.9428571428571428,
+    "handwritten": 1,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1038,
-    "costUsd": 0.0003195,
-    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptr???\nKalcij sproži eksocitozo vezklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, ojačitev\nEPSP depolarizacija IPSP hiperpolarizacija\nAksonski grič odloča o akcijskem potencialu\nSSRI blokira ponovni privzem serotonina"
-   },
-   {
-    "typed": null,
-    "handwritten": 0.9428571428571428,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 1046,
-    "costUsd": 0.0003195,
-    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptr???\n\nKalcij sproži eksocitozo vezklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
-   },
-   {
-    "typed": null,
-    "handwritten": 0.9142857142857143,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 1251,
-    "costUsd": 0.0003195,
-    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptr???\nKalcij sproži eksocitozo vezklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, ojačitev\nEPSP depolarizacija IPSP hiperpolarizacija\nAksonški grič odloča o akcijskem potencialu\nSSRI blokira ponovni privzem serotonina"
-   }
-  ]
- },
- {
-  "config": "3.1-lite/default",
-  "image": "slide-annotated-ugly",
-  "samples": [
-   {
-    "typed": 1,
-    "handwritten": 0.9473684210526315,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 1087,
-    "costUsd": 0.0004065,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na zpitu vedno napiši obdobje uteži!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\nGeometrijska sredina = koren iz L krat P"
-   },
-   {
-    "typed": 1,
-    "handwritten": 0.9473684210526315,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 1137,
-    "costUsd": 0.0004065,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na zpitu vedno napiši obdobje uteži!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\nGeometrijska sredina = koren iz L krat P"
-   },
-   {
-    "typed": 1,
-    "handwritten": 0.9473684210526315,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 1077,
-    "costUsd": 0.0004065,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na zpitu vedno napiši obdobje uteži!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
-   }
-  ]
- },
- {
-  "config": "3-flash-prev/off*",
-  "image": "handwritten-ugly",
-  "samples": [
-   {
-    "typed": null,
-    "handwritten": 0.9714285714285714,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 1384,
-    "costUsd": 0.000642,
-    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nrecepti???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+    "elapsedMs": 1316,
+    "costUsd": 0.0004524,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
    },
    {
     "typed": null,
     "handwritten": 1,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1396,
-    "costUsd": 0.000639,
-    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptr???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
-   },
-   {
-    "typed": null,
-    "handwritten": 1,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 1998,
-    "costUsd": 0.000645,
-    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nrecepti???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+    "elapsedMs": 1072,
+    "costUsd": 0.0004524,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
    }
   ]
  },
  {
-  "config": "3-flash-prev/off*",
+  "config": "lite/medium*",
+  "image": "handwritten-ugly",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.8857142857142857,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 964,
+    "costUsd": 0.00047989999999999996,
+    "text": "Sinapsa = stik med nevronoma, špranja $\\sim 20$ nm receptr???\n\nKalcij sproži eksocitozo vezklov!\n\nIonotropni receptor $\\rightarrow$ hiter, kanal se odpre\n\nMetabotropni $\\rightarrow$ G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksongki grič odloča o akajskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.9714285714285714,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 976,
+    "costUsd": 0.0004674,
+    "text": "Sinapsa = stik med nevronoma, špranja $\\sim 20$ nm receptr???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "lite/medium*",
   "image": "slide-annotated-ugly",
   "samples": [
    {
@@ -173,281 +104,176 @@
     "handwritten": 1,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1668,
-    "costUsd": 0.000819,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\n\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+    "elapsedMs": 1124,
+    "costUsd": 0.0006123999999999999,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\n\nBDP deflator = Paasche\n\nGeometrijska sredina = koren iz L krat P"
    },
    {
     "typed": 1,
     "handwritten": 1,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1572,
-    "costUsd": 0.000819,
-    "text": "Kazalne števila in indeksi cen\n\n- Laspeyresov indeks uporablja količine iz baznega obdobja.\n- Paaschejev indeks uporablja količine iz tekočega obdobja.\n- Fisherjev idealni indeks je geometrijska sredina obeh.\n- Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n- Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
-   },
-   {
-    "typed": 1,
-    "handwritten": 1,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 2129,
-    "costUsd": 0.000819,
+    "elapsedMs": 997,
+    "costUsd": 0.0006123999999999999,
     "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
    }
   ]
  },
  {
-  "config": "2.5-lite",
-  "image": "handwritten-ugly",
+  "config": "lite/medium*",
+  "image": "notes-pharma",
   "samples": [
    {
     "typed": null,
-    "handwritten": 0.7428571428571429,
+    "handwritten": 0.9776119402985075,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1628,
-    "costUsd": 0.0000792,
-    "text": "Sinapsa = stik med nevronoma, španja ~ 20 nm recepta???\nKalcij sproži ekscitozo vezklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, oljačitev\nEPSP depdanzacija IPSP hiperpdanzacija\nAksonski grič odoč o akajskem potencialu\nSSRI blokira ponovni priuzem serotonina"
+    "elapsedMs": 1614,
+    "costUsd": 0.0011724,
+    "text": "Farmacevtska industrija - pregled\n1. Raziskave in razvoj (R&R)\nodkritje novih učinkovin, predklinične študije\nklinične študije: faza I, II, III (varnost, učinkovitost)\n2. Registracija zdravila - JAZMP v Sloveniji, EMA v EU\ndovoljenje za promet, povzetek glavnih značilnosti\n3. Proizvodnja po smernicah DPP (GMP)\nkontrola kakovosti: čistoča, stabilnost, sterilnost\n4. Spremljanje zakonodaje - nenehne spremembe\n5. Farmakovigilanca (varnost zdravil)\nspremljanje neželenih učinkov po prihodu na trg\nporočila zdravnikov, farmacevtov in bolnikov\nukrepi: sprememba navodil, umik zdravila s trga\n6. Trženje, prodaja in distribucija\nveletrgovina z zdravili: skladiščenje, hladna veriga\nlekarne in bolnišnice, recept ali brez recepta\nPrimeri podjetij: Krka (Novo mesto), Lek (Sandoz)\nKrka - generična zdravila, izvoz v več kot 70 držav\nPatent velja 20 let, nato generiki znižajo ceno\nBiološka zdravila: cepiva, monoklonska protitelesa\nbiopodobna zdravila = podobna, a ne enaka\nStroški razvoja enega zdravila ~ 2 miliardi EUR\nle 1 od 10.000 spojin pride do trga\npomembno za izpit: faze kliničnih študij!"
    },
    {
     "typed": null,
-    "handwritten": 0.7142857142857143,
+    "handwritten": 0.9925373134328358,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1379,
-    "costUsd": 0.00007880000000000002,
-    "text": "Sinapsa = stik med nevroni, špranja ~ 20 nm\nrecepte????\n\nKalcij sproži ekscitozo vezklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, očitev\n\nEPSO depolazacija, IPSP hiperpolazacija\n\nAksonski grič odoč o akajškem potencialu\n\nSSRI blokira ponovni prizem serotonina"
-   },
-   {
-    "typed": null,
-    "handwritten": 0.7428571428571429,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 1370,
-    "costUsd": 0.00007880000000000002,
-    "text": "Sinapsa = stik med neuronomoma, španja ~20 nm recepcija???\nKalcij sproži ekscitozo veziklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, olajšitev\nEPSP depolizacija IPSP hiperpolizacija\nAksonski grič odoč o akajskem potencialu\nSSRI blokira ponovni prizem serotonina"
+    "elapsedMs": 1572,
+    "costUsd": 0.0011749,
+    "text": "Farmacevtska industrija - pregled\n1. Raziskave in razvoj (R&R)\nodkrivanje novih učinkovin, predklinične študije\nklinične študije: faza I, II, III (varnost, učinkovitost)\n2. Registracija zdravila - JAZMP v Sloveniji, EMA v EU\ndovoljenje za promet, povzetek glavnih značilnosti\n3. Proizvodnja po smernicah DPP (GMP)\nkontrola kakovosti: čistost, stabilnost, sterilnost\n4. Spremljanje zakonodaje - nenehne spremembe\n5. Farmakovigilanca (varnost zdravil)\nspremljanje neželenih učinkov po prihodu na trg\nporočila zdravnikov, farmacevtov in bolnikov\nukrepi: sprememba navodil, umik zdravila s trga\n6. Trženje, prodaja in distribucija\nveletrgovina z zdravili: skladiščenje, hladna veriga\nlekarne in bolnišnice, recept ali brez recepta\nPrimeri podjetij: Krka (Novo mesto), Lek (Sandoz)\nKrka - generična zdravila, izvoz v več kot 70 držav\nPatent velja 20 let, nato generiki znižajo ceno\nBiološka zdravila: cepiva, monoklonska protitelesa\nbiopodobna zdravila = podobna, a ne enaka\nStroški razvoja enega zdravila ~ 2 miliijardi EUR\nLe 1 od 10.000 spojin pride do trga\n\npomembno za izpit: faze kliničnih študij!"
    }
   ]
  },
  {
-  "config": "2.5-lite",
-  "image": "slide-annotated-ugly",
+  "config": "lite/medium*",
+  "image": "notes-history",
   "samples": [
    {
-    "typed": 1,
-    "handwritten": 0.7894736842105263,
-    "diacritics": 0.8,
-    "thoughtTokens": 0,
-    "elapsedMs": 1444,
-    "costUsd": 0.0001032,
-    "text": "Kazalne števila in indeksi cen\n\n* Laspeyresov indeks uporablja količine iz baznega obdobja.\n* Paaschejev indeks uporablja količine iz tekočega obdobja.\n* Fisherjev idealni indeks je geometrijska sredina obeh.\n* Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n* Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na rpiiu vedho najii ddhije ute!\ncpl je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometritska sredina = koren iz L krat p"
-   },
-   {
-    "typed": 1,
-    "handwritten": 0.8421052631578947,
+    "typed": null,
+    "handwritten": 0.9741379310344828,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1692,
-    "costUsd": 0.000102,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na ppitu vedno najiši dobje uteži\n\ncpl je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina koren iz L krat p"
+    "elapsedMs": 1419,
+    "costUsd": 0.0010674,
+    "text": "Zgodovina - Slovenci v 19. stoletju\nMarčna revolucija 1848, konec absolutizma\nZedinjena Slovenija: program Matije Majarja Ziljskega\nzahteve: vse slovenske dežele v eno upravno enoto\nslovenščina v šolah in uradih\nBleiweisove Kmetijske in rokodelske novice (1843)\nJanez Bleiweis = oče naroda, staroslovenci\nmladoslovenci: Fran Levstik, Josip Jurčič\nTaborsko gibanje 1868-1871, prvi tabor v Ljutomeru\nčitalnice: prva v Trstu 1861, nato Maribor, Ljubljana\nSlovenska matica ustanovljena 1864\nDualizem 1867: Austro-Ogrska\nSlovenci razdeljeni med avstrijski in ogrski del\nGospodarstvo: Južna železnica Dunaj-Trst (1857)\nindustrializacija počasna, izseljevanje v Ameriko\nPolitične stranke konec stoletja:\nkatoliški tabor (dr. Janez Evangelist Krek)\nliberahi tabor (Ivan Hribar, župan Ljubljane)\npotres v Ljubljani 1895 - obnova mesta, Maks Fabiani\nKljučni pojmi: narodna prebuja, kulturni boj\nPorovi: datumi taborov in imena voditeljev!"
    },
    {
-    "typed": 1,
-    "handwritten": 0.7894736842105263,
-    "diacritics": 0.9,
+    "typed": null,
+    "handwritten": 0.9655172413793104,
+    "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1355,
-    "costUsd": 0.00010279999999999999,
-    "text": "Kazalne števila in indeksi cen\n\n* Laspeyresov indeks uporablja količine iz baznega obdobja.\n* Paaschejev indeks uporablja količine iz tekočega obdobja.\n* Fisherjev idealni indeks je geometrijska sredina obeh.\n* Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n* Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR na rpiith vedho najsi dobje utež!\nOPI je Laspeyresov tip\nBDP deflator = Paasche\ngeometrijska sredina = koren iz L krat P"
+    "elapsedMs": 1580,
+    "costUsd": 0.0010649000000000001,
+    "text": "Zgodovina - Slovenci v 19. stoletju\nMarčna revolucija 1848, konec absolutizma\nZedinjena Slovenija: program Mati je Malar ja Ziljskega\nZahteve: vse slovenske dežele v eno upravno enoto\nslovenščina v šolah in uradih\nBleiweisove Kmetijske in rokodelske novice (1843)\nJanez Bleiweis = oče naroda, staroslovenci\nmladoslovenci: Fran Levstik, Josip Jurčič\nTaborsko gibanje 1868-1871, prvi tabor v Ljutomeru\nčitalnice: prva v Trstu 1861, nato Maribor, Ljubljana\nSlovenska matica ustanovljena 1864\nDualizem 1867: Austro-Ogrska\nSlovenci razdeljeni med avstrijski in ogrski del\nGospodarstvo: Južna železnica Dunaj-Trst (1857)\nindustrializacija počasna, izseljevanje v Ameriko\nPolitične stranke konec stoletja:\nkatoliški tabor (dr. Janez Evangelist Krek)\nliberalni tabor (Ivan Hribar, župan Ljubljane)\npotres v Ljubljani 1895 - obnova mesta, Maks Fabiani\nKljučni pojmi: narodna prebuja, kulturni boj\nPorovi: datumi taborov in imena voditeljev!"
    }
   ]
  },
  {
-  "config": "3.5-lite/minimal",
-  "image": "handwritten-ugly",
+  "config": "lite/medium*",
+  "image": "notes-biology",
   "samples": [
    {
     "typed": null,
-    "handwritten": 0.9428571428571428,
+    "handwritten": 1,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1346,
-    "costUsd": 0.0004576,
-    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nreceptor???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloča o akajskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+    "elapsedMs": 1429,
+    "costUsd": 0.0010324000000000002,
+    "text": "celično dihanje\n\nglukoza + kisik -> ogljikov dioksid + voda + ATP\nC6H12O6 + 6 O2 -> 6 CO2 + 6 H2O\n\n1. Glikoliza - v citoplazmi, brez kisika\niz glukoze nastaneta 2 molekuli piruvata, 2 ATP\n\n2. Krebsov cikel - v matriksu mitohondrija\nacetil-CoA, nastajajo NADH in FADH2\n\n3. Dihalna veriga - notranja membrana mitohondrija\nelektroni potujejo do kisika, nastane voda\nATP-sintaza: kemiosmoza, protonski gradient\n\nSkupaj približno 30-32 ATP na glukozo\n\nAnaerobno: mlečnokislinsko vrenje v mišicah\nalkoholno vrenje pri kvasovkah (etanol + CO2)\n\nMitohondrij ima lastno DNK - endosimbiontska teorija\nLynn Margulis, 1967\n\nFotosinteza je obraten proces v kloroplastih\n\nsvetlobne reakcije: tilakoide, temotne: stroma\nCalvinov cikel veže CO2 v sladkorje\n\nEncimi: specifični, odvisni od temperature in pH\ndenaturacija nad 40 stopinj Celzija\n\nza test: shema mitohondrija in bilanca ATP"
    },
    {
     "typed": null,
-    "handwritten": 0.9428571428571428,
+    "handwritten": 1,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1083,
-    "costUsd": 0.0004626,
-    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nrecepti???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksongki grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
-   },
-   {
-    "typed": null,
-    "handwritten": 0.9714285714285714,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 953,
-    "costUsd": 0.0004626,
-    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nrecepti???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija | IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+    "elapsedMs": 1383,
+    "costUsd": 0.0010324000000000002,
+    "text": "celično dihanje\n\nglukoza + kisik -> ogljikov dioksid + voda + ATP\nC6H12O6 + 6 O2 -> 6 CO2 + 6 H2O\n\n1. Glikoliza - v citoplazmi, brez kisika\niz glukoze nastaneta 2 molekuli piruvata, 2 ATP\n\n2. Krebsov cikel - v matriksu mitohondrija\nacetil-CoA, nastajajo NADH in FADH2\n\n3. Dihalna veriga - notranja membrana mitohondrija\nelektroni potujejo do kisika, nastane voda\nATP-sintaza: kemiosmoza, protonski gradient\n\nSkupaj približno 30-32 ATP na glukozo\nAnaerobno: mlečnokislinsko vrenje v mišicah\nalkoholno vrenje pri kvasovkah (etanol + CO2)\n\nMitohondrij ima lastno DNK - endosimbiontska teorija\nLynn Margulis, 1967\n\nFotosinteza je obraten proces v kloroplastih\n\nsvetlobne reakcije: tilakoide, temotne: stroma\nCalvinov cikel veže CO2 v sladkorje\n\nEncimi: specifični, odvisni od temperature in pH\ndenaturacija nad 40 stopinj Celzija\nza test: shema mitohondrija in bilanca ATP"
    }
   ]
  },
  {
-  "config": "3.5-lite/minimal",
-  "image": "slide-annotated-ugly",
+  "config": "lite/medium*",
+  "image": "notes-cursive-economics",
   "samples": [
    {
-    "typed": 1,
+    "typed": null,
     "handwritten": 1,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1137,
-    "costUsd": 0.0006076,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\ngeometrijska sredina = koren iz L krat P"
+    "elapsedMs": 1272,
+    "costUsd": 0.0008673999999999999,
+    "text": "Ekonomija - ponudba in povpraševanje\nZakon povpraševanja: višja cena, manjša količina\nZakon ponudbe: višja cena, večja količina\nRavnotežje: točka, kjer se krivulji sekata\nCenovna elastičnost = sprememba količine / sprememba cene\nelastično povpraševanje: luksuzne dobrine\nneelastično: kruh, zdravila, bencin\nPremik krivulje: dohodek, okus, cene substitutov\nkomplementarne dobrine: kava in sladkor\nTržne oblike: popolna konkurenca, monopol, oligopol\nMonopol: Elektro Ljubljana, nekoč Telekom\nMinimalna plača - spodnja meja cene dela\nInflacija merimo z indeksom cen življenjskih potrebščin\nStatistični urad Republike Slovenije (SURS)\nBDP = potrošnja + investicije + država + neto izvoz\nAdam Smith: nevidna roka trga, 1776\nJohn Maynard Keynes: država naj poveča porabo v krizi\nZa kolokvij: izračun elastičnosti in graf ravnotežja"
    },
    {
-    "typed": 0.975609756097561,
-    "handwritten": 1,
+    "typed": null,
+    "handwritten": 0.9901960784313726,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1089,
-    "costUsd": 0.0006076,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n• Verični indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
-   },
-   {
-    "typed": 0.975609756097561,
-    "handwritten": 1,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 1097,
-    "costUsd": 0.0006076,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n• Verični indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+    "elapsedMs": 1397,
+    "costUsd": 0.0008724,
+    "text": "Ekonomija - ponudba in povpraševanje\nZakon povpraševanja: višja cena, manjša količina\nZakon ponudbe: višja cena, večja količina\nRavnotežje: točka, kjer se krivulji sekata\nCenovna elastičnost = sprememba količine / sprememba cene\nelastično povpraševanje: luksuzne dobrine\nneelastično: kruh, zdravila, bencin\nPremik krivulje: dohodek, okus, cene substitutov\nkomplementarne dobrine: kava in sladkor\nTržne oblike: popolna konkurenca, monopol, oligopol\nMonopol: Elektro Ljubljana, nekoč Telekom\nMinimalna plača - spodnja meja cene dela\nInflacija merimo z indeksom cen življenjskih potrebščin\nStatistični urad Republike Slovenije (SURS)\nBDP = potrošnja + investicije + država + uvoz - izvoz\nAdam Smith: nevidna roka trga, 1776\nJohn Maynard Keynes: država naj poveča porabo v krizi\nZa kolokvij: izračun elastičnosti in graf ravnotežja"
    }
   ]
  },
  {
-  "config": "3.5-lite/high",
-  "image": "handwritten-ugly",
+  "config": "lite/medium*",
+  "image": "notes-cursive-geography",
   "samples": [
    {
     "typed": null,
-    "handwritten": 0.9714285714285714,
+    "handwritten": 0.9888888888888889,
     "diacritics": 1,
-    "thoughtTokens": 663,
-    "elapsedMs": 2826,
-    "costUsd": 0.0021176,
-    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nreceptr???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+    "thoughtTokens": 0,
+    "elapsedMs": 1429,
+    "costUsd": 0.0008749,
+    "text": "Geografija Slovenije\nPovršina 20.271 km2, približno 2.1 milijona prebivalcev\nŠtiri naravne enote: alpska, dinarska, panonska, sredozemska\nNajvišji vrh: Triglav, 2864 m\nReke: Sava, Drava, Mura, Soča, Krka, Kolpa\nSoča se izliva v Jadransko morje, ostale v Črno morje\nKras: vrtače, kraška polja, ponikalnice\nPostojnska jama, Škocjanske jame (UNESCO)\nCerknško jezero je presihajoče jezero\nPodnebje: alpsko, celinsko, sredozemsko\nBurja na Primorskem, fen na Gorenjskem\nPanonska nižina: Prekmurje, kmetijstvo, termalni izviri\nMesta: Ljubljana, Maribor, Celje, Kranj, Koper\nLuka Koper - edino tovorno pristanišče\nGozd pokriva skoraj 60% površja\nVprašanje za test: razlike med Krasom in Alpami"
    },
    {
     "typed": null,
-    "handwritten": 0.9714285714285714,
+    "handwritten": 0.9888888888888889,
     "diacritics": 1,
-    "thoughtTokens": 401,
-    "elapsedMs": 1994,
-    "costUsd": 0.0014601,
-    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nrecepti???\nKalcij sproži eksocitozo veziklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, ojačitev\nEPSP depolarizacija IPSP hiperpolarizacija\nAksonski grič odloča o akcijskem potencialu\nSSRI blokira ponovni privzem serotonina"
-   },
-   {
-    "typed": null,
-    "handwritten": 0.9714285714285714,
-    "diacritics": 1,
-    "thoughtTokens": 801,
-    "elapsedMs": 3145,
-    "costUsd": 0.0024601,
-    "text": "receptr???\nSinapsa = stik med nevronoma, špranja ~20 nm\nKalcij sproži eksocitozo veziklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, ojačitev\nEPSP depolarizacija IPSP hiperpolarizacija\nAksonski grič odloča o akcijskem potencialu\nSSRI blokira ponovni privzem serotonina"
+    "thoughtTokens": 0,
+    "elapsedMs": 1324,
+    "costUsd": 0.0008774,
+    "text": "Geografija Slovenije\nPovršina 20.271 km2, približno 2.1 milijona prebivalcev\nŠtiri naravne enote: alpska, dinarska, panonska, sredozemska\nNajvišji vrh: Triglav, 2864 m\nReke: Sava, Drava, Mura, Soča, Krka, Kolpa\nSoča se izliva v Jadransko morje, ostale v Črno morje\nKras: vrtače, kraška polja, ponikalnice\nPostojnska jama, Škocjanske jame (UNESCO)\nCerkníško jezero je presihajoče jezero\nPodnebje: alpsko, celinsko, sredozemsko\nBurja na Primorskem, fen na Gorenjskem\nPanonska nižina: Prekmurje, kmetijstvo, termalni izviri\nMesta: Ljubljana, Maribor, Celje, Kranj, Koper\nLuka Koper - edino tovorno pristanišče\nGozd pokriva skoraj 60% površja\nVprašanje za test: razlike med Krasom in Alpami"
    }
   ]
  },
  {
-  "config": "3.5-lite/high",
-  "image": "slide-annotated-ugly",
+  "config": "flash-prev/high*",
+  "image": "slide-typed",
   "samples": [
    {
     "typed": 1,
-    "handwritten": 1,
+    "handwritten": null,
     "diacritics": 1,
-    "thoughtTokens": 991,
-    "elapsedMs": 3300,
-    "costUsd": 0.0031051,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\n                                          POZOR: na izpitu vedno napiši obdobje uteži!\n\n                                                             CPI je Laspeyresov tip\n\n                                             BDP deflator = Paasche\n\n                                         geometrijska sredina = koren iz L krat P"
+    "thoughtTokens": 0,
+    "elapsedMs": 1474,
+    "costUsd": 0.000948,
+    "text": "Kazalne števila in indeksi cen\n\n\n● Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n● Paaschejev indeks uporablja količine iz tekočega obdobja.\n\n● Fisherjev idealni indeks je geometrijska sredina obeh.\n\n● Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n● Verižni indeks vsako obdobje osveži uteži košarice.\n\n\nI(t/0) = (Yt / Y0) * 100"
    },
    {
     "typed": 1,
-    "handwritten": 1,
+    "handwritten": null,
     "diacritics": 1,
-    "thoughtTokens": 432,
-    "elapsedMs": 2074,
-    "costUsd": 0.0016851,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\nCPI je Laspeyresov tip\nBDP deflator = Paasche\ngeometrijska sredina = koren iz L krat P"
-   },
-   {
-    "typed": 1,
-    "handwritten": 1,
-    "diacritics": 1,
-    "thoughtTokens": 1059,
-    "elapsedMs": 3703,
-    "costUsd": 0.0032751,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\n                                                POZOR: na izpitu vedno napiši obdobje uteži!\n                                                CPI je Laspeyresov tip\n                                                BDP deflator = Paasche\n                                                geometrijska sredina = koren iz L krat P"
+    "thoughtTokens": 0,
+    "elapsedMs": 1340,
+    "costUsd": 0.000948,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100"
    }
   ]
  },
  {
-  "config": "3.6-flash/minimal",
-  "image": "handwritten-ugly",
-  "samples": [
-   {
-    "typed": null,
-    "handwritten": 0.9714285714285714,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 1613,
-    "costUsd": 0.00087525,
-    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nreceptor???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
-   },
-   {
-    "typed": null,
-    "handwritten": 0.9428571428571428,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 1459,
-    "costUsd": 0.00088275,
-    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nreceptar???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni prevzem serotonina"
-   },
-   {
-    "typed": null,
-    "handwritten": 0.9428571428571428,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 1628,
-    "costUsd": 0.000879,
-    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nreceptar???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni prevzem serotonina"
-   }
-  ]
- },
- {
-  "config": "3.6-flash/minimal",
-  "image": "slide-annotated-ugly",
+  "config": "flash-prev/high*",
+  "image": "slide-annotated",
   "samples": [
    {
     "typed": 1,
     "handwritten": 1,
     "diacritics": 1,
     "thoughtTokens": 0,
-    "elapsedMs": 1744,
-    "costUsd": 0.001104,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\n\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
-   },
-   {
-    "typed": 1,
-    "handwritten": 1,
-    "diacritics": 1,
-    "thoughtTokens": 0,
-    "elapsedMs": 2202,
-    "costUsd": 0.001104,
+    "elapsedMs": 1891,
+    "costUsd": 0.001089,
     "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
    },
    {
@@ -455,9 +281,921 @@
     "handwritten": 1,
     "diacritics": 1,
     "thoughtTokens": 0,
+    "elapsedMs": 1543,
+    "costUsd": 0.001089,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/high*",
+  "image": "handwritten-page",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1761,
+    "costUsd": 0.000897,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1422,
+    "costUsd": 0.000897,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/high*",
+  "image": "handwritten-ugly",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1476,
+    "costUsd": 0.000915,
+    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nrecepta???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija / IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1431,
+    "costUsd": 0.000912,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nrecepta???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija / IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/high*",
+  "image": "slide-annotated-ugly",
+  "samples": [
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1647,
+    "costUsd": 0.001089,
+    "text": "Kazalne števila in indeksi cen\n\n- Laspeyresov indeks uporablja količine iz baznega obdobja.\n- Paaschejev indeks uporablja količine iz tekočega obdobja.\n- Fisherjev idealni indeks je geometrijska sredina obeh.\n- Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n- Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1629,
+    "costUsd": 0.001089,
+    "text": "Kazalne števila in indeksi cen\n\n- Laspeyresov indeks uporablja količine iz baznega obdobja.\n- Paaschejev indeks uporablja količine iz tekočega obdobja.\n- Fisherjev idealni indeks je geometrijska sredina obeh.\n- Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n- Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/high*",
+  "image": "notes-pharma",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2138,
+    "costUsd": 0.001758,
+    "text": "Farmacevtska industrija - pregled\n\n1. Raziskave in razvoj (R&R)\nodkrivanje novih učinkovin, predklinične študije\nklinične študije: faza I, II, III (varnost, učinkovitost)\n\n2. Registracija zdravila - JAZMP v Sloveniji, EMA v EU\ndovoljenje za promet, povzetek glavnih značilnosti\n\n3. Proizvodnja po smernicah DPP (GMP)\nkontrola kakovosti: čistost, stabilnost, sterilnost\n\n4. Spremljanje zakonodaje - nenehne spremembe\n\n5. Farmakovigilanca (varnost zdravil)\nspremljanje neželenih učinkov po prihodu na trg\nporočila zdravnikov, farmacevtov in bolnikov\nukrepi: sprememba navodil, umik zdravila s trga\n\n6. Trženje, prodaja in distribucija\nveletrgovina z zdravili: skladiščenje, hladna veriga\nlekarne in bolnišnice, recept ali brez recepta\n\nPrimeri podjetij: Krka (Novo mesto), Lek (Sandoz)\nKrka - generična zdravila, izvoz v več kot 70 držav\nPatent velja 20 let, nato generiki znižajo ceno\nBiološka zdravila: cepiva, monoklonska protitelesa\nbiopodobna zdravila = podobna, a ne enaka\nstroški razvoja enega zdravila ~ 2 milijardi EUR\nle 1 od 10.000 spojin pride do trga\n\npomembno za izpit: faze kliničnih študij!"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2217,
+    "costUsd": 0.001758,
+    "text": "Farmacevtska industrija - pregled\n1. Raziskave in razvoj (R&R)\nodkrivanje novih učinkovin, predklinične študije\nklinične študije: faza I, II, III (varnost, učinkovitost)\n2. registracija zdravila - JAZMP v Sloveniji, EMA v EU\ndovoljenje za promet, povzetek glavnih značilnosti\n3. Proizvodnja po smernicah DPP (GMP)\nkontrola kakovosti: čistost, stabilnost, sterilnost\n4. Spremljanje zakonodaje - nenehne spremembe\n5. farmakovigilanca (varnost zdravil)\nspremljanje neželenih učinkov po prihodu na trg\nporočila zdravnikov, farmacevtov in bolnikov\nukrepi: sprememba navodil, umik zdravila s trga\n6. Trženje, prodaja in distribucija\nveletrgovina z zdravili: skladiščenje, hladna veriga\nlekarne in bolnišnice, recept ali brez recepta\nPrimeri podjetij: Krka (Novo mesto), Lek (sandoz)\nKrka - generična zdravila, izvoz v več kot 70 držav\nPatent velja 20 let, nato generiki znižajo ceno\nBiološka zdravila: cepiva, monoklonska protitelesa\nbiopodobna zdravila = podobna, a ne enaka\nstroški razvoja enega zdravila ~ 2 milijardi EUR\nle 1 od 10.000 spojin pride do trga\npomembno za izpit: faze kliničnih študij!"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/high*",
+  "image": "notes-history",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.9913793103448276,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1999,
+    "costUsd": 0.001635,
+    "text": "Zgodovina - Slovenci v 19. stoletju\nMarčna revolucija 1848, konec absolutizma\nZedinjena Slovenija: program Matija Majarja Ziljskega\nzahteve: vse slovenske dežele v eno upravno enoto\nslovenščina v šolah in uradih\nBleiweisove Kmetijske in rokodelske novice (1843)\nJanez Bleiweis = oče naroda, staroslovenci\nmladoslovenci: Fran Levstik, Josip Jurčič\nTaborsko gibanje 1868-1871, prvi tabor v Ljutomeru\nčitalnice: prva v Trstu 1861, nato Maribor, Ljubljana\nSlovenska matica ustanovljena 1864\nDualizem 1867: Avstro-Ogrska\nSlovenci razdeljeni med avstrijski in ogrski del\nGospodarstvo: Južna železnica Dunaj-Trst (1857)\nindustrializacija počasna, izseljevanje v Ameriko\nPolitične stranke konec stoletja:\nkatoliški tabor (dr. Janez Evangelist Krek)\nliberalni tabor (Ivan Hribar, župan Ljubljane)\npotres v Ljubljani 1895 - obnova mesta, Maks Fabiani\nKljučni pojmi: narodna prebuja, kulturni boj\nPonovi: datumi taborov in imena voditeljev!"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2065,
+    "costUsd": 0.001635,
+    "text": "Zgodovina - Slovenci v 19. stoletju\nMarčna revolucija 1848, konec absolutizma\nZedinjena Slovenija: program Matije Majarja Ziljskega\nzahteve: vse slovenske dežele v eno upravno enoto\nslovenščina v šolah in uradih\nBleiweisove Kmetijske in rokodelske novice (1843)\nJanez Bleiweis = oče naroda, staroslovenci\nmladoslovenci: Fran Levstik, Josip Jurčič\nTaborsko gibanje 1868-1871, prvi tabor v Ljutomeru\nčitalnice: prva v Trstu 1861, nato Maribor, Ljubljana\nSlovenska matica ustanovljena 1864\nDualizem 1867: Avstro-Ogrska\nSlovenci razdeljeni med avstrijski in ogrski del\nGospodarstvo: Južna železnica Dunaj-Trst (1857)\nindustrializacija počasna, izseljevanje v Ameriko\nPolitične stranke konec stoletja:\nkatoliški tabor (dr. Janez Evangelist Krek)\nliberalni tabor (Ivan Hribar, župan Ljubljane)\npotres v Ljubljani 1895 - obnova mesta, Maks Fabiani\nKljučni pojmi: narodna prebuja, kulturni boj\nPonovi: datumi taborov in imena voditeljev!"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/high*",
+  "image": "notes-biology",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1999,
+    "costUsd": 0.001599,
+    "text": "Celično dihanje\n\nglukoza + kisik -> ogljikov dioksid + voda + ATP\nC6H12O6 + 6 O2 -> 6 CO2 + 6 H2O\n\n1. Glikoliza - v citoplazmi, brez kisika\niz glukoze nastaneta 2 molekuli piruvata, 2 ATP\n\n2. Krebsov cikel - v matriksu mitohondrija\nacetil-COA, nastajajo NADH in FADH2\n\n3. Dihalna veriga - notranja membrana mitohondrija\nelektroni potujejo do kisika, nastane voda\nATP-sintaza: kemiosmoza, protonski gradient\n\nskupaj približno 30-32 ATP na glukozo\nAnaerobno: mlečnokislinsko vrenje v mišicah\nalkoholno vrenje pri kvasovkah (etanol + CO2)\n\nMitohondrij ima lastno DNK - endosimbiontska teorija\nLynn Margulis, 1967\n\nFotosinteza je obraten proces v kloroplastih\n\nsvetlobne reakcije: tilakoide, temotne: stroma\nCalvinov cikel veže CO2 v sladkorje\n\nEncimi: specifični, odvisni od temperature in pH\ndenaturacija nad 40 stopinj Celzija\n\nZa test: shema mitohondrija in bilanca ATP"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2183,
+    "costUsd": 0.001596,
+    "text": "Celično dihanje\n\nglukoza + kisik -> ogljikov dioksid + voda + ATP\nC6H12O6 + 6 O2 -> 6 CO2 + 6 H2O\n\n1. Glikoliza - v citoplazmi, brez kisika\niz glukoze nastaneta 2 molekuli piruvata, 2 ATP\n\n2. Krebsov cikel - v matriksu mitohondrija\nacetil-CoA, nastajajo NADH in FADH2\n\n3. Dihalna veriga - notranja membrana mitohondrija\nelektroni potujejo do kisika, nastane voda\nATP-sintaza: kemiosmoza, protonski gradient\n\nskupaj približno 30-32 ATP na glukozo\nAnaerobno: mlečnokislinsko vrenje v mišicah\nalkoholno vrenje pri kvasovkah (etanol + CO2)\n\nMitohondrij ima lastno DNK - endosimbiontska teorija\nLynn Margulis, 1967\n\nFotosinteza je obraten proces v kloroplastih\nsvetlobne reakcije: tilakoide, temotne: stroma\nCalvinov cikel veže CO2 v sladkorje\n\nEncimi: specifični, odvisni od temperature in pH\ndenaturacija nad 40 stopinj Celzija\n\nza test: shema mitohondrija in bilanca ATP"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/high*",
+  "image": "notes-cursive-economics",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1946,
+    "costUsd": 0.001395,
+    "text": "Ekonomija - ponudba in povpraševanje\nZakon povpraševanja: višja cena, manjša količina\nZakon ponudbe: višja cena, večja količina\nRavnotežje: točka, kjer se krivulji sekata\nCenovna elastičnost = sprememba količine / sprememba cene\nelastično povpraševanje: luksuzne dobrine\nneelastično: kruh, zdravila, bencin\nPremik krivulje: dohodek, okus, cene substitutov\nkomplementarne dobrine: kava in sladkor\nTržne oblike: popolna konkurenca, monopol, oligopol\nMonopol: Elektro Ljubljana, nekoč Telekom\nMinimalna plača - spodnja meja cene dela\nInflacija merimo z indeksom cen življenjskih potrebščin\nStatistični urad Republike Slovenije (SURS)\nBDP = potrošnja + investicije + država + neto izvoz\nAdam Smith: nevidna roka trga, 1776\nJohn Maynard Keynes: država naj poveča porabo v krizi\nZa kolokvij: izračun elastičnosti in graf ravnotežja"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1893,
+    "costUsd": 0.001395,
+    "text": "Ekonomija - ponudba in povpraševanje\nZakon povpraševanja: višja cena, manjša količina\nZakon ponudbe: višja cena, večja količina\nRavnotežje: točka, kjer se krivulji sekata\nCenovna elastičnost = sprememba količine / sprememba cene\nelastično povpraševanje: luksuzne dobrine\nneelastično: kruh, zdravila, bencin\nPremik krivulje: dohodek, okus, cene substitutov\nkomplementarne dobrine: kava in sladkor\nTržne oblike: popolna konkurenca, monopol, oligopol\nMonopol: Elektro Ljubljana, nekoč Telekom\nMinimalna plača - spodnja meja cene dela\nInflacija merimo z indeksom cen življenjskih potrebščin\nStatistični urad Republike Slovenije (SURS)\nBDP = potrošnja + investicije + država + neto izvoz\nAdam Smith: nevidna roka trga, 1776\nJohn Maynard Keynes: država naj poveča porabo v krizi\nZa kolokvij: izračun elastičnosti in graf ravnotežja"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/high*",
+  "image": "notes-cursive-geography",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1880,
+    "costUsd": 0.001407,
+    "text": "Geografija Slovenije\nPovršina 20.271 km2, približno 2,1 milijona prebivalcev\nŠtiri naravne enote: alpska, dinarska, panonska, sredozemska\nNajvišji vrh: Triglav, 2864 m\nReke: Sava, Drava, Mura, Soča, Krka, Kolpa\nSoča se izliva v Jadransko morje, ostale v Črno morje\nKras: vrtače, kraška polja, ponikalnice\nPostojnska jama, Škocjanske jame (UNESCO)\nCerkniško jezero je presihajoče jezero\nPodnebje: alpsko, celinsko, sredozemsko\nBurja na Primorskem, fen na Gorenjskem\nPanonska nižina: Prekmurje, kmetijstvo, termalni izviri\nMesta: Ljubljana, Maribor, Celje, Kranj, Koper\nLuka Koper - edino tovorno pristanišče\nGozd pokriva skoraj 60 % površja\nVprašanje za test: razlike med Krasom in Alpami"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1770,
+    "costUsd": 0.001407,
+    "text": "Geografija Slovenije\n\nPovršina 20.271 km2, približno 2.1 milijona prebivalcev\n\nŠtiri naravne enote: alpska, dinarska, panonska, sredozemska\n\nNajvišji vrh: Triglav, 2864 m\n\nReke: Sava, Drava, Mura, Soča, Krka, Kolpa\n\nSoča se izliva v Jadransko morje, ostale v Črno morje\n\nKras: vrtače, kraška polja, ponikalnice\n\nPostojnska jama, Škocjanske jame (UNESCO)\n\nCerkniško jezero je presihajoče jezero\n\nPodnebje: alpsko, celinsko, sredozemsko\n\nBurja na Primorskem, fen na Gorenjskem\n\nPanonska nižina: Prekmurje, kmetijstvo, termalni izviri\n\nMesta: Ljubljana, Maribor, Celje, Kranj, Koper\n\nLuka Koper - edino tovorno pristanišče\n\nGozd pokriva skoraj 60 % površja\n\nVprašanje za test: razlike med Krasom in Alpami"
+   }
+  ]
+ },
+ {
+  "config": "lite/high",
+  "image": "slide-typed",
+  "samples": [
+   {
+    "typed": 1,
+    "handwritten": null,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1017,
+    "costUsd": 0.0006520999999999999,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100"
+   },
+   {
+    "typed": 1,
+    "handwritten": null,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1331,
+    "costUsd": 0.0006520999999999999,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100"
+   }
+  ]
+ },
+ {
+  "config": "lite/high",
+  "image": "slide-annotated",
+  "samples": [
+   {
+    "typed": 0.975609756097561,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1083,
+    "costUsd": 0.0007696,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n• Verični indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
+   },
+   {
+    "typed": 0.9512195121951219,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1218,
+    "costUsd": 0.0007696,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n• Paschejev indeks uporablja količine iz tekočega obdobja.\n\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n• Verični indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
+   }
+  ]
+ },
+ {
+  "config": "lite/high",
+  "image": "handwritten-page",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1052,
+    "costUsd": 0.0006095999999999999,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1434,
+    "costUsd": 0.0006095999999999999,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "lite/high",
+  "image": "handwritten-ugly",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.9714285714285714,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1074,
+    "costUsd": 0.0006220999999999999,
+    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nrecepto???\nKalcij sproži eksocitozo veziklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, ojačitev\nEPSP depolarizacija IPSP hiperpolarizacija\nAksonski grič odloča o akcijskem potencialu\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.9714285714285714,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 870,
+    "costUsd": 0.0006245999999999999,
+    "text": "Sinapsa = stik med nevronoma, špranja ~ 20 nm\nrecepto???\nKalcij sproži eksocitozo veziklov!\nIonotropni receptor -> hiter, kanal se odpre\nMetabotropni -> G-protein, počasnejši, ojačitev\nEPSP depolarizacija | IPSP hiperpolarizacija\nAksonski grič odloča o akcijskem potencialu\nSSRI blokira ponovni privzem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "lite/high",
+  "image": "slide-annotated-ugly",
+  "samples": [
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1077,
+    "costUsd": 0.0007696,
+    "text": "Kazalne števila in indeksi cen\n\n- Laspeyresov indeks uporablja količine iz baznega obdobja.\n- Paaschejev indeks uporablja količine iz tekočega obdobja.\n- Fisherjev idealni indeks je geometrijska sredina obeh.\n- Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n- Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\n\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1151,
+    "costUsd": 0.0007696,
+    "text": "Kazalne števila in indeksi cen\n\n- Laspeyresov indeks uporablja količine iz baznega obdobja.\n- Paaschejev indeks uporablja količine iz tekočega obdobja.\n- Fisherjev idealni indeks je geometrijska sredina obeh.\n- Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n- Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\n\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+   }
+  ]
+ },
+ {
+  "config": "lite/high",
+  "image": "notes-pharma",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.9925373134328358,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1607,
+    "costUsd": 0.0013321,
+    "text": "Farmacevtska industrija - pregled\n1. Raziskave in razvoj (R&R)\nodkrivanje novih učinkovin, predklinične študije\nklinične študije: faza I, II, III (varnost, učinkovitost)\n2. Registracija zdravila - JAZMP v Sloveniji, EMA v EU\ndovoljenje za promet, povzetek glavnih značilnosti\n3. Proizvodnja po smernicah DPP (GMP)\nkontrola kakovosti: čistost, stabilnost, sterilnost\n4. Spremljanje zakonodaje - nenehne spremembe\n5. Farmakovigilanca (varnost zdravil)\nspremljanje neželenih učinkov po prihodu na trg\nporočila zdravnikov, farmacevtov in bolnikov\nukrepi: sprememba navodil, umik zdravila s trga\n6. Trženje, prodaja in distribucija\nveletrgovina z zdravili: skladiščenje, hladna veriga\nlekarne in bolnišnice, recept ali brez recepta\nPrimeri podjetij: Krka (Novo mesto), Lek (Sandoz)\nKrka - generična zdravila, izvoz v več kot 70 držav\nPatent velja 20 let, nato generiki znižajo ceno\nBiološka zdravila: cepiva, monoklonska protitelesa\nbiopodobna zdravila = podobna, a ne enaka\nStroški razvoja enega zdravila ~ 2 mili jardi EUR\nLe 1 od 10.000 spojin pride do trga\npomembno za izpit: faze kliničnih študij!"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.9925373134328358,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1643,
+    "costUsd": 0.0013321,
+    "text": "Farmacevtska industrija - pregled\n1. Raziskave in razvoj (R&R)\nodkrivanje novih učinkovin, predklinične študije\nklinične študije: faza I, II, III (varnost, učinkovitost)\n2. Registracija zdravila - JAZMP v Sloveniji, EMA v EU\ndovoljenje za promet, povzetek glavnih značilnosti\n3. Proizvodnja po smernicah DPP (GMP)\nkontrola kakovosti: čistost, stabilnost, sterilnost\n4. Spremljanje zakonodaje - nenehne spremembe\n5. Farmakovigilanca (varnost zdravil)\nspremljanje neželenih učinkov po prihodu na trg\nporočila zdravnikov, farmacevtov in bolnikov\nukrepi: sprememba navodil, umik zdravila s trga\n6. Trženje, prodaja in distribucija\nveletrgovina z zdravili: skladiščenje, hladna veriga\nlekarne in bolnišnice, recept ali brez recepta\nPrimeri podjetij: Krka (Novo mesto), Lek (Sandoz)\nKrka - generična zdravila, izvoz v več kot 70 držav\nPatent velja 20 let, nato generiki znižajo ceno\nBiološka zdravila: cepiva, monoklonska protitelesa\nbiopodobna zdravila = podobna, a ne enaka\nStroški razvoja enega zdravila ~ 2 mili jardi EUR\nle 1 od 10.000 spojin pride do trga\npomembno za izpit: faze kliničnih študij!"
+   }
+  ]
+ },
+ {
+  "config": "lite/high",
+  "image": "notes-history",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.9741379310344828,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1363,
+    "costUsd": 0.0012270999999999998,
+    "text": "Zgodovina - Slovenci v 19. stoletju\nMarčna revolucija 1848, konec absolutizma\nZedinjena Slovenija: program Mati je Majar ja Ziliskega\nzahteve: vse slovenske dežele v eno upravno enoto\nslovenščina v šolah in uradih\nBleiweisove Kmetijske in rokodelske novice (1843)\nJanez Bleiweis = oče naroda, staroslovenci\nmladoslovenci: Fran Levstik, Josip Jurčič\nTaborsko gibanje 1868-1871, prvi tabor v Ljutomeru\nčitalnice: prva v Trstu 1861, nato Maribor, Ljubljana\nSlovenska matica ustanovljena 1864\nDualizem 1867: Avstro-Ogrska\nSlovenci razdeljeni med avstrijski in ogrski del\nGospodarstvo: Južna železnica Dunaj-Trst (1857)\nindustrializacija počasna, izseljevanje v Ameriko\nPolitične stranke konec stoletja:\nkatoliški tabor (dr. Janez Evangelist Krek)\nliberalni tabor (Ivan Hribar, župan Ljubljane)\npotres v Ljubljani 1895 - obnova mesta, Maks Fabiani\nKljučni pojmi: narodna prebuja, kulturni boj\nPonovi: datumi taborov in imena voditeljev!"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1380,
+    "costUsd": 0.0012246,
+    "text": "Zgodovina - Slovenci v 19. stoletju\nMarčna revolucija 1848, konec absolutizma\nZedinjena Slovenija: program Matije Majarja Ziljskega\nzahteve: vse slovenske dežele v eno upravno enoto\nslovenščina v šolah in uradih\nBleiweisove Kmetijske in rokodelske novice (1843)\nJanez Bleiweis = oče naroda, staroslovenci\nmladoslovenci: Fran Levstik, Josip Jurčič\nTaborsko gibanje 1868-1871, prvi tabor v Ljutomeru\nčitalnice: prva v Trstu 1861, nato Maribor, Ljubljana\nSlovenska matica ustanovljena 1864\nDualizem 1867: Avstro-Ogrska\nSlovenci razdeljeni med avstrijski in ogrski del\nGospodarstvo: Južna železnica Dunaj-Trst (1857)\nindustrializacija počasna, izseljevanje v Ameriko\nPolitične stranke konec stoletja:\nkatoliški tabor (dr. Janez Evangelist Krek)\nliberalni tabor (Ivan Hribar, župan Ljubljane)\npotres v Ljubljani 1895 - obnova mesta, Maks Fabiani\nKljučni pojmi: narodna prebuja, kulturni boj\nPonovi: datumi taborov in imena voditeljev!"
+   }
+  ]
+ },
+ {
+  "config": "lite/high",
+  "image": "notes-biology",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1652,
+    "costUsd": 0.0011945999999999999,
+    "text": "Celično dihanje\nglukoza + kisik -> ogljikov dioksid + voda + ATP\nC6H12O6 + 6 O2 -> 6 CO2 + 6 H2O\n1. Glikoliza – v citoplazmi, brez kisika\niz glukoze nastaneta 2 molekuli piruvata, 2 ATP\n2. Krebsov cikel – v matriksu mitohondrija\nacetil-COA, nastajajo NADH in FADH2\n3. Dihalna veriga – notranja membrana mitohondrija\nelektroni potujejo do kisika, nastane voda\nATP-sintaza: kemiosmoza, protonski gradient\nskupaj približno 30-32 ATP na glukozo\nAnaerobno: mlečnokislinsko vrenje v mišicah\nalkoholno vrenje pri kvasovkah (etanol + CO2)\nMitohondrij ima lastno DNK – endosimbiontska teorija\nLynn Margulis, 1967\nFotosinteza je obraten proces v kloroplastih\nsvetlobne reakcije: tilakoide, temotne: stroma\nCalvinov cikel veže CO2 v sladkorje\nEncimi: specifični, odvisni od temperature in pH\ndenaturacija nad 40 stopinj Celzija\nZa test: shema mitohondrija in bilanca ATP"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1427,
+    "costUsd": 0.0011945999999999999,
+    "text": "Celično dihanje\nglukoza + kisik -> ogljikov dioksid + voda + ATP\nC6H12O6 + 6 O2 -> 6 CO2 + 6 H2O\n1. Glikoliza – v citoplazmi, brez kisika\niz glukoze nastaneta 2 molekuli piruvata, 2 ATP\n2. Krebsov cikel – v matriksu mitohondrija\nacetil-COA, nastajajo NADH in FADH2\n3. Dihalna veriga – notranja membrana mitohondrija\nelektroni potujejo do kisika, nastane voda\nATP-sintaza: kemiosmoza, protonski gradient\nskupaj približno 30-32 ATP na glukozo\nAnaerobno: mlečnokislinsko vrenje v mišicah\nalkoholno vrenje pri kvasovkah (etanol + CO2)\nMitohondrij ima lastno DNK – endosimbiontska teorija\nLynn Margulis, 1967\nFotosinteza je obraten proces v kloroplastih\nsvetlobne reakcije: tilakoide, temotne: stroma\nCalvinov cikel veže CO2 v sladkorje\nEncimi: specifični, odvisni od temperature in pH\ndenaturacija nad 40 stopinj Celzija\nZa test: shema mitohondrija in bilanca ATP"
+   }
+  ]
+ },
+ {
+  "config": "lite/high",
+  "image": "notes-cursive-economics",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.9901960784313726,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1323,
+    "costUsd": 0.0010271,
+    "text": "Ekonomija - ponudba in povpraševanje\nZakon povpraševanja: višja cena, manjša količina\nZakon ponudbe: višja cena, večja količina\nRavnotežje: točka, kjer se krivulji sekata\nCenovna elastičnost = sprememba količine / sprememba cene\nelastično povpraševanje: luksuzne dobrine\nneelastično: kruh, zdravila, bencin\nPremik krivulje: dohodek, okus, cene substitutov\nkomplementarne dobrine: kava in sladkor\nTržne oblike: popolna konkurenca, monopol, oligopol\nMonopol: Elektro Ljubljana, nekoč Telekom\nMinimalna plača - spodnja meja cene dela\nInflacijo merimo z indeksom cen življenjskih potrebščin\nStatistični urad Republike Slovenije (SURS)\nBDP = potrošnja + investicije + država + neto izvoz\nAdam Smith: nevidna roka trga, 1776\nJohn Maynard Keynes: država naj poveča porabo v krizi\nZa kolokvij: izračun elastičnosti in graf ravnotežja"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1248,
+    "costUsd": 0.0010245999999999999,
+    "text": "Ekonomija - ponudba in povpraševanje\nZakon povpraševanja: višja cena, manjša količina\nZakon ponudbe: višja cena, večja količina\nRavnotežje: točka, kjer se krivulji sekata\nCenovna elastičnost = sprememba količine / sprememba cene\nelastično povpraševanje: luksuzne dobrine\nneelastično: kruh, zdravila, bencin\nPremik krivulje: dohodek, okus, cene substitutov\nkomplementarne dobrine: kava in sladkor\nTržne oblike: popolna konkurenca, monopol, oligopol\nMonopol: Elektro Ljubljana, nekoč Telekom\nMinimalna plača - spodnja meja cene dela\nInflacija merimo z indeksom cen življenjskih potrebščin\nStatistični urad Republike Slovenije (SURS)\nBDP = potrošnja + investicije + država + neto izvoz\nAdam Smith: nevidna roka trga, 1776\nJohn Maynard Keynes: država naj poveča porabo v krizi\nZa kolokvij: izračun elastičnosti in graf ravnotežja"
+   }
+  ]
+ },
+ {
+  "config": "lite/high",
+  "image": "notes-cursive-geography",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.9888888888888889,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1377,
+    "costUsd": 0.0010345999999999999,
+    "text": "Geografija Slovenije\n\nPovršina 20.271 km2, približno 2.1 miliona prebivalcev\n\nŠtiri naravne enote: alpska, dinarska, panonska, sredozemska\n\nNajvišji vrh: Triglav, 2864 m\n\nReke: Sava, Drava, Mura, Soča, Krka, Kolpa\n\nSoča se izliva v Jadransko morje, ostale v Črno morje\n\nKras: vrtače, kraška polja, ponikalnice\n\nPostojnska jama, Škocjanske jame (UNESCO)\n\nCerkniško jezero je presihajoče jezero\n\nPodnebje: alpsko, celinsko, sredozemsko\n\nBurja na Primorskem, fen na Gorenjskem\n\nPanonska nižina: Prekmurje, kmetijstvo, termalni izviri\n\nMesta: Ljubljana, Maribor, Celje, Kranj, Koper\n\nLuka Koper - edino tovorno pristanišče\n\nGozd pokriva skoraj 60 % površja\n\nVprašanje za test: razlike med Krasom in Alpami"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.9888888888888889,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1334,
+    "costUsd": 0.0010345999999999999,
+    "text": "Geografija Slovenije\n\nPovršina 20.271 km2, približno 2.1 milijona prebivalcev\n\nŠtiri naravne enote: alpska, dinarska, panonska, sredozemska\n\nNajušji vrh: Triglav, 2864 m\n\nReke: Sava, Drava, Mura, Soča, Krka, Kolpa\n\nSoča se izliva v Jadransko morje, ostale v Črno morje\n\nKras: vrtače, kraška polja, ponikalnice\n\nPostojnska jama, Škocjanske jame (UNESCO)\n\nCerkniško jezero je presihajoče jezero\n\nPodnebje: alpsko, celinsko, sredozemsko\n\nBurja na Primorskem, fen na Gorenjskem\n\nPanonska nižina: Prekmurje, kmetijstvo, termalni izviri\n\nMesta: Ljubljana, Maribor, Celje, Kranj, Koper\n\nLuka Koper - edino tovorno pristanišče\n\nGozd pokriva skoraj 60 % površja\n\nVprašanje za test: razlike med Krasom in Alpami"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/medium",
+  "image": "slide-typed",
+  "samples": [
+   {
+    "typed": 1,
+    "handwritten": null,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1332,
+    "costUsd": 0.000686,
+    "text": "Kazalne števila in indeksi cen\n\n● Laspeyresov indeks uporablja količine iz baznega obdobja.\n● Paaschejev indeks uporablja količine iz tekočega obdobja.\n● Fisherjev idealni indeks je geometrijska sredina obeh.\n● Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n● Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100"
+   },
+   {
+    "typed": 1,
+    "handwritten": null,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1157,
+    "costUsd": 0.000686,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/medium",
+  "image": "slide-annotated",
+  "samples": [
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1395,
+    "costUsd": 0.000827,
+    "text": "Kazalne števila in indeksi cen\n\n\n● Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n● Paaschejev indeks uporablja količine iz tekočega obdobja.\n\n● Fisherjev idealni indeks je geometrijska sredina obeh.\n\n● Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n● Verižni indeks vsako obdobje osveži uteži košarice.\n\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\n\ngeometrijska sredina => koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1268,
+    "costUsd": 0.000827,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/medium",
+  "image": "handwritten-page",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1357,
+    "costUsd": 0.000635,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1422,
+    "costUsd": 0.000635,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/medium",
+  "image": "handwritten-ugly",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1435,
+    "costUsd": 0.000647,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nrecepti???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 0.9714285714285714,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1323,
+    "costUsd": 0.000647,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\nrecepti???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloča o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/medium",
+  "image": "slide-annotated-ugly",
+  "samples": [
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1434,
+    "costUsd": 0.000827,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1308,
+    "costUsd": 0.000827,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina = koren iz L krat P"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/medium",
+  "image": "notes-pharma",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2046,
+    "costUsd": 0.001499,
+    "text": "Farmacevtska industrija - pregled\n\n1. Raziskave in razvoj (R&R)\nodkrivanje novih učinkovin, predklinične študije\nklinične študije: faza I, II, III (varnost, učinkovitost)\n\n2. Registracija zdravila - JAZMP v Sloveniji, EMA v EU\ndovoljenje za promet, povzetek glavnih značilnosti\n\n3. Proizvodnja po smernicah DPP (GMP)\nkontrola kakovosti: čistost, stabilnost, sterilnost\n\n4. Spremljanje zakonodaje - nenehne spremembe\n\n5. Farmakovigilanca (varnost zdravil)\nspremljanje neželenih učinkov po prihodu na trg\nporočila zdravnikov, farmacevtov in bolnikov\nukrepi: sprememba navodil, umik zdravila s trga\n\n6. Trženje, prodaja in distribucija\nveletrgovina z zdravili: skladiščenje, hladna veriga\nlekarne in bolnišnice, recept ali brez recepta\n\nPrimeri podjetij: Krka (Novo mesto), Lek (Sandoz)\nKrka - generična zdravila, izvoz v več kot 70 držav\nPatent velja 20 let, nato generiki znižajo ceno\nBiološka zdravila: cepiva, monoklonska protitelesa\nbiopodobna zdravila = podobna, a ne enaka\n\nStroški razvoja enega zdravila ~ 2 milijardi EUR\nle 1 od 10.000 spojin pride do trga\n\npomembno za izpit: faze kliničnih študij!"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2131,
+    "costUsd": 0.001505,
+    "text": "Farmacevtska industrija - pregled\n1. Raziskave in razvoj (R&R)\nodkrivanje novih učinkovin, predklinične študije\nklinične študije: faza I, II, III (varnost, učinkovitost)\n2. registracija zdravila - JAZMP v Sloveniji, EMA v EU\ndovoljenje za promet, povzetek glavnih značilnosti\n3. Proizvodnja po smernicah Dpp (GMP)\nkontrola kakovosti: čistost, stabilnost, sterilnost\n4. Spremljanje zakonodaje - nenehne spremembe\n5. Farmakovigilanca (varnost zdravil)\nspremljanje neželenih učinkov po prihodu na trg\nporočila zdravnikov, farmacevtov in bolnikov\nukrepi: sprememba navodil, umik zdravila s trga\n6. Trženje, prodaja in distribucija\nveletrgovina z zdravili: skladiščenje, hladna veriga\nlekarne in bolnišnice, recept ali brez recepta\nPrimeri podjetij: Krka (Novo mesto), Lek (Sandoz)\nKrka - generična zdravila, izvoz v več kot 70 držav\nPatent velja 20 let, nato generiki znižajo ceno\nBiološka Zdravila: cepiva, monoklonska protitelesa\nbiopodobna zdravila = podobna, a ne enaka\nStroški razvoja enega zdravila ~ 2 milijardi EUR\nle 1 od 10.000 spojin pride do trga\npomembno za izpit: faze kliničnih študij!"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/medium",
+  "image": "notes-history",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2007,
+    "costUsd": 0.001373,
+    "text": "Zgodovina - Slovenci v 19. stoletju\nMarčna revolucija 1848, konec absolutizma\nZedinjena Slovenija: program Matije Majarja Ziljskega\nzahteve: vse slovenske dežele v eno upravno enoto\nslovenščina v šolah in uradih\nBleiweisove Kmetijske in rokodelske novice (1843)\nJanez Bleiweis = oče naroda, staroslovenci\nmladoslovenci: Fran Levstik, Josip Jurčič\nTaborsko gibanje 1868-1871, prvi tabor v Ljutomeru\nčitalnice: prva v Trstu 1861, nato Maribor, Ljubljana\nSlovenska matica ustanovljena 1864\nDualizem 1867: Avstro-Ogrska\nSlovenci razdeljeni med avstrijski in ogrski del\nGospodarstvo: Južna železnica Dunaj-Trst (1857)\nindustrializacija počasna, izseljevanje v Ameriko\nPolitične stranke konec stoletja:\nkatoliški tabor (dr. Janez Evangelist Krek)\nliberalni tabor (Ivan Hribar, župan Ljubljane)\npotres v Ljubljani 1895 - obnova mesta, Maks Fabiani\nKljučni pojmi: narodna prebuja, kulturni boj\nPonovi: datumi taborov in imena voditeljev!"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1996,
+    "costUsd": 0.001373,
+    "text": "Zgodovina - Slovenci v 19. stoletju\nMarčna revolucija 1848, konec absolutizma\nZedinjena Slovenija: program Matije Majarja Ziljskega\nzahteve: vse slovenske dežele v eno upravno enoto\nslovenščina v šolah in uradih\nBleiweisove Kmetijske in rokodelske novice (1843)\nJanez Bleiweis = oče naroda, staroslovenci\nmladoslovenci: Fran Levstik, Josip Jurčič\nTaborsko gibanje 1868-1871, prvi tabor v Ljutomeru\nčitalnice: prva v Trstu 1861, nato Maribor, Ljubljana\nSlovenska matica ustanovljena 1864\nDualizem 1867: Avstro-Ogrska\nSlovenci razdeljeni med avstrijski in ogrski del\nGospodarstvo: Južna železnica Dunaj-Trst (1857)\nindustrializacija počasna, izseljevanje v Ameriko\nPolitične stranke konec stoletja:\nkatoliški tabor (dr. Janez Evangelist Krek)\nliberalni tabor (Ivan Hribar, župan Ljubljane)\npotres v Ljubljani 1895 - obnova mesta, Maks Fabiani\nKljučni pojmi: narodna prebuja, kulturni boj\nPonovi: datumi taborov in imena voditeljev!"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/medium",
+  "image": "notes-biology",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1858,
+    "costUsd": 0.001331,
+    "text": "celično dihanje\n\nglukoza + kisik -> ogljikov dioksid + voda + ATP\n\nC6H12O6 + 6 O2 -> 6 CO2 + 6 H2O\n\n1. Glikoliza - v citoplazmi, brez kisika\niz glukoze nastaneta 2 molekuli piruvata, 2 ATP\n\n2. Krebsov cikel - v matriksu mitohondrija\nacetil - CoA, nastajajo NADH in FADH2\n\n3. Dihalna veriga - notranja membrana mitohondrija\nelektroni potujejo do kisika, nastane voda\n\nATP-sintaza: kemiosmoza, protonski gradient\n\nSkupaj približno 30-32 ATP na glukozo\nAnaerobno: mlečnokislinsko vrenje v mišicah\nalkoholno vrenje pri kvasovkah (etanol + CO2)\n\nMitohondrij ima lastno DNK - endosimbiontska teorija\nLynn Margulis, 1967\n\nFotosinteza je obraten proces v kloroplastih\n\nsvetlobne reakcije: tilakoide, temotne: stroma\nCalvinov cikel veže CO2 v sladkorje\n\nEncimi: specifični, odvisni od temperature in pH\ndenaturacija nad 40 stopinj Celzija\n\nza test: shema mitohondrija in bilanca ATP"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1886,
+    "costUsd": 0.001331,
+    "text": "celično dihanje\n\nglukoza + kisik -> ogljikov dioksid + voda + ATP\n\nC6H12O6 + 6 O2 -> 6 CO2 + 6 H2O\n\n1. Glikoliza - v citoplazmi, brez kisika\niz glukoze nastaneta 2 molekuli piruvata, 2 ATP\n\n2. Krebsov cikel - v matriksu mitohondrija\nacetil-CoA, nastajajo NADH in FADH2\n\n3. Dihalna veriga - notranja membrana mitohondrija\nelektroni potujejo do kisika, nastane voda\n\nATP-sintaza: kemiosmoza, protonski gradient\n\nSkupaj približno 30-32 ATP na glukozo\nAnaerobno: mlečnokislinsko vrenje v mišicah\nalkoholno vrenje pri kvasovkah (etanol + CO2)\n\nMitohondrij ima lastno DNK - endosimbiontska teorija\nLynn Margulis, 1967\n\nFotosinteza je obraten proces v kloroplastih\n\nsvetlobne reakcije: tilakoide, temotne: stroma\nCalvinov cikel veže CO2 v sladkorje\n\nEncimi: specifični, odvisni od temperature in pH\ndenaturacija nad 40 stopinj Celzija\n\nza test: shema mitohondrija in bilanca ATP"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/medium",
+  "image": "notes-cursive-economics",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1637,
+    "costUsd": 0.001133,
+    "text": "Ekonomija - ponudba in povpraševanje\nZakon povpraševanja: višja cena, manjša količina\nZakon ponudbe: višja cena, večja količina\nRavnotežje: točka, kjer se krivulji sekata\nCenovna elastičnost = sprememba količine / sprememba cene\nelastično povpraševanje: luksuzne dobrine\nneelastično: kruh, zdravila, bencin\nPremik krivulje: dohodek, okus, cene substitutov\nkomplementarne dobrine: kava in sladkor\nTržne oblike: popolna konkurenca, monopol, oligopol\nMonopol: Elektro Ljubljana, nekoč Telekom\nMinimalna plača - spodnja meja cene dela\nInflacija merimo z indeksom cen življenjskih potrebščin\nStatistični urad Republike Slovenije (SURS)\nBDP = potrošnja + investicije + država + neto izvoz\nAdam Smith: nevidna roka trga, 1776\nJohn Maynard Keynes: država naj poveča porabo v krizi\nZa kolokvij: izračun elastičnosti in graf ravnotežja"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 16,
+    "elapsedMs": 1918,
+    "costUsd": 0.001181,
+    "text": "Ekonomija - ponudba in povpraševanje\n\nZakon povpraševanja: višja cena, manjša količina\nZakon ponudbe: višja cena, večja količina\n\nRavnotežje: točka, kjer se krivulji sekata\nCenovna elastičnost = sprememba količine / sprememba cene\n\nelastično povpraševanje: luksuzne dobrine\nneelastično: kruh, zdravila, bencin\n\nPremik krivulje: dohodek, okus, cene substitutov\nkomplementarne dobrine: kava in sladkor\n\nTržne oblike: popolna konkurenca, monopol, oligopol\nMonopol: Elektro Ljubljana, nekoč Telekom\n\nMinimalna plača - spodnja meja cene dela\nInflacija merimo z indeksom cen življenjskih potrebščin\n\nStatistični urad Republike Slovenije (SURS)\nBDP = potrošnja + investicije + država + neto izvoz\n\nAdam Smith: nevidna roka trga, 1776\nJohn Maynard Keynes: država naj poveča porabo v krizi\n\nZa kolokvij: izračun elastičnosti in graf ravnotežja"
+   }
+  ]
+ },
+ {
+  "config": "flash-prev/medium",
+  "image": "notes-cursive-geography",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1737,
+    "costUsd": 0.001145,
+    "text": "Geografija Slovenije\nPovršina 20.271 km2, približno 2.1 milijona prebivalcev\nŠtiri naravne enote: alpska, dinarska, panonska, sredozemska\nNajvišji vrh: Triglav, 2864 m\nReke: Sava, Drava, Mura, Soča, Krka, Kolpa\nSoča se izliva v Jadransko morje, ostale v Črno morje\nKras: vrtače, kraška polja, ponikalnice\nPostojnska jama, Škocjanske jame (UNESCO)\nCerkniško jezero je presihajoče jezero\nPodnebje: alpsko, celinsko, sredozemsko\nBurja na Primorskem, fen na Gorenjskem\nPanonska nižina: Prekmurje, kmetijstvo, termalni izviri\nMesta: Ljubljana, Maribor, Celje, Kranj, Koper\nLuka Koper - edino tovorno pristanišče\nGozd pokriva skoraj 60 % površja\nVprašanje za test: razlike med Krasom in Alpami"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
     "elapsedMs": 1667,
-    "costUsd": 0.00110775,
-    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\n\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
+    "costUsd": 0.001145,
+    "text": "Geografija Slovenije\nPovršina 20.271 km2, približno 2.1 milijona prebivalcev\nŠtiri naravne enote: alpska, dinarska, panonska, sredozemska\nNajvišji vrh: Triglav, 2864 m\nReke: Sava, Drava, Mura, Soča, Krka, Kolpa\nSoča se izliva v Jadransko morje, ostale v Črno morje\nKras: vrtače, kraška polja, ponikalnice\nPostojnska jama, Škocjanske jame (UNESCO)\nCerkniško jezero je presihajoče jezero\nPodnebje: alpsko, celinsko, sredozemsko\nBurja na Primorskem, fen na Gorenjskem\nPanonska nižina: Prekmurje, kmetijstvo, termalni izviri\nMesta: Ljubljana, Maribor, Celje, Kranj, Koper\nLuka Koper - edino tovorno pristanišče\nGozd pokriva skoraj 60 % površja\nVprašanje za test: razlike med Krasom in Alpami"
+   }
+  ]
+ },
+ {
+  "config": "3.6-flash/high",
+  "image": "slide-typed",
+  "samples": [
+   {
+    "typed": 0.975609756097561,
+    "handwritten": null,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1568,
+    "costUsd": 0.001329,
+    "text": "Kazalne števila in indeks cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100"
+   },
+   {
+    "typed": 1,
+    "handwritten": null,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1483,
+    "costUsd": 0.00131775,
+    "text": "Kazalne števila in indeksi cen\n\nLaspeyresov indeks uporablja količine iz baznega obdobja.\n\nPaaschejev indeks uporablja količine iz tekočega obdobja.\n\nFisherjev idealni indeks je geometrijska sredina obeh.\n\nSubstitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\nVerižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100"
+   }
+  ]
+ },
+ {
+  "config": "3.6-flash/high",
+  "image": "slide-annotated",
+  "samples": [
+   {
+    "typed": 0.975609756097561,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1430,
+    "costUsd": 0.00150525,
+    "text": "Kazalne števila in indeks cen\n\n* Laspeyresov indeks uporablja količine iz baznega obdobja.\n* Paaschejev indeks uporablja količine iz tekočega obdobja.\n* Fisherjev idealni indeks je geometrijska sredina obeh.\n* Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n* Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1725,
+    "costUsd": 0.001509,
+    "text": "Kazalne števila in indeksi cen\n\n* Laspeyresov indeks uporablja količine iz baznega obdobja.\n* Paaschejev indeks uporablja količine iz tekočega obdobja.\n* Fisherjev idealni indeks je geometrijska sredina obeh.\n* Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n* Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
+   }
+  ]
+ },
+ {
+  "config": "3.6-flash/high",
+  "image": "handwritten-page",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1457,
+    "costUsd": 0.001269,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1312,
+    "costUsd": 0.001269,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija, IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "3.6-flash/high",
+  "image": "handwritten-ugly",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.9428571428571428,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1428,
+    "costUsd": 0.00128025,
+    "text": "Sinapsa = stik med neuronoma, špranja ~20 nm\nrecepto???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni prevzem serotonina"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1278,
+    "costUsd": 0.00128025,
+    "text": "Sinapsa = stik med nevronoma, špranja ~20 nm / receptor???\n\nKalcij sproži eksocitozo veziklov!\n\nIonotropni receptor -> hiter, kanal se odpre\n\nMetabotropni -> G-protein, počasnejši, ojačitev\n\nEPSP depolarizacija / IPSP hiperpolarizacija\n\nAksonski grič odloči o akcijskem potencialu\n\nSSRI blokira ponovni privzem serotonina"
+   }
+  ]
+ },
+ {
+  "config": "3.6-flash/high",
+  "image": "slide-annotated-ugly",
+  "samples": [
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1653,
+    "costUsd": 0.001509,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\n\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
+   },
+   {
+    "typed": 1,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1405,
+    "costUsd": 0.001509,
+    "text": "Kazalne števila in indeksi cen\n\n• Laspeyresov indeks uporablja količine iz baznega obdobja.\n• Paaschejev indeks uporablja količine iz tekočega obdobja.\n• Fisherjev idealni indeks je geometrijska sredina obeh.\n• Substitucijska pristranskost: Laspeyres precenjuje inflacijo.\n• Verižni indeks vsako obdobje osveži uteži košarice.\n\nI(t/0) = (Yt / Y0) * 100\n\nPOZOR: na izpitu vedno napiši obdobje uteži!\n\nCPI je Laspeyresov tip\nBDP deflator = Paasche\n\ngeometrijska sredina => koren iz L krat P"
+   }
+  ]
+ },
+ {
+  "config": "3.6-flash/high",
+  "image": "notes-pharma",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2881,
+    "costUsd": 0.002349,
+    "text": "Farmacevtska industrija - pregled\n1. Raziskave in razvoj (R&R)\nodkrivanje novih učinkovin, predklinične študije\nklinične študije: faza I, II, III (varnost, učinkovitost)\n2. Registracija zdravila - JAZMP v Sloveniji, EMA v EU\ndovoljenje za promet, povzetek glavnih značilnosti\n3. Proizvodnja po smernicah DPP (GMP)\nkontrola kakovosti: čistost, stabilnost, sterilnost\n4. Spremljanje zakonodaje - nenehne spremembe\n5. Farmakovigilanca (varnost zdravil)\nspremljanje neželenih učinkov po prihodu na trg\nporočila zdravnikov, farmacevtov in bolnikov\nukrepi: sprememba navodil, umik zdravila s trga\n6. Trženje, prodaja in distribucija\nveletrgovina z zdravili: skladiščenje, hladna veriga\nlekarne in bolnišnice, recept ali brez recepta\nPrimeri podjetij: Krka (Novo mesto), Lek (Sandoz)\nKrka - generična zdravila, izvoz v več kot 70 držav\nPatent velja 20 let, nato generiki znižajo ceno\nBiološka zdravila: cepiva, monoklonska protitelesa\nbiopodobna zdravila = podobna, a ne enaka\nStroški razvoja enega zdravila ~ 2 milijardi EUR\nle 1 od 10.000 spojin pride do trga\npomembno za izpit: faze kliničnih študij!"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2171,
+    "costUsd": 0.002349,
+    "text": "Farmacevtska industrija - pregled\n1. Raziskave in razvoj (R&R)\nodkrivanje novih učinkovin, predklinične študije\nklinične študije: faza I, II, III (varnost, učinkovitost)\n2. Registracija zdravila - JAZMP v Sloveniji, EMA v EU\ndovoljenje za promet, povzetek glavnih značilnosti\n3. Proizvodnja po smernicah DPP (GMP)\nkontrola kakovosti: čistost, stabilnost, sterilnost\n4. Spremljanje zakonodaje - nenehne spremembe\n5. Farmakovigilanca (varnost zdravil)\nspremljanje neželenih učinkov po prihodu na trg\nporočila zdravnikov, farmacevtov in bolnikov\nukrepi: sprememba navodil, umik zdravila s trga\n6. Trženje, prodaja in distribucija\nveletrgovina z zdravili: skladiščenje, hladna veriga\nlekarne in bolnišnice, recept ali brez recepta\nPrimeri podjetij: Krka (Novo mesto), Lek (Sandoz)\nKrka - generična zdravila, izvoz v več kot 70 držav\nPatent velja 20 let, nato generiki znižajo ceno\nBiološka zdravila: cepiva, monoklonska protitelesa\nbiopodobna zdravila = podobna, a ne enaka\nStroški razvoja enega zdravila ~ 2 milijardi EUR\nle 1 od 10.000 spojin pride do trga\npomembno za izpit: faze kliničnih študij!"
+   }
+  ]
+ },
+ {
+  "config": "3.6-flash/high",
+  "image": "notes-history",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 0.9741379310344828,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2243,
+    "costUsd": 0.002199,
+    "text": "Zgodovina - Slovenci v 19. stoletju\nMarčna revolucija 1848, konec absolutizma\nZedin jena Slovenija: program Mati je Majarja Ziliskega\nzahteve: vse slovenske dežele v eno upravno enoto\nslovenščina v šolah in uradih\nBleiweisove Kmetijske in rokodelske novice (1843)\nJanez Bleiweis = oče naroda, staroslovenci\nmladoslovenci: Fran Levstik, Josip Jurčič\nTaborsko gibanje 1868-1871, prvi tabor v Ljutomeru\nčitalnice: prva v Trstu 1861, nato Maribor, Ljubljana\nSlovenska matica ustanovljena 1864\nDualizem 1867: Avstro-Ogrska\nSlovenci razdeljeni med avstrijski in ogrski del\nGospodarstvo: Južna železnica Dunaj-Trst (1857)\nindustrializacija počasna, izseljevanje v Ameriko\nPolitične stranke konec stoletja:\nkatoliški tabor (dr. Janez Evangelist Krek)\nliberalni tabor (Ivan Hribar, župan Ljubljane)\npotres v Ljubljani 1895 - obnova mesta, Maks Fabiani\nKljučni pojmi: narodna prebuja, kulturni boj\nPonovi: datumi taborov in imena voditeljev!"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2309,
+    "costUsd": 0.0021915,
+    "text": "Zgodovina - Slovenci v 19. stoletju\nMarčna revolucija 1848, konec absolutizma\nZedinjena Slovenija: program Matije Majarja Ziljskega\nzahteve: vse slovenske dežele v eno upravno enoto\nslovenščina v šolah in uradih\nBleiweisove Kmetijske in rokodelske novice (1843)\nJanez Bleiweis = oče naroda, staroslovenci\nmladoslovenci: Fran Levstik, Josip Jurčič\nTaborsko gibanje 1868-1871, prvi tabor v Ljutomeru\nčitalnice: prva v Trstu 1861, nato Maribor, Ljubljana\nSlovenska matica ustanovljena 1864\nDualizem 1867: Avstro-Ogrska\nSlovenci razdeljeni med avstrijski in ogrski del\nGospodarstvo: Južna železnica Dunaj-Trst (1857)\nindustrializacija počasna, izseljevanje v Ameriko\nPolitične stranke konec stoletja:\nkatoliški tabor (dr. Janez Evangelist Krek)\nliberalni tabor (Ivan Hribar, župan Ljubljane)\npotres v Ljubljani 1895 - obnova mesta, Maks Fabiani\nKljučni pojmi: narodna prebuja, kulturni boj\nPonovi: datumi taborov in imena voditeljev!"
+   }
+  ]
+ },
+ {
+  "config": "3.6-flash/high",
+  "image": "notes-biology",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1941,
+    "costUsd": 0.0021465,
+    "text": "Celično dihanje\nglukoza + kisik -> ogljikov dioksid + Voda + ATP\nC6H12O6 + 6 O2 -> 6 CO2 + 6 H2O\n1. Glikoliza - v citoplazmi, brez kisika\niz glukoze nastaneta 2 molekuli piruvata, 2 ATP\n2. Krebsov cikel - v matriksu mitohondrija\nacetil-CoA, nastajajo NADH in FADH2\n3. Dihalna veriga - notranja membrana mitohondrija\nelektroni potujejo do kisika, nastane voda\nATP-sintaza: kemiosmoza, protonski gradient\nskupaj približno 30-32 ATP na glukozo\nAnaerobno: mlečnokislinsko vrenje v mišicah\nalkoholno vrenje pri kvasovkah (etanol + CO2)\nMitohondrij ima lastno DNK - endosimbiontska teorija\nLynn Margulis, 1967\nFotosinteza je obraten proces v kloroplastih\nsvetlobne reakcije: tilakoide, temotne: stroma\nCalvinov cikel veže CO2 v sladkorje\nEncimi: specifični, odvisni od temperature in pH\ndenaturacija nad 40 stopinj Celzija\nza test: shema mitohondrija in bilanca ATP"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2240,
+    "costUsd": 0.00214275,
+    "text": "Celično dihanje\n\nglukoza + kisik -> ogljikov dioksid + voda + ATP\nC6H12O6 + 6 O2 -> 6 CO2 + 6 H2O\n\n1. Glikoliza - v citoplazmi, brez kisika\niz glukoze nastaneta 2 molekuli piruvata, 2 ATP\n\n2. Krebsov cikel - v matriksu mitohondrija\nacetil-CoA, nastajajo NADH in FADH2\n\n3. Dihalna veriga - notranja membrana mitohondrija\nelektroni potujejo do kisika, nastane voda\nATP-sintaza: kemiosmoza, protonski gradient\n\nskupaj približno 30-32 ATP na glukozo\nAnaerobno: mlečnokislinsko vrenje v mišicah\nalkoholno vrenje pri kvasovkah (etanol + CO2)\n\nMitohondrij ima lastno DNK - endosimbiontska teorija\nLynn Margulis, 1967\n\nFotosinteza je obraten proces v kloroplastih\n\nsvetlobne reakcije: tilakoide, temotne: stroma\nCalvinov cikel veže CO2 v sladkorje\n\nEncimi: specifični, odvisni od temperature in pH\ndenaturacija nad 40 stopinj Celzija\n\nza test: shema mitohondrija in bilanca ATP"
+   }
+  ]
+ },
+ {
+  "config": "3.6-flash/high",
+  "image": "notes-cursive-economics",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1908,
+    "costUsd": 0.0018915,
+    "text": "Ekonomija - ponudba in povpraševanje\nZakon povpraševanja: višja cena, manjša količina\nZakon ponudbe: višja cena, večja količina\nRavnotežje: točka, kjer se krivulji sekata\nCenovna elastičnost = sprememba količine / sprememba cene\nelastično povpraševanje: luksuzne dobrine\nneelastično: kruh, zdravila, bencin\nPremik krivulje: dohodek, okus, cene substitutov\nkomplementarne dobrine: kava in sladkor\nTržne oblike: popolna konkurenca, monopol, oligopol\nMonopol: Elektro Ljubljana, nekoč Telekom\nMinimalna plača - spodnja meja cene dela\nInflacija merimo z indeksom cen življenjskih potrebščin\nStatistični urad Republike Slovenije (SURS)\nBDP = potrošnja + investicije + država + neto izvoz\nAdam Smith: nevidna roka trga, 1776\nJohn Maynard Keynes: država naj poveča porabo v krizi\nZa kolokvij: izračun elastičnosti in graf ravnotežja"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 2030,
+    "costUsd": 0.0018915,
+    "text": "Ekonomija - ponudba in povpraševanje\nZakon povpraševanja: višja cena, manjša količina\nZakon ponudbe: višja cena, večja količina\nRavnotežje: točka, kjer se krivulji sekata\nCenovna elastičnost = sprememba količine / sprememba cene\nelastično povpraševanje: luksuzne dobrine\nneelastično: kruh, zdravila, bencin\nPremik krivulje: dohodek, okus, cene substitutov\nkomplementarne dobrine: kava in sladkor\nTržne oblike: popolna konkurenca, monopol, oligopol\nMonopol: Elektro Ljubljana, nekoč Telekom\nMinimalna plača - spodnja meja cene dela\nInflacija merimo z indeksom cen življenjskih potrebščin\nStatistični urad Republike Slovenije (SURS)\nBDP = potrošnja + investicije + država + neto izvoz\nAdam Smith: nevidna roka trga, 1776\nJohn Maynard Keynes: država naj poveča porabo v krizi\nZa kolokvij: izračun elastičnosti in graf ravnotežja"
+   }
+  ]
+ },
+ {
+  "config": "3.6-flash/high",
+  "image": "notes-cursive-geography",
+  "samples": [
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1817,
+    "costUsd": 0.0019065,
+    "text": "Geografija Slovenije\nPovršina 20.271 km2, približno 2,1 milijona prebivalcev\nŠtiri naravne enote: alpska, dinarska, panonska, sredozemska\nNajvišji vrh: Triglav, 2864 m\nReke: Sava, Drava, Mura, Soča, Krka, Kolpa\nSoča se izliva v Jadransko morje, ostale v Črno morje\nKras: vrtače, kraška polja, ponikalnice\nPostojnska jama, Škocjanske jame (UNESCO)\nCerkniško jezero je presihajoče jezero\nPodnebje: alpsko, celinsko, sredozemsko\nBurja na Primorskem, fen na Gorenjskem\nPanonska nižina: Prekmurje, kmetijstvo, termalni izviri\nMesta: Ljubljana, Maribor, Celje, Kranj, Koper\nLuka Koper - edino tovorno pristanišče\nGozd pokriva skoraj 60 % površja\nVprašanje za test: razlike med Krasom in Alpami"
+   },
+   {
+    "typed": null,
+    "handwritten": 1,
+    "diacritics": 1,
+    "thoughtTokens": 0,
+    "elapsedMs": 1876,
+    "costUsd": 0.0019065,
+    "text": "Geografija Slovenije\nPovršina 20.271 km2, približno 2,1 milijona prebivalcev\nŠtiri naravne enote: alpska, dinarska, panonska, sredozemska\nNajvišji vrh: Triglav, 2864 m\nReke: Sava, Drava, Mura, Soča, Krka, Kolpa\nSoča se izliva v Jadransko morje, ostale v Črno morje\nKras: vrtače, kraška polja, ponikalnice\nPostojnska jama, Škocjanske jame (UNESCO)\nCerkniško jezero je presihajoče jezero\nPodnebje: alpsko, celinsko, sredozemsko\nBurja na Primorskem, fen na Gorenjskem\nPanonska nižina: Prekmurje, kmetijstvo, termalni izviri\nMesta: Ljubljana, Maribor, Celje, Kranj, Koper\nLuka Koper - edino tovorno pristanišče\nGozd pokriva skoraj 60 % površja\nVprašanje za test: razlike med Krasom in Alpami"
    }
   ]
  }

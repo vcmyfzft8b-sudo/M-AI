@@ -65,3 +65,4 @@ next-env.d.ts
 
 # Local compression-test fixtures; never committed.
 /public/test-fixtures/
+evals/ocr/results-partial.json

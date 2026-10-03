@@ -6,6 +6,10 @@ import { cache } from "react";
 import Stripe from "stripe";
 import { getAppleEntitlement } from "@/lib/mobile/apple";
 import { hasPaidAccess } from "@/lib/billing-access";
+import {
+  type BillingSubscriptionsTable,
+  writeStripeSubscriptionRow,
+} from "@/lib/billing-subscription-write";
 
 import { PREVIEW_AUTH_BYPASS_USER_ID, getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -786,25 +790,23 @@ export async function syncStripeSubscriptionRecord(subscription: Stripe.Subscrip
     .update(profileUpdate as never)
     .eq("id", resolvedUserId);
 
-  await service
-    .from("billing_subscriptions")
-    .upsert(
-      {
-        user_id: resolvedUserId,
-        stripe_customer_id: customerId,
-        stripe_subscription_id: subscription.id,
-        stripe_price_id: priceId,
-        plan,
-        status: subscription.status,
-        currency: item?.price?.currency ?? "eur",
-        unit_amount: item?.price?.unit_amount ?? null,
-        current_period_end: item?.current_period_end
-          ? new Date(item.current_period_end * 1000).toISOString()
-          : null,
-        cancel_at_period_end: subscription.cancel_at_period_end,
-      } as never,
-      { onConflict: "stripe_subscription_id" },
-    );
+  await writeStripeSubscriptionRow(
+    service.from("billing_subscriptions") as unknown as BillingSubscriptionsTable,
+    {
+      user_id: resolvedUserId,
+      stripe_customer_id: customerId,
+      stripe_subscription_id: subscription.id,
+      stripe_price_id: priceId,
+      plan,
+      status: subscription.status,
+      currency: item?.price?.currency ?? "eur",
+      unit_amount: item?.price?.unit_amount ?? null,
+      current_period_end: item?.current_period_end
+        ? new Date(item.current_period_end * 1000).toISOString()
+        : null,
+      cancel_at_period_end: subscription.cancel_at_period_end,
+    },
+  );
 }
 
 type BillingRequestLike = {

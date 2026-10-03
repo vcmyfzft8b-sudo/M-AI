@@ -3,7 +3,7 @@ import Stripe from "stripe";
 
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { getServerEnv } from "@/lib/server-env";
-import { syncStripeSubscription, syncStripeSubscriptionRecord } from "@/lib/billing";
+import { syncStripeSubscription } from "@/lib/billing";
 import { creditTutorPurchase } from "@/lib/tutor-credits";
 
 function extractSubscriptionId(event: Stripe.Event) {
@@ -82,18 +82,17 @@ export async function POST(request: Request) {
       }
     }
 
-    if (
-      event.type === "customer.subscription.created" ||
-      event.type === "customer.subscription.updated" ||
-      event.type === "customer.subscription.deleted"
-    ) {
-      await syncStripeSubscriptionRecord(event.data.object as Stripe.Subscription);
-    } else {
-      const subscriptionId = extractSubscriptionId(event);
+    /*
+     * Stripe does not deliver events in order, so the subscription in the payload may already
+     * be out of date: on 2026-10-03 a voided invoice's `updated` (active) landed after the
+     * cancellation's `deleted` (canceled) and left a canceled subscription granting access.
+     * Every event is therefore only a prompt to ask Stripe for the subscription as it is now.
+     * A canceled subscription is still retrievable, so `deleted` works the same way.
+     */
+    const subscriptionId = extractSubscriptionId(event);
 
-      if (subscriptionId) {
-        await syncStripeSubscription(subscriptionId);
-      }
+    if (subscriptionId) {
+      await syncStripeSubscription(subscriptionId);
     }
 
     return NextResponse.json({ received: true });

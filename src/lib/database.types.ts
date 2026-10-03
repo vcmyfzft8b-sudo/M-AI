@@ -1345,6 +1345,41 @@ export type Database = {
           last_seen_at?: string | null;
         };
       };
+      admin_fixed_costs: {
+        Row: {
+          id: string;
+          name: string;
+          amount: number;
+          currency: "eur" | "usd";
+          cadence: "monthly" | "yearly";
+          live_source: string | null;
+          note: string | null;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+          created_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          amount: number;
+          currency?: "eur" | "usd";
+          cadence?: "monthly" | "yearly";
+          live_source?: string | null;
+          note?: string | null;
+          active?: boolean;
+          created_by?: string | null;
+        };
+        Update: {
+          name?: string;
+          amount?: number;
+          currency?: "eur" | "usd";
+          cadence?: "monthly" | "yearly";
+          live_source?: string | null;
+          note?: string | null;
+          active?: boolean;
+        };
+      };
       ugc_creators: {
         Row: {
           id: string;
@@ -1861,6 +1896,18 @@ export type Database = {
         };
         Returns: number;
       };
+      admin_ai_cost_by_provider: {
+        Args: {
+          p_from: string;
+          p_to: string;
+        };
+        Returns: {
+          bucket: string;
+          calls: number;
+          priced_calls: number;
+          cost_usd: number;
+        }[];
+      };
       ugc_daily_view_deltas: {
         Args: {
           p_from: string;
@@ -1967,6 +2014,8 @@ export type PracticeTestAttemptAnswerRow =
 
 export type AdminUserRow = Database["public"]["Tables"]["admin_users"]["Row"];
 export type UgcCreatorRow = Database["public"]["Tables"]["ugc_creators"]["Row"];
+export type AdminFixedCostRow =
+  Database["public"]["Tables"]["admin_fixed_costs"]["Row"];
 export type UgcCreatorPayoutRow =
   Database["public"]["Tables"]["ugc_creator_payouts"]["Row"];
 export type UgcCreatorAccountRow =

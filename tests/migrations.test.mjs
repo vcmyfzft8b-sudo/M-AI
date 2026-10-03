@@ -157,6 +157,7 @@ test("every migration applies in order on an empty database", options, async () 
   ).map((row) => row.table_name);
 
   assert.deepEqual(tables, [
+    "admin_fixed_costs",
     "admin_impersonation_events",
     "admin_users",
     "site_page_views",
@@ -746,6 +747,35 @@ test("a payout is one line per creator, month and payee", options, async () => {
   await query(`delete from public.ugc_creators where id = $1`, [creator.id]);
   const [{ left }] = await query(`select count(*)::int as left from public.ugc_creator_payouts`);
   assert.equal(left, 0, "a removed creator takes their payout lines with them");
+});
+
+test("AI spend is totalled per provider, with OpenRouter told apart by its prefix", options, async () => {
+  const { query } = await migratedDatabase();
+
+  await query(`insert into public.ai_usage_events (provider, model, stage, estimated_cost_usd, created_at) values
+    ('gemini', 'or/z-ai/glm-5.3-flash', 'note_write', 0.50, '2026-09-10T10:00:00Z'),
+    ('gemini', 'or/google/gemini-3.5-flash-lite', 'tutor', null, '2026-09-10T10:00:00Z'),
+    ('gemini', 'gemini-2.5-flash-lite', 'ocr', 0.25, '2026-09-11T10:00:00Z'),
+    ('gemini', 'gemini-2.5-flash-lite', 'ocr', 0.25, '2026-09-30T21:59:00Z'),
+    -- After midnight in Ljubljana on 1 October: outside September.
+    ('gemini', 'gemini-2.5-flash-lite', 'ocr', 9.99, '2026-09-30T22:00:00Z')`);
+
+  const rows = await query(
+    `select bucket, calls::int, priced_calls::int, cost_usd::text
+     from public.admin_ai_cost_by_provider('2026-08-31T22:00:00Z', '2026-09-30T22:00:00Z')
+     order by bucket`,
+  );
+
+  assert.deepEqual(rows, [
+    { bucket: "gemini", calls: 2, priced_calls: 2, cost_usd: "0.50000000" },
+    // A call logged without a price is counted but adds nothing — which is
+    // why the page prefers OpenRouter's own meter to this.
+    { bucket: "openrouter", calls: 2, priced_calls: 1, cost_usd: "0.50000000" },
+  ]);
+
+  const fixed = await query(`select name, currency, cadence, live_source from public.admin_fixed_costs order by name`);
+  assert.deepEqual(fixed.map((row) => row.name), ["Apple Developer Program", "Supabase", "Vercel"]);
+  assert.equal(fixed.find((row) => row.name === "Vercel").live_source, "vercel");
 });
 
 test("a bulk upsert of mixed-shape rows would null a not-null column", options, async () => {

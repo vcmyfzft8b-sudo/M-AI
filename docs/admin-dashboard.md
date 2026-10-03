@@ -265,6 +265,50 @@ table, `ugc_creator_payouts` is service-role only.
 `scripts/seed-creator-payouts-2026-09.mjs` recorded the September 2026 run (dry
 run by default, `--apply` to write); copy it for a month you want to load in bulk.
 
+## Costs
+
+`/admin/costs` shows what running Memo AI costs in a month — so far, and (for the
+month in progress) where it is heading — next to the money that came in.
+
+| Line | Read from | Kind |
+| --- | --- | --- |
+| Stripe fees | Stripe balance transactions: processing `fee` + `stripe_fee` (Billing) rows | live |
+| OpenRouter | `GET /api/v1/key` → `usage_monthly` (UTC month; **current month only**) | live; past months fall back to our call log, which runs low |
+| Soniox | `GET /v1/usage/summary` (whole UTC days) | live |
+| Gemini direct | `admin_ai_cost_by_provider()` over `ai_usage_events` | estimate |
+| Vercel | `GET /v1/billing/charges` — the Pro seat at `EffectiveCost`, everything else at `BilledCost` | live **only with `VERCEL_BILLING_TOKEN`**; otherwise the fixed "Vercel" row |
+| Supabase, Apple, domain… | `admin_fixed_costs`, edited on the page; yearly fees count a twelfth a month | fixed |
+| Creator payouts | `ugc_creator_payouts` for that month; the month in progress projects last month's run | payouts |
+
+Everything is fetched when the page is opened and cached for 15 minutes; nothing
+runs on a schedule. A provider that does not answer shows "—" and is left out of
+the total (the stat card says how many are missing) rather than counted as €0.
+Dollars convert at the ECB rate (frankfurter.dev, cached 12 h; a fixed 30 Sep 2026
+rate if it cannot be fetched).
+
+Traps found while building it:
+
+- Vercel's charges endpoint answers a window that runs into the future with
+  charges it has only *scheduled* — the whole month's Pro seat appears on the 2nd.
+  It returns the charge periods (07:00–07:00 UTC) that *finished* inside the
+  window, and a window with none is a 404 `costs_not_found`. So the month in
+  progress is read up to the last UTC midnight: complete periods only, one cold
+  read a day.
+- Always ask Vercel for the month, never day by day: the billed amount for the
+  same period changes with the window, because included usage is spread over it
+  (Sept 2026: $29.39 as a month, $47.69 summed by day).
+- Vercel's `BilledCost` puts the seat on its billing day (Sept showed a partial
+  $11.49, October none); its `EffectiveCost` prices plan-included usage at list
+  ($52.65 for Sept). Seat at effective + the rest at billed gave $29.39, which
+  matches the invoice estimate.
+- Soniox and Vercel meter whole UTC days, so they are asked for the UTC month;
+  from Ljubljana's midnight they would add the whole previous day.
+- The analytics token cannot read billing (403). `VERCEL_BILLING_TOKEN` must be a
+  token with access to the team's billing; until it exists, Vercel is the $20 fixed
+  row and usage on top (~$10 in Sept 2026) is not counted.
+- `ai_usage_events` undercounts: some models are logged without a price. Prefer the
+  provider's meter wherever there is one.
+
 ## How Memo AI posts are detected
 
 Several campaign accounts are personal accounts that only sometimes post about

@@ -581,6 +581,80 @@ export async function deletePayoutAction(
   return ok("Payout removed.");
 }
 
+// ------------------------------------------------------------ fixed costs --
+
+/**
+ * Adds a fixed cost, or edits one when an id comes with the form. These are
+ * the subscriptions no API reports — the Costs page counts them in full every
+ * month.
+ */
+export async function saveFixedCostAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const context = await requireAdmin();
+  const serviceRole = createSupabaseServiceRoleClient();
+
+  const id = readString(formData, "cost_id");
+  const name = readString(formData, "name").slice(0, 80);
+
+  if (!name) {
+    return fail("Name the cost.");
+  }
+
+  const amount = toCents(readString(formData, "amount"));
+
+  if (!Number.isFinite(amount) || amount < 0) {
+    return fail("The amount has to be a number, 0 or more.");
+  }
+
+  const currency = readString(formData, "currency") === "usd" ? "usd" : "eur";
+  const cadence = readString(formData, "cadence") === "yearly" ? "yearly" : "monthly";
+  const values = {
+    name,
+    amount: amount / 100,
+    currency,
+    cadence,
+    note: readOptional(formData, "note"),
+  } as const;
+
+  const { error } = id
+    ? await updateIn(serviceRole, "admin_fixed_costs", values).eq("id", id)
+    : await insertInto(serviceRole, "admin_fixed_costs", {
+        ...values,
+        created_by: context.user.email ?? null,
+      });
+
+  if (error) {
+    return fail(`Could not save the cost: ${error.message}`);
+  }
+
+  return ok(id ? "Saved." : `Added ${name}.`);
+}
+
+export async function toggleFixedCostAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireAdmin();
+  const serviceRole = createSupabaseServiceRoleClient();
+
+  const id = readString(formData, "cost_id");
+  const active = readString(formData, "active") === "1";
+
+  if (!id) {
+    return fail("Missing cost.");
+  }
+
+  const { error } = await updateIn(serviceRole, "admin_fixed_costs", { active }).eq("id", id);
+
+  if (error) {
+    return fail(`Could not update the cost: ${error.message}`);
+  }
+
+  return ok(active ? "Counting it again." : "No longer counted.");
+}
+
 export async function addAccountAction(
   _previous: ActionState,
   formData: FormData,

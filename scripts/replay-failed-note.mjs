@@ -82,11 +82,14 @@ async function download(objectPath) {
   return response.ok ? Buffer.from(await response.arrayBuffer()) : null;
 }
 
-async function readWithGemini({ model, instructions, bytes, mimeType, maxOutputTokens }) {
+async function readWithGemini({ model, instructions, bytes, mimeType, maxOutputTokens, mediaResolution }) {
+  // Production reads every photo at high resolution; a replay at the API default would read a
+  // different picture of the same page.
+  const image = { inlineData: { mimeType, data: bytes.toString("base64") } };
   const response = await gemini.models.generateContent({
     model,
     contents: [
-      { role: "user", parts: [{ inlineData: { mimeType, data: bytes.toString("base64") } }, { text: instructions }] },
+      { role: "user", parts: [mediaResolution ? { ...image, mediaResolution: { level: mediaResolution } } : image, { text: instructions }] },
     ],
     config: { maxOutputTokens, thinkingConfig: { thinkingLevel: "minimal" } },
   });
@@ -112,7 +115,7 @@ async function readPhoto(bytes) {
     ["ocr_restate", OCR_RESCUE_MODEL, IMAGE_RESTATE_INSTRUCTIONS],
     ["ocr_restate", OCR_MODEL, IMAGE_RESTATE_INSTRUCTIONS],
   ]) {
-    const result = await readWithGemini({ model, instructions, bytes: normalized, mimeType: "image/jpeg", maxOutputTokens: 6000 });
+    const result = await readWithGemini({ model, instructions, bytes: normalized, mimeType: "image/jpeg", maxOutputTokens: 6000, mediaResolution: "MEDIA_RESOLUTION_HIGH" });
     attempts.push({ stage, model, finishReason: result.finishReason, chars: result.text.length });
     if (result.text.length >= 120) return { text: result.text, attempts };
     if (result.text.length > shortText.length) shortText = result.text;

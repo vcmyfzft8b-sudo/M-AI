@@ -32,18 +32,17 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 // here before went stale and was missing the orientation sentence.
 const { IMAGE_OCR_INSTRUCTIONS: INSTRUCTIONS } = await import("../src/lib/ocr-prompts.ts");
 
-// Thinking as resolveMinimalThinkingConfig sends it: thinkingBudget 0 below 3.5, MINIMAL above.
-const OFF_3 = { thinkingBudget: 0 };
-const MINIMAL = { thinkingLevel: "MINIMAL" };
+// Thinking exactly as production sends it, so a change to that rule reaches the bake-off too.
+const { resolveMinimalThinkingConfig } = await import("../src/lib/ai/gemini-models.ts");
 
 const CONFIGS = [
   // Production: the primary reader, then the rescue that only runs when the primary fails.
-  { name: "lite/medium*", model: "gemini-3.5-flash-lite", thinking: MINIMAL, resolution: "MEDIA_RESOLUTION_MEDIUM" },
-  { name: "flash-prev/high*", model: "gemini-3-flash-preview", thinking: OFF_3, resolution: "MEDIA_RESOLUTION_HIGH" },
+  { name: "lite/medium*", model: "gemini-3.5-flash-lite", resolution: "MEDIA_RESOLUTION_MEDIUM" },
+  { name: "flash-prev/high*", model: "gemini-3-flash-preview", resolution: "MEDIA_RESOLUTION_HIGH" },
   // Candidates for the primary.
-  { name: "lite/high", model: "gemini-3.5-flash-lite", thinking: MINIMAL, resolution: "MEDIA_RESOLUTION_HIGH" },
-  { name: "flash-prev/medium", model: "gemini-3-flash-preview", thinking: OFF_3, resolution: "MEDIA_RESOLUTION_MEDIUM" },
-  { name: "3.6-flash/high", model: "gemini-3.6-flash", thinking: MINIMAL, resolution: "MEDIA_RESOLUTION_HIGH" },
+  { name: "lite/high", model: "gemini-3.5-flash-lite", resolution: "MEDIA_RESOLUTION_HIGH" },
+  { name: "flash-prev/medium", model: "gemini-3-flash-preview", resolution: "MEDIA_RESOLUTION_MEDIUM" },
+  { name: "3.6-flash/high", model: "gemini-3.6-flash", resolution: "MEDIA_RESOLUTION_HIGH" },
 ];
 
 function normalizeWords(value) {
@@ -107,7 +106,7 @@ async function runOcr(config, imagePath, mediaResolution) {
     config: {
       // OCR_RESCUE_MAX_OUTPUT_TOKENS: a dense page must not be cut off by the cap.
       maxOutputTokens: 6000,
-      ...(config.thinking ? { thinkingConfig: config.thinking } : {}),
+      thinkingConfig: resolveMinimalThinkingConfig(config.model),
     },
   });
   const usage = response.usageMetadata ?? {};
@@ -200,5 +199,7 @@ for (const row of rows) {
   );
 }
 
-fs.writeFileSync(path.join(OCR_DIR, "results.json"), JSON.stringify(rows, null, 1));
-console.log("\nfull outputs written to evals/ocr/results.json");
+// Only a full run replaces the committed record; a filtered run must not overwrite it with a subset.
+const resultsFile = wantedImages || wantedConfigs ? "results-partial.json" : "results.json";
+fs.writeFileSync(path.join(OCR_DIR, resultsFile), JSON.stringify(rows, null, 1));
+console.log(`\nfull outputs written to evals/ocr/${resultsFile}`);

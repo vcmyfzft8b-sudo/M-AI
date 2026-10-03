@@ -14,9 +14,15 @@ const reader = source.slice(
   source.indexOf("export async function extractTextFromImage"),
   source.indexOf("async function updateLectureEnrichmentProcessingStage"),
 );
-const plans = [...reader.matchAll(/\{\s*stage: "(ocr_\w+)",[\s\S]*?model: env\.(\w+),[\s\S]*?mediaResolution: "(\w+)",\s*\}/g)].map(
-  ([, stage, model, resolution]) => ({ stage, model, resolution }),
-);
+// One entry per plan: each `stage:` up to the next, read on its own so key order does not matter.
+const plans = reader
+  .split(/(?=\bstage: "ocr_)/)
+  .slice(1)
+  .map((plan) => ({
+    stage: plan.match(/stage: "(ocr_\w+)"/)?.[1],
+    model: plan.match(/\bmodel: env\.(\w+)/)?.[1],
+    resolution: plan.match(/mediaResolution: "(\w+)"/)?.[1],
+  }));
 
 test("a photo is read by the stronger model at high resolution first", () => {
   assert.deepEqual(plans[0], { stage: "ocr_primary", model: "GEMINI_OCR_RESCUE_MODEL", resolution: "high" });

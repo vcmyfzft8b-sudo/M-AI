@@ -51,22 +51,27 @@ export async function writeStripeSubscriptionRow(
     return check(await table.upsert(row, { onConflict: "stripe_subscription_id" }));
   }
 
-  const updated = check(
-    await table
-      .update(row)
-      .eq("stripe_subscription_id", row.stripe_subscription_id)
-      .not("status", "in", `(${TERMINAL_SUBSCRIPTION_STATUSES.join(",")})`)
-      .select("id"),
-  );
+  const updateUnlessEnded = async () =>
+    check(
+      await table
+        .update(row)
+        .eq("stripe_subscription_id", row.stripe_subscription_id)
+        .not("status", "in", `(${TERMINAL_SUBSCRIPTION_STATUSES.join(",")})`)
+        .select("id"),
+    );
+
+  const updated = await updateUnlessEnded();
 
   if (Array.isArray(updated) && updated.length > 0) {
     return updated;
   }
 
   // Either the row is new, or it has ended and must stay as it is.
-  return check(
-    await table.upsert(row, { onConflict: "stripe_subscription_id", ignoreDuplicates: true }),
-  );
+  check(await table.upsert(row, { onConflict: "stripe_subscription_id", ignoreDuplicates: true }));
+
+  // If another delivery inserted the row between our update and our insert, the insert was
+  // dropped; apply this state over theirs, unless theirs had ended.
+  return updateUnlessEnded();
 }
 
 function check(result: { data: unknown; error: { message: string } | null }) {

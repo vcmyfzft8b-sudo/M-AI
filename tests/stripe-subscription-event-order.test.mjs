@@ -90,6 +90,15 @@ test("the two deliveries racing still end canceled, whichever starts first", asy
   }
 });
 
+test("two live writes racing on a new subscription do not drop the later one", async () => {
+  const table = createTable();
+  await Promise.all([
+    writeStripeSubscriptionRow(table, row("incomplete")),
+    writeStripeSubscriptionRow(table, row("active")),
+  ]);
+  assert.equal(statusOf(table), "active");
+});
+
 test("live states still move both ways, and a new subscription is created", async () => {
   const table = createTable();
   await writeStripeSubscriptionRow(table, row("trialing"));

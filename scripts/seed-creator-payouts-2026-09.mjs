@@ -203,7 +203,9 @@ async function main() {
 
   for (const entry of PAYOUTS) {
     const creator = creators.get(entry.slug);
-    const label = `${entry.payee ?? creator?.name ?? entry.slug}`.padEnd(12);
+    const name =
+      creator?.name ?? NEW_CREATORS.find((row) => row.slug === entry.slug)?.name ?? entry.slug;
+    const label = (entry.payee ?? name).padEnd(12);
     total += Math.round((entry.base + entry.bonus) * 100);
 
     console.log(`  ${label} base €${entry.base.toFixed(2).padStart(6)}  bonus €${entry.bonus.toFixed(2).padStart(6)}  = €${(entry.base + entry.bonus).toFixed(2)}`);

@@ -18,8 +18,9 @@ overturning any of it.
    unchanged, item decks size themselves).
 3. **Models per stage** (`src/lib/ai/model-config.ts`): everything on `GEMINI_TEXT_MODEL`
    (2.5-flash-lite) except `note_write` → `or/google/gemini-3.7-flash` (OpenRouter, Google
-   fallback — the summary rework raised the writer bar, see ai-model-selection.md). OCR primary is 3.5-flash-lite;
-   rescue stays gemini-3-flash-preview. Thinking is off for OCR (version-aware —
+   fallback — the summary rework raised the writer bar, see ai-model-selection.md). Photos are read by
+   gemini-3-flash-preview at high resolution first, with 3.5-flash-lite as the fallback (Oct 2026: lite
+   misread names on full handwritten pages); PDFs and slide images still read with 3.5-flash-lite. Thinking is off for OCR (version-aware —
    `resolveMinimalThinkingConfig`; 3.5+ rejects `thinkingBudget` with a bare 400). 3.1-flash-lite
    is **disqualified** everywhere (worst at every stage in the sweep).
 4. **Ingestion**: YouTube links via innertube ANDROID/IOS captions (timedtext **XML**, not json3 —

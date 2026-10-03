@@ -96,7 +96,7 @@ async function readWithGemini({ model, instructions, bytes, mimeType, maxOutputT
   return { finishReason: candidate?.finishReason ?? null, text };
 }
 
-/** Production's order: verbatim, stronger verbatim, restatement (stronger reader first). */
+/** Production's order: stronger verbatim, lite verbatim, restatement (stronger reader first). */
 async function readPhoto(bytes) {
   let normalized = bytes;
   try {
@@ -107,8 +107,8 @@ async function readPhoto(bytes) {
   const attempts = [];
   let shortText = "";
   for (const [stage, model, instructions] of [
-    ["ocr_primary", OCR_MODEL, IMAGE_OCR_INSTRUCTIONS],
-    ["ocr_rescue", OCR_RESCUE_MODEL, IMAGE_OCR_INSTRUCTIONS],
+    ["ocr_primary", OCR_RESCUE_MODEL, IMAGE_OCR_INSTRUCTIONS],
+    ["ocr_rescue", OCR_MODEL, IMAGE_OCR_INSTRUCTIONS],
     ["ocr_restate", OCR_RESCUE_MODEL, IMAGE_RESTATE_INSTRUCTIONS],
     ["ocr_restate", OCR_MODEL, IMAGE_RESTATE_INSTRUCTIONS],
   ]) {

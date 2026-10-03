@@ -14,6 +14,15 @@ test("a bot screen is recognised by its title", () => {
   assert.equal(looksLikeBotChallenge({ html: "<html></html>", title: "Just a moment..." }), true);
 });
 
+test("a site's own block page is a bot screen, not a sign-in wall", () => {
+  assert.equal(looksLikeBotChallenge({ html: "<html></html>", title: "Studocu - Access Blocked" }), true);
+  assert.equal(looksLikeBotChallenge({ html: "<html></html>", title: "Example | Access Denied" }), true);
+  assert.equal(
+    looksLikeBotChallenge({ html: "<html></html>", title: "Open access blocked by publishers – Wikipedia" }),
+    false,
+  );
+});
+
 test("a bot screen is recognised by its markup when the title says nothing", () => {
   assert.equal(looksLikeBotChallenge({ html: SCRIBD_CHALLENGE, title: "" }), true);
   assert.equal(

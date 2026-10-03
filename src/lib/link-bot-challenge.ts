@@ -16,6 +16,9 @@ const CHALLENGE_TITLES = [
   /^just a moment\.{0,3}$/i,
   /^attention required!? \| cloudflare$/i,
   /^access denied$/i,
+  // Studocu answers a server-side fetch with a 403 titled "Studocu - Access Blocked" (2026-10-01),
+  // which we used to report as a sign-in wall.
+  /(?:^|\s[-–|:]\s)access (?:blocked|denied)$/i,
   /^please wait\.{0,3}$/i,
   /^ddos-guard$/i,
   /^security check$/i,

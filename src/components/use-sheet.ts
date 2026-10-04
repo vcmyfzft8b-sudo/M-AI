@@ -36,7 +36,13 @@ type SheetOptions = {
    * finger on the list pans it instead of dismissing the sheet.
    */
   scrollable?: boolean;
-  /** While true the sheet refuses to close — a request in flight, typically. */
+  /**
+   * While true the sheet refuses to close — a request in flight, typically.
+   *
+   * Read through a ref that is only updated after a render, so clearing the busy flag and
+   * dismissing in the same tick still sees the sheet as locked. A caller closing its own sheet
+   * because the request finished passes `{ force: true }` to `dismiss`; see there.
+   */
   locked?: boolean;
 };
 
@@ -92,9 +98,15 @@ export function useSheet(onClosed: () => void, options?: SheetOptions) {
   /**
    * Play the exit, then close. `after` runs once the sheet is really gone, so
    * a caller can open the next sheet without the two overlapping.
+   *
+   * `force` is for the one caller allowed past the lock: the request that locked the sheet,
+   * closing it because it has finished, whether it succeeded or failed. Without it, `setBusy(false); sheet.dismiss()` is silently
+   * ignored, because the lock is read from a ref the busy flag has not reached yet. That left the
+   * note's rename sheet open over the old title after every successful rename (Oct 2026).
+   * Scrims, cancel buttons and drags never force: a learner must not close a sheet mid-request.
    */
-  const dismiss = useCallback((after?: () => void) => {
-    if (lockedRef.current) {
+  const dismiss = useCallback((after?: () => void, options?: { force?: boolean }) => {
+    if (lockedRef.current && !options?.force) {
       return;
     }
 

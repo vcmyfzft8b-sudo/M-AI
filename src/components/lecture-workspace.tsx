@@ -5570,7 +5570,8 @@ export function LectureWorkspace({
       }
 
       setIsNoteActionBusy(false);
-      renameSheet.dismiss(() => startTransition(() => router.refresh()));
+      // Forced: this request is what locked the sheet, and it is done (see useSheet's dismiss).
+      renameSheet.dismiss(() => startTransition(() => router.refresh()), { force: true });
     } catch (error) {
       setNoteActionError(
         error instanceof Error ? error.message : t("library.error.renameFailed"),

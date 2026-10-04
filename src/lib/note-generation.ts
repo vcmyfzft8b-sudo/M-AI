@@ -1,6 +1,7 @@
 import "server-only";
 import { repairWrittenNote } from "@/lib/ai/language-check";
 import { resolveSourceLanguage } from "@/lib/source-language";
+import { readProfileLocale } from "@/lib/i18n/profile-locale";
 
 import { chunkSummarySchema, noteArtifactSchema } from "@/lib/ai/schemas";
 import { generateStructuredObject } from "@/lib/ai/json";
@@ -599,6 +600,21 @@ async function generateNotesLegacy(
   };
 }
 
+/**
+ * The language the learner reads the app in, for material that has no language of its own (a page
+ * of formulas). Never decides anything else, and a lookup that fails is not worth failing a note
+ * over: the material is then detected exactly as before.
+ */
+async function readLearnerLanguage(userId?: string | null) {
+  if (!userId) return null;
+  try {
+    return await readProfileLocale(userId);
+  } catch (error) {
+    console.warn("[source-language] could not read the learner's app language", error);
+    return null;
+  }
+}
+
 export async function generateNotesFromTranscript(
   segments: TranscriptSegmentInput[],
   params: {
@@ -616,6 +632,7 @@ export async function generateNotesFromTranscript(
   const sourceLanguage = await resolveSourceLanguage({
     text: segments.map((segment) => segment.text).join("\n\n"),
     hint: params.outputLanguage,
+    learnerLanguage: await readLearnerLanguage(params.usageContext?.userId),
     ...params.usageContext,
   });
   const localized = { ...params, sourceType, outputLanguage: sourceLanguage };

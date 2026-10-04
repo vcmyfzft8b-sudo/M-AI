@@ -3,6 +3,7 @@ import { generateStructuredObject } from "@/lib/ai/json";
 import { detectSourceLanguage, normalizeContentLanguageCode, resolveMaterialLanguage } from "@/lib/languages";
 import { generationCacheKey, stageModelCacheKeyPart, withGenerationCheckpoint } from "@/lib/notes/generation-cache";
 import {
+  carriesNoLanguage,
   isContradictedBySpelling,
   sampleSourceLanguage,
   sourceLanguageSchema,
@@ -16,6 +17,11 @@ export async function resolveSourceLanguage(params: {
   lectureId?: string | null;
   userId?: string | null;
   metadata?: unknown;
+  /**
+   * The language the learner reads the app in. Only decides material that has no language of its
+   * own (formulas alone); anything written in a language is that language, whoever reads it.
+   */
+  learnerLanguage?: string | null;
 }): Promise<string> {
   const metadata = params.metadata as { sourceLanguage?: { version?: number; code?: string; notesHash?: string } } | null;
   const known = metadata?.sourceLanguage;
@@ -24,7 +30,16 @@ export async function resolveSourceLanguage(params: {
     // A note stored as Estonian before the 2026-09-29 fix is re-detected rather than trusted.
     if (code && !isContradictedBySpelling(code, params.text)) return code;
   }
-  const input = JSON.stringify({ hint: normalizeContentLanguageCode(params.hint), material: sampleSourceLanguage(params.text) });
+  const hint = normalizeContentLanguageCode(params.hint);
+  const learnerLanguage = normalizeContentLanguageCode(params.learnerLanguage);
+  // Nothing to detect, so nothing to ask: the same rule the prompt states, without the model call.
+  if (learnerLanguage && carriesNoLanguage(params.text)) return hint ?? learnerLanguage;
+  const input = JSON.stringify({
+    hint,
+    // Left out when unknown, so a source's cached answer does not change for callers without it.
+    ...(learnerLanguage ? { learnerLanguage } : {}),
+    material: sampleSourceLanguage(params.text),
+  });
   const detect = (instructions: string, version: string) =>
     withGenerationCheckpoint({
       lectureId: params.lectureId,

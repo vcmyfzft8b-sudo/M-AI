@@ -46,6 +46,11 @@ import type { EditableNoteDoc, NoteAnnotation, NoteAnnotationKind } from "@/lib/
 import { NOTE_TTS_HIGHLIGHT_COLORS } from "@/lib/note-tts-settings";
 import { parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import {
+  NOTE_WORD_FIX_MAX_LENGTH,
+  countNoteWord,
+  validateNoteWordFix,
+} from "@/lib/note-word-fix";
+import {
   FLASHCARD_EXIT_ANIMATION_MS,
   type FlashcardExitStart,
 } from "@/lib/study/flashcard-drag";
@@ -1174,6 +1179,49 @@ export function LectureWorkspace({
     }, []),
     { locked: isNoteActionBusy },
   );
+  /*
+   * "Fix a word" (October 2026 feedback): the learner names a word the reader got wrong and it is
+   * replaced everywhere in this note and what was made from it (note-word-fix-server.ts). Opened
+   * from a text selection, prefilled, on every screen size, or empty from the phone's menu.
+   */
+  const [fixWordOpen, setFixWordOpen] = useState(false);
+  const [fixWordFind, setFixWordFind] = useState("");
+  const [fixWordReplace, setFixWordReplace] = useState("");
+  const [fixWordError, setFixWordError] = useState<string | null>(null);
+  const [isFixWordBusy, setIsFixWordBusy] = useState(false);
+  const [fixWordToast, setFixWordToast] = useState<string | null>(null);
+  const fixWordReplaceRef = useRef<HTMLInputElement | null>(null);
+  const fixWordSheet = useSheet(
+    useCallback(() => {
+      setFixWordOpen(false);
+      setFixWordError(null);
+    }, []),
+    { locked: isFixWordBusy },
+  );
+
+  useEffect(() => {
+    if (!fixWordToast) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setFixWordToast(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [fixWordToast]);
+
+  useEffect(() => {
+    if (!fixWordOpen) {
+      return;
+    }
+
+    // Straight to the correct spelling, caret at the end: the wrong word is usually prefilled
+    // into both fields and only a letter or two needs changing.
+    const frame = window.requestAnimationFrame(() => {
+      const input = fixWordReplaceRef.current;
+      input?.focus({ preventScroll: true });
+      input?.setSelectionRange(input.value.length, input.value.length);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [fixWordOpen]);
   const [practiceQuestionIndex, setPracticeQuestionIndex] = useState(0);
 
   // A pending auto-advance must not fire after the quiz is left behind.
@@ -1885,6 +1933,15 @@ export function LectureWorkspace({
     () => (cleanedStructuredNotes ? parseNoteTtsDocument(cleanedStructuredNotes).blocks.map((block) => block.id) : []),
     [cleanedStructuredNotes],
   );
+  // Counted live with the server's own matcher, so the number shown is the number fixed.
+  const fixWordMatches = useMemo(
+    () =>
+      fixWordOpen
+        ? countNoteWord(`${detail.lecture.title ?? ""}\n${detail.artifact?.structured_notes_md ?? ""}`, fixWordFind)
+        : 0,
+    [fixWordOpen, fixWordFind, detail.lecture.title, detail.artifact?.structured_notes_md],
+  );
+  const fixWordInvalid = validateNoteWordFix(fixWordFind, fixWordReplace) !== null;
   useEffect(
     () => () => {
       optimisticNoteMediaUrlsRef.current.forEach((url) => {
@@ -4161,6 +4218,17 @@ export function LectureWorkspace({
           </button>
           <button
             type="button"
+            className="memo-annotate-icon"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={openFixWordFromSelection}
+            disabled={isSavingNoteDoc}
+            aria-label={t("note.fixWord.action")}
+            title={t("note.fixWord.action")}
+          >
+            <Msym name="spellcheck" size="1.25rem" fill={false} weight={500} />
+          </button>
+          <button
+            type="button"
             className={`memo-palette-trigger ${isHighlightPaletteOpen ? "open" : ""}`.trim()}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => setIsHighlightPaletteOpen((current) => !current)}
@@ -5547,6 +5615,67 @@ export function LectureWorkspace({
     navigateWithFeedback(homeHref);
   }
 
+  function openFixWord(prefill: string) {
+    if (blockedOffline("edit")) {
+      return;
+    }
+
+    setFixWordFind(prefill);
+    setFixWordReplace(prefill);
+    setFixWordError(null);
+    setFixWordOpen(true);
+  }
+
+  function openFixWordFromSelection() {
+    if (!noteSelection || !cleanedStructuredNotes) {
+      return;
+    }
+
+    // Whole words, from the same numbering the selection was made in: a selection that starts
+    // mid-word still names the word.
+    const selected = parseNoteTtsDocument(cleanedStructuredNotes)
+      .words.slice(noteSelection.startWordIndex, noteSelection.endWordIndex + 1)
+      .map((word) => word.text)
+      .join(" ");
+
+    window.getSelection()?.removeAllRanges();
+    setNoteSelection(null);
+    setIsHighlightPaletteOpen(false);
+    openFixWord(selected.slice(0, NOTE_WORD_FIX_MAX_LENGTH));
+  }
+
+  async function submitFixWord() {
+    if (isFixWordBusy || fixWordInvalid || fixWordMatches === 0 || blockedOffline("edit")) {
+      return;
+    }
+
+    try {
+      setFixWordError(null);
+      setIsFixWordBusy(true);
+      const response = await fetch(`/api/lectures/${detail.lecture.id}/fix-word`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ find: fixWordFind, replace: fixWordReplace }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? t("common.somethingWentWrong"));
+      }
+
+      // The note, its cards and quiz all changed: take the server's copy before the sheet closes.
+      await refreshLectureDetail({ force: true });
+      setIsFixWordBusy(false);
+      fixWordSheet.dismiss(() => {
+        setFixWordToast(t("note.fixWord.done"));
+        startTransition(() => router.refresh());
+      });
+    } catch (error) {
+      setFixWordError(error instanceof Error ? error.message : t("common.somethingWentWrong"));
+      setIsFixWordBusy(false);
+    }
+  }
+
   async function renameNote() {
     const nextTitle = noteRenameValue.trim();
 
@@ -5898,6 +6027,18 @@ export function LectureWorkspace({
 
               <button
                 type="button"
+                className="memo-action-sheet-item"
+                onClick={() => {
+                  setNoteActionsOpen(false);
+                  openFixWord("");
+                }}
+              >
+                <Msym name="spellcheck" size="1.4rem" fill weight={500} />
+                {t("note.fixWord.action")}
+              </button>
+
+              <button
+                type="button"
                 className="memo-action-sheet-item danger"
                 onClick={() => {
                   setNoteActionsOpen(false);
@@ -5917,6 +6058,114 @@ export function LectureWorkspace({
               </button>
             </div>
           </section>
+        </MemoPortal>
+      ) : null}
+
+      {fixWordOpen ? (
+        <MemoPortal>
+          <button
+            type="button"
+            aria-label={t("common.close")}
+            className={sheetClass("memo-scrim", fixWordSheet.closing)}
+            onClick={() => fixWordSheet.dismiss()}
+          />
+          <div
+            className={sheetClass("memo-sheet memo-dialog", fixWordSheet.closing)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="note-fix-word-title"
+            {...fixWordSheet.dragProps}
+          >
+            <div className="memo-grab" data-drag-handle />
+            <span id="note-fix-word-title" className="memo-sheet-heading">
+              {t("note.fixWord.title")}
+            </span>
+            <p className="memo-sheet-copy">{t("note.fixWord.copy")}</p>
+            <label>
+              <span className="memo-field-label">{t("note.fixWord.wrong")}</span>
+              <input
+                className="memo-sheet-field"
+                value={fixWordFind}
+                onChange={(event) => setFixWordFind(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    fixWordReplaceRef.current?.focus({ preventScroll: true });
+                  }
+                }}
+                placeholder={t("note.fixWord.wrongPlaceholder")}
+                maxLength={NOTE_WORD_FIX_MAX_LENGTH}
+                enterKeyHint="next"
+                autoCapitalize="off"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
+                disabled={isFixWordBusy}
+              />
+            </label>
+            <label>
+              <span className="memo-field-label">{t("note.fixWord.right")}</span>
+              <input
+                ref={fixWordReplaceRef}
+                className="memo-sheet-field"
+                value={fixWordReplace}
+                onChange={(event) => setFixWordReplace(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                  void submitFixWord();
+                }}
+                placeholder={t("note.fixWord.rightPlaceholder")}
+                maxLength={NOTE_WORD_FIX_MAX_LENGTH}
+                enterKeyHint="done"
+                autoCapitalize="off"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
+                disabled={isFixWordBusy}
+              />
+            </label>
+            {fixWordFind.trim() ? (
+              <p className="memo-sheet-copy" aria-live="polite">
+                {fixWordMatches > 0
+                  ? t("note.fixWord.found", { matches: String(fixWordMatches) })
+                  : t("note.fixWord.none")}
+              </p>
+            ) : null}
+            {fixWordError ? <p className="memo-inline-error">{fixWordError}</p> : null}
+            <div className="memo-sheet-actions">
+              <button
+                type="button"
+                className="memo-sheet-coral"
+                onClick={() => void submitFixWord()}
+                disabled={isFixWordBusy || fixWordInvalid || fixWordMatches === 0}
+              >
+                {isFixWordBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {t("note.fixWord.submit")}
+              </button>
+              <button
+                type="button"
+                className="memo-sheet-ghost"
+                onClick={() => fixWordSheet.dismiss()}
+                disabled={isFixWordBusy}
+              >
+                {t("common.cancel")}
+              </button>
+            </div>
+          </div>
+        </MemoPortal>
+      ) : null}
+
+      {fixWordToast ? (
+        <MemoPortal>
+          <div className="memo-toast" role="status">
+            <Msym name="check_circle" size="1.25rem" />
+            <span>{fixWordToast}</span>
+          </div>
         </MemoPortal>
       ) : null}
 

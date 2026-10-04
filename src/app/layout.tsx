@@ -109,6 +109,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "signal_cellular_alt",
   "skip_previous",
   "speed",
+  "spellcheck",
   "stop",
   "style",
   "text_fields",

@@ -90,7 +90,7 @@ type TapState = { x: number; y: number; n: number } | null;
 type CursorState = { x: number; y: number; press: boolean; seen: boolean } | null;
 
 type Screen = "home" | "note" | "capture" | "settings" | "support";
-type Sheet = "create" | "folders" | "newFolder" | "actions" | "rename" | "delete" | "chat";
+type Sheet = "create" | "folders" | "newFolder" | "actions" | "rename" | "fixWord" | "delete" | "chat";
 
 /* The tabs whose body is one of the landing's shared app screens. */
 type StudyTab = Exclude<NoteTab, "notes" | "transcript">;
@@ -133,6 +133,8 @@ type PreviewState = {
   folders: PreviewFolder[];
   targetId: string | null;
   renameValue: string;
+  fixWordFind: string;
+  fixWordReplace: string;
   newFolderName: string;
   theme: PreviewTheme;
   dragKey: string | null;
@@ -371,6 +373,8 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
       folders: initialFolders(props.t),
       targetId: null,
       renameValue: "",
+      fixWordFind: "",
+      fixWordReplace: "",
       newFolderName: "",
       theme: "system",
       dragKey: null,
@@ -2648,6 +2652,17 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
             <Msym name="edit" size="22.4px" fill weight={500} />
             {t("common.rename")}
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              this.setState({ fixWordFind: "", fixWordReplace: "" });
+              this.swapSheet("fixWord");
+            }}
+            style={item(false)}
+          >
+            <Msym name="spellcheck" size="22.4px" fill weight={500} />
+            {t("note.fixWord.action")}
+          </button>
           <button type="button" onClick={() => this.swapSheet("delete")} style={item(true)}>
             <Msym name="delete" size="22.4px" fill weight={500} />
             {t("common.delete")}
@@ -2694,6 +2709,74 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
         <div style={{ display: "grid", gap: "11.2px", marginTop: "16px" }}>
           <button type="button" onClick={() => this.saveRename()} style={coralPill({ width: "100%", height: "54.4px", fontSize: "17.28px" })}>
             {t("common.save")}
+          </button>
+          <button type="button" onClick={this.closeSheet} style={outlinePill(49.6)}>
+            {t("common.cancel")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /*
+   * Fix a word (`.memo-sheet.memo-dialog` in lecture-workspace.tsx). The demo note is a picture of
+   * one, so nothing is rewritten here; the sheet is the screen a visitor gets to see.
+   */
+  renderFixWordSheet() {
+    const s = this.state;
+    const t = this.props.t;
+    const sheet = this.sheetProps("fixWord", this.closeSheet);
+    const field: CSSProperties = {
+      width: "100%",
+      height: "57.6px",
+      padding: "0 19.2px",
+      border: 0,
+      borderRadius: "999px",
+      background: "var(--field)",
+      color: "var(--text)",
+      outline: "none",
+      fontFamily: "inherit",
+      fontSize: "17.28px",
+      fontWeight: 600,
+    };
+    const label: CSSProperties = {
+      display: "block",
+      margin: "12px 0 8.8px",
+      fontSize: "16.8px",
+      fontWeight: 650,
+      letterSpacing: "-0.02em",
+    };
+    return (
+      <div role="dialog" aria-modal="true" onPointerDown={sheet.onPointerDown} style={sheet.style}>
+        {GRAB}
+        <span style={SHEET_HEADING}>{t("note.fixWord.title")}</span>
+        <p style={{ margin: "0 0 4.8px", textAlign: "center", color: "var(--muted)", fontSize: "15.68px", lineHeight: 1.4 }}>
+          {t("note.fixWord.copy")}
+        </p>
+        <label>
+          <span style={label}>{t("note.fixWord.wrong")}</span>
+          <input
+            value={s.fixWordFind}
+            onChange={(e) => this.setState({ fixWordFind: e.target.value })}
+            placeholder={t("note.fixWord.wrongPlaceholder")}
+            style={field}
+          />
+        </label>
+        <label>
+          <span style={label}>{t("note.fixWord.right")}</span>
+          <input
+            value={s.fixWordReplace}
+            onChange={(e) => this.setState({ fixWordReplace: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") this.closeSheet();
+            }}
+            placeholder={t("note.fixWord.rightPlaceholder")}
+            style={field}
+          />
+        </label>
+        <div style={{ display: "grid", gap: "11.2px", marginTop: "16px" }}>
+          <button type="button" onClick={this.closeSheet} style={coralPill({ width: "100%", height: "54.4px", fontSize: "17.28px" })}>
+            {t("note.fixWord.submit")}
           </button>
           <button type="button" onClick={this.closeSheet} style={outlinePill(49.6)}>
             {t("common.cancel")}
@@ -3049,6 +3132,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
                 {s.sheet === "newFolder" ? this.renderNewFolderSheet() : null}
                 {s.sheet === "actions" ? this.renderActionsSheet() : null}
                 {s.sheet === "rename" ? this.renderRenameSheet() : null}
+                {s.sheet === "fixWord" ? this.renderFixWordSheet() : null}
                 {s.sheet === "delete" ? this.renderDeleteSheet() : null}
                 {s.sheet === "chat" ? this.renderChatSheet() : null}
 

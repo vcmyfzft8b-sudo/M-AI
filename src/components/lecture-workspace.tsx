@@ -4235,17 +4235,24 @@ export function LectureWorkspace({
               U
             </span>
           </button>
-          <button
-            type="button"
-            className="memo-annotate-icon"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={openFixWordFromSelection}
-            disabled={isSavingNoteDoc}
-            aria-label={t("note.fixWord.action")}
-            title={t("note.fixWord.action")}
-          >
-            <Msym name="spellcheck" size="1.25rem" fill={false} weight={500} />
-          </button>
+          {/*
+           * Hidden while the colours are out: with the palette open the row is the widest it gets,
+           * and with this button too it ran 4px past a 375px phone (measured on the preview).
+           * Picking a colour is its own moment; the fix is one tap away once it closes.
+           */}
+          {isHighlightPaletteOpen ? null : (
+            <button
+              type="button"
+              className="memo-annotate-icon"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={openFixWordFromSelection}
+              disabled={isSavingNoteDoc}
+              aria-label={t("note.fixWord.action")}
+              title={t("note.fixWord.action")}
+            >
+              <Msym name="spellcheck" size="1.25rem" fill={false} weight={500} />
+            </button>
+          )}
           <button
             type="button"
             className={`memo-palette-trigger ${isHighlightPaletteOpen ? "open" : ""}`.trim()}

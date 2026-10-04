@@ -5,7 +5,7 @@ import ts from 'typescript';
 import { normalizeContentLanguageCode, normalizeNoteLanguage, normalizeSpokenLanguageCode, resolveMaterialLanguage, detectSourceLanguage, buildGeneratedContentLanguageInstruction } from '../src/lib/languages.ts';
 import { judgeHeard } from '../src/lib/tutor/turn-audio.ts';
 import { SONIOX_LANGUAGES, resolveSpeechLanguage, needsEnglishSpeechFallback, toSpeechScript } from '../src/lib/speech-language.ts';
-import { sourceLanguageSchema, sampleSourceLanguage, SOURCE_LANGUAGE_INSTRUCTIONS, isContradictedBySpelling } from '../src/lib/source-language-policy.ts';
+import { sourceLanguageSchema, sampleSourceLanguage, SOURCE_LANGUAGE_INSTRUCTIONS, isContradictedBySpelling, carriesNoLanguage } from '../src/lib/source-language-policy.ts';
 import { generationCacheKey } from '../src/lib/notes/generation-cache-key.ts';
 import { buildSourceNoteInstructions, normalizeNoteCalloutLanguage } from '../src/lib/notes/note-prompts.ts';
 
@@ -66,7 +66,7 @@ function loadResolver(generate) {
   const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
   const entries=new Map();
   const checkpoint=async(p)=>{ const old=p.schema.safeParse(entries.get(p.cacheKey));if(old.success)return old.data;const result=p.schema.parse(await p.generate());entries.set(p.cacheKey,result);return result; };
-  return new Function('generateStructuredObject','detectSourceLanguage','normalizeContentLanguageCode','resolveMaterialLanguage','generationCacheKey','stageModelCacheKeyPart','withGenerationCheckpoint','sampleSourceLanguage','sourceLanguageSchema','SOURCE_LANGUAGE_INSTRUCTIONS','isContradictedBySpelling',js+'\nreturn resolveSourceLanguage;')(generate,detectSourceLanguage,normalizeContentLanguageCode,resolveMaterialLanguage,generationCacheKey,()=> 'fixture-model',checkpoint,sampleSourceLanguage,sourceLanguageSchema,SOURCE_LANGUAGE_INSTRUCTIONS,isContradictedBySpelling);
+  return new Function('generateStructuredObject','detectSourceLanguage','normalizeContentLanguageCode','resolveMaterialLanguage','generationCacheKey','stageModelCacheKeyPart','withGenerationCheckpoint','sampleSourceLanguage','sourceLanguageSchema','SOURCE_LANGUAGE_INSTRUCTIONS','isContradictedBySpelling','carriesNoLanguage',js+'\nreturn resolveSourceLanguage;')(generate,detectSourceLanguage,normalizeContentLanguageCode,resolveMaterialLanguage,generationCacheKey,()=> 'fixture-model',checkpoint,sampleSourceLanguage,sourceLanguageSchema,SOURCE_LANGUAGE_INSTRUCTIONS,isContradictedBySpelling,carriesNoLanguage);
 }
 test('the actual server resolver trusts matching metadata without a model call, but re-detects edits',async()=>{
   let calls=0;
@@ -109,6 +109,53 @@ test('a stored Estonian label on Slovenian material is re-detected instead of re
 test('a model that insists on Estonian falls back to the material, never the stale et hint',async()=>{
   const resolve=loadResolver(async()=>({language:'et'}));
   assert.notEqual(await resolve({text:SLOVENIAN_SCAN,hint:'et'}),'et');
+});
+// A photographed algebra exercise (PR #537) has no language to detect. The model answered en, so a
+// Slovenian learner got an English note, or a Slovenian body under an English title and summary.
+const FORMULAS_ONLY = 'a) (7x - 3y)^5 · (6y - 14x)^3 =\nb) (2a + 5b)^3 · (4b - 10a)^2 =';
+
+test('formulas alone carry no language; one written word does',()=>{
+  assert.equal(carriesNoLanguage(FORMULAS_ONLY),true);
+  assert.equal(carriesNoLanguage('x^4 · x^3 : x^2 = x^5'),true);
+  assert.equal(carriesNoLanguage('√16 · 2² = 8'),true);
+  assert.equal(carriesNoLanguage('(3m^2 n)^3 · (2mn^2)^2 ='),true);
+  // Trigonometry and calculus are notation too; the model called both English.
+  assert.equal(carriesNoLanguage('sin^2 x + cos^2 x = 1\ntan x = sin x / cos x'),true);
+  assert.equal(carriesNoLanguage('lim (x→0) sin x / x = ?\nlog_2 8 = ?\nln(e^2) ='),true);
+  assert.equal(carriesNoLanguage('arctg x + ctg x · sinh(2x)'),true);
+  // A real word among the notation is language evidence again, and the model decides.
+  assert.equal(carriesNoLanguage('Izračunaj sin 30°'),false);
+  assert.equal(carriesNoLanguage('Find the minimum of x^2 - 4x'),false);
+  assert.equal(carriesNoLanguage('Logaritmi: log_2 8 ='),false);
+  assert.equal(carriesNoLanguage('Izračunaj: 3x + 4 = 19'),false);
+  assert.equal(carriesNoLanguage('Solve 3x + 4 = 19'),false);
+});
+test('formulas alone are written in the learner\'s language, without asking the model',async()=>{
+  let calls=0;
+  const resolve=loadResolver(async()=>{calls++;return {language:'en'};});
+  assert.equal(await resolve({text:FORMULAS_ONLY,learnerLanguage:'sl',lectureId:'fixture'}),'sl');
+  assert.equal(await resolve({text:FORMULAS_ONLY,learnerLanguage:'hr',lectureId:'fixture'}),'hr');
+  // The prompt's order: a valid hint from the import still comes first.
+  assert.equal(await resolve({text:FORMULAS_ONLY,hint:'bs',learnerLanguage:'sl',lectureId:'fixture'}),'bs');
+  assert.equal(calls,0);
+  // Without a known learner language nothing changes: the model decides, as before.
+  assert.equal(await resolve({text:FORMULAS_ONLY,lectureId:'fixture'}),'en');
+  assert.equal(calls,1);
+});
+test('the learner\'s language never overrides material written in a language',async()=>{
+  const inputs=[];
+  const resolve=loadResolver(async(p)=>{inputs.push(JSON.parse(p.input));return {language:'en'};});
+  assert.equal(await resolve({text:'Solve for x: 3x + 4 = 19',learnerLanguage:'sl',lectureId:'fixture'}),'en');
+  assert.equal(inputs[0].learnerLanguage,'sl');
+  assert.match(SOURCE_LANGUAGE_INSTRUCTIONS,/learnerLanguage[^.]*never outweighs any language the material is written in/);
+  // Callers that do not know the learner send the same input as before, so cached answers hold.
+  await resolve({text:'Rešimo enačbo 3x + 4 = 19',lectureId:'fixture'});
+  assert.deepEqual(Object.keys(inputs[1]),['hint','material']);
+});
+test('notes ask for the learner\'s app language, and survive not getting it',()=>{
+  const source=fs.readFileSync(new URL('../src/lib/note-generation.ts',import.meta.url),'utf8');
+  assert.match(source,/learnerLanguage: await readLearnerLanguage\(params\.usageContext\?\.userId\)/);
+  assert.match(source,/async function readLearnerLanguage[\s\S]*?try \{\s*return await readProfileLocale\(userId\);\s*\} catch/);
 });
 test('provider failure on unknown material never silently changes it to English or an old hint',async()=>{
   const resolve=loadResolver(async()=>{throw Error('provider unavailable');});

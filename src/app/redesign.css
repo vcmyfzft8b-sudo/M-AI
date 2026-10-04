@@ -436,6 +436,12 @@
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   --shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.18);
   --scrim: rgba(0, 0, 0, 0.32);
+  /* A photo is looked at on black in either appearance, the way Photos shows
+     one, so these four do not change with the theme. */
+  --photo-stage: #000000;
+  --on-photo: #ffffff;
+  --on-photo-chip: rgba(255, 255, 255, 0.16);
+  --photo-chip: rgba(0, 0, 0, 0.5);
   --coral: linear-gradient(135deg, #ff6d68, #f45f5a);
   --blue: #0066cc;
   /* Destructive. Until now every delete, every error note and every danger
@@ -9442,43 +9448,232 @@
   gap: 0.6rem;
 }
 
-.note-source-modal .note-source-photo-grid,
-.note-source-modal .note-source-photo-previews {
+/*
+ * The photos staged for a note. They are pages from a notebook or a book,
+ * almost always shot upright, so each tile is a portrait 3:4 — the camera's
+ * own shape — rather than a square that crops a page into a strip of margin.
+ * Three across while there are six or fewer; past that four across, so all ten
+ * fit a phone in three rows and the sheet scrolls only on a short screen, under
+ * the pinned "create" button.
+ */
+.memo-photo-set {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
   gap: 0.6rem;
 }
 
-.note-source-modal .note-source-photo-preview {
-  position: relative;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--sunken);
-  overflow: hidden;
+.memo-photo-set-count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
 }
 
-.note-source-modal .note-source-photo-image {
+.memo-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.memo-photo-grid[data-dense] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+/* The photo clips to the corners rather than the tile, so the close's
+   enlarged hit area below is not clipped with it. */
+.memo-photo-tile {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  min-width: 0;
+  border-radius: 14px;
+  background: var(--sunken);
+  box-shadow: var(--shadow);
+}
+
+.memo-photo-open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.memo-photo-open img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.note-source-modal .note-source-photo-remove {
+.memo-photo-status {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 0.5rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-align: center;
+}
+
+/* Dark glass on the photo itself, as Photos draws it, rather than a white
+   chip that reads as part of the page. */
+.memo-photo-remove {
   position: absolute;
   top: 0.35rem;
   right: 0.35rem;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--photo-chip);
+  color: var(--on-photo);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+
+/* A bigger hit area than the chip it draws, so a thumb does not open the photo instead. */
+.memo-photo-remove::after {
+  content: "";
+  position: absolute;
+  inset: -0.6rem;
+}
+
+/* With photos staged, the two ways to add another share one row. */
+.note-source-modal .memo-photo-add-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.note-source-modal .memo-photo-add-row .ios-secondary-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  gap: 0.45rem;
+  width: 100%;
+  min-width: 0;
+}
+
+/* A short screen — a small phone, or Safari with its bars showing — is four
+   across from the first photo, so the actions stay in view for longer. */
+@media (max-width: 1099px) and (max-height: 700px) {
+  .memo-photo-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+}
+
+@media (min-width: 1100px) {
+  .memo-photo-grid,
+  .memo-photo-grid[data-dense] {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+/*
+ * One photo at a time, full screen, on black. The photos sit side by side in
+ * a snapping row, so a swipe goes to the next page the way Photos does it and
+ * the browser does the gesture's maths.
+ */
+.memo-photo-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--photo-stage);
+  color: var(--on-photo);
+}
+
+.memo-photo-viewer-bar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  padding: calc(var(--memo-safe-top, env(safe-area-inset-top, 0px)) + 0.6rem) 1rem 0.6rem;
+}
+
+.memo-photo-viewer-count {
+  grid-column: 2;
+  font-size: 1.05rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-photo-viewer-actions {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.memo-photo-viewer-button {
+  display: grid;
+  place-items: center;
+  width: var(--btn-round);
+  height: var(--btn-round);
+  padding: 0;
   border: 0;
   border-radius: 999px;
-  background: var(--surface);
-  color: var(--muted);
-  box-shadow: var(--shadow);
+  background: var(--on-photo-chip);
+  color: var(--on-photo);
   cursor: pointer;
+}
+
+.memo-photo-viewer-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--on-photo-chip);
+}
+
+.memo-photo-viewer-track {
+  display: flex;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.memo-photo-viewer-track::-webkit-scrollbar {
+  display: none;
+}
+
+/* A block, not a grid: the photo's 100% has to resolve against the slide's
+   stretched height, which a grid cell's auto row would not give it. */
+.memo-photo-viewer-slide {
+  flex: 0 0 100%;
+  min-width: 0;
+  padding: 0.5rem 0.75rem calc(var(--memo-safe-bottom, env(safe-area-inset-bottom, 0px)) + 1rem);
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+}
+
+.memo-photo-viewer-slide img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.memo-photo-viewer-status {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  padding: 0 1.5rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+  text-align: center;
 }
 
 /*

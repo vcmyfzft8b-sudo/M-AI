@@ -691,7 +691,6 @@ export const sr: Messages = {
   "capture.removePhotoIndexed": "Ukloni fotografiju {index}",
   "capture.removePhoto": "Ukloni fotografiju",
   "capture.addPhotos": "Dodaj fotografije",
-  "capture.photoLimit": "Do {count} fotografija ukupno",
   "capture.documentFormats": "PDF, DOCX, PPTX ili slika",
   "capture.scan": "Skeniraj",
   "capture.photoPreview": "Pregled fotografije",
@@ -699,11 +698,7 @@ export const sr: Messages = {
   "capture.previewPreparing": "Pregled fotografije se priprema...",
   "capture.previewUnavailable": "Pregled ove fotografije nije bilo moguće prikazati.",
   "capture.dontCloseScreen": "Nemoj da zatvaraš ovaj ekran. Zatvoriće se sam kada sve bude spremno.",
-  "capture.uploadedPhotoCount": {
-    one: "Učitana {count} fotografija",
-    few: "Učitane {count} fotografije",
-    other: "Učitano {count} fotografija",
-  },
+  "capture.photoCount": "{count} od {max} fotografija",
 
   /* ---- Capture sheet — busy labels, errors and the audio import guide ---- */
   "capture.busy.preparing": "Pripremam...",

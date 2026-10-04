@@ -88,8 +88,8 @@ All `/dev` pages are no-ops in production builds.
 5. **Repair the user's production note** (`Pregled in primerjava sodobnih modelov umetne
    inteligence` on prod) after merge — its table was corrupted by the old normalizer. The staging
    copy repair procedure is in the session history; a regenerate also works once new code ships.
-6. **Chat + practice-photo grading models** were never swept — chat runs on the 2.5 fallback,
-   grading on the OCR model; both defensible, neither measured.
+6. **Chat model** was never swept — chat runs on the 2.5 fallback; defensible, not measured.
+   (The practice-photo grader this item also named was never called and was deleted in Oct 2026.)
 7. **Preview-bypass RLS gap** (pre-existing): bypass users 404 on lecture detail everywhere. Fix
    only if preview testing needs it; the magic-link session recipe above is the workaround.
 8. Sentry issue `142288144` is my local test machine (server `Naces-MacBook-Air.local`), safe to

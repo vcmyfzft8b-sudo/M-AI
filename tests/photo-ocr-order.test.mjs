@@ -43,7 +43,7 @@ test("the readers are named by role, and the old names still configure them", ()
 
   // Vercel Preview still sets GEMINI_OCR_RESCUE_MODEL; dropping the fallback would silently
   // change which model reads photos there.
-  assert.match(env, /GEMINI_OCR_STRONG_MODEL: process\.env\.GEMINI_OCR_STRONG_MODEL \?\? process\.env\.GEMINI_OCR_RESCUE_MODEL,/);
-  assert.match(env, /GEMINI_OCR_LITE_MODEL: process\.env\.GEMINI_OCR_LITE_MODEL \?\? process\.env\.GEMINI_OCR_MODEL,/);
+  assert.match(env, /GEMINI_OCR_STRONG_MODEL: firstSetEnv\("GEMINI_OCR_STRONG_MODEL", "GEMINI_OCR_RESCUE_MODEL"\),/);
+  assert.match(env, /GEMINI_OCR_LITE_MODEL: firstSetEnv\("GEMINI_OCR_LITE_MODEL", "GEMINI_OCR_MODEL"\),/);
   assert.doesNotMatch(source, /env\.GEMINI_OCR_(?:RESCUE_)?MODEL\b/);
 });

@@ -69,9 +69,10 @@ const SUPABASE = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_U
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const headers = { apikey: KEY, Authorization: `Bearer ${KEY}` };
 // Same names and fallbacks as server-env.ts.
-const OCR_LITE_MODEL = process.env.GEMINI_OCR_LITE_MODEL ?? process.env.GEMINI_OCR_MODEL ?? "gemini-3.5-flash-lite";
-const OCR_STRONG_MODEL =
-  process.env.GEMINI_OCR_STRONG_MODEL ?? process.env.GEMINI_OCR_RESCUE_MODEL ?? "gemini-3-flash-preview";
+// A blank variable counts as unset, as in server-env.ts.
+const firstSetEnv = (...names) => names.map((name) => process.env[name]?.trim()).find(Boolean);
+const OCR_LITE_MODEL = firstSetEnv("GEMINI_OCR_LITE_MODEL", "GEMINI_OCR_MODEL") ?? "gemini-3.5-flash-lite";
+const OCR_STRONG_MODEL = firstSetEnv("GEMINI_OCR_STRONG_MODEL", "GEMINI_OCR_RESCUE_MODEL") ?? "gemini-3-flash-preview";
 const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 async function rest(pathname) {

@@ -123,6 +123,10 @@ test('formulas alone carry no language; one written word does',()=>{
   assert.equal(carriesNoLanguage('sin^2 x + cos^2 x = 1\ntan x = sin x / cos x'),true);
   assert.equal(carriesNoLanguage('lim (x→0) sin x / x = ?\nlog_2 8 = ?\nln(e^2) ='),true);
   assert.equal(carriesNoLanguage('arctg x + ctg x · sinh(2x)'),true);
+  assert.equal(carriesNoLanguage('α + β + γ = 180°'),true);
+  // Scripts whose words are one or two letters long are language however short.
+  assert.equal(carriesNoLanguage('求解: x + 1 = 2'),false);
+  assert.equal(carriesNoLanguage('حل: x + 1 = 2'),false);
   // A real word among the notation is language evidence again, and the model decides.
   assert.equal(carriesNoLanguage('Izračunaj sin 30°'),false);
   assert.equal(carriesNoLanguage('Find the minimum of x^2 - 4x'),false);

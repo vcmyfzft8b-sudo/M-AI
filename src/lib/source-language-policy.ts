@@ -26,10 +26,14 @@ const MATH_NAMES =
  * for a language, the model answered en -- for "sin x" and "lim" too -- so a Slovenian learner got
  * an English note, or a Slovenian body under an English title and summary when the writer drifted
  * back. Such material is written in the learner's language instead (source-language.ts). Two
- * letters together ("mn", "xy") are a product of variables far more often than a word.
+ * letters together ("mn", "xy") are a product of variables far more often than a word, and Greek
+ * letters are variables (α, β).
  */
 export function carriesNoLanguage(text: string) {
-  return !/\p{L}{3,}/u.test(text.replace(MATH_NAMES, " "));
+  const prose = text.replace(MATH_NAMES, " ");
+  // Chinese, Japanese, Arabic and the like write whole words in one or two letters.
+  const otherScript = /[^\P{L}\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}]/u;
+  return !/\p{L}{3,}/u.test(prose) && !otherScript.test(prose);
 }
 
 /*

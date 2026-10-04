@@ -437,10 +437,11 @@
   --shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.18);
   --scrim: rgba(0, 0, 0, 0.32);
   /* A photo is looked at on black in either appearance, the way Photos shows
-     one, so these three do not change with the theme. */
+     one, so these four do not change with the theme. */
   --photo-stage: #000000;
   --on-photo: #ffffff;
   --on-photo-chip: rgba(255, 255, 255, 0.16);
+  --photo-chip: rgba(0, 0, 0, 0.5);
   --coral: linear-gradient(135deg, #ff6d68, #f45f5a);
   --blue: #0066cc;
   /* Destructive. Until now every delete, every error note and every danger
@@ -9451,21 +9452,20 @@
  * The photos staged for a note. They are pages from a notebook or a book,
  * almost always shot upright, so each tile is a portrait 3:4 — the camera's
  * own shape — rather than a square that crops a page into a strip of margin.
- * Three across on a phone, which keeps a page legible enough to recognise; the
- * last tile adds another, in place of the drop target the empty state shows.
+ * Three across while there are six or fewer; past that four across, so all ten
+ * fit a phone in three rows and the sheet scrolls only on a short screen, under
+ * the pinned "create" button.
  */
 .memo-photo-set {
   display: grid;
   gap: 0.6rem;
 }
 
-.memo-photo-set-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.6rem;
+.memo-photo-set-count {
   margin: 0;
   color: var(--muted);
   font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .memo-photo-grid {
@@ -9474,18 +9474,19 @@
   gap: 0.6rem;
 }
 
-.memo-photo-tile,
-.memo-photo-add {
-  position: relative;
-  aspect-ratio: 3 / 4;
-  min-width: 0;
-  border-radius: 16px;
-  overflow: hidden;
+.memo-photo-grid[data-dense] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
 }
 
 .memo-photo-tile {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  min-width: 0;
+  border-radius: 14px;
+  overflow: hidden;
   background: var(--sunken);
-  box-shadow: var(--shadow), inset 0 0 0 1px var(--line);
+  box-shadow: var(--shadow);
 }
 
 .memo-photo-open {
@@ -9509,47 +9510,30 @@
   display: grid;
   place-items: center;
   height: 100%;
-  padding: 0.6rem;
+  padding: 0.5rem;
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 650;
   text-align: center;
 }
 
-/* Which page this is: the order photos go up in is the order they are read. */
-.memo-photo-index {
-  position: absolute;
-  left: 0.4rem;
-  bottom: 0.4rem;
-  display: grid;
-  place-items: center;
-  min-width: 1.5rem;
-  height: 1.5rem;
-  padding: 0 0.4rem;
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: var(--shadow);
-  font-size: 0.78rem;
-  font-weight: 750;
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
-}
-
+/* Dark glass on the photo itself, as Photos draws it, rather than a white
+   chip that reads as part of the page. */
 .memo-photo-remove {
   position: absolute;
-  top: 0.4rem;
-  right: 0.4rem;
+  top: 0.35rem;
+  right: 0.35rem;
   display: grid;
   place-items: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
   border: 0;
   border-radius: 999px;
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: var(--shadow);
+  background: var(--photo-chip);
+  color: var(--on-photo);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   cursor: pointer;
 }
 
@@ -9557,44 +9541,38 @@
 .memo-photo-remove::after {
   content: "";
   position: absolute;
-  inset: -0.5rem;
+  inset: -0.6rem;
 }
 
-.memo-photo-add {
+/* With photos staged, the two ways to add another share one row. */
+.note-source-modal .memo-photo-add-row {
   display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 0.35rem;
-  padding: 0.6rem;
-  border: 1.5px dashed var(--line);
-  background: var(--surface);
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 0.78rem;
-  font-weight: 650;
-  text-align: center;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
 }
 
-.memo-photo-add:hover:not(:disabled) {
-  box-shadow: inset 0 0 0 1px var(--hover-ring);
+.note-source-modal .memo-photo-add-row .ios-secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-width: 0;
 }
 
-.memo-photo-add:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-
-.memo-photo-add .msym {
-  color: var(--text);
+/* A short screen — a small phone, or Safari with its bars showing — is four
+   across from the first photo, so the actions stay in view for longer. */
+@media (max-width: 1099px) and (max-height: 700px) {
+  .memo-photo-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
 }
 
 @media (min-width: 1100px) {
-  .memo-photo-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .memo-photo-add {
-    background: var(--bg);
+  .memo-photo-grid,
+  .memo-photo-grid[data-dense] {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
 

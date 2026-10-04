@@ -707,7 +707,6 @@ export const sl = {
   "capture.removePhotoIndexed": "Odstrani fotografijo {index}",
   "capture.removePhoto": "Odstrani fotografijo",
   "capture.addPhotos": "Dodaj fotografije",
-  "capture.photoLimit": "Do {count} fotografij skupaj",
   "capture.documentFormats": "PDF, DOCX, PPTX ali slika",
   "capture.scan": "Skeniraj",
   "capture.photoPreview": "Predogled fotografije",
@@ -715,12 +714,7 @@ export const sl = {
   "capture.previewPreparing": "Predogled fotografije se pripravlja...",
   "capture.previewUnavailable": "Predogleda te fotografije ni bilo mogoče prikazati.",
   "capture.dontCloseScreen": "Ne zapiraj tega zaslona. Ko bo vse pripravljeno, se bo zaprl samodejno.",
-  "capture.uploadedPhotoCount": {
-    one: "{count} fotografija naložena",
-    two: "{count} fotografiji naloženi",
-    few: "{count} fotografije naložene",
-    other: "{count} fotografij naloženih",
-  },
+  "capture.photoCount": "{count} od {max} fotografij",
 
   /* ---- Capture sheet — busy labels, errors and the audio import guide ---- */
   "capture.busy.preparing": "Pripravljam...",

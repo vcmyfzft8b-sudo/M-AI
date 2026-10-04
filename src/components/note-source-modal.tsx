@@ -261,6 +261,9 @@ async function fetchWithTimeout(
   }
 }
 
+/** Up to two rows of three; past that the grid goes four across, so ten photos still fit a phone. */
+const PHOTO_GRID_ROOMY_COUNT = 6;
+
 function isHeicPhoto(file: File) {
   const lowerName = file.name.toLowerCase();
   const normalizedMimeType = normalizeMimeType(file.type || "");
@@ -2722,11 +2725,16 @@ export function NoteSourceModal({
                     <>
                       {photoSources.length > 0 ? (
                         <section className="memo-photo-set" aria-label={t("capture.uploadedPhotos")}>
-                          <p className="memo-photo-set-head">
-                            <span>{t("capture.uploadedPhotoCount", { count: photoSources.length })}</span>
-                            <span>{t("capture.photoLimit", { count: MAX_SCAN_IMAGE_COUNT })}</span>
+                          <p className="memo-photo-set-count">
+                            {t("capture.photoCount", {
+                              count: photoSources.length,
+                              max: MAX_SCAN_IMAGE_COUNT,
+                            })}
                           </p>
-                          <div className="memo-photo-grid">
+                          <div
+                            className="memo-photo-grid"
+                            data-dense={photoSources.length > PHOTO_GRID_ROOMY_COUNT ? "" : undefined}
+                          >
                             {photoSources.map((photoSource, index) => (
                               <div key={photoSource.id} className="memo-photo-tile">
                                 <button
@@ -2752,9 +2760,6 @@ export function NoteSourceModal({
                                     </span>
                                   )}
                                 </button>
-                                <span className="memo-photo-index" aria-hidden="true">
-                                  {index + 1}
-                                </span>
                                 <button
                                   type="button"
                                   className="memo-photo-remove"
@@ -2763,30 +2768,10 @@ export function NoteSourceModal({
                                   aria-label={t("capture.removePhotoIndexed", { index: index + 1 })}
                                   title={t("capture.removePhoto")}
                                 >
-                                  <X className="h-4 w-4" />
+                                  <X className="h-3.5 w-3.5" strokeWidth={2.75} />
                                 </button>
                               </div>
                             ))}
-
-                            {/* With photos staged, the drop target shrinks to the next tile. */}
-                            {isCreatorDemo || !canAddDocumentSource ? null : (
-                              <button
-                                type="button"
-                                className="memo-photo-add"
-                                disabled={Boolean(busyLabel)}
-                                onClick={() => {
-                                  if (!canCreateNotes) {
-                                    redirectToPaywall();
-                                    return;
-                                  }
-
-                                  pdfInputRef.current?.click();
-                                }}
-                              >
-                                <Msym name="add_photo_alternate" size="1.6rem" fill={false} />
-                                <span>{t("capture.addPhotos")}</span>
-                              </button>
-                            )}
                           </div>
                         </section>
                       ) : null}
@@ -2813,8 +2798,30 @@ export function NoteSourceModal({
                       />
 
                       {isCreatorDemo || !canAddDocumentSource ? null : (
-                        <div className="note-source-docs-actions note-source-docs-actions-bottom">
-                          {hasPhotoSources ? null : (
+                        <div
+                          className={cn(
+                            "note-source-docs-actions note-source-docs-actions-bottom",
+                            hasPhotoSources && "memo-photo-add-row",
+                          )}
+                        >
+                          {hasPhotoSources ? (
+                            <button
+                              type="button"
+                              className="ios-secondary-button note-source-docs-action-button"
+                              disabled={Boolean(busyLabel)}
+                              onClick={() => {
+                                if (!canCreateNotes) {
+                                  redirectToPaywall();
+                                  return;
+                                }
+
+                                pdfInputRef.current?.click();
+                              }}
+                            >
+                              <Msym name="photo_library" />
+                              {t("capture.addPhotos")}
+                            </button>
+                          ) : (
                             <button
                               type="button"
                               className="memo-dropzone"

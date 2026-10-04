@@ -4181,7 +4181,7 @@ export function LectureWorkspace({
       const photoDockButton = (
         <button
           type="button"
-          className="memo-annotate-icon"
+          className="memo-annotate-icon memo-annotate-photo"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
             /* Before the picker, so the refusal is not a file chosen and then lost. */

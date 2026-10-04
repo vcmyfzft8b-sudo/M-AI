@@ -2835,6 +2835,15 @@
     opacity: 0;
     margin-left: 0;
   }
+
+  /*
+   * And the photo button steps aside while a colour is being picked: even label-less, the five
+   * swatches ran the last one 21px off a 320px screen (on main too). It is back when the palette
+   * closes, and on any wider phone it never leaves.
+   */
+  .memo-dock-pill.palette .memo-annotate-photo {
+    display: none;
+  }
 }
 
 .memo-annotate-icon {

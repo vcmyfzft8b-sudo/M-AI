@@ -436,6 +436,11 @@
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   --shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.18);
   --scrim: rgba(0, 0, 0, 0.32);
+  /* A photo is looked at on black in either appearance, the way Photos shows
+     one, so these three do not change with the theme. */
+  --photo-stage: #000000;
+  --on-photo: #ffffff;
+  --on-photo-chip: rgba(255, 255, 255, 0.16);
   --coral: linear-gradient(135deg, #ff6d68, #f45f5a);
   --blue: #0066cc;
   /* Destructive. Until now every delete, every error note and every danger
@@ -9442,43 +9447,252 @@
   gap: 0.6rem;
 }
 
-.note-source-modal .note-source-photo-grid,
-.note-source-modal .note-source-photo-previews {
+/*
+ * The photos staged for a note. They are pages from a notebook or a book,
+ * almost always shot upright, so each tile is a portrait 3:4 — the camera's
+ * own shape — rather than a square that crops a page into a strip of margin.
+ * Three across on a phone, which keeps a page legible enough to recognise; the
+ * last tile adds another, in place of the drop target the empty state shows.
+ */
+.memo-photo-set {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
   gap: 0.6rem;
 }
 
-.note-source-modal .note-source-photo-preview {
+.memo-photo-set-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.memo-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.memo-photo-tile,
+.memo-photo-add {
   position: relative;
-  border: 1px solid var(--line);
+  aspect-ratio: 3 / 4;
+  min-width: 0;
   border-radius: 16px;
-  background: var(--sunken);
   overflow: hidden;
 }
 
-.note-source-modal .note-source-photo-image {
+.memo-photo-tile {
+  background: var(--sunken);
+  box-shadow: var(--shadow), inset 0 0 0 1px var(--line);
+}
+
+.memo-photo-open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.memo-photo-open img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.note-source-modal .note-source-photo-remove {
+.memo-photo-status {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 0.6rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-align: center;
+}
+
+/* Which page this is: the order photos go up in is the order they are read. */
+.memo-photo-index {
   position: absolute;
-  top: 0.35rem;
-  right: 0.35rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  left: 0.4rem;
+  bottom: 0.4rem;
+  display: grid;
+  place-items: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 0.78rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.memo-photo-remove {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
   border: 0;
   border-radius: 999px;
   background: var(--surface);
-  color: var(--muted);
+  color: var(--text);
   box-shadow: var(--shadow);
   cursor: pointer;
+}
+
+/* A bigger hit area than the chip it draws, so a thumb does not open the photo instead. */
+.memo-photo-remove::after {
+  content: "";
+  position: absolute;
+  inset: -0.5rem;
+}
+
+.memo-photo-add {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem;
+  border: 1.5px dashed var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-align: center;
+}
+
+.memo-photo-add:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-photo-add:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.memo-photo-add .msym {
+  color: var(--text);
+}
+
+@media (min-width: 1100px) {
+  .memo-photo-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .memo-photo-add {
+    background: var(--bg);
+  }
+}
+
+/*
+ * One photo at a time, full screen, on black. The photos sit side by side in
+ * a snapping row, so a swipe goes to the next page the way Photos does it and
+ * the browser does the gesture's maths.
+ */
+.memo-photo-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--photo-stage);
+  color: var(--on-photo);
+}
+
+.memo-photo-viewer-bar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  padding: calc(var(--memo-safe-top, env(safe-area-inset-top, 0px)) + 0.6rem) 1rem 0.6rem;
+}
+
+.memo-photo-viewer-count {
+  grid-column: 2;
+  font-size: 1.05rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-photo-viewer-actions {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.memo-photo-viewer-button {
+  display: grid;
+  place-items: center;
+  width: var(--btn-round);
+  height: var(--btn-round);
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--on-photo-chip);
+  color: var(--on-photo);
+  cursor: pointer;
+}
+
+.memo-photo-viewer-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--on-photo-chip);
+}
+
+.memo-photo-viewer-track {
+  display: flex;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.memo-photo-viewer-track::-webkit-scrollbar {
+  display: none;
+}
+
+/* A block, not a grid: the photo's 100% has to resolve against the slide's
+   stretched height, which a grid cell's auto row would not give it. */
+.memo-photo-viewer-slide {
+  flex: 0 0 100%;
+  min-width: 0;
+  padding: 0.5rem 0.75rem calc(var(--memo-safe-bottom, env(safe-area-inset-bottom, 0px)) + 1rem);
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+}
+
+.memo-photo-viewer-slide img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.memo-photo-viewer-status {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  padding: 0 1.5rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+  text-align: center;
 }
 
 /*

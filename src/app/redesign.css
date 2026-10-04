@@ -2824,6 +2824,19 @@
   margin-left: 0;
 }
 
+/*
+ * The same roll-away on the narrowest phones (320px, iPhone SE 1st generation), where the row
+ * with "Popravi besedo" is wider than the space beside the chat button and slid the photo button
+ * under it (measured on the preview, Oct 2026). The marker icon alone still reads as highlight.
+ */
+@media (max-width: 359px) {
+  .memo-dock-pill.annotating .memo-annotate-label {
+    max-width: 0;
+    opacity: 0;
+    margin-left: 0;
+  }
+}
+
 .memo-annotate-icon {
   display: inline-flex;
   align-items: center;

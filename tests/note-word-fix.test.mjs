@@ -33,9 +33,10 @@ test("a letter with a caron is part of the word, not a boundary", () => {
 });
 
 test("the case the note used survives the fix", () => {
-  assert.equal(matchNoteWordCase("STELJNICE", "steljčnice"), "STELJČNICE");
-  assert.equal(matchNoteWordCase("Steljnice", "steljčnice"), "Steljčnice");
-  assert.equal(matchNoteWordCase("steljnice", "steljčnice"), "steljčnice");
+  // matched occurrence, the learner's replacement, the word the learner typed to find.
+  assert.equal(matchNoteWordCase("STELJNICE", "steljčnice", "steljnice"), "STELJČNICE");
+  assert.equal(matchNoteWordCase("Steljnice", "steljčnice", "steljnice"), "Steljčnice");
+  assert.equal(matchNoteWordCase("steljnice", "steljčnice", "steljnice"), "steljčnice");
   // The learner's own capital wins: a case-only fix must be possible.
   assert.equal(replaceNoteWord("podjetje krka", "krka", "Krka").text, "podjetje Krka");
 });
@@ -139,4 +140,44 @@ test("highlights on a long note are realigned without a full rebuild", () => {
 
   assert.equal(remapped.startWordIndex, newWords.length - 1);
   assert.equal(newWords[remapped.startWordIndex], "mitohondriju");
+});
+
+test("a capital prefilled from the start of a sentence does not spread mid-sentence", () => {
+  // The sheet prefills the selected word as it appears; the learner changes one letter only.
+  const text = "Steljnice so preproste. Med steljnice štejemo alge.";
+
+  assert.equal(
+    replaceNoteWord(text, "Steljnice", "Steljčnice").text,
+    "Steljčnice so preproste. Med steljčnice štejemo alge.",
+  );
+  // A capital the learner changed on purpose is kept everywhere.
+  assert.equal(replaceNoteWord("krka in Krka", "krka", "Krka").text, "Krka in Krka");
+});
+
+test("codes inside JSON are not prose: language, voices, enums, timestamps", () => {
+  const plan = { language: "en", topics: [{ title: "Število en", points: ["en primer"] }] };
+  const fixed = replaceNoteWordInJson(plan, "en", "ena");
+
+  assert.equal(fixed.value.language, "en");
+  assert.deepEqual(fixed.value.topics, [{ title: "Število ena", points: ["ena primer"] }]);
+
+  const turns = [{ speaker: "a", text: "Tako a ne?" }];
+  assert.deepEqual(replaceNoteWordInJson(turns, "a", "pa").value, [{ speaker: "a", text: "Tako pa ne?" }]);
+});
+
+test("fixing a very common word on a long note stays cheap", () => {
+  // Two words for one, 3000 times: the diff has thousands of edits to walk.
+  const before = "To je primer in to je še en primer. ".repeat(1500);
+  const after = replaceNoteWord(before, "je", "je pa").text;
+  const oldWords = words(before);
+  const newWords = words(after);
+  const last = oldWords.length - 1;
+  const startedAt = Date.now();
+  // Typed arrays live outside the JS heap: arrayBuffers is where the old trace grew to ~690 MB.
+  const buffersBefore = process.memoryUsage().arrayBuffers;
+  const [remapped] = remapNoteAnnotations([annotation("end", last - 1, last)], oldWords, newWords);
+
+  assert.ok(Date.now() - startedAt < 3000, "remap took too long");
+  assert.ok(process.memoryUsage().arrayBuffers - buffersBefore < 150 * 1024 * 1024, "remap used too much memory");
+  assert.deepEqual(newWords.slice(remapped.startWordIndex, remapped.endWordIndex + 1), ["en", "primer"]);
 });

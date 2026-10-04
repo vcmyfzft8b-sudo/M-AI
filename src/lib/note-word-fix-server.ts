@@ -197,22 +197,31 @@ async function fixPodcasts(params: {
   const { data, error } = await params.service
     .from("lecture_podcasts")
     .select("id, content_hash, status, title, turns")
-    .eq("lecture_id", params.lectureId)
-    .eq("status", "ready");
+    .eq("lecture_id", params.lectureId);
 
   if (error) throw error;
   let total = 0;
-  const episodes = (data ?? []) as Array<{ id: string; content_hash: string; title: string | null; turns: Json }>;
+  const episodes = (data ?? []) as Array<{
+    id: string;
+    content_hash: string;
+    status: string;
+    title: string | null;
+    turns: Json;
+  }>;
+  const readyEpisodes = episodes.filter((episode) => episode.status === "ready");
 
   for (const episode of episodes) {
     const patch: Record<string, unknown> = {};
 
-    // Keep the episode attached to the corrected note: "<noteHash>" or "<noteHash>:<castKey>".
+    // Keep every episode attached to the corrected note, one still being made included:
+    // "<noteHash>" or "<noteHash>:<castKey>".
     if (episode.content_hash === params.oldHash || episode.content_hash.startsWith(`${params.oldHash}:`)) {
       patch.content_hash = params.newHash + episode.content_hash.slice(params.oldHash.length);
     }
 
-    if (episode.title) {
+    // The script of an episode still being written belongs to its generator; only finished ones
+    // are corrected here.
+    if (episode.status === "ready" && episode.title) {
       const title = replaceNoteWord(episode.title, params.find, params.replace);
       if (title.count > 0) {
         patch.title = title.text;
@@ -220,7 +229,10 @@ async function fixPodcasts(params: {
       }
     }
 
-    const turns = replaceNoteWordInJson(episode.turns, params.find, params.replace);
+    const turns =
+      episode.status === "ready"
+        ? replaceNoteWordInJson(episode.turns, params.find, params.replace)
+        : { value: episode.turns, count: 0 };
     if (turns.count > 0) {
       patch.turns = turns.value;
       total += turns.count;
@@ -239,7 +251,7 @@ async function fixPodcasts(params: {
     service: params.service,
     table: "lecture_podcast_segments",
     filterColumn: "podcast_id",
-    filterValues: episodes.map((episode) => episode.id),
+    filterValues: readyEpisodes.map((episode) => episode.id),
     columns: ["text"],
     find: params.find,
     replace: params.replace,

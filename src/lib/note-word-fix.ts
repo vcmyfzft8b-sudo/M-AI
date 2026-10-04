@@ -56,30 +56,37 @@ function buildNoteWordMatcher(find: string) {
   return new RegExp(`(?<![\\p{L}\\p{N}])${pattern}(?![\\p{L}\\p{N}])`, "giu");
 }
 
+function isUpper(character: string) {
+  return character !== character.toLocaleLowerCase() && character === character.toLocaleUpperCase();
+}
+
+function withFirstCase(value: string, upper: boolean) {
+  const first = value.charAt(0);
+  return (upper ? first.toLocaleUpperCase() : first.toLocaleLowerCase()) + value.slice(1);
+}
+
 /**
- * The fix in the case the note used. ALLCAPS stays ALLCAPS (headings, acronyms); a capital at the
- * start of a sentence survives a fix typed in lower case; otherwise the learner's own spelling
- * wins, which is what makes "krka" -> "Krka" possible.
+ * The fix in the case each occurrence used. ALLCAPS stays ALLCAPS (headings, acronyms). When the
+ * learner changed the capital themselves ("krka" -> "Krka") their spelling is the point and is
+ * kept everywhere. Otherwise the capital follows the occurrence: the sheet prefills the word as
+ * selected, often capitalised at the start of a sentence, and that capital must not spread to the
+ * same word in the middle of other sentences.
  */
-export function matchNoteWordCase(matched: string, replacement: string) {
+export function matchNoteWordCase(matched: string, replacement: string, find: string) {
   const letters = matched.replace(/[^\p{L}]/gu, "");
 
   if (letters.length > 1 && letters === letters.toLocaleUpperCase() && letters !== letters.toLocaleLowerCase()) {
     return replacement.toLocaleUpperCase();
   }
 
-  const first = matched.charAt(0);
-  const replacementFirst = replacement.charAt(0);
+  const typedFind = find.replace(/[^\p{L}]/gu, "").charAt(0);
+  const typedReplace = replacement.replace(/[^\p{L}]/gu, "").charAt(0);
 
-  if (
-    first !== first.toLocaleLowerCase() &&
-    replacementFirst === replacementFirst.toLocaleLowerCase() &&
-    replacementFirst !== replacementFirst.toLocaleUpperCase()
-  ) {
-    return replacementFirst.toLocaleUpperCase() + replacement.slice(1);
+  if (typedFind && typedReplace && isUpper(typedFind) !== isUpper(typedReplace)) {
+    return replacement;
   }
 
-  return replacement;
+  return withFirstCase(replacement, isUpper(matched.charAt(0)));
 }
 
 // Link targets are addresses, not words the learner reads; rewriting one would break the link.
@@ -90,6 +97,7 @@ export type NoteWordFixResult = { text: string; count: number };
 /** Replaces every whole-word occurrence of `find` in `text`. */
 export function replaceNoteWord(text: string, find: string, replace: string): NoteWordFixResult {
   const to = normalizeNoteWordFixInput(replace);
+  const from = normalizeNoteWordFixInput(find);
   const matcher = buildNoteWordMatcher(find);
   let count = 0;
   let output = "";
@@ -100,7 +108,7 @@ export function replaceNoteWord(text: string, find: string, replace: string): No
     const start = link.index ?? 0;
     output += text.slice(cursor, start).replace(matcher, (matched) => {
       count += 1;
-      return matchNoteWordCase(matched, to);
+      return matchNoteWordCase(matched, to, from);
     });
     output += link[0];
     cursor = start + link[0].length;
@@ -108,7 +116,7 @@ export function replaceNoteWord(text: string, find: string, replace: string): No
 
   output += text.slice(cursor).replace(matcher, (matched) => {
     count += 1;
-    return matchNoteWordCase(matched, to);
+    return matchNoteWordCase(matched, to, from);
   });
 
   return { text: count > 0 ? output : text, count };
@@ -122,16 +130,20 @@ export function countNoteWord(text: string, find: string) {
   return replaceNoteWord(text, find, "x").count;
 }
 
+// Values that are codes, not prose: ids and positions, a language ("en" is also Slovene for
+// "one"), a podcast voice ("a"/"b"), enum fields and timestamps. Rewriting one breaks the reader.
+const NON_TEXT_KEY = /^(id|language|speaker|kind|status|type|version|voice|model|difficulty)$|(Id|_id|_at|_key|_kind|_type)$/;
+
 /**
- * The same fix applied to every string inside a JSON value (a mind map, a tutor plan, podcast
- * turns). Keys are left alone, and so are ids: a node's id is a position, not text.
+ * The same fix applied to every prose string inside a JSON value (a mind map, a tutor plan,
+ * podcast turns, a fact list). Keys are left alone, and so are code-like values (NON_TEXT_KEY).
  */
 export function replaceNoteWordInJson<T>(value: T, find: string, replace: string): { value: T; count: number } {
   let count = 0;
 
   const walk = (node: unknown, key: string | null): unknown => {
     if (typeof node === "string") {
-      if (key === "id" || (key !== null && key.endsWith("Id"))) {
+      if (key !== null && NON_TEXT_KEY.test(key)) {
         return node;
       }
 
@@ -170,7 +182,9 @@ function alignWords(oldWords: readonly string[], newWords: readonly string[], ma
   const trace: Int32Array[] = [];
 
   for (let d = 0; d <= Math.min(max, maxEdits); d += 1) {
-    trace.push(v.slice());
+    // Only diagonals -d-1..d+1 are read when walking back, so keep just those: memory grows with
+    // the number of edits squared, not with the note's length times the edits.
+    trace.push(v.slice(offset - d - 1, offset + d + 2));
 
     for (let k = -d; k <= d; k += 2) {
       let x =
@@ -194,10 +208,11 @@ function alignWords(oldWords: readonly string[], newWords: readonly string[], ma
 
         for (let step = d; step > 0; step -= 1) {
           const prev = trace[step];
+          // prev[i] holds diagonal i - step - 1.
+          const at = (diagonal: number) => prev[diagonal + step + 1];
           const ck = cx - cy;
-          const prevK =
-            ck === -step || (ck !== step && prev[offset + ck - 1] < prev[offset + ck + 1]) ? ck + 1 : ck - 1;
-          const prevX = prev[offset + prevK];
+          const prevK = ck === -step || (ck !== step && at(ck - 1) < at(ck + 1)) ? ck + 1 : ck - 1;
+          const prevX = at(prevK);
           const prevY = prevX - prevK;
 
           while (cx > prevX && cy > prevY) {

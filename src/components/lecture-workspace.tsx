@@ -5664,7 +5664,13 @@ export function LectureWorkspace({
       }
 
       // The note, its cards and quiz all changed: take the server's copy before the sheet closes.
-      await refreshLectureDetail({ force: true });
+      // Fetched here rather than through refreshLectureDetail, which hands back a refresh already
+      // in flight, and that one may have left before the fix.
+      const refreshed = await fetch(`/api/lectures/${detail.lecture.id}`, { cache: "no-store" });
+      if (refreshed.ok) {
+        const nextDetail = (await refreshed.json()) as LectureDetail;
+        setDetail((current) => mergeLectureDetailForRefresh(current, nextDetail));
+      }
       setIsFixWordBusy(false);
       fixWordSheet.dismiss(() => {
         setFixWordToast(t("note.fixWord.done"));

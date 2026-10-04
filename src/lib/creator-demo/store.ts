@@ -705,10 +705,30 @@ export function fixDemoNoteWord(lectureId: string, find: string, replace: string
     const oldNote = current.artifact.structured_notes_md;
     const note = replaceNoteWord(oldNote, find, replace);
     const title = replaceNoteWord(current.lecture.title ?? "", find, replace);
-    const flashcards = replaceNoteWordInJson(current.flashcards, find, replace);
-    const quizQuestions = replaceNoteWordInJson(current.quizQuestions, find, replace);
-    const practiceTestQuestions = replaceNoteWordInJson(current.practiceTestQuestions, find, replace);
-    total = note.count + title.count + flashcards.count + quizQuestions.count + practiceTestQuestions.count;
+    // Only the text a learner reads; ids, enums and dates stay as they are.
+    let fixedElsewhere = 0;
+    const fix = (value: string) => {
+      const result = replaceNoteWord(value, find, replace);
+      fixedElsewhere += result.count;
+      return result.text;
+    };
+    const flashcards = current.flashcards.map((card) => ({
+      ...card,
+      front: fix(card.front),
+      back: fix(card.back),
+      hint: card.hint === null ? null : fix(card.hint),
+    }));
+    const quizQuestions = current.quizQuestions.map((question) => {
+      const options = replaceNoteWordInJson(question.options, find, replace);
+      fixedElsewhere += options.count;
+      return { ...question, prompt: fix(question.prompt), explanation: fix(question.explanation), options: options.value };
+    });
+    const practiceTestQuestions = current.practiceTestQuestions.map((question) => ({
+      ...question,
+      prompt: fix(question.prompt),
+      answer_guide: fix(question.answer_guide),
+    }));
+    total = note.count + title.count + fixedElsewhere;
     const doc = current.editableNoteDoc;
     const newTitle = title.count > 0 ? title.text : current.lecture.title;
 
@@ -727,9 +747,9 @@ export function fixDemoNoteWord(lectureId: string, find: string, replace: string
           }
         : doc,
       editableNoteRevision: current.editableNoteRevision + 1,
-      flashcards: flashcards.value,
-      quizQuestions: quizQuestions.value,
-      practiceTestQuestions: practiceTestQuestions.value,
+      flashcards,
+      quizQuestions,
+      practiceTestQuestions,
     };
   });
 

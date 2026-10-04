@@ -25,15 +25,25 @@ const plans = reader
   }));
 
 test("a photo is read by the stronger model at high resolution first", () => {
-  assert.deepEqual(plans[0], { stage: "ocr_primary", model: "GEMINI_OCR_RESCUE_MODEL", resolution: "high" });
+  assert.deepEqual(plans[0], { stage: "ocr_primary", model: "GEMINI_OCR_STRONG_MODEL", resolution: "high" });
 });
 
 test("the lite reader stays as the fallback, at high resolution too", () => {
-  assert.deepEqual(plans[1], { stage: "ocr_rescue", model: "GEMINI_OCR_MODEL", resolution: "high" });
+  assert.deepEqual(plans[1], { stage: "ocr_rescue", model: "GEMINI_OCR_LITE_MODEL", resolution: "high" });
 });
 
 test("the triage replay reads photos in production's order", () => {
   const replay = fs.readFileSync(new URL("../scripts/replay-failed-note.mjs", import.meta.url), "utf8");
 
-  assert.match(replay, /\["ocr_primary", OCR_RESCUE_MODEL, IMAGE_OCR_INSTRUCTIONS\],\s*\["ocr_rescue", OCR_MODEL, IMAGE_OCR_INSTRUCTIONS\]/);
+  assert.match(replay, /\["ocr_primary", OCR_STRONG_MODEL, IMAGE_OCR_INSTRUCTIONS\],\s*\["ocr_rescue", OCR_LITE_MODEL, IMAGE_OCR_INSTRUCTIONS\]/);
+});
+
+test("the readers are named by role, and the old names still configure them", () => {
+  const env = fs.readFileSync(new URL("../src/lib/server-env.ts", import.meta.url), "utf8");
+
+  // Vercel Preview still sets GEMINI_OCR_RESCUE_MODEL; dropping the fallback would silently
+  // change which model reads photos there.
+  assert.match(env, /GEMINI_OCR_STRONG_MODEL: process\.env\.GEMINI_OCR_STRONG_MODEL \?\? process\.env\.GEMINI_OCR_RESCUE_MODEL,/);
+  assert.match(env, /GEMINI_OCR_LITE_MODEL: process\.env\.GEMINI_OCR_LITE_MODEL \?\? process\.env\.GEMINI_OCR_MODEL,/);
+  assert.doesNotMatch(source, /env\.GEMINI_OCR_(?:RESCUE_)?MODEL\b/);
 });

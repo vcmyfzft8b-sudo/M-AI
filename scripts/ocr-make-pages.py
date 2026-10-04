@@ -10,19 +10,24 @@ Font-rendered writing with per-letter jitter is still kinder than a real hand, s
 as an upper bound and confirm on real photos.
 
     python3 scripts/ocr-make-pages.py
+
+The handwriting fonts are the ones macOS ships. Elsewhere, copy the five font files listed in
+PAGES into one folder, keeping the "Supplemental/" subfolder, and point OCR_FONT_DIR at it. Apple's
+fonts may not be redistributed, so they are not in the repo; the rendered pages in evals/ocr are.
 """
 
 import io
 import json
-import math
+import os
 import random
+import sys
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 OCR_DIR = ROOT / "evals" / "ocr"
-FONTS = "/System/Library/Fonts"
+FONTS = os.environ.get("OCR_FONT_DIR", "/System/Library/Fonts")
 
 PAGES = {
     "notes-pharma": {
@@ -281,6 +286,13 @@ def photograph(page, seed, blur):
 
 
 def main():
+    missing = [spec["font"][0] for spec in PAGES.values() if not Path(spec["font"][0]).is_file()]
+    if missing:
+        sys.exit(
+            "Missing handwriting fonts (macOS ships them; set OCR_FONT_DIR elsewhere):\n  "
+            + "\n  ".join(missing)
+        )
+
     truth_path = OCR_DIR / "truth.json"
     truth = json.loads(truth_path.read_text())
 

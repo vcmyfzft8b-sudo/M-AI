@@ -26,8 +26,8 @@ database rather than expecting them in a checkout.
 | Note writing | `or/google/gemini-3.7-flash` (OpenRouter, Google fallback) | Only writer holding recall on long sources |
 | Extraction, outline, dedupe | `gemini-2.5-flash-lite` | Four candidates scored the same; this is the cheapest |
 | Flashcards, quiz, practice | `gemini-2.5-flash-lite` | Ties the most expensive candidate on recall at a third of the cost |
-| OCR (photos) | `gemini-3-flash-preview` at high resolution first, then `gemini-3.5-flash-lite` | Full-page handwriting, Oct 2026: 0 misread words a page vs 1.4 for lite at medium (`scripts/ocr-eval.mjs`) |
-| OCR (PDF, slide images, practice-test answers) | `gemini-3.5-flash-lite` | Earlier handwriting benchmark, unchanged |
+| OCR (photos) | `gemini-3-flash-preview` (`GEMINI_OCR_STRONG_MODEL`) at high resolution first, then `gemini-3.5-flash-lite` | Full-page handwriting, Oct 2026: 0 misread words a page vs 1.4 for lite at medium (`scripts/ocr-eval.mjs`) |
+| OCR (PDF, slide images) | `gemini-3.5-flash-lite` (`GEMINI_OCR_LITE_MODEL`) | Earlier handwriting benchmark, unchanged |
 | Transcription | Soniox | Not an LLM decision |
 
 Measured end to end on a 43-page Slovene law PDF through the deployed preview: 145 items, a note at

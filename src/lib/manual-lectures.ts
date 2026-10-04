@@ -15,6 +15,7 @@ import { isRetryableAiError, toUserFacingAiErrorMessage } from "@/lib/ai/errors"
 import {
   GeminiEmptyTextOutputError,
   generateTextWithGeminiFile,
+  isGeminiRecitationBlock,
 } from "@/lib/ai/gemini";
 import {
   sanitizeJsonForDatabase,
@@ -578,6 +579,10 @@ async function extractVisualTextFromPptxSlideImages(
   }
 
   const instructions = `This image is embedded in a lecture slide. Extract its full study-relevant content: transcribe visible text, labels, captions and table contents exactly, and describe diagram relationships, arrows, sequences and comparisons concisely. Preserve the source language; do not translate or summarize away detail. Return only the extracted content as plain text. If the image is purely decorative with no study-relevant content, return exactly: ${PPTX_VISION_NO_CONTENT_MARKER}`;
+  // Asked for when the exact transcription is withheld as a copy of published text (RECITATION):
+  // a scanned textbook page or a screenshot of an article pasted into a slide is withheld every
+  // time, but readily restated (MEMOAI-WEB-53). The same fallback the photo and PDF readers use.
+  const restateInstructions = `This image is embedded in a lecture slide. Write down all of its study content as plain text in the same language as the image. Do not copy printed sentences word for word: restate each one in your own words, keeping every fact, name, term, number, date, definition, formula, label and table value. Describe diagram relationships, arrows, sequences and comparisons concisely. Do not translate, do not summarize detail away, do not add commentary. Return only the text. If the image is purely decorative with no study-relevant content, return exactly: ${PPTX_VISION_NO_CONTENT_MARKER}`;
 
   const results = new Array<{ slideNumber: number; text: string } | null>(selected.length);
   let cursor = 0;
@@ -591,12 +596,13 @@ async function extractVisualTextFromPptxSlideImages(
         const candidate = selected[index];
         const extension = candidate.mediaPath.split(".").pop()?.toLowerCase() ?? "png";
 
-        try {
-          const text = await generateTextWithGeminiFile({
-            instructions,
-            file: new File([Buffer.from(candidate.bytes)], candidate.mediaPath.split("/").pop() ?? "slide-image", {
-              type: PPTX_IMAGE_MIME_BY_EXTENSION[extension],
-            }),
+        const file = new File([Buffer.from(candidate.bytes)], candidate.mediaPath.split("/").pop() ?? "slide-image", {
+          type: PPTX_IMAGE_MIME_BY_EXTENSION[extension],
+        });
+        const readImage = (prompt: string) =>
+          generateTextWithGeminiFile({
+            instructions: prompt,
+            file,
             model: env.GEMINI_OCR_LITE_MODEL,
             maxOutputTokens: PPTX_VISION_IMAGE_MAX_OUTPUT_TOKENS,
             maxAttempts: PPTX_VISION_MAX_ATTEMPTS,
@@ -606,6 +612,20 @@ async function extractVisualTextFromPptxSlideImages(
             // gemini_text_file rows and the meter cannot name one of the larger intake costs.
             usageContext: { stage: "pptx_vision" },
           });
+
+        try {
+          let text: string;
+
+          try {
+            text = await readImage(instructions);
+          } catch (error) {
+            if (!isGeminiRecitationBlock(error)) {
+              throw error;
+            }
+
+            text = await readImage(restateInstructions);
+          }
+
           const cleaned = normalizeWhitespace(text);
 
           results[index] =
@@ -622,6 +642,17 @@ async function extractVisualTextFromPptxSlideImages(
           if (isRetryableAiError(error)) {
             console.warn("PPTX slide image provider was temporarily unavailable; skipping the image.", {
               mediaPath: candidate.mediaPath,
+            });
+            continue;
+          }
+
+          // Nothing came back even when asked to restate rather than copy. The deck continues
+          // without this image and every empty attempt is already a row in ai_usage_events; it is
+          // the same degradation as a busy provider, not a code defect, so it does not open one.
+          if (error instanceof GeminiEmptyTextOutputError) {
+            console.warn("PPTX slide image came back empty; skipping the image.", {
+              mediaPath: candidate.mediaPath,
+              finishReason: error.finishReason,
             });
             continue;
           }

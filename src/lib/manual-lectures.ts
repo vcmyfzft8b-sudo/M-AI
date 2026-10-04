@@ -55,6 +55,7 @@ import {
   PIPELINE_SOURCE_TEXT_TARGET_CHARS,
 } from "@/lib/source-condensation";
 import { createAiChunkSelector } from "@/lib/source-condensation-ai";
+import { hasEnoughSourceTextToTeach } from "@/lib/source-text-gate";
 import {
   isUnsupportedVideoContentType,
   isReadableLinkContentType,
@@ -1971,19 +1972,6 @@ async function fitSourceTextToPipeline(params: {
       compressedAt: new Date().toISOString(),
     },
   };
-}
-
-/**
- * Whether a source has anything at all to make notes from.
- *
- * This used to demand 120 characters, which turned away a photo of one exercise, a single spoken
- * question and a pasted topic name -- material a learner reasonably expects notes from. Short
- * material now goes on to the notes stage, which teaches the topic it names when there is no
- * explanation to condense (note-generation.ts, topic notes). Only text with no word in it stops
- * here.
- */
-export function hasEnoughSourceTextToTeach(text: string) {
-  return /\p{L}{2,}/u.test(text);
 }
 
 export async function createLectureFromTextSource(params: {

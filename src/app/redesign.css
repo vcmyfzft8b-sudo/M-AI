@@ -9479,12 +9479,13 @@
   gap: 0.5rem;
 }
 
+/* The photo clips to the corners rather than the tile, so the close's
+   enlarged hit area below is not clipped with it. */
 .memo-photo-tile {
   position: relative;
   aspect-ratio: 3 / 4;
   min-width: 0;
   border-radius: 14px;
-  overflow: hidden;
   background: var(--sunken);
   box-shadow: var(--shadow);
 }
@@ -9495,6 +9496,8 @@
   height: 100%;
   padding: 0;
   border: 0;
+  border-radius: inherit;
+  overflow: hidden;
   background: transparent;
   cursor: zoom-in;
 }

@@ -68,8 +68,11 @@ if (!lectureId) {
 const SUPABASE = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "").replace(/\/$/, "");
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const headers = { apikey: KEY, Authorization: `Bearer ${KEY}` };
-const OCR_MODEL = process.env.GEMINI_OCR_MODEL ?? "gemini-3.5-flash-lite";
-const OCR_RESCUE_MODEL = process.env.GEMINI_OCR_RESCUE_MODEL ?? "gemini-3-flash-preview";
+// Same names and fallbacks as server-env.ts.
+// A blank variable counts as unset, as in server-env.ts.
+const firstSetEnv = (...names) => names.map((name) => process.env[name]?.trim()).find(Boolean);
+const OCR_LITE_MODEL = firstSetEnv("GEMINI_OCR_LITE_MODEL", "GEMINI_OCR_MODEL") ?? "gemini-3.5-flash-lite";
+const OCR_STRONG_MODEL = firstSetEnv("GEMINI_OCR_STRONG_MODEL", "GEMINI_OCR_RESCUE_MODEL") ?? "gemini-3-flash-preview";
 const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 async function rest(pathname) {
@@ -111,10 +114,10 @@ async function readPhoto(bytes) {
   const attempts = [];
   let shortText = "";
   for (const [stage, model, instructions] of [
-    ["ocr_primary", OCR_RESCUE_MODEL, IMAGE_OCR_INSTRUCTIONS],
-    ["ocr_rescue", OCR_MODEL, IMAGE_OCR_INSTRUCTIONS],
-    ["ocr_restate", OCR_RESCUE_MODEL, IMAGE_RESTATE_INSTRUCTIONS],
-    ["ocr_restate", OCR_MODEL, IMAGE_RESTATE_INSTRUCTIONS],
+    ["ocr_primary", OCR_STRONG_MODEL, IMAGE_OCR_INSTRUCTIONS],
+    ["ocr_rescue", OCR_LITE_MODEL, IMAGE_OCR_INSTRUCTIONS],
+    ["ocr_restate", OCR_STRONG_MODEL, IMAGE_RESTATE_INSTRUCTIONS],
+    ["ocr_restate", OCR_LITE_MODEL, IMAGE_RESTATE_INSTRUCTIONS],
   ]) {
     const result = await readWithGemini({ model, instructions, bytes: normalized, mimeType: "image/jpeg", maxOutputTokens: 6000, mediaResolution: "MEDIA_RESOLUTION_HIGH" });
     attempts.push({ stage, model, finishReason: result.finishReason, chars: result.text.length });
@@ -129,9 +132,9 @@ async function readPhoto(bytes) {
 async function readPdf(bytes) {
   const attempts = [];
   for (const [stage, model, instructions] of [
-    ["pdf_extract", OCR_MODEL, PDF_EXTRACT_INSTRUCTIONS],
-    ["pdf_restate", OCR_RESCUE_MODEL, PDF_RESTATE_INSTRUCTIONS],
-    ["pdf_restate", OCR_MODEL, PDF_RESTATE_INSTRUCTIONS],
+    ["pdf_extract", OCR_LITE_MODEL, PDF_EXTRACT_INSTRUCTIONS],
+    ["pdf_restate", OCR_STRONG_MODEL, PDF_RESTATE_INSTRUCTIONS],
+    ["pdf_restate", OCR_LITE_MODEL, PDF_RESTATE_INSTRUCTIONS],
   ]) {
     const result = await readWithGemini({ model, instructions, bytes, mimeType: "application/pdf", maxOutputTokens: 24000 });
     attempts.push({ stage, model, finishReason: result.finishReason, chars: result.text.length });

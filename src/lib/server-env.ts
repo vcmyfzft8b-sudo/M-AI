@@ -15,8 +15,13 @@ const serverEnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: trimmedString.min(1),
   GEMINI_API_KEY: optionalTrimmedString,
   GEMINI_TEXT_MODEL: trimmedString.default("gemini-2.5-flash-lite"),
-  GEMINI_OCR_MODEL: trimmedString.default("gemini-3.5-flash-lite"),
-  GEMINI_OCR_RESCUE_MODEL: trimmedString.default("gemini-3-flash-preview"),
+  // The two OCR readers, named for what they are rather than when they run: the strong one reads
+  // every photo first (the lite one misread names on handwriting, Oct 2026) and restates withheld
+  // PDFs; the lite one is the photo fallback and reads PDFs and slide images. They were called
+  // GEMINI_OCR_RESCUE_MODEL and GEMINI_OCR_MODEL until the strong reader stopped being a rescue;
+  // those names are still read as fallbacks, and Vercel Preview sets the old rescue one.
+  GEMINI_OCR_LITE_MODEL: trimmedString.default("gemini-3.5-flash-lite"),
+  GEMINI_OCR_STRONG_MODEL: trimmedString.default("gemini-3-flash-preview"),
   GEMINI_EMBEDDING_MODEL: trimmedString.default("gemini-embedding-001"),
   OPENROUTER_API_KEY: optionalTrimmedString,
   SONIOX_API_KEY: optionalTrimmedString,
@@ -39,6 +44,15 @@ const serverEnvSchema = z.object({
   STRIPE_PRICE_TUTOR_HOUR: optionalTrimmedString,
 });
 
+/**
+ * The first of these env vars that holds a value. A blank one counts as unset, so a variable added
+ * in Vercel with no value falls through to the older name and then to the default instead of
+ * becoming an empty model id.
+ */
+function firstSetEnv(...names: string[]) {
+  return names.map((name) => process.env[name]?.trim()).find(Boolean);
+}
+
 export function getServerEnv() {
   return serverEnvSchema.parse({
     NEXT_PUBLIC_SITE_URL: getPublicEnv().siteUrl,
@@ -47,8 +61,8 @@ export function getServerEnv() {
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     GEMINI_TEXT_MODEL: process.env.GEMINI_TEXT_MODEL,
-    GEMINI_OCR_MODEL: process.env.GEMINI_OCR_MODEL,
-    GEMINI_OCR_RESCUE_MODEL: process.env.GEMINI_OCR_RESCUE_MODEL,
+    GEMINI_OCR_LITE_MODEL: firstSetEnv("GEMINI_OCR_LITE_MODEL", "GEMINI_OCR_MODEL"),
+    GEMINI_OCR_STRONG_MODEL: firstSetEnv("GEMINI_OCR_STRONG_MODEL", "GEMINI_OCR_RESCUE_MODEL"),
     GEMINI_EMBEDDING_MODEL: process.env.GEMINI_EMBEDDING_MODEL,
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     SONIOX_API_KEY: process.env.SONIOX_API_KEY,

@@ -44,7 +44,8 @@ Add these in the Vercel project settings:
 - `SUPABASE_SERVICE_ROLE_KEY=...`
 - `GEMINI_API_KEY=...`
 - `GEMINI_TEXT_MODEL=gemini-2.5-flash-lite`
-- `GEMINI_OCR_MODEL=gemini-3-flash-preview`
+- `GEMINI_OCR_LITE_MODEL=gemini-3.5-flash-lite` (PDFs, slide images, photo fallback)
+- `GEMINI_OCR_STRONG_MODEL=gemini-3-flash-preview` (reads photos first)
 - `GEMINI_EMBEDDING_MODEL=gemini-embedding-001`
 - `SONIOX_API_KEY=...`
 - `SONIOX_MODEL=stt-async-v4`

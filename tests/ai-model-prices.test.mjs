@@ -79,7 +79,7 @@ function modelsTheCodeCalls() {
 test("the env defaults are found, so the sweep below is not vacuously green", () => {
   const defaults = serverEnvModelDefaults();
 
-  for (const key of ["GEMINI_TEXT_MODEL", "GEMINI_OCR_MODEL", "GEMINI_OCR_RESCUE_MODEL"]) {
+  for (const key of ["GEMINI_TEXT_MODEL", "GEMINI_OCR_LITE_MODEL", "GEMINI_OCR_STRONG_MODEL"]) {
     assert.ok(defaults[key], `${key} default not found in server-env.ts`);
   }
 

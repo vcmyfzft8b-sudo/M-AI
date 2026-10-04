@@ -597,10 +597,10 @@ async function extractVisualTextFromPptxSlideImages(
             file: new File([Buffer.from(candidate.bytes)], candidate.mediaPath.split("/").pop() ?? "slide-image", {
               type: PPTX_IMAGE_MIME_BY_EXTENSION[extension],
             }),
-            model: env.GEMINI_OCR_MODEL,
+            model: env.GEMINI_OCR_LITE_MODEL,
             maxOutputTokens: PPTX_VISION_IMAGE_MAX_OUTPUT_TOKENS,
             maxAttempts: PPTX_VISION_MAX_ATTEMPTS,
-            thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_MODEL),
+            thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_LITE_MODEL),
             mediaResolution: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM,
             // Up to 24 vision calls per deck; without a stage they land as anonymous
             // gemini_text_file rows and the meter cannot name one of the larger intake costs.
@@ -1637,8 +1637,8 @@ export async function extractTextFromPdf(file: File) {
     fallbackText = await generateTextWithGeminiFile({
       instructions: `${fallbackInstructions}\n\nExtract the document text as faithfully and completely as possible so it can be turned into detailed study notes and flashcards.`,
       file,
-      model: env.GEMINI_OCR_MODEL,
-      thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_MODEL),
+      model: env.GEMINI_OCR_LITE_MODEL,
+      thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_LITE_MODEL),
       maxOutputTokens: PDF_FALLBACK_MAX_OUTPUT_TOKENS,
     });
   } catch (error) {
@@ -1651,7 +1651,7 @@ export async function extractTextFromPdf(file: File) {
     // Withheld or empty: ask for a restatement, the stronger reader first. Only when both come
     // back empty is it a PDF with nothing readable in it -- a scan of photographs, a diagram-only
     // deck -- which is the learner's file to fix, so say so in a way they can act on.
-    for (const model of [env.GEMINI_OCR_RESCUE_MODEL, env.GEMINI_OCR_MODEL]) {
+    for (const model of [env.GEMINI_OCR_STRONG_MODEL, env.GEMINI_OCR_LITE_MODEL]) {
       try {
         fallbackText = await generateTextWithGeminiFile({
           instructions: restateInstructions,
@@ -1752,7 +1752,7 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
     {
       stage: "ocr_primary",
       instructions: IMAGE_OCR_INSTRUCTIONS,
-      model: env.GEMINI_OCR_RESCUE_MODEL,
+      model: env.GEMINI_OCR_STRONG_MODEL,
       maxOutputTokens: OCR_PRIMARY_MAX_OUTPUT_TOKENS,
       mediaResolution: "high",
     },
@@ -1760,7 +1760,7 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
     {
       stage: "ocr_rescue",
       instructions: IMAGE_OCR_INSTRUCTIONS,
-      model: env.GEMINI_OCR_MODEL,
+      model: env.GEMINI_OCR_LITE_MODEL,
       maxOutputTokens: OCR_RESCUE_MAX_OUTPUT_TOKENS,
       mediaResolution: "high",
     },
@@ -1768,14 +1768,14 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
     {
       stage: "ocr_restate",
       instructions: IMAGE_RESTATE_INSTRUCTIONS,
-      model: env.GEMINI_OCR_RESCUE_MODEL,
+      model: env.GEMINI_OCR_STRONG_MODEL,
       maxOutputTokens: OCR_RESCUE_MAX_OUTPUT_TOKENS,
       mediaResolution: "high",
     },
     {
       stage: "ocr_restate",
       instructions: IMAGE_RESTATE_INSTRUCTIONS,
-      model: env.GEMINI_OCR_MODEL,
+      model: env.GEMINI_OCR_LITE_MODEL,
       maxOutputTokens: OCR_RESCUE_MAX_OUTPUT_TOKENS,
       mediaResolution: "high",
     },

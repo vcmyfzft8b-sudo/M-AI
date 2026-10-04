@@ -14,8 +14,6 @@ import type {
   TranscriptSegmentRow,
 } from "@/lib/database.types";
 import { generateStructuredObject } from "@/lib/ai/json";
-import { generateStructuredObjectWithGeminiFile } from "@/lib/ai/gemini";
-import { resolveMinimalThinkingConfig } from "@/lib/ai/gemini-models";
 import { TRANSCRIPT_SEGMENT_CONTENT_SELECT } from "@/lib/database-selects";
 import { buildGeneratedContentLanguageInstruction } from "@/lib/languages";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
@@ -62,7 +60,7 @@ import type {
   PracticeTestHistoryEntry,
   PracticeTestHistorySummary,
 } from "@/lib/types";
-import { getAiProvider, getServerEnv } from "@/lib/server-env";
+import { getAiProvider } from "@/lib/server-env";
 
 // Raised 3 -> 6 with the 2026-08-28 GLM switch (~3x slower per call; batches independent).
 const PRACTICE_TEST_CONCURRENCY = 6;
@@ -105,19 +103,6 @@ const practiceQuestionSchema = z.object({
 
 const practiceQuestionBatchSchema = z.object({
   questions: z.array(practiceQuestionSchema).min(0).max(16),
-});
-
-/**
- * The photo grader still asks for a number: a photographed answer is read by the OCR model in one
- * call, and splitting that into a marking pass would mean reading the handwriting twice.
- */
-const photoGradingSchema = z.object({
-  score: z.number().int().min(0).max(5),
-  expectedAnswer: z.string().min(1),
-  rationale: z.string().min(1),
-  strengths: z.string(),
-  missingPoints: z.string(),
-  confidence: z.string(),
 });
 
 function toErrorMessage(error: unknown) {
@@ -1509,27 +1494,6 @@ export function buildPracticeTestHistorySummary(
     latestPercentage: scoresByAttempt[scoresByAttempt.length - 1]?.percentage ?? null,
     scoresByAttempt,
   };
-}
-
-export async function gradePracticeTestPhotoWithGemini(params: {
-  file: File;
-  prompt: string;
-  answerGuide: string;
-}) {
-  const env = getServerEnv();
-  // Reading a photographed handwritten answer is OCR work: the text model scored 73-81% on
-  // handwriting in the OCR benchmark, which is not a model to grade a student with.
-  return generateStructuredObjectWithGeminiFile({
-    schema: photoGradingSchema,
-    instructions: `Grade the student's handwritten or photographed answer to the prompt.
-Question: ${params.prompt}
-Answer guide: ${params.answerGuide}
-Use the same 0-5 integer rubric as a school practice test.`,
-    file: params.file,
-    model: env.GEMINI_OCR_MODEL,
-    thinkingConfig: resolveMinimalThinkingConfig(env.GEMINI_OCR_MODEL),
-    maxOutputTokens: 1600,
-  });
 }
 
 export function getPreferredPracticeTestProviderMode() {

@@ -24,6 +24,8 @@ import {
   type DemoNotePack,
 } from "@/lib/creator-demo/content";
 import type { EditableNoteDoc } from "@/lib/note-doc";
+import { parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
+import { remapNoteAnnotations, replaceNoteWord, replaceNoteWordInJson } from "@/lib/note-word-fix";
 import type {
   AppLectureListItem,
   AppLibraryFolder,
@@ -684,6 +686,74 @@ export function saveDemoNoteDoc(lectureId: string, doc: EditableNoteDoc) {
   return detail
     ? { doc: detail.editableNoteDoc as EditableNoteDoc, revision: detail.editableNoteRevision }
     : null;
+}
+
+/**
+ * "Fix a word" in the demo: the same matcher and highlight remapping as the real route, applied to
+ * the demo's own copy of the note and its cards, so a visitor sees the fix land everywhere.
+ */
+export function fixDemoNoteWord(lectureId: string, find: string, replace: string) {
+  let total = 0;
+  const words = (markdown: string, title: string | null) =>
+    parseNoteTtsDocument(stripLeadingRedundantHeading(markdown, title)).words.map((word) => word.text);
+
+  const detail = updateDetail(lectureId, (current) => {
+    if (!current.artifact) {
+      return current;
+    }
+
+    const oldNote = current.artifact.structured_notes_md;
+    const note = replaceNoteWord(oldNote, find, replace);
+    const title = replaceNoteWord(current.lecture.title ?? "", find, replace);
+    // Only the text a learner reads; ids, enums and dates stay as they are.
+    let fixedElsewhere = 0;
+    const fix = (value: string) => {
+      const result = replaceNoteWord(value, find, replace);
+      fixedElsewhere += result.count;
+      return result.text;
+    };
+    const flashcards = current.flashcards.map((card) => ({
+      ...card,
+      front: fix(card.front),
+      back: fix(card.back),
+      hint: card.hint === null ? null : fix(card.hint),
+    }));
+    const quizQuestions = current.quizQuestions.map((question) => {
+      const options = replaceNoteWordInJson(question.options, find, replace);
+      fixedElsewhere += options.count;
+      return { ...question, prompt: fix(question.prompt), explanation: fix(question.explanation), options: options.value };
+    });
+    const practiceTestQuestions = current.practiceTestQuestions.map((question) => ({
+      ...question,
+      prompt: fix(question.prompt),
+      answer_guide: fix(question.answer_guide),
+    }));
+    total = note.count + title.count + fixedElsewhere;
+    const doc = current.editableNoteDoc;
+    const newTitle = title.count > 0 ? title.text : current.lecture.title;
+
+    return {
+      ...current,
+      lecture: { ...current.lecture, title: newTitle },
+      artifact: { ...current.artifact, structured_notes_md: note.text },
+      editableNoteDoc: doc
+        ? {
+            ...doc,
+            annotations: remapNoteAnnotations(
+              doc.annotations,
+              words(oldNote, current.lecture.title),
+              words(note.text, newTitle),
+            ),
+          }
+        : doc,
+      editableNoteRevision: current.editableNoteRevision + 1,
+      flashcards,
+      quizQuestions,
+      practiceTestQuestions,
+    };
+  });
+
+  return detail ? { total, revision: detail.editableNoteRevision, doc: detail.editableNoteDoc } : null;
 }
 
 export function addDemoNoteMedia(params: {

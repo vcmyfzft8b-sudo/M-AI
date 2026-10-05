@@ -22,6 +22,7 @@ import {
   deleteDemoLecture,
   deleteDemoNoteMedia,
   deleteDemoQuizQuestion,
+  fixDemoNoteWord,
   getCreatorDemoState,
   getDemoFolders,
   getDemoLectureDetail,
@@ -312,6 +313,21 @@ async function handleLectureRoute(
       const question = typeof body.question === "string" ? body.question : "";
       const answer = appendDemoChatMessages(lectureId, question);
       return json({ answer });
+    }
+
+    case "fix-word": {
+      const body = await readJsonBody(init, input);
+      const find = typeof body.find === "string" ? body.find : "";
+      const replace = typeof body.replace === "string" ? body.replace : "";
+      const fixed = fixDemoNoteWord(lectureId, find, replace);
+
+      if (!fixed) {
+        return json({ error: demoT("api.notFound") }, 404);
+      }
+
+      return fixed.total > 0
+        ? json({ noteCount: fixed.total, otherCount: 0, revision: fixed.revision, doc: fixed.doc })
+        : json({ error: demoT("note.fixWord.notFound"), code: "not_found" }, 404);
     }
 
     case "notes-doc": {

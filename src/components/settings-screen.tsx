@@ -352,7 +352,8 @@ export function SettingsScreen({
         window.location.assign("/app/consent");
       } catch {
         setIsLoggingOut(false);
-        confirmSheet.dismiss();
+        // Forced: the failed request is what locked the sheet (see useSheet's dismiss).
+        confirmSheet.dismiss(undefined, { force: true });
         showToast(t("native.verifyFailed"));
       }
       return;
@@ -370,7 +371,7 @@ export function SettingsScreen({
         window.location.assign(`/auth/account-deleted${result.appleManualRevocationRequired ? "?apple=manual" : ""}`);
       } catch (error) {
         setIsLoggingOut(false);
-        confirmSheet.dismiss();
+        confirmSheet.dismiss(undefined, { force: true });
         showToast(error instanceof Error ? error.message : t("native.deleteFailed"));
       }
       return;

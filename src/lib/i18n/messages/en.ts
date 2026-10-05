@@ -697,7 +697,6 @@ export const en: Messages = {
   "capture.removePhotoIndexed": "Remove photo {index}",
   "capture.removePhoto": "Remove the photo",
   "capture.addPhotos": "Add photos",
-  "capture.photoLimit": "Up to {count} photos in total",
   "capture.documentFormats": "PDF, DOCX, PPTX or an image",
   "capture.scan": "Scan",
   "capture.photoPreview": "Photo preview",
@@ -705,10 +704,7 @@ export const en: Messages = {
   "capture.previewPreparing": "The photo preview is being prepared...",
   "capture.previewUnavailable": "This photo's preview could not be shown.",
   "capture.dontCloseScreen": "Do not close this screen. It closes on its own once everything is ready.",
-  "capture.uploadedPhotoCount": {
-    one: "{count} photo uploaded",
-    other: "{count} photos uploaded",
-  },
+  "capture.photoCount": "{count} of {max} photos",
 
   /* ---- Capture sheet — busy labels, errors and the audio import guide ---- */
   "capture.busy.preparing": "Preparing...",

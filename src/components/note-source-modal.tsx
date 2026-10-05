@@ -9,6 +9,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -260,6 +261,9 @@ async function fetchWithTimeout(
   }
 }
 
+/** Up to two rows of three; past that the grid goes four across, so ten photos still fit a phone. */
+const PHOTO_GRID_ROOMY_COUNT = 6;
+
 function isHeicPhoto(file: File) {
   const lowerName = file.name.toLowerCase();
   const normalizedMimeType = normalizeMimeType(file.type || "");
@@ -499,13 +503,68 @@ export function NoteSourceModal({
    */
   const canAddDocumentSource = !pdfSource && photoSources.length < MAX_SCAN_IMAGE_COUNT;
   const canGenerateLink = trimmedLinkValue.length > 0 && !linkVideoError;
-  const activePhotoPreview =
-    photoSources.find((photoSource) => photoSource.id === activePhotoPreviewId) ?? null;
-  const visiblePhotoSources = photoSources;
+  const activePhotoIndex = photoSources.findIndex(
+    (photoSource) => photoSource.id === activePhotoPreviewId,
+  );
+  const activePhotoPreview = activePhotoIndex >= 0 ? photoSources[activePhotoIndex] : null;
+  const isPhotoViewerOpen = activePhotoPreview != null;
+  const photoViewerTrackRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     photoSourcesRef.current = photoSources;
   }, [photoSources]);
+
+  // The viewer opens on the photo that was tapped. Only on opening: once it is up, the
+  // learner's own swipe is what moves it, and a write here would cut that swipe short.
+  useLayoutEffect(() => {
+    const track = photoViewerTrackRef.current;
+
+    if (!isPhotoViewerOpen || !track) {
+      return;
+    }
+
+    track.scrollLeft = Math.max(activePhotoIndex, 0) * track.clientWidth;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPhotoViewerOpen]);
+
+  // On a keyboard the arrows page through, since there is no swipe to make.
+  useEffect(() => {
+    if (!isPhotoViewerOpen) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      const track = photoViewerTrackRef.current;
+
+      if (!track || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) {
+        return;
+      }
+
+      event.preventDefault();
+      track.scrollBy({
+        left: event.key === "ArrowRight" ? track.clientWidth : -track.clientWidth,
+        behavior: "smooth",
+      });
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isPhotoViewerOpen]);
+
+  function handlePhotoViewerScroll() {
+    const track = photoViewerTrackRef.current;
+
+    if (!track || track.clientWidth === 0) {
+      return;
+    }
+
+    const index = Math.round(track.scrollLeft / track.clientWidth);
+    const photoSource = photoSources[Math.min(Math.max(index, 0), photoSources.length - 1)];
+
+    if (photoSource && photoSource.id !== activePhotoPreviewId) {
+      setActivePhotoPreviewId(photoSource.id);
+    }
+  }
 
   function redirectToPaywall() {
     onClose();
@@ -1847,7 +1906,16 @@ export function NoteSourceModal({
     }
 
     setPhotoSources(nextPhotoSources);
-    setActivePhotoPreviewId((current) => (current === photoId ? null : current));
+    // Deleting from the viewer moves on to the photo that takes its place, as Photos does;
+    // the viewer closes only once there is nothing left to show.
+    setActivePhotoPreviewId((current) => {
+      if (current !== photoId) {
+        return current;
+      }
+
+      const removedIndex = photoSources.findIndex((photoSource) => photoSource.id === photoId);
+      return nextPhotoSources[Math.min(removedIndex, nextPhotoSources.length - 1)]?.id ?? null;
+    });
   }
 
   function handlePhotoPreviewImageError(photoId: string) {
@@ -2401,9 +2469,6 @@ export function NoteSourceModal({
                   className={cn(
                     "mt-6 space-y-4 note-source-modal-body",
                     selectedMode === "text" && "note-source-modal-body-text",
-                    selectedMode === "text" &&
-                      photoSources.length > 0 &&
-                      "note-source-modal-body-photos",
                   )}
                 >
                   {renderPreparedSourceCard()}
@@ -2659,63 +2724,56 @@ export function NoteSourceModal({
                   {selectedMode === "text" ? (
                     <>
                       {photoSources.length > 0 ? (
-                        <div className="note-source-photo-previews" aria-label={t("capture.uploadedPhotos")}>
-                          <p className="ios-row-subtitle note-source-docs-file-copy note-source-docs-status-copy">
-                            {t("capture.uploadedPhotoCount", { count: photoSources.length })}
-                          </p>
-                          <div className="note-source-photo-grid">
-                            {visiblePhotoSources.map((photoSource) => {
-                              const originalIndex = photoSources.findIndex(
-                                (source) => source.id === photoSource.id,
-                              );
-
-                              return (
-                                <div key={photoSource.id} className="note-source-photo-preview">
-                                  <button
-                                    type="button"
-                                    className="note-source-photo-open"
-                                    onClick={() => setActivePhotoPreviewId(photoSource.id)}
-                                    aria-label={t("capture.openPhoto", {
-                                      index: originalIndex + 1,
-                                    })}
-                                  >
-                                    {photoSource.previewUrl ? (
-                                      // eslint-disable-next-line @next/next/no-img-element
-                                      <img
-                                        src={photoSource.previewUrl}
-                                        alt={
-                                          photoSource.file.name ||
-                                          t("capture.photoAlt", { index: originalIndex + 1 })
-                                        }
-                                        className="note-source-photo-image"
-                                        onError={() => handlePhotoPreviewImageError(photoSource.id)}
-                                      />
-                                    ) : (
-                                      <span className="note-source-photo-preview-status">
-                                        {photoSource.previewStatus === "failed"
-                                          ? t("capture.noPreview")
-                                          : photoSource.previewStatus === "queued"
-                                            ? t("capture.waiting")
-                                            : t("capture.previewing")}
-                                      </span>
-                                    )}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="note-source-photo-remove"
-                                    onClick={() => removePhotoSource(photoSource.id)}
-                                    aria-label={t("capture.removePhotoIndexed", {
-                                      index: originalIndex + 1,
-                                    })}
-                                    title={t("capture.removePhoto")}
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              );
+                        <section className="memo-photo-set" aria-label={t("capture.uploadedPhotos")}>
+                          <p className="memo-photo-set-count">
+                            {t("capture.photoCount", {
+                              count: photoSources.length,
+                              max: MAX_SCAN_IMAGE_COUNT,
                             })}
+                          </p>
+                          <div
+                            className="memo-photo-grid"
+                            data-dense={photoSources.length > PHOTO_GRID_ROOMY_COUNT ? "" : undefined}
+                          >
+                            {photoSources.map((photoSource, index) => (
+                              <div key={photoSource.id} className="memo-photo-tile">
+                                <button
+                                  type="button"
+                                  className="memo-photo-open"
+                                  onClick={() => setActivePhotoPreviewId(photoSource.id)}
+                                  aria-label={t("capture.openPhoto", { index: index + 1 })}
+                                >
+                                  {photoSource.previewUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={photoSource.previewUrl}
+                                      alt={photoSource.file.name || t("capture.photoAlt", { index: index + 1 })}
+                                      onError={() => handlePhotoPreviewImageError(photoSource.id)}
+                                    />
+                                  ) : (
+                                    <span className="memo-photo-status">
+                                      {photoSource.previewStatus === "failed"
+                                        ? t("capture.noPreview")
+                                        : photoSource.previewStatus === "queued"
+                                          ? t("capture.waiting")
+                                          : t("capture.previewing")}
+                                    </span>
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="memo-photo-remove"
+                                  disabled={Boolean(busyLabel)}
+                                  onClick={() => removePhotoSource(photoSource.id)}
+                                  aria-label={t("capture.removePhotoIndexed", { index: index + 1 })}
+                                  title={t("capture.removePhoto")}
+                                >
+                                  <X className="h-3.5 w-3.5" strokeWidth={2.75} />
+                                </button>
+                              </div>
+                            ))}
                           </div>
-                        </div>
+                        </section>
                       ) : null}
 
                       <input
@@ -2740,37 +2798,51 @@ export function NoteSourceModal({
                       />
 
                       {isCreatorDemo || !canAddDocumentSource ? null : (
-                        <div className="note-source-docs-actions note-source-docs-actions-bottom">
-                          <button
-                            type="button"
-                            className="memo-dropzone"
-                            disabled={Boolean(busyLabel)}
-                            onClick={() => {
-                              if (!canCreateNotes) {
-                                redirectToPaywall();
-                                return;
-                              }
+                        <div
+                          className={cn(
+                            "note-source-docs-actions note-source-docs-actions-bottom",
+                            hasPhotoSources && "memo-photo-add-row",
+                          )}
+                        >
+                          {hasPhotoSources ? (
+                            <button
+                              type="button"
+                              className="ios-secondary-button note-source-docs-action-button"
+                              disabled={Boolean(busyLabel)}
+                              onClick={() => {
+                                if (!canCreateNotes) {
+                                  redirectToPaywall();
+                                  return;
+                                }
 
-                              pdfInputRef.current?.click();
-                            }}
-                          >
-                            <Msym name="cloud_upload" className="memo-dropzone-icon" />
-                            <span className="memo-dropzone-lead">
-                              {t(hasPhotoSources ? "capture.addPhotos" : "capture.pickFile")}
-                            </span>
-                            <span className="memo-dropzone-title">
-                              {hasPhotoSources
-                                ? t("capture.photoLimit", { count: MAX_SCAN_IMAGE_COUNT })
-                                : t("capture.documentFormats")}
-                            </span>
-                            <span className="memo-dropzone-hint">
-                              {t("capture.dropHint", {
-                                action: t(
-                                  hasPhotoSources ? "capture.addPhotos" : "capture.pickFile",
-                                ),
-                              })}
-                            </span>
-                          </button>
+                                pdfInputRef.current?.click();
+                              }}
+                            >
+                              <Msym name="photo_library" />
+                              {t("capture.addPhotos")}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="memo-dropzone"
+                              disabled={Boolean(busyLabel)}
+                              onClick={() => {
+                                if (!canCreateNotes) {
+                                  redirectToPaywall();
+                                  return;
+                                }
+
+                                pdfInputRef.current?.click();
+                              }}
+                            >
+                              <Msym name="cloud_upload" className="memo-dropzone-icon" />
+                              <span className="memo-dropzone-lead">{t("capture.pickFile")}</span>
+                              <span className="memo-dropzone-title">{t("capture.documentFormats")}</span>
+                              <span className="memo-dropzone-hint">
+                                {t("capture.dropHint", { action: t("capture.pickFile") })}
+                              </span>
+                            </button>
+                          )}
 
                           <button
                             type="button"
@@ -2816,52 +2888,59 @@ export function NoteSourceModal({
 
       {activePhotoPreview ? (
         <div
-          className="note-source-photo-viewer"
+          className="memo-photo-viewer"
           role="dialog"
           aria-modal="true"
           aria-label={t("capture.photoPreview")}
         >
-          <button
-            type="button"
-            className="note-source-photo-viewer-backdrop"
-            onClick={() => setActivePhotoPreviewId(null)}
-            aria-label={t("capture.closePhotoPreview")}
-          />
-          <div className="note-source-photo-viewer-stage">
-            {activePhotoPreview.previewUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={activePhotoPreview.previewUrl}
-                alt={activePhotoPreview.file.name || t("capture.photoPreview")}
-                className="note-source-photo-viewer-image"
-              />
-            ) : (
-              <p className="note-source-photo-viewer-status">
-                {activePhotoPreview.previewStatus === "failed"
-                  ? t("capture.previewUnavailable")
-                  : t("capture.previewPreparing")}
-              </p>
-            )}
+          <div className="memo-photo-viewer-bar">
+            <span className="memo-photo-viewer-count" aria-live="polite">
+              {activePhotoIndex + 1} / {photoSources.length}
+            </span>
+            <div className="memo-photo-viewer-actions">
+              <button
+                type="button"
+                className="memo-photo-viewer-button"
+                disabled={Boolean(busyLabel)}
+                onClick={() => removePhotoSource(activePhotoPreview.id)}
+                aria-label={t("capture.removePhoto")}
+                title={t("capture.removePhoto")}
+              >
+                <Trash2 className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                className="memo-photo-viewer-button"
+                onClick={() => setActivePhotoPreviewId(null)}
+                aria-label={t("capture.closePhotoPreview")}
+                title={t("common.close")}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           </div>
-          <div className="note-source-photo-viewer-actions">
-            <button
-              type="button"
-              className="note-source-photo-viewer-icon-button"
-              onClick={() => removePhotoSource(activePhotoPreview.id)}
-              aria-label={t("capture.removePhoto")}
-              title={t("capture.removePhoto")}
-            >
-              <Trash2 className="h-5 w-5" />
-            </button>
-            <button
-              type="button"
-              className="note-source-photo-viewer-icon-button"
-              onClick={() => setActivePhotoPreviewId(null)}
-              aria-label={t("capture.closePhotoPreview")}
-              title={t("common.close")}
-            >
-              <X className="h-5 w-5" />
-            </button>
+          <div
+            ref={photoViewerTrackRef}
+            className="memo-photo-viewer-track"
+            onScroll={handlePhotoViewerScroll}
+          >
+            {photoSources.map((photoSource, index) => (
+              <div key={photoSource.id} className="memo-photo-viewer-slide">
+                {photoSource.previewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={photoSource.previewUrl}
+                    alt={photoSource.file.name || t("capture.photoAlt", { index: index + 1 })}
+                  />
+                ) : (
+                  <p className="memo-photo-viewer-status">
+                    {photoSource.previewStatus === "failed"
+                      ? t("capture.previewUnavailable")
+                      : t("capture.previewPreparing")}
+                  </p>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       ) : null}

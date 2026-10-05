@@ -2910,15 +2910,24 @@
   transform: translateY(0.35rem) scale(0.97);
   transform-origin: left bottom;
   pointer-events: none;
+  /* Hidden, not just transparent, once closed: the swatches leave the tab order and the
+     accessibility tree, after the fade-out has played. */
+  visibility: hidden;
   transition:
     opacity 0.2s ease,
-    transform 0.26s cubic-bezier(0.32, 0.72, 0, 1);
+    transform 0.26s cubic-bezier(0.32, 0.72, 0, 1),
+    visibility 0s linear 0.26s;
 }
 
 .memo-swatches.open {
   opacity: 1;
   transform: none;
   pointer-events: auto;
+  visibility: visible;
+  transition:
+    opacity 0.2s ease,
+    transform 0.26s cubic-bezier(0.32, 0.72, 0, 1),
+    visibility 0s;
 }
 
 .memo-swatch {

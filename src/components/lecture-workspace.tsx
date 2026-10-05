@@ -4310,7 +4310,6 @@ export function LectureWorkspace({
                   annotationToolbar={dockToolbar}
                   toolbarAccessory={noteStatus}
                   annotationActive={Boolean(noteSelection)}
-                  annotationPaletteOpen={isHighlightPaletteOpen}
                   dockContainer={dockSlot}
                   annotations={activeNoteDoc.annotations}
                   mediaBlocks={activeNoteDoc.mediaBlocks}

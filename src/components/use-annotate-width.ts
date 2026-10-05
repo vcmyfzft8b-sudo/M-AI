@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef } from "react";
 
 /**
- * The swatch row animates its width, so a single measurement taken at the
- * moment the palette is toggled reads the size it had *before* the animation.
- * Follow it for the length of the transition instead.
+ * The highlight label animates its width, so a single measurement taken when the
+ * toolbar appears reads the size it had *before* the animation. Follow it for the
+ * length of the transition instead.
  */
 const FOLLOW_MS = 480;
 
@@ -22,20 +22,15 @@ const HYSTERESIS_PX = 3;
  * its last visible child, plus the layer's left padding mirrored on the right so
  * both ends read the same.
  *
- * Only children that are actually on screen count. The swatch row is always in
- * the tree and collapses to `max-width: 0`, so measuring the row's full extent
- * would size the pill for swatches nobody can see.
- *
- * The palette-open state is measured too, though the artboard skips it: at
- * 390px the swatch row genuinely needs the whole row and the stylesheet still
- * gives it `calc(100% - 0.7rem)` there, but on a tablet that same rule stretches
- * the pill across a screen with room to spare.
+ * Only children that are actually on screen and in the row count. The colour
+ * swatches float above the pill (`position: absolute`) since Oct 2026, so they
+ * never widen it and opening them needs no remeasure.
  *
  * The value is written as a custom property rather than held in state: the pill
  * is remeasured every commit and through a 480ms follow loop, and re-rendering
  * the note body at that rate is exactly what makes this stutter.
  */
-export function useAnnotateWidth(annotating: boolean, paletteOpen: boolean) {
+export function useAnnotateWidth(annotating: boolean) {
   const pillRef = useRef<HTMLDivElement | null>(null);
   const layerRef = useRef<HTMLDivElement | null>(null);
   const lastRef = useRef(0);
@@ -108,7 +103,7 @@ export function useAnnotateWidth(annotating: boolean, paletteOpen: boolean) {
         followRef.current = null;
       }
     };
-  }, [annotating, paletteOpen, measure]);
+  }, [annotating, measure]);
 
   return { pillRef, layerRef };
 }

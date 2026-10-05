@@ -1430,7 +1430,6 @@ export function NoteReadAloud({
   toolbarAccessory,
   annotationActive = false,
   dockContainer = null,
-  annotationPaletteOpen = false,
   annotations = [],
   mediaBlocks = [],
   noteMedia = [],
@@ -1456,7 +1455,6 @@ export function NoteReadAloud({
    */
   dockContainer?: HTMLElement | null;
   /** True while the colour swatches are showing, so the pill widens for them. */
-  annotationPaletteOpen?: boolean;
   annotations?: NoteAnnotation[];
   mediaBlocks?: NoteMediaBlock[];
   noteMedia?: NoteMediaAsset[];
@@ -3104,7 +3102,7 @@ export function NoteReadAloud({
   const isAnnotating = annotationActive && Boolean(annotationToolbar);
   const isReading = !isAnnotating && (isPlaying || Boolean(activeChunk));
   const isIdle = !isAnnotating && !isReading;
-  const { pillRef, layerRef } = useAnnotateWidth(isAnnotating, annotationPaletteOpen);
+  const { pillRef, layerRef } = useAnnotateWidth(isAnnotating);
   const totalWords = document.words.length;
   const readProgressPercent =
     totalWords > 0
@@ -3118,7 +3116,6 @@ export function NoteReadAloud({
         "memo-dock-pill",
         isReading ? "reading" : "",
         isAnnotating ? "annotating" : "",
-        isAnnotating && annotationPaletteOpen ? "palette" : "",
       ]
         .filter(Boolean)
         .join(" ")}

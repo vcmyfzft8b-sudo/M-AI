@@ -56,6 +56,8 @@ export function useAnnotateWidth(annotating: boolean, paletteOpen: boolean) {
       const childStyles = getComputedStyle(child);
 
       return (
+        // The colours float above the pill (position: absolute) and take no room in it.
+        childStyles.position !== "absolute" &&
         Number.parseFloat(childStyles.maxWidth) !== 0 &&
         childStyles.opacity !== "0" &&
         child.getBoundingClientRect().width > 2

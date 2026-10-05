@@ -1182,7 +1182,8 @@ export function LectureWorkspace({
   /*
    * "Fix a word" (October 2026 feedback): the learner names a word the reader got wrong and it is
    * replaced everywhere in this note and what was made from it (note-word-fix-server.ts). Opened
-   * from a text selection, prefilled, on every screen size, or empty from the phone's menu.
+   * only from a text selection, prefilled with the selected word: the word is right there in the
+   * note, so that is where the learner points at it.
    */
   const [fixWordOpen, setFixWordOpen] = useState(false);
   const [fixWordFind, setFixWordFind] = useState("");
@@ -4181,7 +4182,7 @@ export function LectureWorkspace({
       const photoDockButton = (
         <button
           type="button"
-          className="memo-annotate-icon memo-annotate-photo"
+          className="memo-annotate-icon"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
             /* Before the picker, so the refusal is not a file chosen and then lost. */
@@ -4235,24 +4236,17 @@ export function LectureWorkspace({
               U
             </span>
           </button>
-          {/*
-           * Hidden while the colours are out: with the palette open the row is the widest it gets,
-           * and with this button too it ran 4px past a 375px phone (measured on the preview).
-           * Picking a colour is its own moment; the fix is one tap away once it closes.
-           */}
-          {isHighlightPaletteOpen ? null : (
-            <button
-              type="button"
-              className="memo-annotate-icon"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={openFixWordFromSelection}
-              disabled={isSavingNoteDoc}
-              aria-label={t("note.fixWord.action")}
-              title={t("note.fixWord.action")}
-            >
-              <Msym name="spellcheck" size="1.25rem" fill={false} weight={500} />
-            </button>
-          )}
+          <button
+            type="button"
+            className="memo-annotate-icon"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={openFixWordFromSelection}
+            disabled={isSavingNoteDoc}
+            aria-label={t("note.fixWord.action")}
+            title={t("note.fixWord.action")}
+          >
+            <Msym name="spellcheck" size="1.25rem" fill={false} weight={500} />
+          </button>
           <button
             type="button"
             className={`memo-palette-trigger ${isHighlightPaletteOpen ? "open" : ""}`.trim()}
@@ -6053,19 +6047,6 @@ export function LectureWorkspace({
                 <Msym name="edit" size="1.4rem" fill weight={500} />
                 {t("common.rename")}
               </button>
-
-              <button
-                type="button"
-                className="memo-action-sheet-item"
-                onClick={() => {
-                  setNoteActionsOpen(false);
-                  openFixWord("");
-                }}
-              >
-                <Msym name="spellcheck" size="1.4rem" fill weight={500} />
-                {t("note.fixWord.action")}
-              </button>
-
               <button
                 type="button"
                 className="memo-action-sheet-item danger"

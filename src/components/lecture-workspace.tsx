@@ -1191,7 +1191,6 @@ export function LectureWorkspace({
   const [fixWordError, setFixWordError] = useState<string | null>(null);
   const [isFixWordBusy, setIsFixWordBusy] = useState(false);
   const [fixWordToast, setFixWordToast] = useState<string | null>(null);
-  const [fixWordSaved, setFixWordSaved] = useState(false);
   const fixWordReplaceRef = useRef<HTMLInputElement | null>(null);
   const fixWordSheet = useSheet(
     useCallback(() => {
@@ -1200,24 +1199,6 @@ export function LectureWorkspace({
     }, []),
     { locked: isFixWordBusy },
   );
-
-  /*
-   * Closed from an effect, not straight after the save: the sheet is locked while busy and only
-   * learns it is unlocked once this render lands (useSheet reads `locked` through a ref set in its
-   * own effect, which runs before this one). A dismiss in the same tick was silently ignored and
-   * left the sheet open over the fixed note.
-   */
-  useEffect(() => {
-    if (!fixWordSaved || isFixWordBusy) {
-      return;
-    }
-
-    setFixWordSaved(false);
-    fixWordSheet.dismiss(() => {
-      setFixWordToast(t("note.fixWord.done"));
-      startTransition(() => router.refresh());
-    });
-  }, [fixWordSaved, isFixWordBusy, fixWordSheet, router, t]);
 
   useEffect(() => {
     if (!fixWordToast) {
@@ -5664,6 +5645,11 @@ export function LectureWorkspace({
     openFixWord(selected.slice(0, NOTE_WORD_FIX_MAX_LENGTH));
   }
 
+  function showFixWordDone() {
+    setFixWordToast(t("note.fixWord.done"));
+    startTransition(() => router.refresh());
+  }
+
   async function submitFixWord() {
     if (isFixWordBusy || fixWordInvalid || fixWordMatches === 0 || blockedOffline("edit")) {
       return;
@@ -5692,7 +5678,8 @@ export function LectureWorkspace({
         setDetail((current) => mergeLectureDetailForRefresh(current, nextDetail));
       }
       setIsFixWordBusy(false);
-      setFixWordSaved(true);
+      // Forced: this request is what locked the sheet, and it is done (see useSheet's dismiss).
+      fixWordSheet.dismiss(showFixWordDone, { force: true });
     } catch (error) {
       setFixWordError(error instanceof Error ? error.message : t("common.somethingWentWrong"));
       setIsFixWordBusy(false);

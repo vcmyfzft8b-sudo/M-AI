@@ -111,6 +111,65 @@ test("live states still move both ways, and a new subscription is created", asyn
   assert.equal(table.rows.get(SUBSCRIPTION_ID).cancel_at_period_end, true);
 });
 
+/**
+ * 2026-10-05 18:04 UTC: `checkout.session.completed` and `customer.subscription.created` for a
+ * new subscription were handled at once, and both inserted its row. `ON CONFLICT
+ * (stripe_subscription_id)` only arbitrates on that index, so Postgres reported the loser on the
+ * other unique index, `billing_subscriptions_customer_subscription_unique`, as 23505 and the
+ * webhook answered 500. This table fails the losing insert the same way.
+ */
+function createRacingTable() {
+  const table = createTable();
+  const upsert = table.upsert;
+  const inFlight = new Set();
+
+  table.upsert = async (values, options) => {
+    const key = values[options.onConflict];
+    if (!table.rows.has(key) && inFlight.has(key)) {
+      await upsert(values, options);
+      return {
+        data: null,
+        error: {
+          code: "23505",
+          message:
+            'duplicate key value violates unique constraint "billing_subscriptions_customer_subscription_unique"',
+        },
+      };
+    }
+    inFlight.add(key);
+    try {
+      return await upsert(values, options);
+    } finally {
+      inFlight.delete(key);
+    }
+  };
+
+  return table;
+}
+
+test("two deliveries inserting a new subscription at once both succeed", async () => {
+  for (const [first, second, expected] of [
+    ["active", "active", "active"],
+    ["trialing", "active", "active"],
+    ["active", "canceled", "canceled"],
+    ["canceled", "active", "canceled"],
+  ]) {
+    const table = createRacingTable();
+    await Promise.all([first, second].map((status) => writeStripeSubscriptionRow(table, row(status))));
+    assert.equal(statusOf(table), expected, `${first} and ${second}`);
+  }
+});
+
+test("a duplicate key on anything but a racing insert still throws", async () => {
+  const failing = {
+    ...createTable(),
+    async upsert() {
+      return { data: null, error: { code: "23505", message: "duplicate key value" } };
+    },
+  };
+  await assert.rejects(writeStripeSubscriptionRow(failing, row("canceled")), /duplicate key/);
+});
+
 test("a failed write throws so Stripe redelivers the event", async () => {
   const failing = {
     ...createTable(),

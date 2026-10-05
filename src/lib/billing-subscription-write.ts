@@ -11,7 +11,8 @@ export type StripeSubscriptionRowWrite = {
   [column: string]: unknown;
 };
 
-type WriteResult = PromiseLike<{ data: unknown; error: { message: string } | null }>;
+type WriteError = { message: string; code?: string };
+type WriteResult = PromiseLike<{ data: unknown; error: WriteError | null }>;
 
 /** The slice of the Supabase query builder for `billing_subscriptions` this needs. */
 export type BillingSubscriptionsTable = {
@@ -48,7 +49,7 @@ export async function writeStripeSubscriptionRow(
   row: StripeSubscriptionRowWrite,
 ) {
   if ((TERMINAL_SUBSCRIPTION_STATUSES as readonly string[]).includes(row.status)) {
-    return check(await table.upsert(row, { onConflict: "stripe_subscription_id" }));
+    return check(await upsertRetryingLostRace(() => table.upsert(row, { onConflict: "stripe_subscription_id" })));
   }
 
   const updateUnlessEnded = async () =>
@@ -67,14 +68,36 @@ export async function writeStripeSubscriptionRow(
   }
 
   // Either the row is new, or it has ended and must stay as it is.
-  check(await table.upsert(row, { onConflict: "stripe_subscription_id", ignoreDuplicates: true }));
+  check(
+    await upsertRetryingLostRace(() =>
+      table.upsert(row, { onConflict: "stripe_subscription_id", ignoreDuplicates: true }),
+    ),
+  );
 
   // If another delivery inserted the row between our update and our insert, the insert was
   // dropped; apply this state over theirs, unless theirs had ended.
   return updateUnlessEnded();
 }
 
-function check(result: { data: unknown; error: { message: string } | null }) {
+const UNIQUE_VIOLATION = "23505";
+
+/**
+ * Runs an insert again if it lost a race to insert the same subscription.
+ *
+ * `checkout.session.completed` and `customer.subscription.created` arrive together for a new
+ * subscription, and on 2026-10-05 both inserted its row at once. `ON CONFLICT` arbitrates only on
+ * `stripe_subscription_id`, so Postgres reported the loser on the table's other unique index,
+ * `(stripe_customer_id, stripe_subscription_id)`, as 23505 instead of taking the conflict branch,
+ * and the webhook answered 500. Postgres raises that only after the winner has committed, so the
+ * second attempt sees the row and resolves the conflict as asked. A duplicate that survives the
+ * retry is real and still throws.
+ */
+async function upsertRetryingLostRace(write: () => WriteResult) {
+  const result = await write();
+  return result.error?.code === UNIQUE_VIOLATION ? write() : result;
+}
+
+function check(result: { data: unknown; error: WriteError | null }) {
   if (result.error) {
     // Thrown so the webhook answers 500 and Stripe redelivers, rather than leaving a stale row.
     throw new Error(`Failed to store Stripe subscription: ${result.error.message}`);

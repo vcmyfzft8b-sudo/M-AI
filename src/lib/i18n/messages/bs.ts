@@ -1295,6 +1295,7 @@ export const bs: Messages = {
   "failure.source_too_large": "Ovo je gradivo preveliko za obradu odjednom. Podijeli ga na nekoliko dijelova i pokušaj ponovo.",
   "failure.generation_budget_exceeded": "Izrada bilješki za ovo gradivo više puta zaredom nije uspjela pa smo zaustavili dalje pokušaje. Pokušaj sutra ili nam se javi da provjerimo šta nije u redu.",
   "failure.source_too_short": "Za bilješke nam treba malo više gradiva. Dodaj još nešto teksta i pokušaj ponovo.",
+  "failure.recording_no_study_content": "Preslušali smo snimak, ali u njemu nije bilo ničega što bi se moglo naučiti — zvuči kao razgovor, a ne kao objašnjenje. Snimi predavanje ili objašnjenje ili naglas reci koju temu želiš naučiti.",
   "failure.source_no_study_content": "U ovom gradivu nije bilo ničega što bi se moglo naučiti — izgleda kao prazan obrazac ili slika bez sadržaja. Učitaj bilješke, stranicu iz udžbenika, radni list ili snimak objašnjenja.",
   "note.sourceNotice.missingPhotos": "Neke fotografije se nisu učitale ({missing} od {total}). Bilješke su napravljene iz ostalih; stranice koje nedostaju možeš učitati u novoj bilješci.",
   "note.sourceNotice.topicOther": "Tvoje gradivo je bilo kratko i bez objašnjenja pa smo napravili bilješke koje objašnjavaju temu o kojoj govori.",

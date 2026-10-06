@@ -332,9 +332,13 @@ async function generateNotesContentDriven(
 
   // Nothing to teach even as a topic: a blank form, a photo with nothing on it, a greeting. That
   // is the learner's material, not a defect, and the retry button stays off because a retry
-  // replays the same checkpointed verdict.
+  // replays the same checkpointed verdict. A recording has its own code: the general message
+  // speaks of an empty form or a picture, which a learner who spoke into the phone does not
+  // recognise as their material.
   if (items.length === 0) {
-    throw expectedInputFailure("source_no_study_content");
+    throw expectedInputFailure(
+      params.sourceType === "audio" ? "recording_no_study_content" : "source_no_study_content",
+    );
   }
 
   if (params.stopAfter === "note_extract") {

@@ -1288,6 +1288,7 @@ export const en: Messages = {
   "failure.source_too_large": "This material is too large to process in one go. Split it into a few parts and try again.",
   "failure.generation_budget_exceeded": "Notes generation for this material failed repeatedly, so we stopped further attempts. Try again tomorrow or contact us so we can investigate.",
   "failure.source_too_short": "We need a little more material to make notes from. Add some more text and try again.",
+  "failure.recording_no_study_content": "We listened to the recording, but there was nothing in it to learn from — it sounds like conversation rather than an explanation. Record a lecture or an explanation, or say out loud which topic you want to learn.",
   "failure.source_no_study_content": "There was nothing in this material to learn from — it looks like an empty form or a picture with no study content. Upload notes, a textbook page, a worksheet or a recording of an explanation.",
   "note.sourceNotice.missingPhotos": "Some photos did not upload ({missing} of {total}). These notes are made from the rest; you can upload the missing pages in a new note.",
   "note.sourceNotice.topicOther": "Your material was short and had no explanation in it, so we made notes that explain the topic it is about.",

@@ -1970,12 +1970,12 @@
 
 /* Cancel and the action on one line, in the order iOS puts them. A line shorter
    than the stacked pair, for sheets that have to fit above the keyboard. */
-.memo-sheet-actions.row {
+.memo-sheet-actions.memo-sheet-actions-row {
   display: flex;
   gap: 0.5rem;
 }
 
-.memo-sheet-actions.row > * {
+.memo-sheet-actions.memo-sheet-actions-row > * {
   flex: 1;
   min-width: 0;
   height: 3.4rem;
@@ -2017,8 +2017,10 @@
   outline: none;
 }
 
-/* A one-line answer under the fields, close enough to read as theirs. */
+/* A one-line answer under the fields, close enough to read as theirs. Its line
+   is kept while empty, so editing the word never moves the buttons. */
 .memo-sheet-status {
+  min-height: 1.4em;
   margin: 0.6rem 0 0;
 }
 
@@ -11094,7 +11096,7 @@
     margin-top: 0.5rem;
   }
 
-  .memo-sheet-pinned > .memo-sheet-actions.row > * {
+  .memo-sheet-pinned > .memo-sheet-actions.memo-sheet-actions-row > * {
     height: 3.2rem;
   }
 

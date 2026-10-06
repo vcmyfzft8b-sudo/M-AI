@@ -6126,13 +6126,13 @@ export function LectureWorkspace({
             {/* Always in the layout, so editing the word never moves the buttons under a finger. */}
             <p className="memo-sheet-copy memo-sheet-status" aria-live="polite">
               {!fixWordFind.trim()
-                ? "\u00a0"
+                ? null
                 : fixWordMatches > 0
                   ? t("note.fixWord.found", { matches: String(fixWordMatches) })
                   : t("note.fixWord.none")}
             </p>
             {fixWordError ? <p className="memo-inline-error">{fixWordError}</p> : null}
-            <div className="memo-sheet-actions row">
+            <div className="memo-sheet-actions memo-sheet-actions-row">
               <button
                 type="button"
                 className="memo-sheet-ghost"

@@ -853,7 +853,18 @@ export function KeyboardInset() {
     document.addEventListener("focusin", track);
     document.addEventListener("focusout", onFocusOut);
 
+    // TEMP-KBDEBUG: remove before PR.
+    const dbg = document.createElement("div");
+    dbg.style.cssText = "position:fixed;left:4px;top:40px;z-index:2147483647;background:rgba(0,0,0,.8);color:#0f0;font:11px/1.3 monospace;padding:4px;pointer-events:none;white-space:pre";
+    document.body.appendChild(dbg);
+    const dbgTimer = window.setInterval(() => {
+      const cs = getComputedStyle(root);
+      dbg.textContent = `vvH ${viewport.height.toFixed(0)} vvTop ${viewport.offsetTop.toFixed(0)} inH ${innerHeight} scrY ${scrollY}\nground ${groundLine().toFixed(0)} pub ${published} full ${fullHeight}\nkb ${cs.getPropertyValue("--memo-keyboard")} bar ${cs.getPropertyValue("--memo-keyboard-bar")} up ${cs.getPropertyValue("--memo-keyboard-up")}\ntyping ${isTyping()} focusedAt ${focusedAt ? Math.round(performance.now() - focusedAt) : 0} overl ${barOverlaps} sa ${root.hasAttribute("data-standalone")}`;
+    }, 200);
+
     return () => {
+      window.clearInterval(dbgTimer);
+      dbg.remove();
       if (frame) {
         cancelAnimationFrame(frame);
       }

@@ -2019,7 +2019,7 @@
 
 /* A one-line answer under the fields, close enough to read as theirs. */
 .memo-sheet-status {
-  margin: 0.75rem 0 0;
+  margin: 0.6rem 0 0;
 }
 
 .memo-sheet-field {
@@ -11048,9 +11048,9 @@
 
   /*
    * A sheet whose buttons stay above the keyboard however little room it
-   * leaves. Mobile Safari with its URL and form bars up leaves under 300pt of
-   * sheet on an iPhone 17 Pro, so a two-field sheet overflows there; when it
-   * does, the fields scroll and the row stays put.
+   * leaves. Mobile Safari with its URL and form bars up leaves about 290pt of
+   * sheet on an iPhone 17 Pro, which a two-field sheet only just fits; on a
+   * smaller phone it overflows, and then the fields scroll and the row stays.
    *
    * The handle and title stay too, so on a small phone it still reads as a
    * sheet you can drag, with only the fields between them moving.
@@ -11062,12 +11062,11 @@
   .memo-dialog.memo-sheet-pinned {
     padding-top: 0;
     padding-bottom: 0;
-    /* A focused field comes to rest clear of each end and of its fade, not
-       just of the keys. Above: the 0.6rem top, the handle and its 0.9rem,
-       the title and its 0.9rem, and the fade. Below: the row's 0.6rem top,
-       its 3.4rem button and the fade. */
-    scroll-padding-top: 5.8rem;
-    scroll-padding-bottom: calc(var(--memo-kb-scroll) + 5.1rem);
+    /* A focused field comes to rest clear of each pinned end, not just of
+       the keys. Above: the 0.6rem top, the handle and its 0.9rem, the title
+       and its 0.7rem. Below: the row's 0.75rem top and its 3.4rem button. */
+    scroll-padding-top: 4.6rem;
+    scroll-padding-bottom: calc(var(--memo-kb-scroll) + 4.2rem);
   }
 
   .memo-sheet-pinned > .memo-sheet-head {
@@ -11078,36 +11077,20 @@
     background: var(--memo-sheet-paint);
   }
 
-  .memo-sheet-pinned > .memo-sheet-head::after {
-    content: "";
-    position: absolute;
-    inset: 100% 0 auto 0;
-    height: 1.1rem;
-    background: linear-gradient(to bottom, var(--memo-sheet-paint), transparent);
-    pointer-events: none;
+  .memo-sheet-pinned .memo-sheet-heading {
+    margin-bottom: 0.7rem;
   }
 
   .memo-sheet-pinned > .memo-sheet-actions {
     position: sticky;
     bottom: 0;
     z-index: 1;
-    margin-top: 0.4rem;
-    padding: 0.6rem 0
+    padding: 0.75rem 0
       calc(
         var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
         + var(--memo-kb-up) * var(--memo-kb-clear)
       );
     background: var(--memo-sheet-paint);
-  }
-
-  /* The fields run out under it rather than stopping dead at its edge. */
-  .memo-sheet-pinned > .memo-sheet-actions::before {
-    content: "";
-    position: absolute;
-    inset: auto 0 100% 0;
-    height: 1.1rem;
-    background: linear-gradient(to top, var(--memo-sheet-paint), transparent);
-    pointer-events: none;
   }
 
   .memo-sheet-field {

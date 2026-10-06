@@ -1312,6 +1312,7 @@ export const sl = {
   "failure.source_too_large": "To gradivo je preveliko za obdelavo naenkrat. Razdeli ga na nekaj delov in poskusi znova.",
   "failure.generation_budget_exceeded": "Ustvarjanje zapiskov za to gradivo je večkrat zapored spodletelo, zato smo nadaljnje poskuse ustavili. Poskusi jutri ali nam piši, da preverimo, kaj je narobe.",
   "failure.source_too_short": "Za zapiske potrebujemo malo več gradiva. Dodaj še nekaj besedila in poskusi znova.",
+  "failure.recording_no_study_content": "Posnetek smo poslušali, a v njem ni bilo ničesar, kar bi se dalo naučiti — sliši se kot pogovor, ne kot razlaga. Posnemi predavanje ali razlago ali pa na glas povej, katero temo se želiš naučiti.",
   "failure.source_no_study_content": "V tem gradivu ni bilo ničesar, kar bi se dalo naučiti — videti je kot prazen obrazec ali slika brez snovi. Naloži zapiske, stran iz učbenika, delovni list ali posnetek razlage.",
   "note.sourceNotice.missingPhotos": "Nekatere fotografije se niso naložile ({missing} od {total}). Zapiski so narejeni iz ostalih; manjkajoče strani lahko naložiš v novem zapisku.",
   "note.sourceNotice.topicOther": "Tvoje gradivo je bilo kratko in brez razlage, zato smo pripravili zapiske, ki razložijo snov, o kateri govori.",

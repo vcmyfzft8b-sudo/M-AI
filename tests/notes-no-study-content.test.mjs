@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { StepError, serializeError } from "inngest";
 
 import {
+  LECTURE_FAILURE_MESSAGE_KEYS,
   canRetryLectureFailureCode,
   readLectureFailureCode,
 } from "../src/lib/lecture-failure-codes.ts";
@@ -53,9 +54,28 @@ test("the extraction refusal is thrown as an input failure, not a bare Error", (
   // carrying `source_no_study_content`. `expectedInputFailure` builds exactly that.
   assert.match(
     NOTE_GENERATION_SOURCE,
-    /throw expectedInputFailure\("source_no_study_content"\)/,
+    /throw expectedInputFailure\(\s*params\.sourceType === "audio" \? "recording_no_study_content" : "source_no_study_content",?\s*\)/,
     "the zero-item branch throws an expected-input failure carrying its code",
   );
+});
+
+test("a recording with nothing to study is not described as a form or a picture", () => {
+  // Spoken chatter and a two-word answer reached the zero-item branch and were told their
+  // material "looks like an empty form or a picture". A recording gets its own code and wording.
+  assert.equal(canRetryLectureFailureCode("recording_no_study_content"), false);
+  assert.equal(LECTURE_FAILURE_MESSAGE_KEYS.recording_no_study_content, "failure.recording_no_study_content");
+
+  for (const locale of ["en", "sl", "hr", "bs", "sr"]) {
+    const catalogue = readSource(`src/lib/i18n/messages/${locale}.ts`);
+    const line = catalogue.split("\n").find((entry) => entry.includes('"failure.recording_no_study_content"'));
+
+    assert.ok(line, `${locale} has a message for a recording with nothing to study`);
+    assert.doesNotMatch(
+      line,
+      /form|picture|obrazec|obrazac|slika/i,
+      `${locale}: the recording message does not speak of a form or a picture`,
+    );
+  }
 });
 
 test("a source with nothing study-worthy in it is the learner's material, not a defect", () => {

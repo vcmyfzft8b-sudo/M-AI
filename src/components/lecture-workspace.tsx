@@ -62,7 +62,7 @@ import {
 } from "@/lib/constants";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import Image from "next/image";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 
 import { LecturePodcast } from "@/components/lecture-podcast";
 import { StudyGenerationNotice } from "@/components/generation-notice";
@@ -1209,20 +1209,6 @@ export function LectureWorkspace({
     return () => window.clearTimeout(timer);
   }, [fixWordToast]);
 
-  useEffect(() => {
-    if (!fixWordOpen) {
-      return;
-    }
-
-    // Straight to the correct spelling, caret at the end: the wrong word is usually prefilled
-    // into both fields and only a letter or two needs changing.
-    const frame = window.requestAnimationFrame(() => {
-      const input = fixWordReplaceRef.current;
-      input?.focus({ preventScroll: true });
-      input?.setSelectionRange(input.value.length, input.value.length);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [fixWordOpen]);
   const [practiceQuestionIndex, setPracticeQuestionIndex] = useState(0);
 
   // A pending auto-advance must not fire after the quiz is left behind.
@@ -5620,10 +5606,20 @@ export function LectureWorkspace({
       return;
     }
 
-    setFixWordFind(prefill);
-    setFixWordReplace(prefill);
-    setFixWordError(null);
-    setFixWordOpen(true);
+    // Mounted synchronously and focused inside the tap, as the library's rename sheet does: iOS
+    // opens the keyboard only for a focus made during the user's gesture. Focusing a frame later
+    // (what this did first) left the sheet up with no keys, or brought them up mid-slide.
+    flushSync(() => {
+      setFixWordFind(prefill);
+      setFixWordReplace(prefill);
+      setFixWordError(null);
+      setFixWordOpen(true);
+    });
+
+    // Straight to the correct spelling, caret at the end: only a letter or two needs changing.
+    const input = fixWordReplaceRef.current;
+    input?.focus({ preventScroll: true });
+    input?.setSelectionRange(input.value.length, input.value.length);
   }
 
   function openFixWordFromSelection() {
@@ -6126,13 +6122,14 @@ export function LectureWorkspace({
                 disabled={isFixWordBusy}
               />
             </label>
-            {fixWordFind.trim() ? (
-              <p className="memo-sheet-copy" aria-live="polite">
-                {fixWordMatches > 0
+            {/* Always in the layout, so editing the word never moves the buttons under a finger. */}
+            <p className="memo-sheet-copy" aria-live="polite">
+              {!fixWordFind.trim()
+                ? "\u00a0"
+                : fixWordMatches > 0
                   ? t("note.fixWord.found", { matches: String(fixWordMatches) })
                   : t("note.fixWord.none")}
-              </p>
-            ) : null}
+            </p>
             {fixWordError ? <p className="memo-inline-error">{fixWordError}</p> : null}
             <div className="memo-sheet-actions">
               <button

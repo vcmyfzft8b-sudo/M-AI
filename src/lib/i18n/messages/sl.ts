@@ -289,7 +289,6 @@ export const sl = {
   "note.annotate.photo": "Dodaj fotografijo",
   "note.fixWord.action": "Popravi besedo",
   "note.fixWord.title": "Popravi besedo",
-  "note.fixWord.copy": "Popravimo jo povsod v tem zapisku, tudi v karticah, kvizu in miselnem vzorcu.",
   "note.fixWord.wrong": "Napačno",
   "note.fixWord.wrongPlaceholder": "Kar je zapisal Memo",
   "note.fixWord.right": "Pravilno",

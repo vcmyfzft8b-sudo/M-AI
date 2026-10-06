@@ -1968,6 +1968,62 @@
   margin-top: 1rem;
 }
 
+/* Cancel and the action on one line, in the order iOS puts them. A line shorter
+   than the stacked pair, for sheets that have to fit above the keyboard. */
+.memo-sheet-actions.memo-sheet-actions-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.memo-sheet-actions.memo-sheet-actions-row > * {
+  flex: 1;
+  min-width: 0;
+  height: 3.4rem;
+}
+
+/*
+ * A field that carries its own label at its leading edge, for a sheet with two
+ * fields: a label above each costs a row apiece. The box is `.memo-sheet-field`
+ * on the <label>, so a tap anywhere on it lands in the input.
+ */
+.memo-sheet-labelled {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: text;
+}
+
+.memo-sheet-labelled + .memo-sheet-labelled {
+  margin-top: 0.5rem;
+}
+
+.memo-sheet-labelled > span {
+  flex: none;
+  min-width: 4.6rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.memo-sheet-labelled > input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
+}
+
+/* A one-line answer under the fields, close enough to read as theirs. Its line
+   is kept while empty, so editing the word never moves the buttons. */
+.memo-sheet-status {
+  min-height: 1.4em;
+  margin: 0.6rem 0 0;
+}
+
 .memo-sheet-field {
   width: 100%;
   height: 3.4rem;
@@ -10170,6 +10226,7 @@
 /* Standalone fields are their own container, so the ring goes on the field. */
 .memo-field:focus,
 .memo-sheet-field:focus,
+.memo-sheet-labelled:focus-within,
 .memo-input-pill:focus,
 .memo-textarea:focus,
 .memo-test-input:focus,
@@ -10989,6 +11046,70 @@
 
   .memo-dialog .memo-grab {
     display: block;
+  }
+
+  /*
+   * A sheet whose buttons stay above the keyboard however little room it
+   * leaves. Mobile Safari with its URL and form bars up leaves 295pt of sheet
+   * on an iPhone 17 Pro, which a two-field sheet only just fits; on a smaller
+   * phone it overflows, and then the fields scroll and the row stays.
+   *
+   * The handle and title stay too, so on a small phone it still reads as a
+   * sheet you can drag, with only the fields between them moving.
+   *
+   * The sheet's padding moves into the two pinned ends. A sticky child sticks
+   * inside its scroller's padding, so padding left on the sheet would show the
+   * fields scrolling past above the title and underneath the buttons.
+   */
+  .memo-dialog.memo-sheet-pinned {
+    padding-top: 0;
+    padding-bottom: 0;
+    /* A focused field comes to rest clear of each pinned end, not just of
+       the keys. Above: the 0.45rem top, the handle and its 0.75rem, the
+       title and its 0.55rem. Below: the row's 0.6rem top and its button. */
+    scroll-padding-top: 4rem;
+    scroll-padding-bottom: calc(var(--memo-kb-scroll) + 3.8rem);
+  }
+
+  .memo-sheet-pinned > .memo-sheet-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding-top: 0.45rem;
+    background: var(--memo-sheet-paint);
+  }
+
+  /*
+   * Tighter than other sheets, for Safari: with its URL pill and the room kept
+   * for its form bar, an iPhone 17 Pro leaves 295pt between the sheet's top
+   * edge and the keys, and at the usual spacing this sheet is 303.
+   */
+  .memo-sheet-pinned .memo-grab {
+    margin-bottom: 0.75rem;
+  }
+
+  .memo-sheet-pinned .memo-sheet-heading {
+    margin-bottom: 0.55rem;
+  }
+
+  .memo-sheet-pinned .memo-sheet-status {
+    margin-top: 0.5rem;
+  }
+
+  .memo-sheet-pinned > .memo-sheet-actions.memo-sheet-actions-row > * {
+    height: 3.2rem;
+  }
+
+  .memo-sheet-pinned > .memo-sheet-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    padding: 0.6rem 0
+      calc(
+        var(--memo-kb-down) * (2rem + var(--memo-safe-bottom))
+        + var(--memo-kb-up) * var(--memo-kb-clear)
+      );
+    background: var(--memo-sheet-paint);
   }
 
   .memo-sheet-field {

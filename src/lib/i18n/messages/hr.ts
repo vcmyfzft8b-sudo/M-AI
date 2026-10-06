@@ -276,7 +276,6 @@ export const hr: Messages = {
   "note.annotate.photo": "Dodaj fotografiju",
   "note.fixWord.action": "Ispravi riječ",
   "note.fixWord.title": "Ispravi riječ",
-  "note.fixWord.copy": "Ispravit ćemo je posvuda u ovoj bilješci: u tekstu, karticama, kvizu i mentalnoj mapi.",
   "note.fixWord.wrong": "Pogrešno",
   "note.fixWord.wrongPlaceholder": "Ono što je Memo napisao",
   "note.fixWord.right": "Ispravno",

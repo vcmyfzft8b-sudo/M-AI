@@ -62,7 +62,7 @@ import {
 } from "@/lib/constants";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import Image from "next/image";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 
 import { LecturePodcast } from "@/components/lecture-podcast";
 import { StudyGenerationNotice } from "@/components/generation-notice";
@@ -1209,20 +1209,6 @@ export function LectureWorkspace({
     return () => window.clearTimeout(timer);
   }, [fixWordToast]);
 
-  useEffect(() => {
-    if (!fixWordOpen) {
-      return;
-    }
-
-    // Straight to the correct spelling, caret at the end: the wrong word is usually prefilled
-    // into both fields and only a letter or two needs changing.
-    const frame = window.requestAnimationFrame(() => {
-      const input = fixWordReplaceRef.current;
-      input?.focus({ preventScroll: true });
-      input?.setSelectionRange(input.value.length, input.value.length);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [fixWordOpen]);
   const [practiceQuestionIndex, setPracticeQuestionIndex] = useState(0);
 
   // A pending auto-advance must not fire after the quiz is left behind.
@@ -5620,10 +5606,20 @@ export function LectureWorkspace({
       return;
     }
 
-    setFixWordFind(prefill);
-    setFixWordReplace(prefill);
-    setFixWordError(null);
-    setFixWordOpen(true);
+    // Mounted synchronously and focused inside the tap, as the library's rename sheet does: iOS
+    // opens the keyboard only for a focus made during the user's gesture. Focusing a frame later
+    // (what this did first) left the sheet up with no keys, or brought them up mid-slide.
+    flushSync(() => {
+      setFixWordFind(prefill);
+      setFixWordReplace(prefill);
+      setFixWordError(null);
+      setFixWordOpen(true);
+    });
+
+    // Straight to the correct spelling, caret at the end: only a letter or two needs changing.
+    const input = fixWordReplaceRef.current;
+    input?.focus({ preventScroll: true });
+    input?.setSelectionRange(input.value.length, input.value.length);
   }
 
   function openFixWordFromSelection() {
@@ -6067,21 +6063,23 @@ export function LectureWorkspace({
             onClick={() => fixWordSheet.dismiss()}
           />
           <div
-            className={sheetClass("memo-sheet memo-dialog", fixWordSheet.closing)}
+            className={sheetClass("memo-sheet memo-dialog memo-sheet-pinned", fixWordSheet.closing)}
             role="dialog"
             aria-modal="true"
             aria-labelledby="note-fix-word-title"
             {...fixWordSheet.dragProps}
           >
-            <div className="memo-grab" data-drag-handle />
-            <span id="note-fix-word-title" className="memo-sheet-heading">
-              {t("note.fixWord.title")}
-            </span>
-            <p className="memo-sheet-copy">{t("note.fixWord.copy")}</p>
-            <label>
-              <span className="memo-field-label">{t("note.fixWord.wrong")}</span>
+            <div className="memo-sheet-head" data-drag-zone>
+              <div className="memo-grab" data-drag-handle />
+              <span id="note-fix-word-title" className="memo-sheet-heading">
+                {t("note.fixWord.title")}
+              </span>
+            </div>
+            {/* Each label sits inside its field: two labelled rows are the height of one more field,
+                which is what lets the sheet keep its buttons above the keyboard. */}
+            <label className="memo-sheet-field memo-sheet-labelled">
+              <span>{t("note.fixWord.wrong")}</span>
               <input
-                className="memo-sheet-field"
                 value={fixWordFind}
                 onChange={(event) => setFixWordFind(event.target.value)}
                 onKeyDown={(event) => {
@@ -6100,11 +6098,10 @@ export function LectureWorkspace({
                 disabled={isFixWordBusy}
               />
             </label>
-            <label>
-              <span className="memo-field-label">{t("note.fixWord.right")}</span>
+            <label className="memo-sheet-field memo-sheet-labelled">
+              <span>{t("note.fixWord.right")}</span>
               <input
                 ref={fixWordReplaceRef}
-                className="memo-sheet-field"
                 value={fixWordReplace}
                 onChange={(event) => setFixWordReplace(event.target.value)}
                 onKeyDown={(event) => {
@@ -6126,15 +6123,24 @@ export function LectureWorkspace({
                 disabled={isFixWordBusy}
               />
             </label>
-            {fixWordFind.trim() ? (
-              <p className="memo-sheet-copy" aria-live="polite">
-                {fixWordMatches > 0
+            {/* Always in the layout, so editing the word never moves the buttons under a finger. */}
+            <p className="memo-sheet-copy memo-sheet-status" aria-live="polite">
+              {!fixWordFind.trim()
+                ? null
+                : fixWordMatches > 0
                   ? t("note.fixWord.found", { matches: String(fixWordMatches) })
                   : t("note.fixWord.none")}
-              </p>
-            ) : null}
+            </p>
             {fixWordError ? <p className="memo-inline-error">{fixWordError}</p> : null}
-            <div className="memo-sheet-actions">
+            <div className="memo-sheet-actions memo-sheet-actions-row">
+              <button
+                type="button"
+                className="memo-sheet-ghost"
+                onClick={() => fixWordSheet.dismiss()}
+                disabled={isFixWordBusy}
+              >
+                {t("common.cancel")}
+              </button>
               <button
                 type="button"
                 className="memo-sheet-coral"
@@ -6143,14 +6149,6 @@ export function LectureWorkspace({
               >
                 {isFixWordBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {t("note.fixWord.submit")}
-              </button>
-              <button
-                type="button"
-                className="memo-sheet-ghost"
-                onClick={() => fixWordSheet.dismiss()}
-                disabled={isFixWordBusy}
-              >
-                {t("common.cancel")}
               </button>
             </div>
           </div>

@@ -180,10 +180,24 @@ export function KeyboardInset() {
     /** The foot of the page, in the coordinates the page is laid out in. */
     const groundLine = () => ground.getBoundingClientRect().bottom;
 
+    /*
+     * How far the page is panned, as far as anything fixed is concerned.
+     *
+     * A Home Screen web app reports a pan like Safari does but does not draw
+     * one: its fixed boxes stay put on the screen while `offsetTop` says the
+     * visible strip has moved. Measured on an iPhone 17 Pro, the fix-word
+     * sheet: panned 178 into a 634pt page, the strip on screen was the top 436
+     * of the page's fixed layer, and subtracting the pan anchored the sheet's
+     * buttons 178pt down, under the keys. Its strip always ends at the
+     * keyboard's own edge, so height alone is the answer there.
+     */
+    const panned = () =>
+      root.hasAttribute("data-standalone") ? 0 : viewport.offsetTop;
+
     const rawInset = (line = groundLine()) =>
       Math.max(
         0,
-        Math.round(line - (viewport.offsetTop + viewport.height)),
+        Math.round(line - (panned() + viewport.height)),
       );
 
     /**
@@ -285,7 +299,7 @@ export function KeyboardInset() {
        * and the unwinding is reported in pieces — so a stale `offsetTop` landed
        * after the keyboard had gone and shifted every fixed screen by it.
        */
-      const top = nativeFrames || idle() ? 0 : Math.max(0, Math.round(viewport.offsetTop));
+      const top = nativeFrames || idle() ? 0 : Math.max(0, Math.round(panned()));
       published = inset;
 
       /*
@@ -508,9 +522,14 @@ export function KeyboardInset() {
      * A fraction rather than a flag, so the reserve crosses over on the
      * keyboard's own curve along with the ground it is added to; a bar that
      * simply appeared would step the ground 55px in one frame.
+     *
+     * Never over the page in the wrapper, which turns it off, nor in a Home
+     * Screen web app, whose visible strip ends at the bar's top edge whether it
+     * pans or not (measured on an iPhone 17 Pro: 436 of 812 for a 307pt
+     * keyboard and its 69pt bar). Reserving it there left a 55pt gap.
      */
     const barValue = () => {
-      if (root.hasAttribute("data-native")) {
+      if (root.hasAttribute("data-native") || root.hasAttribute("data-standalone")) {
         return 0;
       }
 

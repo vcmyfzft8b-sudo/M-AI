@@ -2022,10 +2022,6 @@
   margin: 0.75rem 0 0;
 }
 
-.memo-sheet-status + .memo-sheet-copy {
-  margin: 0.2rem 0 0;
-}
-
 .memo-sheet-field {
   width: 100%;
   height: 3.4rem;

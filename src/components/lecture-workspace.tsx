@@ -6131,9 +6131,6 @@ export function LectureWorkspace({
                   ? t("note.fixWord.found", { matches: String(fixWordMatches) })
                   : t("note.fixWord.none")}
             </p>
-            {/* Under the fields rather than the title: when Safari leaves too little room, this is
-                what slides under the buttons, and the title and both fields stay in view. */}
-            <p className="memo-sheet-copy">{t("note.fixWord.copy")}</p>
             {fixWordError ? <p className="memo-inline-error">{fixWordError}</p> : null}
             <div className="memo-sheet-actions row">
               <button

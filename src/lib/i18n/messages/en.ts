@@ -272,7 +272,6 @@ export const en: Messages = {
   "note.annotate.photo": "Add a photo",
   "note.fixWord.action": "Fix a word",
   "note.fixWord.title": "Fix a word",
-  "note.fixWord.copy": "We'll fix it everywhere in this note: the text, flashcards, quiz and mindmap.",
   "note.fixWord.wrong": "Wrong",
   "note.fixWord.wrongPlaceholder": "What Memo wrote",
   "note.fixWord.right": "Correct",

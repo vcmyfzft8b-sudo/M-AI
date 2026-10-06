@@ -514,7 +514,22 @@ export function KeyboardInset() {
         return 0;
       }
 
-      if (isTyping()) {
+      if (isTyping() && root.hasAttribute("data-standalone")) {
+        /*
+         * A Home Screen web app answers the bar the other way round, measured
+         * on an iPhone 17 Pro, the fix-word sheet. Left its height, it counts
+         * the bar as part of the keyboard: the visual viewport ends at the
+         * bar's top edge (436 of 812, inset 376 for a 307pt keyboard), so the
+         * inset already clears it and reserving it again left a 55pt gap. Panned,
+         * the strip it collapses to runs down to the keys themselves, so the bar
+         * lies across the bottom of it and covered the sheet's buttons.
+         */
+        if (published > 0) {
+          barOverlaps = false;
+        } else if (viewport.offsetTop > 0) {
+          barOverlaps = true;
+        }
+      } else if (isTyping()) {
         if (published > 0) {
           barOverlaps = true;
         } else if (viewport.offsetTop > 0) {
@@ -859,6 +874,7 @@ export function KeyboardInset() {
     document.body.appendChild(dbg);
     const dbgTimer = window.setInterval(() => {
       const cs = getComputedStyle(root);
+      dbg.style.top = `${viewport.offsetTop + 40}px`;
       dbg.textContent = `vvH ${viewport.height.toFixed(0)} vvTop ${viewport.offsetTop.toFixed(0)} inH ${innerHeight} scrY ${scrollY}\nground ${groundLine().toFixed(0)} pub ${published} full ${fullHeight}\nkb ${cs.getPropertyValue("--memo-keyboard")} bar ${cs.getPropertyValue("--memo-keyboard-bar")} up ${cs.getPropertyValue("--memo-keyboard-up")}\ntyping ${isTyping()} focusedAt ${focusedAt ? Math.round(performance.now() - focusedAt) : 0} overl ${barOverlaps} sa ${root.hasAttribute("data-standalone")}`;
     }, 200);
 

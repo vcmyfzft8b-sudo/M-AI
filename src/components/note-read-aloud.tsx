@@ -16,7 +16,6 @@ import { useT } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
 import { useOfflineGuard } from "@/components/offline/offline-notice";
-import { useAnnotateWidth } from "@/components/use-annotate-width";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
 import { sheetClass, useSheet } from "@/components/use-sheet";
@@ -3102,7 +3101,6 @@ export function NoteReadAloud({
   const isAnnotating = annotationActive && Boolean(annotationToolbar);
   const isReading = !isAnnotating && (isPlaying || Boolean(activeChunk));
   const isIdle = !isAnnotating && !isReading;
-  const { pillRef, layerRef } = useAnnotateWidth(isAnnotating);
   const totalWords = document.words.length;
   const readProgressPercent =
     totalWords > 0
@@ -3111,7 +3109,6 @@ export function NoteReadAloud({
 
   const renderNoteDock = () => (
     <div
-      ref={pillRef}
       className={[
         "memo-dock-pill",
         isReading ? "reading" : "",
@@ -3182,7 +3179,6 @@ export function NoteReadAloud({
       </div>
 
       <div
-        ref={layerRef}
         className={`memo-dock-layer memo-dock-annotate ${isAnnotating ? "on" : ""}`.trim()}
         aria-hidden={!isAnnotating}
         inert={!isAnnotating}

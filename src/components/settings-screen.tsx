@@ -397,13 +397,11 @@ export function SettingsScreen({
 
     if (kind === "delete") {
       window.location.href = deleteRequestHref;
-      showToast(t("settings.toast.deleteReady"));
       return;
     }
 
     if (kind === "share") {
       window.location.href = shareHref;
-      showToast(t("settings.toast.shareReady"));
     }
   }
 

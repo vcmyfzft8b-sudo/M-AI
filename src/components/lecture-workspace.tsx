@@ -1190,7 +1190,6 @@ export function LectureWorkspace({
   const [fixWordReplace, setFixWordReplace] = useState("");
   const [fixWordError, setFixWordError] = useState<string | null>(null);
   const [isFixWordBusy, setIsFixWordBusy] = useState(false);
-  const [fixWordToast, setFixWordToast] = useState<string | null>(null);
   const fixWordReplaceRef = useRef<HTMLInputElement | null>(null);
   const fixWordSheet = useSheet(
     useCallback(() => {
@@ -1199,15 +1198,6 @@ export function LectureWorkspace({
     }, []),
     { locked: isFixWordBusy },
   );
-
-  useEffect(() => {
-    if (!fixWordToast) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => setFixWordToast(null), 2200);
-    return () => window.clearTimeout(timer);
-  }, [fixWordToast]);
 
   const [practiceQuestionIndex, setPracticeQuestionIndex] = useState(0);
 
@@ -5640,11 +5630,6 @@ export function LectureWorkspace({
     openFixWord(selected.slice(0, NOTE_WORD_FIX_MAX_LENGTH));
   }
 
-  function showFixWordDone() {
-    setFixWordToast(t("note.fixWord.done"));
-    startTransition(() => router.refresh());
-  }
-
   async function submitFixWord() {
     if (isFixWordBusy || fixWordInvalid || fixWordMatches === 0 || blockedOffline("edit")) {
       return;
@@ -5674,7 +5659,7 @@ export function LectureWorkspace({
       }
       setIsFixWordBusy(false);
       // Forced: this request is what locked the sheet, and it is done (see useSheet's dismiss).
-      fixWordSheet.dismiss(showFixWordDone, { force: true });
+      fixWordSheet.dismiss(() => startTransition(() => router.refresh()), { force: true });
     } catch (error) {
       setFixWordError(error instanceof Error ? error.message : t("common.somethingWentWrong"));
       setIsFixWordBusy(false);
@@ -6151,15 +6136,6 @@ export function LectureWorkspace({
                 {t("note.fixWord.submit")}
               </button>
             </div>
-          </div>
-        </MemoPortal>
-      ) : null}
-
-      {fixWordToast ? (
-        <MemoPortal>
-          <div className="memo-toast" role="status">
-            <Msym name="check_circle" size="1.25rem" />
-            <span>{fixWordToast}</span>
           </div>
         </MemoPortal>
       ) : null}

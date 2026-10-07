@@ -31,18 +31,23 @@ test("reads past the 1000-row cap", async () => {
     rows.map((row) => row.index),
     Array.from({ length: 5737 }, (_, index) => index),
   );
-  assert.equal(table.calls.length, 6);
+  // Six pages with rows, then the empty one that ends it.
+  assert.equal(table.calls.length, 7);
 });
 
-test("an exact multiple of the page asks once more and stops on the empty page", async () => {
-  const table = fakeTable(2000);
+test("a row cap below the page size still reads everything", async () => {
+  // A short page is not the end of the table: stopping on one would read 500
+  // rows here and chart them as if they were all of them.
+  const table = fakeTable(1700, 500);
   const rows = await loadEveryRow((from, to) => table.loadPage(from, to));
 
-  assert.equal(rows.length, 2000);
+  assert.equal(rows.length, 1700);
   assert.deepEqual(table.calls, [
     [0, 999],
+    [500, 1499],
     [1000, 1999],
-    [2000, 2999],
+    [1500, 2499],
+    [1700, 2699],
   ]);
 });
 
@@ -83,4 +88,14 @@ test("the creator tables read every row too", () => {
     assert.match(body, /\.order\("id"/, name);
     assert.match(body, /\.range\(/, name);
   }
+});
+
+test("a failed sign-up chart does not take the user list down with it", () => {
+  const page = readFileSync(
+    new URL("../src/app/admin/(dashboard)/users/page.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(page, /getUserGrowth\(range\)\.catch\(/);
+  assert.match(page, /growth === null \?/);
 });

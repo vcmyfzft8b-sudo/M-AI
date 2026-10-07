@@ -23,6 +23,7 @@ import {
   listUsers,
   normalizeUserFilter,
   USER_FILTERS,
+  type UserGrowthPoint,
 } from "@/lib/admin/users";
 
 type SearchParams = Promise<{
@@ -70,7 +71,11 @@ export default async function UsersPage({
 
   const [totals, growth, result, onboarding] = await Promise.all([
     getUserTotals(range),
-    getUserGrowth(range),
+    // Neither may the chart: it pages through every profile in the window.
+    getUserGrowth(range).catch((error: unknown) => {
+      console.error("User growth failed", error);
+      return null as UserGrowthPoint[] | null;
+    }),
     listUsers({ page, pageSize: 50, search, filter }),
     // The survey panel must never take the user list down with it.
     getOnboardingBreakdown(range).catch((error: unknown) => {
@@ -137,7 +142,11 @@ export default async function UsersPage({
       </div>
 
       <Section title="Sign-ups per day">
-        {growth.some((point) => point.signups > 0) ? (
+        {growth === null ? (
+          <EmptyState title="Sign-ups unavailable">
+            The sign-up history could not be read. The details are in the server logs.
+          </EmptyState>
+        ) : growth.some((point) => point.signups > 0) ? (
           <AreaChart
             points={growth.map((point) => ({
               day: point.day,

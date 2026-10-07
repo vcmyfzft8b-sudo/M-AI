@@ -126,6 +126,12 @@ icon button (`--btn-round`) · `3.1` tab · `3.2` outline and solid button ·
 `3.4` coral primary, search, dock · `3.6` field, modal CTA · `5.1` settings row ·
 `5.4` note row.
 
+Progress bars are the onboarding's: a `1rem` track on `--bar-track` with the fill
+standing in it, a light strip along its top and a sweeping sheen. They live
+in `src/app/progress-bars.css`, layered over redesign.css rather than written
+into it, so removing its one import in `src/app/layout.tsx` restores the old
+0.4rem lines (`tests/progress-bars.test.mjs` keeps that true).
+
 Card padding: `0 1.5rem` fixed-height row · `1.2rem 1.6rem` wrapping card row ·
 `1.5rem 1.6rem` content card · `2rem 2.1rem 2.1rem` modal.
 

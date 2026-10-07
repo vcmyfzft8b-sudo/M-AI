@@ -27,6 +27,8 @@ import "katex/dist/katex.min.css";
 import "./globals.css";
 import "./redesign.css";
 import "./onboarding.css";
+// The onboarding's thick progress bars, app-wide. One line to take them back out.
+import "./progress-bars.css";
 
 /**
  * The redesign draws every glyph from Material Symbols Rounded. `next/font`

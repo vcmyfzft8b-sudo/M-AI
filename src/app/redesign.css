@@ -2876,16 +2876,29 @@
 }
 
 /*
- * The same roll-away on the narrowest phones (320px, iPhone SE 1st generation), where the row
- * with "Popravi besedo" is wider than the space beside the chat button and slid the photo button
- * under it (measured on the preview, Oct 2026). The marker icon alone still reads as highlight.
+ * The dock always fits its row. `useAnnotateWidth` compares the buttons with the room beside the
+ * chat button and sets `data-fit` (see src/lib/annotate-dock-fit.ts): "compact" rolls the label
+ * away — the marker icon alone still reads as highlight — and "tight" also closes the buttons up,
+ * for the narrowest phones. This used to be a 359px breakpoint, measured before the fix-a-word
+ * button joined the row, after which every phone from 360px to about 397px cut the photo button off.
  */
-@media (max-width: 359px) {
-  .memo-dock-pill.annotating .memo-annotate-label {
-    max-width: 0;
-    opacity: 0;
-    margin-left: 0;
-  }
+.memo-dock-pill.annotating:is([data-fit="compact"], [data-fit="tight"]) .memo-annotate-label {
+  max-width: 0;
+  opacity: 0;
+  margin-left: 0;
+}
+
+/* What tight takes off is TIGHT_SAVINGS_REM in annotate-dock-fit.ts; change both together. */
+.memo-dock-pill.annotating[data-fit="tight"] .memo-annotate-icon {
+  width: 2.05rem;
+}
+
+.memo-dock-pill.annotating[data-fit="tight"] .memo-palette-trigger {
+  width: 2.2rem;
+}
+
+.memo-dock-pill.annotating[data-fit="tight"] .memo-annotate-primary {
+  padding: 0 0.5rem;
 }
 
 .memo-annotate-icon {

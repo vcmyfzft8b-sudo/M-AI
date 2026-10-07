@@ -329,9 +329,9 @@ test("Enter presses the call to action wherever there is one", () => {
   const handler = FLOW.slice(FLOW.indexOf("const onKey ="), FLOW.indexOf('window.addEventListener("keydown"'));
 
   assert.match(handler, /if \(ctaRef\.current\.enabled\) \{\s*\n\s*ctaRef\.current\.press\(\);/);
-  // A question step has no button at all — picking an option is what advances
-  // it — so that one case still moves the step directly.
-  assert.match(handler, /if \(active\.kind === "q"\)/);
+  // Since the v2 redesign a question step has the button too — a pick no
+  // longer advances by itself — so it gets no shortcut of its own either.
+  assert.doesNotMatch(handler, /active\.kind === "q"\)\s*\{\s*\n\s*if \(current\.form/);
   // And the old shortcut is gone from every other case.
   assert.doesNotMatch(handler, /active\.kind === "loading"/);
 
@@ -365,7 +365,7 @@ test("the option label has room to wrap and cannot leave its tile", () => {
   // And the tile actually reads them rather than carrying its own copy.
   const button = FLOW.slice(FLOW.indexOf("{v.options.map("), FLOW.indexOf("{item.label}"));
   assert.match(button, /gap: v\.optionGap/);
-  assert.match(button, /padding: `clamp\(0\.3rem, 1\.2vh, 0\.8rem\) \$\{v\.optionPad\}`/);
+  assert.match(button, /padding: `clamp\(0\.45rem, 1\.3vh, 0\.85rem\) \$\{v\.optionPad\}`/);
   assert.match(button, /width: v\.optionIcon, height: v\.optionIcon/);
   assert.match(button, /overflowWrap: "anywhere"/);
 });

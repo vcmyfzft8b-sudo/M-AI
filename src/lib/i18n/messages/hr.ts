@@ -1015,7 +1015,7 @@ export const hr: Messages = {
   "onboarding.askQ5": "Sažmi današnje predavanje",
   "onboarding.askQ6": "Zašto ova formula funkcionira?",
   "onboarding.timeTitle": "Kada obično učiš?",
-  "onboarding.timeSub": "Tada ću ti poslati blagi podsjetnik.",
+  "onboarding.timeSub": "Odaberi vrijeme koje ti najviše odgovara.",
   "onboarding.subjectLine.computerScience": "Kod s predavanja u bilješkama je ispravno formatiran.",
   "onboarding.subjectLine.healthMedicine": "Svako ime lijeka i dozu zadrži točno onako kako je predavač rekao.",
   "onboarding.subjectLine.maths": "Izvodi izlaze kao prave formule, a ne kao izobličen tekst.",

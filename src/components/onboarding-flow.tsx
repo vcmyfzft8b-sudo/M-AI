@@ -54,7 +54,6 @@ import {
   usesTenPointGrades,
   type GradeScale,
 } from "@/lib/onboarding-options";
-import { browserTimeZone, enableStudyReminderDelivery } from "@/lib/study-reminders-client";
 
 /**
  * The interactive onboarding.
@@ -540,8 +539,6 @@ export function OnboardingFlow({
   const fileDrag = useRef({ startX: 0, startY: 0, moved: false });
   const saving = useRef(false);
   const saved = useRef(false);
-  /** The study hour counts as answered once its step has been left forwards. */
-  const hourAnswered = useRef(false);
   /** Which way the last step change went, for Memo's hop or boing. */
   const direction = useRef(1);
   /** Whether the small Memo has already dropped in beside the bubble. */
@@ -698,9 +695,6 @@ export function OnboardingFlow({
             targetGrade: gradeTouched.targetGrade ? current.targetGrade : null,
             gradeScale:
               gradeTouched.currentAverageGrade || gradeTouched.targetGrade ? gradeScale : null,
-            // The hour of the study reminder, read in the learner's own zone.
-            studyHour: hourAnswered.current ? current.studyHour : null,
-            timeZone: hourAnswered.current ? browserTimeZone() : null,
           },
         }),
       });
@@ -1480,17 +1474,6 @@ export function OnboardingFlow({
       return;
     }
 
-    // Leaving the study-time step is agreeing to the nudge it promises, so it
-    // is also where the permission to send it is asked for — from the press
-    // itself, which is the only moment a browser lets a page ask.
-    if (kind === "time") {
-      hourAnswered.current = true;
-
-      if (!demo) {
-        void enableStudyReminderDelivery();
-      }
-    }
-
     go(1);
   };
 
@@ -2000,7 +1983,7 @@ export function OnboardingFlow({
       <header style={{ position: "relative", zIndex: "5", gridRow: "1", display: "flex", alignItems: "center", gap: "0.85rem", padding: "max(0.7rem, env(safe-area-inset-top)) clamp(1rem, 4vw, 2rem) clamp(0.5rem, 1.4vh, 0.9rem)" }}>
       <button type="button" onClick={v.back} aria-label={t("onboarding.previousStep")} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "2.4rem", height: "2.4rem", flex: "0 0 auto", padding: "0", border: "0", borderRadius: "999px", background: "var(--line-soft)", color: "var(--text)", fontSize: "1.35rem", lineHeight: "1", cursor: "pointer", transition: "transform 160ms cubic-bezier(0.2,0.8,0.2,1), background-color 160ms ease, opacity 200ms ease", visibility: v.backState === "off" ? "hidden" : undefined }} data-back={v.backState} disabled={v.backDisabled} className="memo-ob-fx-1"><span aria-hidden="true" style={{ display: "block", width: "0.55rem", height: "0.55rem", marginLeft: "0.16rem", borderLeft: "2px solid currentColor", borderBottom: "2px solid currentColor", borderRadius: "1px", transform: "rotate(45deg)" }}></span></button>
       <div style={{ position: "relative", flex: "1 1 auto", minWidth: "0", height: "1rem" }}>
-      <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={v.progressPct} aria-label={t("onboarding.progressLabel")} style={{ height: "100%", borderRadius: "999px", background: "var(--bar-track)", overflow: "hidden" }}>
+      <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={v.progressPct} aria-label={t("onboarding.progressLabel")} style={{ height: "100%", borderRadius: "999px", background: "var(--ob-bar-track)", overflow: "hidden" }}>
       <div style={{ minWidth: "1rem", height: "100%", borderRadius: "999px", transition: "width 620ms cubic-bezier(0.22,1,0.36,1)", position: "relative", overflow: "hidden", width: `${v.progressPct}%`, background: v.accent }}>
       <div aria-hidden="true" style={{ position: "absolute", left: "0.45rem", right: "0.45rem", top: "0.2rem", height: "0.22rem", borderRadius: "999px", background: "rgba(255,255,255,0.38)" }}></div>
       <div aria-hidden="true" style={{ position: "absolute", inset: "0", width: "40%", background: "linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.4), rgba(255,255,255,0))", animation: "memo-shimmer 2.4s ease-in-out infinite" }}></div>
@@ -2026,8 +2009,8 @@ export function OnboardingFlow({
       </aside>
       </>) : null}
       {/* Wider than the column by the room a hop or a glow needs, and pulled back by the same, so nothing it draws is clipped at its edge. */}
-      <main ref={mainEl} style={{ flex: "1 1 30rem", maxWidth: "calc(34rem + 1.6rem)", width: "calc(100% + 1.6rem)", margin: "-3.6rem -0.8rem 0", padding: "3.6rem 0.8rem 0.6rem", minHeight: "0", maxHeight: "calc(100% + 3.6rem)", boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: v.hero ? "safe center" : "flex-start", overflowY: "visible", overscrollBehavior: "contain", scrollPaddingBlock: "0.75rem", scrollbarWidth: "none" }}>
-      <div ref={fitEl} style={{ display: "flex", flexDirection: "column", flexShrink: "0", transformOrigin: "50% 0" }}>
+      <main ref={mainEl} style={{ alignSelf: v.isTime ? "stretch" : undefined, flex: "1 1 30rem", maxWidth: "calc(34rem + 1.6rem)", width: "calc(100% + 1.6rem)", margin: "-3.6rem -0.8rem 0", padding: "3.6rem 0.8rem 0.6rem", minHeight: "0", maxHeight: "calc(100% + 3.6rem)", boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: v.hero ? "safe center" : "flex-start", overflowY: "visible", overscrollBehavior: "contain", scrollPaddingBlock: "0.75rem", scrollbarWidth: "none" }}>
+      <div ref={fitEl} style={{ display: "flex", flexDirection: "column", flexShrink: v.isTime ? "1" : "0", flexGrow: v.isTime ? "1" : "0", minHeight: v.isTime ? "0" : undefined, transformOrigin: "50% 0" }}>
       {!v.hero ? (<>
       <div style={{ display: "flex", alignItems: "center", gap: "clamp(0.8rem, 3.4vw, 1.3rem)", margin: "clamp(1.4rem, 3.4vh, 2.2rem) 0 clamp(1rem, 3vh, 1.8rem)", flexShrink: "0" }}>
       <div style={{ position: "relative", zIndex: "3", flex: "0 0 auto", width: "clamp(4.8rem, 21vw, 6.4rem)", paddingBottom: "0.5rem" }}>
@@ -2046,7 +2029,7 @@ export function OnboardingFlow({
       <SpeechBubble text={v.bubbleText} typed={v.tw} tail="left" bubbleRef={(element) => { bubbleEl.current = element; }} style={{ zIndex: 1, flex: "1 1 auto", minWidth: "0", padding: "clamp(0.8rem, 2.2vh, 1.15rem) clamp(1rem, 3.4vw, 1.4rem)", transformOrigin: "0 50%" }} textStyle={{ fontSize: "clamp(1.05rem, min(4.6vw, 3vh), 1.45rem)", lineHeight: "1.38", textWrap: "pretty" }} />
       </div>
       </>) : null}
-      <div style={{ minHeight: "0", flexShrink: "0", transition: "opacity 200ms ease, transform 260ms cubic-bezier(0.2,0.85,0.2,1)", opacity: v.fade, transform: `translate3d(${v.shift}px, 0, 0)` }}>
+      <div style={{ minHeight: "0", flexShrink: v.isTime ? "1" : "0", flexGrow: v.isTime ? "1" : "0", transition: "opacity 200ms ease, transform 260ms cubic-bezier(0.2,0.85,0.2,1)", opacity: v.fade, transform: `translate3d(${v.shift}px, 0, 0)` }}>
       {v.isWelcome ? (<>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "1.1rem", paddingTop: "1.4rem" }}>
       <SpeechBubble text={v.bubbleText} typed={v.tw} tail="down" style={{ maxWidth: "min(26rem, 100%)", margin: "0 0 0.6rem", padding: "clamp(0.85rem, 2.2vh, 1.1rem) clamp(1.1rem, 4vw, 1.5rem)", animation: "memo-bubble-down 560ms cubic-bezier(0.22,1,0.36,1) 500ms both" }} textStyle={{ fontSize: "clamp(1.2rem, min(5.4vw, 3.4vh), 1.65rem)", lineHeight: "1.3", textWrap: "balance" }} />
@@ -2248,7 +2231,7 @@ export function OnboardingFlow({
       {v.srcBusy ? <span style={{ flex: "0 0 auto", fontSize: "0.95rem", fontWeight: "900", fontVariantNumeric: "tabular-nums", color: v.accent }}>{v.srcPctLabel}</span> : null}
       </div>
       {v.srcBusy ? (<>
-      <div style={{ height: "0.4rem", borderRadius: "999px", background: "var(--bar-track)", overflow: "hidden" }}>
+      <div style={{ height: "0.4rem", borderRadius: "999px", background: "var(--ob-bar-track)", overflow: "hidden" }}>
       <div style={{ height: "100%", width: `${v.srcPct}%`, borderRadius: "999px", background: v.accent, transition: "width 160ms linear" }}></div>
       </div>
       </>) : null}
@@ -2256,7 +2239,7 @@ export function OnboardingFlow({
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.6rem" }}>
       {v.srcOutputs.map((output) => (<Fragment key={output.icon}>
       <div style={{ ...CHIP, display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.7rem 0.8rem", borderRadius: "16px", boxShadow: "0 4px 0 var(--chip-ring)", opacity: output.opacity, transform: `scale(${output.scale})`, transition: "opacity 300ms ease, transform 360ms cubic-bezier(0.34,1.56,0.64,1)" }}>
-      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "2rem", height: "2rem", flex: "0 0 auto", borderRadius: "10px", background: "var(--bar-track)", fontSize: "1rem", lineHeight: "1" }}>{output.icon}</span>
+      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "2rem", height: "2rem", flex: "0 0 auto", borderRadius: "10px", background: "var(--ob-bar-track)", fontSize: "1rem", lineHeight: "1" }}>{output.icon}</span>
       <span style={{ flex: "1 1 auto", minWidth: "0", fontSize: "0.9rem", fontWeight: "800", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{output.label}</span>
       <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.25rem", height: "1.25rem", flex: "0 0 auto", boxSizing: "border-box", borderRadius: "999px", border: output.ring, borderTopColor: output.spinTop, background: output.dot, color: "#ffffff", fontSize: "0.68rem", fontWeight: "900", animation: output.spin }}>{output.mark}</span>
       </div>
@@ -2362,15 +2345,15 @@ export function OnboardingFlow({
       </div>
       </>) : null}
       {v.isTime ? (<>
-      <div>
+      <div className="memo-ob-time">
       <p style={{ ...SUBTITLE, margin: "0 0 0.4rem" }}>{v.subtitle}</p>
-      <div style={{ position: "relative", height: "clamp(14rem, 38vh, 20rem)", margin: "0 -1.6rem", overflow: "hidden", background: v.sky.skyBg, transition: "background 800ms ease", WebkitMaskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 52%, rgba(0,0,0,0.6) 74%, transparent 100%)", maskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 52%, rgba(0,0,0,0.6) 74%, transparent 100%)" }}>
+      <div className="memo-ob-time-sky" style={{ background: v.sky.skyBg, transition: "background 800ms ease", WebkitMaskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 52%, rgba(0,0,0,0.6) 74%, transparent 100%)", maskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 52%, rgba(0,0,0,0.6) 74%, transparent 100%)" }}>
       <div aria-hidden="true" style={{ position: "absolute", inset: "0", opacity: v.sky.starOpacity, transition: "opacity 800ms ease" }}>
       {SKY_STARS.map(([left, top, size], k) => <span key={k} style={{ position: "absolute", left: `${left}%`, top: `${top}%`, width: `${size}px`, height: `${size}px`, borderRadius: "50%", background: "#ffffff", animation: `memo-twinkle 2.6s ease-in-out ${(k * 0.31).toFixed(2)}s infinite` }}></span>)}
       </div>
-      <div aria-hidden="true" style={{ position: "absolute", left: `${v.sky.orbX}%`, top: `${v.sky.orbY}%`, width: "clamp(3.4rem, 9.5vh, 4.6rem)", aspectRatio: "1", transform: "translate(-50%, -50%)", transition: "left 560ms cubic-bezier(0.22,1,0.36,1), top 560ms cubic-bezier(0.22,1,0.36,1)" }}>
+      <div aria-hidden="true" style={{ position: "absolute", left: `clamp(5rem, ${v.sky.orbX}%, calc(100% - 5rem))`, top: `clamp(5rem, ${v.sky.orbY}%, calc(100% - 5rem))`, fontSize: "clamp(4.5rem, 24vw, 6rem)", width: "1em", aspectRatio: "1", transform: "translate(-50%, -50%)", transition: "left 560ms cubic-bezier(0.22,1,0.36,1), top 560ms cubic-bezier(0.22,1,0.36,1)" }}>
       <div style={{ position: "absolute", inset: "0", opacity: v.sky.rayOpacity, transition: "opacity 600ms ease", animation: "memo-spin 28s linear infinite" }}>
-      {SUN_RAYS.map((deg, k) => <span key={deg} style={{ position: "absolute", left: "50%", top: "50%", width: "0.22rem", height: k % 2 === 0 ? "0.9rem" : "0.55rem", marginLeft: "-0.11rem", borderRadius: "999px", background: "#ffc83d", transform: `rotate(${deg}deg) translateY(${k % 2 === 0 ? "-3.2rem" : "-2.75rem"})` }}></span>)}
+      {SUN_RAYS.map((deg, k) => <span key={deg} style={{ position: "absolute", left: "50%", top: "50%", width: "0.22rem", height: k % 2 === 0 ? "0.18em" : "0.11em", marginLeft: "-0.11rem", borderRadius: "999px", background: "#ffc83d", transform: `rotate(${deg}deg) translateY(${k % 2 === 0 ? "-0.7em" : "-0.6em"})` }}></span>)}
       </div>
       <div style={{ position: "absolute", inset: "0", borderRadius: "50%", background: v.sky.orbFill, boxShadow: v.sky.orbGlow, transition: "background 800ms ease, box-shadow 800ms ease" }}></div>
       </div>
@@ -2388,7 +2371,7 @@ export function OnboardingFlow({
       <div style={{ position: "relative", margin: "0.4rem 0 0.4rem", padding: "3.1rem 0 0.2rem" }}>
       <div style={{ ...CHIP, position: "relative", height: "1.15rem", margin: "0 0.2rem", borderRadius: "999px" }}>
       <div style={{ position: "absolute", top: "0", bottom: "0", left: "1rem", right: "1rem" }}>
-      <div aria-hidden="true" style={{ position: "absolute", bottom: "calc(100% + 1.3rem)", left: `${v.sky.hourPct}%`, transform: "translateX(-50%)", padding: "0.4rem 0.9rem", boxSizing: "border-box", border: "2px solid var(--chip-ring)", borderRadius: "0.95rem", background: "var(--bubble)", fontSize: "1.05rem", fontWeight: "900", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+      <div aria-hidden="true" style={{ position: "absolute", bottom: "calc(100% + 1.3rem)", left: `clamp(1.6rem, ${v.sky.hourPct}%, calc(100% - 1.6rem))`, transform: "translateX(-50%)", padding: "0.4rem 0.9rem", boxSizing: "border-box", border: "2px solid var(--chip-ring)", borderRadius: "0.95rem", background: "var(--bubble)", fontSize: "1.05rem", fontWeight: "900", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
       <span style={{ position: "absolute", left: "50%", bottom: "-0.5rem", width: "0.8rem", height: "0.8rem", marginLeft: "-0.4rem", boxSizing: "border-box", background: "var(--bubble)", borderRight: "2px solid var(--chip-ring)", borderBottom: "2px solid var(--chip-ring)", borderBottomRightRadius: "3px", transform: "rotate(45deg)" }}></span>
       <span style={{ position: "relative" }}>{v.hourLabel}</span>
       </div>

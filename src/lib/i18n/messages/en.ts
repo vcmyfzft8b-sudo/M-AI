@@ -1008,7 +1008,7 @@ export const en: Messages = {
   "onboarding.askQ5": "Summarise today's lecture",
   "onboarding.askQ6": "Why does this formula work?",
   "onboarding.timeTitle": "When do you usually study?",
-  "onboarding.timeSub": "I'll send you a gentle nudge at that time.",
+  "onboarding.timeSub": "Pick the time that works best for you.",
   "onboarding.subjectLine.computerScience": "The code in my lecture slides comes through in the notes properly formatted.",
   "onboarding.subjectLine.healthMedicine": "It keeps every drug name and dosage exactly as the lecturer said it.",
   "onboarding.subjectLine.maths": "The derivations come out as real formulas, not mangled text.",

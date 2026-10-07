@@ -1031,7 +1031,7 @@ export const sl = {
   "onboarding.askQ5": "Povzemi današnje predavanje",
   "onboarding.askQ6": "Zakaj ta formula deluje?",
   "onboarding.timeTitle": "Kdaj se običajno učiš?",
-  "onboarding.timeSub": "Takrat ti pošljem prijazen opomnik.",
+  "onboarding.timeSub": "Izberi čas, ki ti najbolj ustreza.",
   "onboarding.subjectLine.computerScience": "Koda s predavanj se v zapiskih pokaže pravilno oblikovana.",
   "onboarding.subjectLine.healthMedicine": "Vsako ime zdravila in odmerek ohrani točno tako, kot je povedal predavatelj.",
   "onboarding.subjectLine.maths": "Izpeljave pridejo ven kot prave formule, ne kot skažen tekst.",

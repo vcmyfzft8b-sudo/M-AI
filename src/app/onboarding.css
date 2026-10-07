@@ -43,7 +43,7 @@
   --pedestal-glow: rgba(0, 0, 0, 0.32);
   --contact: rgba(0, 0, 0, 0.42);
   --bubble: #141416;
-  --bar-track: #262629;
+  --ob-bar-track: #262629;
   --memo-shadow: rgba(0, 0, 0, 0.38);
   --cta-off-ink: rgba(255, 255, 255, 0.42);
 
@@ -92,7 +92,7 @@
   --pedestal-glow: rgba(40, 30, 60, 0.08);
   --contact: rgba(80, 50, 80, 0.16);
   --bubble: #ffffff;
-  --bar-track: rgba(0, 0, 0, 0.09);
+  --ob-bar-track: rgba(0, 0, 0, 0.09);
   --memo-shadow: rgba(80, 50, 80, 0.12);
   --cta-off-ink: rgba(0, 0, 0, 0.32);
 }
@@ -125,7 +125,7 @@
     --pedestal-glow: rgba(40, 30, 60, 0.08);
     --contact: rgba(80, 50, 80, 0.16);
     --bubble: #ffffff;
-    --bar-track: rgba(0, 0, 0, 0.09);
+    --ob-bar-track: rgba(0, 0, 0, 0.09);
     --memo-shadow: rgba(80, 50, 80, 0.12);
     --cta-off-ink: rgba(0, 0, 0, 0.32);
   }
@@ -290,4 +290,24 @@
   .memo-onboarding-v2 .memo-ob-file-ext {
     display: none;
   }
+}
+
+/* Let the sky use the space left by the question and slider, including on
+   short phones. The sun and moon remain inset from its soft edges. */
+.memo-ob-time {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.memo-ob-time > :not(.memo-ob-time-sky) {
+  flex-shrink: 0;
+}
+
+.memo-ob-time-sky {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }

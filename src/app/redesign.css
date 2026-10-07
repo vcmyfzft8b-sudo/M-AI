@@ -2713,7 +2713,11 @@
 }
 
 .memo-dock-pill.annotating {
-  width: fit-content;
+  /* Use the available row, with a readable cap on wide screens. The named
+     container lets the label respond to the pill, including beside chat. */
+  width: min(26rem, 100%);
+  min-width: 0;
+  container: annotation-dock / inline-size;
   justify-content: flex-start;
 }
 
@@ -2834,9 +2838,21 @@
 }
 
 .memo-dock-annotate {
+  width: 100%;
+  min-width: 0;
   gap: 0.1rem;
   color: var(--text);
-  padding: 0 0.5rem;
+  padding: 0 0.4rem;
+}
+
+/* Equal, flexible hit areas keep all five actions inside the pill, including
+   during the listen-to-annotation transition and at increased text sizes. */
+.memo-dock-annotate > button {
+  flex: 1 1 0;
+  min-width: 0;
+  width: 0;
+  height: 2.9rem;
+  padding: 0;
 }
 
 .memo-annotate-primary {
@@ -2862,43 +2878,27 @@
 }
 
 .memo-annotate-label {
-  display: inline-block;
+  display: none;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
+  text-overflow: ellipsis;
   font-weight: 800;
   letter-spacing: -0.02em;
-  max-width: 6rem;
   margin-left: 0.4rem;
-  transition:
-    max-width 0.38s cubic-bezier(0.32, 0.72, 0, 1),
-    opacity 0.24s cubic-bezier(0.32, 0.72, 0, 1),
-    margin-left 0.38s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-/*
- * The dock always fits its row. `useAnnotateWidth` compares the buttons with the room beside the
- * chat button and sets `data-fit` (see src/lib/annotate-dock-fit.ts): "compact" rolls the label
- * away — the marker icon alone still reads as highlight — and "tight" also closes the buttons up,
- * for the narrowest phones. This used to be a 359px breakpoint, measured before the fix-a-word
- * button joined the row, after which every phone from 360px to about 397px cut the photo button off.
- */
-.memo-dock-pill.annotating:is([data-fit="compact"], [data-fit="tight"]) .memo-annotate-label {
-  max-width: 0;
-  opacity: 0;
-  margin-left: 0;
-}
+/* A label is optional; the five accessible icon buttons always stay visible.
+   This follows the actual container rather than a device-width breakpoint. */
+@container annotation-dock (min-width: 24rem) {
+  .memo-dock-annotate > .memo-annotate-primary {
+    flex-grow: 2;
+    padding: 0 0.4rem;
+  }
 
-/* What tight takes off is TIGHT_SAVINGS_REM in annotate-dock-fit.ts; change both together. */
-.memo-dock-pill.annotating[data-fit="tight"] .memo-annotate-icon {
-  width: 2.05rem;
-}
-
-.memo-dock-pill.annotating[data-fit="tight"] .memo-palette-trigger {
-  width: 2.2rem;
-}
-
-.memo-dock-pill.annotating[data-fit="tight"] .memo-annotate-primary {
-  padding: 0 0.5rem;
+  .memo-annotate-label {
+    display: block;
+  }
 }
 
 .memo-annotate-icon {
@@ -11483,12 +11483,11 @@
   }
 
   .memo-dock-pill.annotating {
-    width: var(--annot-w, 14rem);
+    /* Leave exactly the chat button and the row gap beside the tools. */
+    width: min(26rem, calc(100% - 4.1rem));
   }
 
-  /* The design cross-fades the dock's three layers and nothing more. A scale
-     on top of that would also be measured by useAnnotateWidth while it runs,
-     so the annotate pill would settle a pixel short of its content. */
+  /* Cross-fade the dock's three layers without moving their hit areas. */
   .memo-dock-layer {
     position: absolute;
     inset: 0;
@@ -11518,11 +11517,6 @@
   .memo-dock-player {
     gap: 0.3rem;
     padding: 0 0.4rem;
-  }
-
-  .memo-dock-annotate {
-    gap: 0.1rem;
-    padding: 0 0 0 0.5rem;
   }
 
   /* The chat bar and the dock pill share one row and trade width. Which state

@@ -37,15 +37,21 @@ test("the note dock keeps the chat bar's width until the listen pill is portalle
 });
 
 test("the survey mascot is the preloaded, sized image rather than the raw PNG", () => {
+  // Every Memo in the survey is drawn by one figure component, so the image is
+  // set up once there rather than per screen.
   const flow = read("../src/components/onboarding-flow.tsx");
+  const mascot = read("../src/components/onboarding-mascot.tsx");
   const layout = read("../src/app/layout.tsx");
   const call = 'getImageProps({ src: "/memo-mascot.png", alt: "", width: 320, height: 288 })';
 
   // The same call as the root layout's preload, so the request is the preloaded one.
   assert.ok(layout.includes(call));
-  assert.ok(flow.includes(`const MASCOT = ${call}.props;`));
-  assert.doesNotMatch(flow, /<img src="\/memo-mascot\.png"/);
-  assert.equal(flow.match(/<img src=\{MASCOT\.src\} srcSet=\{MASCOT\.srcSet\} width=\{MASCOT\.width\} height=\{MASCOT\.height\}/g)?.length, 2);
+  assert.ok(mascot.includes(`const MASCOT = ${call}.props;`));
+  assert.doesNotMatch(flow, /memo-mascot\.png/);
+  assert.doesNotMatch(mascot, /src="\/memo-mascot\.png"/);
+  // Sized by its intrinsic dimensions, so the box is reserved before the file arrives.
+  assert.equal(mascot.match(/src=\{MASCOT\.src\}\s+srcSet=\{MASCOT\.srcSet\}\s+width=\{MASCOT\.width\}\s+height=\{MASCOT\.height\}/g)?.length, 1);
+  assert.match(flow, /<MascotFigure/);
 });
 
 test("the navigation overlay follows the content column into its replacement", () => {

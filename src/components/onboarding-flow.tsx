@@ -1692,7 +1692,7 @@ export function OnboardingFlow({
     optionGap: chrome.gap,
     /*
      * Two-up, a tile has no width to spare for the tick beside its label — it
-     * pushed "Flashcards" onto two lines — so there it sits on the corner as a
+     * broke a ten-letter label across two lines — so there it sits on the corner as a
      * badge, and the label is a step smaller.
      */
     optionColumns: step.cols === WRAPPING_COLUMNS,

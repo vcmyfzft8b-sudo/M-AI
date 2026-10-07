@@ -30,13 +30,21 @@ export const TIGHT_SAVINGS_REM = 3 * 0.25 + 0.3 + 2 * 0.2;
  */
 export const CHAT_SLOT_REM = 4.1;
 
-/** A few pixels of slack, so a row that fits exactly does not flicker between two states. */
+/**
+ * How much spare room it takes to step back up to a roomier fit. Only on the
+ * way up: a fit is never kept once the row is even a pixel too wide for it, so
+ * nothing is ever cut off, but a row that fits with a pixel to spare does not
+ * flicker between two fits as its measurement wobbles by a subpixel.
+ */
 const SLACK_PX = 2;
+
+const ROOMINESS: Record<AnnotateDockFit, number> = { tight: 0, compact: 1, full: 2 };
 
 export function annotateDockFit({
   icons,
   label,
   room,
+  current = null,
 }: {
   /** The row's width without the label, at the buttons' normal size, in px. */
   icons: number;
@@ -44,12 +52,17 @@ export function annotateDockFit({
   label: number;
   /** The widest the dock may be, in px. */
   room: number;
+  /** The fit the dock is in now, if it has one. */
+  current?: AnnotateDockFit | null;
 }): AnnotateDockFit {
-  if (icons + label <= room + SLACK_PX) {
+  const margin = (fit: AnnotateDockFit) =>
+    current && ROOMINESS[fit] > ROOMINESS[current] ? SLACK_PX : 0;
+
+  if (icons + label + margin("full") <= room) {
     return "full";
   }
 
-  if (icons <= room + SLACK_PX) {
+  if (icons + margin("compact") <= room) {
     return "compact";
   }
 

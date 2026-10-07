@@ -29,20 +29,38 @@ test("a phone with room for the label shows it", () => {
 
 test("the phones that used to cut the photo button off fold the label instead", () => {
   // 360px to ~397px: the old 359px breakpoint left the label up here, and the row overflowed.
-  // 320px folds it too, as the old breakpoint did.
-  for (const viewport of [320, 360, 375, 390, 393]) {
+  for (const viewport of [360, 375, 390, 393]) {
     assert.equal(annotateDockFit({ icons: ICONS, label: LABEL, room: room(viewport) }), "compact", `${viewport}px`);
   }
 });
 
-test("narrower still — a split screen, a zoomed page — the buttons close up as well", () => {
-  assert.equal(annotateDockFit({ icons: ICONS, label: LABEL, room: room(300) }), "tight");
-  // And tight is enough there: what it saves brings the row inside the room.
-  assert.ok(ICONS - TIGHT_SAVINGS_REM * 16 <= room(300));
+test("on a 320px phone and anything narrower the buttons close up as well", () => {
+  // At 320px the folded row is within a pixel of the room, and a fit is never
+  // kept even a pixel over — so the buttons close up rather than risk the edge.
+  for (const viewport of [300, 320]) {
+    assert.equal(annotateDockFit({ icons: ICONS, label: LABEL, room: room(viewport) }), "tight", `${viewport}px`);
+    // And tight is enough there: what it saves brings the row inside the room.
+    assert.ok(ICONS - TIGHT_SAVINGS_REM * 16 <= room(viewport), `${viewport}px`);
+  }
 });
 
 test("desktop has no cap and always shows the label", () => {
   assert.equal(annotateDockFit({ icons: ICONS, label: LABEL, room: Number.POSITIVE_INFINITY }), "full");
+});
+
+test("a fit is left the moment the row stops fitting, and only re-entered with room to spare", () => {
+  const roomForRow = ICONS + LABEL;
+
+  // Going down: one pixel too wide is enough, whatever fit the dock is in.
+  assert.equal(annotateDockFit({ icons: ICONS, label: LABEL, room: roomForRow - 1, current: "full" }), "compact");
+  // Exactly fitting keeps the label.
+  assert.equal(annotateDockFit({ icons: ICONS, label: LABEL, room: roomForRow, current: "full" }), "full");
+  // Coming back up from folded needs a couple of pixels more, so a wobbling
+  // measurement cannot flick the label in and out.
+  assert.equal(annotateDockFit({ icons: ICONS, label: LABEL, room: roomForRow, current: "compact" }), "compact");
+  assert.equal(annotateDockFit({ icons: ICONS, label: LABEL, room: roomForRow + 2, current: "compact" }), "full");
+  // With no fit yet, it is decided on the widths alone.
+  assert.equal(annotateDockFit({ icons: ICONS, label: LABEL, room: roomForRow }), "full");
 });
 
 test("a longer label in another language folds sooner, by its own width", () => {

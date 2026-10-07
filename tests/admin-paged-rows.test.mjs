@@ -69,3 +69,18 @@ test("the signups chart pages both of its series in a total order", () => {
   assert.equal(body.match(/\.range\(from, to\)/g)?.length, 2);
   assert.equal(body.match(/\.order\("id"/g)?.length, 2);
 });
+
+test("the creator tables read every row too", () => {
+  // 543 videos and 256 follower snapshots on 2026-10-08: under the cap today,
+  // and silently wrong totals on /admin/creators the day either passes it.
+  const source = readFileSync(new URL("../src/lib/admin/ugc.ts", import.meta.url), "utf8");
+
+  for (const name of ["cachedLifetimeTotals", "cachedFollowerSnapshots"]) {
+    const start = source.indexOf(`const ${name} = cache(`);
+    const body = source.slice(start, start + source.slice(start).search(/\n\n(?=\S)/));
+
+    assert.match(body, /loadEveryRow/, name);
+    assert.match(body, /\.order\("id"/, name);
+    assert.match(body, /\.range\(/, name);
+  }
+});

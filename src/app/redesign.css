@@ -412,6 +412,16 @@
   /* The empty part of a progress bar: a step quieter than `--track`, so the
      coral fill and its highlight read as the thing on top. */
   --bar-track: rgba(0, 0, 0, 0.09);
+  /*
+   * The lips the other buttons stand on, as the onboarding draws them: a white
+   * button on a ring-coloured lip (the onboarding's `--chip-ring`), an ink
+   * button on a lip halfway between ink and page, a red one on a darker red.
+   * The last two are mixed from tokens that change with the theme, so they
+   * follow it on their own.
+   */
+  --btn-lip: rgba(0, 0, 0, 0.13);
+  --ink-lip: color-mix(in oklch, var(--ink) 55%, var(--bg));
+  --danger-lip: color-mix(in oklch, var(--danger) 62%, #000000);
   --bg: #f1f1f5;
   /*
    * A panel recessed inside a card. The design only ever nests these on a
@@ -502,6 +512,7 @@
   --line: rgba(255, 255, 255, 0.14);
   --track: #3a3a3e;
   --bar-track: #262629;
+  --btn-lip: #3b3b40;
   --ink: #ffffff;
   --emoji-tile: rgba(130, 148, 218, 0.2);
   --upgrade-tint: rgba(130, 148, 218, 0.22);
@@ -535,6 +546,7 @@
     --line: rgba(255, 255, 255, 0.14);
     --track: #3a3a3e;
     --bar-track: #262629;
+    --btn-lip: #3b3b40;
     --ink: #ffffff;
     --emoji-tile: rgba(130, 148, 218, 0.2);
   --upgrade-tint: rgba(130, 148, 218, 0.22);
@@ -5248,6 +5260,144 @@
 .memo-modal-actions .ios-primary-button.ios-primary-button:not(:disabled):active,
 .memo-card-row :is(.settings-inline-action, .billing-portal-button, .memo-primary-pill):not(:disabled):active {
   transform: translateY(5px);
+  box-shadow: 0 0 0 transparent;
+}
+
+/*
+ * The other buttons, standing the same way.
+ *
+ * Every text button now has the primary's lip and its press, in its own
+ * colour: ink on an ink-grey lip, white on the onboarding chips' ring with a
+ * lip of the same ring, red on a darker red. Round icon buttons, chips and
+ * tabs keep their flat look — a lip under a 2.9rem close reads as a bump, not
+ * as a button — and so does anything disabled, which cannot be pressed.
+ *
+ * The `:is(...)` lists carry the specificity of their most specific member,
+ * which is what lets one rule here outrank the per-component declarations
+ * scattered through the file.
+ */
+:is(
+  .memo-button-solid,
+  .memo-results-primary,
+  .memo-primary-pill,
+  .memo-confirm-go,
+  .memo-study-empty-cta,
+  .memo-tutor-start,
+  .memo-tutor-control.primary,
+  .memo-podcast-primary,
+  .memo-podcast-control.primary,
+  .library-folder-primary-button,
+  .memo-quiz-sheet-actions .solid,
+  .memo-quiz-result-primary,
+  .memo-result-actions > :first-child,
+  .memo-panel .lecture-study-create-button,
+  .memo-panel .lecture-study-restart,
+  .memo-panel .lecture-practice-start-button,
+  .memo-panel .lecture-practice-submit,
+  .memo-panel .lecture-practice-controls button:last-child
+):not(:disabled) {
+  box-shadow: 0 5px 0 var(--ink-lip);
+  transform: translateY(0);
+  transition:
+    transform 120ms cubic-bezier(0.2, 0.85, 0.2, 1),
+    box-shadow 120ms ease,
+    background-color 160ms ease;
+}
+
+:is(
+  .memo-sheet-ghost,
+  .memo-button-ghost,
+  .memo-button-outline,
+  .memo-capture-cancel,
+  .memo-ghost-pill,
+  .memo-confirm-cancel,
+  .memo-settings-signout,
+  .memo-scope-button,
+  .memo-action-sheet-cancel,
+  .memo-quiz-sheet-actions .ghost,
+  .memo-result-actions > :not(:first-child),
+  .library-folder-secondary-button,
+  .library-folder-danger-button,
+  .study-manage-pill,
+  .mobile-study-manage-pill,
+  .memo-panel .lecture-study-manage-button,
+  .ios-secondary-button
+):not(:disabled) {
+  border: var(--btn-border-width) solid var(--btn-lip);
+  box-shadow: 0 4px 0 var(--btn-lip);
+  transform: translateY(0);
+  transition:
+    transform 120ms cubic-bezier(0.2, 0.85, 0.2, 1),
+    box-shadow 120ms ease,
+    background-color 160ms ease;
+}
+
+.memo-sheet-danger.memo-sheet-danger:not(:disabled) {
+  border: 0;
+  background: var(--danger);
+  box-shadow: 0 5px 0 var(--danger-lip);
+  transform: translateY(0);
+  transition: transform 120ms cubic-bezier(0.2, 0.85, 0.2, 1), box-shadow 120ms ease;
+}
+
+/* The flashcard verdicts, as the onboarding's: a ring and a lip of their own red or green. */
+:is(.memo-panel, .memo-palace-panel) :is(.lecture-flashcard-review-button, .lecture-flashcard-review-score) {
+  border: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+  box-shadow: 0 4px 0 color-mix(in srgb, currentColor 35%, transparent);
+  transform: translateY(0);
+  transition: transform 120ms cubic-bezier(0.2, 0.85, 0.2, 1), box-shadow 120ms ease;
+}
+
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-button.selected {
+  box-shadow: 0 4px 0 color-mix(in srgb, currentColor 35%, transparent), inset 0 0 0 2px currentColor;
+}
+
+:is(
+  .memo-button-solid,
+  .memo-results-primary,
+  .memo-primary-pill,
+  .memo-confirm-go,
+  .memo-study-empty-cta,
+  .memo-tutor-start,
+  .memo-tutor-control.primary,
+  .memo-podcast-primary,
+  .memo-podcast-control.primary,
+  .library-folder-primary-button,
+  .memo-quiz-sheet-actions .solid,
+  .memo-quiz-result-primary,
+  .memo-result-actions > :first-child,
+  .memo-panel .lecture-study-create-button,
+  .memo-panel .lecture-study-restart,
+  .memo-panel .lecture-practice-start-button,
+  .memo-panel .lecture-practice-submit,
+  .memo-panel .lecture-practice-controls button:last-child
+):not(:disabled):active,
+.memo-sheet-danger.memo-sheet-danger:not(:disabled):active {
+  transform: translateY(5px);
+  box-shadow: 0 0 0 transparent;
+}
+
+:is(
+  .memo-sheet-ghost,
+  .memo-button-ghost,
+  .memo-button-outline,
+  .memo-capture-cancel,
+  .memo-ghost-pill,
+  .memo-confirm-cancel,
+  .memo-settings-signout,
+  .memo-scope-button,
+  .memo-action-sheet-cancel,
+  .memo-quiz-sheet-actions .ghost,
+  .memo-result-actions > :not(:first-child),
+  .library-folder-secondary-button,
+  .library-folder-danger-button,
+  .study-manage-pill,
+  .mobile-study-manage-pill,
+  .memo-panel .lecture-study-manage-button,
+  .ios-secondary-button
+):not(:disabled):active,
+:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-button:not(:disabled):active {
+  transform: translateY(4px);
   box-shadow: 0 0 0 transparent;
 }
 

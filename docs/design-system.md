@@ -59,6 +59,7 @@ breaks silently. A token that is the same in both (`--coral`, `--blue`,
 | `--coral` | `linear-gradient(135deg,#ff6d68,#f45f5a)` | Coral fills that are not buttons (record orb, level bars). **It is a gradient** — it cannot be a border or a text colour. |
 | `--coral-solid` / `--coral-lip` | `#ff6d68` / coral at 62% over black | The primary button: a solid coral face standing on a darker lip of itself (`--memo-coral-glow` is `0 5px 0 var(--coral-lip)`). Also the fill of the study progress bars. |
 | `--bar-track` | `rgba(0,0,0,.09)` light / `#262629` dark | The empty part of a progress bar. |
+| `--btn-lip` / `--ink-lip` / `--danger-lip` | ring grey / ink half-way to page / red at 62% over black | The lips the other text buttons stand on: white buttons (with a ring of the same colour), ink buttons and red ones. Round icon buttons, chips and tabs have none. |
 | `--promo` | `#f45f5a` light / `#ff6d68` dark | Solid coral: switch-on, notification dot, discount copy. |
 | `--upgrade-tint` / `-line` / `-ink` | periwinkle | Upgrade prompts. Deliberately quieter than coral. |
 | `--blue` | `#0066cc` | One button only (create-folder ready). Do not add a second. |

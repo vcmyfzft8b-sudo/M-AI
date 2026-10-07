@@ -1,0 +1,133 @@
+/*
+ * The progress bar, as the onboarding draws it — across the app.
+ *
+ * A 1rem track with the fill standing in it, a strip of light along the top of
+ * the fill, and a sheen that sweeps across it every couple of seconds. It
+ * replaces the 0.4rem lines on the study screens (flashcards, quiz, test), the
+ * note-generation bar, the tutor's topic bar and the podcast's writing bar.
+ * Each fill keeps the colour its screen gives it — coral on the study screens,
+ * the voice's hue on the tutor, the pair's gradient on the podcast.
+ *
+ * All of it lives in this one file, layered over redesign.css and landing.css
+ * without editing them, so the look can be taken back in one line: remove
+ * `import "./progress-bars.css";` from src/app/layout.tsx. Nothing else refers
+ * to this file or to the two tokens it declares.
+ *
+ * It wins by coming after redesign.css in the root layout (same selectors,
+ * later in the cascade) and, for the landing page — whose stylesheet the page
+ * imports itself, so its order is not guaranteed — by one class more.
+ */
+
+/* --- tokens --------------------------------------------------------------- */
+
+.memo,
+.memo-portal {
+  /* The empty part of a bar: a step quieter than `--track`, so the fill and its
+     highlight read as the thing on top. */
+  --bar-track: rgba(0, 0, 0, 0.09);
+  /* `--coral` is a gradient; a fill this thick reads cleaner solid. */
+  --coral-solid: #ff6d68;
+}
+
+:root[data-theme="dark"] .memo:not(.memo-os-theme):not(.memo-theme-light),
+:root[data-theme="dark"] .memo-portal,
+.memo.memo-theme-dark {
+  --bar-track: #262629;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .memo:not(.memo-theme-light),
+  :root:not([data-theme]) .memo-portal,
+  :root[data-theme="system"] .memo:not(.memo-theme-light),
+  :root[data-theme="system"] .memo-portal,
+  .memo.memo-os-theme:not(.memo-theme-light) {
+    --bar-track: #262629;
+  }
+}
+
+/* --- the tracks ----------------------------------------------------------- */
+
+.memo-progress {
+  background: var(--bar-track);
+  overflow: hidden;
+}
+
+.memo-progress.cards,
+.memo-progress.quiz,
+.memo-progress.test,
+.memo-panel .memo-progress.test {
+  height: 1rem;
+}
+
+.memo-panel .memo-progress.test {
+  background: var(--bar-track);
+}
+
+.memo-gen-track,
+.memo-tutor-topicbar,
+.memo-podcast-progress {
+  height: 1rem;
+  background: var(--bar-track);
+}
+
+/* --- the fills ------------------------------------------------------------ */
+
+/* Never thinner than its own height, so the first card shows a dot, not nothing. */
+.memo-progress > div,
+.memo-panel .memo-progress.test > div,
+.memo-tutor-topicbar > span,
+.memo-podcast-progress > span {
+  min-width: 1rem;
+}
+
+.memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="test"]) .memo-progress > div,
+.memo-panel .memo-progress.test > div,
+.memo-gen-track > span,
+.landing-v2 .landing-study-frame .memo-progress > div {
+  background: var(--coral-solid);
+}
+
+/* The light strip and the sheen need the fill as their containing block. The
+   generation bar's fill is already absolutely positioned, so it only clips. */
+.memo-progress > div,
+.memo-tutor-topicbar > span,
+.memo-podcast-progress > span {
+  position: relative;
+  overflow: hidden;
+}
+
+.memo-gen-track > span {
+  overflow: hidden;
+}
+
+.memo-progress > div::after,
+.memo-gen-track > span::after,
+.memo-tutor-topicbar > span::after,
+.memo-podcast-progress > span::after {
+  content: "";
+  position: absolute;
+  left: 0.45rem;
+  right: 0.45rem;
+  top: 0.2rem;
+  height: 0.22rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.38);
+  pointer-events: none;
+}
+
+.memo-progress > div::before,
+.memo-tutor-topicbar > span::before,
+.memo-podcast-progress > span::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0));
+  animation: memo-bar-shimmer 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes memo-bar-shimmer {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(220%); }
+}

@@ -2303,7 +2303,7 @@
 }
 
 .landing-study-frame .memo-progress > div {
-  background: var(--coral);
+  background: var(--coral-solid);
 }
 
 /* A thrown card leaves the screen instead of being sliced off at its edge. */

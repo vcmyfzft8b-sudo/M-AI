@@ -289,9 +289,9 @@ const SKY_STARS = [
 ] as const;
 const SUN_RAYS = Array.from({ length: 12 }, (_, k) => k * 30);
 const SKY_CLOUDS = [
-  { top: "18%", width: "42%", drift: "24s", delay: "-5s", scale: 1 },
-  { top: "54%", width: "32%", drift: "32s", delay: "-19s", scale: 0.85 },
-  { top: "30%", width: "26%", drift: "28s", delay: "-12s", scale: 0.7 },
+  { left: "16%", top: "28%", width: "16%", drift: "24s", delay: "-5s", scale: 1 },
+  { left: "64%", top: "58%", width: "20%", drift: "32s", delay: "-19s", scale: 0.85 },
+  { left: "32%", top: "78%", width: "12%", drift: "28s", delay: "-12s", scale: 0.7 },
 ] as const;
 
 function isStudentRole(role: string) {
@@ -1424,8 +1424,9 @@ export function OnboardingFlow({
 
   /*
    * No step scrolls: when a step is taller than the room between the header
-   * and Continue, the whole step, Memo included, is scaled down to fit — never
-   * below 55%, where the type would stop being readable.
+   * and Continue, scale its contents down while preserving the column width.
+   * Compensating the layout width also lets long answers wrap less, so the
+   * role choices and answered quiz keep the same side insets as Continue.
    */
   useEffect(() => {
     const main = mainEl.current;
@@ -1437,15 +1438,30 @@ export function OnboardingFlow({
 
     const measure = () => {
       const style = getComputedStyle(main);
-      const room = main.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
-      const height = fit.offsetHeight;
+      const width = main.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      if (!width) return;
 
-      if (!height || !room) {
-        return;
+      fit.style.width = `${width}px`;
+      const room = main.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      if (!fit.offsetHeight || !room) return;
+
+      let scale = 1;
+      if (fit.offsetHeight > room) {
+        // Width changes wrapping, so measure the fit rather than applying the
+        // original height ratio and narrowing every card on taller steps.
+        let low = 0.55;
+        let high = 1;
+        for (let pass = 0; pass < 10; pass += 1) {
+          const candidate = (low + high) / 2;
+          fit.style.width = `${width / candidate}px`;
+          if (fit.offsetHeight * candidate <= room) low = candidate;
+          else high = candidate;
+        }
+        scale = low;
       }
 
-      const scale = Math.max(0.55, Math.min(1, room / height));
-      fit.style.transform = scale < 0.995 ? `scale(${scale.toFixed(3)})` : "";
+      fit.style.width = `${width / scale}px`;
+      fit.style.transform = scale < 1 ? `scale(${scale})` : "";
     };
 
     const observer = new ResizeObserver(measure);
@@ -2010,7 +2026,7 @@ export function OnboardingFlow({
       </>) : null}
       {/* Wider than the column by the room a hop or a glow needs, and pulled back by the same, so nothing it draws is clipped at its edge. */}
       <main ref={mainEl} style={{ alignSelf: v.isTime ? "stretch" : undefined, flex: "1 1 30rem", maxWidth: "calc(34rem + 1.6rem)", width: "calc(100% + 1.6rem)", margin: "-3.6rem -0.8rem 0", padding: "3.6rem 0.8rem 0.6rem", minHeight: "0", maxHeight: "calc(100% + 3.6rem)", boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: v.hero ? "safe center" : "flex-start", overflowY: "visible", overscrollBehavior: "contain", scrollPaddingBlock: "0.75rem", scrollbarWidth: "none" }}>
-      <div ref={fitEl} style={{ display: "flex", flexDirection: "column", flexShrink: v.isTime ? "1" : "0", flexGrow: v.isTime ? "1" : "0", minHeight: v.isTime ? "0" : undefined, transformOrigin: "50% 0" }}>
+      <div ref={fitEl} style={{ alignSelf: "center", display: "flex", flexDirection: "column", flexShrink: v.isTime ? "1" : "0", flexGrow: v.isTime ? "1" : "0", minHeight: v.isTime ? "0" : undefined, transformOrigin: "50% 0" }}>
       {!v.hero ? (<>
       <div style={{ display: "flex", alignItems: "center", gap: "clamp(0.8rem, 3.4vw, 1.3rem)", margin: "clamp(1.4rem, 3.4vh, 2.2rem) 0 clamp(1rem, 3vh, 1.8rem)", flexShrink: "0" }}>
       <div style={{ position: "relative", zIndex: "3", flex: "0 0 auto", width: "clamp(4.8rem, 21vw, 6.4rem)", paddingBottom: "0.5rem" }}>
@@ -2347,18 +2363,18 @@ export function OnboardingFlow({
       {v.isTime ? (<>
       <div className="memo-ob-time">
       <p style={{ ...SUBTITLE, margin: "0 0 0.4rem" }}>{v.subtitle}</p>
-      <div className="memo-ob-time-sky" style={{ background: v.sky.skyBg, transition: "background 800ms ease", WebkitMaskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 76%, rgba(0,0,0,0.6) 90%, transparent 100%)", maskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 76%, rgba(0,0,0,0.6) 90%, transparent 100%)" }}>
+      <div className="memo-ob-time-sky" style={{ background: v.sky.skyBg, transition: "background 800ms ease" }}>
       <div aria-hidden="true" style={{ position: "absolute", inset: "0", opacity: v.sky.starOpacity, transition: "opacity 800ms ease" }}>
       {SKY_STARS.map(([left, top, size], k) => <span key={k} style={{ position: "absolute", left: `${left}%`, top: `${top}%`, width: `${size}px`, height: `${size}px`, borderRadius: "50%", background: "#ffffff", animation: `memo-twinkle 2.6s ease-in-out ${(k * 0.31).toFixed(2)}s infinite` }}></span>)}
       </div>
-      <div className="memo-ob-time-orb" aria-hidden="true" style={{ position: "absolute", left: `clamp(0.9em, ${v.sky.orbX}%, calc(100% - 0.9em))`, top: `clamp(0.9em, ${v.sky.orbY}%, calc(100% - 0.9em))`, width: "1em", aspectRatio: "1", transform: "translate(-50%, -50%)", transition: "left 560ms cubic-bezier(0.22,1,0.36,1), top 560ms cubic-bezier(0.22,1,0.36,1)" }}>
+      <div className="memo-ob-time-orb" aria-hidden="true" style={{ position: "absolute", left: `clamp(0.9em, ${v.sky.orbX}%, calc(100% - 0.9em))`, top: `clamp(0.9em, ${50 + (v.sky.orbY - 36) * 0.3}%, calc(100% - 0.9em))`, width: "1em", aspectRatio: "1", transform: "translate(-50%, -50%)", transition: "left 560ms cubic-bezier(0.22,1,0.36,1), top 560ms cubic-bezier(0.22,1,0.36,1)" }}>
       <div style={{ position: "absolute", inset: "0", opacity: v.sky.rayOpacity, transition: "opacity 600ms ease", animation: "memo-spin 28s linear infinite" }}>
       {SUN_RAYS.map((deg, k) => <span key={deg} style={{ position: "absolute", left: "50%", top: "50%", width: "0.22rem", height: k % 2 === 0 ? "0.18em" : "0.11em", marginLeft: "-0.11rem", borderRadius: "999px", background: "#ffc83d", transform: `rotate(${deg}deg) translateY(${k % 2 === 0 ? "-0.7em" : "-0.6em"})` }}></span>)}
       </div>
       <div style={{ position: "absolute", inset: "0", borderRadius: "50%", background: v.sky.orbFill, boxShadow: v.sky.orbGlow, transition: "background 800ms ease, box-shadow 800ms ease" }}></div>
       </div>
       {SKY_CLOUDS.map((cloud) => (<Fragment key={cloud.top}>
-      <div aria-hidden="true" style={{ position: "absolute", left: "-10%", top: cloud.top, width: cloud.width, aspectRatio: "1.9", animation: `memo-cloud-drift ${cloud.drift} linear ${cloud.delay} infinite` }}>
+      <div aria-hidden="true" style={{ position: "absolute", left: cloud.left, top: cloud.top, width: cloud.width, aspectRatio: "1.9", animation: `memo-ob-cloud-drift ${cloud.drift} linear ${cloud.delay} infinite` }}>
       <div style={{ position: "absolute", inset: "0", transform: `scale(${cloud.scale})`, filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.12))" }}>
       <span style={{ position: "absolute", left: "0", right: "0", bottom: "0", height: "50%", borderRadius: "999px", background: v.sky.cloudFill, transition: "background 700ms ease" }}></span>
       <span style={{ position: "absolute", left: "14%", bottom: "22%", width: "42%", aspectRatio: "1", borderRadius: "50%", background: v.sky.cloudFill, transition: "background 700ms ease" }}></span>

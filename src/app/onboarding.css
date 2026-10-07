@@ -315,5 +315,16 @@
 
 .memo-ob-time-orb {
   /* Grow with the actual sky, while leaving room for rays on short phones. */
-  font-size: min(36cqw, 42cqh);
+  font-size: min(16cqw, 26cqh);
+}
+
+/* Full-bleed sky: fade into the page above and below, with no side mask. */
+.memo-ob-time-sky {
+  margin-inline: calc(-1 * clamp(1rem, 4vw, 2rem));
+  mask-image: linear-gradient(to bottom, transparent, black 30%, black 65%, transparent);
+}
+
+@keyframes memo-ob-cloud-drift {
+  0%, 100% { transform: translateX(-6%); }
+  50% { transform: translateX(6%); }
 }

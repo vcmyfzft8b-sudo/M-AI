@@ -306,8 +306,14 @@
 }
 
 .memo-ob-time-sky {
+  container-type: size;
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+}
+
+.memo-ob-time-orb {
+  /* Grow with the actual sky, while leaving room for rays on short phones. */
+  font-size: min(36cqw, 42cqh);
 }

@@ -289,9 +289,9 @@ const SKY_STARS = [
 ] as const;
 const SUN_RAYS = Array.from({ length: 12 }, (_, k) => k * 30);
 const SKY_CLOUDS = [
-  { top: "18%", width: "30%", drift: "24s", delay: "-5s", scale: 1 },
-  { top: "54%", width: "22%", drift: "32s", delay: "-19s", scale: 0.85 },
-  { top: "30%", width: "17%", drift: "28s", delay: "-12s", scale: 0.7 },
+  { top: "18%", width: "42%", drift: "24s", delay: "-5s", scale: 1 },
+  { top: "54%", width: "32%", drift: "32s", delay: "-19s", scale: 0.85 },
+  { top: "30%", width: "26%", drift: "28s", delay: "-12s", scale: 0.7 },
 ] as const;
 
 function isStudentRole(role: string) {
@@ -2347,11 +2347,11 @@ export function OnboardingFlow({
       {v.isTime ? (<>
       <div className="memo-ob-time">
       <p style={{ ...SUBTITLE, margin: "0 0 0.4rem" }}>{v.subtitle}</p>
-      <div className="memo-ob-time-sky" style={{ background: v.sky.skyBg, transition: "background 800ms ease", WebkitMaskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 52%, rgba(0,0,0,0.6) 74%, transparent 100%)", maskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 52%, rgba(0,0,0,0.6) 74%, transparent 100%)" }}>
+      <div className="memo-ob-time-sky" style={{ background: v.sky.skyBg, transition: "background 800ms ease", WebkitMaskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 76%, rgba(0,0,0,0.6) 90%, transparent 100%)", maskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 76%, rgba(0,0,0,0.6) 90%, transparent 100%)" }}>
       <div aria-hidden="true" style={{ position: "absolute", inset: "0", opacity: v.sky.starOpacity, transition: "opacity 800ms ease" }}>
       {SKY_STARS.map(([left, top, size], k) => <span key={k} style={{ position: "absolute", left: `${left}%`, top: `${top}%`, width: `${size}px`, height: `${size}px`, borderRadius: "50%", background: "#ffffff", animation: `memo-twinkle 2.6s ease-in-out ${(k * 0.31).toFixed(2)}s infinite` }}></span>)}
       </div>
-      <div aria-hidden="true" style={{ position: "absolute", left: `clamp(5rem, ${v.sky.orbX}%, calc(100% - 5rem))`, top: `clamp(5rem, ${v.sky.orbY}%, calc(100% - 5rem))`, fontSize: "clamp(4.5rem, 24vw, 6rem)", width: "1em", aspectRatio: "1", transform: "translate(-50%, -50%)", transition: "left 560ms cubic-bezier(0.22,1,0.36,1), top 560ms cubic-bezier(0.22,1,0.36,1)" }}>
+      <div className="memo-ob-time-orb" aria-hidden="true" style={{ position: "absolute", left: `clamp(0.9em, ${v.sky.orbX}%, calc(100% - 0.9em))`, top: `clamp(0.9em, ${v.sky.orbY}%, calc(100% - 0.9em))`, width: "1em", aspectRatio: "1", transform: "translate(-50%, -50%)", transition: "left 560ms cubic-bezier(0.22,1,0.36,1), top 560ms cubic-bezier(0.22,1,0.36,1)" }}>
       <div style={{ position: "absolute", inset: "0", opacity: v.sky.rayOpacity, transition: "opacity 600ms ease", animation: "memo-spin 28s linear infinite" }}>
       {SUN_RAYS.map((deg, k) => <span key={deg} style={{ position: "absolute", left: "50%", top: "50%", width: "0.22rem", height: k % 2 === 0 ? "0.18em" : "0.11em", marginLeft: "-0.11rem", borderRadius: "999px", background: "#ffc83d", transform: `rotate(${deg}deg) translateY(${k % 2 === 0 ? "-0.7em" : "-0.6em"})` }}></span>)}
       </div>

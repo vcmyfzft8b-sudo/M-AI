@@ -2717,6 +2717,8 @@
      container lets the label respond to the pill, including beside chat. */
   width: min(26rem, 100%);
   min-width: 0;
+  /* Desktop can also place the reopen-chat button in this row. */
+  flex-shrink: 1;
   container: annotation-dock / inline-size;
   justify-content: flex-start;
 }

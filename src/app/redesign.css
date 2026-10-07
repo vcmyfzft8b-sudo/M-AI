@@ -397,31 +397,16 @@
 .memo,
 .memo-portal {
   /*
-   * The coral call to action's lip: the 3D edge the onboarding's Continue
-   * button stands on, in one place so every one of them stands the same height.
-   * A press pushes the button down onto it (see "The chunky primary" below).
+   * The coral call to action's glow, in one place so every one of them carries
+   * the same light.
    *
-   * It replaces a soft glow, and keeps the glow's one rule: close under the
-   * button. A shadow cannot escape an ancestor that clips, and most of these
-   * sit in sheets that scroll, so anything hanging further below was sliced
-   * off square at the scrollport's edge.
+   * Close under the button on purpose. A shadow cannot escape an ancestor that
+   * clips, and most of these sit in sheets that scroll — so the further it hung
+   * below the button, the more of it was sliced off square at the scrollport's
+   * edge instead of fading out. It used to range from `0 4px 16px` to
+   * `0 14px 30px` depending on which button you had found.
    */
-  --coral-solid: #ff6d68;
-  --coral-lip: color-mix(in oklch, #ff6d68 62%, #000000);
-  --memo-coral-glow: 0 5px 0 var(--coral-lip);
-  /* The empty part of a progress bar: a step quieter than `--track`, so the
-     coral fill and its highlight read as the thing on top. */
-  --bar-track: rgba(0, 0, 0, 0.09);
-  /*
-   * The lips the other buttons stand on, as the onboarding draws them: a white
-   * button on a ring-coloured lip (the onboarding's `--chip-ring`), an ink
-   * button on a lip halfway between ink and page, a red one on a darker red.
-   * The last two are mixed from tokens that change with the theme, so they
-   * follow it on their own.
-   */
-  --btn-lip: rgba(0, 0, 0, 0.13);
-  --ink-lip: color-mix(in oklch, var(--ink) 55%, var(--bg));
-  --danger-lip: color-mix(in oklch, var(--danger) 62%, #000000);
+  --memo-coral-glow: 0 4px 16px rgba(244, 95, 90, 0.3);
   --bg: #f1f1f5;
   /*
    * A panel recessed inside a card. The design only ever nests these on a
@@ -511,8 +496,6 @@
   --field: rgba(255, 255, 255, 0.11);
   --line: rgba(255, 255, 255, 0.14);
   --track: #3a3a3e;
-  --bar-track: #262629;
-  --btn-lip: #3b3b40;
   --ink: #ffffff;
   --emoji-tile: rgba(130, 148, 218, 0.2);
   --upgrade-tint: rgba(130, 148, 218, 0.22);
@@ -545,8 +528,6 @@
     --field: rgba(255, 255, 255, 0.11);
     --line: rgba(255, 255, 255, 0.14);
     --track: #3a3a3e;
-    --bar-track: #262629;
-    --btn-lip: #3b3b40;
     --ink: #ffffff;
     --emoji-tile: rgba(130, 148, 218, 0.2);
   --upgrade-tint: rgba(130, 148, 218, 0.22);
@@ -3812,12 +3793,10 @@
 
 .memo-progress {
   border-radius: 999px;
-  background: var(--bar-track);
-  overflow: hidden;
+  background: var(--field);
 }
 
 .memo-progress > div {
-  min-width: 1rem;
   height: 100%;
   border-radius: 999px;
   background: var(--text);
@@ -3835,12 +3814,12 @@
  * grows to carry the line now that the line itself is not doing it.
  */
 .memo-progress.cards {
-  height: 1rem;
+  height: 0.4rem;
   margin: 0.9rem 0 0;
 }
 
 .memo-progress.quiz {
-  height: 1rem;
+  height: 0.4rem;
   margin: 0.75rem 0 1.2rem;
 }
 
@@ -3852,11 +3831,11 @@
  * three report progress the learner is making, and progress in this app is coral.
  */
 .memo-note-screen:is([data-note-tab="flashcards"], [data-note-tab="quiz"], [data-note-tab="test"]) .memo-progress > div {
-  background: var(--coral-solid);
+  background: var(--coral);
 }
 
 .memo-progress.test {
-  height: 1rem;
+  height: 0.4rem;
   margin: 0.85rem 0 1.4rem;
 }
 
@@ -5203,202 +5182,19 @@
    down the file, and this block is the definition, not a correction.
    ------------------------------------------------------------------------ */
 
-/*
- * The chunky primary — the onboarding's Continue button, everywhere.
- *
- * Solid coral standing on a darker lip of itself, a heavier label, and a press
- * that pushes the button down onto its lip. The lip is the coral call to
- * action's alone, and only while it is actually coral: `:disabled` greys these,
- * and a coral edge left under a grey button reads as a stray red line.
- *
- * No rim: the lip already draws the edge, and a rim on top of it doubled the
- * outline along the bottom.
- */
+/* Colour fills. The glow is the coral call to action's alone — and only while
+   it is actually coral: `:disabled` greys these, and the glow left behind put a
+   red halo under a grey button. */
 .memo-sheet-coral.memo-sheet-coral:not(:disabled),
 .memo-button-coral.memo-button-coral:not(:disabled),
 .memo-wheel-cta.memo-wheel-cta:not(:disabled),
 .memo-offer-cta.memo-offer-cta:not(:disabled),
 .memo-paywall-cta.memo-paywall-cta:not(:disabled),
+.memo-subscribe-cta.memo-subscribe-cta:not(:disabled),
 .memo-new-folder-cta.memo-new-folder-cta:not(:disabled),
-.memo-capture-submit.memo-capture-submit:not(:disabled),
-.memo-m-create.memo-m-create:not(:disabled),
-.note-source-modal .ios-primary-button.ios-primary-button:not(:disabled),
-.memo-modal-actions .ios-primary-button.ios-primary-button:not(:disabled),
-.memo-card-row :is(.settings-inline-action, .billing-portal-button, .memo-primary-pill):not(:disabled) {
-  border: 0;
-  background: var(--coral-solid);
-  color: #ffffff;
+.note-source-modal .ios-primary-button.ios-primary-button:not(:disabled) {
+  border: var(--btn-border-width) solid var(--btn-border-filled);
   box-shadow: var(--memo-coral-glow);
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  transform: translateY(0);
-  transition:
-    transform 120ms cubic-bezier(0.2, 0.85, 0.2, 1),
-    box-shadow 120ms ease,
-    filter 160ms ease;
-}
-
-/* The upgrade button keeps its amber, on an amber lip of its own. */
-.memo-subscribe-cta.memo-subscribe-cta:not(:disabled) {
-  border: 0;
-  box-shadow: 0 5px 0 color-mix(in oklch, #ff7a18 58%, #000000);
-  font-weight: 800;
-  transform: translateY(0);
-  transition: transform 120ms cubic-bezier(0.2, 0.85, 0.2, 1), box-shadow 120ms ease;
-}
-
-.memo-sheet-coral.memo-sheet-coral:not(:disabled):active,
-.memo-button-coral.memo-button-coral:not(:disabled):active,
-.memo-wheel-cta.memo-wheel-cta:not(:disabled):active,
-.memo-offer-cta.memo-offer-cta:not(:disabled):active,
-.memo-paywall-cta.memo-paywall-cta:not(:disabled):active,
-.memo-subscribe-cta.memo-subscribe-cta:not(:disabled):active,
-.memo-new-folder-cta.memo-new-folder-cta:not(:disabled):active,
-.memo-capture-submit.memo-capture-submit:not(:disabled):active,
-.memo-m-create.memo-m-create:not(:disabled):active,
-.note-source-modal .ios-primary-button.ios-primary-button:not(:disabled):active,
-.memo-modal-actions .ios-primary-button.ios-primary-button:not(:disabled):active,
-.memo-card-row :is(.settings-inline-action, .billing-portal-button, .memo-primary-pill):not(:disabled):active {
-  transform: translateY(5px);
-  box-shadow: 0 0 0 transparent;
-}
-
-/*
- * The other buttons, standing the same way.
- *
- * Every text button now has the primary's lip and its press, in its own
- * colour: ink on an ink-grey lip, white on the onboarding chips' ring with a
- * lip of the same ring, red on a darker red. Round icon buttons, chips and
- * tabs keep their flat look — a lip under a 2.9rem close reads as a bump, not
- * as a button — and so does anything disabled, which cannot be pressed.
- *
- * The `:is(...)` lists carry the specificity of their most specific member,
- * which is what lets one rule here outrank the per-component declarations
- * scattered through the file.
- */
-:is(
-  .memo-button-solid,
-  .memo-results-primary,
-  .memo-primary-pill,
-  .memo-confirm-go,
-  .memo-study-empty-cta,
-  .memo-tutor-start,
-  .memo-tutor-control.primary,
-  .memo-podcast-primary,
-  .memo-podcast-control.primary,
-  .library-folder-primary-button,
-  .memo-quiz-sheet-actions .solid,
-  .memo-quiz-result-primary,
-  .memo-result-actions > :first-child,
-  .memo-panel .lecture-study-create-button,
-  .memo-panel .lecture-study-restart,
-  .memo-panel .lecture-practice-start-button,
-  .memo-panel .lecture-practice-submit,
-  .memo-panel .lecture-practice-controls button:last-child
-):not(:disabled) {
-  box-shadow: 0 5px 0 var(--ink-lip);
-  transform: translateY(0);
-  transition:
-    transform 120ms cubic-bezier(0.2, 0.85, 0.2, 1),
-    box-shadow 120ms ease,
-    background-color 160ms ease;
-}
-
-:is(
-  .memo-sheet-ghost,
-  .memo-button-ghost,
-  .memo-button-outline,
-  .memo-capture-cancel,
-  .memo-ghost-pill,
-  .memo-confirm-cancel,
-  .memo-settings-signout,
-  .memo-scope-button,
-  .memo-action-sheet-cancel,
-  .memo-quiz-sheet-actions .ghost,
-  .memo-result-actions > :not(:first-child),
-  .library-folder-secondary-button,
-  .library-folder-danger-button,
-  .study-manage-pill,
-  .mobile-study-manage-pill,
-  .memo-panel .lecture-study-manage-button,
-  .ios-secondary-button
-):not(:disabled) {
-  border: var(--btn-border-width) solid var(--btn-lip);
-  box-shadow: 0 4px 0 var(--btn-lip);
-  transform: translateY(0);
-  transition:
-    transform 120ms cubic-bezier(0.2, 0.85, 0.2, 1),
-    box-shadow 120ms ease,
-    background-color 160ms ease;
-}
-
-.memo-sheet-danger.memo-sheet-danger:not(:disabled) {
-  border: 0;
-  background: var(--danger);
-  box-shadow: 0 5px 0 var(--danger-lip);
-  transform: translateY(0);
-  transition: transform 120ms cubic-bezier(0.2, 0.85, 0.2, 1), box-shadow 120ms ease;
-}
-
-/* The flashcard verdicts, as the onboarding's: a ring and a lip of their own red or green. */
-:is(.memo-panel, .memo-palace-panel) :is(.lecture-flashcard-review-button, .lecture-flashcard-review-score) {
-  border: 2px solid color-mix(in srgb, currentColor 35%, transparent);
-  box-shadow: 0 4px 0 color-mix(in srgb, currentColor 35%, transparent);
-  transform: translateY(0);
-  transition: transform 120ms cubic-bezier(0.2, 0.85, 0.2, 1), box-shadow 120ms ease;
-}
-
-:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-button.selected {
-  box-shadow: 0 4px 0 color-mix(in srgb, currentColor 35%, transparent), inset 0 0 0 2px currentColor;
-}
-
-:is(
-  .memo-button-solid,
-  .memo-results-primary,
-  .memo-primary-pill,
-  .memo-confirm-go,
-  .memo-study-empty-cta,
-  .memo-tutor-start,
-  .memo-tutor-control.primary,
-  .memo-podcast-primary,
-  .memo-podcast-control.primary,
-  .library-folder-primary-button,
-  .memo-quiz-sheet-actions .solid,
-  .memo-quiz-result-primary,
-  .memo-result-actions > :first-child,
-  .memo-panel .lecture-study-create-button,
-  .memo-panel .lecture-study-restart,
-  .memo-panel .lecture-practice-start-button,
-  .memo-panel .lecture-practice-submit,
-  .memo-panel .lecture-practice-controls button:last-child
-):not(:disabled):active,
-.memo-sheet-danger.memo-sheet-danger:not(:disabled):active {
-  transform: translateY(5px);
-  box-shadow: 0 0 0 transparent;
-}
-
-:is(
-  .memo-sheet-ghost,
-  .memo-button-ghost,
-  .memo-button-outline,
-  .memo-capture-cancel,
-  .memo-ghost-pill,
-  .memo-confirm-cancel,
-  .memo-settings-signout,
-  .memo-scope-button,
-  .memo-action-sheet-cancel,
-  .memo-quiz-sheet-actions .ghost,
-  .memo-result-actions > :not(:first-child),
-  .library-folder-secondary-button,
-  .library-folder-danger-button,
-  .study-manage-pill,
-  .mobile-study-manage-pill,
-  .memo-panel .lecture-study-manage-button,
-  .ios-secondary-button
-):not(:disabled):active,
-:is(.memo-panel, .memo-palace-panel) .lecture-flashcard-review-button:not(:disabled):active {
-  transform: translateY(4px);
-  box-shadow: 0 0 0 transparent;
 }
 
 .memo-sheet-danger.memo-sheet-danger,
@@ -5751,18 +5547,17 @@
  * stylesheet gets to have four bars that are meant to be one.
  */
 .memo-panel .memo-progress.test {
-  height: 1rem;
+  height: 0.4rem;
   margin: 0.85rem 0 1.4rem;
   border-radius: 999px;
-  background: var(--bar-track);
+  background: var(--field);
   overflow: hidden;
 }
 
 .memo-panel .memo-progress.test > div {
-  min-width: 1rem;
   height: 100%;
   border-radius: 999px;
-  background: var(--coral-solid);
+  background: var(--coral);
   transition: width 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -6014,20 +5809,19 @@
  */
 .memo-gen-track {
   position: relative;
-  height: 1rem;
+  height: 0.6rem;
   margin-top: 0.7rem;
   overflow: hidden;
   border-radius: 999px;
-  background: var(--bar-track);
+  background: var(--track);
 }
 
 .memo-gen-track > span {
   position: absolute;
   inset: 0 auto 0 0;
   width: 38%;
-  overflow: hidden;
   border-radius: inherit;
-  background: var(--coral-solid);
+  background: var(--coral);
   animation: memo-gen-sweep 1.5s cubic-bezier(0.45, 0, 0.2, 1) infinite;
 }
 
@@ -15472,15 +15266,14 @@
 }
 
 .memo-tutor-topicbar {
-  height: 1rem;
+  height: 0.4rem;
   border-radius: 999px;
-  background: var(--bar-track);
+  background: var(--track);
   overflow: hidden;
 }
 
 .memo-tutor-topicbar > span {
   display: block;
-  min-width: 1rem;
   height: 100%;
   border-radius: 999px;
   background: oklch(0.7 0.16 var(--orb-hue));
@@ -17939,15 +17732,14 @@
 
 .memo-podcast-progress {
   width: min(18rem, 100%);
-  height: 1rem;
+  height: 0.4rem;
   border-radius: 999px;
-  background: var(--bar-track);
+  background: var(--track);
   overflow: hidden;
 }
 
 .memo-podcast-progress > span {
   display: block;
-  min-width: 1rem;
   height: 100%;
   border-radius: 999px;
   background: linear-gradient(
@@ -21989,53 +21781,4 @@ html[data-native] .memo-toast.subtle {
   font-size: 0.95rem;
   line-height: 1.55;
   letter-spacing: -0.01em;
-}
-
-/*
- * The progress bar, as the onboarding draws it.
- *
- * A 1rem track with the fill standing in it, a strip of light along the top of
- * the fill, and a sheen that sweeps across it every couple of seconds. The fill
- * keeps whatever colour its screen gives it — coral on the study screens, the
- * voice's hue on the tutor, the pair's gradient on the podcast — and only
- * gains the light. The generation bar is already positioned, so it is left as
- * it is; the other fills become the containing block for their pseudo-elements.
- */
-.memo-progress > div,
-.memo-tutor-topicbar > span,
-.memo-podcast-progress > span {
-  position: relative;
-  overflow: hidden;
-}
-
-.memo-progress > div::after,
-.memo-gen-track > span::after,
-.memo-tutor-topicbar > span::after,
-.memo-podcast-progress > span::after {
-  content: "";
-  position: absolute;
-  left: 0.45rem;
-  right: 0.45rem;
-  top: 0.2rem;
-  height: 0.22rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.38);
-  pointer-events: none;
-}
-
-.memo-progress > div::before,
-.memo-tutor-topicbar > span::before,
-.memo-podcast-progress > span::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  width: 40%;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0));
-  animation: memo-bar-shimmer 2.4s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes memo-bar-shimmer {
-  0% { transform: translateX(-120%); }
-  100% { transform: translateX(220%); }
 }

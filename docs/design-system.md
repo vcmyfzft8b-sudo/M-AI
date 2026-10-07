@@ -56,10 +56,7 @@ breaks silently. A token that is the same in both (`--coral`, `--blue`,
 
 | Token | Value | Use |
 | --- | --- | --- |
-| `--coral` | `linear-gradient(135deg,#ff6d68,#f45f5a)` | Coral fills that are not buttons (record orb, level bars). **It is a gradient** — it cannot be a border or a text colour. |
-| `--coral-solid` / `--coral-lip` | `#ff6d68` / coral at 62% over black | The primary button: a solid coral face standing on a darker lip of itself (`--memo-coral-glow` is `0 5px 0 var(--coral-lip)`). Also the fill of the study progress bars. |
-| `--bar-track` | `rgba(0,0,0,.09)` light / `#262629` dark | The empty part of a progress bar. |
-| `--btn-lip` / `--ink-lip` / `--danger-lip` | ring grey / ink half-way to page / red at 62% over black | The lips the other text buttons stand on: white buttons (with a ring of the same colour), ink buttons and red ones. Round icon buttons, chips and tabs have none. |
+| `--coral` | `linear-gradient(135deg,#ff6d68,#f45f5a)` | The primary action, and only that. **It is a gradient** — it cannot be a border or a text colour. |
 | `--promo` | `#f45f5a` light / `#ff6d68` dark | Solid coral: switch-on, notification dot, discount copy. |
 | `--upgrade-tint` / `-line` / `-ink` | periwinkle | Upgrade prompts. Deliberately quieter than coral. |
 | `--blue` | `#0066cc` | One button only (create-folder ready). Do not add a second. |
@@ -127,9 +124,13 @@ list · `1.15rem` inside a row (tile → copy) · `1.6rem` section to section.
 Heights: `2.6` segment · `2.7` chip / note action / small outline · `2.9` round
 icon button (`--btn-round`) · `3.1` tab · `3.2` outline and solid button ·
 `3.4` coral primary, search, dock · `3.6` field, modal CTA · `5.1` settings row ·
-`5.4` note row. Progress bars are `1rem` tall: `--bar-track` with the fill
-standing in it, a light strip along the fill's top and a sweeping sheen (the
-onboarding's bar, shared at the end of redesign.css).
+`5.4` note row.
+
+Progress bars are the onboarding's: a `1rem` track on `--bar-track` with the fill
+standing in it, a light strip along its top and a sweeping sheen. They live
+in `src/app/progress-bars.css`, layered over redesign.css rather than written
+into it, so removing its one import in `src/app/layout.tsx` restores the old
+0.4rem lines (`tests/progress-bars.test.mjs` keeps that true).
 
 Card padding: `0 1.5rem` fixed-height row · `1.2rem 1.6rem` wrapping card row ·
 `1.5rem 1.6rem` content card · `2rem 2.1rem 2.1rem` modal.
@@ -165,7 +166,7 @@ a component.
 
 ## Components — reuse before you write CSS
 
-Buttons: `.memo-button-coral` (primary — the onboarding's chunky button: solid coral on a 5px lip, 800 label, pressing pushes it down onto the lip; every coral call to action is listed once in the "chunky primary" block of redesign.css, so add a new one there) · `.memo-button-solid` /
+Buttons: `.memo-button-coral` (primary) · `.memo-button-solid` /
 `.memo-primary-pill` (ink confirm) · `.memo-button-outline` + `.small` +
 `.small.danger` (secondary) · `.memo-button-ghost` / `.memo-settings-signout`
 (tile, no border) · `.memo-icon-button` (round, `--btn-round`).
@@ -235,9 +236,8 @@ Real, and worth knowing before you copy a pattern out of the stylesheet:
 1. **Destructive red is only half tokenised.** `--danger` / `--danger-tint` now
    exist and the auth screens use them, but ~58 older declarations still type the
    literal and stay light-mode red in dark.
-2. **Coral's solid token is new.** `--coral-solid` exists since the chunky
-   buttons, but older rules still retype `#ff6d68` and `#f45f5a` by hand wherever
-   coral must be a border or text colour. Convert them as you touch them.
+2. **Coral has no solid token.** `--coral` is a gradient, so `#ff6d68` and
+   `#f45f5a` are retyped by hand wherever coral must be a border or text colour.
 3. **Three parallel token vocabularies** for the same concepts: `globals.css`
    (`--label`, `--separator`, `--surface-solid`, `--tint`), `redesign.css`
    (`--text`, `--line`, `--surface`), and `onboarding.css`, which reuses the

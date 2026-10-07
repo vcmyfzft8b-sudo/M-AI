@@ -4,7 +4,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
 import { getImageProps } from "next/image";
 
 import {
@@ -342,7 +342,3 @@ export function useMascot({ accent, calm, scope }: { accent: string; calm: boole
   return { move, burst, blink, stopGroove, grooving, refs };
 }
 
-/** A box with Memo's 320:288 proportions, for the figure to fill. */
-export function MascotBox({ children, style }: { children: ReactNode; style?: CSSProperties }) {
-  return <div style={{ position: "relative", aspectRatio: "320 / 288", ...style }}>{children}</div>;
-}

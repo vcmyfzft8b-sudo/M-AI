@@ -110,6 +110,8 @@ export type LandingTutorDemoProps = {
   theme?: LandingAppTheme;
   /** Offers the finished screen's "Check yourself with cards", as the app does. */
   onOpenFlashcards?: () => void;
+  /** Told whenever the walkthrough changes phase — the onboarding's mascot sways along while it talks. */
+  onPhaseChange?: (phase: TutorPhase) => void;
 };
 
 export function LandingTutorDemo({
@@ -118,6 +120,7 @@ export function LandingTutorDemo({
   className,
   theme = "os",
   onOpenFlashcards,
+  onPhaseChange,
 }: LandingTutorDemoProps) {
   const { t, locale } = useTranslations();
 
@@ -192,6 +195,10 @@ export function LandingTutorDemo({
   const isRunning = step !== null;
   const isPreparing = phase === "preparing";
   const isPaused = phase === "paused";
+
+  useEffect(() => {
+    onPhaseChange?.(phase);
+  }, [onPhaseChange, phase]);
 
   /*
    * The sphere on the real voice.

@@ -1,23 +1,14 @@
 "use client";
 
 /*
- * The three images here are the brand mascot and lockup, sized with `clamp()`
- * against the viewport rather than at fixed intrinsic dimensions. `next/image`
- * wants the dimensions up front and would either pin them or need `fill` and a
- * positioned wrapper around each — both of which change the layout the design
- * specifies. They are small PNGs already in `public/`, so the plain tag stays.
- *
- * The mascot still takes its URLs and intrinsic size from `getImageProps`. The
- * size reserves its box before the file arrives (it used to grow from nothing
- * and push the welcome step down), and the URLs are the optimised ones the root
- * layout already preloads: the raw 140 KB PNG was the welcome step's largest
- * paint, fetched late and apart from a preload it never used.
+ * Memo himself is drawn by `onboarding-mascot.tsx`; the one image left here is
+ * the brand lockup in the desktop aside, a small PNG sized by its box.
  */
 /* eslint-disable @next/next/no-img-element */
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
-import { getImageProps } from "next/image";
+import { Nunito } from "next/font/google";
 import { useRouter } from "next/navigation";
 
 import { mapAppHrefForClient } from "@/lib/creator-demo/paths";
@@ -27,7 +18,23 @@ import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
 import { LOCALE_INTL_TAG, type Locale } from "@/lib/i18n/locales";
 import { LandingTutorDemo } from "@/components/landing/landing-tutor-demo";
+import {
+  MascotFigure,
+  MascotPedestal,
+  MascotSparkles,
+  MascotThought,
+  SpeechBubble,
+  useMascot,
+} from "@/components/onboarding-mascot";
 import type { ProfileRow } from "@/lib/database.types";
+import {
+  STUDY_HOUR_DEFAULT,
+  STUDY_HOUR_MAX,
+  STUDY_HOUR_MIN,
+  studyHourLabel,
+  studySky,
+  thinkIcons,
+} from "@/lib/onboarding-mascot";
 import {
   AUDIENCE_OPTIONS,
   CLASS_FOCUS_OPTIONS,
@@ -47,28 +54,30 @@ import {
   usesTenPointGrades,
   type GradeScale,
 } from "@/lib/onboarding-options";
+import { browserTimeZone, enableStudyReminderDelivery } from "@/lib/study-reminders-client";
 
 /**
  * The interactive onboarding.
  *
- * A port of the design canvas the flow was redrawn in, kept deliberately close
- * to it: every measurement, easing curve and animation below is the one the
- * artboard carries, which is why the styling is inline rather than in a
- * stylesheet — a number here can be diffed against the design file line for
- * line. Only the two things an inline style cannot express live in
- * `onboarding.css`: the keyframes, and the hover/active rules the canvas wrote
- * as `style-hover` / `style-active`.
+ * A port of the design canvas the flow was redrawn in ("Onboarding Redesign
+ * v2"), kept deliberately close to it: every measurement, easing curve and
+ * animation below is the one the artboard carries, which is why the styling is
+ * inline rather than in a stylesheet — a number here can be diffed against the
+ * design file line for line. Only what an inline style cannot express lives in
+ * `onboarding.css`: the tokens, the keyframes, and the hover/active rules the
+ * canvas wrote as `style-hover` / `style-active`.
+ *
+ * v2 puts Memo on every screen. On the welcome, loading and last screens he is
+ * the hero; everywhere else he stands beside a speech bubble that carries the
+ * step's question, typed out as he says it, and he reacts to what the learner
+ * does — a hop for a pick, a cheer for a right answer, a droop for a miss.
  *
  * What is deliberately NOT the design's own is anything it duplicated from the
  * app: the option lists come from `onboarding-options.ts`, the wording from the
- * message catalogues, and the tutor's voices and their hues from the real
- * tutor. The design file had its own copies of all three, and one of them —
- * the feature list — had drifted out of order, so every label on that step
- * named the option above it.
+ * message catalogues, and the tutor step mounts the real walkthrough.
  */
 
-// The same call as the root layout's preload, so the request is the preloaded one.
-const MASCOT = getImageProps({ src: "/memo-mascot.png", alt: "", width: 320, height: 288 }).props;
+const NUNITO = Nunito({ subsets: ["latin", "latin-ext"], display: "swap" });
 
 /** The accent the design ships with: the head of the app's own coral. */
 const ACCENT = "#ff6d68";
@@ -78,6 +87,8 @@ const WIDE_QUERY = "(min-width: 980px)";
 
 /** Below this the proof list drops its last two rows and the reviews drop to one. */
 const ROOMY_QUERY = "(min-height: 760px)";
+
+const CALM_QUERY = "(prefers-reduced-motion: reduce)";
 
 type OnboardingForm = {
   heardFrom: string;
@@ -92,6 +103,7 @@ type OnboardingForm = {
   dailyGoal: string;
   currentAverageGrade: number;
   targetGrade: number;
+  studyHour: number;
 };
 
 type StepKind =
@@ -104,6 +116,8 @@ type StepKind =
   | "quiz"
   | "test"
   | "tutor"
+  | "ask"
+  | "time"
   | "testimonial"
   | "chart"
   | "loading"
@@ -123,10 +137,8 @@ type Step = {
  * The two long lists — ten fields of study, twelve tools — are laid out by the
  * design as `repeat(auto-fit, minmax(11rem, 1fr))`. On a phone that floor is
  * wider than half the column, so auto-fit gives up and stacks all twelve in one
- * column, and the list runs off the bottom of a screen that cannot scroll: 62px
- * of the subject step and 217px of the feature step were simply unreachable at
- * 375x812. Capping the floor at just under half the container keeps the design's
- * own track width wherever it fits and goes two-up where it does not.
+ * column. Capping the floor at just under half the container keeps the
+ * design's own track width wherever it fits and goes two-up where it does not.
  */
 const WRAPPING_COLUMNS = "repeat(auto-fit, minmax(min(11rem, 47%), 1fr))";
 
@@ -137,10 +149,8 @@ const WRAPPING_COLUMNS = "repeat(auto-fit, minmax(min(11rem, 47%), 1fr))";
  * numbers are right for it. The two steps that go multi-column do not: on a
  * 390px phone each tile is 174px wide, and the design's 0.95rem padding, 2.5rem
  * icon and 0.8rem gap leave the label 92px — narrower than the single word
- * "Personalizacija", which is 118px, so the word had nowhere to go but out
- * through the side of its own tile. Trimming the chrome gives the label 120px,
- * which is enough for the longest word in any of the five languages to sit on a
- * line of its own.
+ * "Personalizacija". Trimming the chrome gives the label 120px, which is enough
+ * for the longest word in any of the five languages to sit on a line of its own.
  */
 const OPTION_CHROME = {
   single: { padding: "0.95rem", icon: "clamp(1.55rem, 4.6vh, 2.5rem)", gap: "0.8rem" },
@@ -165,19 +175,24 @@ const STEPS: readonly Step[] = [
   { id: "tryQuiz", kind: "quiz", qk: "quizTitle", sk: "quizSub" },
   { id: "tryTest", kind: "test", qk: "testTitle", sk: "testSub" },
   { id: "tryTutor", kind: "tutor", qk: "tutorTitle", sk: "tutorSub" },
+  { id: "askAnything", kind: "ask", qk: "askTitle" },
   { id: "classFocus", kind: "q", key: "classFocus", qk: "qFocus", sk: "subFocus", cols: "1fr" },
   { id: "dailyGoal", kind: "q", key: "dailyGoal", qk: "qGoal", sk: "subGoal", cols: "1fr" },
+  { id: "studyTime", kind: "time", qk: "timeTitle", sk: "timeSub" },
   { id: "testimonial", kind: "testimonial" },
   { id: "progress", kind: "chart", when: "student" },
   { id: "personalizing", kind: "loading" },
   { id: "done", kind: "done" },
 ];
 
+/** The three screens where Memo is the whole picture rather than a companion. */
+function isHeroKind(kind: StepKind) {
+  return kind === "welcome" || kind === "loading" || kind === "done";
+}
+
 /**
  * The three answers the redesign asks for with a brand mark rather than an
- * emoji, drawn exactly as the design file draws them — the Instagram glyph in
- * particular is a stroked outline there, not the filled lucide one the old
- * survey used.
+ * emoji, drawn exactly as the design file draws them.
  */
 const BRAND_MARKS: Record<string, { vb: string; d: string; fill: string; stroke: string }> = {
   instagram: {
@@ -211,11 +226,19 @@ const START_QUEUE = [0, 1, 2];
 
 /** The four things the source step offers to turn into a note. */
 const DEMO_FILES = [
-  { v: "audio", name: "lecture-04.m4a", ext: "M4A", meta: "srcFileAudio", i: "🎙️" },
-  { v: "pdf", name: "mitosis-slides.pdf", ext: "PDF", meta: "srcFilePdf", i: "📄" },
-  { v: "photo", name: "notebook-page.jpg", ext: "JPG", meta: "srcFilePhoto", i: "📷" },
-  { v: "link", name: "khan-mitosis", ext: "URL", meta: "srcFileLink", i: "🔗" },
-] as const satisfies readonly { v: string; name: string; ext: string; meta: CopyKey; i: string }[];
+  { v: "audio", name: "lecture-04.m4a", ext: "M4A", meta: "srcFileAudio", i: "🎙️", tint: "rgba(255,109,104,0.16)" },
+  { v: "pdf", name: "mitosis-slides.pdf", ext: "PDF", meta: "srcFilePdf", i: "📄", tint: "rgba(98,170,255,0.18)" },
+  { v: "photo", name: "notebook-page.jpg", ext: "JPG", meta: "srcFilePhoto", i: "📷", tint: "rgba(255,204,77,0.22)" },
+  { v: "link", name: "khan-mitosis", ext: "URL", meta: "srcFileLink", i: "🔗", tint: "rgba(98,214,118,0.2)" },
+] as const satisfies readonly { v: string; name: string; ext: string; meta: CopyKey; i: string; tint: string }[];
+
+/** What a source turns into, each ticking off as the bar passes its mark. */
+const SOURCE_OUTPUTS = [
+  { icon: "📝", label: "rowNotes", at: 30 },
+  { icon: "🃏", label: "rowQuizCards", at: 55 },
+  { icon: "✅", label: "rowTests", at: 80 },
+  { icon: "📻", label: "rowPodcast", at: 100 },
+] as const satisfies readonly { icon: string; label: CopyKey; at: number }[];
 
 const QUIZ_OPTIONS = [
   { v: "prophase", l: "quizOptA" },
@@ -223,6 +246,21 @@ const QUIZ_OPTIONS = [
   { v: "anaphase", l: "quizOptC" },
   { v: "telophase", l: "quizOptD" },
 ] as const satisfies readonly { v: string; l: CopyKey }[];
+
+/** The "most opened this week" list on the proof step; the last two only on a tall screen. */
+const PROOF_ROWS = [
+  { icon: "🃏", label: "rowQuizCards", pct: 91, opacity: 1 },
+  { icon: "✅", label: "rowTests", pct: 83, opacity: 0.9 },
+  { icon: "🎙️", label: "rowTutor", pct: 74, opacity: 0.8 },
+  { icon: "📻", label: "rowPodcast", pct: 66, opacity: 0.7 },
+  { icon: "🏛️", label: "rowPalace", pct: 58, opacity: 0.6 },
+  { icon: "📝", label: "rowNotes", pct: 42, opacity: 0.5 },
+  { icon: "⚡", label: "rowSpeed", pct: 29, opacity: 0.42 },
+] as const satisfies readonly { icon: string; label: CopyKey; pct: number; opacity: number }[];
+
+/** The example questions on the "ask me anything" step, each in its own colour. */
+const ASK_QUESTIONS = ["askQ1", "askQ2", "askQ3", "askQ4", "askQ5", "askQ6"] as const satisfies readonly CopyKey[];
+const ASK_HUES = ["#9b7bff", "#d9a93a", "#6f8fb3", "#e0705f", "#5fae6f", "#e09a4f"];
 
 const REVIEWS = {
   student: [
@@ -244,6 +282,18 @@ const SUBJECT_LINES: Record<string, MessageKey> = {
   maths: "onboarding.subjectLine.maths",
   law_criminal_justice: "onboarding.subjectLine.law",
 };
+
+/** Twelve stars over the night sky, and twelve rays round the sun. */
+const SKY_STARS = [
+  [10, 16, 4], [22, 30, 3], [34, 12, 3], [48, 26, 4], [62, 14, 3], [74, 32, 3],
+  [86, 18, 4], [16, 50, 3], [56, 44, 3], [92, 46, 4], [40, 58, 3], [70, 60, 3],
+] as const;
+const SUN_RAYS = Array.from({ length: 12 }, (_, k) => k * 30);
+const SKY_CLOUDS = [
+  { top: "18%", width: "30%", drift: "24s", delay: "-5s", scale: 1 },
+  { top: "54%", width: "22%", drift: "32s", delay: "-19s", scale: 0.85 },
+  { top: "30%", width: "17%", drift: "28s", delay: "-12s", scale: 0.7 },
+] as const;
 
 function isStudentRole(role: string) {
   return (
@@ -268,8 +318,6 @@ function getSchoolOptionsForRole(role: string) {
 
   return SCHOOL_OPTIONS;
 }
-
-
 
 /**
  * The survey is global in English and local in the four home markets, so the
@@ -310,29 +358,27 @@ const COPY_KEYS = [
   "welcomeTitle", "welcomeSub", "ctaStart", "ctaDone", "footDone", "footLoading",
   "subHeard", "subAudience", "subRole", "subSchool", "subSubject", "subFeature",
   "subFocus", "subGoal", "subTarget", "proofSub", "proofHeader", "proofLive",
-  "proofTop", "proofRating", "rowQuizCards", "rowTests", "rowTutor", "rowPodcast",
-  "rowPalace", "rowNotes", "rowSpeed", "srcTitle", "srcSub", "srcAudio",
-  "srcPdf", "srcPhoto", "srcLink", "srcStage1", "srcStage2", "srcStage3",
-  "srcStage4", "srcNoteTitle", "srcNoteMeta", "flashTitle", "flashSub", "flashHint",
-  "flashHintBack", "deckDone", "ofWord", "quizTitle", "quizSub", "quizMeta",
-  "quizQ", "quizRight", "quizWrong", "quizExplain", "testTitle", "testSub",
-  "testMeta", "testQ", "testPlaceholder", "testGrade", "testMarked", "testFeedback",
-  "tutorTitle", "tutorSub", "tutorListen", "tutorSpeaking", "tutorReplay", "tutorScript",
-  "chartKicker", "chartIn12", "chartNow", "chart6", "chart12", "chartFoot",
-  "reviewStudents", "reviewOthers", "reviewVerified", "yearsOld", "loadTitle", "loadReady",
+  "proofRating", "rowQuizCards", "rowTests", "rowTutor", "rowPodcast",
+  "rowPalace", "rowNotes", "rowSpeed", "srcTitle", "srcSub",
+  "srcStage1", "srcStage2", "srcStage3", "srcStage4", "srcNoteTitle",
+  "flashTitle", "flashSub", "flashHintBack",
+  "quizTitle", "quizSub", "quizMeta", "quizQ", "quizRight", "quizWrong", "quizExplain",
+  "testTitle", "testSub", "testMeta", "testQ", "testPlaceholder", "testGrade", "testMarked", "testFeedback",
+  "tutorTitle", "tutorSub",
+  "chartKicker", "chartIn12", "chartNow", "chart6", "chart12",
+  "reviewStudents", "reviewOthers", "loadTitle", "loadReady",
   "loadRow1", "loadRow2", "loadRow3", "doneTitle", "doneSub", "qHeard",
-  "qAudience", "qRole", "qSchool", "qYear", "qYearElem", "qSubject",
+  "qAudience", "qRole", "qSchool", "qYear", "qSubject",
   "qMotivation", "qFeature", "qFocus", "qGoal", "qGradeNow", "qGradeNowSub",
-  "qGradeTarget", "proofTitle", "chartTitle", "chartSub", "chartWith", "chartAlone",
+  "qGradeTarget", "proofTitle", "chartTitle", "chartWith", "chartAlone",
   "ctaContinue", "asideTitle", "asideFoot", "dropIdle", "dropOver", "srcTapHint",
-  "tutorSlowerLabel", "tutorNormalLabel", "tutorAgainLabel", "deckCompleted", "deckRoundCompleted", "deckAllDone",
-  "deckRepeatMissed", "deckSetCompleted", "deckRoundScore", "deckCorrect", "deckRestart", "deckRepeatBtn",
   "reviewQuote1", "reviewQuote2", "reviewQuote3", "reviewMeta1", "reviewMeta2", "reviewMeta3",
   "reviewQuote4", "reviewQuote5", "reviewQuote6", "reviewMeta4", "reviewMeta5", "reviewMeta6",
-  "tutorStart", "tutorStop", "loadWorking", "sumYouAre", "sumYear", "sumField",
+  "loadWorking", "sumYouAre", "sumYear", "sumField",
   "sumGoal", "sumFirst", "sumDaily", "flashQ1", "flashA1", "flashQ2",
   "flashA2", "flashQ3", "flashA3", "srcFileAudio", "srcFilePdf", "srcFilePhoto",
-  "srcFileLink", "quizOptA", "quizOptB", "quizOptC", "quizOptD", "srcBody", "chartAria",
+  "srcFileLink", "quizOptA", "quizOptB", "quizOptC", "quizOptD", "chartAria",
+  "askTitle", "askQ1", "askQ2", "askQ3", "askQ4", "askQ5", "askQ6", "timeTitle", "timeSub",
 ] as const;
 
 type CopyKey = (typeof COPY_KEYS)[number];
@@ -344,6 +390,7 @@ type FlowState = {
   shift: number;
   wide: boolean;
   roomy: boolean;
+  calm: boolean;
   pct: number;
   flipped: boolean;
   quizPick: string;
@@ -358,12 +405,15 @@ type FlowState = {
   exitQ: string;
   exitDx: number;
   exitToken: number;
-  cycle: number;
   queue: number[];
   answers: Record<number, "easy" | "again">;
   testText: string;
   testGraded: boolean;
   gradeScale: number;
+  /** How many characters of Memo's line are typed out. */
+  tw: number;
+  /** Which icon his thought cloud is showing. */
+  thinkTick: number;
   form: OnboardingForm;
 };
 
@@ -373,6 +423,7 @@ const INITIAL_STATE: FlowState = {
   shift: 0,
   wide: false,
   roomy: true,
+  calm: false,
   pct: 0,
   flipped: false,
   quizPick: "",
@@ -387,12 +438,13 @@ const INITIAL_STATE: FlowState = {
   exitQ: "",
   exitDx: 0,
   exitToken: 0,
-  cycle: 1,
   queue: START_QUEUE,
   answers: {},
   testText: "",
   testGraded: false,
   gradeScale: 1,
+  tw: 0,
+  thinkTick: 0,
   form: {
     heardFrom: "",
     audience: "",
@@ -406,8 +458,15 @@ const INITIAL_STATE: FlowState = {
     dailyGoal: "",
     currentAverageGrade: 3.5,
     targetGrade: 4.5,
+    studyHour: STUDY_HOUR_DEFAULT,
   },
 };
+
+/** The subtitle under Memo's bubble, centred on every step that has one. */
+const SUBTITLE: CSSProperties = { margin: "0 0 clamp(0.6rem, 1.8vh, 1.15rem)", textAlign: "center", fontSize: "clamp(0.9rem, 2vh, 1rem)", fontWeight: "700", lineHeight: "1.45", color: "var(--muted)" };
+
+/** The 3D chip: a 2px ring and a lip of the same colour under it. */
+const CHIP: CSSProperties = { boxSizing: "border-box", border: "2px solid var(--chip-ring)", background: "var(--chip)" };
 
 export function OnboardingFlow({
   profile,
@@ -430,11 +489,10 @@ export function OnboardingFlow({
    * Where the back arrow goes from the very first step.
    *
    * Only the landing page, and only on the web: someone who pressed "Try it
-   * for €0" to get here has to be able to change their mind, and before this
-   * the arrow was simply dead on step one. Decided by the server rather than
-   * sniffed here, because the app has no landing page to return to — the
-   * wrapper rewrites `/` back to this very screen, so an arrow pointing there
-   * would be a loop.
+   * for €0" to get here has to be able to change their mind. Decided by the
+   * server rather than sniffed here, because the app has no landing page to
+   * return to — the wrapper rewrites `/` back to this very screen, so an arrow
+   * pointing there would be a loop.
    */
   backHref?: string;
 }) {
@@ -471,11 +529,31 @@ export function OnboardingFlow({
   const timers = useRef<Record<string, ReturnType<typeof setTimeout> | undefined>>({});
   const intervals = useRef<Record<string, ReturnType<typeof setInterval> | undefined>>({});
   const raf = useRef(0);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const dropEl = useRef<HTMLDivElement | null>(null);
+  const mainEl = useRef<HTMLElement | null>(null);
+  const fitEl = useRef<HTMLDivElement | null>(null);
+  const gazeEl = useRef<HTMLDivElement | null>(null);
+  const heroTiltEl = useRef<HTMLDivElement | null>(null);
+  const bubbleEl = useRef<HTMLDivElement | null>(null);
   const drag = useRef({ width: 353, from: 0, moved: false, lastDx: 0 });
   const fileDrag = useRef({ startX: 0, startY: 0, moved: false });
   const saving = useRef(false);
   const saved = useRef(false);
+  /** The study hour counts as answered once its step has been left forwards. */
+  const hourAnswered = useRef(false);
+  /** Which way the last step change went, for Memo's hop or boing. */
+  const direction = useRef(1);
+  /** Whether the small Memo has already dropped in beside the bubble. */
+  const riderShown = useRef(false);
+  const tilt = useRef({ target: [0, 0], current: [0, 0], frame: 0 });
+  const gazeFrame = useRef(0);
+  const lastPointer = useRef<[number, number] | null>(null);
+  const hourMoved = useRef(0);
+
+  const scope = useCallback(() => rootRef.current, []);
+  const mascot = useMascot({ accent: ACCENT, calm: state.calm, scope });
+  const { move, burst, blink, stopGroove } = mascot;
 
   const patch = useCallback((next: Partial<FlowState>) => {
     setState((current) => ({ ...current, ...next }));
@@ -524,18 +602,12 @@ export function OnboardingFlow({
   const index = Math.max(0, path.findIndex((s) => s.id === state.stepId));
   const step = path[index] ?? path[0];
   const kind = step.kind;
+  const hero = isHeroKind(kind);
 
   /*
    * The bar is read against the whole flow, not against the path the current
-   * answers cut out of it.
-   *
-   * Measuring the cut path is what the design does, and it means the bar
-   * jumps backwards: the first screen sizes itself against the 17 steps
-   * someone who is not a student walks, because no role has been picked yet,
-   * and then restates itself against 23 the moment a student picks one.
-   * Against the whole flow the bar only ever moves forward, and always ends
-   * full. A branch that skips steps shows up as a longer jump, which is what
-   * skipping questions should look like.
+   * answers cut out of it, so it only ever moves forward and always ends full.
+   * A branch that skips steps shows up as a longer jump.
    */
   const shownIndex = Math.max(0, STEPS.findIndex((s) => s.id === state.stepId));
 
@@ -626,6 +698,9 @@ export function OnboardingFlow({
             targetGrade: gradeTouched.targetGrade ? current.targetGrade : null,
             gradeScale:
               gradeTouched.currentAverageGrade || gradeTouched.targetGrade ? gradeScale : null,
+            // The hour of the study reminder, read in the learner's own zone.
+            studyHour: hourAnswered.current ? current.studyHour : null,
+            timeZone: hourAnswered.current ? browserTimeZone() : null,
           },
         }),
       });
@@ -645,11 +720,8 @@ export function OnboardingFlow({
   /*
    * The last screen is reached when two things have both happened: the ring has
    * filled and sat for the design's 900ms beat, and the answers are on the
-   * server. Either can finish first — the ring takes two to four seconds and a
-   * save on a bad connection can take longer — so whichever finishes last is
-   * the one that moves the flow on. Asking once, at the end of the beat,
-   * stranded anyone whose save had not come back yet on a screen that says
-   * "your plan is ready" and carries no button at all.
+   * server. Either can finish first, so whichever finishes last is the one
+   * that moves the flow on.
    */
   const loaderSettled = useRef(false);
 
@@ -673,22 +745,21 @@ export function OnboardingFlow({
     void submit().then(() => finishLoadingRef.current());
 
     intervals.current.load = setInterval(() => {
-      setState((current) => {
-        const next = Math.min(100, current.pct + Math.round(3 + Math.random() * 7));
+      const next = Math.min(100, stateRef.current.pct + Math.round(3 + Math.random() * 7));
+      patch({ pct: next });
 
-        if (next >= 100) {
-          clearLoop("load");
-          clearTimer("loadDone");
-          timers.current.loadDone = setTimeout(() => {
-            loaderSettled.current = true;
-            finishLoadingRef.current();
-          }, 900);
-        }
-
-        return { ...current, pct: next };
-      });
+      if (next >= 100) {
+        clearLoop("load");
+        clearTimer("loadDone");
+        move("loader", "cheer");
+        burst("loader", "sparkle");
+        timers.current.loadDone = setTimeout(() => {
+          loaderSettled.current = true;
+          finishLoadingRef.current();
+        }, 900);
+      }
     }, 190);
-  }, [patch, submit]);
+  }, [burst, move, patch, submit]);
 
   /** `go` is called from timers and from the keyboard, so it lives on a ref too. */
   const goRef = useRef<(delta: number) => void>(() => {});
@@ -718,9 +789,11 @@ export function OnboardingFlow({
       }
 
       const to = list[target];
+      direction.current = delta;
       clearTimer("go");
-      clearTimer("select");
       clearTimer("reveal");
+      clearTimer("srcDone");
+      clearTimer("deckNext");
       clearLoop("load");
       clearTimer("loadDone");
       patch({ fade: 0, shift: delta > 0 ? 20 : -20 });
@@ -746,6 +819,11 @@ export function OnboardingFlow({
 
   goRef.current = go;
 
+  /*
+   * A pick, then Continue. v2 no longer jumps ahead the moment an option is
+   * tapped: Memo answers the tap himself — a hop, eyes squeezed happy, a few
+   * stars — and the learner moves on when they are ready.
+   */
   const select = useCallback(
     (key: keyof OnboardingForm, value: string) => {
       setState((current) => {
@@ -772,26 +850,28 @@ export function OnboardingFlow({
         setGradeTouched({ currentAverageGrade: false, targetGrade: false });
       }
 
-      clearTimer("select");
-      timers.current.select = setTimeout(() => goRef.current(1), 300);
+      move("rider", "hop");
+      blink("happy");
+      burst("rider", "sparkle");
     },
-    [],
+    [blink, burst, move],
   );
 
   const nudge = useCallback(
-    (key: "currentAverageGrade" | "targetGrade", direction: number) => {
+    (key: "currentAverageGrade" | "targetGrade", step: number) => {
       setGradeTouched((current) => ({ ...current, [key]: true }));
       setState((current) => {
         const { min, max, step: size } = gradeBounds(current.form.schoolLevel);
-        const raw = current.form[key] + direction * size;
+        const raw = current.form[key] + step * size;
         const value = Math.round(Math.min(max, Math.max(min, raw)) * 10) / 10;
 
         return { ...current, form: { ...current.form, [key]: value }, gradeScale: 1.14 };
       });
       clearTimer("grade");
       timers.current.grade = setTimeout(() => patch({ gradeScale: 1 }), 170);
+      move("rider", "boing");
     },
-    [patch],
+    [move, patch],
   );
 
   const pickSource = useCallback(
@@ -801,66 +881,90 @@ export function OnboardingFlow({
       }
 
       patch({ source: v, srcPct: 0 });
+      move("rider", "munch", 9);
       clearLoop("src");
       intervals.current.src = setInterval(() => {
-        setState((current) => {
-          const next = Math.min(100, current.srcPct + Math.round(4 + Math.random() * 9));
+        const next = Math.min(100, stateRef.current.srcPct + Math.round(4 + Math.random() * 9));
+        patch({ srcPct: next });
 
-          if (next >= 100) {
-            clearLoop("src");
-            clearTimer("srcDone");
-            timers.current.srcDone = setTimeout(() => {
-              if (stateRef.current.stepId === "trySource" && stateRef.current.source) {
-                goRef.current(1);
-              }
-            }, 700);
-          }
-
-          return { ...current, srcPct: next };
-        });
+        if (next >= 100) {
+          clearLoop("src");
+          move("rider", "cheer");
+          burst("rider", "sparkle");
+          clearTimer("srcDone");
+          timers.current.srcDone = setTimeout(() => {
+            if (stateRef.current.stepId === "trySource" && stateRef.current.source) {
+              goRef.current(1);
+            }
+          }, 700);
+        }
       }, 130);
     },
-    [patch],
+    [burst, move, patch],
   );
 
   /**
    * The card throw, with the app's own numbers: 120px of travel is a full
    * verdict, the tilt tops out at 8 degrees, and the release threshold scales
    * with the card between 88 and 150px so it feels the same at any size.
+   *
+   * v2 has no results screen: the last card goes straight on to the next step.
    */
   const swipeCard = useCallback((answer: "easy" | "again") => {
-    setState((current) => {
-      if (current.exitDir) {
-        return current;
-      }
+    const current = stateRef.current;
 
-      if (Math.abs(drag.current.lastDx) < 5) {
-        drag.current.lastDx = drag.current.width * 0.34 * (answer === "easy" ? 1 : -1);
-      }
+    if (current.exitDir) {
+      return;
+    }
 
-      const pos = current.cardPos;
-      const card = CARDS[current.queue[Math.min(pos, current.queue.length - 1)]];
+    if (Math.abs(drag.current.lastDx) < 5) {
+      drag.current.lastDx = drag.current.width * 0.34 * (answer === "easy" ? 1 : -1);
+    }
 
-      // The answer is recorded and the deck advances in the same commit that
-      // starts the exit, so the card under the finger is already the next
-      // question while a clone carries the old one off.
-      return {
-        ...current,
-        answers: { ...current.answers, [pos]: answer },
-        dragging: false,
-        dragX: 0,
-        flipped: false,
-        cardPos: Math.min(current.queue.length, pos + 1),
-        exitDir: answer === "easy" ? 1 : -1,
-        exitQ: card ? card.q : "",
-        exitDx: drag.current.lastDx,
-        exitToken: current.exitToken + 1,
-      };
+    const pos = current.cardPos;
+    const queue = current.queue;
+    const last = pos + 1 >= queue.length;
+    const card = CARDS[queue[Math.min(pos, queue.length - 1)]];
+    const hadMiss = Object.values(current.answers).includes("again");
+
+    // The answer is recorded and the deck advances in the same commit that
+    // starts the exit, so the card under the finger is already the next
+    // question while a clone carries the old one off.
+    patch({
+      answers: { ...current.answers, [pos]: answer },
+      dragging: false,
+      dragX: 0,
+      flipped: false,
+      cardPos: last ? pos : pos + 1,
+      exitDir: answer === "easy" ? 1 : -1,
+      exitQ: card ? card.q : "",
+      exitDx: drag.current.lastDx,
+      exitToken: current.exitToken + 1,
     });
+    drag.current.lastDx = 0;
 
     clearTimer("exit");
     timers.current.exit = setTimeout(() => patch({ exitDir: 0 }), 185);
-  }, [patch]);
+
+    if (last) {
+      clearTimer("deckNext");
+      timers.current.deckNext = setTimeout(() => {
+        if (stateRef.current.stepId === "tryFlashcard") {
+          goRef.current(1);
+        }
+      }, 520);
+    }
+
+    if (answer === "easy" && last && !hadMiss) {
+      move("rider", "cheer");
+      burst("rider", "confetti");
+    } else if (answer === "easy") {
+      move("rider", "hop");
+      burst("rider", "sparkle");
+    } else {
+      move("rider", "sad");
+    }
+  }, [burst, move, patch]);
 
   const cardDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -942,7 +1046,7 @@ export function OnboardingFlow({
         return Boolean(box && x > box.left && x < box.right && y > box.top && y < box.bottom);
       };
 
-      const move = (moveEvent: PointerEvent) => {
+      const onMove = (moveEvent: PointerEvent) => {
         const dx = moveEvent.clientX - fileDrag.current.startX;
         const dy = moveEvent.clientY - fileDrag.current.startY;
 
@@ -958,7 +1062,7 @@ export function OnboardingFlow({
       };
 
       const up = (upEvent: PointerEvent) => {
-        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", up);
         window.removeEventListener("pointercancel", up);
 
@@ -973,37 +1077,52 @@ export function OnboardingFlow({
         }
       };
 
-      window.addEventListener("pointermove", move);
+      window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", up);
       window.addEventListener("pointercancel", up);
     },
     [patch, pickSource],
   );
 
+  /* The tutor talking or listening sets Memo swaying along; anything else stops him. */
+  const onTutorPhase = useCallback(
+    (phase: string) => {
+      if (phase === "speaking" || phase === "listening") {
+        if (!mascot.grooving()) {
+          move("rider", "groove", Infinity);
+        }
+      } else {
+        stopGroove();
+      }
+    },
+    [mascot, move, stopGroove],
+  );
+
+  const qBlocked = kind === "q" && !form[step.key as keyof OnboardingForm];
+
   const ctaDisabled = (() => {
     if (kind === "loading") {
       return !saveError;
     }
 
-    if (kind === "source" || kind !== "q") {
-      return false;
-    }
-
-    return !form[step.key as keyof OnboardingForm];
+    return qBlocked;
   })();
 
   useEffect(() => {
     const wide = window.matchMedia(WIDE_QUERY);
     const roomy = window.matchMedia(ROOMY_QUERY);
-    const sync = () => patch({ wide: wide.matches, roomy: roomy.matches });
+    const calm = window.matchMedia(CALM_QUERY);
+    const sync = () => patch({ wide: wide.matches, roomy: roomy.matches, calm: calm.matches });
 
     sync();
     wide.addEventListener("change", sync);
     roomy.addEventListener("change", sync);
+    calm.addEventListener("change", sync);
 
     return () => {
       wide.removeEventListener("change", sync);
       roomy.removeEventListener("change", sync);
+      calm.removeEventListener("change", sync);
     };
   }, [patch]);
 
@@ -1011,8 +1130,8 @@ export function OnboardingFlow({
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
 
-      // The practice-test step has a real textarea in it, and Enter there is a
-      // new line rather than a request for the next screen.
+      // The practice-test step has a real textarea in it, and the study-time
+      // step a slider: Enter and the arrows belong to them there.
       if (target && /^(INPUT|TEXTAREA)$/.test(target.tagName)) {
         return;
       }
@@ -1028,16 +1147,8 @@ export function OnboardingFlow({
       const active = list[Math.max(0, list.findIndex((s) => s.id === current.stepId))];
 
       if (event.key === "ArrowRight" || event.key === "Enter") {
-        // A question step has no button — picking an option is what advances it
-        // — so Enter goes on to the next step once one has been picked.
-        if (active.kind === "q") {
-          if (current.form[active.key!]) {
-            goRef.current(1);
-          }
-
-          return;
-        }
-
+        // Every step has the button now, questions included — it waits for a
+        // pick there — so the keyboard presses it rather than moving the step.
         if (ctaRef.current.enabled) {
           ctaRef.current.press();
         }
@@ -1067,23 +1178,293 @@ export function OnboardingFlow({
   useEffect(() => {
     const runningTimers = timers.current;
     const runningLoops = intervals.current;
+    const runningTilt = tilt.current;
 
     return () => {
       Object.values(runningTimers).forEach((id) => id !== undefined && clearTimeout(id));
       Object.values(runningLoops).forEach((id) => id !== undefined && clearInterval(id));
       cancelAnimationFrame(raf.current);
+      cancelAnimationFrame(runningTilt.frame);
+      cancelAnimationFrame(gazeFrame.current);
     };
+  }, []);
+
+  /*
+   * Arriving on a step: Memo drops in the first time he appears beside a
+   * bubble and hops (or, going back, boings) every time after; the bubble
+   * springs in; he blinks once he has landed. The hero screens animate their
+   * own bigger Memo instead.
+   */
+  useEffect(() => {
+    const current = STEPS.find((s) => s.id === state.stepId);
+
+    if (!current) {
+      return;
+    }
+
+    if (current.id === "tryFlashcard") {
+      clearTimer("deckNext");
+      patch({ queue: START_QUEUE, cardPos: 0, answers: {}, flipped: false, dragX: 0, dragging: false, exitDir: 0 });
+    }
+
+    stopGroove();
+    clearTimer("landBlink");
+    timers.current.landBlink = setTimeout(() => blink("single"), 720);
+
+    if (current.kind === "welcome") {
+      riderShown.current = false;
+      move("hero", "dropIn");
+      clearTimer("hero");
+      timers.current.hero = setTimeout(() => move("hero", "wave"), 1000);
+      return;
+    }
+
+    if (current.kind === "done") {
+      riderShown.current = false;
+      move("done", "dropIn");
+      clearTimer("hero");
+      timers.current.hero = setTimeout(() => {
+        move("done", "cheer");
+        burst("done", "confetti");
+      }, 860);
+      return;
+    }
+
+    if (current.kind === "loading") {
+      riderShown.current = false;
+      return;
+    }
+
+    if (!riderShown.current) {
+      riderShown.current = true;
+      move("rider", "dropIn");
+    } else {
+      move("rider", direction.current < 0 ? "boing" : "hop");
+    }
+
+    if (bubbleEl.current?.animate && !stateRef.current.calm) {
+      bubbleEl.current.animate(
+        [
+          { opacity: 0, transform: "translateX(-10px) scale(0.92)", easing: "cubic-bezier(0.22,1,0.36,1)" },
+          { offset: 0.6, opacity: 1, transform: "translateX(2px) scale(1.02)", easing: "cubic-bezier(0.45,0,0.55,1)" },
+          { opacity: 1, transform: "none" },
+        ],
+        { duration: 460 },
+      );
+    }
+    // Only a change of step is an arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.stepId]);
+
+  /** What Memo says on this step — the question itself lives in his bubble. */
+  const bubbleText = (() => {
+    if (kind === "welcome") return c.welcomeTitle;
+    if (kind === "loading") return state.pct >= 100 ? c.loadReady : c.loadTitle;
+    if (kind === "done") return c.doneTitle;
+    if (kind === "proof") return c.proofTitle;
+    if (kind === "chart") return c.chartTitle;
+    if (kind === "testimonial") return student ? c.reviewStudents : c.reviewOthers;
+
+    return step.qk ? c[step.qk] : "";
+  })();
+
+  /*
+   * The bubble types itself out while Memo talks along — a munch per syllable
+   * or so. A new step waits for the step to settle first (longer on the hero
+   * screens, whose bubble springs in late); a new line on the same step, like
+   * the loader's "ready", starts at once.
+   */
+  const typedStep = useRef<string | null>(null);
+
+  useEffect(() => {
+    clearLoop("type");
+    clearTimer("type");
+
+    const total = bubbleText.length;
+    const sameStep = typedStep.current === state.stepId;
+    typedStep.current = state.stepId;
+
+    if (state.calm) {
+      patch({ tw: total });
+      return;
+    }
+
+    patch({ tw: 0 });
+    const delay = sameStep ? 0 : kind === "welcome" ? 700 : hero ? 420 : 160;
+
+    timers.current.type = setTimeout(() => {
+      const who = kind === "welcome" ? "hero" : kind === "done" ? "done" : kind === "loading" ? "loader" : "rider";
+      move(who, "munch", Math.max(2, Math.round(total / 9)));
+      intervals.current.type = setInterval(() => {
+        const next = Math.min(total, stateRef.current.tw + 2);
+        patch({ tw: next });
+
+        if (next >= total) {
+          clearLoop("type");
+        }
+      }, 24);
+    }, delay);
+    // The line and the step are what restart the typing; the rest is read live.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bubbleText, state.stepId, state.calm]);
+
+  /* What Memo is turning over in his thought cloud, cycled with a pop. */
+  const thinking = thinkIcons(state.stepId, form.studyHour);
+  const thinkIcon = thinking.length ? thinking[state.thinkTick % thinking.length] : "";
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!thinkIcons(stateRef.current.stepId, stateRef.current.form.studyHour).length) {
+        return;
+      }
+
+      setState((current) => ({ ...current, thinkTick: current.thinkTick + 1 }));
+    }, 1700);
+
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (state.thinkTick === 0 || state.calm) {
+      return;
+    }
+
+    rootRef.current?.querySelectorAll<HTMLElement>("[data-memo-think]").forEach((element) =>
+      element.animate(
+        [
+          { transform: "scale(0.3) rotate(-20deg)", opacity: 0, easing: "cubic-bezier(0.22,1,0.36,1)" },
+          { offset: 0.6, transform: "scale(1.15) rotate(6deg)", opacity: 1 },
+          { transform: "none", opacity: 1 },
+        ],
+        { duration: 420 },
+      ),
+    );
+  }, [state.thinkTick, state.calm]);
+
+  /*
+   * He leans toward whatever you are pointing at — a companion watching along —
+   * and on the welcome screen the big Memo tilts after the pointer in 3D.
+   */
+  useEffect(() => {
+    const tiltStep = () => {
+      const element = heroTiltEl.current;
+      const { target, current } = tilt.current;
+      current[0] += (target[0] - current[0]) * 0.085;
+      current[1] += (target[1] - current[1]) * 0.085;
+
+      if (element) {
+        element.style.transform =
+          `translate3d(${(current[0] * 10).toFixed(2)}px,${(current[1] * 6).toFixed(2)}px,0) rotateY(${(current[0] * 16).toFixed(2)}deg) ` +
+          `rotateX(${(-current[1] * 12).toFixed(2)}deg) rotate(${(current[0] * 5).toFixed(2)}deg)`;
+      }
+
+      tilt.current.frame =
+        element && (Math.abs(target[0] - current[0]) > 0.0015 || Math.abs(target[1] - current[1]) > 0.0015)
+          ? requestAnimationFrame(tiltStep)
+          : 0;
+    };
+
+    const gazeStep = () => {
+      gazeFrame.current = 0;
+      const element = gazeEl.current;
+      const pointer = lastPointer.current;
+
+      if (!element || !pointer || stateRef.current.calm) {
+        return;
+      }
+
+      const box = element.getBoundingClientRect();
+      const dx = Math.max(-1, Math.min(1, (pointer[0] - (box.left + box.width / 2)) / 420));
+      const below = pointer[1] > box.bottom ? 1 : 0;
+      element.style.transform = `rotate(${(dx * 9).toFixed(2)}deg) translateX(${(dx * 2).toFixed(1)}px) scale(${1 + below * 0.02})`;
+    };
+
+    const onPointer = (event: PointerEvent) => {
+      lastPointer.current = [event.clientX, event.clientY];
+
+      if (!gazeFrame.current) {
+        gazeFrame.current = requestAnimationFrame(gazeStep);
+      }
+
+      const element = heroTiltEl.current;
+
+      if (!element || stateRef.current.calm) {
+        return;
+      }
+
+      const box = element.getBoundingClientRect();
+      tilt.current.target = [
+        Math.max(-1, Math.min(1, (event.clientX - (box.left + box.width / 2)) / (window.innerWidth / 2))),
+        Math.max(-1, Math.min(1, (event.clientY - (box.top + box.height / 2)) / (window.innerHeight / 2))),
+      ];
+
+      if (!tilt.current.frame) {
+        tilt.current.frame = requestAnimationFrame(tiltStep);
+      }
+    };
+
+    const onOut = (event: MouseEvent) => {
+      if (event.relatedTarget) {
+        return;
+      }
+
+      tilt.current.target = [0, 0];
+
+      if (gazeEl.current) {
+        gazeEl.current.style.transform = "rotate(0deg)";
+      }
+
+      if (!tilt.current.frame) {
+        tilt.current.frame = requestAnimationFrame(tiltStep);
+      }
+    };
+
+    window.addEventListener("pointermove", onPointer);
+    window.addEventListener("mouseout", onOut);
+
+    return () => {
+      window.removeEventListener("pointermove", onPointer);
+      window.removeEventListener("mouseout", onOut);
+    };
+  }, []);
+
+  /*
+   * No step scrolls: when a step is taller than the room between the header
+   * and Continue, the whole step, Memo included, is scaled down to fit — never
+   * below 55%, where the type would stop being readable.
+   */
+  useEffect(() => {
+    const main = mainEl.current;
+    const fit = fitEl.current;
+
+    if (!main || !fit || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const measure = () => {
+      const style = getComputedStyle(main);
+      const room = main.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      const height = fit.offsetHeight;
+
+      if (!height || !room) {
+        return;
+      }
+
+      const scale = Math.max(0.55, Math.min(1, room / height));
+      fit.style.transform = scale < 0.995 ? `scale(${scale.toFixed(3)})` : "";
+    };
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(main);
+    observer.observe(fit);
+    measure();
+
+    return () => observer.disconnect();
   }, []);
 
   /*
    * What the call to action does, named rather than written into the view, so
    * that the keyboard can press the button rather than approximate it.
-   *
-   * Approximating it was wrong in both directions: Enter used to advance a step
-   * directly, which does nothing at all on the last screen — there is no step
-   * after it, so the one button in the flow that leaves it was the one button
-   * the keyboard could not press — and it was also refused on the loading step,
-   * where the button, when it is there at all, is the retry after a failed save.
    */
   const pressCta = () => {
     if (kind === "done") {
@@ -1099,6 +1480,17 @@ export function OnboardingFlow({
       return;
     }
 
+    // Leaving the study-time step is agreeing to the nudge it promises, so it
+    // is also where the permission to send it is asked for — from the press
+    // itself, which is the only moment a browser lets a page ask.
+    if (kind === "time") {
+      hourAnswered.current = true;
+
+      if (!demo) {
+        void enableStudyReminderDelivery();
+      }
+    }
+
     go(1);
   };
 
@@ -1107,9 +1499,9 @@ export function OnboardingFlow({
     enabled: false,
   });
 
-  const soft = accentRgba(0.14);
+  const soft = accentRgba(0.16);
 
-  const options = (kind === "q" ? optionsFor(step) : []).map((option) => {
+  const options = (kind === "q" ? optionsFor(step) : []).map((option, optionIndex) => {
     const on = form[step.key as keyof OnboardingForm] === option.value;
     const mark = BRAND_MARKS[option.icon];
 
@@ -1125,11 +1517,11 @@ export function OnboardingFlow({
       hasMark: Boolean(mark),
       noMark: !mark,
       selected: on,
-      bg: on ? soft : "var(--surface)",
-      glow: on
-        ? `inset 0 0 0 1.5px ${ACCENT}, var(--shadow)`
-        : "inset 0 0 0 1px var(--line)",
-      lift: on ? "-2px" : "0px",
+      bg: on ? soft : "var(--chip)",
+      ring: on ? ACCENT : "var(--chip-ring)",
+      depth: on ? "2px" : "4px",
+      lift: on ? "2px" : "0px",
+      delay: `${40 + optionIndex * 55}ms`,
       onSelect: () => select(step.key as keyof OnboardingForm, option.value),
     };
   });
@@ -1172,8 +1564,8 @@ export function OnboardingFlow({
     const from = form.currentAverageGrade;
     const to = Math.max(form.targetGrade, from + 0.2);
     const x0 = 34;
-    const x1 = 312;
-    const yTop = 24;
+    const x1 = 300;
+    const yTop = 30;
     const yBase = 128;
     const at = (progress: number, value: number): [number, number] => {
       const x = x0 + (x1 - x0) * progress;
@@ -1240,15 +1632,12 @@ export function OnboardingFlow({
   })();
 
   const queue = state.queue;
-  const missed = queue.map((_, k) => k).filter((k) => state.answers[k] === "again");
-  const deckKnown = queue.length - missed.length;
-  const deckPct = missed.length === 0 ? 100 : Math.round((deckKnown / queue.length) * 100);
   const activeCard = CARDS[queue[Math.min(state.cardPos, queue.length - 1)]] ?? CARDS[0];
-  const nextCard = CARDS[queue[state.cardPos + 1]];
+  const nextCard = CARDS[queue[state.cardPos + 1]] ?? CARDS[(queue[state.cardPos] + 1) % CARDS.length];
 
   const chrome = step.cols === WRAPPING_COLUMNS ? OPTION_CHROME.columns : OPTION_CHROME.single;
 
-  const showCta = (kind !== "loading" || Boolean(saveError)) && kind !== "q";
+  const showCta = kind !== "loading" || Boolean(saveError);
 
   const ctaLabels: Partial<Record<StepKind, string>> = {
     welcome: c.ctaStart,
@@ -1264,13 +1653,11 @@ export function OnboardingFlow({
    * Onboarding and the upgrade screen are two halves of `/app/start`: the answers
    * are already saved by the time this screen is reached, so the page reloads
    * onto the half that comes next. `mapAppHrefForClient` is what makes the demo
-   * walk the same journey — it rewrites the destination to `/creator/start`,
-   * where the same upgrade screen is mounted against demo props.
+   * walk the same journey.
    *
    * Answered anonymously, the same button opens sign-in instead. `/app/start`
-   * is still where it ends up — that is where `/auth/continue` sends everyone —
-   * and the answers are waiting there, claimed out of the cookie by the time
-   * the page decides which half to show.
+   * is still where it ends up, and the answers are waiting there, claimed out
+   * of the cookie by the time the page decides which half to show.
    */
   const finish = () => {
     if (finishing) return;
@@ -1281,6 +1668,12 @@ export function OnboardingFlow({
 
   ctaRef.current = { press: pressCta, enabled: showCta && !ctaDisabled && !finishing };
 
+  const sky = studySky(form.studyHour);
+  const right = state.quizPick === "metaphase";
+  const fullMarks = state.testText.toLowerCase().includes("metaphase");
+  const sourceFile = DEMO_FILES.find((file) => file.v === state.source) ?? DEMO_FILES[0];
+  const srcDone = state.srcPct >= 100;
+
   const v = {
     accent: ACCENT,
     c,
@@ -1288,13 +1681,21 @@ export function OnboardingFlow({
     roomy: state.roomy,
     fade: state.fade,
     shift: state.shift,
+    hero,
     progressPct: Math.round((shownIndex / (STEPS.length - 1)) * 100),
-    title: step.qk ? c[step.qk] : "",
+    bubbleText,
+    tw: Math.min(state.tw, bubbleText.length),
     subtitle: step.sk ? c[step.sk] : "",
     gridCols: step.cols || "1fr",
     optionPad: chrome.padding,
     optionIcon: chrome.icon,
     optionGap: chrome.gap,
+    /*
+     * Two-up, a tile has no width to spare for the tick beside its label — it
+     * pushed "Flashcards" onto two lines — so there it sits on the corner as a
+     * badge, and the label is a step smaller.
+     */
+    optionColumns: step.cols === WRAPPING_COLUMNS,
     options,
     summary,
     isWelcome: kind === "welcome",
@@ -1310,12 +1711,18 @@ export function OnboardingFlow({
     isTest: kind === "test",
     isQuiz: kind === "quiz",
     isTutor: kind === "tutor",
+    isAsk: kind === "ask",
+    isTime: kind === "time",
+    thinkIcon,
+    sparkleOn:
+      kind === "proof" ||
+      kind === "testimonial" ||
+      kind === "chart" ||
+      (kind === "quiz" && right),
 
-    flipped: state.flipped,
     flipDeg: state.flipped ? "180deg" : "0deg",
     flipEase: state.exitDir ? "none" : "transform 0.36s cubic-bezier(0.22,1,0.36,1)",
 
-    reviewTitle: student ? c.reviewStudents : c.reviewOthers,
     reviewList: (() => {
       const bucket = student ? REVIEWS.student : REVIEWS.other;
       const ordered = [
@@ -1334,85 +1741,131 @@ export function OnboardingFlow({
       }));
     })(),
 
+    proofRows: PROOF_ROWS.slice(0, state.roomy ? PROOF_ROWS.length : 5).map((row, k) => ({
+      ...row,
+      label: c[row.label],
+      strong: k === 0,
+      rule: k === 0 ? undefined : "1px solid var(--line-soft)",
+      delay: `${70 + k * 70}ms`,
+      barDelay: `${240 + k * 70}ms`,
+    })),
+
     quizOptions: QUIZ_OPTIONS.map((option, k) => {
-      const right = option.v === "metaphase";
+      const isRight = option.v === "metaphase";
       const chosen = state.quizPick === option.v;
       const revealed = Boolean(state.quizPick);
-      const good = revealed && right;
-      const bad = revealed && chosen && !right;
+      const good = revealed && isRight;
+      const bad = revealed && chosen && !isRight;
 
       return {
         value: option.v,
         label: c[option.l],
         letter: ["A", "B", "C", "D"][k],
         bg: good ? "rgba(34,197,94,0.10)" : bad ? "rgba(255,59,48,0.08)" : "var(--sunken)",
-        ring: good ? "#22c55e" : bad ? "#ff3b30" : "transparent",
+        ring: good ? "#22c55e" : bad ? "#ff3b30" : "var(--chip-ring)",
         color: good ? "#22c55e" : bad ? "#ff3b30" : "var(--text)",
         badgeBg: good ? "#22c55e" : bad ? "#ff3b30" : "var(--line-soft)",
         badgeColor: good || bad ? "#ffffff" : "var(--muted)",
+        lip: good ? "#17924a" : bad ? "#c8261c" : "var(--chip-ring)",
+        anim: bad
+          ? "memo-shake 460ms ease-out both"
+          : good
+            ? "memo-pop 380ms cubic-bezier(0.22,1,0.36,1) both"
+            : `memo-rise 440ms cubic-bezier(0.22,1,0.36,1) ${60 + k * 60}ms both`,
         onPick: () => {
           if (stateRef.current.quizPick) {
             return;
           }
 
           patch({ quizPick: option.v });
+
+          if (isRight) {
+            move("rider", "cheer");
+            burst("rider", "sparkle");
+          } else {
+            move("rider", "shake");
+          }
         },
       };
     }),
     quizAnswered: Boolean(state.quizPick),
-    quizVerdict: state.quizPick === "metaphase" ? c.quizRight : c.quizWrong,
-    quizVerdictBg: state.quizPick === "metaphase" ? "#22c55e" : "#ff3b30",
+    quizVerdict: right ? c.quizRight : c.quizWrong,
+    quizVerdictBg: right ? "#22c55e" : "#ff3b30",
 
-    files: DEMO_FILES.map((file) => ({
+    files: DEMO_FILES.map((file, k) => ({
+      v: file.v,
       name: file.name,
       ext: file.ext,
       meta: c[file.meta],
       icon: file.i,
+      tint: file.tint,
       lifted: state.fileDrag && state.fileDrag.v === file.v ? 0.35 : 1,
+      delay: `${60 + k * 70}ms`,
       onDown: (event: ReactPointerEvent<HTMLDivElement>) => fileDown(file.v, event),
     })),
     fileDragging: Boolean(state.fileDrag),
     ghostX: state.fileDrag ? state.fileDrag.x : 0,
     ghostY: state.fileDrag ? state.fileDrag.y : 0,
-    dragName: state.fileDrag
-      ? DEMO_FILES.find((f) => f.v === state.fileDrag?.v)?.name ?? ""
-      : "",
+    dragName: state.fileDrag ? DEMO_FILES.find((f) => f.v === state.fileDrag?.v)?.name ?? "" : "",
     dragIcon: state.fileDrag ? DEMO_FILES.find((f) => f.v === state.fileDrag?.v)?.i ?? "" : "",
-    dropRef: dropEl,
     dropBg: state.over ? accentRgba(0.12) : "transparent",
     dropRing: state.over ? ACCENT : "var(--line)",
     dropScale: state.over ? 1.008 : 1,
     dropLabel: state.over ? c.dropOver : c.dropIdle,
     sourceIdle: !state.source,
     srcWorking: Boolean(state.source),
+    srcBusy: Boolean(state.source) && !srcDone,
     srcPct: state.srcPct,
-    srcStage:
-      state.srcPct < 35
+    srcCardRing: srcDone ? "#22c55e" : "var(--chip-ring)",
+    srcIconBg: srcDone ? "rgba(34,197,94,0.16)" : sourceFile.tint,
+    srcCardIcon: srcDone ? "✓" : sourceFile.i,
+    srcCardTitle: srcDone ? c.srcNoteTitle : sourceFile.name,
+    srcCardSub: srcDone
+      ? c.srcStage4
+      : state.srcPct < 35
         ? c.srcStage1
         : state.srcPct < 70
           ? c.srcStage2
-          : state.srcPct < 100
-            ? c.srcStage3
-            : c.srcStage4,
-    srcBody: c.srcBody,
+          : c.srcStage3,
+    srcPctLabel: srcDone ? "✓" : `${state.srcPct}%`,
+    srcOutputs: SOURCE_OUTPUTS.map((output) => {
+      const done = state.srcPct >= output.at;
+
+      return {
+        icon: output.icon,
+        label: c[output.label],
+        opacity: done ? 1 : 0.5,
+        scale: done ? 1 : 0.96,
+        dot: done ? "#22c55e" : "transparent",
+        ring: done ? "0" : "2px solid var(--chip-ring)",
+        spinTop: done ? "transparent" : ACCENT,
+        spin: done ? "memo-pop 360ms cubic-bezier(0.22,1,0.36,1) both" : "memo-spin 0.8s linear infinite",
+        mark: done ? "✓" : "",
+      };
+    }),
 
     testText: state.testText,
     onTestType: (event: { target: { value: string } }) => patch({ testText: event.target.value }),
     testGraded: state.testGraded,
     testUngraded: !state.testGraded,
-    gradeTest: () => patch({ testGraded: true }),
+    gradeTest: () => {
+      patch({ testGraded: true });
+
+      if (fullMarks) {
+        move("rider", "cheer");
+        burst("rider", "confetti");
+      } else {
+        move("rider", "hop");
+      }
+    },
     cannotGrade: state.testText.trim().length <= 2,
     gradeOpacity: state.testText.trim().length <= 2 ? 0.45 : 1,
-    testScore: state.testText.toLowerCase().includes("metaphase") ? "4 / 4" : "3 / 4",
-    testScoreBg: state.testText.toLowerCase().includes("metaphase") ? "#22c55e" : "#ffcc4d",
+    testScore: fullMarks ? "4 / 4" : "3 / 4",
+    testScoreBg: fullMarks ? "#22c55e" : "#ffcc4d",
 
     cardQ: c[activeCard.q],
     cardA: c[activeCard.a],
-    hasNext: state.cardPos + 1 < queue.length,
-    nextQ: nextCard ? c[nextCard.q] : "",
-    cardCounter: `${Math.min(state.cardPos + 1, queue.length)} ${c.ofWord} ${queue.length}`,
-    cardsLeft: state.cardPos < queue.length,
-    cardsDone: state.cardPos >= queue.length,
+    nextQ: c[nextCard.q],
     knownCount: Object.values(state.answers).filter((a) => a === "easy").length,
     againCount: Object.values(state.answers).filter((a) => a === "again").length,
     cardShift: state.dragging ? state.dragX : 0,
@@ -1449,28 +1902,6 @@ export function OnboardingFlow({
     swipeAgain: () => swipeCard("again"),
     swipeEasy: () => swipeCard("easy"),
 
-    deckEmoji: deckPct >= 70 ? "🎉" : "💪",
-    deckTint: deckPct >= 70 ? "#2aa34a" : "#f45f5a",
-    deckTintSoft: deckPct >= 70 ? "rgba(42,163,74,0.18)" : "rgba(244,95,90,0.18)",
-    deckPct,
-    deckEyebrow: missed.length === 0 ? c.deckCompleted : c.deckRoundCompleted.replace("{n}", String(state.cycle)),
-    deckTitle: missed.length === 0 ? c.deckAllDone : c.deckRepeatMissed,
-    deckScoreLabel: missed.length === 0 ? c.deckSetCompleted : c.deckRoundScore,
-    deckRatio: `${deckKnown}/${queue.length}`,
-    deckActionLabel: missed.length === 0 ? c.deckRestart : c.deckRepeatBtn.replace("{n}", String(missed.length)),
-    deckAction: () =>
-      setState((current) => ({
-        ...current,
-        /* A clean round restarts the set; anything missed becomes the next round. */
-        queue: missed.length === 0 ? START_QUEUE : missed.map((k) => queue[k]),
-        cardPos: 0,
-        answers: {},
-        flipped: false,
-        dragX: 0,
-        exitDir: 0,
-        cycle: missed.length === 0 ? 1 : current.cycle + 1,
-      })),
-
     gradeValue: gradeValue.toFixed(1),
     gradePct: Math.round(((gradeValue - gradeMin) / (gradeMax - gradeMin)) * 100),
     gradeMin: gradeMin.toFixed(1),
@@ -1487,43 +1918,97 @@ export function OnboardingFlow({
     chartDotX: chart.dotX,
     chartDotY: chart.dotY,
 
-    loadingTitle: state.pct >= 100 ? c.loadReady : c.loadTitle,
+    askBubbles: ASK_QUESTIONS.map((key, k) => {
+      const hue = ASK_HUES[k % ASK_HUES.length];
+      const left = k % 2 === 0;
+
+      return {
+        key,
+        text: c[key],
+        side: left ? "flex-start" : "flex-end",
+        bg: `color-mix(in oklch, ${hue} 22%, var(--bg))`,
+        ring: `color-mix(in oklch, ${hue} 58%, var(--bg))`,
+        ink: `color-mix(in oklch, ${hue} 62%, var(--text))`,
+        tailL: left ? "1.4rem" : "auto",
+        tailR: left ? "auto" : "1.4rem",
+        origin: left ? "1.4rem 100%" : "calc(100% - 1.4rem) 100%",
+        delay: `${320 + k * 150}ms`,
+        floatDelay: `${(-k * 0.7).toFixed(1)}s`,
+      };
+    }),
+    onAsk: () => {
+      move("rider", "hop");
+      burst("rider", "sparkle");
+    },
+
+    sky,
+    studyHour: form.studyHour,
+    hourLabel: studyHourLabel(form.studyHour, locale),
+    onHour: (event: { target: { value: string } }) => {
+      const hour = Number(event.target.value);
+
+      if (hour === stateRef.current.form.studyHour) {
+        return;
+      }
+
+      setState((current) => ({ ...current, form: { ...current.form, studyHour: hour } }));
+      const now = Date.now();
+
+      if (now - hourMoved.current > 140) {
+        hourMoved.current = now;
+        move("rider", "boing");
+      }
+    },
+
     ringOffset: 100 - state.pct,
     loadingStage: state.pct >= 100 ? c.loadReady : c.loadWorking.replace("{n}", String(state.pct)),
     loadingRows: loaderRows,
+
+    tapRider: () => {
+      move("rider", "jelly");
+      burst("rider", "sparkle");
+    },
+    tapHero: () => {
+      move("hero", "jelly");
+      burst("hero", "sparkle");
+    },
+    tapDone: () => {
+      move("done", "cheer");
+      burst("done", "confetti");
+    },
 
     next: pressCta,
     back: () => { if (index === 0) { if (backHref) router.push(backHref); return; } go(-1); },
     backDisabled: index === 0 && !backHref,
     backState: index === 0 && !backHref ? "off" : "on",
-    /* Single-select steps advance on tap, so a Continue button would be a
-       second control for something already done. Only the steps with nothing
-       to pick keep one. */
     showCta,
     ctaLabel: kind === "loading" ? t("common.retry") : ctaLabels[kind] ?? c.ctaContinue,
     ctaDisabled,
     finishing,
-    ctaOpacity: ctaDisabled ? 0.45 : 1,
-    ctaBg: "var(--ink)",
-    ctaColor: "var(--on-ink)",
-    ctaGlow: "var(--shadow)",
+    /* A question with nothing picked shows its button dimmed, waiting. */
+    ctaBg: qBlocked ? `color-mix(in oklch, ${ACCENT} 34%, var(--bg))` : ACCENT,
+    ctaColor: qBlocked ? "var(--cta-off-ink)" : "#ffffff",
+    ctaLip: qBlocked ? `color-mix(in oklch, ${ACCENT} 22%, var(--bg))` : `color-mix(in oklch, ${ACCENT} 62%, #000000)`,
     footNote:
       kind === "loading" ? saveError ?? c.footLoading : kind === "done" ? c.footDone : "",
   };
 
   return (
-    <div className="memo-onboarding-v2 memo-onboarding-keyboard">
-      <div style={{ position: "relative", height: "100%", minHeight: "100%", maxHeight: "100%", display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", gridTemplateColumns: "minmax(0, 1fr)", overflow: "hidden", boxSizing: "border-box", background: "var(--bg)", color: "var(--text)", fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI', sans-serif", WebkitFontSmoothing: "antialiased" }}>
+    <div ref={rootRef} className="memo-onboarding-v2 memo-onboarding-keyboard">
+      <div style={{ position: "relative", height: "100%", minHeight: "100%", maxHeight: "100%", display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", gridTemplateColumns: "minmax(0, 1fr)", overflow: "hidden", boxSizing: "border-box", background: "var(--bg)", color: "var(--text)", fontFamily: `${NUNITO.style.fontFamily}, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`, WebkitFontSmoothing: "antialiased" }}>
       <div aria-hidden="true" style={{ position: "absolute", inset: "-10%", gridArea: "1 / 1 / 3 / 2", pointerEvents: "none", backgroundImage: "radial-gradient(58% 44% at 18% 10%, var(--mesh-lift) 0%, transparent 68%), radial-gradient(48% 38% at 84% 20%, var(--mesh-sink) 0%, transparent 64%), radial-gradient(54% 40% at 32% 44%, var(--mesh-lift) 0%, transparent 66%), radial-gradient(64% 46% at 90% 60%, var(--mesh-sink) 0%, transparent 62%), radial-gradient(50% 42% at 8% 76%, var(--mesh-lift) 0%, transparent 66%), radial-gradient(60% 44% at 64% 94%, var(--mesh-sink) 0%, transparent 64%)", opacity: "var(--mesh-opacity, 1)", animation: "memo-aurora 40s ease-in-out infinite" }}></div>
-      <header style={{ position: "relative", zIndex: "2", gridRow: "1", display: "flex", alignItems: "center", gap: "0.85rem", padding: "max(0.7rem, env(safe-area-inset-top)) clamp(1rem, 4vw, 2rem) clamp(0.5rem, 1.4vh, 0.9rem)" }}>
+      <header style={{ position: "relative", zIndex: "5", gridRow: "1", display: "flex", alignItems: "center", gap: "0.85rem", padding: "max(0.7rem, env(safe-area-inset-top)) clamp(1rem, 4vw, 2rem) clamp(0.5rem, 1.4vh, 0.9rem)" }}>
       <button type="button" onClick={v.back} aria-label={t("onboarding.previousStep")} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "2.4rem", height: "2.4rem", flex: "0 0 auto", padding: "0", border: "0", borderRadius: "999px", background: "var(--line-soft)", color: "var(--text)", fontSize: "1.35rem", lineHeight: "1", cursor: "pointer", transition: "transform 160ms cubic-bezier(0.2,0.8,0.2,1), background-color 160ms ease, opacity 200ms ease", visibility: v.backState === "off" ? "hidden" : undefined }} data-back={v.backState} disabled={v.backDisabled} className="memo-ob-fx-1"><span aria-hidden="true" style={{ display: "block", width: "0.55rem", height: "0.55rem", marginLeft: "0.16rem", borderLeft: "2px solid currentColor", borderBottom: "2px solid currentColor", borderRadius: "1px", transform: "rotate(45deg)" }}></span></button>
-      <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={v.progressPct} aria-label={t("onboarding.progressLabel")} style={{ flex: "1 1 auto", minWidth: "0", height: "0.4rem", borderRadius: "999px", background: "var(--track)", overflow: "hidden" }}>
-      <div style={{ height: "100%", borderRadius: "999px", transition: "width 480ms cubic-bezier(0.2,0.85,0.2,1)", position: "relative", overflow: "hidden", width: `${v.progressPct}%`, background: v.accent }}>
-      <div aria-hidden="true" style={{ position: "absolute", inset: "0", width: "40%", background: "linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.55), rgba(255,255,255,0))", animation: "memo-shimmer 2.4s ease-in-out infinite" }}></div>
+      <div style={{ position: "relative", flex: "1 1 auto", minWidth: "0", height: "1rem" }}>
+      <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={v.progressPct} aria-label={t("onboarding.progressLabel")} style={{ height: "100%", borderRadius: "999px", background: "var(--bar-track)", overflow: "hidden" }}>
+      <div style={{ minWidth: "1rem", height: "100%", borderRadius: "999px", transition: "width 620ms cubic-bezier(0.22,1,0.36,1)", position: "relative", overflow: "hidden", width: `${v.progressPct}%`, background: v.accent }}>
+      <div aria-hidden="true" style={{ position: "absolute", left: "0.45rem", right: "0.45rem", top: "0.2rem", height: "0.22rem", borderRadius: "999px", background: "rgba(255,255,255,0.38)" }}></div>
+      <div aria-hidden="true" style={{ position: "absolute", inset: "0", width: "40%", background: "linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.4), rgba(255,255,255,0))", animation: "memo-shimmer 2.4s ease-in-out infinite" }}></div>
+      </div>
       </div>
       </div>
       </header>
-      <div style={{ position: "relative", zIndex: "2", gridRow: "2", minHeight: "0", overflow: "hidden", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: "clamp(1.5rem, 5vw, 4rem)", padding: "clamp(0.4rem, 1.4vh, 1.6rem) clamp(1rem, 4vw, 2rem) clamp(4.4rem, 12vh, 5.6rem)" }}>
+      <div style={{ position: "relative", zIndex: "2", gridRow: "2", minHeight: "0", overflow: "visible", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: "clamp(1.5rem, 5vw, 4rem)", padding: "clamp(0.4rem, 1.4vh, 1.6rem) clamp(1rem, 4vw, 2rem) clamp(5.6rem, 14vh, 6.8rem)" }}>
       {v.wide ? (<>
       <aside style={{ flex: "0 1 22rem", alignSelf: "stretch", display: "flex", flexDirection: "column", justifyContent: "center", gap: "1.6rem", paddingRight: "1rem" }}>
       <img src="/memo-lockup.png" alt="Memo AI" style={{ width: "8.5rem", height: "auto", display: "block" }} />
@@ -1540,22 +2025,54 @@ export function OnboardingFlow({
       <p style={{ margin: "0", fontSize: "0.82rem", fontWeight: "600", lineHeight: "1.5", color: "var(--muted-2)" }}>{v.c.asideFoot}</p>
       </aside>
       </>) : null}
-      <main className="memo-onboarding-step-scroll" style={{ flex: "1 1 30rem", maxWidth: "34rem", width: "100%", minHeight: "0", maxHeight: "100%", display: "flex", flexDirection: "column" }}>
+      {/* Wider than the column by the room a hop or a glow needs, and pulled back by the same, so nothing it draws is clipped at its edge. */}
+      <main ref={mainEl} style={{ flex: "1 1 30rem", maxWidth: "calc(34rem + 1.6rem)", width: "calc(100% + 1.6rem)", margin: "-3.6rem -0.8rem 0", padding: "3.6rem 0.8rem 0.6rem", minHeight: "0", maxHeight: "calc(100% + 3.6rem)", boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: v.hero ? "safe center" : "flex-start", overflowY: "visible", overscrollBehavior: "contain", scrollPaddingBlock: "0.75rem", scrollbarWidth: "none" }}>
+      <div ref={fitEl} style={{ display: "flex", flexDirection: "column", flexShrink: "0", transformOrigin: "50% 0" }}>
+      {!v.hero ? (<>
+      <div style={{ display: "flex", alignItems: "center", gap: "clamp(0.8rem, 3.4vw, 1.3rem)", margin: "clamp(1.4rem, 3.4vh, 2.2rem) 0 clamp(1rem, 3vh, 1.8rem)", flexShrink: "0" }}>
+      <div style={{ position: "relative", zIndex: "3", flex: "0 0 auto", width: "clamp(4.8rem, 21vw, 6.4rem)", paddingBottom: "0.5rem" }}>
+      <MascotPedestal />
+      {v.sparkleOn ? <MascotSparkles /> : null}
+      <div ref={mascot.refs.riderBurst} aria-hidden="true" style={{ position: "absolute", left: "50%", top: "30%", width: "0", height: "0", zIndex: "3", pointerEvents: "none" }}></div>
+      <div ref={gazeEl} style={{ position: "relative", width: "84%", margin: "0 auto", transformOrigin: "50% 100%", transition: "transform 520ms cubic-bezier(0.22,1,0.36,1)" }}>
+      <div ref={mascot.refs.rider} onClick={v.tapRider} aria-hidden="true" style={{ position: "relative", aspectRatio: "320 / 288", transformOrigin: "50% 100%", cursor: "pointer" }}>
+      {v.thinkIcon ? <MascotThought icon={v.thinkIcon} offset="0.5rem" /> : null}
+      <div style={{ position: "absolute", inset: "0", transformOrigin: "50% 96%", animation: "memo-breathe 3s ease-in-out infinite" }}>
+      <MascotFigure />
+      </div>
+      </div>
+      </div>
+      </div>
+      <SpeechBubble text={v.bubbleText} typed={v.tw} tail="left" bubbleRef={(element) => { bubbleEl.current = element; }} style={{ zIndex: 1, flex: "1 1 auto", minWidth: "0", padding: "clamp(0.8rem, 2.2vh, 1.15rem) clamp(1rem, 3.4vw, 1.4rem)", transformOrigin: "0 50%" }} textStyle={{ fontSize: "clamp(1.05rem, min(4.6vw, 3vh), 1.45rem)", lineHeight: "1.38", textWrap: "pretty" }} />
+      </div>
+      </>) : null}
       <div style={{ minHeight: "0", flexShrink: "0", transition: "opacity 200ms ease, transform 260ms cubic-bezier(0.2,0.85,0.2,1)", opacity: v.fade, transform: `translate3d(${v.shift}px, 0, 0)` }}>
       {v.isWelcome ? (<>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "1.1rem", paddingTop: "1.4rem" }}>
-      <img src={MASCOT.src} srcSet={MASCOT.srcSet} width={MASCOT.width} height={MASCOT.height} alt="" fetchPriority="high" decoding="sync" style={{ width: "clamp(5.5rem, min(34vw, 19vh), 12rem)", maxHeight: "24vh", height: "auto", objectFit: "contain", display: "block", animation: "memo-bob 5s ease-in-out infinite", filter: "drop-shadow(0 22px 40px rgba(0,0,0,0.35))" }} />
-      <h1 style={{ margin: "0", fontSize: "clamp(2rem, 7vw, 3rem)", fontWeight: "850", lineHeight: "1.05", letterSpacing: "-0.03em", textWrap: "pretty" }}>{v.c.welcomeTitle}</h1>
+      <SpeechBubble text={v.bubbleText} typed={v.tw} tail="down" style={{ maxWidth: "min(26rem, 100%)", margin: "0 0 0.6rem", padding: "clamp(0.85rem, 2.2vh, 1.1rem) clamp(1.1rem, 4vw, 1.5rem)", animation: "memo-bubble-down 560ms cubic-bezier(0.22,1,0.36,1) 500ms both" }} textStyle={{ fontSize: "clamp(1.2rem, min(5.4vw, 3.4vh), 1.65rem)", lineHeight: "1.3", textWrap: "balance" }} />
+      <div style={{ position: "relative", width: "clamp(6.5rem, min(38vw, 21vh), 12rem)", aspectRatio: "320 / 288", perspective: "700px", marginBottom: "1.2rem" }}>
+      <MascotPedestal hero />
+      <MascotSparkles />
+      <div ref={mascot.refs.heroBurst} aria-hidden="true" style={{ position: "absolute", left: "50%", top: "46%", width: "0", height: "0", zIndex: "2", pointerEvents: "none" }}></div>
+      <div ref={heroTiltEl} style={{ position: "absolute", inset: "0", willChange: "transform" }}>
+      <div ref={mascot.refs.setHero} onClick={v.tapHero} aria-hidden="true" style={{ position: "absolute", inset: "0", transformOrigin: "50% 92%", cursor: "pointer" }}>
+      <div style={{ position: "absolute", inset: "0", animation: "memo-bob 5s ease-in-out infinite" }}>
+      <div style={{ position: "absolute", inset: "0", transformOrigin: "50% 94%", animation: "memo-breathe 3.4s ease-in-out infinite" }}>
+      <MascotFigure lash={3} priority />
+      </div>
+      </div>
+      </div>
+      </div>
+      </div>
       <p style={{ margin: "0", maxWidth: "26rem", fontSize: "clamp(1rem, 3.6vw, 1.12rem)", fontWeight: "600", lineHeight: "1.45", color: "var(--muted)", textWrap: "pretty" }}>{v.c.welcomeSub}</p>
       </div>
       </>) : null}
       {v.isQuestion ? (<>
       <div>
-      <h1 style={{ margin: "0 0 clamp(0.2rem, 0.6vh, 0.4rem)", fontSize: "clamp(1.15rem, min(5.6vw, 4.4vh), 2.15rem)", fontWeight: "850", lineHeight: "1.1", letterSpacing: "-0.025em", textWrap: "pretty" }}>{v.title}</h1>
-      <p style={{ margin: "0 0 clamp(0.4rem, 1.6vh, 1.15rem)", fontSize: "clamp(0.84rem, 1.9vh, 0.96rem)", fontWeight: "600", lineHeight: "1.45", color: "var(--muted)" }}>{v.subtitle}</p>
+      {v.subtitle ? <p style={SUBTITLE}>{v.subtitle}</p> : null}
       <div style={{ display: "grid", gap: "clamp(0.35rem, 1.1vh, 0.6rem)", gridTemplateColumns: v.gridCols }}>
       {v.options.map((item) => (<Fragment key={item.value}>
-      <button type="button" onClick={item.onSelect} aria-pressed={item.selected} style={{ display: "flex", alignItems: "center", gap: v.optionGap, width: "100%", minHeight: "clamp(2.35rem, 7vh, 3.9rem)", padding: `clamp(0.3rem, 1.2vh, 0.8rem) ${v.optionPad}`, border: "0", borderRadius: "clamp(0.85rem, 2.4vh, 1.15rem)", color: "var(--text)", textAlign: "left", cursor: "pointer", fontFamily: "inherit", transition: "transform 180ms cubic-bezier(0.2,0.85,0.2,1), background-color 200ms ease, box-shadow 240ms ease", background: item.bg, boxShadow: item.glow, transform: `translateY(${item.lift})` }} className="memo-ob-fx-2">
+      <button type="button" onClick={item.onSelect} aria-pressed={item.selected} style={{ position: "relative", display: "flex", alignItems: "center", gap: v.optionGap, width: "100%", minHeight: "clamp(3rem, 7.6vh, 4.2rem)", padding: `clamp(0.45rem, 1.3vh, 0.85rem) ${v.optionPad}`, boxSizing: "border-box", border: `2px solid ${item.ring}`, borderRadius: "1.15rem", color: "var(--text)", textAlign: "left", cursor: "pointer", fontFamily: "inherit", background: item.bg, boxShadow: `0 ${item.depth} 0 ${item.ring}`, transform: `translateY(${item.lift})`, transition: "transform 140ms cubic-bezier(0.2,0.85,0.2,1), background-color 180ms ease, box-shadow 140ms ease, border-color 180ms ease", animation: `memo-rise 440ms cubic-bezier(0.22,1,0.36,1) ${item.delay} both` }} className="memo-ob-press">
       <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: v.optionIcon, height: v.optionIcon, flex: "0 0 auto", borderRadius: "0.8rem", background: "var(--tile)", color: "var(--text)", fontSize: "clamp(0.95rem, 2.3vh, 1.2rem)", lineHeight: "1" }}>
       {item.noMark ? (<>{item.icon}</>) : null}
       {item.hasMark ? (<>
@@ -1563,13 +2080,13 @@ export function OnboardingFlow({
       </>) : null}
       </span>
       <span style={{ flex: "1 1 auto", minWidth: "0", display: "grid", gap: "0.15rem", overflowWrap: "anywhere" }}>
-      <span style={{ fontSize: "clamp(0.88rem, 2.2vh, 1rem)", fontWeight: "750", lineHeight: "1.2" }}>{item.label}</span>
+      <span style={{ fontSize: v.optionColumns ? "clamp(0.86rem, 2.1vh, 0.98rem)" : "clamp(0.95rem, 2.3vh, 1.08rem)", fontWeight: "800", lineHeight: "1.2" }}>{item.label}</span>
       {item.desc ? (<>
       <span style={{ fontSize: "clamp(0.7rem, 1.7vh, 0.82rem)", fontWeight: "600", lineHeight: "1.3", color: "var(--muted)" }}>{item.desc}</span>
       </>) : null}
       </span>
       {item.selected ? (<>
-      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.5rem", height: "1.5rem", flex: "0 0 auto", borderRadius: "999px", color: "#000000", fontSize: "0.8rem", fontWeight: "900", animation: "memo-pop 320ms cubic-bezier(0.2,0.9,0.2,1) both", background: v.accent }}>✓</span>
+      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.5rem", height: "1.5rem", flex: "0 0 auto", borderRadius: "999px", color: "#000000", fontSize: "0.8rem", fontWeight: "900", animation: "memo-pop 320ms cubic-bezier(0.2,0.9,0.2,1) both", background: v.accent, ...(v.optionColumns ? { position: "absolute", top: "-0.55rem", right: "-0.55rem", boxShadow: "0 0 0 3px var(--bg)" } : null) }}>✓</span>
       </>) : null}
       </button>
       </Fragment>))}
@@ -1578,8 +2095,7 @@ export function OnboardingFlow({
       </>) : null}
       {v.isGrade ? (<>
       <div>
-      <h1 style={{ margin: "0 0 clamp(0.2rem, 0.6vh, 0.4rem)", fontSize: "clamp(1.15rem, min(5.6vw, 4.4vh), 2.15rem)", fontWeight: "850", lineHeight: "1.1", letterSpacing: "-0.025em", textWrap: "pretty" }}>{v.title}</h1>
-      <p style={{ margin: "0 0 clamp(0.7rem, 2vh, 1.4rem)", fontSize: "clamp(0.84rem, 1.9vh, 0.96rem)", fontWeight: "600", color: "var(--muted)" }}>{v.subtitle}</p>
+      <p style={{ ...SUBTITLE, margin: "0 0 clamp(0.7rem, 2vh, 1.4rem)" }}>{v.subtitle}</p>
       <div style={{ display: "grid", gap: "1.4rem", padding: "0.4rem 0.2rem" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
       <button type="button" onClick={v.gradeDown} aria-label={t("onboarding.lowerGrade")} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "3.1rem", height: "3.1rem", flex: "0 0 auto", padding: "0", border: "0", borderRadius: "999px", background: "var(--tile)", color: "var(--text)", fontSize: "1.5rem", fontWeight: "700", lineHeight: "1", cursor: "pointer", fontFamily: "inherit", transition: "transform 150ms cubic-bezier(0.2,0.85,0.2,1), background-color 160ms ease" }} className="memo-ob-fx-3"><span aria-hidden="true" style={{ display: "block", width: "0.95rem", height: "0.14rem", borderRadius: "2px", background: "currentColor" }}></span></button>
@@ -1600,74 +2116,23 @@ export function OnboardingFlow({
       </>) : null}
       {v.isProof ? (<>
       <div>
-      <h1 style={{ margin: "0 0 0.4rem", fontSize: "clamp(1.3rem, min(6vw, 4.6vh), 2.2rem)", fontWeight: "850", lineHeight: "1.08", letterSpacing: "-0.025em" }}>{v.c.proofTitle}</h1>
-      <p style={{ margin: "0 0 clamp(0.4rem, 1.6vh, 1.15rem)", fontSize: "clamp(0.84rem, 1.9vh, 0.96rem)", fontWeight: "600", color: "var(--muted)" }}>{v.c.proofSub}</p>
+      <p style={SUBTITLE}>{v.c.proofSub}</p>
       <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", padding: "0 0.15rem clamp(0.45rem, 1.3vh, 0.7rem)" }}>
       <span style={{ fontSize: "0.7rem", fontWeight: "850", letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--muted-2)" }}>{v.c.proofHeader}</span>
       <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", fontWeight: "750", color: "var(--muted)" }}><span aria-hidden="true" style={{ width: "0.42rem", height: "0.42rem", borderRadius: "999px", background: "#62d676", boxShadow: "0 0 0 3px rgba(98,214,118,0.18)" }}></span>{v.c.proofLive}</span>
       </div>
       <div style={{ display: "grid" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "clamp(1.6rem, 3.9vh, 2.1rem) minmax(0, 1fr) auto", alignItems: "center", columnGap: "0.7rem", rowGap: "clamp(0.25rem, 0.7vh, 0.4rem)", padding: "clamp(0.3rem, 1vh, 0.62rem) 0.15rem", animation: "memo-rise 400ms cubic-bezier(0.2,0.85,0.2,1) 70ms both" }}>
-      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "clamp(1.6rem, 3.9vh, 2.1rem)", height: "clamp(1.6rem, 3.9vh, 2.1rem)", borderRadius: "0.62rem", background: "var(--tile)", fontSize: "clamp(0.85rem, 2vh, 1rem)", lineHeight: "1" }}>🃏</span>
-      <span style={{ minWidth: "0", display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.95rem", fontWeight: "800", color: "var(--text)" }}>{v.c.rowQuizCards}</span>
-      <span style={{ fontSize: "0.88rem", fontWeight: "850", fontVariantNumeric: "tabular-nums", color: "var(--text)" }}>91%</span>
+      {v.proofRows.map((row) => (<Fragment key={row.icon}>
+      <div style={{ display: "grid", gridTemplateColumns: "clamp(1.6rem, 3.9vh, 2.1rem) minmax(0, 1fr) auto", alignItems: "center", columnGap: "0.7rem", rowGap: "clamp(0.25rem, 0.7vh, 0.4rem)", padding: "clamp(0.3rem, 1vh, 0.62rem) 0.15rem", borderTop: row.rule, animation: `memo-rise 400ms cubic-bezier(0.2,0.85,0.2,1) ${row.delay} both` }}>
+      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "clamp(1.6rem, 3.9vh, 2.1rem)", height: "clamp(1.6rem, 3.9vh, 2.1rem)", borderRadius: "0.62rem", background: "var(--tile)", fontSize: "clamp(0.85rem, 2vh, 1rem)", lineHeight: "1" }}>{row.icon}</span>
+      <span style={{ minWidth: "0", display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.95rem", fontWeight: row.strong ? "800" : "700", color: "var(--text)" }}>{row.label}</span>
+      <span style={{ fontSize: "0.88rem", fontWeight: "850", fontVariantNumeric: "tabular-nums", color: row.strong ? "var(--text)" : "var(--muted)" }}>{row.pct}%</span>
       <span style={{ gridColumn: "2 / -1", height: "0.34rem", borderRadius: "999px", background: "var(--line-soft)", overflow: "hidden" }}>
-      <span style={{ display: "block", width: "91%", height: "100%", borderRadius: "999px", opacity: "1", transformOrigin: "left", animation: "memo-grow 950ms cubic-bezier(0.2,0.85,0.2,1) 240ms both", background: v.accent }}></span>
+      <span style={{ display: "block", width: `${row.pct}%`, height: "100%", borderRadius: "999px", opacity: row.opacity, transformOrigin: "left", animation: `memo-grow 950ms cubic-bezier(0.2,0.85,0.2,1) ${row.barDelay} both`, background: v.accent }}></span>
       </span>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "clamp(1.6rem, 3.9vh, 2.1rem) minmax(0, 1fr) auto", alignItems: "center", columnGap: "0.7rem", rowGap: "clamp(0.25rem, 0.7vh, 0.4rem)", padding: "clamp(0.3rem, 1vh, 0.62rem) 0.15rem", borderTop: "1px solid var(--line-soft)", animation: "memo-rise 400ms cubic-bezier(0.2,0.85,0.2,1) 140ms both" }}>
-      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "clamp(1.6rem, 3.9vh, 2.1rem)", height: "clamp(1.6rem, 3.9vh, 2.1rem)", borderRadius: "0.62rem", background: "var(--tile)", fontSize: "clamp(0.85rem, 2vh, 1rem)", lineHeight: "1" }}>✅</span>
-      <span style={{ minWidth: "0", display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.95rem", fontWeight: "700", color: "var(--text)" }}>{v.c.rowTests}</span>
-      <span style={{ fontSize: "0.88rem", fontWeight: "850", fontVariantNumeric: "tabular-nums", color: "var(--muted)" }}>83%</span>
-      <span style={{ gridColumn: "2 / -1", height: "0.34rem", borderRadius: "999px", background: "var(--line-soft)", overflow: "hidden" }}>
-      <span style={{ display: "block", width: "83%", height: "100%", borderRadius: "999px", opacity: "0.9", transformOrigin: "left", animation: "memo-grow 950ms cubic-bezier(0.2,0.85,0.2,1) 310ms both", background: v.accent }}></span>
-      </span>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "clamp(1.6rem, 3.9vh, 2.1rem) minmax(0, 1fr) auto", alignItems: "center", columnGap: "0.7rem", rowGap: "clamp(0.25rem, 0.7vh, 0.4rem)", padding: "clamp(0.3rem, 1vh, 0.62rem) 0.15rem", borderTop: "1px solid var(--line-soft)", animation: "memo-rise 400ms cubic-bezier(0.2,0.85,0.2,1) 210ms both" }}>
-      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "clamp(1.6rem, 3.9vh, 2.1rem)", height: "clamp(1.6rem, 3.9vh, 2.1rem)", borderRadius: "0.62rem", background: "var(--tile)", fontSize: "clamp(0.85rem, 2vh, 1rem)", lineHeight: "1" }}>🎙️</span>
-      <span style={{ minWidth: "0", display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.95rem", fontWeight: "700", color: "var(--text)" }}>{v.c.rowTutor}</span>
-      <span style={{ fontSize: "0.88rem", fontWeight: "850", fontVariantNumeric: "tabular-nums", color: "var(--muted)" }}>74%</span>
-      <span style={{ gridColumn: "2 / -1", height: "0.34rem", borderRadius: "999px", background: "var(--line-soft)", overflow: "hidden" }}>
-      <span style={{ display: "block", width: "74%", height: "100%", borderRadius: "999px", opacity: "0.8", transformOrigin: "left", animation: "memo-grow 950ms cubic-bezier(0.2,0.85,0.2,1) 380ms both", background: v.accent }}></span>
-      </span>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "clamp(1.6rem, 3.9vh, 2.1rem) minmax(0, 1fr) auto", alignItems: "center", columnGap: "0.7rem", rowGap: "clamp(0.25rem, 0.7vh, 0.4rem)", padding: "clamp(0.3rem, 1vh, 0.62rem) 0.15rem", borderTop: "1px solid var(--line-soft)", animation: "memo-rise 400ms cubic-bezier(0.2,0.85,0.2,1) 280ms both" }}>
-      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "clamp(1.6rem, 3.9vh, 2.1rem)", height: "clamp(1.6rem, 3.9vh, 2.1rem)", borderRadius: "0.62rem", background: "var(--tile)", fontSize: "clamp(0.85rem, 2vh, 1rem)", lineHeight: "1" }}>📻</span>
-      <span style={{ minWidth: "0", display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.95rem", fontWeight: "700", color: "var(--text)" }}>{v.c.rowPodcast}</span>
-      <span style={{ fontSize: "0.88rem", fontWeight: "850", fontVariantNumeric: "tabular-nums", color: "var(--muted)" }}>66%</span>
-      <span style={{ gridColumn: "2 / -1", height: "0.34rem", borderRadius: "999px", background: "var(--line-soft)", overflow: "hidden" }}>
-      <span style={{ display: "block", width: "66%", height: "100%", borderRadius: "999px", opacity: "0.7", transformOrigin: "left", animation: "memo-grow 950ms cubic-bezier(0.2,0.85,0.2,1) 450ms both", background: v.accent }}></span>
-      </span>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "clamp(1.6rem, 3.9vh, 2.1rem) minmax(0, 1fr) auto", alignItems: "center", columnGap: "0.7rem", rowGap: "clamp(0.25rem, 0.7vh, 0.4rem)", padding: "clamp(0.3rem, 1vh, 0.62rem) 0.15rem", borderTop: "1px solid var(--line-soft)", animation: "memo-rise 400ms cubic-bezier(0.2,0.85,0.2,1) 350ms both" }}>
-      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "clamp(1.6rem, 3.9vh, 2.1rem)", height: "clamp(1.6rem, 3.9vh, 2.1rem)", borderRadius: "0.62rem", background: "var(--tile)", fontSize: "clamp(0.85rem, 2vh, 1rem)", lineHeight: "1" }}>🏛️</span>
-      <span style={{ minWidth: "0", display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.95rem", fontWeight: "700", color: "var(--text)" }}>{v.c.rowPalace}</span>
-      <span style={{ fontSize: "0.88rem", fontWeight: "850", fontVariantNumeric: "tabular-nums", color: "var(--muted)" }}>58%</span>
-      <span style={{ gridColumn: "2 / -1", height: "0.34rem", borderRadius: "999px", background: "var(--line-soft)", overflow: "hidden" }}>
-      <span style={{ display: "block", width: "58%", height: "100%", borderRadius: "999px", opacity: "0.6", transformOrigin: "left", animation: "memo-grow 950ms cubic-bezier(0.2,0.85,0.2,1) 520ms both", background: v.accent }}></span>
-      </span>
-      </div>
-      {v.roomy ? (<>
-      <div style={{ display: "grid", gridTemplateColumns: "clamp(1.6rem, 3.9vh, 2.1rem) minmax(0, 1fr) auto", alignItems: "center", columnGap: "0.7rem", rowGap: "clamp(0.25rem, 0.7vh, 0.4rem)", padding: "clamp(0.3rem, 1vh, 0.62rem) 0.15rem", borderTop: "1px solid var(--line-soft)", animation: "memo-rise 400ms cubic-bezier(0.2,0.85,0.2,1) 420ms both" }}>
-      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "clamp(1.6rem, 3.9vh, 2.1rem)", height: "clamp(1.6rem, 3.9vh, 2.1rem)", borderRadius: "0.62rem", background: "var(--tile)", fontSize: "clamp(0.85rem, 2vh, 1rem)", lineHeight: "1" }}>📝</span>
-      <span style={{ minWidth: "0", display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.95rem", fontWeight: "700", color: "var(--text)" }}>{v.c.rowNotes}</span>
-      <span style={{ fontSize: "0.88rem", fontWeight: "850", fontVariantNumeric: "tabular-nums", color: "var(--muted)" }}>42%</span>
-      <span style={{ gridColumn: "2 / -1", height: "0.34rem", borderRadius: "999px", background: "var(--line-soft)", overflow: "hidden" }}>
-      <span style={{ display: "block", width: "42%", height: "100%", borderRadius: "999px", opacity: "0.5", transformOrigin: "left", animation: "memo-grow 950ms cubic-bezier(0.2,0.85,0.2,1) 590ms both", background: v.accent }}></span>
-      </span>
-      </div>
-      </>) : null}
-      {v.roomy ? (<>
-      <div style={{ display: "grid", gridTemplateColumns: "clamp(1.6rem, 3.9vh, 2.1rem) minmax(0, 1fr) auto", alignItems: "center", columnGap: "0.7rem", rowGap: "clamp(0.25rem, 0.7vh, 0.4rem)", padding: "clamp(0.3rem, 1vh, 0.62rem) 0.15rem", borderTop: "1px solid var(--line-soft)", animation: "memo-rise 400ms cubic-bezier(0.2,0.85,0.2,1) 490ms both" }}>
-      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "clamp(1.6rem, 3.9vh, 2.1rem)", height: "clamp(1.6rem, 3.9vh, 2.1rem)", borderRadius: "0.62rem", background: "var(--tile)", fontSize: "clamp(0.85rem, 2vh, 1rem)", lineHeight: "1" }}>⚡</span>
-      <span style={{ minWidth: "0", display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.95rem", fontWeight: "700", color: "var(--text)" }}>{v.c.rowSpeed}</span>
-      <span style={{ fontSize: "0.88rem", fontWeight: "850", fontVariantNumeric: "tabular-nums", color: "var(--muted)" }}>29%</span>
-      <span style={{ gridColumn: "2 / -1", height: "0.34rem", borderRadius: "999px", background: "var(--line-soft)", overflow: "hidden" }}>
-      <span style={{ display: "block", width: "29%", height: "100%", borderRadius: "999px", opacity: "0.42", transformOrigin: "left", animation: "memo-grow 950ms cubic-bezier(0.2,0.85,0.2,1) 660ms both", background: v.accent }}></span>
-      </span>
-      </div>
-      </>) : null}
+      </Fragment>))}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: "0.7rem", padding: "clamp(0.55rem, 1.5vh, 0.9rem) 0.15rem 0", borderTop: "1px solid var(--line-soft)", animation: "memo-rise 400ms cubic-bezier(0.2,0.85,0.2,1) 620ms both" }}>
       <span aria-hidden="true" style={{ display: "flex", gap: "0.08rem", fontSize: "0.86rem", color: "#ffcc4d" }}><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></span>
@@ -1679,11 +2144,10 @@ export function OnboardingFlow({
       </>) : null}
       {v.isTestimonial ? (<>
       <div>
-      <h1 style={{ margin: "0 0 1.2rem", fontSize: "clamp(1.3rem, min(6vw, 4.6vh), 2.2rem)", fontWeight: "850", lineHeight: "1.08", letterSpacing: "-0.025em" }}>{v.reviewTitle}</h1>
       <div style={{ display: "grid" }}>
       {v.reviewList.map((rev) => (<Fragment key={rev.name}>
       <figure style={{ margin: "0", padding: "clamp(0.45rem, 1.5vh, 1.05rem) 0.15rem", borderTop: `1px solid ${rev.rule}`, animation: "memo-rise 400ms cubic-bezier(0.2,0.85,0.2,1) both" }}>
-      <div aria-label={t("onboarding.testimonial.stars")} style={{ display: "flex", gap: "0.14rem" }}><span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.1rem", height: "1.1rem", borderRadius: "3px", background: "#00b67a", color: "var(--text)", fontSize: "0.68rem", lineHeight: "1" }}>★</span><span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.1rem", height: "1.1rem", borderRadius: "3px", background: "#00b67a", color: "var(--text)", fontSize: "0.68rem", lineHeight: "1" }}>★</span><span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.1rem", height: "1.1rem", borderRadius: "3px", background: "#00b67a", color: "var(--text)", fontSize: "0.68rem", lineHeight: "1" }}>★</span><span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.1rem", height: "1.1rem", borderRadius: "3px", background: "#00b67a", color: "var(--text)", fontSize: "0.68rem", lineHeight: "1" }}>★</span><span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.1rem", height: "1.1rem", borderRadius: "3px", background: "#00b67a", color: "var(--text)", fontSize: "0.68rem", lineHeight: "1" }}>★</span></div>
+      <div aria-label={t("onboarding.testimonial.stars")} style={{ display: "flex", gap: "0.14rem" }}>{[0, 1, 2, 3, 4].map((star) => <span key={star} aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.1rem", height: "1.1rem", borderRadius: "3px", background: "#00b67a", color: "#ffffff", fontSize: "0.68rem", lineHeight: "1" }}>★</span>)}</div>
       <blockquote style={{ margin: "clamp(0.3rem, 1vh, 0.6rem) 0 clamp(0.35rem, 1.1vh, 0.7rem)", fontSize: "clamp(0.9rem, min(3.6vw, 2.1vh), 1.02rem)", fontWeight: "600", lineHeight: "1.5", textWrap: "pretty" }}>{rev.quote}</blockquote>
       <figcaption style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
       <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.85rem", height: "1.85rem", flex: "0 0 auto", borderRadius: "999px", background: "var(--sunken)", color: "var(--text)", fontSize: "0.76rem", fontWeight: "800" }}>{rev.initials}</span>
@@ -1697,7 +2161,6 @@ export function OnboardingFlow({
       </>) : null}
       {v.isChart ? (<>
       <div>
-      <h1 style={{ margin: "0 0 clamp(0.8rem, 2.2vh, 1.3rem)", fontSize: "clamp(1.3rem, min(6vw, 4.6vh), 2.2rem)", fontWeight: "850", lineHeight: "1.08", letterSpacing: "-0.025em" }}>{v.c.chartTitle}</h1>
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "clamp(0.6rem, 2vh, 1.2rem)", padding: "0.2rem 0.1rem" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
       <div style={{ display: "grid", gap: "0.2rem" }}>
@@ -1709,23 +2172,32 @@ export function OnboardingFlow({
       </div>
       </div>
       <div style={{ position: "relative", width: "100%" }}>
-      <svg viewBox="0 0 320 140" role="img" aria-label={v.c.chartAria} style={{ display: "block", width: "100%", height: "auto", maxHeight: "min(38vh, 17rem)", overflow: "visible" }}>
+      <svg viewBox="0 0 320 140" preserveAspectRatio="xMidYMid meet" role="img" aria-label={v.c.chartAria} style={{ display: "block", width: "100%", height: "auto", maxHeight: "min(38vh, 17rem)", overflow: "visible" }}>
       <defs>
       <linearGradient id="memo-area" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stopOpacity="0.42" stopColor={v.accent} />
       <stop offset="100%" stopOpacity="0" stopColor={v.accent} />
       </linearGradient>
+      <linearGradient id="memo-area-x" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
+      <stop offset="12%" stopColor="#ffffff" stopOpacity="1" />
+      <stop offset="80%" stopColor="#ffffff" stopOpacity="1" />
+      <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+      </linearGradient>
+      <mask id="memo-area-fade" maskUnits="userSpaceOnUse" x="0" y="0" width="320" height="140">
+      <rect x="34" y="0" width="266" height="140" fill="url(#memo-area-x)" />
+      </mask>
       </defs>
-      <line x1="34" y1="24" x2="312" y2="24" stroke="var(--line-soft)" strokeWidth="1" strokeDasharray="3 5" />
-      <line x1="34" y1="76" x2="312" y2="76" stroke="var(--line-soft)" strokeWidth="1" strokeDasharray="3 5" />
-      <line x1="34" y1="128" x2="312" y2="128" stroke="var(--line)" strokeWidth="1" />
-      <path d={v.chartArea} fill="url(#memo-area)" style={{ animation: "memo-rise 700ms ease-out 700ms both" }} />
+      <line x1="34" y1="30" x2="300" y2="30" stroke="var(--line-soft)" strokeWidth="1" strokeDasharray="3 5" />
+      <line x1="34" y1="79" x2="300" y2="79" stroke="var(--line-soft)" strokeWidth="1" strokeDasharray="3 5" />
+      <line x1="34" y1="128" x2="300" y2="128" stroke="var(--line)" strokeWidth="1" />
+      <path d={v.chartArea} fill="url(#memo-area)" mask="url(#memo-area-fade)" style={{ animation: "memo-rise 700ms ease-out 700ms both" }} />
       <path d={v.chartOwn} fill="none" stroke="#4f4d57" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" pathLength="620" strokeDasharray="620" style={{ animation: "memo-draw 1200ms cubic-bezier(0.33,0,0.2,1) 200ms both" }} />
-      <path d={v.chartLine} fill="none" stroke={v.accent} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" pathLength="620" strokeDasharray="620" style={{ filter: "drop-shadow(0 6px 16px rgba(0,0,0,0.5))", animation: "memo-draw 1700ms cubic-bezier(0.32,0.02,0.18,1) 320ms both" }} />
-      <circle cx={v.chartDotX} cy={v.chartDotY} r="11" fill={v.accent} opacity="0.22" style={{ animation: "memo-pop 500ms cubic-bezier(0.2,0.9,0.2,1) 1550ms both" }} />
-      <circle cx={v.chartDotX} cy={v.chartDotY} r="5.5" fill={v.accent} stroke="var(--bg)" strokeWidth="2.5" style={{ animation: "memo-pop 460ms cubic-bezier(0.2,0.9,0.2,1) 1600ms both" }} />
+      <path d={v.chartLine} fill="none" stroke={v.accent} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" pathLength="620" strokeDasharray="620" style={{ filter: "drop-shadow(0 3px 5px var(--memo-shadow))", animation: "memo-draw 1700ms cubic-bezier(0.32,0.02,0.18,1) 320ms both" }} />
+      <circle cx={v.chartDotX} cy={v.chartDotY} r="11" fill={v.accent} opacity="0.22" style={{ transformBox: "fill-box", transformOrigin: "center", animation: "memo-pop 500ms cubic-bezier(0.2,0.9,0.2,1) 1550ms both" }} />
+      <circle cx={v.chartDotX} cy={v.chartDotY} r="5.5" fill={v.accent} stroke="var(--bg)" strokeWidth="2.5" style={{ transformBox: "fill-box", transformOrigin: "center", animation: "memo-pop 460ms cubic-bezier(0.2,0.9,0.2,1) 1600ms both" }} />
       </svg>
-      <span style={{ position: "absolute", left: "0", top: "0.15rem", fontSize: "0.72rem", fontWeight: "750", color: "var(--muted)" }}>{v.chartTarget}</span>
+      <span style={{ position: "absolute", left: "0", top: "calc(21.4% - 0.45rem)", fontSize: "0.72rem", fontWeight: "750", color: "var(--muted)" }}>{v.chartTarget}</span>
       <span style={{ position: "absolute", left: "0", bottom: "1.9rem", fontSize: "0.72rem", fontWeight: "750", color: "var(--muted-2)" }}>{v.chartCurrent}</span>
       </div>
       <div style={{ display: "flex", width: "100%", justifyContent: "space-between", gap: "0.5rem", padding: "0 0.1rem", fontSize: "0.74rem", fontWeight: "750", color: "var(--muted-2)" }}>
@@ -1742,14 +2214,13 @@ export function OnboardingFlow({
       </>) : null}
       {v.isSource ? (<>
       <div>
-      <h1 style={{ margin: "0 0 clamp(0.2rem, 0.6vh, 0.4rem)", fontSize: "clamp(1.15rem, min(5.6vw, 4.4vh), 2.15rem)", fontWeight: "850", lineHeight: "1.1", letterSpacing: "-0.025em" }}>{v.title}</h1>
-      <p style={{ margin: "0 0 clamp(0.4rem, 1.6vh, 1.15rem)", fontSize: "clamp(0.84rem, 1.9vh, 0.96rem)", fontWeight: "600", color: "var(--muted)" }}>{v.subtitle}</p>
+      <p style={SUBTITLE}>{v.subtitle}</p>
       {v.sourceIdle ? (<>
       <div style={{ padding: "0.25rem 0.35rem 0.15rem" }}>
       <div style={{ display: "grid", gap: "clamp(0.4rem, 1.1vh, 0.6rem)", gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
-      {v.files.map((file) => (<Fragment key={file.name}>
-      <div onPointerDown={file.onDown} role="button" tabIndex={0} style={{ display: "flex", alignItems: "center", gap: "0.7rem", padding: "0.65rem 0.8rem", border: "1px solid var(--line)", borderRadius: "16px", background: "var(--sunken)", cursor: "grab", touchAction: "none", userSelect: "none", WebkitUserSelect: "none", transition: "opacity 160ms ease, transform 160ms cubic-bezier(0.2,0.85,0.2,1), background 160ms ease", opacity: file.lifted }} className="memo-ob-fx-4">
-      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "2.2rem", height: "2.2rem", flex: "0 0 auto", borderRadius: "12px", background: "rgba(130,148,218,0.13)", fontSize: "1.05rem", lineHeight: "1" }}>{file.icon}</span>
+      {v.files.map((file) => (<Fragment key={file.v}>
+      <div onPointerDown={file.onDown} role="button" tabIndex={0} style={{ ...CHIP, display: "flex", alignItems: "center", gap: "0.7rem", padding: "0.75rem 0.85rem", borderRadius: "18px", boxShadow: "0 4px 0 var(--chip-ring)", cursor: "grab", touchAction: "none", userSelect: "none", WebkitUserSelect: "none", transition: "opacity 160ms ease, transform 160ms cubic-bezier(0.2,0.85,0.2,1), background 160ms ease", opacity: file.lifted, animation: `memo-rise 440ms cubic-bezier(0.22,1,0.36,1) ${file.delay} both` }} className="memo-ob-press">
+      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "2.2rem", height: "2.2rem", flex: "0 0 auto", borderRadius: "12px", background: file.tint, fontSize: "1.15rem", lineHeight: "1" }}>{file.icon}</span>
       <span style={{ display: "grid", gap: "0.1rem", minWidth: "0" }}>
       <span style={{ fontSize: "0.88rem", fontWeight: "750", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{file.name}</span>
       <span style={{ fontSize: "0.72rem", fontWeight: "600", color: "var(--muted)" }}>{file.meta}</span>
@@ -1758,27 +2229,38 @@ export function OnboardingFlow({
       </div>
       </Fragment>))}
       </div>
-      <div ref={v.dropRef} style={{ display: "grid", placeItems: "center", gap: "0.35rem", margin: "clamp(0.6rem, 1.8vh, 1rem) 0.35rem 0.5rem", padding: "clamp(0.9rem, 3.4vh, 1.8rem) clamp(1.2rem, 4vw, 2.2rem)", border: "1.5px dashed", borderRadius: "20px", textAlign: "center", transition: "background 160ms ease, border-color 160ms ease, transform 160ms cubic-bezier(0.2,0.85,0.2,1)", background: v.dropBg, borderColor: v.dropRing, transform: `scale(${v.dropScale})` }}>
-      <span aria-hidden="true" style={{ fontSize: "1.7rem", lineHeight: "1", color: "var(--muted)" }}>⤓</span>
-      <span style={{ fontSize: "1rem", fontWeight: "600", color: "var(--text)" }}>{v.dropLabel}</span>
-      <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "0.8rem", color: "var(--muted-2)" }}>{v.c.srcTapHint}</span>
+      <div ref={dropEl} style={{ display: "grid", placeItems: "center", gap: "0.35rem", margin: "clamp(0.6rem, 1.8vh, 1rem) 0.35rem 0.5rem", padding: "clamp(0.9rem, 3.4vh, 1.8rem) clamp(1.2rem, 4vw, 2.2rem)", borderWidth: "2.5px", borderStyle: "dashed", borderRadius: "22px", textAlign: "center", animation: "memo-drop-glow 2.4s ease-in-out infinite", transition: "background 160ms ease, border-color 160ms ease, transform 160ms cubic-bezier(0.2,0.85,0.2,1)", background: v.dropBg, borderColor: v.dropRing, transform: `scale(${v.dropScale})` }}>
+      <span aria-hidden="true" style={{ fontSize: "1.9rem", lineHeight: "1", color: v.accent, animation: "memo-nudge-y 1.4s ease-in-out infinite" }}>⤓</span>
+      <span style={{ fontSize: "1.08rem", fontWeight: "800", color: "var(--text)" }}>{v.dropLabel}</span>
+      <span style={{ fontSize: "0.88rem", fontWeight: "700", color: "var(--muted-2)" }}>{v.c.srcTapHint}</span>
       </div>
       </div>
       </>) : null}
       {v.srcWorking ? (<>
-      <div style={{ display: "grid", gap: "clamp(0.9rem, 2.6vh, 1.6rem)", padding: "0.35rem 0.35rem 0.6rem" }}>
-      <div style={{ display: "grid", gap: "0.4rem" }}>
-      <p style={{ margin: "0", fontSize: "clamp(1.1rem, 3vh, 1.3rem)", fontWeight: "800", letterSpacing: "-0.03em" }}>{v.srcStage}</p>
-      <p style={{ margin: "0", color: "var(--muted)", fontSize: "1rem", fontWeight: "500", lineHeight: "1.5" }}>{v.c.srcBody}</p>
-      <div style={{ position: "relative", height: "0.6rem", marginTop: "0.7rem", overflow: "hidden", borderRadius: "999px", background: "var(--tile-hi)" }}>
-      <span style={{ position: "absolute", inset: "0 auto 0 0", width: "38%", borderRadius: "inherit", background: "linear-gradient(135deg, #ff6d68, #f45f5a)", animation: "memo-gen-sweep 1.5s cubic-bezier(0.45, 0, 0.2, 1) infinite" }}></span>
+      <div style={{ display: "grid", gap: "0.75rem", padding: "0.2rem 0 0.6rem" }}>
+      <div style={{ ...CHIP, display: "grid", gap: "0.75rem", padding: "0.85rem 0.95rem 0.95rem", borderRadius: "20px", borderColor: v.srcCardRing, boxShadow: `0 4px 0 ${v.srcCardRing}`, transition: "border-color 400ms ease, box-shadow 400ms ease", animation: "memo-pop 420ms cubic-bezier(0.22,1,0.36,1) both" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.8rem" }}>
+      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "2.6rem", height: "2.6rem", flex: "0 0 auto", borderRadius: "13px", background: v.srcIconBg, color: "#22c55e", fontSize: "1.2rem", fontWeight: "900", lineHeight: "1", transition: "background 400ms ease" }}>{v.srcCardIcon}</span>
+      <span style={{ display: "grid", gap: "0.12rem", minWidth: "0", flex: "1 1 auto" }}>
+      <span style={{ fontSize: "1.02rem", fontWeight: "900", lineHeight: "1.25", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v.srcCardTitle}</span>
+      <span style={{ fontSize: "0.82rem", fontWeight: "700", color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v.srcCardSub}</span>
+      </span>
+      {v.srcBusy ? <span style={{ flex: "0 0 auto", fontSize: "0.95rem", fontWeight: "900", fontVariantNumeric: "tabular-nums", color: v.accent }}>{v.srcPctLabel}</span> : null}
       </div>
+      {v.srcBusy ? (<>
+      <div style={{ height: "0.4rem", borderRadius: "999px", background: "var(--bar-track)", overflow: "hidden" }}>
+      <div style={{ height: "100%", width: `${v.srcPct}%`, borderRadius: "999px", background: v.accent, transition: "width 160ms linear" }}></div>
       </div>
-      <div style={{ display: "grid", gap: "0.8rem" }}>
-      <span aria-hidden="true" style={{ display: "block", width: "11rem", height: "1.32rem", borderRadius: "999px", background: "var(--sunken)", animation: "memo-skeleton 1.4s ease-in-out infinite" }}></span>
-      <span aria-hidden="true" style={{ display: "block", width: "100%", height: "1.05rem", borderRadius: "999px", background: "var(--sunken)", animation: "memo-skeleton 1.4s ease-in-out 0.1s infinite" }}></span>
-      <span aria-hidden="true" style={{ display: "block", width: "92%", height: "1.05rem", borderRadius: "999px", background: "var(--sunken)", animation: "memo-skeleton 1.4s ease-in-out 0.2s infinite" }}></span>
-      <span aria-hidden="true" style={{ display: "block", width: "74%", height: "1.05rem", borderRadius: "999px", background: "var(--sunken)", animation: "memo-skeleton 1.4s ease-in-out 0.3s infinite" }}></span>
+      </>) : null}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.6rem" }}>
+      {v.srcOutputs.map((output) => (<Fragment key={output.icon}>
+      <div style={{ ...CHIP, display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.7rem 0.8rem", borderRadius: "16px", boxShadow: "0 4px 0 var(--chip-ring)", opacity: output.opacity, transform: `scale(${output.scale})`, transition: "opacity 300ms ease, transform 360ms cubic-bezier(0.34,1.56,0.64,1)" }}>
+      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "2rem", height: "2rem", flex: "0 0 auto", borderRadius: "10px", background: "var(--bar-track)", fontSize: "1rem", lineHeight: "1" }}>{output.icon}</span>
+      <span style={{ flex: "1 1 auto", minWidth: "0", fontSize: "0.9rem", fontWeight: "800", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{output.label}</span>
+      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.25rem", height: "1.25rem", flex: "0 0 auto", boxSizing: "border-box", borderRadius: "999px", border: output.ring, borderTopColor: output.spinTop, background: output.dot, color: "#ffffff", fontSize: "0.68rem", fontWeight: "900", animation: output.spin }}>{output.mark}</span>
+      </div>
+      </Fragment>))}
       </div>
       </div>
       </>) : null}
@@ -1786,24 +2268,18 @@ export function OnboardingFlow({
       </>) : null}
       {v.isFlash ? (<>
       <div>
-      <h1 style={{ margin: "0 0 clamp(0.2rem, 0.6vh, 0.4rem)", fontSize: "clamp(1.15rem, min(5.6vw, 4.4vh), 2.15rem)", fontWeight: "850", lineHeight: "1.1", letterSpacing: "-0.025em" }}>{v.title}</h1>
-      <p style={{ margin: "0 0 clamp(0.4rem, 1.6vh, 1.15rem)", fontSize: "clamp(0.84rem, 1.9vh, 0.96rem)", fontWeight: "600", color: "var(--muted)" }}>{v.subtitle}</p>
-      {v.cardsLeft ? (<>
+      <p style={SUBTITLE}>{v.subtitle}</p>
       <div>
       <div style={{ position: "relative", perspective: "1400px", touchAction: "pan-y" }}>
-      {v.hasNext ? (<>
-      <div aria-hidden="true" style={{ position: "absolute", inset: "0", display: "flex", alignItems: "center", justifyContent: "center", padding: "clamp(1.2rem, 4vh, 2rem) 1.7rem", borderRadius: "26px", background: "var(--surface)", boxShadow: "var(--shadow)", pointerEvents: "none", transition: v.nextEase, transform: `translateY(${v.nextLift}px) scale(${v.nextScale})` }}>
+      <div aria-hidden="true" style={{ ...CHIP, position: "absolute", inset: "0", display: "flex", alignItems: "center", justifyContent: "center", padding: "clamp(1.2rem, 4vh, 2rem) 1.7rem", borderRadius: "26px", boxShadow: "0 6px 0 var(--chip-ring)", pointerEvents: "none", transition: v.nextEase, transform: `translateY(${v.nextLift}px) scale(${v.nextScale})` }}>
       <span style={{ fontSize: "clamp(0.95rem, 2.6vh, 1.3rem)", fontWeight: "800", letterSpacing: "-0.03em", lineHeight: "1.32", textAlign: "center", textWrap: "pretty", opacity: "0.5" }}>{v.nextQ}</span>
       </div>
-      </>) : null}
       <div onPointerDown={v.cardDown} onPointerMove={v.cardMove} onPointerUp={v.cardUp} onPointerCancel={v.cardUp} role="button" tabIndex={0} style={{ position: "relative", zIndex: "2", minHeight: "clamp(10.5rem, 30vh, 17rem)", cursor: "grab", touchAction: "pan-y", userSelect: "none", WebkitUserSelect: "none", willChange: "transform", perspective: "1400px", transformStyle: "preserve-3d", transition: v.dragEase, transform: `translate3d(${v.cardShift}px, ${v.cardLift}px, 0) rotate(${v.cardTilt}deg)` }}>
       <div style={{ position: "absolute", inset: "0", transformStyle: "preserve-3d", transition: v.flipEase, transform: `rotateY(${v.flipDeg})` }}>
-      <div style={{ position: "absolute", inset: "0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.7rem", padding: "clamp(1.2rem, 4vh, 2rem) 1.7rem", borderRadius: "26px", color: "var(--text)", background: "var(--surface)", boxShadow: "var(--shadow-lg)", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "translateZ(1px)" }}>
-      <span style={{ fontSize: "0.8rem", fontWeight: "750", letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--muted)" }}>{v.cardCounter}</span>
+      <div style={{ ...CHIP, position: "absolute", inset: "0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.7rem", padding: "clamp(1.2rem, 4vh, 2rem) 1.7rem", borderRadius: "26px", color: "var(--text)", boxShadow: "0 6px 0 var(--chip-ring), var(--shadow)", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "translateZ(1px)" }}>
       <span style={{ fontSize: "clamp(1rem, 2.8vh, 1.35rem)", fontWeight: "800", letterSpacing: "-0.03em", lineHeight: "1.32", textAlign: "center", textWrap: "pretty" }}>{v.cardQ}</span>
-      <span style={{ color: "var(--muted)", fontSize: "clamp(0.85rem, 2.1vh, 1.05rem)", letterSpacing: "-0.02em" }}>{v.c.flashHint}</span>
       </div>
-      <div style={{ position: "absolute", inset: "0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.7rem", padding: "clamp(1.2rem, 4vh, 2rem) 1.7rem", borderRadius: "26px", color: "var(--text)", background: "var(--surface)", boxShadow: "var(--shadow), inset 0 0 0 1px var(--line)", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg) translateZ(1px)" }}>
+      <div style={{ ...CHIP, position: "absolute", inset: "0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.7rem", padding: "clamp(1.2rem, 4vh, 2rem) 1.7rem", borderRadius: "26px", color: "var(--text)", boxShadow: "0 6px 0 var(--chip-ring), var(--shadow)", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg) translateZ(1px)" }}>
       <span style={{ fontSize: "clamp(0.95rem, 2.6vh, 1.25rem)", fontWeight: "700", letterSpacing: "-0.025em", lineHeight: "1.42", textAlign: "center", textWrap: "pretty" }}>{v.cardA}</span>
       <span style={{ color: "var(--muted)", fontSize: "clamp(0.85rem, 2.1vh, 1.05rem)", letterSpacing: "-0.02em" }}>{v.c.flashHintBack}</span>
       </div>
@@ -1814,41 +2290,22 @@ export function OnboardingFlow({
       <div key={v.exitToken} aria-hidden="true" style={{ position: "absolute", inset: "0", zIndex: "3", display: "grid", placeItems: "center", borderRadius: "26px", fontSize: "2.25rem", pointerEvents: "none", animation: v.exitAnim, background: v.exitBg, boxShadow: `inset 0 0 0 1.5px ${v.exitLine}`, "--ex": v.exitShift, "--ey": v.exitLift, "--er": v.exitTilt } as CSSProperties}>{v.exitMark}</div>
       </>) : null}
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.6rem", marginTop: "clamp(0.7rem, 2vh, 1.4rem)" }}>
-      <button type="button" onClick={v.swipeAgain} aria-label={t("study.cards.didntKnow")} style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", minHeight: "3rem", padding: "0 1.15rem", border: "0", borderRadius: "999px", background: "rgba(255,59,48,0.14)", color: "#ff3b30", fontFamily: "inherit", fontSize: "1rem", fontWeight: "800", lineHeight: "1", cursor: "pointer", transition: "transform 160ms cubic-bezier(0.2,0.85,0.2,1)" }} className="memo-ob-fx-5">✕ <span style={{ fontVariantNumeric: "tabular-nums" }}>{v.againCount}</span></button>
-      <button type="button" onClick={v.swipeEasy} aria-label={t("study.cards.knew")} style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", minHeight: "3rem", padding: "0 1.15rem", border: "0", borderRadius: "999px", background: "rgba(34,197,94,0.14)", color: "#22c55e", fontFamily: "inherit", fontSize: "1rem", fontWeight: "800", lineHeight: "1", cursor: "pointer", transition: "transform 160ms cubic-bezier(0.2,0.85,0.2,1)" }} className="memo-ob-fx-5"><span style={{ fontVariantNumeric: "tabular-nums" }}>{v.knownCount}</span> ✓</button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.9rem", marginTop: "clamp(1.6rem, 3.6vh, 2.2rem)" }}>
+      <button type="button" onClick={v.swipeAgain} aria-label={t("study.cards.didntKnow")} style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", minHeight: "3.4rem", padding: "0 1.5rem", border: "2px solid rgba(255,59,48,0.35)", borderRadius: "999px", background: "rgba(255,59,48,0.12)", color: "#ff3b30", boxShadow: "0 4px 0 rgba(255,59,48,0.35)", fontFamily: "inherit", fontSize: "1.12rem", fontWeight: "900", lineHeight: "1", cursor: "pointer", transition: "transform 160ms cubic-bezier(0.2,0.85,0.2,1)" }} className="memo-ob-press">✕ <span style={{ fontVariantNumeric: "tabular-nums" }}>{v.againCount}</span></button>
+      <button type="button" onClick={v.swipeEasy} aria-label={t("study.cards.knew")} style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", minHeight: "3.4rem", padding: "0 1.5rem", border: "2px solid rgba(34,197,94,0.38)", borderRadius: "999px", background: "rgba(34,197,94,0.12)", color: "#1fb257", boxShadow: "0 4px 0 rgba(34,197,94,0.38)", fontFamily: "inherit", fontSize: "1.12rem", fontWeight: "900", lineHeight: "1", cursor: "pointer", transition: "transform 160ms cubic-bezier(0.2,0.85,0.2,1)" }} className="memo-ob-press"><span style={{ fontVariantNumeric: "tabular-nums" }}>{v.knownCount}</span> ✓</button>
       </div>
       </div>
-      </>) : null}
-      {v.cardsDone ? (<>
-      <div style={{ display: "grid", justifyItems: "center", width: "100%", maxWidth: "30rem", margin: "0 auto", padding: "clamp(0.3rem, 1.2vh, 1.6rem) 0 0", boxSizing: "border-box", textAlign: "center", animation: "memo-pop 0.32s cubic-bezier(0.22, 1, 0.36, 1) both" }}>
-      <div style={{ position: "relative", display: "grid", placeItems: "center", width: "min(12rem, 24vh)", height: "min(12rem, 24vh)" }}>
-      <div style={{ display: "grid", placeItems: "center", width: "78%", height: "78%", borderRadius: "999px", background: "var(--tile)" }}>
-      <span aria-hidden="true" style={{ fontSize: "min(4.4rem, 11vh)", lineHeight: "1" }}>{v.deckEmoji}</span>
-      </div>
-      <span style={{ position: "absolute", top: "0.2rem", right: "0", padding: "clamp(0.25rem, 0.9vh, 0.45rem) clamp(0.5rem, 1.6vw, 0.8rem)", borderRadius: "0.875rem", transform: "rotate(-8deg)", whiteSpace: "nowrap", fontSize: "min(1.5rem, 3.8vh)", fontWeight: "850", letterSpacing: "-0.03em", background: v.deckTintSoft, color: v.deckTint, animation: "memo-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both" }}>{v.deckPct} %</span>
-      </div>
-      <span style={{ marginTop: "clamp(0.4rem, 1.6vh, 1.2rem)", color: "var(--muted)", fontSize: "0.78rem", fontWeight: "700", letterSpacing: "0.1em", textTransform: "uppercase" }}>{v.deckEyebrow}</span>
-      <span style={{ marginTop: "clamp(0.2rem, 0.7vh, 0.5rem)", fontSize: "min(1.75rem, 4.4vh)", fontWeight: "800", letterSpacing: "-0.04em", lineHeight: "1.15", textWrap: "pretty" }}>{v.deckTitle}</span>
-      <span style={{ marginTop: "clamp(0.3rem, 1vh, 0.7rem)", color: "var(--muted)", fontSize: "min(1rem, 2.4vh)", fontWeight: "500" }}><span style={{ fontWeight: "800", color: v.deckTint }}>{v.deckPct} %</span> {v.deckScoreLabel}</span>
-      <span style={{ marginTop: "0.25rem", color: "var(--muted)", fontSize: "min(1rem, 2.4vh)", fontWeight: "500" }}>{v.c.deckCorrect} <span style={{ fontWeight: "800", color: v.deckTint }}>{v.deckRatio}</span></span>
-      <div style={{ display: "grid", gap: "0.7rem", width: "100%", marginTop: "clamp(0.5rem, 1.8vh, 1.6rem)" }}>
-      <button type="button" onClick={v.deckAction} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.6rem", width: "100%", minHeight: "clamp(2.8rem, 7vh, 3.3rem)", padding: "0 1.4rem", border: "0", borderRadius: "999px", background: "var(--ink)", color: "var(--on-ink)", fontFamily: "inherit", fontSize: "clamp(0.96rem, 2.3vh, 1.08rem)", fontWeight: "750", lineHeight: "1", cursor: "pointer", transition: "transform 170ms cubic-bezier(0.2,0.85,0.2,1)" }} className="memo-ob-fx-6"><span aria-hidden="true" style={{ fontSize: "1.2rem" }}>↻</span>{v.deckActionLabel}</button>
-      </div>
-      </div>
-      </>) : null}
       </div>
       </>) : null}
       {v.isQuiz ? (<>
       <div>
-      <h1 style={{ margin: "0 0 clamp(0.2rem, 0.6vh, 0.4rem)", fontSize: "clamp(1.15rem, min(5.6vw, 4.4vh), 2.15rem)", fontWeight: "850", lineHeight: "1.1", letterSpacing: "-0.025em" }}>{v.title}</h1>
-      <p style={{ margin: "0 0 clamp(0.4rem, 1.6vh, 1.15rem)", fontSize: "clamp(0.84rem, 1.9vh, 0.96rem)", fontWeight: "600", color: "var(--muted)" }}>{v.subtitle}</p>
-      <div style={{ padding: "clamp(1rem, 2.8vh, 1.6rem) clamp(1.1rem, 3vw, 1.7rem) clamp(0.9rem, 2.6vh, 1.5rem)", borderRadius: "24px", background: "var(--surface)", boxShadow: "var(--shadow)" }}>
+      <p style={SUBTITLE}>{v.subtitle}</p>
+      <div style={{ ...CHIP, padding: "clamp(1rem, 2.8vh, 1.6rem) clamp(1.1rem, 3vw, 1.7rem) clamp(0.9rem, 2.6vh, 1.5rem)", borderRadius: "24px", boxShadow: "0 5px 0 var(--chip-ring)" }}>
       <span style={{ display: "block", color: "var(--muted)", fontSize: "clamp(0.86rem, 2vh, 0.98rem)", fontWeight: "600", letterSpacing: "-0.015em" }}>{v.c.quizMeta}</span>
       <p style={{ margin: "0.5rem 0 clamp(0.7rem, 2vh, 1.2rem)", fontSize: "clamp(1.02rem, 2.8vh, 1.3rem)", fontWeight: "800", letterSpacing: "-0.03em", lineHeight: "1.3", textWrap: "pretty" }}>{v.c.quizQ}</p>
       <div style={{ display: "grid", gap: "clamp(0.4rem, 1.2vh, 0.7rem)" }}>
       {v.quizOptions.map((opt) => (<Fragment key={opt.value}>
-      <button type="button" onClick={opt.onPick} style={{ display: "flex", alignItems: "center", gap: "0.9rem", width: "100%", minHeight: "clamp(3rem, 7.4vh, 4.4rem)", padding: "0 1.1rem", borderRadius: "18px", cursor: "pointer", fontFamily: "inherit", fontSize: "clamp(0.95rem, 2.3vh, 1.08rem)", fontWeight: "600", letterSpacing: "-0.02em", textAlign: "left", border: "1.5px solid transparent", transition: "background 0.18s ease, color 0.18s ease, border-color 0.18s ease", background: opt.bg, borderColor: opt.ring, color: opt.color }}>
+      <button type="button" onClick={opt.onPick} style={{ display: "flex", alignItems: "center", gap: "0.9rem", width: "100%", minHeight: "clamp(3rem, 7.4vh, 4.4rem)", padding: "0 1.1rem", boxSizing: "border-box", borderRadius: "18px", cursor: "pointer", fontFamily: "inherit", fontSize: "clamp(0.95rem, 2.3vh, 1.08rem)", fontWeight: "600", letterSpacing: "-0.02em", textAlign: "left", border: "2px solid transparent", transition: "background 0.18s ease, color 0.18s ease, border-color 0.18s ease", background: opt.bg, borderColor: opt.ring, color: opt.color, boxShadow: `0 4px 0 ${opt.lip}`, animation: opt.anim }} className="memo-ob-press">
       <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "2.1rem", height: "2.1rem", flex: "0 0 auto", borderRadius: "999px", fontSize: "0.98rem", fontWeight: "750", transition: "background 0.18s ease", background: opt.badgeBg, color: opt.badgeColor }}>{opt.letter}</span>
       <span style={{ flex: "1 1 auto", minWidth: "0" }}>{opt.label}</span>
       </button>
@@ -1856,7 +2313,7 @@ export function OnboardingFlow({
       </div>
       {v.quizAnswered ? (<>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.8rem", marginTop: "clamp(0.7rem, 2vh, 1.4rem)", paddingTop: "clamp(0.7rem, 2vh, 1.4rem)", borderTop: "1px solid var(--line)", animation: "memo-pop 0.24s cubic-bezier(0.22, 1, 0.36, 1) both" }}>
-      <span style={{ padding: "0.3rem 0.65rem", borderRadius: "999px", fontSize: "0.82rem", fontWeight: "800", color: "var(--text)", background: v.quizVerdictBg }}>{v.quizVerdict}</span>
+      <span style={{ padding: "0.3rem 0.65rem", borderRadius: "999px", fontSize: "0.82rem", fontWeight: "800", color: "#ffffff", background: v.quizVerdictBg }}>{v.quizVerdict}</span>
       <span style={{ flex: "1 1 12rem", minWidth: "0", fontSize: "clamp(0.85rem, 2vh, 0.95rem)", fontWeight: "650", lineHeight: "1.4", color: "var(--muted)" }}>{v.c.quizExplain}</span>
       </div>
       </>) : null}
@@ -1865,14 +2322,13 @@ export function OnboardingFlow({
       </>) : null}
       {v.isTest ? (<>
       <div>
-      <h1 style={{ margin: "0 0 clamp(0.2rem, 0.6vh, 0.4rem)", fontSize: "clamp(1.15rem, min(5.6vw, 4.4vh), 2.15rem)", fontWeight: "850", lineHeight: "1.1", letterSpacing: "-0.025em" }}>{v.title}</h1>
-      <p style={{ margin: "0 0 clamp(0.4rem, 1.6vh, 1.15rem)", fontSize: "clamp(0.84rem, 1.9vh, 0.96rem)", fontWeight: "600", color: "var(--muted)" }}>{v.subtitle}</p>
-      <div style={{ padding: "clamp(0.95rem, 2.8vh, 1.5rem) clamp(1.1rem, 3vw, 1.6rem)", borderRadius: "24px", background: "var(--surface)", boxShadow: "var(--shadow)" }}>
+      <p style={SUBTITLE}>{v.subtitle}</p>
+      <div style={{ ...CHIP, padding: "clamp(0.95rem, 2.8vh, 1.5rem) clamp(1.1rem, 3vw, 1.6rem)", borderRadius: "24px", boxShadow: "0 5px 0 var(--chip-ring)" }}>
       <span style={{ display: "block", color: "var(--muted)", fontSize: "clamp(0.84rem, 2vh, 0.96rem)", fontWeight: "600" }}>{v.c.testMeta}</span>
       <p style={{ margin: "0.45rem 0 clamp(0.6rem, 1.8vh, 1rem)", fontSize: "clamp(1rem, 2.6vh, 1.22rem)", fontWeight: "800", letterSpacing: "-0.03em", lineHeight: "1.3", textWrap: "pretty" }}>{v.c.testQ}</p>
-      <textarea value={v.testText} onChange={v.onTestType} placeholder={v.c.testPlaceholder} rows={3} style={{ width: "100%", boxSizing: "border-box", padding: "0.85rem 0.95rem", border: "1.5px solid var(--line)", borderRadius: "18px", background: "var(--sunken)", color: "var(--text)", fontFamily: "inherit", fontSize: "clamp(0.9rem, 2.2vh, 1rem)", fontWeight: "600", lineHeight: "1.5", resize: "none", outline: "none" }}></textarea>
+      <textarea value={v.testText} onChange={v.onTestType} placeholder={v.c.testPlaceholder} rows={3} style={{ width: "100%", boxSizing: "border-box", padding: "0.85rem 0.95rem", border: "2px solid var(--chip-ring)", borderRadius: "18px", background: "var(--bubble)", color: "var(--text)", fontFamily: "inherit", fontSize: "clamp(0.9rem, 2.2vh, 1rem)", fontWeight: "600", lineHeight: "1.5", resize: "none", outline: "none" }} />
       {v.testUngraded ? (<>
-      <button type="button" onClick={v.gradeTest} disabled={v.cannotGrade} style={{ marginTop: "0.75rem", width: "100%", minHeight: "3rem", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "1rem", fontWeight: "800", cursor: "pointer", transition: "opacity 200ms ease, transform 170ms cubic-bezier(0.2,0.85,0.2,1)", background: v.accent, color: "#000000", opacity: v.gradeOpacity }} className="memo-ob-fx-6">{v.c.testGrade}</button>
+      <button type="button" onClick={v.gradeTest} disabled={v.cannotGrade} style={{ marginTop: "0.75rem", width: "100%", minHeight: "3.3rem", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "1.05rem", fontWeight: "900", letterSpacing: "0.03em", cursor: "pointer", boxShadow: `0 4px 0 color-mix(in oklch, ${v.accent} 62%, #000000)`, transition: "opacity 200ms ease, transform 170ms cubic-bezier(0.2,0.85,0.2,1)", background: v.accent, color: "#000000", opacity: v.gradeOpacity }} className="memo-ob-fx-6">{v.c.testGrade}</button>
       </>) : null}
       {v.testGraded ? (<>
       <div style={{ display: "grid", gap: "0.55rem", marginTop: "clamp(0.7rem, 2vh, 1.1rem)", paddingTop: "clamp(0.7rem, 2vh, 1.1rem)", borderTop: "1px solid var(--line)", animation: "memo-pop 0.24s cubic-bezier(0.22,1,0.36,1) both" }}>
@@ -1888,22 +2344,78 @@ export function OnboardingFlow({
       </>) : null}
       {v.isTutor ? (<>
       <div>
-      <h1 style={{ margin: "0 0 clamp(0.2rem, 0.6vh, 0.4rem)", fontSize: "clamp(1.15rem, min(5.6vw, 4.4vh), 2.15rem)", fontWeight: "850", lineHeight: "1.1", letterSpacing: "-0.025em" }}>{v.title}</h1>
-      <p style={{ margin: "0 0 clamp(0.4rem, 1.6vh, 1.15rem)", fontSize: "clamp(0.84rem, 1.9vh, 0.96rem)", fontWeight: "600", color: "var(--muted)" }}>{v.subtitle}</p>
+      <p style={SUBTITLE}>{v.subtitle}</p>
       {/* Inside the app, so it follows the app's saved appearance, not the OS alone. */}
-      <LandingTutorDemo theme="app" />
+      <LandingTutorDemo theme="app" onPhaseChange={onTutorPhase} />
+      </div>
+      </>) : null}
+      {v.isAsk ? (<>
+      <div style={{ display: "grid", gap: "clamp(0.6rem, 1.7vh, 0.95rem)", padding: "0.2rem 0 0.8rem" }}>
+      {v.askBubbles.map((q) => (<Fragment key={q.key}>
+      <div style={{ display: "flex", justifyContent: q.side, animation: `memo-drift 4.2s ease-in-out ${q.floatDelay} infinite` }}>
+      <button type="button" onClick={v.onAsk} style={{ position: "relative", maxWidth: "86%", padding: "0.75rem 1.15rem", boxSizing: "border-box", border: `2px solid ${q.ring}`, borderRadius: "1.25rem", background: q.bg, color: q.ink, fontFamily: "inherit", fontSize: "clamp(0.98rem, 2.3vh, 1.1rem)", fontWeight: "800", lineHeight: "1.35", textAlign: "left", cursor: "pointer", transformOrigin: q.origin, animation: `memo-bubble-down 540ms cubic-bezier(0.22,1,0.36,1) ${q.delay} both` }} className="memo-ob-fx-9">
+      <span aria-hidden="true" style={{ position: "absolute", bottom: "-0.56rem", left: q.tailL, right: q.tailR, width: "0.95rem", height: "0.95rem", boxSizing: "border-box", background: q.bg, borderRight: `2px solid ${q.ring}`, borderBottom: `2px solid ${q.ring}`, borderBottomRightRadius: "3px", transform: "rotate(45deg)" }}></span>
+      <span style={{ position: "relative" }}>{q.text}</span>
+      </button>
+      </div>
+      </Fragment>))}
+      </div>
+      </>) : null}
+      {v.isTime ? (<>
+      <div>
+      <p style={{ ...SUBTITLE, margin: "0 0 0.4rem" }}>{v.subtitle}</p>
+      <div style={{ position: "relative", height: "clamp(14rem, 38vh, 20rem)", margin: "0 -1.6rem", overflow: "hidden", background: v.sky.skyBg, transition: "background 800ms ease", WebkitMaskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 52%, rgba(0,0,0,0.6) 74%, transparent 100%)", maskImage: "radial-gradient(ellipse 50% 50% at 50% 50%, #000 52%, rgba(0,0,0,0.6) 74%, transparent 100%)" }}>
+      <div aria-hidden="true" style={{ position: "absolute", inset: "0", opacity: v.sky.starOpacity, transition: "opacity 800ms ease" }}>
+      {SKY_STARS.map(([left, top, size], k) => <span key={k} style={{ position: "absolute", left: `${left}%`, top: `${top}%`, width: `${size}px`, height: `${size}px`, borderRadius: "50%", background: "#ffffff", animation: `memo-twinkle 2.6s ease-in-out ${(k * 0.31).toFixed(2)}s infinite` }}></span>)}
+      </div>
+      <div aria-hidden="true" style={{ position: "absolute", left: `${v.sky.orbX}%`, top: `${v.sky.orbY}%`, width: "clamp(3.4rem, 9.5vh, 4.6rem)", aspectRatio: "1", transform: "translate(-50%, -50%)", transition: "left 560ms cubic-bezier(0.22,1,0.36,1), top 560ms cubic-bezier(0.22,1,0.36,1)" }}>
+      <div style={{ position: "absolute", inset: "0", opacity: v.sky.rayOpacity, transition: "opacity 600ms ease", animation: "memo-spin 28s linear infinite" }}>
+      {SUN_RAYS.map((deg, k) => <span key={deg} style={{ position: "absolute", left: "50%", top: "50%", width: "0.22rem", height: k % 2 === 0 ? "0.9rem" : "0.55rem", marginLeft: "-0.11rem", borderRadius: "999px", background: "#ffc83d", transform: `rotate(${deg}deg) translateY(${k % 2 === 0 ? "-3.2rem" : "-2.75rem"})` }}></span>)}
+      </div>
+      <div style={{ position: "absolute", inset: "0", borderRadius: "50%", background: v.sky.orbFill, boxShadow: v.sky.orbGlow, transition: "background 800ms ease, box-shadow 800ms ease" }}></div>
+      </div>
+      {SKY_CLOUDS.map((cloud) => (<Fragment key={cloud.top}>
+      <div aria-hidden="true" style={{ position: "absolute", left: "-10%", top: cloud.top, width: cloud.width, aspectRatio: "1.9", animation: `memo-cloud-drift ${cloud.drift} linear ${cloud.delay} infinite` }}>
+      <div style={{ position: "absolute", inset: "0", transform: `scale(${cloud.scale})`, filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.12))" }}>
+      <span style={{ position: "absolute", left: "0", right: "0", bottom: "0", height: "50%", borderRadius: "999px", background: v.sky.cloudFill, transition: "background 700ms ease" }}></span>
+      <span style={{ position: "absolute", left: "14%", bottom: "22%", width: "42%", aspectRatio: "1", borderRadius: "50%", background: v.sky.cloudFill, transition: "background 700ms ease" }}></span>
+      <span style={{ position: "absolute", left: "40%", bottom: "12%", width: "50%", aspectRatio: "1", borderRadius: "50%", background: v.sky.cloudShade, transition: "background 700ms ease" }}></span>
+      <span style={{ position: "absolute", left: "46%", bottom: "18%", width: "44%", aspectRatio: "1", borderRadius: "50%", background: v.sky.cloudFill, transition: "background 700ms ease" }}></span>
+      </div>
+      </div>
+      </Fragment>))}
+      </div>
+      <div style={{ position: "relative", margin: "0.4rem 0 0.4rem", padding: "3.1rem 0 0.2rem" }}>
+      <div style={{ ...CHIP, position: "relative", height: "1.15rem", margin: "0 0.2rem", borderRadius: "999px" }}>
+      <div style={{ position: "absolute", top: "0", bottom: "0", left: "1rem", right: "1rem" }}>
+      <div aria-hidden="true" style={{ position: "absolute", bottom: "calc(100% + 1.3rem)", left: `${v.sky.hourPct}%`, transform: "translateX(-50%)", padding: "0.4rem 0.9rem", boxSizing: "border-box", border: "2px solid var(--chip-ring)", borderRadius: "0.95rem", background: "var(--bubble)", fontSize: "1.05rem", fontWeight: "900", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+      <span style={{ position: "absolute", left: "50%", bottom: "-0.5rem", width: "0.8rem", height: "0.8rem", marginLeft: "-0.4rem", boxSizing: "border-box", background: "var(--bubble)", borderRight: "2px solid var(--chip-ring)", borderBottom: "2px solid var(--chip-ring)", borderBottomRightRadius: "3px", transform: "rotate(45deg)" }}></span>
+      <span style={{ position: "relative" }}>{v.hourLabel}</span>
+      </div>
+      <div aria-hidden="true" style={{ position: "absolute", top: "50%", left: `${v.sky.hourPct}%`, width: "2.4rem", height: "2.4rem", boxSizing: "border-box", transform: "translate(-50%, -50%)", borderRadius: "50%", background: "var(--bg)", border: `3px solid ${v.accent}`, boxShadow: `0 3px 0 var(--chip-ring), 0 0 0 6px color-mix(in oklch, ${v.accent} 16%, transparent)` }}></div>
+      </div>
+      </div>
+      <input type="range" min={STUDY_HOUR_MIN} max={STUDY_HOUR_MAX} step={1} value={v.studyHour} onChange={v.onHour} aria-label={v.c.timeTitle} aria-valuetext={v.hourLabel} style={{ position: "absolute", left: "0", right: "0", bottom: "-0.9rem", width: "100%", height: "3.2rem", margin: "0", opacity: "0", cursor: "grab" }} />
+      </div>
       </div>
       </>) : null}
       {v.isLoading ? (<>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "clamp(0.5rem, 1.6vh, 1rem)", paddingTop: "0.6rem" }}>
+      <SpeechBubble text={v.bubbleText} typed={v.tw} tail="down" style={{ maxWidth: "min(26rem, 100%)", margin: "0 0 0.6rem", padding: "clamp(0.85rem, 2.2vh, 1.1rem) clamp(1.1rem, 4vw, 1.5rem)", animation: "memo-bubble-down 560ms cubic-bezier(0.22,1,0.36,1) 150ms both" }} textStyle={{ fontSize: "clamp(1.2rem, min(5.4vw, 3.4vh), 1.65rem)", lineHeight: "1.3", textWrap: "balance" }} />
       <div style={{ position: "relative", flex: "0 0 auto", display: "grid", placeItems: "center", width: "min(9rem, 22vh)", height: "min(9rem, 22vh)", aspectRatio: "1" }}>
       <svg viewBox="0 0 100 100" aria-hidden="true" style={{ position: "absolute", inset: "0", width: "100%", height: "100%", transform: "rotate(-90deg)" }}>
       <circle cx="50" cy="50" r="45" fill="none" stroke="var(--line-soft)" strokeWidth="3" />
       <circle cx="50" cy="50" r="45" fill="none" stroke={v.accent} strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray="100" strokeDashoffset={v.ringOffset} style={{ transition: "stroke-dashoffset 200ms linear" }} />
       </svg>
-      <img src={MASCOT.src} srcSet={MASCOT.srcSet} width={MASCOT.width} height={MASCOT.height} alt="" fetchPriority="high" decoding="sync" style={{ position: "relative", width: "58%", maxWidth: "58%", maxHeight: "58%", height: "auto", display: "block", animation: "memo-bob 4.2s ease-in-out infinite", filter: "drop-shadow(0 14px 26px rgba(0,0,0,0.35))" }} />
+      <div ref={mascot.refs.loader} style={{ position: "relative", width: "58%", aspectRatio: "320 / 288", transformOrigin: "50% 92%" }}>
+      {v.thinkIcon ? <MascotThought icon={v.thinkIcon} offset="0rem" scale={0.9} /> : null}
+      <MascotSparkles />
+      <div ref={mascot.refs.loaderBurst} aria-hidden="true" style={{ position: "absolute", left: "50%", top: "45%", width: "0", height: "0", pointerEvents: "none" }}></div>
+      <div style={{ position: "absolute", inset: "0", animation: "memo-bob 4.2s ease-in-out infinite" }}>
+      <MascotFigure priority />
       </div>
-      <h1 style={{ margin: "0", fontSize: "clamp(1.25rem, min(5.4vw, 4vh), 1.9rem)", fontWeight: "850", lineHeight: "1.1", letterSpacing: "-0.03em", textWrap: "pretty" }}>{v.loadingTitle}</h1>
+      </div>
+      </div>
       <p style={{ margin: "0", fontSize: "clamp(0.86rem, 2.1vh, 0.98rem)", fontWeight: "600", color: "var(--muted)" }}>{v.loadingStage}</p>
       <div style={{ display: "grid", gap: "clamp(0.3rem, 1vh, 0.5rem)", width: "100%", maxWidth: "19rem", textAlign: "left" }}>
       {v.loadingRows.map((row) => (<Fragment key={row.label}>
@@ -1917,16 +2429,27 @@ export function OnboardingFlow({
       </>) : null}
       {v.isDone ? (<>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "1rem", paddingTop: "1.2rem" }}>
-      <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "4.6rem", height: "4.6rem", borderRadius: "999px", fontSize: "2rem", fontWeight: "900", color: "#000000", animation: "memo-pop 460ms cubic-bezier(0.2,0.9,0.2,1) both", background: "#62d676" }}>✓</span>
-      <h1 style={{ margin: "0", fontSize: "clamp(1.4rem, min(6.5vw, 5vh), 2.4rem)", fontWeight: "850", lineHeight: "1.08", letterSpacing: "-0.025em" }}>{v.c.doneTitle}</h1>
+      <SpeechBubble text={v.bubbleText} typed={v.tw} tail="down" style={{ maxWidth: "min(26rem, 100%)", margin: "0 0 0.6rem", padding: "clamp(0.85rem, 2.2vh, 1.1rem) clamp(1.1rem, 4vw, 1.5rem)", animation: "memo-bubble-down 560ms cubic-bezier(0.22,1,0.36,1) 300ms both" }} textStyle={{ fontSize: "clamp(1.2rem, min(5.4vw, 3.4vh), 1.65rem)", lineHeight: "1.3", textWrap: "balance" }} />
+      <div style={{ position: "relative", width: "clamp(6.5rem, 20vh, 10rem)", aspectRatio: "320 / 288", marginBottom: "1.2rem" }}>
+      <MascotPedestal hero />
+      <MascotSparkles />
+      <div ref={mascot.refs.doneBurst} aria-hidden="true" style={{ position: "absolute", left: "50%", top: "40%", width: "0", height: "0", zIndex: "2", pointerEvents: "none" }}></div>
+      <div ref={mascot.refs.setDone} onClick={v.tapDone} aria-hidden="true" style={{ position: "absolute", inset: "0", transformOrigin: "50% 92%", cursor: "pointer" }}>
+      <div style={{ position: "absolute", inset: "0", transformOrigin: "50% 94%", animation: "memo-breathe 3s ease-in-out infinite" }}>
+      <MascotFigure lash={3} />
+      </div>
+      </div>
+      <span aria-hidden="true" style={{ position: "absolute", right: "-6%", bottom: "0", display: "inline-flex", alignItems: "center", justifyContent: "center", width: "2.2rem", height: "2.2rem", borderRadius: "999px", fontSize: "1.05rem", fontWeight: "900", color: "#000000", background: "#62d676", boxShadow: "0 0 0 3px var(--bg)", animation: "memo-pop 460ms cubic-bezier(0.2,0.9,0.2,1) 900ms both" }}>✓</span>
+      </div>
       <p style={{ margin: "0", maxWidth: "24rem", fontSize: "1rem", fontWeight: "600", lineHeight: "1.45", color: "var(--muted)" }}>{v.c.doneSub}</p>
       </div>
       </>) : null}
       </div>
+      </div>
       </main>
-      <footer className="memo-onboarding-keyboard-footer" style={{ position: "fixed", left: "0", right: "0", zIndex: "6", boxSizing: "border-box", background: "linear-gradient(to top, var(--bg) 62%, transparent)", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.55rem", paddingTop: "clamp(0.5rem, 1.4vh, 0.9rem)", paddingInline: "clamp(1rem, 4vw, 2rem)" }}>
+      <footer className="memo-onboarding-keyboard-footer" style={{ position: "fixed", left: "0", right: "0", zIndex: "6", boxSizing: "border-box", background: "linear-gradient(to top, var(--bg) 62%, transparent)", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.55rem", paddingTop: "clamp(0.7rem, 1.8vh, 1.1rem)", paddingInline: "clamp(1rem, 4vw, 2rem)" }}>
       {v.showCta ? (<>
-      <button type="button" onClick={v.next} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", width: "100%", maxWidth: "34rem", minHeight: "clamp(2.9rem, 7vh, 3.5rem)", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "clamp(0.95rem, 2.2vh, 1.06rem)", fontWeight: "800", letterSpacing: "-0.01em", cursor: "pointer", transition: "transform 170ms cubic-bezier(0.2,0.85,0.2,1), opacity 200ms ease, box-shadow 240ms ease", background: v.ctaBg, color: v.ctaColor, boxShadow: v.ctaGlow, opacity: v.ctaOpacity }} disabled={v.ctaDisabled || v.finishing} aria-busy={v.finishing} className="memo-ob-fx-8">{v.finishing ? <span aria-hidden="true" className="memo-spin" style={{ width: "1.05rem", height: "1.05rem", flex: "0 0 auto", boxSizing: "border-box", borderRadius: "999px", border: "2px solid currentColor", borderTopColor: "transparent" }} /> : null}<span className="memo-ob-cta-label">{v.ctaLabel}</span></button>
+      <button type="button" onClick={v.next} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", width: "100%", maxWidth: "34rem", minHeight: "clamp(3.1rem, 7.4vh, 3.6rem)", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "clamp(1rem, 2.3vh, 1.12rem)", fontWeight: "900", letterSpacing: "0.06em", cursor: v.ctaDisabled ? "default" : "pointer", background: v.ctaBg, color: v.ctaColor, boxShadow: `0 5px 0 ${v.ctaLip}`, transform: "translateY(0)", transition: "transform 120ms cubic-bezier(0.2,0.85,0.2,1), box-shadow 120ms ease, background-color 220ms ease, color 220ms ease" }} disabled={v.ctaDisabled || v.finishing} aria-busy={v.finishing} className="memo-ob-press-cta">{v.finishing ? <span aria-hidden="true" className="memo-spin" style={{ width: "1.05rem", height: "1.05rem", flex: "0 0 auto", boxSizing: "border-box", borderRadius: "999px", border: "2px solid currentColor", borderTopColor: "transparent" }} /> : null}<span className="memo-ob-cta-label">{v.ctaLabel}</span></button>
       </>) : null}
       <span style={{ fontSize: "0.76rem", fontWeight: "650", color: "var(--muted-2)", textAlign: "center" }}>{v.footNote}</span>
       </footer>

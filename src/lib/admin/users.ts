@@ -1,5 +1,6 @@
 import "server-only";
 
+import { loadEveryRow } from "@/lib/admin/paged-rows";
 import { type DateRange, eachDay, rangeToTimestamps, todayInReportZone } from "@/lib/admin/ranges";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 import {
@@ -203,17 +204,28 @@ export async function getUserGrowth(range: DateRange): Promise<UserGrowthPoint[]
   const serviceRole = createSupabaseServiceRoleClient();
   const { fromIso, toIso } = rangeToTimestamps(range);
 
-  const [signupResult, onboardedResult] = await Promise.all([
-    serviceRole
-      .from("profiles")
-      .select("created_at")
-      .gte("created_at", fromIso)
-      .lt("created_at", toIso),
-    serviceRole
-      .from("profiles")
-      .select("onboarding_completed_at")
-      .gte("onboarding_completed_at", fromIso)
-      .lt("onboarding_completed_at", toIso),
+  // Every row, not the first 1000: see paged-rows.ts.
+  const [signupRows, onboardedRows] = await Promise.all([
+    loadEveryRow<{ created_at: string }>((from, to) =>
+      serviceRole
+        .from("profiles")
+        .select("created_at")
+        .gte("created_at", fromIso)
+        .lt("created_at", toIso)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    loadEveryRow<{ onboarding_completed_at: string | null }>((from, to) =>
+      serviceRole
+        .from("profiles")
+        .select("onboarding_completed_at")
+        .gte("onboarding_completed_at", fromIso)
+        .lt("onboarding_completed_at", toIso)
+        .order("onboarding_completed_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
   ]);
 
   const byDay = new Map<string, UserGrowthPoint>();
@@ -222,7 +234,7 @@ export async function getUserGrowth(range: DateRange): Promise<UserGrowthPoint[]
     byDay.set(day, { day, signups: 0, onboarded: 0 });
   }
 
-  for (const row of (signupResult.data ?? []) as Array<{ created_at: string }>) {
+  for (const row of signupRows) {
     const point = byDay.get(todayInReportZone(new Date(row.created_at)));
 
     if (point) {
@@ -230,9 +242,7 @@ export async function getUserGrowth(range: DateRange): Promise<UserGrowthPoint[]
     }
   }
 
-  for (const row of (onboardedResult.data ?? []) as Array<{
-    onboarding_completed_at: string | null;
-  }>) {
+  for (const row of onboardedRows) {
     if (!row.onboarding_completed_at) {
       continue;
     }

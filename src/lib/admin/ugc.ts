@@ -17,6 +17,7 @@ import type {
   UgcVideoRow,
 } from "@/lib/database.types";
 import { callRpc, updateIn } from "@/lib/admin/db";
+import { loadEveryRow } from "@/lib/admin/paged-rows";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 export type CreatorWithAccounts = UgcCreatorRow & {
@@ -264,16 +265,15 @@ export async function getCreatorMetrics(
 /** Lifetime Memo AI totals per creator, independent of any window. */
 const cachedLifetimeTotals = cache(async () => {
   const serviceRole = createSupabaseServiceRoleClient();
-  const { data } = await serviceRole
-    .from("ugc_videos")
-    .select("creator_id, views, saves")
-    .eq("classification", "memo");
 
-  return (data ?? []) as Array<{
-    creator_id: string;
-    views: number;
-    saves: number;
-  }>;
+  return loadEveryRow<{ creator_id: string; views: number; saves: number }>((from, to) =>
+    serviceRole
+      .from("ugc_videos")
+      .select("creator_id, views, saves")
+      .eq("classification", "memo")
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 });
 
 type FollowerSnapshot = {
@@ -289,14 +289,17 @@ type FollowerSnapshot = {
 const cachedFollowerSnapshots = cache(
   async (from: string, to: string): Promise<FollowerSnapshot[]> => {
     const serviceRole = createSupabaseServiceRoleClient();
-    const { data } = await serviceRole
-      .from("ugc_account_stats")
-      .select("creator_id, captured_on, follower_count")
-      .gte("captured_on", from)
-      .lte("captured_on", to)
-      .order("captured_on", { ascending: true });
 
-    return (data ?? []) as FollowerSnapshot[];
+    return loadEveryRow<FollowerSnapshot>((first, last) =>
+      serviceRole
+        .from("ugc_account_stats")
+        .select("creator_id, captured_on, follower_count")
+        .gte("captured_on", from)
+        .lte("captured_on", to)
+        .order("captured_on", { ascending: true })
+        .order("id", { ascending: true })
+        .range(first, last),
+    );
   },
 );
 

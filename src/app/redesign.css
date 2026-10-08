@@ -22143,15 +22143,53 @@ html[data-native] .memo-toast.subtle {
   50% { rotate: -2deg; }
 }
 
-@media (min-width: 1100px) {
+/*
+ * Side by side, the way the Turbo video has it, from tablet width up rather than from the app's
+ * 1100px: this screen is filmed off a laptop, and a laptop browser window narrower than 1100px (or
+ * the creator's preview pane) must not fall back to the phone strip. Real phones stay stacked.
+ */
+@media (min-width: 640px) {
   .memo-oq {
     flex-direction: row;
-    gap: 2rem;
-    padding: 2rem;
+    gap: 1.6rem;
+    padding: 1.6rem;
   }
 
   .memo-oq-card {
-    flex: 0 1 50rem;
+    flex: 1.35 1 0;
+    max-width: 50rem;
+  }
+
+  .memo-oq-brand {
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0;
+    min-width: 0;
+    padding: 1.2rem 0.5rem 1rem;
+  }
+
+  .memo-oq-stage {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .memo-oq-mascot {
+    width: min(24rem, 76%);
+  }
+
+  .memo-oq-sticker {
+    top: -16%;
+    left: 60%;
+    font-size: clamp(1.85rem, 4.6vw, 4.4rem);
+  }
+}
+
+@media (min-width: 1100px) {
+  .memo-oq {
+    gap: 2rem;
+    padding: 2rem;
   }
 
   .memo-oq-head {
@@ -22175,29 +22213,6 @@ html[data-native] .memo-toast.subtle {
   }
 
   .memo-oq-brand {
-    flex: 1 1 0;
-    flex-direction: column;
-    align-items: stretch;
-    justify-content: flex-start;
-    gap: 0;
-    min-width: 0;
     padding: 1.5rem 0.5rem 1rem;
   }
-
-  .memo-oq-stage {
-    flex: 1 1 auto;
-    justify-content: center;
-    gap: 1.6rem;
-  }
-
-  .memo-oq-mascot {
-    width: min(24rem, 72%);
-  }
-
-  .memo-oq-sticker {
-    top: -16%;
-    left: 60%;
-    font-size: clamp(2.4rem, 4.6vw, 4.4rem);
-  }
-
 }

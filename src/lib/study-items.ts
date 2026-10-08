@@ -452,10 +452,17 @@ export type ItemStudyGenerationResult = {
   plans: CoverageUnitPlan[];
 };
 
-const studyBatchCheckpointSchema = z.object({
-  drafts: z.array(z.unknown()),
-  coveredItemIds: z.array(z.number().int()),
-});
+/*
+ * A batch that covered nothing is never read back. Saved, it would answer the skip retry below
+ * (same items, same key) and every later step retry from the cache, so a deck whose only batch
+ * came back empty once could never be asked again and failed with "no usable cards" for good.
+ */
+const studyBatchCheckpointSchema = z
+  .object({
+    drafts: z.array(z.unknown()),
+    coveredItemIds: z.array(z.number().int()),
+  })
+  .refine((checkpoint) => checkpoint.coveredItemIds.length > 0);
 
 /**
  * Runs one generator over the item batches, retries the union of skipped and missing items once,

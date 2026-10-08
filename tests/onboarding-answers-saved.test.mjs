@@ -359,8 +359,10 @@ test("the option label has room to wrap and cannot leave its tile", () => {
   assert.match(FLOW, /const OPTION_CHROME = \{/);
   // The roomier single-column numbers are the design's own.
   assert.match(FLOW, /single: \{ padding: "0\.95rem", icon: "clamp\(1\.55rem, 4\.6vh, 2\.5rem\)", gap: "0\.8rem" \}/);
-  // The trimmed ones apply exactly where the tiles are half-width.
-  assert.match(FLOW, /step\.cols === WRAPPING_COLUMNS \? OPTION_CHROME\.columns : OPTION_CHROME\.single/);
+  // The trimmed ones apply exactly where the tiles sit side by side: the two
+  // wrapping lists and the year grid alike.
+  assert.match(FLOW, /inColumns\(step\) \? OPTION_CHROME\.columns : OPTION_CHROME\.single/);
+  assert.match(FLOW, /return Boolean\(target\.cols\) && target\.cols !== "1fr";/);
 
   // And the tile actually reads them rather than carrying its own copy.
   const button = FLOW.slice(FLOW.indexOf("{v.options.map("), FLOW.indexOf("{item.label}"));

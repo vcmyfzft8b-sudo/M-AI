@@ -142,6 +142,17 @@ type Step = {
 const WRAPPING_COLUMNS = "repeat(auto-fit, minmax(min(11rem, 47%), 1fr))";
 
 /*
+ * Whether a step lays its options out side by side. Every such step — the two
+ * wrapping lists and the year grid, which goes two-up on a phone too — gets the
+ * compact tile chrome and the corner tick: a two-up tile has no width to spare,
+ * and the year step kept the one-column chrome until "Poslijediplomski" broke
+ * in two on a 390px phone.
+ */
+function inColumns(target: { cols?: string }) {
+  return Boolean(target.cols) && target.cols !== "1fr";
+}
+
+/*
  * How much of a tile the icon, the gap and the padding are allowed to take.
  *
  * A one-per-row step has a whole screen width to spend, and the design's
@@ -157,17 +168,24 @@ const OPTION_CHROME = {
 } as const;
 
 /*
- * The smallest a two-column label may be shrunk to so its longest word fits on
- * one line (see `columnLabelPx`). Below this the word breaks instead, which
+ * The smallest an option label may be shrunk to so its longest word fits on
+ * one line (see `optionLabelPx`). Below this the word breaks instead, which
  * `overflowWrap: "anywhere"` still allows as the last resort.
  */
-const COLUMN_LABEL_FLOOR_PX = 12;
+const OPTION_LABEL_FLOOR_PX = 12;
 
-/** The two-column label's own size, `clamp(0.86rem, 2.1vh, 0.98rem)`, in px. */
-function columnLabelBasePx() {
+/** The option labels' own sizes, as the CSS clamps below state them. */
+const OPTION_LABEL_SIZE = {
+  single: "clamp(0.95rem, 2.3vh, 1.08rem)",
+  columns: "clamp(0.86rem, 2.1vh, 0.98rem)",
+} as const;
+
+/** The same clamps, worked out in px for the measurement. */
+function optionLabelBasePx(columns: boolean) {
   const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  const [min, vh, max] = columns ? [0.86, 0.021, 0.98] : [0.95, 0.023, 1.08];
 
-  return Math.min(0.98 * rem, Math.max(0.86 * rem, 0.021 * window.innerHeight));
+  return Math.min(max * rem, Math.max(min * rem, vh * window.innerHeight));
 }
 
 const STEPS: readonly Step[] = [
@@ -536,16 +554,16 @@ export function OnboardingFlow({
   });
   const [saveError, setSaveError] = useState<string | null>(null);
   /*
-   * The two-column steps' label size when the default is too big for a word.
+   * A question step's label size when the default is too big for a word.
    *
    * On a 360px phone a two-up tile leaves its label about 100px, and v2's
    * heavier type puts some single words past that — Croatian "Personalizacija"
-   * broke as "Personalizacij / a". Hyphenation is not there in every language
-   * on every browser, so the labels are measured instead: every label on the
-   * step shrinks together, just enough for its longest word to fit, and only
-   * when one does not.
+   * broke as "Personalizacij / a", English "Postgraduate" as "Postgraduat / e".
+   * Hyphenation is not there in every language on every browser, so the labels
+   * are measured instead: every label on the step shrinks together, just enough
+   * for its longest word to fit, and only when one does not.
    */
-  const [columnLabelPx, setColumnLabelPx] = useState<number | null>(null);
+  const [optionLabelPx, setOptionLabelPx] = useState<number | null>(null);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -1448,11 +1466,13 @@ export function OnboardingFlow({
     };
   }, []);
 
-  const columnStep = step.cols === WRAPPING_COLUMNS;
+  const questionStep = kind === "q";
+  const columnStep = inColumns(step);
 
   useEffect(() => {
-    if (!columnStep) {
-      setColumnLabelPx(null);
+    setOptionLabelPx(null);
+
+    if (!questionStep) {
       return;
     }
 
@@ -1467,12 +1487,21 @@ export function OnboardingFlow({
         return;
       }
 
-      const base = columnLabelBasePx();
+      const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const base = optionLabelBasePx(columnStep);
       context.font = `800 ${base}px ${getComputedStyle(labels[0]).fontFamily}`;
       let ratio = 1;
 
       for (const label of labels) {
-        const room = label.clientWidth;
+        const tile = label.closest("button");
+        // Outside the two-column steps the tick that marks a pick sits in the
+        // row, so room is kept for it on every tile — otherwise a word that fits
+        // would break the moment its tile is tapped.
+        const tick =
+          !columnStep && tile && tile.getAttribute("aria-pressed") !== "true"
+            ? 1.5 * rem + (Number.parseFloat(getComputedStyle(tile).columnGap) || 0)
+            : 0;
+        const room = label.clientWidth - tick;
 
         for (const word of (label.textContent ?? "").split(/\s+/)) {
           const width = context.measureText(word).width;
@@ -1484,7 +1513,7 @@ export function OnboardingFlow({
       }
 
       // A hair under the exact fit, for the rounding between canvas and layout.
-      setColumnLabelPx(ratio < 1 ? Math.max(COLUMN_LABEL_FLOOR_PX, Math.floor(base * ratio * 0.98 * 10) / 10) : null);
+      setOptionLabelPx(ratio < 1 ? Math.max(OPTION_LABEL_FLOOR_PX, Math.floor(base * ratio * 0.98 * 10) / 10) : null);
     };
 
     // The label font has to be loaded for its widths to be the real ones.
@@ -1495,7 +1524,7 @@ export function OnboardingFlow({
       cancelled = true;
       window.removeEventListener("resize", measure);
     };
-  }, [columnStep, state.stepId, locale]);
+  }, [questionStep, columnStep, state.stepId, locale]);
 
   /*
    * No step scrolls: when a step is taller than the room between the header
@@ -1709,7 +1738,7 @@ export function OnboardingFlow({
   const activeCard = CARDS[queue[Math.min(state.cardPos, queue.length - 1)]] ?? CARDS[0];
   const nextCard = CARDS[queue[state.cardPos + 1]] ?? CARDS[(queue[state.cardPos] + 1) % CARDS.length];
 
-  const chrome = step.cols === WRAPPING_COLUMNS ? OPTION_CHROME.columns : OPTION_CHROME.single;
+  const chrome = inColumns(step) ? OPTION_CHROME.columns : OPTION_CHROME.single;
 
   const showCta = kind !== "loading" || Boolean(saveError);
 
@@ -1769,8 +1798,10 @@ export function OnboardingFlow({
      * broke a ten-letter label across two lines — so there it sits on the corner as a
      * badge, and the label is a step smaller.
      */
-    optionColumns: step.cols === WRAPPING_COLUMNS,
-    columnLabelSize: columnLabelPx ? `${columnLabelPx}px` : "clamp(0.86rem, 2.1vh, 0.98rem)",
+    optionColumns: inColumns(step),
+    optionLabelSize: optionLabelPx
+      ? `${optionLabelPx}px`
+      : OPTION_LABEL_SIZE[inColumns(step) ? "columns" : "single"],
     options,
     summary,
     isWelcome: kind === "welcome",
@@ -2155,7 +2186,7 @@ export function OnboardingFlow({
       </>) : null}
       </span>
       <span style={{ flex: "1 1 auto", minWidth: "0", display: "grid", gap: "0.15rem", overflowWrap: "anywhere" }}>
-      <span data-option-label="" style={{ fontSize: v.optionColumns ? v.columnLabelSize : "clamp(0.95rem, 2.3vh, 1.08rem)", fontWeight: "800", lineHeight: "1.2" }}>{item.label}</span>
+      <span data-option-label="" style={{ fontSize: v.optionLabelSize, fontWeight: "800", lineHeight: "1.2" }}>{item.label}</span>
       {item.desc ? (<>
       <span style={{ fontSize: "clamp(0.7rem, 1.7vh, 0.82rem)", fontWeight: "600", lineHeight: "1.3", color: "var(--muted)" }}>{item.desc}</span>
       </>) : null}

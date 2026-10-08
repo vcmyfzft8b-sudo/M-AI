@@ -91,6 +91,32 @@ export function isRestDay(day: DayKey, restDays: number) {
   return (restDays & (1 << weekdayIndex(day))) !== 0;
 }
 
+/** The first day of the month `day` is in. */
+export function monthOf(day: DayKey): DayKey {
+  return `${day.slice(0, 7)}-01`;
+}
+
+/** The first day of the month `months` after (or before) `month`'s. */
+export function addMonths(month: DayKey, months: number): DayKey {
+  const date = new Date(toUtcMs(monthOf(month)));
+  date.setUTCMonth(date.getUTCMonth() + months);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * A month as a Monday-first calendar: six weeks of seven cells, the days of
+ * the month in place and `null` around them. Always six rows, so the calendar
+ * keeps its height when the learner pages between months.
+ */
+export function monthGrid(month: DayKey): (DayKey | null)[] {
+  const first = monthOf(month);
+  const length = diffDays(first, addMonths(first, 1));
+  const lead = weekdayIndex(first);
+  return Array.from({ length: 42 }, (_, cell) =>
+    cell < lead || cell >= lead + length ? null : addDays(first, cell - lead),
+  );
+}
+
 /**
  * Days elapsed between two instants, for the memory model. Fractional on
  * purpose: forgetting does not wait for midnight.

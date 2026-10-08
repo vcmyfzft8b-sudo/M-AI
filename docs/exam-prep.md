@@ -10,6 +10,12 @@ close they are to that grade.
   (`exam-onboarding.tsx`: Memo in a speech bubble, the 3D chips, the coral button with its
   lip). With an exam it shows that exam's journey (`lecture-exam.tsx`). An exam can cover
   several notes; it then shows in each of their Exam tabs.
+- The flow asks, in order: the exact exam day on a month calendar (tomorrow to a year
+  ahead), **whether there is any other material for the exam**, the exam type, the grade,
+  and the daily time and days off. The material step opens Home's own upload sheet
+  (`NoteSourceModal` with `onCreated`): the new note joins the exam and is written in the
+  background while the learner finishes the setup — the journey shows it as still being
+  prepared and plans it once it is ready. The learner's other notes can be added there too.
 - Demo, no login: `/creator/lectures/demo-note-mikroekonomija?tab=exam` — an exam that
   already has a week and a half of study behind it; any other demo note starts empty.
 - Landing: the Exam pill in the hero phone and "How it works", and the "Exam prep" row of

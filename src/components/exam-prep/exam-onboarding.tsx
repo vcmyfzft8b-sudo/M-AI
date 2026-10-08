@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Nunito } from "next/font/google";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -10,8 +11,9 @@ import {
   MascotSparkles,
   SpeechBubble,
 } from "@/components/onboarding-mascot";
+import type { NoteSourceMode } from "@/components/note-source-modal";
 import { ViewportPortal } from "@/components/viewport-portal";
-import { addDays, dayKeyAt, diffDays, isDayKey } from "@/lib/exam-prep/dates";
+import { addDays, addMonths, dayKeyAt, diffDays, isDayKey, monthGrid, monthOf } from "@/lib/exam-prep/dates";
 import {
   defaultTargetPercent,
   GRADE_SCALE_IDS,
@@ -29,9 +31,21 @@ import { noteEmoji } from "@/lib/note-emoji";
 
 const NUNITO = Nunito({ subsets: ["latin", "latin-ext"], display: "swap" });
 
-type StepId = "welcome" | "date" | "notes" | "type" | "grade" | "time" | "making";
+type StepId = "welcome" | "date" | "material" | "type" | "grade" | "time" | "making";
 
-const DATE_CHOICES = [7, 14, 21, 30] as const;
+/** The app's own upload sheet, loaded only when the learner adds material. */
+const NoteSourceModal = dynamic(
+  () => import("@/components/note-source-modal").then((module) => module.NoteSourceModal),
+  { ssr: false },
+);
+
+/** What else an exam can be on, as Home's "new note" sheet offers it. */
+const MATERIAL_SOURCES: Array<{ mode: NoteSourceMode; icon: string; label: MessageKey }> = [
+  { mode: "text", icon: "📚", label: "library.create.text" },
+  { mode: "record", icon: "🎙️", label: "library.create.record" },
+  { mode: "upload", icon: "🔊", label: "library.quickAction.audio" },
+  { mode: "link", icon: "🔗", label: "library.create.link" },
+];
 
 const TYPE_CHOICES: Array<{ id: ExamTypeId; icon: string; label: MessageKey; desc: MessageKey }> = [
   { id: "written", icon: "✍️", label: "exam.type.written", desc: "exam.type.written.hint" },
@@ -104,17 +118,18 @@ export function ExamOnboarding({
   onSaved,
 }: ExamOnboardingProps) {
   const format = useExamFormat();
-  const { t, locale, longDate, grade, weekdayNames } = format;
+  const { t, locale, longDate, fullDate, monthTitle, grade, weekdayNames } = format;
   const editing = Boolean(initialPlan);
   const today = useMemo(() => dayKeyAt(Date.now(), browserTimeZone()), []);
 
+  const thisNote = notes.find((note) => note.id === lectureId);
   const otherNotes = notes.filter(
     (note) => note.id !== lectureId && (hasPaidAccess || note.id === trialLectureId),
   );
   const steps: StepId[] = [
     ...(editing ? [] : (["welcome"] as StepId[])),
     "date",
-    ...(otherNotes.length > 0 ? (["notes"] as StepId[]) : []),
+    "material",
     "type",
     "grade",
     "time",
@@ -124,10 +139,12 @@ export function ExamOnboarding({
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState(0);
   const [examDate, setExamDate] = useState(initialPlan?.examDate ?? "");
-  const [customDate, setCustomDate] = useState(
-    Boolean(initialPlan && !DATE_CHOICES.some((days) => addDays(today, days) === initialPlan.examDate)),
-  );
+  // The calendar opens on the exam's month when editing, otherwise on this one.
+  const [calendarMonth, setCalendarMonth] = useState(() => monthOf(initialPlan?.examDate ?? today));
   const [lectureIds, setLectureIds] = useState<string[]>(initialPlan?.lectureIds ?? [lectureId]);
+  // Notes made from material uploaded during this setup: still being written.
+  const [uploads, setUploads] = useState<Array<{ id: string; mode: NoteSourceMode }>>([]);
+  const [sourceMode, setSourceMode] = useState<NoteSourceMode | null>(null);
   const [examType, setExamType] = useState<ExamTypeId | null>(initialPlan?.examType ?? null);
   const [gradeScale, setGradeScale] = useState<GradeScaleId>(initialPlan?.gradeScale ?? defaultScale);
   const [targetGrade, setTargetGrade] = useState(
@@ -146,6 +163,7 @@ export function ExamOnboarding({
   const savingRef = useRef(false);
 
   const step = steps[index];
+  const lastExamDay = addDays(today, EXAM_MAX_DAYS_AHEAD);
   const daysUntil = isDayKey(examDate) ? diffDays(today, examDate) : -1;
   const dateValid = daysUntil >= 1 && daysUntil <= EXAM_MAX_DAYS_AHEAD;
   const gradeOptions = targetGradeOptions(gradeScale, locale);
@@ -157,7 +175,7 @@ export function ExamOnboarding({
         return t("exam.ob.welcome");
       case "date":
         return t("exam.ob.qDate");
-      case "notes":
+      case "material":
         return t("exam.ob.qNotes");
       case "type":
         return t("exam.ob.qType");
@@ -273,6 +291,16 @@ export function ExamOnboarding({
     go(index - 1);
   }
 
+  function toggleNote(id: string) {
+    setLectureIds((current) =>
+      current.includes(id)
+        ? current.filter((value) => value !== id)
+        : current.length >= EXAM_MAX_NOTES
+          ? current
+          : [...current, id],
+    );
+  }
+
   function chooseScale(scale: GradeScaleId) {
     setGradeScale(scale);
     const label = DEFAULT_TARGET[scale];
@@ -292,25 +320,28 @@ export function ExamOnboarding({
   const ready: Record<StepId, boolean> = {
     welcome: true,
     date: dateValid,
-    notes: lectureIds.length > 0,
+    material: lectureIds.length > 0,
     type: examType !== null,
     grade: targetPercent > 0 && targetPercent <= 100,
     time: dailyMinutes !== null,
     making: Boolean(error) || (Boolean(savedId) && made >= 3),
   };
 
-  const ctaLabel =
-    step === "welcome"
-      ? t("exam.ob.start")
-      : step === "time"
-        ? editing
-          ? t("common.save")
-          : t("exam.ob.makePlan")
-        : step === "making"
-          ? error
-            ? t("common.retry")
-            : t("exam.ob.open")
-          : t("common.continue");
+  const ctaLabel = (() => {
+    switch (step) {
+      case "welcome":
+        return t("exam.ob.start");
+      case "material":
+        // Only this note so far: the button answers Memo's question.
+        return lectureIds.length === 1 ? t("exam.ob.noMore") : t("common.continue");
+      case "time":
+        return editing ? t("common.save") : t("exam.ob.makePlan");
+      case "making":
+        return error ? t("common.retry") : t("exam.ob.open");
+      default:
+        return t("common.continue");
+    }
+  })();
 
   const progress = Math.round(((index + 1) / steps.length) * 100);
   const isHero = step === "welcome" || step === "making";
@@ -414,121 +445,147 @@ export function ExamOnboarding({
                     {step === "date" ? (
                       <>
                         <p className="memo-exam-ob-sub">{t("exam.ob.subDate")}</p>
-                        <div className="memo-exam-ob-options" role="radiogroup" aria-label={t("exam.ob.qDate")}>
-                          {DATE_CHOICES.map((days, option) => {
-                            const day = addDays(today, days);
-                            const on = !customDate && examDate === day;
-                            return (
-                              <button
-                                key={days}
-                                type="button"
-                                role="radio"
-                                aria-checked={on}
-                                className="memo-exam-ob-option"
-                                style={{ animationDelay: `${40 + option * 55}ms` }}
-                                onClick={() => {
-                                  setCustomDate(false);
-                                  setExamDate(day);
-                                }}
-                              >
-                                <span className="memo-exam-ob-icon" aria-hidden="true">
-                                  {days === 7 ? "⚡" : days === 14 ? "📅" : days === 21 ? "🗓️" : "🌙"}
-                                </span>
-                                <span className="memo-exam-ob-copy">
-                                  <strong>
-                                    {days === 30
-                                      ? t("exam.create.inMonth")
-                                      : t("exam.create.inWeeks", { count: days / 7 })}
-                                  </strong>
-                                  <span>{longDate(day)}</span>
-                                </span>
-                                {on ? <span className="memo-exam-ob-check" aria-hidden="true">✓</span> : null}
-                              </button>
-                            );
-                          })}
-                          <button
-                            type="button"
-                            role="radio"
-                            aria-checked={customDate}
-                            className="memo-exam-ob-option"
-                            style={{ animationDelay: "260ms" }}
-                            onClick={() => {
-                              setCustomDate(true);
-
-                              if (!dateValid) {
-                                setExamDate(addDays(today, 10));
-                              }
-                            }}
-                          >
-                            <span className="memo-exam-ob-icon" aria-hidden="true">✏️</span>
-                            <span className="memo-exam-ob-copy">
-                              <strong>{t("exam.ob.pickDate")}</strong>
-                              <span>
-                                {customDate && dateValid ? longDate(examDate) : t("exam.ob.pickDateSub")}
-                              </span>
-                            </span>
-                            {customDate ? <span className="memo-exam-ob-check" aria-hidden="true">✓</span> : null}
-                          </button>
+                        <div className="memo-exam-ob-cal" role="group" aria-label={t("exam.create.dateLabel")}>
+                          <div className="memo-exam-ob-cal-head">
+                            <button
+                              type="button"
+                              className="memo-exam-ob-round small"
+                              aria-label={t("exam.ob.prevMonth")}
+                              disabled={calendarMonth <= monthOf(today)}
+                              onClick={() => setCalendarMonth((month) => addMonths(month, -1))}
+                            >
+                              ‹
+                            </button>
+                            <strong aria-live="polite">{monthTitle(calendarMonth)}</strong>
+                            <button
+                              type="button"
+                              className="memo-exam-ob-round small"
+                              aria-label={t("exam.ob.nextMonth")}
+                              disabled={calendarMonth >= monthOf(lastExamDay)}
+                              onClick={() => setCalendarMonth((month) => addMonths(month, 1))}
+                            >
+                              ›
+                            </button>
+                          </div>
+                          <div className="memo-exam-ob-cal-week" aria-hidden="true">
+                            {weekdayNames().map((name, day) => (
+                              <span key={day}>{name}</span>
+                            ))}
+                          </div>
+                          <div className="memo-exam-ob-cal-grid" key={calendarMonth}>
+                            {monthGrid(calendarMonth).map((day, cell) =>
+                              day ? (
+                                <button
+                                  key={day}
+                                  type="button"
+                                  aria-pressed={examDate === day}
+                                  aria-current={day === today ? "date" : undefined}
+                                  aria-label={day === today ? `${fullDate(day)}, ${t("exam.ob.today")}` : fullDate(day)}
+                                  className="memo-exam-ob-cal-day"
+                                  // The exam is at the earliest tomorrow: today leaves no day to plan.
+                                  disabled={day <= today || day > lastExamDay}
+                                  onClick={() => setExamDate(day)}
+                                >
+                                  {Number(day.slice(8))}
+                                </button>
+                              ) : (
+                                <span key={`blank-${cell}`} aria-hidden="true" />
+                              ),
+                            )}
+                          </div>
                         </div>
-                        {customDate ? (
-                          <input
-                            className="memo-exam-ob-date"
-                            type="date"
-                            value={examDate}
-                            min={addDays(today, 1)}
-                            max={addDays(today, EXAM_MAX_DAYS_AHEAD)}
-                            aria-label={t("exam.create.dateLabel")}
-                            onChange={(event) => setExamDate(event.target.value)}
-                          />
-                        ) : null}
                       </>
                     ) : null}
 
-                    {step === "notes" ? (
+                    {step === "material" ? (
                       <>
                         <p className="memo-exam-ob-sub">{t("exam.ob.subNotes")}</p>
                         <div className="memo-exam-ob-options" role="group" aria-label={t("exam.ob.qNotes")}>
-                          {[
-                            notes.find((note) => note.id === lectureId) ?? {
-                              id: lectureId,
-                              title: lectureTitle,
-                              sourceType: null,
-                              status: "ready",
-                            },
-                            ...otherNotes,
-                          ].map((note, option) => {
-                            const isThis = note.id === lectureId;
-                            const on = lectureIds.includes(note.id);
+                          <button
+                            type="button"
+                            aria-pressed
+                            disabled
+                            className="memo-exam-ob-option"
+                            style={{ animationDelay: "40ms" }}
+                          >
+                            <span className="memo-exam-ob-icon" aria-hidden="true">
+                              {noteEmoji({ id: lectureId, title: lectureTitle, source_type: thisNote?.sourceType })}
+                            </span>
+                            <span className="memo-exam-ob-copy">
+                              <strong>{thisNote?.title || lectureTitle || t("note.untitled")}</strong>
+                              <span>{t("exam.ob.thisNote")}</span>
+                            </span>
+                            <span className="memo-exam-ob-check" aria-hidden="true">✓</span>
+                          </button>
+                          {uploads.map((upload) => {
+                            const on = lectureIds.includes(upload.id);
                             return (
                               <button
-                                key={note.id}
+                                key={upload.id}
                                 type="button"
                                 aria-pressed={on}
-                                disabled={isThis}
                                 className="memo-exam-ob-option"
-                                style={{ animationDelay: `${40 + Math.min(option, 8) * 55}ms` }}
-                                onClick={() =>
-                                  setLectureIds((current) =>
-                                    current.includes(note.id)
-                                      ? current.filter((id) => id !== note.id)
-                                      : current.length >= EXAM_MAX_NOTES
-                                        ? current
-                                        : [...current, note.id],
-                                  )
-                                }
+                                onClick={() => toggleNote(upload.id)}
                               >
                                 <span className="memo-exam-ob-icon" aria-hidden="true">
-                                  {noteEmoji({ id: note.id, title: note.title, source_type: note.sourceType })}
+                                  {MATERIAL_SOURCES.find((source) => source.mode === upload.mode)?.icon}
                                 </span>
                                 <span className="memo-exam-ob-copy">
-                                  <strong>{note.title || t("note.untitled")}</strong>
-                                  {isThis ? <span>{t("exam.ob.thisNote")}</span> : null}
+                                  <strong>{t("exam.ob.newMaterial")}</strong>
+                                  <span>{t("exam.ob.preparing")}</span>
                                 </span>
                                 {on ? <span className="memo-exam-ob-check" aria-hidden="true">✓</span> : null}
                               </button>
                             );
                           })}
                         </div>
+
+                        <p className="memo-exam-ob-label-row">{t("exam.ob.addMaterial")}</p>
+                        <div className="memo-exam-ob-adds">
+                          {MATERIAL_SOURCES.map((source, option) => (
+                            <button
+                              key={source.mode}
+                              type="button"
+                              className="memo-exam-ob-add"
+                              style={{ animationDelay: `${120 + option * 55}ms` }}
+                              disabled={lectureIds.length >= EXAM_MAX_NOTES}
+                              onClick={() => setSourceMode(source.mode)}
+                            >
+                              <span className="memo-exam-ob-icon" aria-hidden="true">{source.icon}</span>
+                              <span>{t(source.label)}</span>
+                            </button>
+                          ))}
+                        </div>
+
+                        {otherNotes.length > 0 ? (
+                          <>
+                            <p className="memo-exam-ob-label-row">{t("exam.ob.yourNotes")}</p>
+                            <div className="memo-exam-ob-options" role="group" aria-label={t("exam.ob.yourNotes")}>
+                              {otherNotes.map((note, option) => {
+                                const on = lectureIds.includes(note.id);
+                                return (
+                                  <button
+                                    key={note.id}
+                                    type="button"
+                                    aria-pressed={on}
+                                    className="memo-exam-ob-option"
+                                    style={{ animationDelay: `${340 + Math.min(option, 8) * 55}ms` }}
+                                    onClick={() => toggleNote(note.id)}
+                                  >
+                                    <span className="memo-exam-ob-icon" aria-hidden="true">
+                                      {noteEmoji({ id: note.id, title: note.title, source_type: note.sourceType })}
+                                    </span>
+                                    <span className="memo-exam-ob-copy">
+                                      <strong>{note.title || t("note.untitled")}</strong>
+                                      {note.status !== "ready" ? <span>{t("exam.ob.preparing")}</span> : null}
+                                    </span>
+                                    {on ? <span className="memo-exam-ob-check" aria-hidden="true">✓</span> : null}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        ) : null}
                       </>
                     ) : null}
 
@@ -711,6 +768,22 @@ export function ExamOnboarding({
           </footer>
         </div>
       </div>
+      {sourceMode ? (
+        // The same sheet Home opens. The note it makes joins this exam and the
+        // learner stays in the setup; it is written in the background.
+        <NoteSourceModal
+          mode={sourceMode}
+          open
+          canCreateNotes={hasPaidAccess}
+          onClose={() => setSourceMode(null)}
+          onCreated={(id) => {
+            setUploads((current) => [...current, { id, mode: sourceMode }]);
+            setLectureIds((current) =>
+              current.includes(id) || current.length >= EXAM_MAX_NOTES ? current : [...current, id],
+            );
+          }}
+        />
+      ) : null}
     </ViewportPortal>
   );
 }

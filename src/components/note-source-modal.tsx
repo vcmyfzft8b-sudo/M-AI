@@ -321,11 +321,17 @@ export function NoteSourceModal({
   open,
   onClose,
   canCreateNotes,
+  onCreated,
 }: {
   mode: NoteSourceMode | null;
   open: boolean;
   onClose: () => void;
   canCreateNotes?: boolean;
+  /**
+   * Hands the new note back instead of opening it. The exam setup uses this to
+   * add material to an exam without leaving the setup.
+   */
+  onCreated?: (lectureId: string) => void;
 }) {
   const t = useT();
   const router = useRouter();
@@ -564,6 +570,19 @@ export function NoteSourceModal({
     if (photoSource && photoSource.id !== activePhotoPreviewId) {
       setActivePhotoPreviewId(photoSource.id);
     }
+  }
+
+  /** The note is made and processing: open it, or hand it back to the caller that asked. */
+  function finishCreated(lectureId: string) {
+    onClose();
+
+    if (onCreated) {
+      onCreated(lectureId);
+      return;
+    }
+
+    navigateWithFeedback(`/app/lectures/${lectureId}`);
+    router.refresh();
   }
 
   function redirectToPaywall() {
@@ -1285,6 +1304,13 @@ export function NoteSourceModal({
 
       pendingLecture.commit();
 
+      if (onCreated) {
+        stopProcessing();
+        onClose();
+        onCreated(pendingLecture.id);
+        return;
+      }
+
       // The sheet stays up — and stays in its processing state — until the
       // route swap unmounts it. Closing it or clearing the busy label here
       // would show the library, or the sheet's idle "Ustvari" state, in the gap
@@ -1351,9 +1377,7 @@ export function NoteSourceModal({
 
       processingStarted = true;
       createdLectureIdRef.current = null;
-      onClose();
-      navigateWithFeedback(`/app/lectures/${result.lectureId}`);
-      router.refresh();
+      finishCreated(result.lectureId);
     } catch (submitError) {
       if (redirectToBillingIfNeeded({ error: submitError, router })) {
         onClose();
@@ -1593,9 +1617,7 @@ export function NoteSourceModal({
 
       // Kept either way: queued now, or finished from storage by the server shortly.
       createdLectureIdRef.current = null;
-      onClose();
-      navigateWithFeedback(`/app/lectures/${lectureId}`);
-      router.refresh();
+      finishCreated(lectureId);
     } catch (submitError) {
       await deleteCreatedLecture();
       if (redirectToBillingIfNeeded({ error: submitError, router })) {
@@ -1667,10 +1689,8 @@ export function NoteSourceModal({
 
       await parseApiResponse<{ lectureId: string }>(response, t);
 
-      onClose();
       createdLectureIdRef.current = null;
-      navigateWithFeedback(`/app/lectures/${lectureId}`);
-      router.refresh();
+      finishCreated(lectureId);
     } catch (submitError) {
       await deleteCreatedLecture();
       if (redirectToBillingIfNeeded({ error: submitError, router })) {
@@ -2123,10 +2143,8 @@ export function NoteSourceModal({
 
       await parseApiResponse<{ lectureId: string }>(response, t);
 
-      onClose();
       createdLectureIdRef.current = null;
-      navigateWithFeedback(`/app/lectures/${lectureId}`);
-      router.refresh();
+      finishCreated(lectureId);
     } catch (submitError) {
       await deleteCreatedLecture();
       if (redirectToBillingIfNeeded({ error: submitError, router })) {

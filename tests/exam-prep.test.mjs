@@ -3,10 +3,13 @@ import test from "node:test";
 
 import {
   addDays,
+  addMonths,
   dayKeyAt,
   diffDays,
   isDayKey,
   isRestDay,
+  monthGrid,
+  monthOf,
   weekdayIndex,
 } from "../src/lib/exam-prep/dates.ts";
 import {
@@ -355,4 +358,29 @@ test("plan requests are validated: real notes are uuids, the demo's are readable
   assert.equal(demoCreateExamPlanSchema.safeParse({ ...body, lectureIds: ["demo-note-anatomija"] }).success, true);
   assert.equal(createExamPlanSchema.safeParse({ ...body, restDays: 127, lectureIds: ["0b5c0d9e-6f1a-4c55-8a51-0d6f1b4e9a10"] }).success, false);
   assert.equal(createExamPlanSchema.safeParse({ ...body, examDate: "2026-02-30", lectureIds: ["0b5c0d9e-6f1a-4c55-8a51-0d6f1b4e9a10"] }).success, false);
+});
+
+test("the date calendar lays a month out Monday-first in six fixed weeks", () => {
+  assert.equal(monthOf("2026-10-08"), "2026-10-01");
+  assert.equal(addMonths("2026-10-08", 1), "2026-11-01");
+  assert.equal(addMonths("2026-01-31", 1), "2026-02-01");
+  assert.equal(addMonths("2026-01-15", -1), "2025-12-01");
+
+  // October 2026 starts on a Thursday: three blanks, then 1–31.
+  const october = monthGrid("2026-10-20");
+  assert.equal(october.length, 42);
+  assert.deepEqual(october.slice(0, 4), [null, null, null, "2026-10-01"]);
+  assert.equal(october.filter(Boolean).length, 31);
+  assert.equal(october[3 + 30], "2026-10-31");
+  assert.equal(october[3 + 31], null);
+
+  // A month starting on Sunday and running 31 days fills the sixth week.
+  const march = monthGrid("2026-03-01");
+  assert.equal(march.indexOf("2026-03-01"), 6);
+  assert.equal(march[41], null);
+  assert.equal(march[36], "2026-03-31");
+
+  for (const day of october.filter(Boolean)) {
+    assert.equal(october.indexOf(day) % 7, weekdayIndex(day));
+  }
 });

@@ -113,6 +113,14 @@ export function useExamFormat() {
     longDate: (day: string) => format(day, { weekday: "short", day: "numeric", month: "short" }),
     weekday: (day: string) => format(day, { weekday: "short" }),
     dayOfMonth: (day: string) => format(day, { day: "numeric" }),
+    /** "Wednesday, 28 October 2026", for a calendar day read aloud. */
+    fullDate: (day: string) =>
+      format(day, { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+    /** "October 2026" over a calendar, capitalised as a heading in every language. */
+    monthTitle: (day: string) => {
+      const title = format(day, { month: "long", year: "numeric" });
+      return title.charAt(0).toLocaleUpperCase(tag) + title.slice(1);
+    },
     /** Monday-first short weekday names, for the rest-day picker. */
     weekdayNames: () =>
       // 2026-10-05 is a Monday.

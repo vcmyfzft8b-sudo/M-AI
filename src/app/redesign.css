@@ -5837,31 +5837,37 @@
   width: 38%;
   border-radius: inherit;
   background: var(--coral);
-  animation: memo-gen-sweep 1.5s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  animation: memo-gen-sweep 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/*
+ * From just off the left end to just off the right one, with no rest at
+ * either: the fill is 38% of the track, so it has cleared it at 100 / 38 =
+ * 263%. The old sweep paused off-screen at both ends and ran on to 300%, which
+ * left the track empty for about half of every pass, so the bar looked as if
+ * it had stopped.
+ */
 @keyframes memo-gen-sweep {
-  0%,
-  6% {
-    transform: translateX(-105%);
+  from {
+    transform: translateX(-100%);
   }
 
-  94%,
-  100% {
-    transform: translateX(300%);
+  to {
+    transform: translateX(263.2%);
   }
 }
 
 /*
- * Reduced motion stops the sweep at its first frame, which is off the left end
- * — an empty track reads as broken rather than as still. A full, quieter bar
- * says the same thing without moving.
+ * Reduced motion keeps the sweep, only slower. This bar is the one sign that a
+ * note is still being made, and a still bar over a wait of minutes reads as
+ * stuck; it is the same call iOS makes, whose own activity indicators keep
+ * turning under Reduce Motion. `!important` because globals.css cuts every
+ * animation to a single 0.01ms run in this mode.
  */
 @media (prefers-reduced-motion: reduce) {
   .memo-gen-track > span {
-    width: 100%;
-    transform: none;
-    opacity: 0.55;
+    animation-duration: 2.4s !important;
+    animation-iteration-count: infinite !important;
   }
 }
 

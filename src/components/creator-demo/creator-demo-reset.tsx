@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAppHref } from "@/components/creator-demo/creator-demo-context";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { useT } from "@/components/i18n-provider";
+import { resetDemoExams } from "@/lib/creator-demo/exams";
 import { resetCreatorDemo } from "@/lib/creator-demo/store";
 
 /** Puts the demo library back to its starting state between takes. */
@@ -23,6 +24,7 @@ export function CreatorDemoReset() {
       onClick={() => {
         setIsResetting(true);
         resetCreatorDemo();
+        resetDemoExams();
         router.push(homeHref);
         window.setTimeout(() => setIsResetting(false), 400);
       }}

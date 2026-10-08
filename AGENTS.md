@@ -204,6 +204,18 @@ either symptom as this incident first, and only as new if it recurs after that m
   the map is ever dimmed by a selection — only a search dims, and only what it did not match.
 - Details are in [docs/mindmap.md](/docs/mindmap.md).
 
+## Exam Prep
+
+- The day-by-day journey is never stored. It is recomputed from the learner's study evidence
+  (`study_events`, graded practice tests, manual ticks) by the pure planner in
+  `src/lib/exam-prep/journey.ts`, so a missed day re-plans itself. Do not add a stored
+  schedule or "missed" counters.
+- The forecast counts first-attempt answers only, is always a range, and stays locked below
+  `FORECAST_EVIDENCE_NEEDED`. Never feed self-rated confidence into it.
+- The same functions run in the real API (`src/lib/exam-prep/server.ts`) and the `/creator`
+  demo (`src/lib/creator-demo/exams.ts`). Change them once, in `src/lib/exam-prep/`.
+- Method, sources and constants: [docs/exam-prep.md](/docs/exam-prep.md).
+
 ## Admin Dashboard
 
 - The admin dashboard is at `/admin`, gated by the `public.admin_users` email allowlist rather than a role on the user account. `PREVIEW_AUTH_BYPASS` deliberately does not open it.

@@ -12,6 +12,20 @@
 import { buildNoteTtsChunks, parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import { buildDemoMindmap } from "@/lib/creator-demo/mindmap";
 import { demoT } from "@/lib/creator-demo/demo-translator";
+import {
+  createDemoExam,
+  deleteDemoExam,
+  getDemoExamPayload,
+  listDemoExamSummaries,
+  recordDemoStudyEvent,
+  setDemoExamCheck,
+  updateDemoExam,
+} from "@/lib/creator-demo/exams";
+import {
+  demoCreateExamPlanSchema,
+  demoUpdateExamPlanSchema,
+  examTaskCheckSchema,
+} from "@/lib/exam-prep/schema";
 import type { EditableNoteDoc } from "@/lib/note-doc";
 import {
   addDemoNoteMedia,
@@ -287,6 +301,19 @@ async function handleLectureRoute(
         return handleQuizQuestionRoute(lectureId, tail.slice(1), method, input, init);
       }
 
+      if (section === "quiz" && tail[0] === "answers") {
+        const body = await readJsonBody(init, input);
+        const question = detail?.quizQuestions.find((item) => item.id === body.questionId);
+
+        if (!question) {
+          return json({ error: demoT("api.notFound") }, 404);
+        }
+
+        const correct = question.correct_option_idx === body.optionIndex;
+        recordDemoStudyEvent({ lectureId, kind: "quiz", itemId: question.id, outcome: correct ? 3 : 1 });
+        return json({ correct });
+      }
+
       return json({ ok: true });
     }
 
@@ -504,6 +531,61 @@ async function handleQuizQuestionRoute(
   return question ? json({ question }) : json({ error: demoT("api.notFound") }, 404);
 }
 
+/** Exam prep, computed from the demo library by the same planner as production. */
+async function handleExamRoute(
+  segments: string[],
+  method: string,
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+) {
+  const [planId, action] = segments;
+
+  if (!planId) {
+    if (method === "POST") {
+      const parsed = demoCreateExamPlanSchema.safeParse(await readJsonBody(init, input));
+
+      if (!parsed.success) {
+        return json({ error: demoT("common.somethingWentWrong") }, 400);
+      }
+
+      return json({ id: createDemoExam(parsed.data) }, 201);
+    }
+
+    return json({ plans: listDemoExamSummaries() });
+  }
+
+  if (action === "checks") {
+    const parsed = examTaskCheckSchema.safeParse(await readJsonBody(init, input));
+
+    if (!parsed.success) {
+      return json({ error: demoT("common.somethingWentWrong") }, 400);
+    }
+
+    return setDemoExamCheck(planId, parsed.data)
+      ? json({ ok: true })
+      : json({ error: demoT("api.notFound") }, 404);
+  }
+
+  if (method === "PATCH") {
+    const parsed = demoUpdateExamPlanSchema.safeParse(await readJsonBody(init, input));
+
+    if (!parsed.success) {
+      return json({ error: demoT("common.somethingWentWrong") }, 400);
+    }
+
+    return updateDemoExam(planId, parsed.data)
+      ? json({ ok: true })
+      : json({ error: demoT("api.notFound") }, 404);
+  }
+
+  if (method === "DELETE") {
+    return deleteDemoExam(planId) ? json({ ok: true }) : json({ error: demoT("api.notFound") }, 404);
+  }
+
+  const payload = getDemoExamPayload(planId);
+  return payload ? json(payload) : json({ error: demoT("api.notFound") }, 404);
+}
+
 async function handleFolderRoute(
   segments: string[],
   method: string,
@@ -693,10 +775,20 @@ async function handleDemoRequest(
 
       if (action === "progress") {
         const body = await readJsonBody(init, input);
-        const progress = setDemoFlashcardProgress({
-          flashcardId,
-          confidenceBucket: (body.confidenceBucket as "again" | "good" | "easy") ?? "good",
-        });
+        const confidenceBucket = (body.confidenceBucket as "again" | "good" | "easy") ?? "good";
+        const progress = setDemoFlashcardProgress({ flashcardId, confidenceBucket });
+        const lectureId = getCreatorDemoState().order.find((id) =>
+          getCreatorDemoState().details[id]?.flashcards.some((card) => card.id === flashcardId),
+        );
+
+        if (lectureId) {
+          recordDemoStudyEvent({
+            lectureId,
+            kind: "flashcard",
+            itemId: flashcardId,
+            outcome: confidenceBucket === "again" ? 1 : confidenceBucket === "easy" ? 4 : 3,
+          });
+        }
 
         return json({ progress });
       }
@@ -735,6 +827,9 @@ async function handleDemoRequest(
 
     case "library-folders":
       return handleFolderRoute(rest, method, input, init);
+
+    case "exams":
+      return handleExamRoute(rest, method, input, init);
 
     default:
       return json({ ok: true });

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import type { FlashcardProgressRow } from "@/lib/database.types";
+import { recordStudyEvent } from "@/lib/exam-prep/server";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -10,6 +11,9 @@ import { routeIdParamSchema } from "@/lib/validation";
 import { tr } from "@/lib/i18n/server";
 
 const FLASHCARD_PROGRESS_MAX_BYTES = 4 * 1024;
+
+/** The confidence buttons on the FSRS grade scale the review log uses. */
+const BUCKET_OUTCOME = { again: 1, good: 3, easy: 4 } as const;
 
 const progressSchema = z.object({
   confidenceBucket: z.enum(["again", "good", "easy"]),
@@ -114,6 +118,16 @@ export async function POST(
   if (progressError) {
     return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }
+
+  // The row above keeps only the latest grade; the exam journey's memory model
+  // needs every review, so each one is also appended to the log.
+  await recordStudyEvent({
+    userId: user.id,
+    lectureId: flashcardRow.lecture_id,
+    kind: "flashcard",
+    itemId: id,
+    outcome: BUCKET_OUTCOME[parsed.data.confidenceBucket],
+  });
 
   return NextResponse.json({ progress });
 }

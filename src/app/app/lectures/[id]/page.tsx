@@ -9,13 +9,16 @@ import { routeIdParamSchema } from "@/lib/validation";
 
 export default async function LecturePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string | string[] }>;
 }) {
-  const [user, resolvedParams, appState] = await Promise.all([
+  const [user, resolvedParams, appState, query] = await Promise.all([
     requireUser(),
     params,
     getViewerAppState(),
+    searchParams,
   ]);
   const parsedParams = routeIdParamSchema.safeParse(resolvedParams);
 
@@ -57,10 +60,13 @@ export default async function LecturePage({
         trialLectureId={appState?.trialLectureId ?? null}
       />
       <LectureWorkspace
+        // A new deep link (`?tab=`) opens the note afresh on that tab.
+        key={typeof query.tab === "string" ? query.tab : "notes"}
         initialDetail={detail}
         hasPaidAccess={Boolean(appState?.hasPaidAccess)}
         trialLectureId={appState?.trialLectureId ?? null}
         initialTrialChatMessagesRemaining={appState?.trialChatMessagesRemaining ?? 5}
+        initialTabId={typeof query.tab === "string" ? query.tab : null}
       />
     </>
   );

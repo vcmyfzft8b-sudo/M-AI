@@ -80,6 +80,7 @@ function buildHomepageJsonLd(locale: string, t: (key: MessageKey) => string) {
       t("landing.seo.featureMindmap"),
       t("landing.seo.featurePalace"),
       t("landing.seo.featureSpeedRead"),
+      t("landing.seo.featureExamPrep"),
       t("landing.seo.featureChat"),
     ],
   };

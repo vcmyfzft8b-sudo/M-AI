@@ -31,6 +31,7 @@ import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
  */
 const RAIL_ITEMS: Array<{ href: string; labelKey: MessageKey; icon: string }> = [
   { href: "/app", labelKey: "nav.home", icon: "home" },
+  { href: "/app/exams", labelKey: "nav.exams", icon: "event" },
   { href: "/app/support", labelKey: "nav.help", icon: "help" },
   { href: "/app/settings", labelKey: "nav.settings", icon: "settings" },
 ];

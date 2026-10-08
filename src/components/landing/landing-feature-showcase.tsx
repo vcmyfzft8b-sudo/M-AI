@@ -12,6 +12,7 @@ import type { MessageKey } from "@/lib/i18n/messages/keys";
 
 import { LandingAppScope } from "./app/landing-app-scope";
 import { landingNoteMeta, landingNoteTitleMeta } from "./app/landing-note-meta";
+import { LandingExamScreen } from "./app/landing-exam-screen";
 import { LandingFlashcardsScreen } from "./app/landing-flashcards-screen";
 import { LandingMindmapScreen } from "./app/landing-mindmap-screen";
 import { LandingPalaceScreen } from "./app/landing-palace-screen";
@@ -36,7 +37,8 @@ import type { SourceDetail, SourceKind } from "./memo-app-preview-data";
  *
  * The order is the app's: capture, the note and the two things its screen does
  * besides being read (listen, and the tutor), the study pills in the order the
- * note's pill row lists them, and last the chat, which reaches across every note.
+ * note's pill row lists them, exam prep, which plans across notes, and last the
+ * chat, which reaches across every note.
  */
 const FEATURES = [
   { id: "capture", titleKey: "showcase.captureTitle", descKey: "showcase.captureDesc" },
@@ -50,6 +52,7 @@ const FEATURES = [
   { id: "palace", titleKey: "showcase.palaceTitle", descKey: "showcase.palaceDesc" },
   { id: "test", titleKey: "showcase.testsTitle", descKey: "showcase.testsDesc" },
   { id: "speed", titleKey: "showcase.speedTitle", descKey: "showcase.speedDesc" },
+  { id: "exam", titleKey: "showcase.examTitle", descKey: "showcase.examDesc" },
   { id: "chat", titleKey: "showcase.chatTitle", descKey: "showcase.chatDesc" },
 ] as const satisfies ReadonlyArray<{ id: string; titleKey: MessageKey; descKey: MessageKey }>;
 
@@ -431,6 +434,7 @@ const PANELS: Record<FeatureId, ComponentType<PanelProps>> = {
   palace: ({ active }) => <LandingPalaceScreen autoplay={active} />,
   test: ({ active }) => <LandingTestScreen autoplay={active} />,
   speed: ({ active }) => <LandingSpeedReadScreen autoplay={active} />,
+  exam: () => <LandingExamScreen />,
   chat: ChatPanel,
 };
 
@@ -445,6 +449,7 @@ const PADDED: ReadonlySet<FeatureId> = new Set([
   "palace",
   "test",
   "speed",
+  "exam",
 ]);
 
 /* One phone-sized screen holding the app. */

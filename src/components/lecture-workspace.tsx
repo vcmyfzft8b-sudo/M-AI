@@ -20,6 +20,7 @@ import { StudyCompletionCard } from "@/components/study-completion-card";
 import { MemoPortal } from "@/components/memo-portal";
 import { OfflineFeatureNotice, useOfflineGuard } from "@/components/offline/offline-notice";
 import { RecordingPlayer } from "@/components/recording-player";
+import { useIsHydrated } from "@/components/viewport-portal";
 import {
   getApiErrorMessage,
   parseApiResponse,
@@ -1102,16 +1103,41 @@ const SUB_SCREEN_TITLE_KEYS: Record<string, MessageKey | null> = {
   transcript: "note.tab.transcript",
 };
 
+/**
+ * The workspace tab a note tab id opens. Used for deep links (`?tab=quiz`),
+ * which the exam journey's tasks use to land on the right tool.
+ */
+function workspaceTabForNoteTab(id: string | null | undefined): WorkspaceTab {
+  switch (id) {
+    case "tutor":
+    case "podcast":
+    case "mindmap":
+    case "palace":
+    case "speed":
+    case "transcript":
+      return id;
+    case "flashcards":
+    case "quiz":
+    case "test":
+      return "study";
+    default:
+      return "notes";
+  }
+}
+
 export function LectureWorkspace({
   initialDetail,
   hasPaidAccess,
   trialLectureId,
   initialTrialChatMessagesRemaining,
+  initialTabId = null,
 }: {
   initialDetail: LectureDetail;
   hasPaidAccess: boolean;
   trialLectureId: string | null;
   initialTrialChatMessagesRemaining: number;
+  /** A `NOTE_TABS` id to open on, from the `?tab=` deep link. */
+  initialTabId?: string | null;
 }) {
   const { locale, t } = useTranslations();
   const router = useRouter();
@@ -1126,7 +1152,17 @@ export function LectureWorkspace({
    */
   const { isOffline, blockedOffline, offlineToast } = useOfflineGuard();
   const [detail, setDetail] = useState(initialDetail);
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>("notes");
+  const initialNoteTab = NOTE_TABS.find((tab) => tab.id === initialTabId) ?? null;
+  /*
+   * A deep-linked tab opens once the page has hydrated, not on the server: the
+   * quiz shuffles its options as it is first drawn, so a server-drawn quiz and
+   * the browser's would disagree. Until the learner picks a tab themselves the
+   * link decides; null means "not picked yet".
+   */
+  const isHydrated = useIsHydrated();
+  const [chosenTab, setActiveTab] = useState<WorkspaceTab | null>(initialNoteTab ? null : "notes");
+  const activeTab: WorkspaceTab =
+    chosenTab ?? (isHydrated ? workspaceTabForNoteTab(initialNoteTab?.id) : "notes");
   const [question, setQuestion] = useState("");
   const [chatError, setChatError] = useState<string | null>(null);
   // Redesign chrome. Chat is a side panel that can be dismissed to a pill and
@@ -1303,9 +1339,10 @@ export function LectureWorkspace({
   );
   const [isFlashcardFlipped, setIsFlashcardFlipped] = useState(false);
   /** Set once the learner taps a study pill, after which nothing reroutes them. */
-  const hasChosenStudyViewRef = useRef(false);
+  const hasChosenStudyViewRef = useRef(Boolean(initialNoteTab?.view));
+  const deepLinkedStudyViewRef = useRef<StudyMaterialView | null>(initialNoteTab?.view ?? null);
   const [activeStudyView, setActiveStudyView] = useState<StudyMaterialView>(
-    getInitialStudyView(initialDetail),
+    initialNoteTab?.view ?? getInitialStudyView(initialDetail),
   );
   const initialFlashcardSession = sanitizeFlashcardSessionState(
     initialDetail.studySession?.flashcard_state,
@@ -1548,8 +1585,11 @@ export function LectureWorkspace({
 
   useEffect(() => {
     const nextDetail = mergeLectureDetailWithStoredStudySession(initialDetail);
+    // A deep link's view wins on the first pass only; a later note resets as before.
+    const linkedView = deepLinkedStudyViewRef.current;
+    deepLinkedStudyViewRef.current = null;
     setDetail(nextDetail);
-    setActiveStudyView(getInitialStudyView(nextDetail));
+    setActiveStudyView(linkedView ?? getInitialStudyView(nextDetail));
   }, [initialDetail]);
 
   useEffect(() => {
@@ -2677,6 +2717,7 @@ export function LectureWorkspace({
       [currentQuizQuestionId]: optionIndex,
     };
     setQuizSelections(nextSelections);
+    recordQuizAnswer(currentQuizQuestionId, optionIndex);
 
     // A right answer needs no interruption — the design lets it read for a
     // beat, then moves on by itself. A miss waits for the feedback row.
@@ -2690,6 +2731,23 @@ export function LectureWorkspace({
         QUIZ_CORRECT_PAUSE_MS,
       );
     }
+  }
+
+  /**
+   * Logs the answer for the exam journey's forecast. Fire-and-forget: the quiz
+   * never waits on it, and an answer lost offline costs one data point.
+   */
+  function recordQuizAnswer(questionId: string, optionIndex: number) {
+    if (isOffline) {
+      return;
+    }
+
+    void fetch(`/api/lectures/${detail.lecture.id}/quiz/answers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ questionId, optionIndex }),
+      keepalive: true,
+    }).catch(() => undefined);
   }
 
   function finishQuizRound(selections = quizSelections) {

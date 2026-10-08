@@ -16,9 +16,11 @@ const RESOLVE_TIMEOUT_MS = 2500;
 export function CreatorLecture({
   lectureId,
   initialDetail,
+  initialTabId = null,
 }: {
   lectureId: string;
   initialDetail: LectureDetail | null;
+  initialTabId?: string | null;
 }) {
   const t = useT();
   const detail = useCreatorDemoDetail(lectureId, initialDetail);
@@ -61,11 +63,12 @@ export function CreatorLecture({
 
   return (
     <LectureWorkspace
-      key={lectureId}
+      key={`${lectureId}:${initialTabId ?? "notes"}`}
       initialDetail={detail}
       hasPaidAccess
       trialLectureId={null}
       initialTrialChatMessagesRemaining={5}
+      initialTabId={initialTabId}
     />
   );
 }

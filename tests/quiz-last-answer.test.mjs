@@ -24,7 +24,7 @@ const javascript = ts.transpileModule([...handlers.values()].join("\n"), {
 
 function render({ queue = ["first", "last"], index = queue.length - 1, selections = { first: 1 }, round = 1 } = {}) {
   const questions = new Map(queue.map(id => [id, { id, correct_option_idx: 1 }]));
-  const state = { selections, index, summary: null };
+  const state = { selections, index, summary: null, recorded: [] };
   const pending = [];
   const currentId = queue[index];
   const context = vm.createContext({
@@ -35,6 +35,8 @@ function render({ queue = ["first", "last"], index = queue.length - 1, selection
     setQuizSelections: next => { state.selections = typeof next === "function" ? next(state.selections) : next; },
     setActiveQuizQuestionIndex: next => { state.index = typeof next === "function" ? next(state.index) : next; },
     setQuizRoundSummary: next => { state.summary = next; },
+    // The answer is also logged for the exam journey; it must never hold the quiz up.
+    recordQuizAnswer: (questionId, optionIndex) => { state.recorded.push([questionId, optionIndex]); },
     window: { clearTimeout() {}, setTimeout(fn) { pending.push(fn); return pending.length; } },
   });
   vm.runInContext(javascript, context);
@@ -79,4 +81,14 @@ test("a correct answer before the last question advances without ending the roun
   ui.pending.shift()();
   assert.equal(ui.state.index, 1);
   assert.equal(ui.state.summary, null);
+});
+
+test("an answer is logged once for the exam journey, and an answered question logs nothing", () => {
+  const fresh = render({ queue: ["first", "last"], selections: {} });
+  fresh.choose(0);
+  assert.deepEqual(fresh.state.recorded, [["last", 0]]);
+
+  const answered = render({ queue: ["first", "last"], selections: { last: 1 } });
+  answered.choose(0);
+  assert.deepEqual(answered.state.recorded, []);
 });

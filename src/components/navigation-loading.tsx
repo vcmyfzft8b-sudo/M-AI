@@ -16,6 +16,7 @@ import {
 import { createPortal } from "react-dom";
 
 import { DashboardLoading } from "@/components/dashboard-loading";
+import { ExamLoading } from "@/components/exam-prep/exam-loading";
 import { LectureWorkspaceLoading } from "@/components/lecture-loading";
 import { SettingsLoading } from "@/components/settings-loading";
 import { SupportArticleLoading, SupportIndexLoading } from "@/components/support-loading";
@@ -61,6 +62,10 @@ function getNavigationSkeleton(href: string, demoBasePath: string | null): React
 
   if (pathname === "/app/settings") {
     return <SettingsLoading />;
+  }
+
+  if (pathname === "/app/exams" || pathname.startsWith("/app/exams/")) {
+    return <ExamLoading />;
   }
 
   if (pathname === "/app") {

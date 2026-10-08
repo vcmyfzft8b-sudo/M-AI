@@ -31,6 +31,10 @@ export type StudyAssetStatus =
 export type FlashcardDifficulty = "easy" | "medium" | "hard";
 export type FlashcardConfidenceBucket = "again" | "good" | "easy";
 
+export type ExamType = "multiple_choice" | "written" | "oral" | "problem_solving" | "mixed";
+export type ExamGradeScale = "ten_point" | "five_point" | "letter" | "percent" | "pass_fail";
+export type StudyEventItemKind = "flashcard" | "quiz";
+
 export type AdminRole = "owner" | "admin";
 
 export type UgcPlatform = "tiktok" | "instagram" | "youtube";
@@ -1110,6 +1114,111 @@ export type Database = {
           last_reviewed_at?: string | null;
         };
       };
+      exam_plans: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          exam_date: string;
+          exam_type: ExamType;
+          grade_scale: ExamGradeScale;
+          target_grade: string;
+          target_percent: number;
+          daily_minutes: number;
+          rest_days: number;
+          time_zone: string;
+          status: "active" | "archived";
+          result_percent: number | null;
+          result_grade: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          exam_date: string;
+          exam_type?: ExamType;
+          grade_scale?: ExamGradeScale;
+          target_grade: string;
+          target_percent: number;
+          daily_minutes?: number;
+          rest_days?: number;
+          time_zone?: string;
+          status?: "active" | "archived";
+          result_percent?: number | null;
+          result_grade?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          title?: string;
+          exam_date?: string;
+          exam_type?: ExamType;
+          grade_scale?: ExamGradeScale;
+          target_grade?: string;
+          target_percent?: number;
+          daily_minutes?: number;
+          rest_days?: number;
+          time_zone?: string;
+          status?: "active" | "archived";
+          result_percent?: number | null;
+          result_grade?: string | null;
+          updated_at?: string;
+        };
+      };
+      exam_plan_lectures: {
+        Row: {
+          plan_id: string;
+          lecture_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          plan_id: string;
+          lecture_id: string;
+          user_id: string;
+          created_at?: string;
+        };
+        Update: Record<string, never>;
+      };
+      exam_plan_task_checks: {
+        Row: {
+          plan_id: string;
+          user_id: string;
+          day: string;
+          task_key: string;
+          created_at: string;
+        };
+        Insert: {
+          plan_id: string;
+          user_id: string;
+          day: string;
+          task_key: string;
+          created_at?: string;
+        };
+        Update: Record<string, never>;
+      };
+      study_events: {
+        Row: {
+          id: number;
+          user_id: string;
+          lecture_id: string;
+          item_kind: StudyEventItemKind;
+          item_id: string;
+          outcome: number;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          lecture_id: string;
+          item_kind: StudyEventItemKind;
+          item_id: string;
+          outcome: number;
+          created_at?: string;
+        };
+        Update: Record<string, never>;
+      };
       lecture_study_sessions: {
         Row: {
           user_id: string;
@@ -2002,6 +2111,12 @@ export type LectureStudySectionRow =
 export type FlashcardRow = Database["public"]["Tables"]["flashcards"]["Row"];
 export type FlashcardProgressRow =
   Database["public"]["Tables"]["flashcard_progress"]["Row"];
+export type ExamPlanRow = Database["public"]["Tables"]["exam_plans"]["Row"];
+export type ExamPlanLectureRow =
+  Database["public"]["Tables"]["exam_plan_lectures"]["Row"];
+export type ExamPlanTaskCheckRow =
+  Database["public"]["Tables"]["exam_plan_task_checks"]["Row"];
+export type StudyEventRow = Database["public"]["Tables"]["study_events"]["Row"];
 export type LectureStudySessionRow =
   Database["public"]["Tables"]["lecture_study_sessions"]["Row"];
 export type QuizQuestionRow = Database["public"]["Tables"]["quiz_questions"]["Row"];

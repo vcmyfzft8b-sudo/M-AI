@@ -8,8 +8,10 @@ shows, honestly, how close they are to that target.
   cards, the quiz and the test. With no exam planned it shows the tools' start screen; its
   button opens the planning flow, drawn exactly as the app's onboarding asks its questions
   (`exam-onboarding.tsx`: Memo in a speech bubble, the 3D chips, the coral button with its
-  lip). With an exam it shows that exam's journey (`lecture-exam.tsx`). An exam can cover
-  several notes; it then shows in each of their Exam tabs.
+  lip). With an exam it is laid out as **Astra AI** lays out exam prep (see "The exam screen"
+  below; `lecture-exam.tsx`, `exam-mastery.tsx`). An exam can cover several notes; it then
+  shows in each of their Exam tabs, and Home shows a card for the next exam
+  (`exam-home-card.tsx`).
 - The flow asks, in order: the exact exam day on a month calendar (tomorrow to a year
   ahead), **whether there is any other material for the exam**, the exam type, the target
   percentage (30–100 %, a stepper by fives and a slider for the exact value), and the daily
@@ -35,6 +37,42 @@ shows, honestly, how close they are to that target.
   already has a week and a half of study behind it; any other demo note starts empty.
 - Landing: the Exam pill in the hero phone and "How it works", and the "Exam prep" row of
   the feature list (`landing-exam-screen.tsx`).
+
+## The exam screen: Astra's layout, Memo's design
+
+A survey of more than 20 study apps (October 2026) found that Turbo AI and Coconote have no
+exam plan, Quizlet's is old and buried, and Knowt's covers only AP exams. **Astra AI**, a
+Ljubljana startup in our own market, does exactly this feature ("Priprava na test"): your
+material, a test date and a target become a plan with a mastery percentage, today's goals,
+topics and a step ladder per topic ending in oral and written mock exams. The founder chose
+to follow it, drawn in MemoAI's design with the note's own tools. The screen, top to bottom:
+
+1. **Memo's line and the mastery ring** (`ExamMasteryHero`): "I'll get you to 80% by Sat
+   17 Oct. Today: Review 5 cards." The ring is the exam's mastery with a tick at the goal;
+   beside it the goal, days left, and the study streak (or the likely score once the
+   forecast is unlocked).
+2. **Today's goals** (`ExamGoals`): the planner's tasks for today with their tool's icon,
+   ticked from real study (by hand only where the app cannot see it), and one coral
+   Continue that opens the first open one.
+3. **Your topics** (`ExamTopicList`): each study section with its mastery; the first one
+   below 85% is current and shows its step; later ones wait behind it.
+4. **The topic ladder** (`ExamTopicLadder`), opened by tapping a topic: ten steps in three
+   stages, each one of the note's tools — Guided lesson (notes), Podcast, Flashcards, Quiz,
+   Mind map, Explain it to the tutor, Repetition, Knowledge gaps, Oral mock exam (tutor),
+   Written mock exam (test).
+
+Topics and mastery are computed in `src/lib/exam-prep/topics.ts`, from the same review log as
+everything else and never stored:
+
+- An item (card, or question for a note without cards) is **mastered** after two reviews
+  and while its recall now is at least 90%; an item seen but not mastered counts 0.4.
+  Topic mastery is that average; the exam's is the average over topics weighted by items.
+- Steps the app can measure tick themselves: Flashcards (every card seen), Repetition
+  (every card reviewed twice), Knowledge gaps (85% of the cards mastered), Written mock exam
+  (a graded practice test on the note), Quiz (five answers on the note). The others count
+  once opened, stored as `exam_plan_task_checks` rows keyed `step:<topic>:<step>`.
+- The current step is the first open one after the furthest one done, so a skipped podcast
+  does not hold the ladder back.
 
 ## What the research says, and what we took from it
 

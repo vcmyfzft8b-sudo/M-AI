@@ -445,6 +445,10 @@
   --coral: linear-gradient(135deg, #ff6d68, #f45f5a);
   /* Text and glyphs on a coral fill. The same in both appearances. */
   --on-coral: #ffffff;
+  /* Exam prep: the mastery ring and bars (solid, as a stroke cannot take the
+     gradient), and the green of a finished goal or a mastered topic. */
+  --mastery: #f45f5a;
+  --done: #34c759;
   --blue: #0066cc;
   /* Destructive. Until now every delete, every error note and every danger
      outline typed `#ff3b30` straight into the rule, which is why dark mode kept
@@ -504,6 +508,8 @@
   --upgrade-line: rgba(130, 148, 218, 0.4);
   --upgrade-ink: #b9c2f0;
   --promo: #ff6d68;
+  --mastery: #ff6d68;
+  --done: #30d158;
   --danger: #ff453a;
   --danger-tint: rgba(255, 69, 58, 0.15);
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
@@ -536,6 +542,8 @@
   --upgrade-line: rgba(130, 148, 218, 0.4);
   --upgrade-ink: #b9c2f0;
     --promo: #ff6d68;
+    --mastery: #ff6d68;
+    --done: #30d158;
     --danger: #ff453a;
     --danger-tint: rgba(255, 69, 58, 0.15);
     --shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
@@ -735,7 +743,6 @@
 [data-promo-hint] {
   display: none;
 }
-
 
 /* --- motion --------------------------------------------------------------- */
 
@@ -2098,7 +2105,6 @@
   animation: memo-fade-in 0.15s ease-out;
 }
 
-
 /* --- library chat panel (desktop) ---------------------------------------- */
 
 .memo-homechat-scrim {
@@ -2835,7 +2841,6 @@
   line-height: 1;
 }
 
-
 .memo-dock-close {
   background: transparent;
   color: var(--muted);
@@ -3495,7 +3500,6 @@
   color: var(--text);
   animation: memo-pop-in 0.16s ease-out both;
 }
-
 
 /* The phone opens the read-aloud settings as a sheet. */
 .note-read-usage-mobile-backdrop {
@@ -4571,7 +4575,6 @@
   letter-spacing: -0.015em;
 }
 
-
 /* ===========================================================================
    Study surfaces
    ---------------------------------------------------------------------------
@@ -5335,7 +5338,6 @@
   cursor: default;
   opacity: 0.5;
 }
-
 
 /* --- study results -------------------------------------------------------- */
 
@@ -6612,7 +6614,6 @@
   border-top: 1px solid var(--line);
 }
 
-
 .memo-breadcrumb + .memo-article-title {
   margin-top: 0.9rem;
 }
@@ -6999,7 +7000,6 @@
   cursor: default;
   box-shadow: none;
 }
-
 
 .memo-modal-tile {
   display: inline-flex;
@@ -8031,7 +8031,6 @@
   font-size: 1.02rem;
 }
 
-
 .note-source-modal .note-source-field-label {
   display: block;
   margin-bottom: 0.5rem;
@@ -8147,7 +8146,6 @@
   box-shadow: var(--shadow);
 }
 
-
 /*
  * The modal body is a grid, and its row tracks are sized from each child's
  * max-content height — measured as if the text never wrapped. A two-line
@@ -8165,7 +8163,6 @@
  * — sticking it to the bottom keeps the call to action visible without moving
  * it out of the body in every one of the four capture modes.
  */
-
 
 /*
  * The design's results screen shape, reused for the study empty states: a
@@ -11002,7 +10999,6 @@
     font-weight: 650;
   }
 
-
   .memo-home-screen {
     position: fixed;
     inset: calc(var(--memo-vv-top) + var(--memo-safe-top)) 0 var(--memo-kb-ground) 0;
@@ -11136,7 +11132,6 @@
     font-weight: 600;
   }
 
-
   .memo-homechat-scrim,
   .memo-homechat-wrap {
     display: none;
@@ -11158,7 +11153,6 @@
     background: var(--text);
     color: var(--bg);
   }
-
 
   .memo-utility-link {
     margin: 0 1.15rem 0.9rem;
@@ -11664,7 +11658,6 @@
     opacity: 1;
   }
 
-
   /*
    * The note screen is fixed to the viewport, so nothing outside it scrolls — and on a touch
    * device a drag with nothing to scroll is not nothing, it is the rubber band. The whole screen
@@ -11914,7 +11907,6 @@
     height: 3rem;
   }
 
-
   /*
    * These two carry a desktop `memo-pop-in` on a two-class selector, which
    * outranks the phone's own `memo-sheet-up` on `.memo-sheet-full` however
@@ -11941,7 +11933,6 @@
     width: auto;
     animation: memo-sheet-up 0.34s cubic-bezier(0.22, 1, 0.36, 1);
   }
-
 
   .memo-settings-screen {
     position: fixed;
@@ -12322,7 +12313,6 @@
     font-size: 1.05rem;
   }
 
-
   /* The capture sheet returns to the phone design's bottom sheet. */
   .note-source-modal-wrap {
     place-items: end stretch;
@@ -12413,7 +12403,6 @@
     color: var(--text);
   }
 
-
   /*
    * Every phone bottom sheet moves the same way: up from the bottom edge on
    * open, tracking the finger while dragged, and springing back on release
@@ -12476,7 +12465,6 @@
     opacity: 0.5;
     cursor: grab;
   }
-
 
   /*
    * The folder sheet's grouped card, straight from the phone design: one
@@ -12984,7 +12972,6 @@
   .library-folder-secondary-button {
     width: 100%;
   }
-
 
   /*
    * The study manager is a bottom sheet on the phone, and the only thing the
@@ -16082,8 +16069,6 @@
   margin-bottom: 0.6rem;
 }
 
-
-
 /*
  * The test: the box you write the answer in is the thing that gives.
  *
@@ -16522,8 +16507,6 @@
   .memo-tutor-lede {
     display: none;
   }
-
-
 
   .memo-capture-row.memo-tutor-voicerow {
     min-height: 3.6rem;
@@ -17773,7 +17756,6 @@
  * short laptop.
  */
 
-
 .memo-podcast-stage {
   display: grid;
   justify-items: center;
@@ -18467,12 +18449,6 @@
   }
 }
 
-
-
-
-
-
-
 /* ---------------------------------------------------------------------------
    The memory palace.
 
@@ -19018,7 +18994,6 @@
 .memo-palace-arrival-copy { max-width: 22rem; margin: 0.85rem 0 1.6rem; color: var(--muted); font-size: 0.95rem; line-height: 1.6; text-wrap: pretty; }
 .memo-palace-arrival-content .memo-gen-track { display: block; width: min(12rem, 65%); margin: 0; }
 
-
 /*
  * The study screen you are standing in front of.
  *
@@ -19146,7 +19121,6 @@
   font-size: 0.85rem;
   font-weight: 650;
 }
-
 
 /* A card in a panel this size does not need the deck screen's full height. */
 .memo-palace-panel .lecture-flashcard {
@@ -19384,7 +19358,6 @@
   padding: 1.6rem 1.4rem 1.4rem;
   box-shadow: 0 22px 60px rgba(10, 8, 20, 0.35);
 }
-
 
 .memo-palace-done {
   position: absolute;
@@ -21754,7 +21727,6 @@ html[data-native] .memo-toast.subtle {
   }
 }
 
-
 /* Onboarding has its own palette and sits outside .memo. Its practice answer
    still follows the shared keyboard measurement, including browser fallback.
    Keep one scroller and let centering yield when the keyboard leaves less room.
@@ -21794,33 +21766,6 @@ html[data-native] .memo-toast.subtle {
   letter-spacing: -0.01em;
 }
 
-/* ===========================================================================
-   Exam prep — the note's Exam tab: the journey, readiness and today
-   (src/components/exam-prep/). The method is in docs/exam-prep.md.
-   ========================================================================= */
-
-.memo-exam-section {
-  margin-top: 1.6rem;
-}
-
-.memo-exam-section > h2 {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  margin: 0 0 0.85rem;
-  font-size: 1.3rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-}
-
-.memo-exam-section > h2 small {
-  color: var(--muted);
-  font-size: 0.95rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
 .memo-exam-card {
   padding: 1.5rem 1.6rem;
   border-radius: 22px;
@@ -21856,10 +21801,6 @@ html[data-native] .memo-toast.subtle {
   padding-bottom: 1.6rem;
 }
 
-.memo-exam-tab > .memo-exam-section {
-  margin-top: 0.45rem;
-}
-
 .memo-exam-tab-head {
   display: flex;
   align-items: flex-start;
@@ -21891,538 +21832,6 @@ html[data-native] .memo-toast.subtle {
   margin-top: 0.6rem;
 }
 
-/* --- countdown hero ------------------------------------------------------- */
-
-.memo-exam-hero {
-  display: grid;
-  gap: 1.15rem;
-}
-
-.memo-exam-hero-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.memo-exam-days {
-  display: flex;
-  align-items: baseline;
-  gap: 0.55rem;
-}
-
-.memo-exam-days strong {
-  font-size: 2.6rem;
-  font-weight: 800;
-  letter-spacing: -0.05em;
-  line-height: 1;
-}
-
-.memo-exam-days span {
-  color: var(--muted);
-  font-size: 1.02rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.memo-exam-phase {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  height: 2.2rem;
-  padding: 0 0.9rem;
-  border-radius: 999px;
-  background: var(--tile);
-  font-size: 0.9rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-}
-
-.memo-exam-phase .msym {
-  font-size: 1.05rem;
-}
-
-/* One cell per day from the plan's start to the exam. */
-.memo-exam-strip {
-  display: flex;
-  gap: 3px;
-  height: 1rem;
-}
-
-.memo-exam-strip > span {
-  flex: 1 1 0;
-  min-width: 2px;
-  border-radius: 999px;
-  background: var(--field);
-}
-
-.memo-exam-strip > span[data-state="studied"] {
-  background: var(--ink);
-}
-
-.memo-exam-strip > span[data-state="missed"] {
-  background: var(--muted-2);
-}
-
-.memo-exam-strip > span[data-state="rest"] {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--field);
-}
-
-.memo-exam-strip > span[data-state="today"] {
-  background: var(--coral);
-}
-
-.memo-exam-strip > span[data-state="exam"] {
-  background: var(--coral);
-  opacity: 0.45;
-}
-
-.memo-exam-phases {
-  display: flex;
-  gap: 3px;
-  margin-top: -0.6rem;
-}
-
-.memo-exam-phases > span {
-  overflow: hidden;
-  min-width: 0;
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 650;
-  letter-spacing: -0.005em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.memo-exam-phases > span.current {
-  color: var(--text);
-}
-
-.memo-exam-phase-hint {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.95rem;
-  line-height: 1.5;
-  letter-spacing: -0.01em;
-}
-
-/* --- readiness ------------------------------------------------------------ */
-
-.memo-exam-ready-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.memo-exam-ready-head h2 {
-  margin: 0;
-  font-size: 1.3rem;
-  font-weight: 750;
-  letter-spacing: -0.03em;
-}
-
-.memo-exam-target {
-  color: var(--muted);
-  font-size: 0.95rem;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-
-.memo-exam-target strong {
-  color: var(--text);
-}
-
-/* 0–100 %: the likely range is the band, the middle the dot, the goal the tick. */
-.memo-exam-gauge {
-  position: relative;
-  height: 1rem;
-  margin: 2.3rem 0 0.6rem;
-  border-radius: 999px;
-  background: var(--field);
-}
-
-.memo-exam-gauge-band {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  border-radius: 999px;
-  background: var(--coral);
-  opacity: 0.32;
-  transition:
-    left 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-    width 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.memo-exam-gauge-dot {
-  position: absolute;
-  top: 50%;
-  width: 1.15rem;
-  height: 1.15rem;
-  margin-left: -0.575rem;
-  border: 3px solid var(--surface);
-  border-radius: 999px;
-  transform: translateY(-50%);
-  transition: left 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.memo-exam-gauge-dot.today {
-  background: var(--ink);
-}
-
-.memo-exam-gauge-dot.plan {
-  background: var(--coral);
-}
-
-.memo-exam-gauge-target {
-  position: absolute;
-  top: -0.45rem;
-  bottom: -0.45rem;
-  width: 2px;
-  margin-left: -1px;
-  border-radius: 999px;
-  background: var(--text);
-}
-
-.memo-exam-gauge-target > span {
-  position: absolute;
-  bottom: calc(100% + 0.3rem);
-  left: 50%;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  background: var(--text);
-  color: var(--surface);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-
-.memo-exam-gauge-scale {
-  display: flex;
-  justify-content: space-between;
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.memo-exam-forecasts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.6rem;
-  margin-top: 1.15rem;
-}
-
-.memo-exam-forecast {
-  display: grid;
-  gap: 0.2rem;
-  align-content: start;
-}
-
-.memo-exam-forecast-label {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-weight: 650;
-  letter-spacing: -0.005em;
-}
-
-.memo-exam-forecast-label::before {
-  content: "";
-  width: 0.6rem;
-  height: 0.6rem;
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: var(--ink);
-}
-
-.memo-exam-forecast.plan .memo-exam-forecast-label::before {
-  background: var(--coral);
-}
-
-.memo-exam-forecast strong {
-  font-size: 1.3rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-}
-
-.memo-exam-forecast span:last-child {
-  color: var(--muted);
-  font-size: 0.92rem;
-  letter-spacing: -0.01em;
-}
-
-.memo-exam-chance {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-top: 1rem;
-  font-size: 1rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-}
-
-.memo-exam-chance .msym {
-  color: var(--promo);
-  font-size: 1.25rem;
-}
-
-.memo-exam-locked {
-  display: grid;
-  gap: 0.6rem;
-  margin-top: 1.15rem;
-}
-
-.memo-exam-locked strong {
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.memo-exam-locked p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.92rem;
-  line-height: 1.5;
-}
-
-.memo-exam-meter {
-  display: grid;
-  gap: 0.4rem;
-}
-
-.memo-exam-meter-label {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.6rem;
-  font-size: 0.92rem;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-
-.memo-exam-meter-label span:last-child {
-  color: var(--muted);
-}
-
-.memo-exam-meter .memo-progress {
-  height: 1rem;
-}
-
-.memo-exam-meter .memo-progress > div {
-  background: var(--coral);
-}
-
-.memo-exam-meters {
-  display: grid;
-  gap: 0.95rem;
-  margin-top: 1.3rem;
-}
-
-/* --- today ---------------------------------------------------------------- */
-
-.memo-exam-tasks {
-  display: grid;
-  border-radius: 22px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  overflow: hidden;
-}
-
-.memo-exam-task {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  min-height: 4.6rem;
-  padding: 0.8rem 1.2rem 0.8rem 1.1rem;
-  color: var(--text);
-  text-decoration: none;
-  transition: background 0.16s ease;
-}
-
-.memo-exam-task + .memo-exam-task {
-  border-top: 1px solid var(--line);
-}
-
-.memo-exam-task-button {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.memo-exam-task + .memo-exam-task-button,
-.memo-exam-task-button + .memo-exam-task {
-  border-top: 1px solid var(--line);
-}
-
-button.memo-exam-task:hover,
-a.memo-exam-task:hover {
-  background: var(--tile);
-}
-
-button.memo-exam-task:focus-visible,
-a.memo-exam-task:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 3px var(--focus-ring);
-}
-
-.memo-exam-check {
-  position: relative;
-  display: inline-flex;
-  width: 2.2rem;
-  height: 2.2rem;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text);
-  cursor: default;
-}
-
-button.memo-exam-check {
-  cursor: pointer;
-}
-
-button.memo-exam-check:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--focus-ring);
-}
-
-.memo-exam-check svg {
-  position: absolute;
-  inset: 0;
-  transform: rotate(-90deg);
-}
-
-.memo-exam-check circle {
-  fill: none;
-  stroke-width: 3;
-}
-
-.memo-exam-check .track {
-  stroke: var(--line);
-}
-
-.memo-exam-check .fill {
-  stroke: var(--promo);
-  stroke-linecap: round;
-  transition: stroke-dashoffset 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.memo-exam-check .msym {
-  position: relative;
-  font-size: 1.15rem;
-}
-
-.memo-exam-task.done .memo-exam-check {
-  background: var(--ink);
-  color: var(--bg);
-}
-
-.memo-exam-task-copy {
-  display: grid;
-  gap: 0.15rem;
-  min-width: 0;
-  flex: 1;
-}
-
-.memo-exam-task-title {
-  font-size: 1.05rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  text-wrap: pretty;
-}
-
-.memo-exam-task.done .memo-exam-task-title {
-  color: var(--muted);
-  text-decoration: line-through;
-  text-decoration-color: var(--muted-2);
-}
-
-.memo-exam-task-meta {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.9rem;
-  letter-spacing: -0.01em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.memo-exam-task-link {
-  display: grid;
-  min-width: 0;
-  flex: 1;
-  color: inherit;
-  text-decoration: none;
-}
-
-.memo-exam-task-time {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 0.9rem;
-  font-weight: 650;
-}
-
-.memo-exam-task > .msym {
-  flex: 0 0 auto;
-  color: var(--muted-2);
-  font-size: 1.4rem;
-}
-
-.memo-exam-task-start {
-  display: inline-flex;
-  align-items: center;
-  height: 2.4rem;
-  flex: 0 0 auto;
-  padding: 0 1rem;
-  border-radius: 999px;
-  background: var(--coral);
-  color: var(--on-coral);
-  font-size: 0.95rem;
-  font-weight: 750;
-  box-shadow: var(--memo-coral-glow);
-}
-
-.memo-exam-calm {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1.2rem 1.6rem;
-  border-radius: 22px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-
-.memo-exam-calm p {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  line-height: 1.45;
-  letter-spacing: -0.02em;
-}
-
-.memo-exam-calm p + p {
-  margin-top: 0.2rem;
-  color: var(--muted);
-  font-weight: 400;
-  font-size: 0.92rem;
-}
-
-.memo-exam-welcome {
-  margin-bottom: 0.85rem;
-}
-
 .memo-exam-fit {
   display: grid;
   gap: 0.6rem;
@@ -22444,195 +21853,6 @@ button.memo-exam-check:focus-visible {
 
 .memo-exam-fit .memo-button-outline {
   justify-self: start;
-}
-
-/* --- journey timeline ----------------------------------------------------- */
-
-.memo-exam-days-list {
-  display: grid;
-  border-radius: 22px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  overflow: hidden;
-}
-
-.memo-exam-day {
-  display: grid;
-  grid-template-columns: 3.4rem minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.9rem;
-  min-height: 3.9rem;
-  padding: 0.6rem 1.2rem 0.6rem 1rem;
-}
-
-.memo-exam-day + .memo-exam-day {
-  border-top: 1px solid var(--line);
-}
-
-.memo-exam-date {
-  display: grid;
-  justify-items: center;
-  line-height: 1.1;
-}
-
-.memo-exam-date span {
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.memo-exam-date strong {
-  font-size: 1.15rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-}
-
-.memo-exam-day.today .memo-exam-date strong {
-  color: var(--promo);
-}
-
-.memo-exam-day-copy {
-  display: grid;
-  gap: 0.1rem;
-  min-width: 0;
-}
-
-.memo-exam-day-title {
-  overflow: hidden;
-  font-size: 0.98rem;
-  font-weight: 650;
-  letter-spacing: -0.015em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.memo-exam-day-meta {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.86rem;
-  letter-spacing: -0.005em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.memo-exam-day.rest .memo-exam-day-title,
-.memo-exam-day.quiet .memo-exam-day-title {
-  color: var(--muted);
-  font-weight: 600;
-}
-
-.memo-exam-day-mark {
-  display: inline-flex;
-  width: 1.9rem;
-  height: 1.9rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: var(--tile);
-  color: var(--muted);
-}
-
-.memo-exam-day-mark .msym {
-  font-size: 1.1rem;
-}
-
-.memo-exam-day.studied .memo-exam-day-mark {
-  background: var(--ink);
-  color: var(--bg);
-}
-
-.memo-exam-day.exam .memo-exam-day-mark,
-.memo-exam-day.today .memo-exam-day-mark {
-  background: var(--coral);
-  color: var(--on-coral);
-}
-
-.memo-exam-phase-row {
-  padding: 0.75rem 1.2rem 0.45rem;
-  background: var(--sunken);
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.memo-exam-day + .memo-exam-phase-row,
-.memo-exam-phase-row + .memo-exam-day {
-  border-top: 1px solid var(--line);
-}
-
-.memo-exam-more {
-  display: flex;
-  justify-content: center;
-  width: 100%;
-  min-height: 3.2rem;
-  border: 0;
-  border-top: 1px solid var(--line);
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  align-items: center;
-}
-
-.memo-exam-more:hover {
-  background: var(--tile);
-}
-
-/* --- per-note ------------------------------------------------------------- */
-
-.memo-exam-notes {
-  display: grid;
-  gap: 0.85rem;
-}
-
-.memo-exam-note-card {
-  display: grid;
-  gap: 0.95rem;
-}
-
-.memo-exam-note-head {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  min-width: 0;
-  color: var(--text);
-  text-decoration: none;
-}
-
-.memo-exam-note-head > .msym {
-  margin-left: auto;
-  color: var(--muted-2);
-  font-size: 1.4rem;
-}
-
-.memo-exam-note-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.85rem;
-}
-
-.memo-exam-stat {
-  display: grid;
-  gap: 0.1rem;
-}
-
-.memo-exam-stat strong {
-  font-size: 1.15rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-}
-
-.memo-exam-stat span {
-  color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: -0.005em;
 }
 
 /* --- result --------------------------------------------------------------- */
@@ -22682,26 +21902,647 @@ button.memo-exam-check:focus-visible {
     border-radius: 20px;
   }
 
-  .memo-exam-task {
-    padding-inline: 1rem;
+  
+
+  
+}
+
+/* --- exam prep: Astra's layout in Memo's design ------------------------------
+ * Memo's line and the mastery ring, today's goals, the topics, and each
+ * topic's ladder of tools. See exam-mastery.tsx and docs/exam-prep.md.
+ */
+
+.memo-exam-mastery {
+  display: grid;
+  gap: 1.15rem;
+  padding: 1.2rem 1.25rem 1.3rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-exam-say {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+
+.memo-exam-say img {
+  flex: none;
+  width: 3.6rem;
+  height: auto;
+  filter: drop-shadow(0 4px 8px var(--field));
+}
+
+.memo-exam-bubble {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0.7rem 0.95rem;
+  border-radius: 18px 18px 18px 12px;
+  background: var(--sunken);
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+
+.memo-exam-mastery-row {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+}
+
+.memo-exam-ring {
+  position: relative;
+  flex: none;
+  width: 7.4rem;
+  height: 7.4rem;
+}
+
+.memo-exam-ring.compact {
+  width: 4.6rem;
+  height: 4.6rem;
+}
+
+.memo-exam-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.memo-exam-ring .track,
+.memo-exam-ring .fill {
+  fill: none;
+  stroke-width: 12;
+}
+
+.memo-exam-ring .track {
+  stroke: var(--field);
+}
+
+.memo-exam-ring .fill {
+  stroke: var(--mastery);
+  stroke-linecap: round;
+  transition: stroke-dasharray 600ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.memo-exam-ring .goal {
+  fill: var(--text);
+}
+
+.memo-exam-ring-value {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
+.memo-exam-ring-value strong {
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-ring.compact .memo-exam-ring-value strong {
+  font-size: 1.08rem;
+  letter-spacing: -0.02em;
+}
+
+.memo-exam-ring-value small {
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.memo-exam-facts {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 0.6rem;
+}
+
+.memo-exam-fact {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.memo-exam-fact > span {
+  display: grid;
+  flex: none;
+  width: 2.1rem;
+  height: 2.1rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--field);
+}
+
+.memo-exam-fact p {
+  min-width: 0;
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.memo-exam-fact small {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.memo-exam-block {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.memo-exam-block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0 0.2rem;
+}
+
+.memo-exam-block-head h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.memo-exam-block-head span {
+  font-size: 0.92rem;
+  font-weight: 650;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.memo-exam-panel-list {
+  padding: 0.35rem 1.1rem 0.6rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-exam-tile {
+  display: grid;
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--tile-tint) 16%, transparent);
+  color: var(--tile-tint);
+}
+
+.memo-exam-tile.plain {
+  background: var(--field);
+  color: var(--muted);
+}
+
+.memo-exam-goal {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+
+.memo-exam-goal:first-child {
+  border-top: 0;
+}
+
+.memo-exam-goal-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.75rem 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+
+button.memo-exam-goal-main,
+a.memo-exam-goal-main {
+  cursor: pointer;
+}
+
+.memo-exam-goal-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.memo-exam-goal-copy strong {
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.memo-exam-goal-copy small {
+  font-size: 0.92rem;
+  font-weight: 400;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.memo-exam-goal.done .memo-exam-goal-copy strong {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.memo-exam-tick {
+  display: grid;
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--on-coral);
+}
+
+button.memo-exam-tick {
+  cursor: pointer;
+}
+
+.memo-exam-tick.on,
+.memo-exam-tick[aria-pressed="true"] {
+  border-color: var(--done);
+  background: var(--done);
+}
+
+.memo-exam-continue {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  height: 3.4rem;
+  margin: 0.45rem 0 0.4rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--coral);
+  box-shadow: var(--memo-coral-glow);
+  color: var(--on-coral);
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 750;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.memo-exam-continue:disabled {
+  cursor: default;
+}
+
+.memo-exam-goals-done {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0.45rem 0 0.35rem;
+  padding: 0.8rem;
+  border-radius: 16px;
+  background: color-mix(in oklch, var(--done) 14%, transparent);
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.memo-exam-topic {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.85rem 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.memo-exam-topic:first-child {
+  border-top: 0;
+}
+
+button.memo-exam-topic {
+  cursor: pointer;
+}
+
+.memo-exam-topic-num {
+  display: grid;
+  flex: none;
+  width: 2.4rem;
+  height: 2.4rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.memo-exam-topic-num.mastered {
+  background: var(--done);
+  color: var(--on-coral);
+}
+
+.memo-exam-topic-num.current {
+  background: var(--coral);
+  color: var(--on-coral);
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--mastery) 22%, transparent);
+}
+
+.memo-exam-topic-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.memo-exam-topic-copy strong {
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.memo-exam-topic.later .memo-exam-topic-copy strong {
+  color: var(--muted);
+}
+
+.memo-exam-topic-copy small {
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.memo-exam-topic-pct {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-topic.current .memo-exam-topic-pct,
+.memo-exam-topic.mastered .memo-exam-topic-pct {
+  color: var(--text);
+}
+
+.memo-exam-bar {
+  display: block;
+  height: 0.4rem;
+  margin-top: 0.35rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--field);
+}
+
+.memo-exam-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--mastery);
+}
+
+.memo-exam-bar.full > span {
+  background: var(--done);
+}
+
+.memo-exam-ladder {
+  display: grid;
+  gap: 0.85rem;
+  padding-bottom: 1.6rem;
+}
+
+.memo-exam-ladder-back {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 0.35rem;
+  height: 2.7rem;
+  padding: 0 1rem 0 0.75rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.memo-exam-ladder-head h2 {
+  margin: 0.3rem 0 0.75rem;
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.memo-exam-ladder-mastery {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.memo-exam-ladder-mastery .memo-exam-bar {
+  flex: 1;
+  height: 0.6rem;
+  margin: 0;
+}
+
+.memo-exam-ladder-mastery strong {
+  font-size: 0.95rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.memo-exam-steps {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-exam-stage {
+  margin: 0.85rem 0 0.35rem 3.3rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.memo-exam-steps li:first-child .memo-exam-stage {
+  margin-top: 0.2rem;
+}
+
+.memo-exam-step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.3rem 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.memo-exam-step::before {
+  content: "";
+  position: absolute;
+  top: -0.6rem;
+  left: 1.2rem;
+  width: 2px;
+  height: 1rem;
+  background: var(--line);
+}
+
+.memo-exam-steps li:first-child .memo-exam-step::before {
+  display: none;
+}
+
+.memo-exam-step-dot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  flex: none;
+  width: 2.4rem;
+  height: 2.4rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.memo-exam-step.done .memo-exam-step-dot {
+  background: var(--done);
+  color: var(--on-coral);
+}
+
+.memo-exam-step-card {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 20px;
+}
+
+.memo-exam-step.now .memo-exam-step-card {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 2px var(--mastery), var(--shadow);
+}
+
+.memo-exam-step.done .memo-exam-goal-copy strong {
+  color: var(--muted);
+}
+
+.memo-exam-step.later .memo-exam-step-card {
+  opacity: 0.72;
+}
+
+.memo-exam-step-go {
+  flex: none;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  background: var(--coral);
+  color: var(--on-coral);
+  font-size: 0.92rem;
+  font-weight: 750;
+}
+
+@media (hover: hover) {
+  .memo-exam-goal-main:hover,
+  .memo-exam-topic:hover,
+  .memo-exam-step:hover .memo-exam-step-card {
+    box-shadow: inset 0 0 0 1px var(--hover-ring);
   }
 
-  .memo-exam-tasks,
-  .memo-exam-days-list {
-    border-radius: 20px;
+  .memo-exam-step.now:hover .memo-exam-step-card {
+    box-shadow: inset 0 0 0 2px var(--mastery), var(--shadow);
   }
 }
 
-@media (max-width: 479px) {
-  .memo-exam-days strong {
-    font-size: 2.2rem;
-  }
+.memo-exam-goal-main:focus-visible,
+.memo-exam-topic:focus-visible,
+.memo-exam-step:focus-visible,
+.memo-exam-tick:focus-visible,
+.memo-exam-continue:focus-visible,
+.memo-exam-ladder-back:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
 
-  .memo-exam-note-grid {
-    gap: 0.6rem;
-  }
+.memo-exam-home {
+  display: grid;
+  gap: 0.85rem;
+  margin-bottom: 0.85rem;
+  padding: 1.05rem 1.15rem 0.75rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
 
-  .memo-exam-task-time {
-    display: none;
-  }
+.memo-exam-home-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.memo-exam-home-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.memo-exam-home-copy strong {
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.memo-exam-home-copy small {
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.memo-exam-home .memo-exam-continue {
+  margin: 0;
 }

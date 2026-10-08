@@ -2,9 +2,8 @@
 
 import { useMemo, useState } from "react";
 
-import { ExamHero } from "@/components/exam-prep/exam-hero";
-import { ExamReadinessCard } from "@/components/exam-prep/exam-readiness-card";
-import { ExamTodayTasks } from "@/components/exam-prep/exam-today";
+import { EXAM_TYPE_LABEL } from "@/components/exam-prep/exam-format";
+import { ExamGoals, ExamMasteryHero, ExamTopicList } from "@/components/exam-prep/exam-mastery";
 import { useT } from "@/components/i18n-provider";
 import { addDays, dayKeyAt } from "@/lib/exam-prep/dates";
 import { buildExamJourney } from "@/lib/exam-prep/journey";
@@ -94,9 +93,8 @@ function buildLandingJourney(t: Translate<MessageKey>, now: number) {
 }
 
 /**
- * Exam prep, as the journey screen draws it: the countdown, how close the
- * learner is to their grade, and today's tasks. Local state only; nothing
- * navigates.
+ * Exam prep, as the note's Exam tab draws it: Memo's line and the mastery
+ * ring, today's goals and the topics. Local state only; nothing navigates.
  */
 export function LandingExamScreen({
   theme,
@@ -119,20 +117,16 @@ export function LandingExamScreen({
       <div className="landing-study-frame memo-exam-tab">
         {journey ? (
           <>
-            <ExamHero journey={journey} />
-            <div className="memo-exam-section">
-              <ExamReadinessCard
-                readiness={journey.readiness}
-                gradeScale="percent"
-                targetGrade="80"
-                targetPercent={80}
-              />
-            </div>
-            {journey.todayPlan ? (
-              <div className="memo-exam-section">
-                <ExamTodayTasks day={journey.todayPlan} linkTasks={false} />
-              </div>
+            <ExamMasteryHero
+              journey={journey}
+              targetPercent={80}
+              examDate={journey.days.at(-1)?.day ?? journey.today}
+              examLabel={t(EXAM_TYPE_LABEL.written)}
+            />
+            {journey.todayPlan && journey.todayPlan.tasks.length > 0 ? (
+              <ExamGoals day={journey.todayPlan} linkTasks={false} />
             ) : null}
+            <ExamTopicList topics={journey.topics} showNotes={false} />
           </>
         ) : null}
       </div>

@@ -411,3 +411,59 @@ test("a note counts as ready only once its cards exist or their generation has e
   assert.equal(buildMaterialNote({ ...base, flashcards: [card], studyStatus: null }).ready, true);
   assert.equal(buildMaterialNote(base).ready, true);
 });
+
+test("topics carry Astra's mastery and ladder, from the review log alone", async () => {
+  const { buildExamTopics, topicStepKey } = await import("../src/lib/exam-prep/topics.ts");
+  const { buildLearnUnits, replayMemory } = await import("../src/lib/exam-prep/journey.ts");
+  const DAY = 86_400_000;
+  const now = Date.parse("2026-10-08T12:00:00Z");
+  const note = {
+    lectureId: "n1",
+    title: "Mikroekonomija",
+    emoji: "📈",
+    sections: [
+      { id: "s1", title: "Ponudba", cardIds: ["a", "b"], words: 300 },
+      { id: "s2", title: "Elastičnost", cardIds: ["c", "d", "e"], words: 300 },
+    ],
+    quizQuestionIds: [],
+    practiceQuestionIds: [],
+    words: 600,
+    ready: true,
+  };
+  const card = (itemId, atMs, outcome = 3) => ({ lectureId: "n1", kind: "flashcard", itemId, outcome, atMs });
+  const events = [
+    // Section 1: both cards recalled twice, the second time yesterday.
+    card("a", now - 3 * DAY), card("a", now - DAY),
+    card("b", now - 3 * DAY), card("b", now - DAY),
+    // Section 2: one card twice, one once, one never.
+    card("c", now - 3 * DAY), card("c", now - DAY),
+    card("d", now - DAY),
+  ];
+  const evidence = {
+    events,
+    practiceAnswers: [],
+    checks: [{ day: "2026-10-07", taskKey: topicStepKey("n1:s2", "podcast") }],
+  };
+  const { topics, mastery } = buildExamTopics({
+    notes: [note],
+    units: buildLearnUnits([note]),
+    evidence,
+    memory: replayMemory(events, "UTC"),
+    nowMs: now,
+  });
+
+  assert.deepEqual(topics.map((topic) => topic.title), ["Ponudba", "Elastičnost"]);
+  assert.equal(topics[0].mastery, 100);
+  assert.equal(topics[0].state, "mastered");
+  // 1 mastered + 0.4 × 1 seen, over 3 cards.
+  assert.equal(topics[1].mastery, 47);
+  assert.equal(topics[1].state, "current");
+  const steps = Object.fromEntries(topics[1].steps.map((step) => [step.id, step]));
+  assert.equal(steps.podcast.done, true);
+  assert.equal(steps.flashcards.done, false);
+  assert.equal(Math.round(steps.flashcards.progress * 100), 67);
+  // The next step after the furthest one done, not the skipped lesson.
+  assert.equal(topics[1].currentStep, "flashcards");
+  // Weighted by cards: (100 × 2 + 47 × 3) / 5.
+  assert.equal(mastery, 68);
+});

@@ -35,6 +35,7 @@ import {
   type MemoryState,
 } from "./fsrs.ts";
 import { buildReadiness } from "./forecast.ts";
+import { buildExamTopics } from "./topics.ts";
 import type {
   ExamEvidence,
   ExamJourney,
@@ -1131,6 +1132,8 @@ export function buildExamJourney(input: BuildJourneyInput): ExamJourney {
     locale: input.locale,
   });
 
+  const { topics, mastery } = buildExamTopics({ notes, units, evidence, memory: memoryNow, nowMs });
+
   return {
     status: daysLeft > 0 ? "upcoming" : daysLeft === 0 ? "exam_day" : "finished",
     today,
@@ -1141,6 +1144,8 @@ export function buildExamJourney(input: BuildJourneyInput): ExamJourney {
     days,
     todayPlan,
     readiness,
+    topics,
+    mastery,
     feasibility: {
       fits: simulation.unscheduled === 0,
       unscheduledSections: simulation.unscheduled,

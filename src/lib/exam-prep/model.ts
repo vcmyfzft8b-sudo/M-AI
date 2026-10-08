@@ -5,8 +5,10 @@
  * API (built from Supabase rows in `src/lib/exam-prep/server.ts`) and the
  * `/creator` demo (built from its in-memory store).
  */
+
 import type { DayKey } from "./dates.ts";
 import type { GradeScaleId } from "./grade-scales.ts";
+import type { ExamTopic } from "./topics.ts";
 
 export type ExamTypeId = "multiple_choice" | "written" | "oral" | "problem_solving" | "mixed";
 
@@ -86,7 +88,7 @@ export type JourneyPhase = "learn" | "practice" | "mock" | "final";
 
 export type JourneyTaskKind = "learn" | "review" | "quiz" | "mock" | "explain" | "wind_down";
 
-export type JourneyTaskTab = "notes" | "flashcards" | "quiz" | "test" | "tutor";
+export type JourneyTaskTab = "notes" | "flashcards" | "quiz" | "test" | "tutor" | "podcast" | "mindmap";
 
 export interface JourneyTask {
   /** Stable for the day; the key manual ticks are stored under. */
@@ -193,6 +195,9 @@ export interface ExamJourney {
   days: JourneyDay[];
   todayPlan: JourneyDay | null;
   readiness: ExamReadiness;
+  /** The material as topics with mastery, and the exam's overall mastery (0–100). */
+  topics: ExamTopic[];
+  mastery: number;
   feasibility: JourneyFeasibility;
   /** Days with any study in the last seven days, and days planned in them. */
   week: { studied: number; planned: number };
@@ -231,6 +236,8 @@ export interface ExamPlanSummary {
   todayTotal: number;
   todayMinutes: number;
   coverage: number;
+  /** 0–100, as the Exam tab's ring shows it. */
+  mastery: number;
   forecastMid: number | null;
   forecastGrade: string | null;
   resultGrade: string | null;

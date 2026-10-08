@@ -211,6 +211,10 @@ either symptom as this incident first, and only as new if it recurs after that m
   onboarding's layer, mascot and chips); change the two together. It always asks whether
   the exam has other material and uploads it through `NoteSourceModal`'s `onCreated`, so
   the learner never leaves the setup to add a note.
+- With an exam the tab follows Astra AI's layout in Memo's design: Memo's line and a mastery
+  ring, today's goals with one Continue, the topics with mastery, and a ten-step ladder per
+  topic built from the note's own tools (`exam-mastery.tsx`, `src/lib/exam-prep/topics.ts`).
+  Home shows a card for the next exam. Keep the ladder's steps pointing at real note tools.
 - The day-by-day journey is never stored. It is recomputed from the learner's study evidence
   (`study_events`, graded practice tests, manual ticks) by the pure planner in
   `src/lib/exam-prep/journey.ts`, so a missed day re-plans itself. Do not add a stored

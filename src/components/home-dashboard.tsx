@@ -30,6 +30,7 @@ import {
 } from "@/lib/install-guide";
 import { LibraryChat } from "@/components/library-chat";
 import type { NoteSourceMode } from "@/components/note-source-modal";
+import { ExamHomeCard } from "@/components/exam-prep/exam-home-card";
 import { Emoji, Msym } from "@/components/msym";
 import { InstantLink } from "@/components/instant-link";
 import { LibraryFolderMenu } from "@/components/library-folder-menu";
@@ -1836,6 +1837,8 @@ export function HomeDashboard({
             {dashboardActionError && !renameTarget && !deleteTarget ? (
               <p className="memo-inline-error">{dashboardActionError}</p>
             ) : null}
+
+            <ExamHomeCard />
 
             {failedLectures.length > 0 ? (
               <div className="memo-note-list memo-failed-list">

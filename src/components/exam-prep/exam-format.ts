@@ -4,7 +4,6 @@ import { useTranslations } from "@/components/i18n-provider";
 import type { GradeScaleId } from "@/lib/exam-prep/grade-scales";
 import type {
   ExamTypeId,
-  JourneyPhase,
   JourneyTask,
 } from "@/lib/exam-prep/model";
 import { LOCALE_INTL_TAG } from "@/lib/i18n/locales";
@@ -16,20 +15,6 @@ export const EXAM_TYPE_LABEL: Record<ExamTypeId, MessageKey> = {
   problem_solving: "exam.type.problem_solving",
   oral: "exam.type.oral",
   mixed: "exam.type.mixed",
-};
-
-export const PHASE_LABEL: Record<JourneyPhase, MessageKey> = {
-  learn: "exam.phase.learn",
-  practice: "exam.phase.practice",
-  mock: "exam.phase.mock",
-  final: "exam.phase.final",
-};
-
-export const PHASE_HINT: Record<JourneyPhase, MessageKey> = {
-  learn: "exam.phase.learn.hint",
-  practice: "exam.phase.practice.hint",
-  mock: "exam.phase.mock.hint",
-  final: "exam.phase.final.hint",
 };
 
 /** A day key as a date at noon UTC, so no zone can move it to a neighbour. */
@@ -57,8 +42,6 @@ export function useExamFormat() {
     return label;
   };
 
-  const gradeRange = (scale: GradeScaleId, low: string, high: string) =>
-    low === high ? grade(scale, low) : `${grade(scale, low)}–${grade(scale, high)}`;
 
   const taskTitle = (task: JourneyTask) => {
     switch (task.kind) {
@@ -103,8 +86,6 @@ export function useExamFormat() {
     t,
     /** "Wed 28 Oct" in the reader's language. */
     longDate: (day: string) => format(day, { weekday: "short", day: "numeric", month: "short" }),
-    weekday: (day: string) => format(day, { weekday: "short" }),
-    dayOfMonth: (day: string) => format(day, { day: "numeric" }),
     /** "Wednesday, 28 October 2026", for a calendar day read aloud. */
     fullDate: (day: string) =>
       format(day, { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
@@ -121,7 +102,6 @@ export function useExamFormat() {
       ),
     percent: (value: number) => t("exam.percent", { value: Math.round(value) }),
     grade,
-    gradeRange,
     taskTitle,
     taskMeta,
   };

@@ -349,10 +349,11 @@
   --ob-done: #62d676;
 }
 
+/* Head, scrolling body, button: the button has its own row, so no answer can sit under it. */
 .memo-exam-ob-shell {
   position: relative;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
   overflow: hidden;
   background: var(--bg);
@@ -468,7 +469,7 @@
   overscroll-behavior: contain;
   display: flex;
   justify-content: center;
-  padding: clamp(0.4rem, 1.4vh, 1.6rem) clamp(1rem, 4vw, 2rem) clamp(7rem, 16vh, 8rem);
+  padding: clamp(0.4rem, 1.4vh, 1.6rem) clamp(1rem, 4vw, 2rem) clamp(1rem, 3vh, 1.6rem);
 }
 
 .memo-exam-ob-col {
@@ -1144,10 +1145,7 @@
 }
 
 .memo-exam-ob-foot {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
   z-index: 6;
   display: flex;
   flex-direction: column;
@@ -1155,7 +1153,6 @@
   gap: 0.55rem;
   box-sizing: border-box;
   padding: clamp(0.7rem, 1.8vh, 1.1rem) clamp(1rem, 4vw, 2rem) max(0.9rem, var(--memo-safe-bottom, 0px));
-  background: linear-gradient(to top, var(--bg) 62%, transparent);
 }
 
 .memo-exam-ob-cta {

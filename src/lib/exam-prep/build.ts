@@ -232,6 +232,7 @@ export function summarizeJourney(
     todayTotal: today ? today.tasks.length : 0,
     todayMinutes: today ? today.minutes : 0,
     coverage: journey.readiness.coverage,
+    mastery: journey.mastery,
     forecastMid: forecast ? forecast.mid : null,
     forecastGrade: forecast ? forecast.gradeMid : null,
     resultGrade: plan.resultGrade,

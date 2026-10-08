@@ -1,43 +1,31 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { EXAM_TYPE_LABEL, noteHref, useExamFormat } from "@/components/exam-prep/exam-format";
-import { ExamHero } from "@/components/exam-prep/exam-hero";
+import {
+  ExamGoals,
+  ExamMasteryHero,
+  ExamTopicList,
+  ExamTopicLadder,
+} from "@/components/exam-prep/exam-mastery";
 import { ExamOnboarding } from "@/components/exam-prep/exam-onboarding";
-import { ExamReadinessCard } from "@/components/exam-prep/exam-readiness-card";
-import { ExamTimeline } from "@/components/exam-prep/exam-timeline";
-import { ExamTodayTasks } from "@/components/exam-prep/exam-today";
-import { InstantLink } from "@/components/instant-link";
 import { Emoji, Msym } from "@/components/msym";
+import { mapAppHrefForClient } from "@/lib/creator-demo/paths";
 import type { GradeScaleId } from "@/lib/exam-prep/grade-scales";
 import type {
   ExamNoteOption,
   ExamPlanPayload,
   ExamPlanSummary,
-  JourneyDay,
   JourneyTask,
 } from "@/lib/exam-prep/model";
+import { topicStepKey, type ExamTopic, type ExamTopicStep } from "@/lib/exam-prep/topics";
 
 type Overview = { plans: ExamPlanSummary[]; notes: ExamNoteOption[] };
 
-/** True when the last planned study day before today went by without study. */
-function cameBackAfterABreak(days: JourneyDay[]) {
-  const todayIndex = days.findIndex((day) => day.isToday);
-
-  for (let index = todayIndex - 1; index >= 0; index -= 1) {
-    const day = days[index];
-
-    if (day.kind !== "study") {
-      continue;
-    }
-
-    const activity = day.activity;
-    return !activity || activity.cards + activity.questions + activity.tests === 0;
-  }
-
-  return false;
-}
+/** Ladder steps the app sees on its own when the topic has cards to measure. */
+const MEASURED_STEPS = new Set(["flashcards", "repetition", "gaps"]);
 
 async function readJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -52,9 +40,10 @@ async function readJson<T>(response: Response): Promise<T> {
  *
  * With no exam planned it is the same start screen the other tools have, and
  * its button opens the planning flow — drawn as the app's onboarding draws its
- * questions. With an exam it is that exam's journey: the countdown, today's
- * tasks (which open this note's other tabs), how close the learner is to their
- * grade, and the plan day by day. See docs/exam-prep.md.
+ * questions. With an exam it is laid out as Astra AI lays out exam prep: Memo
+ * saying where the plan gets the learner and by when, a mastery ring, today's
+ * goals with one Continue, and the material as topics, each a ladder of this
+ * note's tools ending in mock exams. See docs/exam-prep.md.
  */
 /** How often the tab looks again while material is being prepared, and for how long (30 min). */
 const PENDING_CHECK_MS = 20_000;
@@ -75,7 +64,8 @@ export function LectureExam({
   onOpenTab: (tab: JourneyTask["tab"]) => void;
 }) {
   const format = useExamFormat();
-  const { t, longDate, grade } = format;
+  const { t, grade } = format;
+  const router = useRouter();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
   const [payload, setPayload] = useState<ExamPlanPayload | null>(null);
@@ -85,6 +75,7 @@ export function LectureExam({
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [resultPercent, setResultPercent] = useState("");
+  const [topicKey, setTopicKey] = useState<string | null>(null);
 
   const loadPlan = useCallback(
     async (id: string) => {
@@ -171,6 +162,27 @@ export function LectureExam({
       setError(t("exam.error.save"));
     } finally {
       setPendingKey(null);
+    }
+  }
+
+  /**
+   * Opens a ladder step's tool. A step the app cannot see happen (the lesson,
+   * the podcast, the tutor, a mock exam) counts as done once opened; the rest
+   * tick themselves from study.
+   */
+  function openStep(topic: ExamTopic, step: ExamTopicStep) {
+    if (planId && payload && !step.done && !(MEASURED_STEPS.has(step.id) && topic.items > 0)) {
+      void fetch(`/api/exams/${planId}/checks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ day: payload.journey.today, taskKey: topicStepKey(topic.key, step.id), done: true }),
+      }).catch(() => undefined);
+    }
+
+    if (topic.lectureId === lectureId) {
+      onOpenTab(step.tab);
+    } else {
+      router.push(mapAppHrefForClient(noteHref(topic.lectureId, step.tab)));
     }
   }
 
@@ -291,18 +303,29 @@ export function LectureExam({
 
   const { plan, journey } = payload;
   const todayPlan = journey.todayPlan;
-  const doneCount = todayPlan ? todayPlan.tasks.filter((task) => task.done).length : 0;
-  const allDone = Boolean(todayPlan && todayPlan.tasks.length > 0 && doneCount === todayPlan.tasks.length);
-  const restToday = journey.status === "upcoming" && todayPlan?.kind === "rest";
-  const welcomeBack = journey.status === "upcoming" && cameBackAfterABreak(journey.days);
+  const openTopic = journey.topics.find((topic) => topic.key === topicKey) ?? null;
+  const showNotes = new Set(journey.topics.map((topic) => topic.lectureId)).size > 1;
+
+  if (openTopic) {
+    return (
+      <div className="memo-exam-tab">
+        <ExamTopicLadder
+          topic={openTopic}
+          examTitle={plan.title}
+          index={journey.topics.indexOf(openTopic)}
+          total={journey.topics.length}
+          onBack={() => setTopicKey(null)}
+          onOpenStep={openStep}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="memo-exam-tab">
       <div className="memo-exam-tab-head">
         <div>
-          <span className="memo-eyebrow">
-            {t(EXAM_TYPE_LABEL[plan.examType])} · {longDate(plan.examDate)}
-          </span>
+          <span className="memo-eyebrow">{t("exam.astra.eyebrow")}</span>
           <h2>{plan.title}</h2>
         </div>
         <button type="button" className="memo-button-outline small" onClick={() => setSetup("edit")}>
@@ -323,6 +346,7 @@ export function LectureExam({
               onClick={() => {
                 setPlanId(item.id);
                 setPayload(null);
+                setTopicKey(null);
                 void loadPlan(item.id);
               }}
             >
@@ -334,92 +358,51 @@ export function LectureExam({
 
       {error ? <p className="memo-inline-error">{error}</p> : null}
 
-      <ExamHero journey={journey} />
+      <ExamMasteryHero
+        journey={journey}
+        targetPercent={plan.targetPercent}
+        examDate={plan.examDate}
+        examLabel={t(EXAM_TYPE_LABEL[plan.examType])}
+      />
 
       {journey.materialPending > 0 ? (
         <p className="memo-exam-note">{t("exam.pending", { count: journey.materialPending })}</p>
       ) : null}
 
-      {journey.status === "upcoming" ? (
-        <section className="memo-exam-section" aria-labelledby="exam-today-title">
-          <h2 id="exam-today-title">
-            <span>{t("exam.today.title")}</span>
-            {todayPlan && todayPlan.kind === "study" ? (
-              <small>
-                {t("exam.today.summary", {
-                  done: doneCount,
-                  total: todayPlan.tasks.length,
-                  minutes: todayPlan.minutes,
-                })}
-              </small>
-            ) : null}
-          </h2>
+      {journey.status === "upcoming" && todayPlan && todayPlan.kind === "study" && todayPlan.tasks.length > 0 ? (
+        <ExamGoals
+          day={todayPlan}
+          onToggle={toggleTask}
+          pendingKey={pendingKey}
+          currentLectureId={lectureId}
+          onOpenTab={onOpenTab}
+        />
+      ) : null}
 
-          {welcomeBack && !allDone ? (
-            <div className="memo-exam-calm memo-exam-welcome">
-              <Emoji symbol="👋" size="1.6rem" />
-              <div>
-                <p>{t("exam.today.welcomeBack")}</p>
-                <p>{t("exam.today.welcomeBackBody")}</p>
-              </div>
-            </div>
+      {journey.status === "upcoming" && !journey.feasibility.fits ? (
+        <div className="memo-exam-panel memo-exam-fit">
+          <strong>{t("exam.fit.title")}</strong>
+          <p>
+            {t("exam.fit.body", {
+              count: journey.feasibility.unscheduledSections,
+              minutes: journey.feasibility.recommendedMinutes,
+            })}
+          </p>
+          {journey.feasibility.recommendedMinutes > plan.dailyMinutes ? (
+            <button
+              type="button"
+              className="memo-button-outline small"
+              disabled={isSaving}
+              onClick={() => void patchPlan({ dailyMinutes: journey.feasibility.recommendedMinutes })}
+            >
+              {t("exam.fit.action", { minutes: journey.feasibility.recommendedMinutes })}
+            </button>
           ) : null}
-
-          {restToday ? (
-            <div className="memo-exam-calm">
-              <Emoji symbol="🌿" size="1.6rem" />
-              <div>
-                <p>{t("exam.today.rest")}</p>
-                <p>{t("exam.today.restBody")}</p>
-              </div>
-            </div>
-          ) : todayPlan ? (
-            <>
-              {allDone ? (
-                <div className="memo-exam-calm memo-exam-welcome">
-                  <Emoji symbol="🎉" size="1.6rem" />
-                  <div>
-                    <p>{t("exam.today.allDone")}</p>
-                    <p>{t("exam.today.allDoneBody")}</p>
-                  </div>
-                </div>
-              ) : null}
-              <ExamTodayTasks
-                day={todayPlan}
-                onToggle={toggleTask}
-                pendingKey={pendingKey}
-                currentLectureId={lectureId}
-                onOpenTab={onOpenTab}
-              />
-            </>
-          ) : null}
-
-          {!journey.feasibility.fits ? (
-            <div className="memo-exam-panel memo-exam-fit">
-              <strong>{t("exam.fit.title")}</strong>
-              <p>
-                {t("exam.fit.body", {
-                  count: journey.feasibility.unscheduledSections,
-                  minutes: journey.feasibility.recommendedMinutes,
-                })}
-              </p>
-              {journey.feasibility.recommendedMinutes > plan.dailyMinutes ? (
-                <button
-                  type="button"
-                  className="memo-button-outline small"
-                  disabled={isSaving}
-                  onClick={() => void patchPlan({ dailyMinutes: journey.feasibility.recommendedMinutes })}
-                >
-                  {t("exam.fit.action", { minutes: journey.feasibility.recommendedMinutes })}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </section>
+        </div>
       ) : null}
 
       {journey.status === "finished" ? (
-        <section className="memo-exam-section">
+        <section className="memo-exam-block">
           <div className="memo-exam-card memo-exam-result">
             <h2>{t("exam.result.title")}</h2>
             {plan.resultPercent != null ? (
@@ -469,68 +452,8 @@ export function LectureExam({
         </section>
       ) : null}
 
-      <section className="memo-exam-section">
-        <ExamReadinessCard
-          readiness={journey.readiness}
-          gradeScale={plan.gradeScale as GradeScaleId}
-          targetGrade={plan.targetGrade}
-          targetPercent={plan.targetPercent}
-          finished={journey.status !== "upcoming"}
-        />
-      </section>
-
-      <section className="memo-exam-section" aria-labelledby="exam-path-title">
-        <h2 id="exam-path-title">
-          <span>{t("exam.timeline.title")}</span>
-          {journey.week.planned > 0 ? (
-            <small>
-              {t("exam.timeline.week", { studied: journey.week.studied, planned: journey.week.planned })}
-            </small>
-          ) : null}
-        </h2>
-        <ExamTimeline days={journey.days} />
-      </section>
-
-      {journey.readiness.notes.length > 1 ? (
-        <section className="memo-exam-section" aria-labelledby="exam-notes-title">
-          <h2 id="exam-notes-title">{t("exam.notes.title")}</h2>
-          <div className="memo-exam-notes">
-            {journey.readiness.notes.map((note) => (
-              <div key={note.lectureId} className="memo-exam-card memo-exam-note-card">
-                {note.lectureId === lectureId ? (
-                  <div className="memo-exam-note-head">
-                    <span className="memo-note-emoji">
-                      <Emoji symbol={note.emoji ?? "📘"} size="1.3rem" />
-                    </span>
-                    <span className="memo-note-title">{note.title}</span>
-                  </div>
-                ) : (
-                  <InstantLink href={noteHref(note.lectureId, "exam")} className="memo-exam-note-head">
-                    <span className="memo-note-emoji">
-                      <Emoji symbol={note.emoji ?? "📘"} size="1.3rem" />
-                    </span>
-                    <span className="memo-note-title">{note.title}</span>
-                    <Msym name="chevron_right" size="1.4rem" fill={false} weight={400} />
-                  </InstantLink>
-                )}
-                <div className="memo-exam-note-grid">
-                  <div className="memo-exam-stat">
-                    <strong>{format.percent(note.coverage * 100)}</strong>
-                    <span>{t("exam.ready.coverage")}</span>
-                  </div>
-                  <div className="memo-exam-stat">
-                    <strong>{format.percent(Math.min(99, note.memoryAtExam * 100))}</strong>
-                    <span>{t("exam.notes.memory")}</span>
-                  </div>
-                  <div className="memo-exam-stat">
-                    <strong>{note.accuracy == null ? "–" : format.percent(note.accuracy * 100)}</strong>
-                    <span>{t("exam.notes.accuracy")}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+      {journey.topics.length > 0 ? (
+        <ExamTopicList topics={journey.topics} showNotes={showNotes} onOpenTopic={(topic) => setTopicKey(topic.key)} />
       ) : null}
 
       <div className="memo-exam-tab-foot">

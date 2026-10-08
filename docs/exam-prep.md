@@ -13,12 +13,14 @@ shows, honestly, how close they are to that target.
 - The flow asks, in order: the exact exam day on a month calendar (tomorrow to a year
   ahead), **whether there is any other material for the exam**, the exam type, the target
   percentage (30–100 %, a stepper by fives and a slider for the exact value), and the daily
-  time and days off. The material step is one card with four ways in — PDF or photo,
-  record, audio file, link — that open Home's own upload sheet
+  time and days off. An exam is planned from the note's own source material; the material
+  step asks only whether there is **more material to learn** for it. It is one card: what
+  the plan covers on top (this note, then anything uploaded), and four ways to add more
+  below — PDF or photo, record, audio file, link — that open Home's own upload sheet
   (`NoteSourceModal` with `onCreated`): the new note joins the exam and is written in the
   background while the learner finishes the setup — the journey shows it as still being
-  prepared and plans it once it is ready. The learner's notes sit below as chips (the first
-  six, then "+N"), tapped to add.
+  prepared and plans it once it is ready. The learner's other notes are not offered; a plan
+  being edited that already covers some shows them there, so they can be taken out.
 - Demo, no login: `/creator/lectures/demo-note-mikroekonomija?tab=exam` — an exam that
   already has a week and a half of study behind it; any other demo note starts empty.
 - Landing: the Exam pill in the hero phone and "How it works", and the "Exam prep" row of
@@ -171,8 +173,8 @@ trial note (`checkExamLectures`); the preview bypass account has no auth row and
 
 Today's tasks on the same note switch the note's tab in place; tasks on another note link
 to it with `?tab=flashcards|quiz|test|tutor|exam` (`LectureWorkspace`'s `initialTabId`).
-`GET /api/exams?lectureId=` returns the exams covering that note and the notes the planning
-flow can add, in one request.
+`GET /api/exams?lectureId=` returns the exams covering that note and the learner's notes (the
+setup reads this note's and, when editing, the plan's other notes from it), in one request.
 
 ## Not done yet
 

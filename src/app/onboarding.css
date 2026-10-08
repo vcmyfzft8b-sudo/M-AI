@@ -750,7 +750,7 @@
   transform: scale(0.92);
 }
 
-/* "Any other material?": one card with the four ways in, and the notes as chips. */
+/* "More material to learn?": one card, what the plan covers on top and the four ways to add more below. */
 .memo-exam-ob-upload {
   display: grid;
   gap: 0.75rem;
@@ -767,6 +767,21 @@
   text-align: center;
   font-size: clamp(0.98rem, 2.4vh, 1.1rem);
   font-weight: 850;
+}
+
+.memo-exam-ob-upload > .memo-exam-ob-upload-label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.memo-exam-ob-upload > hr {
+  width: 100%;
+  margin: 0.15rem 0;
+  border: 0;
+  border-top: 2px solid var(--line-soft);
 }
 
 .memo-exam-ob-sources {

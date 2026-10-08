@@ -61,14 +61,12 @@ export function LectureExam({
   lectureTitle,
   isReady,
   hasPaidAccess,
-  trialLectureId,
   onOpenTab,
 }: {
   lectureId: string;
   lectureTitle: string;
   isReady: boolean;
   hasPaidAccess: boolean;
-  trialLectureId: string | null;
   /** Opens one of this note's tabs, for today's tasks on this note. */
   onOpenTab: (tab: JourneyTask["tab"]) => void;
 }) {
@@ -202,7 +200,6 @@ export function LectureExam({
       lectureTitle={lectureTitle}
       notes={overview?.notes ?? []}
       hasPaidAccess={hasPaidAccess}
-      trialLectureId={trialLectureId}
       initialPlan={setup === "edit" ? payload?.plan ?? null : null}
       onClose={() => setSetup(null)}
       onSaved={(id) => {

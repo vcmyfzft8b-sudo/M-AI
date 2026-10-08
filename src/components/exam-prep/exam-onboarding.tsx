@@ -41,8 +41,6 @@ const MATERIAL_SOURCES: Array<{ mode: NoteSourceMode; icon: string; label: Messa
   { mode: "link", icon: "🔗", label: "exam.ob.source.link" },
 ];
 
-/** Other notes shown before "+N": enough to find this term's, short enough to stay one glance. */
-const NOTES_SHOWN = 6;
 
 const TYPE_CHOICES: Array<{ id: ExamTypeId; icon: string; label: MessageKey; desc: MessageKey }> = [
   { id: "written", icon: "✍️", label: "exam.type.written", desc: "exam.type.written.hint" },
@@ -89,7 +87,6 @@ export interface ExamOnboardingProps {
   lectureTitle: string;
   notes: ExamNoteOption[];
   hasPaidAccess: boolean;
-  trialLectureId: string | null;
   /** Editing an existing plan: no welcome, every answer filled in. */
   initialPlan?: ExamPlanPayload["plan"] | null;
   onClose: () => void;
@@ -106,7 +103,6 @@ export function ExamOnboarding({
   lectureTitle,
   notes,
   hasPaidAccess,
-  trialLectureId,
   initialPlan = null,
   onClose,
   onSaved,
@@ -117,8 +113,12 @@ export function ExamOnboarding({
   const today = useMemo(() => dayKeyAt(Date.now(), browserTimeZone()), []);
 
   const thisNote = notes.find((note) => note.id === lectureId);
-  const otherNotes = notes.filter(
-    (note) => note.id !== lectureId && (hasPaidAccess || note.id === trialLectureId),
+  // The plan is built from this note's material. Other notes only appear when a plan
+  // being edited already covers them, so they can be taken out.
+  const earlierNotes = useMemo(
+    () =>
+      notes.filter((note) => note.id !== lectureId && (initialPlan?.lectureIds ?? []).includes(note.id)),
+    [initialPlan, lectureId, notes],
   );
   const steps: StepId[] = [
     ...(editing ? [] : (["welcome"] as StepId[])),
@@ -139,7 +139,6 @@ export function ExamOnboarding({
   // Notes made from material uploaded during this setup: still being written.
   const [uploads, setUploads] = useState<Array<{ id: string; mode: NoteSourceMode }>>([]);
   const [sourceMode, setSourceMode] = useState<NoteSourceMode | null>(null);
-  const [showAllNotes, setShowAllNotes] = useState(false);
   const [examType, setExamType] = useState<ExamTypeId | null>(initialPlan?.examType ?? null);
   const [targetPercent, setTargetPercent] = useState<number>(() =>
     Math.max(TARGET_MIN, Math.round(initialPlan?.targetPercent ?? TARGET_DEFAULT)),
@@ -152,11 +151,6 @@ export function ExamOnboarding({
   const savingRef = useRef(false);
 
   const step = steps[index];
-  // The first few notes and any picked ones, in library order so nothing moves under a tap.
-  const shownNotes = showAllNotes
-    ? otherNotes
-    : otherNotes.filter((note, position) => position < NOTES_SHOWN || lectureIds.includes(note.id));
-  const hiddenNotes = otherNotes.length - shownNotes.length;
   const lastExamDay = addDays(today, EXAM_MAX_DAYS_AHEAD);
   const daysUntil = isDayKey(examDate) ? diffDays(today, examDate) : -1;
   const dateValid = daysUntil >= 1 && daysUntil <= EXAM_MAX_DAYS_AHEAD;
@@ -490,6 +484,47 @@ export function ExamOnboarding({
                       <>
                         <p className="memo-exam-ob-sub">{t("exam.ob.subNotes")}</p>
                         <div className="memo-exam-ob-upload">
+                          <p className="memo-exam-ob-upload-label">{t("exam.ob.yourNotes")}</p>
+                          <div className="memo-exam-ob-notes" role="group" aria-label={t("exam.ob.yourNotes")}>
+                            <button type="button" aria-pressed disabled className="memo-exam-ob-note-chip">
+                              <span aria-hidden="true">
+                                {noteEmoji({ id: lectureId, title: lectureTitle, source_type: thisNote?.sourceType })}
+                              </span>
+                              <span className="memo-exam-ob-note-title">
+                                {thisNote?.title || lectureTitle || t("note.untitled")}
+                              </span>
+                            </button>
+                            {earlierNotes.map((note) => (
+                              <button
+                                key={note.id}
+                                type="button"
+                                aria-pressed={lectureIds.includes(note.id)}
+                                className="memo-exam-ob-note-chip"
+                                onClick={() => toggleNote(note.id)}
+                              >
+                                <span aria-hidden="true">
+                                  {noteEmoji({ id: note.id, title: note.title, source_type: note.sourceType })}
+                                </span>
+                                <span className="memo-exam-ob-note-title">{note.title || t("note.untitled")}</span>
+                              </button>
+                            ))}
+                            {uploads.map((upload) => (
+                              <button
+                                key={upload.id}
+                                type="button"
+                                aria-pressed={lectureIds.includes(upload.id)}
+                                className="memo-exam-ob-note-chip"
+                                onClick={() => toggleNote(upload.id)}
+                              >
+                                <span aria-hidden="true">
+                                  {MATERIAL_SOURCES.find((source) => source.mode === upload.mode)?.icon}
+                                </span>
+                                <span className="memo-exam-ob-note-title">{t("exam.ob.newMaterial")}</span>
+                                <small>{t("exam.ob.preparing")}</small>
+                              </button>
+                            ))}
+                          </div>
+                          <hr />
                           <p>{t("exam.ob.addMaterial")}</p>
                           <div className="memo-exam-ob-sources">
                             {MATERIAL_SOURCES.map((source) => (
@@ -505,58 +540,6 @@ export function ExamOnboarding({
                               </button>
                             ))}
                           </div>
-                        </div>
-
-                        <p className="memo-exam-ob-label-row">{t("exam.ob.yourNotes")}</p>
-                        <div className="memo-exam-ob-notes" role="group" aria-label={t("exam.ob.yourNotes")}>
-                          <button type="button" aria-pressed disabled className="memo-exam-ob-note-chip">
-                            <span aria-hidden="true">
-                              {noteEmoji({ id: lectureId, title: lectureTitle, source_type: thisNote?.sourceType })}
-                            </span>
-                            <span className="memo-exam-ob-note-title">
-                              {thisNote?.title || lectureTitle || t("note.untitled")}
-                            </span>
-                          </button>
-                          {uploads.map((upload) => (
-                            <button
-                              key={upload.id}
-                              type="button"
-                              aria-pressed={lectureIds.includes(upload.id)}
-                              className="memo-exam-ob-note-chip"
-                              onClick={() => toggleNote(upload.id)}
-                            >
-                              <span aria-hidden="true">
-                                {MATERIAL_SOURCES.find((source) => source.mode === upload.mode)?.icon}
-                              </span>
-                              <span className="memo-exam-ob-note-title">{t("exam.ob.newMaterial")}</span>
-                              <small>{t("exam.ob.preparing")}</small>
-                            </button>
-                          ))}
-                          {shownNotes.map((note) => (
-                            <button
-                              key={note.id}
-                              type="button"
-                              aria-pressed={lectureIds.includes(note.id)}
-                              className="memo-exam-ob-note-chip"
-                              onClick={() => toggleNote(note.id)}
-                            >
-                              <span aria-hidden="true">
-                                {noteEmoji({ id: note.id, title: note.title, source_type: note.sourceType })}
-                              </span>
-                              <span className="memo-exam-ob-note-title">{note.title || t("note.untitled")}</span>
-                              {note.status !== "ready" ? <small>{t("exam.ob.preparing")}</small> : null}
-                            </button>
-                          ))}
-                          {hiddenNotes > 0 ? (
-                            <button
-                              type="button"
-                              className="memo-exam-ob-note-chip more"
-                              aria-label={t("exam.ob.allNotes")}
-                              onClick={() => setShowAllNotes(true)}
-                            >
-                              +{hiddenNotes}
-                            </button>
-                          ) : null}
                         </div>
                       </>
                     ) : null}

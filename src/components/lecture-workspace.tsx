@@ -4100,7 +4100,6 @@ export function LectureWorkspace({
           lectureTitle={detail.lecture.title?.trim() || t("note.untitled")}
           isReady={detail.lecture.status === "ready"}
           hasPaidAccess={hasPaidAccess}
-          trialLectureId={trialLectureId}
           onOpenTab={(tabId) => {
             const target = NOTE_TABS.find((tab) => tab.id === tabId);
 

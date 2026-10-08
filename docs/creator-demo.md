@@ -24,27 +24,6 @@ no paywall, nothing to set up.
   feedback.
 - **Chat** — answers about the note, from a canned set per subject.
 
-## Oral quiz (`/creator/oral-quiz`)
-
-A scripted tutor skit for UGC, modelled on the Turbo AI "oral quiz" TikTok trend: Memo
-asks a question out loud, the creator answers out loud, Memo answers back and then
-explains, with the word being spoken highlighted. The lesson card is on the left and an
-animated Memo on the right (he talks with the voice, reacts to each answer and cheers at
-the end). It takes the whole screen, with no app chrome, and is meant to be filmed off a
-laptop.
-
-- **Start** (or Space/Enter) plays it; **R** starts again. The creator's lines are
-  timed to the original video; a tap or Space moves on early. Add `?answer=tap` to make
-  every answer wait for a tap instead.
-- It plays in the app's language (sl, en, hr, bs, sr). The mnemonic "DICK" and its four
-  English drug names stay English in all of them; everything around it is translated.
-- Sound is real: pre-recorded with the app's Soniox voice (Grace) in
-  `public/creator-demo/oral-quiz/<locale>/`, with per-word timings in
-  `src/lib/creator-demo/oral-quiz-timings.json`.
-- The script is `src/lib/creator-demo/oral-quiz.ts`. After changing a tutor line, re-record
-  with `node --experimental-strip-types scripts/generate-oral-quiz-clips.mjs [--language sl]`;
-  `tests/creator-oral-quiz.test.mjs` fails until the recordings match the text.
-
 ## What to know before recording
 
 - **Nothing of the creator's own can get in.** Every source is pre-staged and

@@ -1,6 +1,10 @@
 /**
- * The oral quiz the creator demo plays at `/creator/oral-quiz`: a scripted
- * exchange between the tutor and a learner, made for UGC videos and nothing else.
+ * The oral quiz at `/ugc/oral-quiz`: a scripted exchange between the tutor and a
+ * learner, made for comedy UGC videos and nothing else.
+ *
+ * Deliberately kept apart from the creator demo (`/creator`): creators making
+ * ordinary study content use that, and nothing there links here. This is only
+ * reached by its own link, and is noindexed and disallowed in robots.txt.
  *
  * It is a skit, not a lesson. The creator plays the learner and says the learner's
  * lines out loud; the tutor's lines are recordings (see
@@ -9,17 +13,17 @@
  * never reads from it.
  *
  * One script per app language. The joke is the English mnemonic, so "DICK" stays
- * English in every one of them, declined where the grammar asks ("malo DICK-a"), and
- * the voice is told to say it the English way. Everything else is translated,
- * the drug names it stands for included, although "kalcij" spells a K. The screen's own chrome comes
- * from the i18n catalogues.
+ * English in every one of them, declined where the grammar asks ("malo DICK-a"),
+ * and the voice is told to say it the English way. Everything else is translated,
+ * the drug names it stands for included, although "kalcij" spells a K. The
+ * screen's own chrome comes from the i18n catalogues.
  */
 
 import type { Locale } from "@/lib/i18n/locales";
 
 export type OralQuizTutorTurn = {
   speaker: "tutor";
-  /** File name stem of the recording, `public/creator-demo/oral-quiz/<locale>/<voice>-<clip>.mp3`. */
+  /** File name stem of the recording, `public/ugc/oral-quiz/<locale>/<voice>-<clip>.mp3`. */
   clip: string;
   /** What the screen shows, word for word. */
   text: string;

@@ -21793,7 +21793,7 @@ html[data-native] .memo-toast.subtle {
 }
 
 /*
- * The creator demo's oral quiz (`/creator/oral-quiz`, src/components/creator-demo/oral-quiz.tsx):
+ * The UGC oral quiz (`/ugc/oral-quiz`, src/components/ugc/oral-quiz.tsx):
  * the lesson card on the left, Memo on the right, filmed off a laptop for UGC. The card is the
  * read-aloud's own highlight (`.note-read-content`, globals.css) on a plain card; the stage is
  * the onboarding's Memo with a sticker over his head.
@@ -22141,6 +22141,93 @@ html[data-native] .memo-toast.subtle {
 @keyframes memo-oq-wobble {
   0%, 100% { rotate: -8deg; }
   50% { rotate: -2deg; }
+}
+
+/* The language picker the link opens on, and the chip on the ready screen that goes back to it. */
+.memo-oq-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 1.15rem;
+  width: min(26rem, 100%);
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: max(1.6rem, var(--memo-safe-top, 0px)) 1rem max(1.6rem, var(--memo-safe-bottom, 0px));
+}
+
+.memo-oq-picker-mascot {
+  position: relative;
+  align-self: center;
+  width: 7.5rem;
+  aspect-ratio: 320 / 288;
+  --memo-shadow: var(--hover-ring);
+}
+
+.memo-oq-picker-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  text-align: center;
+}
+
+.memo-oq-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.memo-oq-lang {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 5.1rem;
+  padding: 0 1.5rem;
+  border: 0;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-align: left;
+}
+
+.memo-oq-lang .msym {
+  color: var(--muted-2);
+}
+
+.memo-oq-lang:hover {
+  box-shadow: var(--shadow), inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-oq-lang:focus-visible,
+.memo-oq-langchip:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow), 0 0 0 3px var(--focus-ring);
+}
+
+.memo-oq-langchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.7rem;
+  margin-top: 0.5rem;
+  padding: 0 1rem 0 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.memo-oq-langchip:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
 }
 
 /*

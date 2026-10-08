@@ -1,15 +1,15 @@
 /*
- * Records the tutor's half of the creator demo's oral quiz (`/creator/oral-quiz`),
+ * Records the tutor's half of the UGC oral quiz (`/ugc/oral-quiz`),
  * once, into files the page just plays.
  *
  * Each tutor turn, in each app language, becomes an mp3 in
- * public/creator-demo/oral-quiz/<locale>/, and the time each of its words is spoken
- * goes into src/lib/creator-demo/oral-quiz-timings.json, so
+ * public/ugc/oral-quiz/<locale>/, and the time each of its words is spoken
+ * goes into src/lib/ugc/oral-quiz-timings.json, so
  * the page highlights the word the voice is on rather than guessing at a pace. The
  * timings are Soniox's own character timestamps, the same ones a note's read-aloud
  * highlights from (note-tts-synthesis.ts).
  *
- * Re-run after changing a tutor line in src/lib/creator-demo/oral-quiz.ts.
+ * Re-run after changing a tutor line in src/lib/ugc/oral-quiz.ts.
  *
  * Usage:  node --experimental-strip-types scripts/generate-oral-quiz-clips.mjs [--voice Grace] [--language sl]
  */
@@ -26,11 +26,11 @@ import {
   ORAL_QUIZ_VOICE,
   oralQuizSpoken,
   oralQuizWords,
-} from "../src/lib/creator-demo/oral-quiz.ts";
+} from "../src/lib/ugc/oral-quiz.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const OUT_DIR = path.join(ROOT, "public", "creator-demo", "oral-quiz");
-const TIMINGS_FILE = path.join(ROOT, "src", "lib", "creator-demo", "oral-quiz-timings.json");
+const OUT_DIR = path.join(ROOT, "public", "ugc", "oral-quiz");
+const TIMINGS_FILE = path.join(ROOT, "src", "lib", "ugc", "oral-quiz-timings.json");
 
 /* Higher than the tutor clips' 32 kbps: this one is heard through a phone filming a laptop. */
 const BITRATE = 64_000;

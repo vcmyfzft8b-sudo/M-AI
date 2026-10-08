@@ -5,21 +5,24 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useTranslations } from "@/components/i18n-provider";
+import { useT } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
 import { MascotFigure, MascotSparkles, useMascot } from "@/components/onboarding-mascot";
 import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, SEO_BRAND_NAME } from "@/lib/brand";
-import { ORAL_QUIZ_SCRIPTS, oralQuizWords, type OralQuizTurn } from "@/lib/creator-demo/oral-quiz";
-import ORAL_QUIZ_TIMINGS from "@/lib/creator-demo/oral-quiz-timings.json";
-import type { Locale } from "@/lib/i18n/locales";
+import { ORAL_QUIZ_SCRIPTS, oralQuizWords, type OralQuizTurn } from "@/lib/ugc/oral-quiz";
+import ORAL_QUIZ_TIMINGS from "@/lib/ugc/oral-quiz-timings.json";
+import { LOCALE_LABELS, LOCALES, type Locale } from "@/lib/i18n/locales";
+import type { OralQuizCopy } from "@/lib/ugc/oral-quiz-copy";
 
 /**
- * The creator demo's oral quiz: Memo asks out loud, the creator answers out loud,
+ * The UGC oral quiz: Memo asks out loud, the creator answers out loud,
  * and Memo explains, with the word being spoken lit up as it goes. A screen for
- * filming, not a feature — see src/lib/creator-demo/oral-quiz.ts.
+ * filming, not a feature — see src/lib/ugc/oral-quiz.ts.
  *
- * It plays in the app's language: each has its own script and recordings, with
- * the English mnemonic kept in all of them.
+ * It opens on a language picker, and plays in the language picked there: each has
+ * its own script and recordings, and the screen's own words follow it. The picker,
+ * and the chip that goes back to it, are gone the moment Start is pressed, so
+ * nothing about languages is on screen in a take.
  *
  * The learner's turns wait as long as the original video gave them. `?answer=tap`
  * makes each one wait for a tap, Space or Enter instead, for a creator who needs
@@ -89,7 +92,7 @@ function planFor(locale: Locale): Plan {
     title,
     turns,
     clips,
-    src: (clip) => `/creator-demo/oral-quiz/${locale}/${VOICE}-${clip}.mp3`,
+    src: (clip) => `/ugc/oral-quiz/${locale}/${VOICE}-${clip}.mp3`,
     starts,
     totalMs: starts[starts.length - 1] + turnMs(turns[turns.length - 1]),
     lessonWords: lessonTurns.flatMap((turn) => turn.words),
@@ -176,8 +179,69 @@ function Words({ words, current }: { words: string[]; current: number }) {
   ));
 }
 
-export function CreatorOralQuiz() {
-  const { t, locale } = useTranslations();
+export function UgcOralQuiz({
+  copy,
+  initialLocale,
+}: {
+  copy: Record<Locale, OralQuizCopy>;
+  initialLocale: Locale | null;
+}) {
+  const [locale, setLocale] = useState<Locale | null>(initialLocale);
+
+  /* In the address too, so a reload between takes keeps the language. */
+  const choose = useCallback((next: Locale | null) => {
+    setLocale(next);
+    const url = new URL(window.location.href);
+
+    if (next) {
+      url.searchParams.set("lang", next);
+    } else {
+      url.searchParams.delete("lang");
+    }
+
+    window.history.replaceState(window.history.state, "", url);
+  }, []);
+
+  return locale ? (
+    <OralQuizScreen key={locale} locale={locale} copy={copy[locale]} onChangeLanguage={() => choose(null)} />
+  ) : (
+    <LanguagePicker onPick={choose} />
+  );
+}
+
+/* The first screen: which language the take is in. In the app's language, with each option in its own. */
+function LanguagePicker({ onPick }: { onPick: (locale: Locale) => void }) {
+  const t = useT();
+
+  return (
+    <div className="memo-oq-picker">
+      <div className="memo-oq-picker-mascot" aria-hidden="true">
+        <div className="memo-oq-mascot-breathe">
+          <MascotFigure lash={3} priority />
+        </div>
+      </div>
+      <h1 className="memo-oq-picker-title">{t("ugcQuiz.pickLanguage")}</h1>
+      <div className="memo-oq-picker-list">
+        {LOCALES.map((option) => (
+          <button key={option} type="button" className="memo-oq-lang" lang={option} onClick={() => onPick(option)}>
+            <span>{LOCALE_LABELS[option]}</span>
+            <Msym name="chevron_right" size="1.35rem" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OralQuizScreen({
+  locale,
+  copy,
+  onChangeLanguage,
+}: {
+  locale: Locale;
+  copy: OralQuizCopy;
+  onChangeLanguage: () => void;
+}) {
   const plan = planFor(locale);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -477,8 +541,8 @@ export function CreatorOralQuiz() {
       <section className="memo-oq-card" onClick={() => advanceRef.current?.()}>
         <header className="memo-oq-head">
           {lockup("memo-oq-head-lockup")}
-          <span className="memo-oq-product">{t("creatorQuiz.product")}</span>
-          <span className="memo-oq-streak" aria-label={t("creatorQuiz.streak", { count: STREAK })}>
+          <span className="memo-oq-product">{copy.product}</span>
+          <span className="memo-oq-streak" aria-label={copy.streak.replace("{count}", String(STREAK))}>
             <Msym name="bolt" size="1.25rem" />
             {STREAK}
           </span>
@@ -490,10 +554,14 @@ export function CreatorOralQuiz() {
         <div ref={scrollerRef} className="memo-oq-body note-read-content">
           {stage === "ready" ? (
             <div className="memo-oq-ready">
-              <span className="memo-eyebrow">{t("creatorQuiz.eyebrow")}</span>
-              <p className="memo-oq-hint">{t("creatorQuiz.startHint")}</p>
+              <span className="memo-eyebrow">{copy.eyebrow}</span>
+              <p className="memo-oq-hint">{copy.startHint}</p>
               <button type="button" className="memo-button-coral memo-oq-start" onClick={() => void start()}>
-                {t("creatorQuiz.start")}
+                {copy.start}
+              </button>
+              <button type="button" className="memo-oq-langchip" onClick={onChangeLanguage}>
+                <Msym name="language" size="1.1rem" />
+                {LOCALE_LABELS[locale]}
               </button>
             </div>
           ) : inLesson ? (
@@ -505,7 +573,7 @@ export function CreatorOralQuiz() {
             </article>
           ) : (
             <div className="memo-oq-quiz">
-              <span className="memo-eyebrow">{t("creatorQuiz.eyebrow")}</span>
+              <span className="memo-eyebrow">{copy.eyebrow}</span>
               {quizTurns.map(({ turn, index, words }) =>
                 turn.speaker === "tutor" ? (
                   <p key={index} className={index === position.turn ? "memo-oq-line" : "memo-oq-line past"}>
@@ -533,19 +601,19 @@ export function CreatorOralQuiz() {
               }}
             >
               <Msym name="replay" size="1.25rem" />
-              {t("creatorQuiz.again")}
+              {copy.again}
             </button>
           ) : stage === "playing" ? (
             <>
               <Msym name={listening ? "mic" : "graphic_eq"} size="1.35rem" />
-              <span>{listening ? t("creatorQuiz.listening") : t("creatorQuiz.speaking")}</span>
+              <span>{listening ? copy.listening : copy.speaking}</span>
             </>
           ) : null}
         </footer>
       </section>
 
       <aside className="memo-oq-brand" aria-hidden="true">
-        <span className="memo-oq-tagline">{t("creatorQuiz.tagline")}</span>
+        <span className="memo-oq-tagline">{copy.tagline}</span>
         <div className="memo-oq-stage">
           <div className="memo-oq-mascot">
             <span className="memo-oq-halo" />
@@ -554,7 +622,7 @@ export function CreatorOralQuiz() {
             <span className="memo-oq-ring third" />
             <MascotSparkles />
             <span key={stage === "ready" ? "ready" : "on"} className="memo-oq-sticker">
-              {t("creatorQuiz.lockIn")}
+              {copy.lockIn}
             </span>
             <div ref={mascot.refs.heroBurst} className="memo-oq-burst" />
             <div ref={mascot.refs.setHero} className="memo-oq-mascot-body">

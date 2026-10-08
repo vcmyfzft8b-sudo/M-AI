@@ -195,11 +195,6 @@
   50% { filter: brightness(1.07); }
 }
 
-@keyframes memo-gen-sweep {
-  0%, 6% { transform: translateX(-105%); }
-  94%, 100% { transform: translateX(300%); }
-}
-
 @keyframes memo-skeleton {
   0%, 100% { opacity: 0.34; }
   50% { opacity: 0.7; }

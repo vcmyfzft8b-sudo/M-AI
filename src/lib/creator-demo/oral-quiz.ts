@@ -100,7 +100,7 @@ const LINES: Record<Locale, Lines> = {
   hr: {
     title: "Kako dati D-I-C-K",
     lines: [
-      "Tvojoj pacijentici treba malo DICK. Kako ćeš joj ga dati?",
+      "Tvojoj pacijentici treba malo DICK-a. Kako ćeš joj ga dati?",
       "Pa naravno, samo uz pristanak.",
       "Pacijentica je bez svijesti. Ne može dati pristanak.",
       "Oh.",
@@ -118,7 +118,7 @@ const LINES: Record<Locale, Lines> = {
   bs: {
     title: "Kako dati D-I-C-K",
     lines: [
-      "Tvojoj pacijentici treba malo DICK. Kako ćeš joj ga dati?",
+      "Tvojoj pacijentici treba malo DICK-a. Kako ćeš joj ga dati?",
       "Pa naravno, samo uz pristanak.",
       "Pacijentica je bez svijesti. Ne može dati pristanak.",
       "Oh.",
@@ -136,7 +136,7 @@ const LINES: Record<Locale, Lines> = {
   sr: {
     title: "Kako dati D-I-C-K",
     lines: [
-      "Tvojoj pacijentkinji treba malo DICK. Kako ćeš joj ga dati?",
+      "Tvojoj pacijentkinji treba malo DICK-a. Kako ćeš joj ga dati?",
       "Pa naravno, samo uz pristanak.",
       "Pacijentkinja je bez svesti. Ne može da da pristanak.",
       "Oh.",
@@ -162,7 +162,7 @@ const LINES: Record<Locale, Lines> = {
  */
 const SOUTH_SLAVIC_SPOKEN = {
   DICK: "dik",
-  // Declined the Slovenian way ("malo DICK-a"), said as one word.
+  // Declined ("malo DICK-a", the genitive after "malo"), said as one word.
   "DICK-a": "dika",
   dextrose: "dekstrouz",
   calcium: "kelsijem",

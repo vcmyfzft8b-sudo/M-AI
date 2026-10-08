@@ -19,16 +19,20 @@ export type HighlightPick = {
 export type HighlightRange = { startWordIndex: number; endWordIndex: number };
 
 /** The most highlights one note gets, however long it is. */
-export const MAX_AI_HIGHLIGHTS = 20;
+export const MAX_AI_HIGHLIGHTS = 24;
 /** A note this short is all signal; a highlighter over it marks everything and means nothing. */
 export const MIN_NOTE_WORDS_FOR_HIGHLIGHTS = 60;
-/** Roughly one highlight for this many words of note. */
-const WORDS_PER_HIGHLIGHT = 100;
-const MIN_HIGHLIGHT_TARGET = 4;
+/**
+ * At most one highlight for this many words of note. A study note defines a term every few
+ * sentences: a 490-word note on the cell defined about fifteen, and one per hundred words
+ * highlighted five of them.
+ */
+const WORDS_PER_HIGHLIGHT = 40;
+const MIN_HIGHLIGHT_TARGET = 6;
 /** A term is a name, not a sentence: a pick longer than this is not a key term. */
 export const MAX_TERM_WORDS = 6;
 
-/** How many highlights to ask for: about one per defined term in an average note. */
+/** The most highlights to ask for: room for every term an average note defines. */
 export function highlightTarget(wordCount: number) {
   return Math.min(
     MAX_AI_HIGHLIGHTS,
@@ -169,8 +173,8 @@ function findSequence(
 /**
  * The word range of one pick. The context finds the right occurrence (a key term is highlighted
  * where it is defined, not at a passing mention), and only the term inside it is highlighted. A
- * pick whose context cannot be found falls back to the term's first occurrence, which for a term
- * the note introduces is almost always its definition.
+ * pick whose context cannot be found, or does not contain the term, falls back to the term's first
+ * occurrence, which for a term the note introduces is almost always its definition.
  */
 export function findHighlightRange(
   words: HighlightableWord[],
@@ -185,9 +189,12 @@ export function findHighlightRange(
 
   const context = splitWords(pick.context);
   const contextMatch = context.length >= term.length ? findSequence(words, normalized, context) : null;
-  const match = contextMatch
-    ? findSequence(words, normalized, term, contextMatch.start, contextMatch.start + context.length)
-    : findSequence(words, normalized, term);
+  // A context from the neighbouring table cell is found but does not hold the term; the term's
+  // own first occurrence is then the better answer than dropping it.
+  const match =
+    (contextMatch &&
+      findSequence(words, normalized, term, contextMatch.start, contextMatch.start + context.length)) ||
+    findSequence(words, normalized, term);
 
   return match ? { startWordIndex: match.startWordIndex, endWordIndex: match.endWordIndex } : null;
 }

@@ -67,13 +67,16 @@ test("single words and multi-word terms are both located; a missing context fall
     [
       { term: "Cenovna elastičnost", context: "Cenovna elastičnost meri odzivnost povpraševane količine", kind: "term" },
       { term: "Neelastično povpraševanje", context: "not in the note at all", kind: "term" },
+      // A context that exists but holds another term (the neighbouring table cell).
+      { term: "Elastičnost", context: "količina se skoraj ne odzove", kind: "term" },
     ],
     MAX_AI_HIGHLIGHTS,
   );
 
   assert.deepEqual(
     ranges.map((range) => textOf(words, range)),
-    ["Cenovna elastičnost", "Neelastično povpraševanje"],
+    // The fallback is the term's first occurrence; here that is the passing mention.
+    ["Cenovna elastičnost", "Neelastično povpraševanje", "elastičnost"],
   );
 });
 
@@ -117,7 +120,7 @@ test("facts stay a quarter of the highlights, and the total is capped", () => {
 });
 
 test("the number asked for grows with the note and stops at the cap", () => {
-  assert.equal(highlightTarget(120), 4);
-  assert.equal(highlightTarget(650), 7);
+  assert.equal(highlightTarget(120), 6);
+  assert.equal(highlightTarget(490), 12);
   assert.equal(highlightTarget(5000), MAX_AI_HIGHLIGHTS);
 });

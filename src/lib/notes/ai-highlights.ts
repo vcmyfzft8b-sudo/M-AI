@@ -57,14 +57,15 @@ function highlightInstructions(target: number) {
 What to pick:
 - "term": the key term itself, copied VERBATIM from the note (1 to ${MAX_TERM_WORDS} words, same spelling, diacritics and case), e.g. "Cenovna elastičnost", "inzulinska rezistenca", "Frank-Starlingov zakon". The term, never the definition sentence.
 - The note usually puts a defined term in **bold** where it introduces it, and definitions often sit in "> **Definicija:** ..." (or "Definition:") boxes. Prefer those terms, and do highlight terms inside definition boxes, but never the box label itself ("Definicija", "Pogosta napaka", "Ključno").
-- Skip bold that is not a concept: labels that only name a list or a step ("Pravice:", "Naloga 4:"), names of people used as examples, and plain numbers.
+- A list item that starts with a bold term, a colon and its explanation ("- **Jedro:** organel, ki ...") is a definition: highlight that term. So is a term in the first column of a table that explains or compares it.
+- Skip bold that is not a concept: labels that only name a group, a step or an example ("Pravice:", "Naloga 4:", "Primer:"), names of people used as examples, and plain numbers.
 - Highlight each term once, where it is defined, not at later mentions.
 - "context": 4 to 20 words copied verbatim from the same sentence, containing the term, so the right occurrence can be found.
 - "kind": "term" for a key term. Use "fact" only for a decisive number, date, formula or condition that a test would ask about, at most a quarter of your picks. For a fact, "term" is the value together with what it is (2 to ${MAX_TERM_WORDS} words, e.g. "približno 50 %", "32 bitov", "od 15. leta"), never a bare number.
 
 Rules:
 - Never pick from a heading. Picks must not overlap.
-- Aim for about ${target} picks spread across the whole note, in note order. Fewer is fine when the note has fewer real key terms; an empty list is a valid answer. Never pick filler to reach a count.`;
+- Highlight every key term the note defines or introduces, in note order, up to ${target} picks. If the note has more, keep the most important ones and spread them across the whole note. Fewer is fine when the note has fewer real key terms; an empty list is a valid answer. Never pick filler to reach a count.`;
 }
 
 /**

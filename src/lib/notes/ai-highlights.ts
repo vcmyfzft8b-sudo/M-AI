@@ -10,134 +10,70 @@ import {
   readLectureArtifactForNoteDoc,
   saveEditableNoteDoc,
 } from "@/lib/note-doc-server";
-import type { NoteTtsBlock } from "@/lib/note-tts-text";
+import {
+  collectHighlightableWords,
+  highlightTarget,
+  MAX_AI_HIGHLIGHTS,
+  MAX_KEYWORD_WORDS,
+  MIN_NOTE_WORDS_FOR_HIGHLIGHTS,
+  pickHighlightRanges,
+} from "@/lib/notes/ai-highlight-ranges";
 import { parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 
 /**
- * The model runs a highlighter over the finished note the way a diligent student would, and the
- * result is stored as ordinary annotations — the same objects the reader creates by selecting
- * text — so the reader can remove any of them exactly the way they remove their own: select the
- * span, tap highlight again.
+ * The model runs a highlighter over the finished note and the result is stored as ordinary
+ * annotations — the same objects the reader creates by selecting text — so the reader can remove
+ * any of them exactly the way they remove their own: select the span, tap highlight again.
  *
- * Yellow on purpose: the classic highlighter colour, and visibly distinct from both the blue the
- * heading highlight uses (.lecture-heading-highlight) and the orange the reader's own highlights
- * default to.
+ * What it marks is the key words inside the definitions of the note's most important concepts,
+ * the part a learner has to remember. A learner asked for exactly that in the October 2026 survey:
+ * "da Memo ključne besede v definicijah poudari, saj bi tako lažje prepoznala najpomembnejše pojme
+ * in si jih hitreje zapomnila". It used to mark 3-to-15-word phrases it judged important anywhere,
+ * which read as random half-sentences, and it skipped the definition boxes entirely.
+ *
+ * Stored with the palette's "yellow" colour id, the same as before this change.
  */
 const AI_HIGHLIGHT_COLOR_ID = "yellow";
 const AI_HIGHLIGHT_ID_PREFIX = "ai-hl-";
-const MAX_AI_HIGHLIGHTS = 12;
-/** A note this short is all signal; a highlighter over it marks everything and means nothing. */
-const MIN_NOTE_WORDS_FOR_HIGHLIGHTS = 60;
-
-const highlightSelectionSchema = z.object({
-  highlights: z
-    .array(
-      z.object({
-        /** Verbatim span copied from the note; matched mechanically, so paraphrase is discarded. */
-        quote: z.string().min(12).max(280),
-      }),
-    )
-    .max(20),
-});
-
-const HIGHLIGHT_INSTRUCTIONS = `You are the reader's highlighter. You are given finished study notes, and you choose the spans a diligent student would run a highlighter over: the genuinely important or tricky parts — the phrase that carries a key definition, the number that decides an answer, the condition everyone forgets, the half of a distinction that is easy to confuse.
-
-Rules:
-- Return each highlight as a VERBATIM quote, copied character-for-character from the note text (including punctuation and diacritics). Quotes are located mechanically; anything paraphrased is discarded.
-- Each quote is one continuous span of 3 to 15 words: the decisive phrase, not the whole sentence and never a whole paragraph.
-- Choose 4 to 12 across the whole note and spread them across sections; at most 2 per section.
-- Never quote a heading, and never quote text inside a "> **...**" callout box — those are already emphasized.
-- Quotes must not overlap each other.
-- You are the judge of whether a note needs highlights at all: if little is genuinely highlight-worthy, return fewer, and an empty list is a valid answer. Never highlight filler to reach a count.`;
-
-/** The word stream the reader's own selections index against, minus headings and callouts. */
-function collectHighlightableWords(blocks: NoteTtsBlock[]) {
-  const words: Array<{ index: number; text: string }> = [];
-
-  for (const block of blocks) {
-    if (block.kind === "heading" || block.kind === "callout") {
-      continue;
-    }
-
-    if (block.kind === "list") {
-      for (const item of block.items) {
-        for (const token of item.tokens) {
-          if (token.type === "word") {
-            words.push({ index: token.wordIndex, text: token.text });
-          }
-        }
-      }
-      continue;
-    }
-
-    if (block.kind === "table") {
-      for (const row of block.rows) {
-        for (const cell of row.cells) {
-          for (const token of cell.tokens) {
-            if (token.type === "word") {
-              words.push({ index: token.wordIndex, text: token.text });
-            }
-          }
-        }
-      }
-      continue;
-    }
-
-    for (const token of block.tokens) {
-      if (token.type === "word") {
-        words.push({ index: token.wordIndex, text: token.text });
-      }
-    }
-  }
-
-  return words;
-}
-
-function normalizeWord(value: string) {
-  return value.toLowerCase().normalize("NFC").replace(/[^\p{L}\p{N}]/gu, "");
-}
 
 /**
- * Locates a quote in the note's word stream and returns its word-index range — the same indexes
- * a reader's selection of those words would produce. Contiguity is demanded on the GLOBAL index,
- * so a "match" that would silently span a skipped heading or callout is rejected.
+ * No length bounds here on purpose. They are stripped from the request and only enforced when the
+ * answer is parsed, so one pick too many or one long context would reject the whole answer and
+ * leave the note with no highlights. pickHighlightRanges applies every limit to what comes back.
  */
-function findQuoteRange(
-  words: Array<{ index: number; text: string }>,
-  normalizedWords: string[],
-  quote: string,
-) {
-  const quoteWords = quote.split(/\s+/).map(normalizeWord).filter(Boolean);
+const highlightSelectionSchema = z.object({
+  highlights: z.array(
+    z.object({
+      /** The concept the definition is about; not highlighted itself. */
+      concept: z.string(),
+      /** The key words inside its definition, verbatim; matched mechanically. */
+      keywords: z.string(),
+      /** Verbatim words from the same sentence, to find the right occurrence. */
+      context: z.string(),
+    }),
+  ),
+});
 
-  if (quoteWords.length < 2) {
-    return null;
-  }
+function highlightInstructions(target: number) {
+  return `You are the reader's highlighter. You are given finished study notes. A learner wants the KEY WORDS IN THE DEFINITIONS emphasized, so she can spot the most important concepts at a glance and remember them faster.
 
-  for (let start = 0; start + quoteWords.length <= normalizedWords.length; start += 1) {
-    let matched = true;
+Step 1. Choose the most important concepts of this material: the ones a teacher would ask about in a test. Aim for about ${target}, spread evenly across the whole note, from its first section to its last. Skip minor terms, side remarks, examples, people and places mentioned in passing.
 
-    for (let offset = 0; offset < quoteWords.length; offset += 1) {
-      if (normalizedWords[start + offset] !== quoteWords[offset]) {
-        matched = false;
-        break;
-      }
-    }
+Step 2. For each one, find where the note defines or explains it. That can be a sentence, a list item such as "- **Mitoza:** delitev, pri kateri ...", a row of a table, or a definition box ("> **Definicija:** ...").
 
-    if (!matched) {
-      continue;
-    }
+Step 3. Pick the KEY WORDS INSIDE that definition: the decisive words that carry its meaning and must be memorized, not the concept's own name. Examples:
+- "Mitoza: delitev, pri kateri iz ene celice nastaneta dve hčerinski celici z enakim številom kromosomov kot materinska celica." → keywords "dve hčerinski celici z enakim številom kromosomov"
+- "Celica je najmanjša zgradbena in delovna enota živega bitja." → keywords "najmanjša zgradbena in delovna enota"
+- "Ponudba brez bistvenih sestavin ni ponudba, temveč zgolj vabilo k ponudbi." → keywords "brez bistvenih sestavin"
 
-    const startWordIndex = words[start].index;
-    const endWordIndex = words[start + quoteWords.length - 1].index;
+Output for each pick:
+- "concept": the concept's name.
+- "keywords": copied VERBATIM from the definition (same spelling, diacritics and case), one continuous span of 2 to ${MAX_KEYWORD_WORDS} words, usually 3 to 6. Never a single word, never the concept's name alone, never a whole sentence, never a bare number.
+- "context": 6 to 25 words copied verbatim from the same sentence, containing the keywords, so the right place can be found.
 
-    if (endWordIndex - startWordIndex !== quoteWords.length - 1) {
-      continue;
-    }
-
-    return { startWordIndex, endWordIndex };
-  }
-
-  return null;
+Rules:
+- One pick per concept, in note order. Picks must not overlap. Never pick from a heading or a box label ("Definicija", "Ključno").
+- Fewer is fine only when the note really has fewer definitions of important concepts; an empty list is a valid answer. Never pick filler to reach a count.`;
 }
 
 /**
@@ -162,40 +98,18 @@ export async function applyAiHighlightsToNote(params: {
       return;
     }
 
+    const target = highlightTarget(words.length);
     const selection = await generateStructuredObject({
       schema: highlightSelectionSchema,
       stage: "chat",
-      maxOutputTokens: 1600,
-      instructions: HIGHLIGHT_INSTRUCTIONS,
+      maxOutputTokens: 2400,
+      instructions: highlightInstructions(target),
       input: cleaned,
       usageContext: { ...(params.usageContext ?? {}), stage: "note_highlight" },
     });
 
-    const normalizedWords = words.map((word) => normalizeWord(word.text));
     const createdAt = new Date().toISOString();
-    const ranges: Array<{ startWordIndex: number; endWordIndex: number }> = [];
-
-    for (const highlight of selection.highlights) {
-      const range = findQuoteRange(words, normalizedWords, highlight.quote);
-
-      if (!range) {
-        continue;
-      }
-
-      const overlaps = ranges.some(
-        (existing) =>
-          range.startWordIndex <= existing.endWordIndex &&
-          range.endWordIndex >= existing.startWordIndex,
-      );
-
-      if (!overlaps) {
-        ranges.push(range);
-      }
-
-      if (ranges.length >= MAX_AI_HIGHLIGHTS) {
-        break;
-      }
-    }
+    const ranges = pickHighlightRanges(words, selection.highlights, MAX_AI_HIGHLIGHTS);
 
     if (ranges.length === 0) {
       return;

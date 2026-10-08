@@ -82,11 +82,11 @@ const LINES: Record<Locale, Lines> = {
   sl: {
     title: "Kako dati D-I-C-K",
     lines: [
-      "Tvoja pacientka potrebuje malo DICK. Kako ji ga daš?",
+      "Tvoja pacientka potrebuje malo DICK-a. Kako ji ga daš?",
       "Seveda samo s privolitvijo.",
       "Pacientka je nezavestna. Privolitve ne more dati.",
       "Oh.",
-      "Potem ji moraš DICK dati vseeno.",
+      "Potem ji moraš DICK-a vseeno dati.",
       "Brez privolitve?",
       "Zapomni si: DICK pomeni dextrose, insulin, calcium in Kayexalate.",
       "Oh.",
@@ -162,6 +162,8 @@ const LINES: Record<Locale, Lines> = {
  */
 const SOUTH_SLAVIC_SPOKEN = {
   DICK: "dik",
+  // Declined the Slovenian way ("malo DICK-a"), said as one word.
+  "DICK-a": "dika",
   dextrose: "dekstrouz",
   calcium: "kelsijem",
   Kayexalate: "kajeksalejt",

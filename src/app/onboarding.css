@@ -750,56 +750,205 @@
   transform: scale(0.92);
 }
 
-/* "Upload material": Home's create options as onboarding tiles. */
-.memo-exam-ob-adds {
+/* "Any other material?": one card with the four ways in, and the notes as chips. */
+.memo-exam-ob-upload {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(0.35rem, 1.1vh, 0.6rem);
-}
-
-.memo-exam-ob-add {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  min-height: clamp(3rem, 7vh, 3.8rem);
-  padding: 0.5rem 0.7rem;
-  box-sizing: border-box;
+  gap: 0.75rem;
+  padding: clamp(0.8rem, 2vh, 1.1rem) 0.75rem;
   border: 2px solid var(--chip-ring);
-  border-radius: 1.125rem;
+  border-radius: 1.375rem;
   background: var(--chip);
-  color: var(--text);
-  text-align: left;
-  font: inherit;
-  font-size: clamp(0.8rem, 2vh, 0.92rem);
-  font-weight: 800;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-  cursor: pointer;
   box-shadow: 0 4px 0 var(--chip-ring);
-  transition: transform 140ms cubic-bezier(0.2, 0.85, 0.2, 1), box-shadow 140ms ease;
   animation: memo-rise 440ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.memo-exam-ob-add:disabled {
+.memo-exam-ob-upload > p {
+  margin: 0;
+  text-align: center;
+  font-size: clamp(0.98rem, 2.4vh, 1.1rem);
+  font-weight: 850;
+}
+
+.memo-exam-ob-sources {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.memo-exam-ob-source {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.memo-exam-ob-source > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(2.9rem, 7vh, 3.5rem);
+  height: clamp(2.9rem, 7vh, 3.5rem);
+  border-radius: 999px;
+  background: var(--ob-soft);
+  box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--ob-accent) 30%, transparent);
+  font-size: clamp(1.3rem, 3.2vh, 1.6rem);
+  line-height: 1;
+  transition: transform 140ms cubic-bezier(0.2, 0.85, 0.2, 1);
+}
+
+.memo-exam-ob-source:active:not(:disabled) > span {
+  transform: scale(0.9);
+}
+
+.memo-exam-ob-source:focus-visible {
+  outline: none;
+}
+
+.memo-exam-ob-source:focus-visible > span {
+  box-shadow: 0 0 0 3px var(--ob-soft), 0 0 0 5px var(--ob-accent);
+}
+
+.memo-exam-ob-source:disabled {
   cursor: default;
   opacity: 0.45;
 }
 
-.memo-exam-ob-add:focus-visible {
+.memo-exam-ob-notes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.memo-exam-ob-note-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  min-height: 2.5rem;
+  padding: 0 0.85rem;
+  box-sizing: border-box;
+  border: 2px solid var(--chip-ring);
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 3px 0 var(--chip-ring);
+  transition: transform 140ms cubic-bezier(0.2, 0.85, 0.2, 1), box-shadow 140ms ease;
+}
+
+.memo-exam-ob-note-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-exam-ob-note-chip small {
+  flex: 0 0 auto;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.memo-exam-ob-note-chip[aria-pressed="true"] {
+  border-color: var(--ob-accent);
+  background: var(--ob-soft);
+  box-shadow: 0 1px 0 var(--ob-accent);
+  transform: translateY(2px);
+}
+
+/* This note is always in; it reads as chosen, not as switched off. */
+.memo-exam-ob-note-chip:disabled {
+  cursor: default;
+}
+
+.memo-exam-ob-note-chip.more {
+  color: var(--muted);
+}
+
+.memo-exam-ob-note-chip:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--ob-soft), 0 0 0 5px var(--ob-accent);
 }
 
-.memo-exam-ob-add:active:not(:disabled) {
-  transform: translateY(4px);
+.memo-exam-ob-note-chip:active:not(:disabled) {
+  transform: translateY(3px);
   box-shadow: 0 0 0 transparent;
 }
 
-.memo-exam-ob-chips {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.5rem;
+/* The target: a slider filled to the value, thumb in the accent with its lip. */
+.memo-exam-ob-range {
+  --fill: 50%;
+  display: block;
+  width: 100%;
+  height: 2.2rem;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.memo-exam-ob-range::-webkit-slider-runnable-track {
+  height: 0.9rem;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--ob-accent) var(--fill), var(--ob-bar-track) var(--fill));
+}
+
+.memo-exam-ob-range::-moz-range-track {
+  height: 0.9rem;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--ob-accent) var(--fill), var(--ob-bar-track) var(--fill));
+}
+
+.memo-exam-ob-range::-webkit-slider-thumb {
+  width: 1.9rem;
+  height: 1.9rem;
+  margin-top: -0.5rem;
+  border: 3px solid var(--ob-accent);
+  border-radius: 999px;
+  background: var(--chip);
+  box-shadow: 0 3px 0 var(--ob-lip);
+  -webkit-appearance: none;
+}
+
+.memo-exam-ob-range::-moz-range-thumb {
+  width: 1.9rem;
+  height: 1.9rem;
+  box-sizing: border-box;
+  border: 3px solid var(--ob-accent);
+  border-radius: 999px;
+  background: var(--chip);
+  box-shadow: 0 3px 0 var(--ob-lip);
+}
+
+/* Focus is drawn on the thumb, so the global inset ring stays off the track. */
+.memo-exam-ob-range:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.memo-exam-ob-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--ob-soft), 0 0 0 5px var(--ob-accent);
+}
+
+.memo-exam-ob-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px var(--ob-soft), 0 0 0 5px var(--ob-accent);
 }
 
 .memo-exam-ob-chip {
@@ -898,20 +1047,6 @@
   animation: memo-pop 260ms cubic-bezier(0.2, 1.4, 0.3, 1) both;
 }
 
-.memo-exam-ob-track {
-  height: 0.55rem;
-  border-radius: 999px;
-  background: var(--tile);
-  overflow: hidden;
-}
-
-.memo-exam-ob-track > div {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--ob-accent);
-  transition: width 260ms cubic-bezier(0.2, 0.85, 0.2, 1);
-}
-
 .memo-exam-ob-scale {
   display: flex;
   justify-content: space-between;
@@ -919,26 +1054,6 @@
   font-size: 0.78rem;
   font-weight: 700;
   color: var(--muted-2);
-}
-
-.memo-exam-ob-need {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.85rem;
-  padding: 0.8rem 1rem;
-  border: 2px solid var(--chip-ring);
-  border-radius: 1.15rem;
-  background: var(--chip);
-  font-size: 1rem;
-  font-weight: 800;
-}
-
-.memo-exam-ob-need strong {
-  min-width: 3.6rem;
-  text-align: center;
-  font-size: 1.35rem;
-  font-variant-numeric: tabular-nums;
 }
 
 .memo-exam-ob-hero {

@@ -2,9 +2,9 @@
 
 import dynamic from "next/dynamic";
 import { Nunito } from "next/font/google";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 
-import { SCALE_LABEL, useExamFormat } from "@/components/exam-prep/exam-format";
+import { useExamFormat } from "@/components/exam-prep/exam-format";
 import {
   MascotFigure,
   MascotPedestal,
@@ -14,12 +14,6 @@ import {
 import type { NoteSourceMode } from "@/components/note-source-modal";
 import { ViewportPortal } from "@/components/viewport-portal";
 import { addDays, addMonths, dayKeyAt, diffDays, isDayKey, monthGrid, monthOf } from "@/lib/exam-prep/dates";
-import {
-  defaultTargetPercent,
-  GRADE_SCALE_IDS,
-  targetGradeOptions,
-  type GradeScaleId,
-} from "@/lib/exam-prep/grade-scales";
 import type {
   ExamNoteOption,
   ExamPlanPayload,
@@ -41,11 +35,14 @@ const NoteSourceModal = dynamic(
 
 /** What else an exam can be on, as Home's "new note" sheet offers it. */
 const MATERIAL_SOURCES: Array<{ mode: NoteSourceMode; icon: string; label: MessageKey }> = [
-  { mode: "text", icon: "📚", label: "library.create.text" },
-  { mode: "record", icon: "🎙️", label: "library.create.record" },
-  { mode: "upload", icon: "🔊", label: "library.quickAction.audio" },
-  { mode: "link", icon: "🔗", label: "library.create.link" },
+  { mode: "text", icon: "📄", label: "exam.ob.source.file" },
+  { mode: "record", icon: "🎙️", label: "exam.ob.source.record" },
+  { mode: "upload", icon: "🎧", label: "exam.ob.source.audio" },
+  { mode: "link", icon: "🔗", label: "exam.ob.source.link" },
 ];
+
+/** Other notes shown before "+N": enough to find this term's, short enough to stay one glance. */
+const NOTES_SHOWN = 6;
 
 const TYPE_CHOICES: Array<{ id: ExamTypeId; icon: string; label: MessageKey; desc: MessageKey }> = [
   { id: "written", icon: "✍️", label: "exam.type.written", desc: "exam.type.written.hint" },
@@ -63,14 +60,13 @@ const TIME_CHOICES: Array<{ minutes: number; icon: string; desc: MessageKey }> =
   { minutes: 90, icon: "🏆", desc: "exam.ob.time90" },
 ];
 
-/** What most learners aim for on each scale, as the starting point. */
-const DEFAULT_TARGET: Record<GradeScaleId, string> = {
-  ten_point: "8",
-  five_point: "4",
-  letter: "B",
-  percent: "70",
-  pass_fail: "pass",
-};
+/**
+ * The target is a share of the exam's points. Below 30 % no exam passes, and
+ * 75 % is where most learners start when asked for a good result.
+ */
+const TARGET_MIN = 30;
+const TARGET_DEFAULT = 75;
+const TARGET_STEP = 5;
 
 /** How long the "making your plan" rows take to tick, so the moment reads. */
 const MAKING_ROW_MS = 650;
@@ -94,7 +90,6 @@ export interface ExamOnboardingProps {
   notes: ExamNoteOption[];
   hasPaidAccess: boolean;
   trialLectureId: string | null;
-  defaultScale?: GradeScaleId;
   /** Editing an existing plan: no welcome, every answer filled in. */
   initialPlan?: ExamPlanPayload["plan"] | null;
   onClose: () => void;
@@ -112,13 +107,12 @@ export function ExamOnboarding({
   notes,
   hasPaidAccess,
   trialLectureId,
-  defaultScale = "ten_point",
   initialPlan = null,
   onClose,
   onSaved,
 }: ExamOnboardingProps) {
   const format = useExamFormat();
-  const { t, locale, longDate, fullDate, monthTitle, grade, weekdayNames } = format;
+  const { t, longDate, fullDate, monthTitle, weekdayNames } = format;
   const editing = Boolean(initialPlan);
   const today = useMemo(() => dayKeyAt(Date.now(), browserTimeZone()), []);
 
@@ -145,15 +139,10 @@ export function ExamOnboarding({
   // Notes made from material uploaded during this setup: still being written.
   const [uploads, setUploads] = useState<Array<{ id: string; mode: NoteSourceMode }>>([]);
   const [sourceMode, setSourceMode] = useState<NoteSourceMode | null>(null);
+  const [showAllNotes, setShowAllNotes] = useState(false);
   const [examType, setExamType] = useState<ExamTypeId | null>(initialPlan?.examType ?? null);
-  const [gradeScale, setGradeScale] = useState<GradeScaleId>(initialPlan?.gradeScale ?? defaultScale);
-  const [targetGrade, setTargetGrade] = useState(
-    initialPlan?.targetGrade ?? DEFAULT_TARGET[initialPlan?.gradeScale ?? defaultScale],
-  );
-  const [targetPercent, setTargetPercent] = useState<number>(
-    initialPlan?.targetPercent ??
-      defaultTargetPercent(defaultScale, DEFAULT_TARGET[defaultScale], locale) ??
-      70,
+  const [targetPercent, setTargetPercent] = useState<number>(() =>
+    Math.max(TARGET_MIN, Math.round(initialPlan?.targetPercent ?? TARGET_DEFAULT)),
   );
   const [dailyMinutes, setDailyMinutes] = useState<number | null>(initialPlan?.dailyMinutes ?? null);
   const [restDays, setRestDays] = useState(initialPlan?.restDays ?? 0);
@@ -163,11 +152,14 @@ export function ExamOnboarding({
   const savingRef = useRef(false);
 
   const step = steps[index];
+  // The first few notes and any picked ones, in library order so nothing moves under a tap.
+  const shownNotes = showAllNotes
+    ? otherNotes
+    : otherNotes.filter((note, position) => position < NOTES_SHOWN || lectureIds.includes(note.id));
+  const hiddenNotes = otherNotes.length - shownNotes.length;
   const lastExamDay = addDays(today, EXAM_MAX_DAYS_AHEAD);
   const daysUntil = isDayKey(examDate) ? diffDays(today, examDate) : -1;
   const dateValid = daysUntil >= 1 && daysUntil <= EXAM_MAX_DAYS_AHEAD;
-  const gradeOptions = targetGradeOptions(gradeScale, locale);
-  const gradeIndex = Math.max(0, gradeOptions.findIndex((option) => option.label === targetGrade));
 
   const bubble = (() => {
     switch (step) {
@@ -229,8 +221,10 @@ export function ExamOnboarding({
       title: (initialPlan?.title ?? lectureTitle).slice(0, EXAM_TITLE_MAX),
       examDate,
       examType: examType ?? "written",
-      gradeScale,
-      targetGrade,
+      // A plan made here is always a percentage target; older plans on a grade
+      // scale become one when they are edited.
+      gradeScale: "percent",
+      targetGrade: String(targetPercent),
       targetPercent,
       dailyMinutes: dailyMinutes ?? 30,
       restDays,
@@ -301,20 +295,15 @@ export function ExamOnboarding({
     );
   }
 
-  function chooseScale(scale: GradeScaleId) {
-    setGradeScale(scale);
-    const label = DEFAULT_TARGET[scale];
-    setTargetGrade(label);
-    setTargetPercent(defaultTargetPercent(scale, label, locale) ?? 70);
-  }
-
-  function stepGrade(delta: number) {
-    const option = gradeOptions[Math.min(gradeOptions.length - 1, Math.max(0, gradeIndex + delta))];
-
-    if (option) {
-      setTargetGrade(option.label);
-      setTargetPercent(defaultTargetPercent(gradeScale, option.label, locale) ?? targetPercent);
-    }
+  function stepTarget(delta: number) {
+    setTargetPercent((value) => {
+      // From an odd value, the first step lands on the next multiple of five.
+      const next =
+        delta > 0
+          ? (Math.floor(value / TARGET_STEP) + 1) * TARGET_STEP
+          : (Math.ceil(value / TARGET_STEP) - 1) * TARGET_STEP;
+      return Math.min(100, Math.max(TARGET_MIN, next));
+    });
   }
 
   const ready: Record<StepId, boolean> = {
@@ -322,7 +311,7 @@ export function ExamOnboarding({
     date: dateValid,
     material: lectureIds.length > 0,
     type: examType !== null,
-    grade: targetPercent > 0 && targetPercent <= 100,
+    grade: targetPercent >= TARGET_MIN && targetPercent <= 100,
     time: dailyMinutes !== null,
     making: Boolean(error) || (Boolean(savedId) && made >= 3),
   };
@@ -500,92 +489,75 @@ export function ExamOnboarding({
                     {step === "material" ? (
                       <>
                         <p className="memo-exam-ob-sub">{t("exam.ob.subNotes")}</p>
-                        <div className="memo-exam-ob-options" role="group" aria-label={t("exam.ob.qNotes")}>
-                          <button
-                            type="button"
-                            aria-pressed
-                            disabled
-                            className="memo-exam-ob-option"
-                            style={{ animationDelay: "40ms" }}
-                          >
-                            <span className="memo-exam-ob-icon" aria-hidden="true">
+                        <div className="memo-exam-ob-upload">
+                          <p>{t("exam.ob.addMaterial")}</p>
+                          <div className="memo-exam-ob-sources">
+                            {MATERIAL_SOURCES.map((source) => (
+                              <button
+                                key={source.mode}
+                                type="button"
+                                className="memo-exam-ob-source"
+                                disabled={lectureIds.length >= EXAM_MAX_NOTES}
+                                onClick={() => setSourceMode(source.mode)}
+                              >
+                                <span aria-hidden="true">{source.icon}</span>
+                                {t(source.label)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <p className="memo-exam-ob-label-row">{t("exam.ob.yourNotes")}</p>
+                        <div className="memo-exam-ob-notes" role="group" aria-label={t("exam.ob.yourNotes")}>
+                          <button type="button" aria-pressed disabled className="memo-exam-ob-note-chip">
+                            <span aria-hidden="true">
                               {noteEmoji({ id: lectureId, title: lectureTitle, source_type: thisNote?.sourceType })}
                             </span>
-                            <span className="memo-exam-ob-copy">
-                              <strong>{thisNote?.title || lectureTitle || t("note.untitled")}</strong>
-                              <span>{t("exam.ob.thisNote")}</span>
+                            <span className="memo-exam-ob-note-title">
+                              {thisNote?.title || lectureTitle || t("note.untitled")}
                             </span>
-                            <span className="memo-exam-ob-check" aria-hidden="true">✓</span>
                           </button>
-                          {uploads.map((upload) => {
-                            const on = lectureIds.includes(upload.id);
-                            return (
-                              <button
-                                key={upload.id}
-                                type="button"
-                                aria-pressed={on}
-                                className="memo-exam-ob-option"
-                                onClick={() => toggleNote(upload.id)}
-                              >
-                                <span className="memo-exam-ob-icon" aria-hidden="true">
-                                  {MATERIAL_SOURCES.find((source) => source.mode === upload.mode)?.icon}
-                                </span>
-                                <span className="memo-exam-ob-copy">
-                                  <strong>{t("exam.ob.newMaterial")}</strong>
-                                  <span>{t("exam.ob.preparing")}</span>
-                                </span>
-                                {on ? <span className="memo-exam-ob-check" aria-hidden="true">✓</span> : null}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        <p className="memo-exam-ob-label-row">{t("exam.ob.addMaterial")}</p>
-                        <div className="memo-exam-ob-adds">
-                          {MATERIAL_SOURCES.map((source, option) => (
+                          {uploads.map((upload) => (
                             <button
-                              key={source.mode}
+                              key={upload.id}
                               type="button"
-                              className="memo-exam-ob-add"
-                              style={{ animationDelay: `${120 + option * 55}ms` }}
-                              disabled={lectureIds.length >= EXAM_MAX_NOTES}
-                              onClick={() => setSourceMode(source.mode)}
+                              aria-pressed={lectureIds.includes(upload.id)}
+                              className="memo-exam-ob-note-chip"
+                              onClick={() => toggleNote(upload.id)}
                             >
-                              <span className="memo-exam-ob-icon" aria-hidden="true">{source.icon}</span>
-                              <span>{t(source.label)}</span>
+                              <span aria-hidden="true">
+                                {MATERIAL_SOURCES.find((source) => source.mode === upload.mode)?.icon}
+                              </span>
+                              <span className="memo-exam-ob-note-title">{t("exam.ob.newMaterial")}</span>
+                              <small>{t("exam.ob.preparing")}</small>
                             </button>
                           ))}
+                          {shownNotes.map((note) => (
+                            <button
+                              key={note.id}
+                              type="button"
+                              aria-pressed={lectureIds.includes(note.id)}
+                              className="memo-exam-ob-note-chip"
+                              onClick={() => toggleNote(note.id)}
+                            >
+                              <span aria-hidden="true">
+                                {noteEmoji({ id: note.id, title: note.title, source_type: note.sourceType })}
+                              </span>
+                              <span className="memo-exam-ob-note-title">{note.title || t("note.untitled")}</span>
+                              {note.status !== "ready" ? <small>{t("exam.ob.preparing")}</small> : null}
+                            </button>
+                          ))}
+                          {hiddenNotes > 0 ? (
+                            <button
+                              type="button"
+                              className="memo-exam-ob-note-chip more"
+                              aria-label={t("exam.ob.allNotes")}
+                              onClick={() => setShowAllNotes(true)}
+                            >
+                              +{hiddenNotes}
+                            </button>
+                          ) : null}
                         </div>
-
-                        {otherNotes.length > 0 ? (
-                          <>
-                            <p className="memo-exam-ob-label-row">{t("exam.ob.yourNotes")}</p>
-                            <div className="memo-exam-ob-options" role="group" aria-label={t("exam.ob.yourNotes")}>
-                              {otherNotes.map((note, option) => {
-                                const on = lectureIds.includes(note.id);
-                                return (
-                                  <button
-                                    key={note.id}
-                                    type="button"
-                                    aria-pressed={on}
-                                    className="memo-exam-ob-option"
-                                    style={{ animationDelay: `${340 + Math.min(option, 8) * 55}ms` }}
-                                    onClick={() => toggleNote(note.id)}
-                                  >
-                                    <span className="memo-exam-ob-icon" aria-hidden="true">
-                                      {noteEmoji({ id: note.id, title: note.title, source_type: note.sourceType })}
-                                    </span>
-                                    <span className="memo-exam-ob-copy">
-                                      <strong>{note.title || t("note.untitled")}</strong>
-                                      {note.status !== "ready" ? <span>{t("exam.ob.preparing")}</span> : null}
-                                    </span>
-                                    {on ? <span className="memo-exam-ob-check" aria-hidden="true">✓</span> : null}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </>
-                        ) : null}
                       </>
                     ) : null}
 
@@ -619,81 +591,50 @@ export function ExamOnboarding({
 
                     {step === "grade" ? (
                       <>
-                        <div className="memo-exam-ob-chips" role="radiogroup" aria-label={t("exam.create.scaleLabel")}>
-                          {GRADE_SCALE_IDS.map((scale) => (
-                            <button
-                              key={scale}
-                              type="button"
-                              role="radio"
-                              aria-checked={gradeScale === scale}
-                              className="memo-exam-ob-chip"
-                              onClick={() => chooseScale(scale)}
-                            >
-                              {t(SCALE_LABEL[scale])}
-                            </button>
-                          ))}
-                        </div>
+                        <p className="memo-exam-ob-sub">{t("exam.ob.subGrade")}</p>
                         <div className="memo-exam-ob-grade">
-                          <p className="memo-exam-ob-sub flush">{t("exam.ob.subGrade")}</p>
                           <div className="memo-exam-ob-stepper">
                             <button
                               type="button"
                               className="memo-exam-ob-round"
-                              aria-label={t("onboarding.lowerGrade")}
-                              disabled={gradeIndex <= 0}
-                              onClick={() => stepGrade(-1)}
+                              aria-label={t("exam.create.lower")}
+                              disabled={targetPercent <= TARGET_MIN}
+                              onClick={() => stepTarget(-1)}
                             >
                               −
                             </button>
-                            <span className="memo-exam-ob-value" key={targetGrade} aria-live="polite">
-                              {grade(gradeScale, targetGrade)}
+                            <span className="memo-exam-ob-value" aria-live="polite">
+                              {format.percent(targetPercent)}
                             </span>
                             <button
                               type="button"
                               className="memo-exam-ob-round"
-                              aria-label={t("onboarding.raiseGrade")}
-                              disabled={gradeIndex >= gradeOptions.length - 1}
-                              onClick={() => stepGrade(1)}
+                              aria-label={t("exam.create.raise")}
+                              disabled={targetPercent >= 100}
+                              onClick={() => stepTarget(1)}
                             >
                               +
                             </button>
                           </div>
                           <div>
-                            <div className="memo-exam-ob-track">
-                              <div
-                                style={{
-                                  width: `${gradeOptions.length > 1 ? (gradeIndex / (gradeOptions.length - 1)) * 100 : 100}%`,
-                                }}
-                              />
-                            </div>
+                            <input
+                              className="memo-exam-ob-range"
+                              type="range"
+                              min={TARGET_MIN}
+                              max={100}
+                              step={1}
+                              value={targetPercent}
+                              aria-label={t("exam.ob.qGrade")}
+                              aria-valuetext={format.percent(targetPercent)}
+                              style={{ "--fill": `${((targetPercent - TARGET_MIN) / (100 - TARGET_MIN)) * 100}%` } as CSSProperties}
+                              onChange={(event) => setTargetPercent(Number(event.target.value))}
+                            />
                             <div className="memo-exam-ob-scale">
-                              <span>{grade(gradeScale, gradeOptions[0]?.label ?? "")}</span>
-                              <span>{grade(gradeScale, gradeOptions.at(-1)?.label ?? "")}</span>
+                              <span>{format.percent(TARGET_MIN)}</span>
+                              <span>{format.percent(100)}</span>
                             </div>
                           </div>
-                          <div className="memo-exam-ob-need">
-                            <span>{t("exam.create.needs", { grade: grade(gradeScale, targetGrade) })}</span>
-                            <button
-                              type="button"
-                              className="memo-exam-ob-round small"
-                              aria-label={t("exam.create.lower")}
-                              disabled={targetPercent <= 1}
-                              onClick={() => setTargetPercent((value) => Math.max(1, value - 1))}
-                            >
-                              −
-                            </button>
-                            <strong>{format.percent(targetPercent)}</strong>
-                            <button
-                              type="button"
-                              className="memo-exam-ob-round small"
-                              aria-label={t("exam.create.raise")}
-                              disabled={targetPercent >= 100}
-                              onClick={() => setTargetPercent((value) => Math.min(100, value + 1))}
-                            >
-                              +
-                            </button>
-                          </div>
-                          <p className="memo-exam-ob-note">{t("exam.create.needsHint")}</p>
+                          <p className="memo-exam-ob-note">{t("exam.ob.gradeHint")}</p>
                         </div>
                       </>
                     ) : null}

@@ -1,8 +1,8 @@
 # Exam prep
 
-A learner names an exam, its date, its type and the grade they want, and picks the notes it
-covers. Memo then plans every day until the exam from those notes and shows, honestly, how
-close they are to that grade.
+A learner names an exam, its date, its type and the percentage of the points they want, and
+picks the notes it covers. Memo then plans every day until the exam from those notes and
+shows, honestly, how close they are to that target.
 
 - App: the note's **Exam** tab (`NOTE_TABS`, after Test), one of the note's tools like the
   cards, the quiz and the test. With no exam planned it shows the tools' start screen; its
@@ -11,11 +11,14 @@ close they are to that grade.
   lip). With an exam it shows that exam's journey (`lecture-exam.tsx`). An exam can cover
   several notes; it then shows in each of their Exam tabs.
 - The flow asks, in order: the exact exam day on a month calendar (tomorrow to a year
-  ahead), **whether there is any other material for the exam**, the exam type, the grade,
-  and the daily time and days off. The material step opens Home's own upload sheet
+  ahead), **whether there is any other material for the exam**, the exam type, the target
+  percentage (30–100 %, a stepper by fives and a slider for the exact value), and the daily
+  time and days off. The material step is one card with four ways in — PDF or photo,
+  record, audio file, link — that open Home's own upload sheet
   (`NoteSourceModal` with `onCreated`): the new note joins the exam and is written in the
   background while the learner finishes the setup — the journey shows it as still being
-  prepared and plans it once it is ready. The learner's other notes can be added there too.
+  prepared and plans it once it is ready. The learner's notes sit below as chips (the first
+  six, then "+N"), tapped to add.
 - Demo, no login: `/creator/lectures/demo-note-mikroekonomija?tab=exam` — an exam that
   already has a week and a half of study behind it; any other demo note starts empty.
 - Landing: the Exam pill in the hero phone and "How it works", and the "Exam prep" row of
@@ -132,9 +135,11 @@ is the data to calibrate them with.
 
 `ten_point` (5–10; Ljubljana's 51/61/71/81/91), `five_point` (1–5; 50/63/77/90 in Slovenian
 schools, 50/60/75/90 in Croatian, Bosnian and Serbian ones), `letter` (A–F), `percent`,
-`pass_fail`. Cut-offs differ by faculty, so the target is stored as a percentage the learner
-can correct in the builder, and the forecast maps percentages to grades with that correction
-written in.
+`pass_fail`. The setup asks only for a percentage, because cut-offs differ by faculty and a
+learner knows the score they want more surely than a table knows their grade: plans made or
+edited now are stored as `percent`, and the journey then shows percentages only, with no
+grade. Plans made earlier on a grade scale keep it until they are edited, and the forecast
+still maps their percentages to grades with the learner's cut-off written in.
 
 ## Data (`supabase/migrations/0058_exam_prep.sql`)
 

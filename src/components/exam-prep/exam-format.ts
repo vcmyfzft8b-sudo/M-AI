@@ -32,14 +32,6 @@ export const PHASE_HINT: Record<JourneyPhase, MessageKey> = {
   final: "exam.phase.final.hint",
 };
 
-export const SCALE_LABEL: Record<GradeScaleId, MessageKey> = {
-  ten_point: "exam.scale.ten_point",
-  five_point: "exam.scale.five_point",
-  letter: "exam.scale.letter",
-  percent: "exam.scale.percent",
-  pass_fail: "exam.scale.pass_fail",
-};
-
 /** A day key as a date at noon UTC, so no zone can move it to a neighbour. */
 function dayDate(day: string) {
   return new Date(`${day}T12:00:00Z`);

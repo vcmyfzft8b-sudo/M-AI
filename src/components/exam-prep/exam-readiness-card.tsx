@@ -56,6 +56,8 @@ export function ExamReadinessCard({
   const { today, onPlan } = readiness;
   const showPlan = !finished;
   const band = showPlan ? onPlan : today;
+  // A target set as a percentage has no grade to translate the range into.
+  const percentOnly = gradeScale === "percent";
 
   return (
     <section className="memo-exam-card" aria-labelledby="exam-readiness-title">
@@ -64,10 +66,12 @@ export function ExamReadinessCard({
         <span className="memo-exam-target">
           {t("exam.ready.targetLabel")}{" "}
           <strong>
-            {t("exam.ready.target", {
-              grade: grade(gradeScale, targetGrade),
-              percent: Math.round(targetPercent),
-            })}
+            {percentOnly
+              ? percent(targetPercent)
+              : t("exam.ready.target", {
+                  grade: grade(gradeScale, targetGrade),
+                  percent: Math.round(targetPercent),
+                })}
           </strong>
         </span>
       </div>
@@ -80,7 +84,7 @@ export function ExamReadinessCard({
               style={{ left: `${band.low}%`, width: `${Math.max(1, band.high - band.low)}%` }}
             />
             <div className="memo-exam-gauge-target" style={{ left: `${clampPercent(targetPercent)}%` }}>
-              <span>{grade(gradeScale, targetGrade)}</span>
+              <span>{percentOnly ? percent(targetPercent) : grade(gradeScale, targetGrade)}</span>
             </div>
             <div className="memo-exam-gauge-dot today" style={{ left: `${today.mid}%` }} />
             {showPlan ? (
@@ -97,21 +101,25 @@ export function ExamReadinessCard({
             <div className="memo-exam-forecast">
               <span className="memo-exam-forecast-label">{t("exam.ready.todayLabel")}</span>
               <strong>{t("exam.ready.range", { low: today.low, high: today.high })}</strong>
-              <span>
-                {t("exam.ready.grade", {
-                  grade: gradeRange(gradeScale, today.gradeLow, today.gradeHigh),
-                })}
-              </span>
+              {percentOnly ? null : (
+                <span>
+                  {t("exam.ready.grade", {
+                    grade: gradeRange(gradeScale, today.gradeLow, today.gradeHigh),
+                  })}
+                </span>
+              )}
             </div>
             {showPlan ? (
               <div className="memo-exam-forecast plan">
                 <span className="memo-exam-forecast-label">{t("exam.ready.onPlanLabel")}</span>
                 <strong>{t("exam.ready.range", { low: onPlan.low, high: onPlan.high })}</strong>
-                <span>
-                  {t("exam.ready.grade", {
-                    grade: gradeRange(gradeScale, onPlan.gradeLow, onPlan.gradeHigh),
-                  })}
-                </span>
+                {percentOnly ? null : (
+                  <span>
+                    {t("exam.ready.grade", {
+                      grade: gradeRange(gradeScale, onPlan.gradeLow, onPlan.gradeHigh),
+                    })}
+                  </span>
+                )}
               </div>
             ) : null}
           </div>
@@ -120,10 +128,15 @@ export function ExamReadinessCard({
             <p className="memo-exam-chance">
               <Msym name="trending_up" size="1.25rem" />
               <span>
-                {t("exam.ready.chance", {
-                  percent: Math.round(onPlan.chanceOfTarget * 100),
-                  grade: grade(gradeScale, targetGrade),
-                })}
+                {percentOnly
+                  ? t("exam.ready.chancePercent", {
+                      percent: Math.round(onPlan.chanceOfTarget * 100),
+                      target: Math.round(targetPercent),
+                    })
+                  : t("exam.ready.chance", {
+                      percent: Math.round(onPlan.chanceOfTarget * 100),
+                      grade: grade(gradeScale, targetGrade),
+                    })}
               </span>
             </p>
           ) : null}

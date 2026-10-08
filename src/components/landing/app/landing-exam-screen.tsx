@@ -58,9 +58,9 @@ function buildLandingJourney(t: Translate<MessageKey>, now: number) {
     title: t("flowDemo.note.leadA"),
     examDate: addDays(today, 11),
     examType: "written",
-    gradeScale: "ten_point",
-    targetGrade: "9",
-    targetPercent: 81,
+    gradeScale: "percent",
+    targetGrade: "80",
+    targetPercent: 80,
     dailyMinutes: 30,
     restDays: 1 << 6,
     timeZone: ZONE,
@@ -123,9 +123,9 @@ export function LandingExamScreen({
             <div className="memo-exam-section">
               <ExamReadinessCard
                 readiness={journey.readiness}
-                gradeScale="ten_point"
-                targetGrade="9"
-                targetPercent={81}
+                gradeScale="percent"
+                targetGrade="80"
+                targetPercent={80}
               />
             </div>
             {journey.todayPlan ? (

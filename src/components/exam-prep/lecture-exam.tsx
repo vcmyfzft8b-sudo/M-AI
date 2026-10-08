@@ -512,10 +512,12 @@ export function LectureExam({
 
       <div className="memo-exam-tab-foot">
         <p className="memo-exam-note">
-          {t("exam.goal", {
-            grade: grade(plan.gradeScale as GradeScaleId, plan.targetGrade),
-            percent: Math.round(plan.targetPercent),
-          })}
+          {plan.gradeScale === "percent"
+            ? t("exam.goalPercent", { percent: Math.round(plan.targetPercent) })
+            : t("exam.goal", {
+                grade: grade(plan.gradeScale as GradeScaleId, plan.targetGrade),
+                percent: Math.round(plan.targetPercent),
+              })}
         </p>
         <button
           type="button"

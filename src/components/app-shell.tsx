@@ -66,7 +66,10 @@ export function AppShell({
 
   // `/app/onboarding` is not a route of its own: it is what `/creator/onboarding`
   // unmaps to, the demo mount of the survey. Both own the whole viewport.
-  const isOnboarding = pathname === "/app/start" || pathname === "/app/onboarding";
+  // `/app/oral-quiz` is the same kind of demo-only mount: the creator demo's tutor skit, filmed
+  // full screen.
+  const ownsViewport =
+    pathname === "/app/start" || pathname === "/app/onboarding" || pathname === "/app/oral-quiz";
   const isNote = pathname.startsWith("/app/lectures/");
   const isHome = pathname === "/app";
 
@@ -123,9 +126,9 @@ export function AppShell({
     [isNote, pathname, t],
   );
 
-  // Onboarding and checkout own the whole viewport; the app chrome would only
-  // get in the way.
-  if (isOnboarding) {
+  // Onboarding, checkout and the oral quiz own the whole viewport; the app chrome
+  // would only get in the way.
+  if (ownsViewport) {
     return (
       <div className={`memo memo-shell ${className}`.trim()}>
         <main>{children}</main>

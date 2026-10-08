@@ -86,7 +86,7 @@ const LINES: Record<Locale, Lines> = {
       "Seveda samo s privolitvijo.",
       "Pacientka je nezavestna. Privolitve ne more dati.",
       "Oh.",
-      "Potem ji moraš DICK-a vseeno dati.",
+      "Potem ji moraš DICK vseeno dati.",
       "Brez privolitve?",
       "Zapomni si: DICK pomeni dextrose, insulin, calcium in Kayexalate.",
       "Oh.",

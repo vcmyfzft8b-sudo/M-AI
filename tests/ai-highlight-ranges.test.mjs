@@ -90,6 +90,7 @@ test("never a single word, the concept's own name, a bare number, a second pick 
     words,
     [
       { concept: "Celica", keywords: "Celica", context: "Celica je najmanjša zgradbena" },
+      { concept: "Celica", keywords: "Celica je najmanjša", context: "Celica je najmanjša zgradbena" },
       { concept: "Mitoza", keywords: "delitev", context: "Mitoza delitev pri kateri nastaneta" },
       { concept: "Mitoza", keywords: "dve hčerinski celici", context: "nastaneta dve hčerinski celici z enakim" },
       { concept: "Mitoza", keywords: "z enakim številom kromosomov", context: "celici z enakim številom kromosomov" },
@@ -100,6 +101,21 @@ test("never a single word, the concept's own name, a bare number, a second pick 
   );
 
   assert.deepEqual(textsOf(words, ranges), ["dve hčerinski celici"]);
+});
+
+test("key words without their sentence are placed only when they occur once", () => {
+  const words = wordsOf(`${NOTE}\n\nPovzetek: pri mitozi nastaneta dve hčerinski celici z enakim številom kromosomov.`);
+  const ranges = pickHighlightRanges(
+    words,
+    [
+      { concept: "Mitoza", keywords: "dve hčerinski celici z enakim številom kromosomov", context: "not in the note" },
+      { concept: "Mejoza", keywords: "spolne celice s polovičnim številom", context: "not in the note" },
+    ],
+    MAX_AI_HIGHLIGHTS,
+  );
+
+  // The mitosis phrase now also appears in the summary, so without its sentence it is dropped.
+  assert.deepEqual(textsOf(words, ranges), ["spolne celice s polovičnim številom"]);
 });
 
 test("the total is capped", () => {

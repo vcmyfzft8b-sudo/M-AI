@@ -170,8 +170,8 @@ function findSequence(
 /**
  * The word range of one pick's key words. The context finds the right sentence (the definition,
  * not a passing mention of the same words), and only the key words inside it are highlighted. A
- * pick whose context cannot be found, or does not contain the key words, falls back to their first
- * occurrence.
+ * pick whose context cannot be found, or does not contain the key words, falls back to the key
+ * words' only occurrence, and is dropped when they occur more than once.
  */
 export function findHighlightRange(
   words: HighlightableWord[],
@@ -188,12 +188,20 @@ export function findHighlightRange(
   const context = splitWords(pick.context);
   const contextMatch =
     context.length >= keywords.length ? findSequence(words, normalized, context) : null;
-  const match =
-    (contextMatch &&
-      findSequence(words, normalized, keywords, contextMatch.start, contextMatch.start + context.length)) ||
-    findSequence(words, normalized, keywords);
+  const inContext =
+    contextMatch &&
+    findSequence(words, normalized, keywords, contextMatch.start, contextMatch.start + context.length);
 
-  return match ? { startWordIndex: match.startWordIndex, endWordIndex: match.endWordIndex } : null;
+  if (inContext) {
+    return { startWordIndex: inContext.startWordIndex, endWordIndex: inContext.endWordIndex };
+  }
+
+  // Without its sentence, place the key words only if they occur once: a phrase that also appears
+  // in an overview or a summary could otherwise be highlighted there instead of in the definition.
+  const first = findSequence(words, normalized, keywords);
+  const second = first && findSequence(words, normalized, keywords, first.start + 1);
+
+  return first && !second ? { startWordIndex: first.startWordIndex, endWordIndex: first.endWordIndex } : null;
 }
 
 /**
@@ -217,7 +225,13 @@ export function pickHighlightRanges(
     const conceptKey = splitWords(pick.concept).join(" ");
     const keywordsKey = splitWords(pick.keywords).join(" ");
 
-    if (!keywordsKey || seenConcepts.has(conceptKey) || keywordsKey === conceptKey) {
+    // Never the concept's own name, alone or leading the key words ("Mitoza delitev"): that is
+    // the heading or label the reader already sees.
+    if (
+      !keywordsKey ||
+      seenConcepts.has(conceptKey) ||
+      (conceptKey && (keywordsKey === conceptKey || keywordsKey.startsWith(`${conceptKey} `)))
+    ) {
       continue;
     }
 

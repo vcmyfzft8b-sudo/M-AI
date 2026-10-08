@@ -31,26 +31,27 @@ import { parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-t
  * in si jih hitreje zapomnila". It used to mark 3-to-15-word phrases it judged important anywhere,
  * which read as random half-sentences, and it skipped the definition boxes entirely.
  *
- * Yellow on purpose: the classic highlighter colour, and visibly distinct from both the blue the
- * heading highlight uses (.lecture-heading-highlight) and the orange the reader's own highlights
- * default to.
+ * Stored with the palette's "yellow" colour id, the same as before this change.
  */
 const AI_HIGHLIGHT_COLOR_ID = "yellow";
 const AI_HIGHLIGHT_ID_PREFIX = "ai-hl-";
 
+/**
+ * No length bounds here on purpose. They are stripped from the request and only enforced when the
+ * answer is parsed, so one pick too many or one long context would reject the whole answer and
+ * leave the note with no highlights. pickHighlightRanges applies every limit to what comes back.
+ */
 const highlightSelectionSchema = z.object({
-  highlights: z
-    .array(
-      z.object({
-        /** The concept the definition is about; not highlighted itself. */
-        concept: z.string().max(120),
-        /** The key words inside its definition, verbatim; matched mechanically. */
-        keywords: z.string().min(1).max(200),
-        /** Verbatim words from the same sentence, to find the right occurrence. */
-        context: z.string().max(400),
-      }),
-    )
-    .max(MAX_AI_HIGHLIGHTS + 6),
+  highlights: z.array(
+    z.object({
+      /** The concept the definition is about; not highlighted itself. */
+      concept: z.string(),
+      /** The key words inside its definition, verbatim; matched mechanically. */
+      keywords: z.string(),
+      /** Verbatim words from the same sentence, to find the right occurrence. */
+      context: z.string(),
+    }),
+  ),
 });
 
 function highlightInstructions(target: number) {

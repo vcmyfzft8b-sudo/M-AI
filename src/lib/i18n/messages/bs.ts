@@ -2349,6 +2349,7 @@ export const bs: Messages = {
   "exam.ob.makePlan": "Napravi plan",
   "exam.ob.making": "Pravim tvoj plan…",
   "exam.ob.ready": "Plan je spreman!",
+  "exam.ob.makingRowUpload": "Pravim bilješke iz materijala koji si dodao",
   "exam.ob.makingRow1": "Raspoređujem gradivo po danima",
   "exam.ob.makingRow2": "Planiram ponavljanje u razmacima",
   "exam.ob.makingRow3": "Pripremam probne ispite",

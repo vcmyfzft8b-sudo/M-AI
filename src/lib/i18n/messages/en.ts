@@ -2322,6 +2322,7 @@ export const en: Messages = {
   "exam.ob.makePlan": "Make my plan",
   "exam.ob.making": "Making your plan…",
   "exam.ob.ready": "Your plan is ready!",
+  "exam.ob.makingRowUpload": "Making notes from the material you added",
   "exam.ob.makingRow1": "Spreading the material over the days",
   "exam.ob.makingRow2": "Scheduling spaced reviews",
   "exam.ob.makingRow3": "Setting up mock exams",

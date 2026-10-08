@@ -21,6 +21,16 @@ shows, honestly, how close they are to that target.
   background while the learner finishes the setup — the journey shows it as still being
   prepared and plans it once it is ready. The learner's other notes are not offered; a plan
   being edited that already covers some shows them there, so they can be taken out.
+- **Uploaded material is prepared for the plan, not just stored.** The chip reads "Making
+  notes…", and the last screen of the setup adds "Making notes from the material you added".
+  Cards and quizzes are otherwise made the first time their tab is opened, so
+  `prepareExamMaterial` (`server.ts`, run after the response to opening or creating a plan)
+  queues both for every finished note in the exam that has none on record yet — the same
+  jobs the Flashcards and Quiz tabs start, claimed by inserting the status row only where
+  none exists, so they never run twice. Until a note has its cards it counts as still being
+  prepared (`buildMaterialNote`'s `ready`), the tab says so and looks again every 20 s (for
+  up to 30 min), and the plan picks up its sections, cards and questions the moment they
+  exist.
 - Demo, no login: `/creator/lectures/demo-note-mikroekonomija?tab=exam` — an exam that
   already has a week and a half of study behind it; any other demo note starts empty.
 - Landing: the Exam pill in the hero phone and "How it works", and the "Exam prep" row of

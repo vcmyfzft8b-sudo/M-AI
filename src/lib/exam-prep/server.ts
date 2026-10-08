@@ -2,10 +2,11 @@ import "server-only";
 
 import { PREVIEW_AUTH_BYPASS_USER_ID } from "@/lib/auth";
 import { loadEveryRow } from "@/lib/admin/paged-rows";
-import { getUserEntitlementState } from "@/lib/billing";
+import { canUseLectureFeatures, getUserEntitlementState } from "@/lib/billing";
 import type {
   ExamPlanRow,
   FlashcardConfidenceBucket,
+  StudyAssetStatus,
   StudyEventItemKind,
 } from "@/lib/database.types";
 import {
@@ -26,6 +27,7 @@ import type {
 } from "@/lib/exam-prep/model";
 import type { CreateExamPlanInput, UpdateExamPlanInput } from "@/lib/exam-prep/schema";
 import { getTranslations } from "@/lib/i18n/server";
+import { enqueueLectureQuizGeneration, enqueueLectureStudyGeneration } from "@/lib/jobs";
 import { listLecturesForUser } from "@/lib/lectures";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
@@ -109,12 +111,13 @@ async function loadMaterial(
     return { notes: [], cardLecture: new Map() };
   }
 
-  const [lectures, artifacts, sections, flashcards, quiz, practice] = await Promise.all([
+  const [lectures, artifacts, studyAssets, sections, flashcards, quiz, practice] = await Promise.all([
     service
       .from("lectures")
       .select("id, title, source_type, status")
       .eq("user_id", userId)
       .in("id", lectureIds),
+    service.from("lecture_study_assets").select("lecture_id, status").in("lecture_id", lectureIds),
     service
       .from("lecture_artifacts")
       .select("lecture_id, structured_notes_md")
@@ -181,6 +184,12 @@ async function loadMaterial(
       (row) => [row.lecture_id, row.structured_notes_md],
     ),
   );
+  const studyStatus = new Map(
+    ((studyAssets.data ?? []) as Array<{ lecture_id: string; status: StudyAssetStatus }>).map((row) => [
+      row.lecture_id,
+      row.status,
+    ]),
+  );
   const cardLecture = new Map(flashcards.map((card) => [card.id, card.lecture_id]));
   const byId = new Map(lectureRows.map((row) => [row.id, row]));
 
@@ -198,6 +207,7 @@ async function loadMaterial(
           .map((row) => row.id),
         notesMarkdown: notesByLecture.get(lecture.id) ?? null,
         untitled,
+        studyStatus: studyStatus.get(lecture.id) ?? null,
       }),
     );
 
@@ -354,6 +364,81 @@ export async function getExamPlanPayload(userId: string, planId: string) {
 }
 
 /** Just the rows, for screens that only need titles and dates. */
+/**
+ * Gives every finished note in an exam its cards and quiz, so the plan can use them.
+ *
+ * Both are otherwise made the first time somebody opens the Flashcards or Quiz tab, and a
+ * note without cards can only be planned as "read it". Material uploaded from the exam
+ * setup reaches this the first time the plan is opened after its notes are written. A
+ * generation is claimed by inserting its status row only where none exists, so a note
+ * whose cards are made, running or failed is left alone and two opens never pay twice.
+ * Runs after the response; a failure costs the plan its cards for now, never the request.
+ */
+export async function prepareExamMaterial(userId: string, lectureIds: string[]) {
+  if (lectureIds.length === 0 || isExamPrepUnavailableForUser(userId)) {
+    return;
+  }
+
+  const service = createSupabaseServiceRoleClient();
+  const { data: lectures } = await service
+    .from("lectures")
+    .select("id, status")
+    .eq("user_id", userId)
+    .in("id", lectureIds);
+  const ready = ((lectures ?? []) as Array<{ id: string; status: string }>)
+    .filter((lecture) => lecture.status === "ready")
+    .map((lecture) => lecture.id);
+
+  if (ready.length === 0) {
+    return;
+  }
+
+  const [{ data: studyRows }, { data: quizRows, error: quizError }] = await Promise.all([
+    service.from("lecture_study_assets").select("lecture_id").in("lecture_id", ready),
+    service.from("lecture_quiz_assets").select("lecture_id").in("lecture_id", ready),
+  ]);
+  const hasStudy = new Set(((studyRows ?? []) as Array<{ lecture_id: string }>).map((row) => row.lecture_id));
+  const hasQuiz = new Set(((quizRows ?? []) as Array<{ lecture_id: string }>).map((row) => row.lecture_id));
+
+  for (const lectureId of ready) {
+    if (!hasStudy.has(lectureId) && (await canUseLectureFeatures(userId, lectureId, "study")).allowed) {
+      const { data: claimed } = await service
+        .from("lecture_study_assets")
+        .upsert({ lecture_id: lectureId, status: "queued", error_message: null, model_metadata: {} } as never, {
+          onConflict: "lecture_id",
+          ignoreDuplicates: true,
+        })
+        .select("lecture_id");
+
+      if (claimed?.length) {
+        await enqueueLectureStudyGeneration(lectureId);
+      }
+    }
+
+    // An install without the quiz tables keeps its quiz in the note's metadata; the Quiz
+    // tab makes that one as before.
+    if (!quizError && !hasQuiz.has(lectureId) && (await canUseLectureFeatures(userId, lectureId, "quiz")).allowed) {
+      const { data: claimed } = await service
+        .from("lecture_quiz_assets")
+        .upsert(
+          {
+            lecture_id: lectureId,
+            status: "queued",
+            error_message: null,
+            model_metadata: {},
+            generated_at: new Date().toISOString(),
+          } as never,
+          { onConflict: "lecture_id", ignoreDuplicates: true },
+        )
+        .select("lecture_id");
+
+      if (claimed?.length) {
+        await enqueueLectureQuizGeneration(lectureId);
+      }
+    }
+  }
+}
+
 export async function listExamPlanRows(userId: string) {
   if (isExamPrepUnavailableForUser(userId)) {
     return [];

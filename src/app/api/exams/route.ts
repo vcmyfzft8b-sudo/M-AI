@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { createBillingRequiredResponse } from "@/lib/billing";
 import { createExamPlanSchema } from "@/lib/exam-prep/schema";
@@ -8,6 +8,7 @@ import {
   isExamPrepUnavailableForUser,
   listExamNoteOptions,
   listExamPlanSummaries,
+  prepareExamMaterial,
 } from "@/lib/exam-prep/server";
 import { tr } from "@/lib/i18n/server";
 import { captureRouteError } from "@/lib/monitoring";
@@ -106,6 +107,12 @@ export async function POST(request: Request) {
     }
 
     const id = await createExamPlan(user.id, parsed.data);
+    // The plan's notes get their cards and quiz now, not when their tabs are first opened.
+    after(() =>
+      prepareExamMaterial(user.id, parsed.data.lectureIds).catch((error) =>
+        captureRouteError(error, { route: "POST /api/exams", operation: "prepare-material", request, userId: user.id }),
+      ),
+    );
     return NextResponse.json({ id }, { status: 201 });
   } catch (error) {
     captureRouteError(error, { route: "POST /api/exams", operation: "create", request, userId: user.id });

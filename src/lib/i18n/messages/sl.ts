@@ -2385,6 +2385,7 @@ export const sl = {
   "exam.ob.makePlan": "Pripravi načrt",
   "exam.ob.making": "Pripravljam tvoj načrt …",
   "exam.ob.ready": "Načrt je pripravljen!",
+  "exam.ob.makingRowUpload": "Delam zapiske iz gradiva, ki si ga dodal",
   "exam.ob.makingRow1": "Razporejam snov po dnevih",
   "exam.ob.makingRow2": "Načrtujem ponavljanje v razmikih",
   "exam.ob.makingRow3": "Pripravljam poskusne izpite",

@@ -54,7 +54,7 @@ export interface ExamMaterialNote {
   practiceQuestionIds: string[];
   /** Words in the whole note, for reading-time estimates. */
   words: number;
-  /** False while the note is still being generated or has failed. */
+  /** False while the note, or its cards, are still being made, or the note failed. */
   ready: boolean;
 }
 

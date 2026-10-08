@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { createBillingRequiredResponse } from "@/lib/billing";
 import { updateExamPlanSchema } from "@/lib/exam-prep/schema";
@@ -6,6 +6,7 @@ import {
   checkExamLectures,
   deleteExamPlan,
   getExamPlanPayload,
+  prepareExamMaterial,
   updateExamPlan,
 } from "@/lib/exam-prep/server";
 import { tr } from "@/lib/i18n/server";
@@ -52,6 +53,15 @@ export async function GET(request: Request, context: RouteContext) {
 
   try {
     const payload = await getExamPlanPayload(user.id, planId);
+
+    if (payload) {
+      // Notes finished since the last open (an upload from the setup) get their cards and quiz.
+      after(() =>
+        prepareExamMaterial(user.id, payload.plan.lectureIds).catch((error) =>
+          captureRouteError(error, { route: "GET /api/exams/[id]", operation: "prepare-material", request, userId: user.id }),
+        ),
+      );
+    }
 
     return payload
       ? NextResponse.json(payload)

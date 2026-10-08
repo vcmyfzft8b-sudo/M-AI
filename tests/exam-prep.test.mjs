@@ -384,3 +384,30 @@ test("the date calendar lays a month out Monday-first in six fixed weeks", () =>
     assert.equal(october.indexOf(day) % 7, weekdayIndex(day));
   }
 });
+
+test("a note counts as ready only once its cards exist or their generation has ended", async () => {
+  const { buildMaterialNote } = await import("../src/lib/exam-prep/build.ts");
+  const base = {
+    lecture: { id: "n1", title: "Uploaded slides", source_type: "pdf", status: "ready" },
+    sections: [],
+    flashcards: [],
+    quizQuestionIds: [],
+    practiceQuestionIds: [],
+    notesMarkdown: "Some notes",
+    untitled: "Untitled",
+  };
+  const card = { id: "c1", idx: 0, section_id: null };
+
+  // Still being written from the upload.
+  assert.equal(buildMaterialNote({ ...base, lecture: { ...base.lecture, status: "processing" } }).ready, false);
+  // Written, but its cards are not made yet (none asked for, or on their way).
+  assert.equal(buildMaterialNote({ ...base, studyStatus: null }).ready, false);
+  assert.equal(buildMaterialNote({ ...base, studyStatus: "queued" }).ready, false);
+  assert.equal(buildMaterialNote({ ...base, studyStatus: "generating" }).ready, false);
+  // Cards made, or generation over: planned now (a failed one as "read the note").
+  assert.equal(buildMaterialNote({ ...base, flashcards: [card], studyStatus: "ready" }).ready, true);
+  assert.equal(buildMaterialNote({ ...base, studyStatus: "failed" }).ready, true);
+  // Older notes with cards and no status row, and the demo, which does not say.
+  assert.equal(buildMaterialNote({ ...base, flashcards: [card], studyStatus: null }).ready, true);
+  assert.equal(buildMaterialNote(base).ready, true);
+});

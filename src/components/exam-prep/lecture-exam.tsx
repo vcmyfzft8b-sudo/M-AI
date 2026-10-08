@@ -56,6 +56,10 @@ async function readJson<T>(response: Response): Promise<T> {
  * tasks (which open this note's other tabs), how close the learner is to their
  * grade, and the plan day by day. See docs/exam-prep.md.
  */
+/** How often the tab looks again while material is being prepared, and for how long (30 min). */
+const PENDING_CHECK_MS = 20_000;
+const PENDING_CHECKS_MAX = 90;
+
 export function LectureExam({
   lectureId,
   lectureTitle,
@@ -124,6 +128,28 @@ export function LectureExam({
   useEffect(() => {
     void loadOverview();
   }, [loadOverview]);
+
+  // Material still turning into notes and cards (an upload from the setup): look again now
+  // and then, so its days join the plan without the learner leaving the tab.
+  const materialPending = payload?.journey.materialPending ?? 0;
+  useEffect(() => {
+    if (!planId || materialPending === 0) {
+      return;
+    }
+
+    let checks = 0;
+    const id = window.setInterval(() => {
+      checks += 1;
+
+      if (checks > PENDING_CHECKS_MAX) {
+        window.clearInterval(id);
+      } else if (document.visibilityState === "visible") {
+        void loadPlan(planId);
+      }
+    }, PENDING_CHECK_MS);
+
+    return () => window.clearInterval(id);
+  }, [loadPlan, materialPending, planId]);
 
   async function toggleTask(task: JourneyTask) {
     if (!payload || !planId) {

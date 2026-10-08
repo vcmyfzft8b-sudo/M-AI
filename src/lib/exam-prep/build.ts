@@ -89,6 +89,11 @@ export interface MaterialSource {
   practiceQuestionIds: string[];
   notesMarkdown: string | null;
   untitled: string;
+  /**
+   * The note's card generation: `null` when none is on record yet, left out when the
+   * caller does not know (the demo, whose notes come with their cards).
+   */
+  studyStatus?: "queued" | "generating" | "ready" | "failed" | null;
 }
 
 export function buildMaterialNote(source: MaterialSource): ExamMaterialNote {
@@ -145,7 +150,14 @@ export function buildMaterialNote(source: MaterialSource): ExamMaterialNote {
     quizQuestionIds: source.quizQuestionIds,
     practiceQuestionIds: source.practiceQuestionIds,
     words,
-    ready: source.lecture.status === "ready",
+    // A finished note whose cards are still to come is not ready either: the plan would
+    // only have "read it" to offer until they exist.
+    ready:
+      source.lecture.status === "ready" &&
+      !(
+        cards.length === 0 &&
+        (source.studyStatus === null || source.studyStatus === "queued" || source.studyStatus === "generating")
+      ),
   };
 }
 

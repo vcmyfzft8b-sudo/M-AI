@@ -188,15 +188,24 @@ export function ExamOnboarding({
     return () => window.clearTimeout(id);
   }, [bubble, typed]);
 
+  // Uploaded material leads the list: its notes are being made as the plan is.
+  const makingRows = [
+    ...(uploads.some((upload) => lectureIds.includes(upload.id)) ? [t("exam.ob.makingRowUpload")] : []),
+    t("exam.ob.makingRow1"),
+    t("exam.ob.makingRow2"),
+    t("exam.ob.makingRow3"),
+  ];
+  const rowCount = makingRows.length;
+
   // The plan is saved while the rows tick; the last one waits for the server.
   useEffect(() => {
-    if (step !== "making" || made >= 3 || (made === 2 && !savedId)) {
+    if (step !== "making" || made >= rowCount || (made === rowCount - 1 && !savedId)) {
       return;
     }
 
     const id = window.setTimeout(() => setMade((value) => value + 1), MAKING_ROW_MS);
     return () => window.clearTimeout(id);
-  }, [made, savedId, step]);
+  }, [made, rowCount, savedId, step]);
 
   function go(next: number) {
     setTyped(0);
@@ -248,7 +257,7 @@ export function ExamOnboarding({
 
   function next() {
     if (step === "making") {
-      if (savedId && made >= 3) {
+      if (savedId && made >= rowCount) {
         onSaved(savedId);
       } else if (error) {
         void save();
@@ -307,7 +316,7 @@ export function ExamOnboarding({
     type: examType !== null,
     grade: targetPercent >= TARGET_MIN && targetPercent <= 100,
     time: dailyMinutes !== null,
-    making: Boolean(error) || (Boolean(savedId) && made >= 3),
+    making: Boolean(error) || (Boolean(savedId) && made >= rowCount),
   };
 
   const ctaLabel = (() => {
@@ -328,7 +337,6 @@ export function ExamOnboarding({
 
   const progress = Math.round(((index + 1) / steps.length) * 100);
   const isHero = step === "welcome" || step === "making";
-  const makingRows = [t("exam.ob.makingRow1"), t("exam.ob.makingRow2"), t("exam.ob.makingRow3")];
 
   const mascot = (
     <>

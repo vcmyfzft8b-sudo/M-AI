@@ -8,10 +8,10 @@
  * word being spoken highlighted. Nothing here is generated, and the real tutor
  * never reads from it.
  *
- * One script per app language. The joke is the English mnemonic, so it stays in
- * English in every one of them: "DICK" and the four English drug names it spells
- * are printed as they are, and the voice is told to say them the English way.
- * Everything around the mnemonic is translated. The screen's own chrome comes
+ * One script per app language. The joke is the English mnemonic, so "DICK" stays
+ * English in every one of them, declined where the grammar asks ("malo DICK-a"), and
+ * the voice is told to say it the English way. Everything else is translated,
+ * the drug names it stands for included, although "kalcij" spells a K. The screen's own chrome comes
  * from the i18n catalogues.
  */
 
@@ -88,7 +88,7 @@ const LINES: Record<Locale, Lines> = {
       "Oh.",
       "Potem ji moraš DICK vseeno dati.",
       "Brez privolitve?",
-      "Zapomni si: DICK pomeni dextrose, insulin, calcium in Kayexalate.",
+      "Zapomni si: DICK pomeni dekstroza, insulin, kalcij in Kayexalate.",
       "Oh.",
       "Dati jih moraš v tem vrstnem redu, in sicer takole. " +
         "Dekstroza gre najprej kot IV bolus, da insulin ne zniža preveč krvnega sladkorja. " +
@@ -106,7 +106,7 @@ const LINES: Record<Locale, Lines> = {
       "Oh.",
       "Onda joj DICK moraš dati svejedno.",
       "Bez pristanka?",
-      "Zapamti: DICK znači dextrose, insulin, calcium i Kayexalate.",
+      "Zapamti: DICK znači dekstroza, inzulin, kalcij i Kayexalate.",
       "Oh.",
       "Moraš ih dati tim redoslijedom, i to ovako. " +
         "Dekstroza ide prva kao IV bolus, da inzulin ne sruši šećer u krvi. " +
@@ -124,7 +124,7 @@ const LINES: Record<Locale, Lines> = {
       "Oh.",
       "Onda joj DICK moraš dati svejedno.",
       "Bez pristanka?",
-      "Zapamti: DICK znači dextrose, insulin, calcium i Kayexalate.",
+      "Zapamti: DICK znači dekstroza, inzulin, kalcijum i Kayexalate.",
       "Oh.",
       "Moraš ih dati tim redoslijedom, i to ovako. " +
         "Dekstroza ide prva kao IV bolus, da inzulin ne obori šećer u krvi. " +
@@ -142,7 +142,7 @@ const LINES: Record<Locale, Lines> = {
       "Oh.",
       "Onda joj DICK moraš dati svejedno.",
       "Bez pristanka?",
-      "Zapamti: DICK znači dextrose, insulin, calcium i Kayexalate.",
+      "Zapamti: DICK znači dekstroza, insulin, kalcijum i Kayexalate.",
       "Oh.",
       "Moraš ih dati tim redosledom, i to ovako. " +
         "Dekstroza ide prva kao IV bolus, da insulin ne obori šećer u krvi. " +
@@ -156,16 +156,13 @@ const LINES: Record<Locale, Lines> = {
 /*
  * How the voice is told to say a printed word, where the printed spelling would come
  * out wrong. One word for one word, always, so each spoken word still lands on its
- * printed one. In the four South Slavic languages the English mnemonic is spelled the
- * way an English speaker says it, or the voice reads "calcium" as "tsaltsium" and
- * "IV" as a Roman numeral.
+ * printed one. In the four South Slavic languages "DICK" and the brand name are spelled
+ * the way an English speaker says them, and "IV" would otherwise be read as a Roman numeral.
  */
 const SOUTH_SLAVIC_SPOKEN = {
   DICK: "dik",
   // Declined ("malo DICK-a", the genitive after "malo"), said as one word.
   "DICK-a": "dika",
-  dextrose: "dekstrouz",
-  calcium: "kelsijem",
   Kayexalate: "kajeksalejt",
 };
 

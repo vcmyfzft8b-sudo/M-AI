@@ -9,30 +9,27 @@ import type { NoteTtsBlock, NoteTtsInlineToken } from "@/lib/note-tts-text";
 export type HighlightableWord = { index: number; text: string };
 
 export type HighlightPick = {
-  /** The key term itself, verbatim. */
-  term: string;
-  /** A verbatim run of words around the term, used to find the right occurrence. */
+  /** The concept the definition is about; identifies the pick, never highlighted itself. */
+  concept: string;
+  /** The key words inside its definition, verbatim: what gets highlighted. */
+  keywords: string;
+  /** A verbatim run of words around the key words, used to find the right occurrence. */
   context: string;
-  kind: "term" | "fact";
 };
 
 export type HighlightRange = { startWordIndex: number; endWordIndex: number };
 
-/** The most highlights one note gets, however long it is. */
-export const MAX_AI_HIGHLIGHTS = 24;
+/** The most highlights one note gets: the core concepts, not every term it mentions. */
+export const MAX_AI_HIGHLIGHTS = 10;
 /** A note this short is all signal; a highlighter over it marks everything and means nothing. */
 export const MIN_NOTE_WORDS_FOR_HIGHLIGHTS = 60;
-/**
- * At most one highlight for this many words of note. A study note defines a term every few
- * sentences: a 490-word note on the cell defined about fifteen, and one per hundred words
- * highlighted five of them.
- */
-const WORDS_PER_HIGHLIGHT = 40;
-const MIN_HIGHLIGHT_TARGET = 6;
-/** A term is a name, not a sentence: a pick longer than this is not a key term. */
-export const MAX_TERM_WORDS = 6;
+/** About one core concept for this many words of note. */
+const WORDS_PER_HIGHLIGHT = 90;
+const MIN_HIGHLIGHT_TARGET = 5;
+/** Key words are the decisive part of a definition, not the whole of it. */
+export const MAX_KEYWORD_WORDS = 10;
 
-/** The most highlights to ask for: room for every term an average note defines. */
+/** How many core concepts to ask for: five to ten, growing with the note. */
 export function highlightTarget(wordCount: number) {
   return Math.min(
     MAX_AI_HIGHLIGHTS,
@@ -171,37 +168,37 @@ function findSequence(
 }
 
 /**
- * The word range of one pick. The context finds the right occurrence (a key term is highlighted
- * where it is defined, not at a passing mention), and only the term inside it is highlighted. A
- * pick whose context cannot be found, or does not contain the term, falls back to the term's first
- * occurrence, which for a term the note introduces is almost always its definition.
+ * The word range of one pick's key words. The context finds the right sentence (the definition,
+ * not a passing mention of the same words), and only the key words inside it are highlighted. A
+ * pick whose context cannot be found, or does not contain the key words, falls back to their first
+ * occurrence.
  */
 export function findHighlightRange(
   words: HighlightableWord[],
   normalized: string[],
-  pick: Pick<HighlightPick, "term" | "context">,
+  pick: Pick<HighlightPick, "keywords" | "context">,
 ): HighlightRange | null {
-  const term = splitWords(pick.term);
+  const keywords = splitWords(pick.keywords);
 
-  if (term.length === 0 || term.length > MAX_TERM_WORDS) {
+  // One word lifted out of a definition ("relativno") tells the reader nothing on its own.
+  if (keywords.length < 2 || keywords.length > MAX_KEYWORD_WORDS) {
     return null;
   }
 
   const context = splitWords(pick.context);
-  const contextMatch = context.length >= term.length ? findSequence(words, normalized, context) : null;
-  // A context from the neighbouring table cell is found but does not hold the term; the term's
-  // own first occurrence is then the better answer than dropping it.
+  const contextMatch =
+    context.length >= keywords.length ? findSequence(words, normalized, context) : null;
   const match =
     (contextMatch &&
-      findSequence(words, normalized, term, contextMatch.start, contextMatch.start + context.length)) ||
-    findSequence(words, normalized, term);
+      findSequence(words, normalized, keywords, contextMatch.start, contextMatch.start + context.length)) ||
+    findSequence(words, normalized, keywords);
 
   return match ? { startWordIndex: match.startWordIndex, endWordIndex: match.endWordIndex } : null;
 }
 
 /**
- * Turns the model's picks into stored ranges: located, never overlapping, each term once, facts
- * kept to a quarter of the whole so the highlights stay about the key terms, and capped.
+ * Turns the model's picks into stored ranges: located, never overlapping, one per concept, never
+ * just the concept's own name (that is the heading or label already), and capped.
  */
 export function pickHighlightRanges(
   words: HighlightableWord[],
@@ -210,27 +207,22 @@ export function pickHighlightRanges(
 ) {
   const normalized = words.map((word) => normalizeHighlightWord(word.text));
   const ranges: HighlightRange[] = [];
-  const seenTerms = new Set<string>();
-  const maxFacts = Math.max(1, Math.floor(limit / 4));
-  let facts = 0;
+  const seenConcepts = new Set<string>();
 
   for (const pick of picks) {
     if (ranges.length >= limit) {
       break;
     }
 
-    const termKey = splitWords(pick.term).join(" ");
+    const conceptKey = splitWords(pick.concept).join(" ");
+    const keywordsKey = splitWords(pick.keywords).join(" ");
 
-    if (!termKey || seenTerms.has(termKey)) {
-      continue;
-    }
-
-    if (pick.kind === "fact" && facts >= maxFacts) {
+    if (!keywordsKey || seenConcepts.has(conceptKey) || keywordsKey === conceptKey) {
       continue;
     }
 
     // A bare number ("50") tells the reader nothing once it is lifted out as a highlight.
-    if (/^\d+$/.test(termKey)) {
+    if (/^\d+$/.test(keywordsKey)) {
       continue;
     }
 
@@ -249,12 +241,10 @@ export function pickHighlightRanges(
       continue;
     }
 
-    seenTerms.add(termKey);
-    ranges.push(range);
-
-    if (pick.kind === "fact") {
-      facts += 1;
+    if (conceptKey) {
+      seenConcepts.add(conceptKey);
     }
+    ranges.push(range);
   }
 
   return ranges;

@@ -14,7 +14,7 @@ import {
   collectHighlightableWords,
   highlightTarget,
   MAX_AI_HIGHLIGHTS,
-  MAX_TERM_WORDS,
+  MAX_KEYWORD_WORDS,
   MIN_NOTE_WORDS_FOR_HIGHLIGHTS,
   pickHighlightRanges,
 } from "@/lib/notes/ai-highlight-ranges";
@@ -25,10 +25,11 @@ import { parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-t
  * annotations — the same objects the reader creates by selecting text — so the reader can remove
  * any of them exactly the way they remove their own: select the span, tap highlight again.
  *
- * What it marks is the key terms where the note defines them (a learner asked for exactly that in
- * the October 2026 survey: "poudari ključne besede v definicijah", so the most important ideas
- * stand out and stick). It used to mark 3-to-15-word phrases it judged important, which read as
- * half-sentences and missed the terms themselves, and it skipped the definition boxes entirely.
+ * What it marks is the key words inside the definitions of the note's most important concepts,
+ * the part a learner has to remember. A learner asked for exactly that in the October 2026 survey:
+ * "da Memo ključne besede v definicijah poudari, saj bi tako lažje prepoznala najpomembnejše pojme
+ * in si jih hitreje zapomnila". It used to mark 3-to-15-word phrases it judged important anywhere,
+ * which read as random half-sentences, and it skipped the definition boxes entirely.
  *
  * Yellow on purpose: the classic highlighter colour, and visibly distinct from both the blue the
  * heading highlight uses (.lecture-heading-highlight) and the orange the reader's own highlights
@@ -41,31 +42,37 @@ const highlightSelectionSchema = z.object({
   highlights: z
     .array(
       z.object({
-        /** The key term itself, verbatim; matched mechanically, so paraphrase is discarded. */
-        term: z.string().min(1).max(120),
-        /** Verbatim words around it from the same sentence, to find the right occurrence. */
-        context: z.string().max(300),
-        kind: z.enum(["term", "fact"]),
+        /** The concept the definition is about; not highlighted itself. */
+        concept: z.string().max(120),
+        /** The key words inside its definition, verbatim; matched mechanically. */
+        keywords: z.string().min(1).max(200),
+        /** Verbatim words from the same sentence, to find the right occurrence. */
+        context: z.string().max(400),
       }),
     )
-    .max(MAX_AI_HIGHLIGHTS + 10),
+    .max(MAX_AI_HIGHLIGHTS + 6),
 });
 
 function highlightInstructions(target: number) {
-  return `You are the reader's highlighter. You are given finished study notes. Highlight the KEY TERMS: the concepts a student must know, at the place where the note defines or explains each one, so the most important ideas stand out and are easier to remember.
+  return `You are the reader's highlighter. You are given finished study notes. A learner wants the KEY WORDS IN THE DEFINITIONS emphasized, so she can spot the most important concepts at a glance and remember them faster.
 
-What to pick:
-- "term": the key term itself, copied VERBATIM from the note (1 to ${MAX_TERM_WORDS} words, same spelling, diacritics and case), e.g. "Cenovna elastičnost", "inzulinska rezistenca", "Frank-Starlingov zakon". The term, never the definition sentence.
-- The note usually puts a defined term in **bold** where it introduces it, and definitions often sit in "> **Definicija:** ..." (or "Definition:") boxes. Prefer those terms, and do highlight terms inside definition boxes, but never the box label itself ("Definicija", "Pogosta napaka", "Ključno").
-- A list item that starts with a bold term, a colon and its explanation ("- **Jedro:** organel, ki ...") is a definition: highlight that term. So is a term in the first column of a table that explains or compares it.
-- Skip bold that is not a concept: labels that only name a group, a step or an example ("Pravice:", "Naloga 4:", "Primer:"), names of people used as examples, and plain numbers.
-- Highlight each term once, where it is defined, not at later mentions.
-- "context": 4 to 20 words copied verbatim from the same sentence, containing the term, so the right occurrence can be found.
-- "kind": "term" for a key term. Use "fact" only for a decisive number, date, formula or condition that a test would ask about, at most a quarter of your picks. For a fact, "term" is the value together with what it is (2 to ${MAX_TERM_WORDS} words, e.g. "približno 50 %", "32 bitov", "od 15. leta"), never a bare number.
+Step 1. Choose the most important concepts of this material: the ones a teacher would ask about in a test. Aim for about ${target}, spread evenly across the whole note, from its first section to its last. Skip minor terms, side remarks, examples, people and places mentioned in passing.
+
+Step 2. For each one, find where the note defines or explains it. That can be a sentence, a list item such as "- **Mitoza:** delitev, pri kateri ...", a row of a table, or a definition box ("> **Definicija:** ...").
+
+Step 3. Pick the KEY WORDS INSIDE that definition: the decisive words that carry its meaning and must be memorized, not the concept's own name. Examples:
+- "Mitoza: delitev, pri kateri iz ene celice nastaneta dve hčerinski celici z enakim številom kromosomov kot materinska celica." → keywords "dve hčerinski celici z enakim številom kromosomov"
+- "Celica je najmanjša zgradbena in delovna enota živega bitja." → keywords "najmanjša zgradbena in delovna enota"
+- "Ponudba brez bistvenih sestavin ni ponudba, temveč zgolj vabilo k ponudbi." → keywords "brez bistvenih sestavin"
+
+Output for each pick:
+- "concept": the concept's name.
+- "keywords": copied VERBATIM from the definition (same spelling, diacritics and case), one continuous span of 2 to ${MAX_KEYWORD_WORDS} words, usually 3 to 6. Never a single word, never the concept's name alone, never a whole sentence, never a bare number.
+- "context": 6 to 25 words copied verbatim from the same sentence, containing the keywords, so the right place can be found.
 
 Rules:
-- Never pick from a heading. Picks must not overlap.
-- Highlight every key term the note defines or introduces, in note order, up to ${target} picks. If the note has more, keep the most important ones and spread them across the whole note. Fewer is fine when the note has fewer real key terms; an empty list is a valid answer. Never pick filler to reach a count.`;
+- One pick per concept, in note order. Picks must not overlap. Never pick from a heading or a box label ("Definicija", "Ključno").
+- Fewer is fine only when the note really has fewer definitions of important concepts; an empty list is a valid answer. Never pick filler to reach a count.`;
 }
 
 /**

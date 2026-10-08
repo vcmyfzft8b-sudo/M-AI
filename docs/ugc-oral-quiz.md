@@ -18,9 +18,15 @@ disallowed in `robots.txt`. Do not link it from `/creator` or from that doc.
   answer wait for a tap instead.
 - Memo sits beside the card from 640px wide (a laptop window or a narrow preview pane);
   on a phone he moves into a strip above it.
-- It plays in the app's language (sl, en, hr, bs, sr), stored in the `memo-locale`
-  cookie. "DICK" stays English in all of them, declined where the grammar asks
-  ("malo DICK-a"); everything else, the drug names included, is translated.
+- The link opens on a language picker (sl, en, hr, bs, sr); the screen then plays in
+  the language picked, and `?lang=sl` (which the picker sets) keeps it across reloads or
+  skips the picker when shared. A chip under Start goes back to the picker; it and the
+  picker are gone once Start is pressed. "DICK" stays English in every language,
+  declined where the grammar asks ("malo DICK-a"); everything else, the drug names
+  included, is translated.
+- On a laptop Memo moves with the voice's loudness. On an iPhone or iPad he moves in
+  step with the words instead: measuring the voice would route it through Web Audio,
+  which the silent switch mutes.
 
 ## Changing it
 

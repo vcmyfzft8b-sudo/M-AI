@@ -117,6 +117,10 @@ const START: Position = { turn: 0, word: -1, ms: 0 };
  * the line playing silently) a pulse on every word, from the same timings the highlight
  * uses, so he still talks in step with the words.
  */
+function isAppleTouchDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
 class VoiceLevel {
   private context: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
@@ -125,8 +129,14 @@ class VoiceLevel {
 
   /* Must run inside the tap: an AudioContext starts suspended anywhere else. */
   attach(player: HTMLAudioElement) {
-    if (this.context) {
-      void this.context.resume().catch(() => undefined);
+    /*
+     * Not on an iPhone or iPad. Measuring the voice routes it through Web Audio, which iOS
+     * mutes under the silent switch and stops on an interruption (a call, the lock screen),
+     * while a plain <audio> element keeps playing — the take would lose its voice to buy a
+     * livelier mouth. There he talks in step with the words instead.
+     */
+    if (this.context || isAppleTouchDevice()) {
+      void this.context?.resume().catch(() => undefined);
       return;
     }
 
@@ -136,6 +146,12 @@ class VoiceLevel {
       analyser.fftSize = 512;
       context.createMediaElementSource(player).connect(analyser);
       analyser.connect(context.destination);
+      // A context the system suspended carries the voice too, so it is woken again at once.
+      context.onstatechange = () => {
+        if (context.state !== "running" && context.state !== "closed") {
+          void context.resume().catch(() => undefined);
+        }
+      };
       this.context = context;
       this.analyser = analyser;
       this.samples = new Uint8Array(analyser.fftSize);
@@ -143,6 +159,17 @@ class VoiceLevel {
     } catch {
       this.context = null;
       this.analyser = null;
+    }
+  }
+
+  close() {
+    const context = this.context;
+    this.context = null;
+    this.analyser = null;
+
+    if (context) {
+      context.onstatechange = null;
+      void context.close().catch(() => undefined);
     }
   }
 
@@ -267,9 +294,12 @@ function OralQuizScreen({
   useEffect(() => {
     setCalm(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
+    const level = voiceLevel.current;
+
     return () => {
       runRef.current += 1;
       audioRef.current?.pause();
+      level.close();
     };
   }, []);
 
@@ -306,9 +336,9 @@ function OralQuizScreen({
         );
 
         const timer = window.setInterval(() => {
+          // Superseded: the player is the new run's now, so it is left alone (restart paused it).
           if (run !== runRef.current) {
             window.clearInterval(timer);
-            player.pause();
             resolve();
             return;
           }
@@ -350,8 +380,15 @@ function OralQuizScreen({
           done = true;
           window.clearInterval(timer);
           window.clearTimeout(react);
-          advanceRef.current = null;
-          setPosition({ turn: index, word: words, ms: startMs + ms });
+
+          if (advanceRef.current === finish) {
+            advanceRef.current = null;
+          }
+
+          if (run === runRef.current) {
+            setPosition({ turn: index, word: words, ms: startMs + ms });
+          }
+
           resolve();
         };
 
@@ -402,6 +439,11 @@ function OralQuizScreen({
         move("hero", "hop");
         move("hero", "groove", Infinity);
         await playTutor(index, plan.starts[index], plan.clips[turn.clip], plan.src(turn.clip), run);
+
+        if (run !== runRef.current) {
+          return;
+        }
+
         stopGroove();
       } else {
         await waitLearner(index, plan.starts[index], turn.text, turn.ms, untilTap, run);
@@ -416,7 +458,6 @@ function OralQuizScreen({
   }, [audio, burst, move, plan, playTutor, stopGroove, waitLearner]);
 
   const restart = useCallback(() => {
-    runRef.current += 1;
     audioRef.current?.pause();
     stopGroove();
     void start();
@@ -424,7 +465,8 @@ function OralQuizScreen({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) {
+      // A focused button answers its own Space and Enter (the language chip goes to the picker).
+      if (event.metaKey || event.ctrlKey || event.altKey || (event.target instanceof HTMLElement && event.target.closest("button"))) {
         return;
       }
 

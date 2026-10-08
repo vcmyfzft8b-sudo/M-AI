@@ -156,6 +156,20 @@ const OPTION_CHROME = {
   columns: { padding: "0.6rem", icon: "clamp(1.4rem, 4vh, 1.75rem)", gap: "0.4rem" },
 } as const;
 
+/*
+ * The smallest a two-column label may be shrunk to so its longest word fits on
+ * one line (see `columnLabelPx`). Below this the word breaks instead, which
+ * `overflowWrap: "anywhere"` still allows as the last resort.
+ */
+const COLUMN_LABEL_FLOOR_PX = 12;
+
+/** The two-column label's own size, `clamp(0.86rem, 2.1vh, 0.98rem)`, in px. */
+function columnLabelBasePx() {
+  const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+
+  return Math.min(0.98 * rem, Math.max(0.86 * rem, 0.021 * window.innerHeight));
+}
+
 const STEPS: readonly Step[] = [
   { id: "welcome", kind: "welcome" },
   { id: "heardFrom", kind: "q", key: "heardFrom", qk: "qHeard", sk: "subHeard", cols: "1fr" },
@@ -521,6 +535,17 @@ export function OnboardingFlow({
     targetGrade: false,
   });
   const [saveError, setSaveError] = useState<string | null>(null);
+  /*
+   * The two-column steps' label size when the default is too big for a word.
+   *
+   * On a 360px phone a two-up tile leaves its label about 100px, and v2's
+   * heavier type puts some single words past that — Croatian "Personalizacija"
+   * broke as "Personalizacij / a". Hyphenation is not there in every language
+   * on every browser, so the labels are measured instead: every label on the
+   * step shrinks together, just enough for its longest word to fit, and only
+   * when one does not.
+   */
+  const [columnLabelPx, setColumnLabelPx] = useState<number | null>(null);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -532,6 +557,7 @@ export function OnboardingFlow({
   const dropEl = useRef<HTMLDivElement | null>(null);
   const mainEl = useRef<HTMLElement | null>(null);
   const fitEl = useRef<HTMLDivElement | null>(null);
+  const optionGridEl = useRef<HTMLDivElement | null>(null);
   const gazeEl = useRef<HTMLDivElement | null>(null);
   const heroTiltEl = useRef<HTMLDivElement | null>(null);
   const bubbleEl = useRef<HTMLDivElement | null>(null);
@@ -1422,6 +1448,55 @@ export function OnboardingFlow({
     };
   }, []);
 
+  const columnStep = step.cols === WRAPPING_COLUMNS;
+
+  useEffect(() => {
+    if (!columnStep) {
+      setColumnLabelPx(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const measure = () => {
+      const grid = optionGridEl.current;
+      const labels = grid ? Array.from(grid.querySelectorAll<HTMLElement>("[data-option-label]")) : [];
+      const context = document.createElement("canvas").getContext("2d");
+
+      if (cancelled || !labels.length || !context) {
+        return;
+      }
+
+      const base = columnLabelBasePx();
+      context.font = `800 ${base}px ${getComputedStyle(labels[0]).fontFamily}`;
+      let ratio = 1;
+
+      for (const label of labels) {
+        const room = label.clientWidth;
+
+        for (const word of (label.textContent ?? "").split(/\s+/)) {
+          const width = context.measureText(word).width;
+
+          if (room > 0 && width > room) {
+            ratio = Math.min(ratio, room / width);
+          }
+        }
+      }
+
+      // A hair under the exact fit, for the rounding between canvas and layout.
+      setColumnLabelPx(ratio < 1 ? Math.max(COLUMN_LABEL_FLOOR_PX, Math.floor(base * ratio * 0.98 * 10) / 10) : null);
+    };
+
+    // The label font has to be loaded for its widths to be the real ones.
+    void document.fonts.ready.then(() => requestAnimationFrame(measure));
+    window.addEventListener("resize", measure);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("resize", measure);
+    };
+  }, [columnStep, state.stepId, locale]);
+
   /*
    * No step scrolls: when a step is taller than the room between the header
    * and Continue, scale its contents down while preserving the column width.
@@ -1695,6 +1770,7 @@ export function OnboardingFlow({
      * badge, and the label is a step smaller.
      */
     optionColumns: step.cols === WRAPPING_COLUMNS,
+    columnLabelSize: columnLabelPx ? `${columnLabelPx}px` : "clamp(0.86rem, 2.1vh, 0.98rem)",
     options,
     summary,
     isWelcome: kind === "welcome",
@@ -2069,7 +2145,7 @@ export function OnboardingFlow({
       {v.isQuestion ? (<>
       <div>
       {v.subtitle ? <p style={SUBTITLE}>{v.subtitle}</p> : null}
-      <div style={{ display: "grid", gap: "clamp(0.35rem, 1.1vh, 0.6rem)", gridTemplateColumns: v.gridCols }}>
+      <div ref={optionGridEl} style={{ display: "grid", gap: "clamp(0.35rem, 1.1vh, 0.6rem)", gridTemplateColumns: v.gridCols }}>
       {v.options.map((item) => (<Fragment key={item.value}>
       <button type="button" onClick={item.onSelect} aria-pressed={item.selected} style={{ position: "relative", display: "flex", alignItems: "center", gap: v.optionGap, width: "100%", minHeight: "clamp(3rem, 7.6vh, 4.2rem)", padding: `clamp(0.45rem, 1.3vh, 0.85rem) ${v.optionPad}`, boxSizing: "border-box", border: `2px solid ${item.ring}`, borderRadius: "1.15rem", color: "var(--text)", textAlign: "left", cursor: "pointer", fontFamily: "inherit", background: item.bg, boxShadow: `0 ${item.depth} 0 ${item.ring}`, transform: `translateY(${item.lift})`, transition: "transform 140ms cubic-bezier(0.2,0.85,0.2,1), background-color 180ms ease, box-shadow 140ms ease, border-color 180ms ease", animation: `memo-rise 440ms cubic-bezier(0.22,1,0.36,1) ${item.delay} both` }} className="memo-ob-press">
       <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: v.optionIcon, height: v.optionIcon, flex: "0 0 auto", borderRadius: "0.8rem", background: "var(--tile)", color: "var(--text)", fontSize: "clamp(0.95rem, 2.3vh, 1.2rem)", lineHeight: "1" }}>
@@ -2079,7 +2155,7 @@ export function OnboardingFlow({
       </>) : null}
       </span>
       <span style={{ flex: "1 1 auto", minWidth: "0", display: "grid", gap: "0.15rem", overflowWrap: "anywhere" }}>
-      <span style={{ fontSize: v.optionColumns ? "clamp(0.86rem, 2.1vh, 0.98rem)" : "clamp(0.95rem, 2.3vh, 1.08rem)", fontWeight: "800", lineHeight: "1.2" }}>{item.label}</span>
+      <span data-option-label="" style={{ fontSize: v.optionColumns ? v.columnLabelSize : "clamp(0.95rem, 2.3vh, 1.08rem)", fontWeight: "800", lineHeight: "1.2" }}>{item.label}</span>
       {item.desc ? (<>
       <span style={{ fontSize: "clamp(0.7rem, 1.7vh, 0.82rem)", fontWeight: "600", lineHeight: "1.3", color: "var(--muted)" }}>{item.desc}</span>
       </>) : null}

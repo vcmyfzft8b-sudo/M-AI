@@ -37,8 +37,7 @@ import type { SourceDetail, SourceKind } from "./memo-app-preview-data";
  *
  * The order is the app's: capture, the note and the two things its screen does
  * besides being read (listen, and the tutor), the study pills in the order the
- * note's pill row lists them, exam prep, which plans across notes, and last the
- * chat, which reaches across every note.
+ * note's pill row lists them, and last the chat, which reaches across every note.
  */
 const FEATURES = [
   { id: "capture", titleKey: "showcase.captureTitle", descKey: "showcase.captureDesc" },
@@ -51,8 +50,8 @@ const FEATURES = [
   { id: "mindmap", titleKey: "showcase.mindmapTitle", descKey: "showcase.mindmapDesc" },
   { id: "palace", titleKey: "showcase.palaceTitle", descKey: "showcase.palaceDesc" },
   { id: "test", titleKey: "showcase.testsTitle", descKey: "showcase.testsDesc" },
-  { id: "speed", titleKey: "showcase.speedTitle", descKey: "showcase.speedDesc" },
   { id: "exam", titleKey: "showcase.examTitle", descKey: "showcase.examDesc" },
+  { id: "speed", titleKey: "showcase.speedTitle", descKey: "showcase.speedDesc" },
   { id: "chat", titleKey: "showcase.chatTitle", descKey: "showcase.chatDesc" },
 ] as const satisfies ReadonlyArray<{ id: string; titleKey: MessageKey; descKey: MessageKey }>;
 

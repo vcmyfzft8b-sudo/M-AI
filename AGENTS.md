@@ -206,6 +206,9 @@ either symptom as this incident first, and only as new if it recurs after that m
 
 ## Exam Prep
 
+- Exam prep is a note tab (`exam` in `NOTE_TABS`), not a screen of its own. Its planning
+  flow must keep looking like the app's onboarding (`exam-onboarding.tsx` reuses the
+  onboarding's layer, mascot and chips); change the two together.
 - The day-by-day journey is never stored. It is recomputed from the learner's study evidence
   (`study_events`, graded practice tests, manual ticks) by the pure planner in
   `src/lib/exam-prep/journey.ts`, so a missed day re-plans itself. Do not add a stored

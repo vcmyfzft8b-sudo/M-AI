@@ -18,22 +18,6 @@ export const EXAM_TYPE_LABEL: Record<ExamTypeId, MessageKey> = {
   mixed: "exam.type.mixed",
 };
 
-export const EXAM_TYPE_HINT: Record<ExamTypeId, MessageKey> = {
-  written: "exam.type.written.hint",
-  multiple_choice: "exam.type.multiple_choice.hint",
-  problem_solving: "exam.type.problem_solving.hint",
-  oral: "exam.type.oral.hint",
-  mixed: "exam.type.mixed.hint",
-};
-
-export const EXAM_TYPE_ICON: Record<ExamTypeId, string> = {
-  written: "edit",
-  multiple_choice: "quiz",
-  problem_solving: "functions",
-  oral: "record_voice_over",
-  mixed: "style",
-};
-
 export const PHASE_LABEL: Record<JourneyPhase, MessageKey> = {
   learn: "exam.phase.learn",
   practice: "exam.phase.practice",

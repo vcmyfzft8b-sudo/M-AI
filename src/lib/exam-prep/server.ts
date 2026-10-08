@@ -20,11 +20,13 @@ import type {
   ExamEvidence,
   ExamMaterialNote,
   ExamPlanPayload,
+  ExamNoteOption,
   ExamPlanSummary,
   StudyEvent,
 } from "@/lib/exam-prep/model";
 import type { CreateExamPlanInput, UpdateExamPlanInput } from "@/lib/exam-prep/schema";
 import { getTranslations } from "@/lib/i18n/server";
+import { listLecturesForUser } from "@/lib/lectures";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 /*
@@ -372,7 +374,11 @@ export async function listExamPlanRows(userId: string) {
   return (data ?? []) as ExamPlanRow[];
 }
 
-export async function listExamPlanSummaries(userId: string): Promise<ExamPlanSummary[]> {
+/** The learner's exams, or only those that cover one note (the note's Exam tab). */
+export async function listExamPlanSummaries(
+  userId: string,
+  options: { lectureId?: string | null } = {},
+): Promise<ExamPlanSummary[]> {
   const rows = await listExamPlanRows(userId);
 
   if (rows.length === 0) {
@@ -384,12 +390,32 @@ export async function listExamPlanSummaries(userId: string): Promise<ExamPlanSum
     service,
     rows.map((row) => row.id),
   );
+  const covering = options.lectureId
+    ? rows.filter((row) => (lectureIds.get(row.id) ?? []).includes(options.lectureId as string))
+    : rows;
   const nowMs = Date.now();
   const payloads = await Promise.all(
-    rows.map((row) => buildPayload(service, userId, row, lectureIds.get(row.id) ?? [], nowMs)),
+    covering.map((row) => buildPayload(service, userId, row, lectureIds.get(row.id) ?? [], nowMs)),
   );
 
   return sortSummaries(payloads.map((payload) => summarizeJourney(payload.plan, payload.journey)));
+}
+
+/** The notes an exam can be planned from, for the setup's "what else does it cover" step. */
+export async function listExamNoteOptions(userId: string): Promise<ExamNoteOption[]> {
+  if (isExamPrepUnavailableForUser(userId)) {
+    return [];
+  }
+
+  const lectures = await listLecturesForUser(userId);
+  return lectures
+    .filter((lecture) => lecture.status !== "failed")
+    .map((lecture) => ({
+      id: lecture.id,
+      title: lecture.title,
+      sourceType: lecture.source_type,
+      status: lecture.status,
+    }));
 }
 
 export type LectureAccessCheck =

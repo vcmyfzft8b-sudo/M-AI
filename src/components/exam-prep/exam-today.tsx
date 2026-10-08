@@ -40,12 +40,17 @@ export function ExamTodayTasks({
   onToggle,
   pendingKey = null,
   linkTasks = true,
+  currentLectureId = null,
+  onOpenTab,
 }: {
   day: JourneyDay;
   onToggle?: (task: JourneyTask) => void;
   pendingKey?: string | null;
   /** False on the landing page, where nothing navigates. */
   linkTasks?: boolean;
+  /** The note this list is drawn inside: its tasks switch tabs instead of navigating. */
+  currentLectureId?: string | null;
+  onOpenTab?: (tab: JourneyTask["tab"]) => void;
 }) {
   const { t, taskTitle, taskMeta } = useExamFormat();
   const firstOpen = day.tasks.find((task) => !task.done)?.key ?? null;
@@ -93,7 +98,15 @@ export function ExamTodayTasks({
               >
                 <ProgressCheck task={task} />
               </button>
-              {href ? (
+              {href && task.lectureId === currentLectureId && onOpenTab ? (
+                <button
+                  type="button"
+                  className="memo-exam-task-link memo-exam-task-button"
+                  onClick={() => onOpenTab(task.tab)}
+                >
+                  {copy}
+                </button>
+              ) : href ? (
                 <InstantLink href={href} className="memo-exam-task-link">
                   {copy}
                 </InstantLink>
@@ -116,6 +129,23 @@ export function ExamTodayTasks({
               {copy}
               {trailing}
             </div>
+          );
+        }
+
+        if (task.lectureId === currentLectureId && onOpenTab) {
+          return (
+            <button
+              key={task.key}
+              type="button"
+              className={`${className} memo-exam-task-button`}
+              onClick={() => onOpenTab(task.tab)}
+            >
+              <span className="memo-exam-check">
+                <ProgressCheck task={task} />
+              </span>
+              {copy}
+              {trailing}
+            </button>
           );
         }
 

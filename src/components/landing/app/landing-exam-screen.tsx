@@ -116,7 +116,7 @@ export function LandingExamScreen({
 
   return (
     <LandingAppScope theme={theme} className={["landing-study-screen", className].filter(Boolean).join(" ")}>
-      <div className="landing-study-frame memo-exam-screen">
+      <div className="landing-study-frame memo-exam-tab">
         {journey ? (
           <>
             <ExamHero journey={journey} />

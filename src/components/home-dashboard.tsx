@@ -22,7 +22,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { flushSync } from "react-dom";
 
 import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
-import { ExamHomeCard } from "@/components/exam-prep/exam-home-card";
 import { useT, useTranslations } from "@/components/i18n-provider";
 import {
   detectInstallPlatform,
@@ -1682,22 +1681,17 @@ export function HomeDashboard({
             height={BRAND_LOCKUP_HEIGHT}
             priority
           />
-          <span className="memo-m-topbar-actions">
-            <InstantLink href="/app/exams" className="memo-m-round" aria-label={t("nav.exams")}>
-              <Msym name="event" size="1.55rem" fill={false} weight={500} />
-            </InstantLink>
-            {/* The dot is the only hint that there is something new in there;
-                it clears the first time the guide is opened. */}
-            <InstantLink
-              href="/app/settings"
-              className={`memo-m-round ${showInstallHint ? "has-dot" : ""}`.trim()}
-              aria-label={
-                showInstallHint ? t("library.settings.withBadge") : t("nav.settings")
-              }
-            >
-              <Msym name="settings" size="1.6rem" fill={false} weight={500} />
-            </InstantLink>
-          </span>
+          {/* The dot is the only hint that there is something new in there;
+              it clears the first time the guide is opened. */}
+          <InstantLink
+            href="/app/settings"
+            className={`memo-m-round ${showInstallHint ? "has-dot" : ""}`.trim()}
+            aria-label={
+              showInstallHint ? t("library.settings.withBadge") : t("nav.settings")
+            }
+          >
+            <Msym name="settings" size="1.6rem" fill={false} weight={500} />
+          </InstantLink>
         </div>
 
         <div className="memo-home-scroll" ref={attachScroll}>
@@ -1812,10 +1806,6 @@ export function HomeDashboard({
           </div>
 
           <div className="memo-home-body">
-            <ExamHomeCard
-              hasReadyNotes={libraryLectures.some((lecture) => lecture.status === "ready")}
-            />
-
             {showDiscountPromo ? (
               <button
                 type="button"

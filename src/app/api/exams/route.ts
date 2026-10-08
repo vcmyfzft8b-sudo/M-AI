@@ -6,6 +6,7 @@ import {
   checkExamLectures,
   createExamPlan,
   isExamPrepUnavailableForUser,
+  listExamNoteOptions,
   listExamPlanSummaries,
 } from "@/lib/exam-prep/server";
 import { tr } from "@/lib/i18n/server";
@@ -13,10 +14,15 @@ import { captureRouteError } from "@/lib/monitoring";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { getRouteUser } from "@/lib/supabase/server";
+import { uuidSchema } from "@/lib/validation";
 
 const CREATE_MAX_BYTES = 8 * 1024;
 
-/** The learner's exams, each with today's progress and its forecast. */
+/**
+ * The learner's exams, each with today's progress and its forecast. With
+ * `?lectureId=`, only the exams that cover that note, plus the notes an exam
+ * could also cover — what a note's Exam tab needs in one request.
+ */
 export async function GET(request: Request) {
   const auth = await getRouteUser({ route: "GET /api/exams", request });
 
@@ -36,7 +42,22 @@ export async function GET(request: Request) {
     return limited;
   }
 
+  const lectureId = new URL(request.url).searchParams.get("lectureId");
+
+  if (lectureId && !uuidSchema.safeParse(lectureId).success) {
+    return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
+  }
+
   try {
+    if (lectureId) {
+      const [plans, notes] = await Promise.all([
+        listExamPlanSummaries(user.id, { lectureId }),
+        listExamNoteOptions(user.id),
+      ]);
+
+      return NextResponse.json({ plans, notes });
+    }
+
     return NextResponse.json({ plans: await listExamPlanSummaries(user.id) });
   } catch (error) {
     captureRouteError(error, { route: "GET /api/exams", operation: "list", request, userId: user.id });

@@ -206,8 +206,17 @@ export interface ExamPlanPayload {
   journey: ExamJourney;
 }
 
+/** A note the setup offers to add to an exam. */
+export interface ExamNoteOption {
+  id: string;
+  title: string | null;
+  sourceType: string | null;
+  status: string;
+}
+
 export interface ExamPlanSummary {
   id: string;
+  lectureIds: string[];
   title: string;
   examDate: DayKey;
   examType: ExamTypeId;

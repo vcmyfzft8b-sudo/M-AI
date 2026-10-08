@@ -39,6 +39,7 @@ import { LandingMindmapScreen } from "./app/landing-mindmap-screen";
 import { LandingPalaceScreen } from "./app/landing-palace-screen";
 import { LandingPodcastScreen } from "./app/landing-podcast-screen";
 import { LandingQuizScreen } from "./app/landing-quiz-screen";
+import { LandingExamScreen } from "./app/landing-exam-screen";
 import { LandingSpeedReadScreen } from "./app/landing-speed-read-screen";
 import { LandingTestScreen } from "./app/landing-test-screen";
 import { LandingTutorDemo } from "./landing-tutor-demo";
@@ -1753,6 +1754,8 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
         );
       case "test":
         return <LandingTestScreen key={key} theme={theme} autoplay={autoplay} />;
+      case "exam":
+        return <LandingExamScreen key={key} theme={theme} />;
       case "speed":
         return <LandingSpeedReadScreen key={key} theme={theme} autoplay={autoplay} markdown={noteBodyMarkdown(this.noteBlocks())} />;
     }

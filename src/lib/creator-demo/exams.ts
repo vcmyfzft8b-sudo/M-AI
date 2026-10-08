@@ -312,13 +312,30 @@ export function getDemoExamPayload(planId: string) {
   return plan ? payloadFor(plan) : null;
 }
 
-export function listDemoExamSummaries() {
+export function listDemoExamSummaries(lectureId?: string | null) {
   return sortSummaries(
-    getState().plans.map((plan) => {
-      const payload = payloadFor(plan);
-      return summarizeJourney(payload.plan, payload.journey);
-    }),
+    getState()
+      .plans.filter((plan) => !lectureId || plan.lectureIds.includes(lectureId))
+      .map((plan) => {
+        const payload = payloadFor(plan);
+        return summarizeJourney(payload.plan, payload.journey);
+      }),
   );
+}
+
+/** The demo library, as the setup's note picker lists it. */
+export function listDemoExamNoteOptions() {
+  const library = getCreatorDemoState();
+
+  return library.order
+    .map((id) => library.details[id]?.lecture)
+    .filter((lecture) => lecture && lecture.status !== "failed")
+    .map((lecture) => ({
+      id: lecture!.id,
+      title: lecture!.title,
+      sourceType: lecture!.source_type,
+      status: lecture!.status,
+    }));
 }
 
 export function createDemoExam(input: CreateExamPlanInput) {

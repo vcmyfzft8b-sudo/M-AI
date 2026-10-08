@@ -77,7 +77,6 @@ const MATERIAL_SYMBOL_NAMES = [
   "folder_delete",
   "forum",
   "forward_10",
-  "functions",
   "graphic_eq",
   "headphones",
   "help",

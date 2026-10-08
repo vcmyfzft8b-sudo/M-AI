@@ -21,6 +21,7 @@ import { MemoPortal } from "@/components/memo-portal";
 import { OfflineFeatureNotice, useOfflineGuard } from "@/components/offline/offline-notice";
 import { RecordingPlayer } from "@/components/recording-player";
 import { useIsHydrated } from "@/components/viewport-portal";
+import { LectureExam } from "@/components/exam-prep/lecture-exam";
 import {
   getApiErrorMessage,
   parseApiResponse,
@@ -102,6 +103,7 @@ type WorkspaceTab =
   | "mindmap"
   | "palace"
   | "speed"
+  | "exam"
   | "chat"
   | "transcript"
   | "audio";
@@ -1100,6 +1102,7 @@ const SUB_SCREEN_TITLE_KEYS: Record<string, MessageKey | null> = {
   mindmap: "note.tab.mindmap",
   palace: "palace.title",
   speed: "note.tab.speed",
+  exam: "note.tab.exam",
   transcript: "note.tab.transcript",
 };
 
@@ -1114,6 +1117,7 @@ function workspaceTabForNoteTab(id: string | null | undefined): WorkspaceTab {
     case "mindmap":
     case "palace":
     case "speed":
+    case "exam":
     case "transcript":
       return id;
     case "flashcards":
@@ -4083,6 +4087,31 @@ export function LectureWorkspace({
       return <OfflineFeatureNotice feature="generate" />;
     }
 
+    // An exam plan is worked out on the server from the learner's study, so
+    // there is nothing to show of it without a connection.
+    if (isOffline && activeTab === "exam") {
+      return <OfflineFeatureNotice feature="generate" />;
+    }
+
+    if (activeTab === "exam") {
+      return (
+        <LectureExam
+          lectureId={detail.lecture.id}
+          lectureTitle={detail.lecture.title?.trim() || t("note.untitled")}
+          isReady={detail.lecture.status === "ready"}
+          hasPaidAccess={hasPaidAccess}
+          trialLectureId={trialLectureId}
+          onOpenTab={(tabId) => {
+            const target = NOTE_TABS.find((tab) => tab.id === tabId);
+
+            if (target) {
+              selectNoteTab(target);
+            }
+          }}
+        />
+      );
+    }
+
     if (activeTab === "podcast") {
       return (
         <LecturePodcast
@@ -5805,6 +5834,8 @@ export function LectureWorkspace({
               ? "palace"
               : activeTab === "speed"
                 ? "speed"
+                : activeTab === "exam"
+                  ? "exam"
                 : activeTab === "transcript" || activeTab === "audio"
                   ? "transcript"
                   : activeStudyView === "flashcards"
@@ -6339,6 +6370,11 @@ export function LectureWorkspace({
 
     if (tab.id === "speed") {
       setActiveTab("speed");
+      return;
+    }
+
+    if (tab.id === "exam") {
+      setActiveTab("exam");
       return;
     }
 

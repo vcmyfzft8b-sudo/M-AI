@@ -91,7 +91,7 @@ query would let one rule serve both a phone viewport and the landing's phone-siz
 | Memory palace | `lecture-palace.tsx` | `app/landing-palace-screen.tsx` | Hero, How it works, Features |
 | Speed read | `note-speed-reader.tsx` | `app/landing-speed-read-screen.tsx` | Hero, How it works, Features |
 | Chat (note and library) | `library-chat.tsx`, `chat-markdown.tsx` | hero chat, showcase | Hero, Features |
-| Exam prep (journey, readiness, today's tasks) | `src/components/exam-prep/` (`ExamHero`, `ExamReadinessCard`, `ExamTodayTasks`) | `app/landing-exam-screen.tsx` — the app's own components over a journey the real planner computes | Features |
+| Exam (note tab: journey, readiness, today's tasks) | `lecture-exam.tsx` + `ExamHero`, `ExamReadinessCard`, `ExamTodayTasks` | `app/landing-exam-screen.tsx` — the app's own components over a journey the real planner computes | Hero, How it works, Features |
 
 Keep this table current: a new feature adds a row, and a new landing component is listed here.
 

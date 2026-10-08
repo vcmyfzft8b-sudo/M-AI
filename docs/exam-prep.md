@@ -4,12 +4,16 @@ A learner names an exam, its date, its type and the grade they want, and picks t
 covers. Memo then plans every day until the exam from those notes and shows, honestly, how
 close they are to that grade.
 
-- App: `/app/exams` (list), `/app/exams/new` (builder), `/app/exams/[id]` (journey),
-  `/app/exams/[id]/edit`. Reached from the calendar button on the phone's home screen, the
-  "Exams" rail item on desktop, and a card above the library while an exam is coming up.
-- Demo, no login: `/creator/exams` — the same screens over the demo library, with one exam
-  that already has a week and a half of study behind it.
-- Landing: the "Exam prep" row of the feature list (`landing-exam-screen.tsx`).
+- App: the note's **Exam** tab (`NOTE_TABS`, after Test), one of the note's tools like the
+  cards, the quiz and the test. With no exam planned it shows the tools' start screen; its
+  button opens the planning flow, drawn exactly as the app's onboarding asks its questions
+  (`exam-onboarding.tsx`: Memo in a speech bubble, the 3D chips, the coral button with its
+  lip). With an exam it shows that exam's journey (`lecture-exam.tsx`). An exam can cover
+  several notes; it then shows in each of their Exam tabs.
+- Demo, no login: `/creator/lectures/demo-note-mikroekonomija?tab=exam` — an exam that
+  already has a week and a half of study behind it; any other demo note starts empty.
+- Landing: the Exam pill in the hero phone and "How it works", and the "Exam prep" row of
+  the feature list (`landing-exam-screen.tsx`).
 
 ## What the research says, and what we took from it
 
@@ -146,7 +150,7 @@ trial note (`checkExamLectures`); the preview bypass account has no auth row and
 
 | Route | |
 | --- | --- |
-| `GET /api/exams` | Summaries (today's progress, forecast) for the list and the home card. |
+| `GET /api/exams` | Summaries (today's progress, forecast); `?lectureId=` for one note's Exam tab. |
 | `POST /api/exams` | Create. |
 | `GET /api/exams/[id]` | The plan and its journey, computed now. |
 | `PATCH /api/exams/[id]` | Edit, including the daily budget and the real result. |
@@ -154,8 +158,10 @@ trial note (`checkExamLectures`); the preview bypass account has no auth row and
 | `POST /api/exams/[id]/checks` | Tick or untick a manual task. |
 | `POST /api/lectures/[id]/quiz/answers` | Log a quiz answer. |
 
-Tasks deep-link into the note with `?tab=flashcards|quiz|test|tutor`
-(`LectureWorkspace`'s `initialTabId`).
+Today's tasks on the same note switch the note's tab in place; tasks on another note link
+to it with `?tab=flashcards|quiz|test|tutor|exam` (`LectureWorkspace`'s `initialTabId`).
+`GET /api/exams?lectureId=` returns the exams covering that note and the notes the planning
+flow can add, in one request.
 
 ## Not done yet
 

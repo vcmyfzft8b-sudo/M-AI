@@ -16,6 +16,7 @@ import {
   createDemoExam,
   deleteDemoExam,
   getDemoExamPayload,
+  listDemoExamNoteOptions,
   listDemoExamSummaries,
   recordDemoStudyEvent,
   setDemoExamCheck,
@@ -551,7 +552,11 @@ async function handleExamRoute(
       return json({ id: createDemoExam(parsed.data) }, 201);
     }
 
-    return json({ plans: listDemoExamSummaries() });
+    const lectureId = getUrl(input).searchParams.get("lectureId");
+
+    return lectureId
+      ? json({ plans: listDemoExamSummaries(lectureId), notes: listDemoExamNoteOptions() })
+      : json({ plans: listDemoExamSummaries() });
   }
 
   if (action === "checks") {

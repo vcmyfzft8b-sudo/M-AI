@@ -29,6 +29,7 @@ const LANDING_SCREEN_FOR_TAB = {
   mindmap: "src/components/landing/app/landing-mindmap-screen.tsx",
   palace: "src/components/landing/app/landing-palace-screen.tsx",
   test: "src/components/landing/app/landing-test-screen.tsx",
+  exam: "src/components/landing/app/landing-exam-screen.tsx",
   speed: "src/components/landing/app/landing-speed-read-screen.tsx",
 };
 

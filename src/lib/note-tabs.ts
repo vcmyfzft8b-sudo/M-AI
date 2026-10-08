@@ -84,6 +84,18 @@ export const NOTE_TABS = [
     tint: "oklch(0.66 0.15 150)",
   },
   /*
+   * Where the practice leads: a dated exam, planned day by day from this note
+   * (and any others it covers), with how close the learner is to their grade.
+   * Right after the test, which is the closest thing to it.
+   */
+  {
+    id: "exam",
+    view: null,
+    labelKey: "note.tab.exam",
+    icon: "event",
+    tint: "oklch(0.66 0.15 230)",
+  },
+  /*
    * Another way through the note itself — one word at a time, held still, for a
    * reader who wants the whole thing at pace rather than explained. It sits at
    * the end of the row rather than beside the walkthrough: the three practice

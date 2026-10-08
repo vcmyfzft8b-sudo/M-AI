@@ -180,6 +180,7 @@ export const SUB_SCREEN_TITLE_KEYS: Record<NoteTab, MessageKey | null> = {
   palace: "palace.title",
   test: "note.subScreen.test",
   speed: "note.tab.speed",
+  exam: "note.tab.exam",
   transcript: "note.tab.transcript",
 };
 

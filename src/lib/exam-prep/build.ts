@@ -205,6 +205,7 @@ export function summarizeJourney(
 
   return {
     id: plan.id,
+    lectureIds: plan.lectureIds,
     title: plan.title,
     examDate: plan.examDate,
     examType: plan.examType,

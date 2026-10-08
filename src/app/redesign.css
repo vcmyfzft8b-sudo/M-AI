@@ -21797,3 +21797,515 @@ html[data-native] .memo-toast.subtle {
   line-height: 1.55;
   letter-spacing: -0.01em;
 }
+
+/*
+ * The UGC oral quiz (`/ugc/oral-quiz`, src/components/ugc/oral-quiz.tsx):
+ * the lesson card on the left, Memo on the right, filmed off a laptop for UGC. The card is the
+ * read-aloud's own highlight (`.note-read-content`, globals.css) on a plain card; the stage is
+ * the onboarding's Memo with a sticker over his head.
+ *
+ * Phone first: Memo shrinks into a strip above the card. From 1100px the two sit side by side.
+ */
+.memo-oq {
+  /* MascotFigure's drop shadow reads this; it is only declared in the onboarding's scope. */
+  --memo-shadow: var(--hover-ring);
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.85rem;
+  height: 100dvh;
+  padding: max(0.85rem, var(--memo-safe-top, 0px)) 1rem max(0.85rem, var(--memo-safe-bottom, 0px));
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.memo-oq-card {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.memo-oq-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.2rem 1.5rem 0.85rem;
+}
+
+/* The one wordmark on the screen, so it is drawn big: it has to read on a phone filming a laptop. */
+.memo-oq-head-lockup {
+  display: block;
+  width: auto;
+  height: 2.9rem;
+}
+
+.memo-oq-product {
+  color: var(--muted);
+  font-size: 1.1rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.memo-oq-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  height: 2.2rem;
+  margin-left: auto;
+  padding: 0 0.85rem 0 0.6rem;
+  border-radius: 999px;
+  background: var(--tile);
+  font-size: 1.05rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-oq-streak .msym {
+  color: var(--promo);
+}
+
+.memo-progress.memo-oq-progress {
+  flex: 0 0 auto;
+  height: 1rem;
+  margin: 0 1.5rem;
+}
+
+.memo-oq-progress > div {
+  background: var(--promo);
+  transition: width 0.12s linear;
+}
+
+.memo-oq-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 1.6rem 1.5rem 2rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 1.2rem, #000 calc(100% - 2rem), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 1.2rem, #000 calc(100% - 2rem), transparent 100%);
+}
+
+.memo-oq-ready {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.memo-oq-hint {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.35;
+}
+
+.memo-button-coral.memo-oq-start {
+  flex: 0 0 auto;
+  margin-top: 0.6rem;
+  padding: 0 2.4rem;
+}
+
+.memo-oq-quiz {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.memo-oq-line,
+.memo-oq-text {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1.75;
+}
+
+.memo-oq-line.past {
+  color: var(--muted);
+}
+
+.memo-oq-heard {
+  display: inline-flex;
+  align-self: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 85%;
+  margin: 0;
+  padding: 0.75rem 1.15rem;
+  border-radius: 22px;
+  background: var(--sunken);
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.4;
+}
+
+.memo-oq-heard .msym {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.memo-oq-title {
+  margin: 0 0 1.15rem;
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.memo-oq-status {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.5rem;
+  height: 3.4rem;
+  padding: 0 1.5rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.memo-oq-status.listening .msym {
+  color: var(--promo);
+  animation: memo-oq-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes memo-oq-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.9); }
+}
+
+/* Memo's side. On the phone a strip: Memo, then the name and the tagline. */
+.memo-oq-brand {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1.15rem;
+  padding: 1.4rem 0.5rem 0;
+}
+
+.memo-oq-tagline {
+  color: var(--muted);
+  font-size: 1.08rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.memo-oq-stage {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+}
+
+.memo-oq-mascot {
+  position: relative;
+  width: 6.4rem;
+  aspect-ratio: 320 / 288;
+}
+
+.memo-oq-mascot-body {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 92%;
+}
+
+.memo-oq-mascot-breathe {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 94%;
+  animation: memo-breathe 3.4s ease-in-out infinite;
+}
+
+.memo-oq-burst {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/*
+ * Memo is the attention-grabber, so he is never still: he drops in and waves until started,
+ * squashes and stretches with the voice's loudness (`--oq-level`, set every tick from the
+ * recording), and a glow and three rings pulse out of him while he talks.
+ */
+.memo-oq-mascot-voice {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 92%;
+  transform:
+    translateY(calc(var(--oq-level, 0) * -5%))
+    scale(calc(1 + var(--oq-level, 0) * 0.08), calc(1 - var(--oq-level, 0) * 0.05));
+  transition: transform 70ms linear;
+}
+
+.memo-oq-halo {
+  position: absolute;
+  inset: -30%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--promo) 46%, transparent), transparent);
+  opacity: calc(0.4 + var(--oq-level, 0) * 0.6);
+  transform: scale(calc(0.82 + var(--oq-level, 0) * 0.34));
+  transition: transform 90ms linear, opacity 90ms linear;
+  animation: memo-oq-halo 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes memo-oq-halo {
+  0%, 100% { scale: 1; }
+  50% { scale: 1.12; }
+}
+
+.memo-oq-ring {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  width: 92%;
+  aspect-ratio: 1;
+  border: 0.22rem solid var(--promo);
+  border-radius: 50%;
+  opacity: 0;
+  translate: -50% -50%;
+  pointer-events: none;
+  animation: memo-oq-ring 2.6s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
+}
+
+.memo-oq-ring.second {
+  animation-delay: 0.87s;
+}
+
+.memo-oq-ring.third {
+  animation-delay: 1.73s;
+}
+
+.memo-oq[data-mode="speaking"] .memo-oq-ring {
+  animation-duration: 1.5s;
+}
+
+.memo-oq[data-mode="speaking"] .memo-oq-ring.second {
+  animation-delay: 0.5s;
+}
+
+.memo-oq[data-mode="speaking"] .memo-oq-ring.third {
+  animation-delay: 1s;
+}
+
+.memo-oq[data-mode="listening"] .memo-oq-ring {
+  border-color: var(--muted);
+}
+
+@keyframes memo-oq-ring {
+  0% { opacity: 0.6; scale: 0.7; }
+  100% { opacity: 0; scale: 1.55; }
+}
+
+/* The sticker over his head: stamped on, then wobbling. A surface-coloured edge, so it is a
+   sticker on either ground. */
+.memo-oq-sticker {
+  position: absolute;
+  top: -22%;
+  left: 50%;
+  z-index: 5;
+  color: var(--promo);
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  white-space: nowrap;
+  -webkit-text-stroke: 0.16em var(--surface);
+  paint-order: stroke fill;
+  filter: drop-shadow(0 6px 10px var(--memo-shadow));
+  transform: translateX(-50%);
+  rotate: -8deg;
+  animation:
+    memo-oq-stamp 620ms cubic-bezier(0.2, 1.6, 0.4, 1) 350ms both,
+    memo-oq-wobble 1.6s ease-in-out 1s infinite;
+}
+
+.memo-oq[data-mode="speaking"] .memo-oq-sticker {
+  animation-duration: 620ms, 0.8s;
+}
+
+@keyframes memo-oq-stamp {
+  0% { opacity: 0; scale: 2.8; }
+  100% { opacity: 1; scale: 1; }
+}
+
+@keyframes memo-oq-wobble {
+  0%, 100% { rotate: -8deg; }
+  50% { rotate: -2deg; }
+}
+
+/* The language picker the link opens on, and the chip on the ready screen that goes back to it. */
+.memo-oq-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 1.15rem;
+  width: min(26rem, 100%);
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: max(1.6rem, var(--memo-safe-top, 0px)) 1rem max(1.6rem, var(--memo-safe-bottom, 0px));
+}
+
+.memo-oq-picker-mascot {
+  position: relative;
+  align-self: center;
+  width: 7.5rem;
+  aspect-ratio: 320 / 288;
+  --memo-shadow: var(--hover-ring);
+}
+
+.memo-oq-picker-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  text-align: center;
+}
+
+.memo-oq-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.memo-oq-lang {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 5.1rem;
+  padding: 0 1.5rem;
+  border: 0;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-align: left;
+}
+
+.memo-oq-lang .msym {
+  color: var(--muted-2);
+}
+
+.memo-oq-lang:hover {
+  box-shadow: var(--shadow), inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-oq-lang:focus-visible,
+.memo-oq-langchip:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow), 0 0 0 3px var(--focus-ring);
+}
+
+.memo-oq-langchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.7rem;
+  margin-top: 0.5rem;
+  padding: 0 1rem 0 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.memo-oq-langchip:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+/*
+ * Side by side, the way the Turbo video has it, from tablet width up rather than from the app's
+ * 1100px: this screen is filmed off a laptop, and a laptop browser window narrower than 1100px (or
+ * the creator's preview pane) must not fall back to the phone strip. Real phones stay stacked.
+ */
+@media (min-width: 640px) {
+  .memo-oq {
+    flex-direction: row;
+    gap: 1.6rem;
+    padding: 1.6rem;
+  }
+
+  .memo-oq-card {
+    flex: 1.35 1 0;
+    max-width: 50rem;
+  }
+
+  .memo-oq-brand {
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0;
+    min-width: 0;
+    padding: 1.2rem 0.5rem 1rem;
+  }
+
+  .memo-oq-stage {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .memo-oq-mascot {
+    width: min(24rem, 76%);
+  }
+
+  .memo-oq-sticker {
+    top: -16%;
+    left: 60%;
+    font-size: clamp(1.85rem, 4.6vw, 4.4rem);
+  }
+}
+
+@media (min-width: 1100px) {
+  .memo-oq {
+    gap: 2rem;
+    padding: 2rem;
+  }
+
+  .memo-oq-head {
+    padding: 1.5rem 1.6rem 1.15rem;
+  }
+
+  .memo-oq-head-lockup {
+    height: 4.2rem;
+  }
+
+  .memo-progress.memo-oq-progress {
+    margin: 0 1.6rem;
+  }
+
+  .memo-oq-body {
+    padding: 2rem 1.6rem 2.4rem;
+  }
+
+  .memo-oq-status {
+    padding: 0 1.6rem;
+  }
+
+  .memo-oq-brand {
+    padding: 1.5rem 0.5rem 1rem;
+  }
+}

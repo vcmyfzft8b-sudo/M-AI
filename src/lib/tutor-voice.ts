@@ -82,16 +82,22 @@ export async function loadTutorGrounding(
   ownedLecture?: { title: string | null; language_hint: string | null },
 ): Promise<TutorGrounding | null> {
   const supabase = createSupabaseServiceRoleClient();
-  const [{ data: artifact }, { data: lecture }] = await Promise.all([
+  const [{ data: artifact, error: artifactError }, { data: lecture, error: lectureError }] = await Promise.all([
     supabase
       .from("lecture_artifacts")
       .select("summary, key_topics, structured_notes_md, model_metadata")
       .eq("lecture_id", lectureId)
       .maybeSingle(),
     ownedLecture
-      ? Promise.resolve({ data: ownedLecture })
+      ? Promise.resolve({ data: ownedLecture, error: null })
       : supabase.from("lectures").select("title, language_hint").eq("id", lectureId).maybeSingle(),
   ]);
+
+  // A failed read is not a missing note. Answering null here told a learner halfway through a
+  // walkthrough of a finished note that it was still being processed (409 tutorNotReady).
+  if (artifactError || lectureError) {
+    throw new Error("Tutor grounding lookup failed", { cause: artifactError ?? lectureError });
+  }
 
   const artifactRow = (artifact ?? null) as {
     summary: string;

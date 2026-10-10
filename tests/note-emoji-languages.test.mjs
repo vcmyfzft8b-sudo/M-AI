@@ -42,3 +42,65 @@ test("a subject with no keyword still gets a stable emoji", () => {
   assert.ok(first.length > 0);
   assert.equal(emojiFor("Nekaj čisto drugega"), first);
 });
+
+/*
+ * Keywords are stems that match where a word starts, not anywhere in the title. Matching anywhere
+ * gave "Article", "Heart" and "Start-ups" the art palette, "Strategija" and "Separation of powers"
+ * the history scroll, and every French Revolution note DNA, because "revolucija" contains
+ * "evolucij". The subject a title is really about must still win in all five languages, including
+ * the compound sciences that start a stem mid-word after a prefix.
+ */
+const SUBJECTS = [
+  ["Zgodovina – francoska revolucija", "📜"],
+  ["Povijest – Francuska revolucija", "📜"],
+  ["Istorija – Francuska revolucija", "📜"],
+  ["History – the French Revolution", "📜"],
+  ["Drugi svjetski rat", "📜"],
+  ["Uzroci rata", "📜"],
+  ["Arts and crafts", "🎨"],
+  ["Umetnost 20. stoletja", "🎨"],
+  ["Microeconomics – supply and demand", "📈"],
+  ["Mikroekonomija – ponuda i tražnja", "📈"],
+  ["Biokemija", "⚗️"],
+  ["Astrofizika", "⚛️"],
+  ["Hidrogeologija", "🌍"],
+  ["Neuroanatomija", "🧠"],
+  ["Bioetika", "🤔"],
+  ["Aritmetika", "➗"],
+  ["Strateški menadžment", "🧭"],
+  ["DNA replication", "🧬"],
+  ["Law of contracts", "⚖️"],
+  ["Romantika v literaturi", "📖"],
+];
+
+for (const [title, emoji] of SUBJECTS) {
+  test(`"${title}" gets ${emoji}`, () => {
+    assert.equal(emojiFor(title), emoji);
+  });
+}
+
+const ACCIDENTS = [
+  ["Article: ERP systems in practice", "🎨"],
+  ["Part 2: Linear algebra", "🎨"],
+  ["Heart physiology", "🎨"],
+  ["Start-ups and venture capital", "🎨"],
+  ["Strategija podjetja", "📜"],
+  ["Separation of powers", "📜"],
+  ["Ratio analysis", "📜"],
+  ["Contest preparation", "📝"],
+  ["Estetika in kozmetika", "🤔"],
+  ["Excellent writing", "🧬"],
+  ["Lawn care", "⚖️"],
+  ["Dnevnik prakse", "🧬"],
+];
+
+for (const [title, wrong] of ACCIDENTS) {
+  test(`"${title}" is not ${wrong}`, () => {
+    assert.notEqual(emojiFor(title), wrong);
+  });
+}
+
+test("the subject still wins when the title starts with something else", () => {
+  assert.equal(emojiFor("Part 2: Linear algebra"), "➗");
+  assert.equal(emojiFor("Uvod v biologijo celice"), "🧬");
+});

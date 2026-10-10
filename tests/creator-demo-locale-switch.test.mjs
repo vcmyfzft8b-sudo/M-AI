@@ -98,3 +98,32 @@ test("the college write-up is the record note, in the reader's language", () => 
     );
   }
 });
+
+test("a study session saved in the old language does not come back over the new one", () => {
+  const storage = () => {
+    const values = new Map();
+    const api = {
+      getItem: (key) => (values.has(key) ? values.get(key) : null),
+      setItem: (key, value) => values.set(key, String(value)),
+      removeItem: (key) => values.delete(key),
+    };
+    // `Object.keys(localStorage)` lists the stored keys in a browser.
+    return new Proxy(api, { ownKeys: () => [...values.keys()], getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }) });
+  };
+
+  globalThis.window = { localStorage: storage(), sessionStorage: storage() };
+
+  try {
+    store.initCreatorDemoState(buildDemoSeed("sl"));
+    store.syncCreatorDemoLocale("sl");
+    window.localStorage.setItem("lecture-study-session:demo-note-mikroekonomija", "{}");
+    window.localStorage.setItem("nota-selected-library-folder:someone-else", "x");
+
+    store.syncCreatorDemoLocale("hr");
+
+    assert.equal(window.localStorage.getItem("lecture-study-session:demo-note-mikroekonomija"), null);
+    assert.equal(window.localStorage.getItem("nota-selected-library-folder:someone-else"), "x");
+  } finally {
+    delete globalThis.window;
+  }
+});

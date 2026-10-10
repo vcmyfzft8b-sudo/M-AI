@@ -163,7 +163,32 @@ export function syncCreatorDemoLocale(locale: Locale) {
   const current = getCreatorDemoState();
 
   if (current.locale !== locale) {
+    forgetDemoStudySessions();
     setState(localizeCreatorDemoState(current, locale));
+  }
+}
+
+/**
+ * The note screen keeps a half-done study session (a practice test's typed
+ * answers, a flashcard run) in localStorage and prefers it over the note it is
+ * handed, so a session started in one language would come back over the note
+ * rewritten in another. Rewriting the library drops them.
+ */
+function forgetDemoStudySessions() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const keys = Object.keys(window.localStorage).filter((key) =>
+      key.startsWith("lecture-study-session:demo-"),
+    );
+
+    for (const key of keys) {
+      window.localStorage.removeItem(key);
+    }
+  } catch {
+    // Storage is a convenience; at worst an old session reappears.
   }
 }
 
@@ -196,7 +221,13 @@ export function hydrateCreatorDemoFromSession() {
     }
 
     // An earlier take in this tab may have been in another language.
-    setState(localizeCreatorDemoState(parsed, getCreatorDemoState().locale));
+    const { locale } = getCreatorDemoState();
+
+    if ((parseLocale(parsed.locale) ?? SOURCE_LOCALE) !== locale) {
+      forgetDemoStudySessions();
+    }
+
+    setState(localizeCreatorDemoState(parsed, locale));
   } catch {
     // A corrupted snapshot just means the demo starts from the seed library.
   }

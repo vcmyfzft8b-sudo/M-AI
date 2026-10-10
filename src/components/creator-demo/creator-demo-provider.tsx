@@ -12,6 +12,7 @@ import {
   hydrateCreatorDemoFromSession,
   initCreatorDemoState,
   subscribeToCreatorDemo,
+  syncCreatorDemoLocale,
   type CreatorDemoState,
 } from "@/lib/creator-demo/store";
 import type { AppLectureListItem, AppLibraryFolder, LectureDetail } from "@/lib/types";
@@ -98,6 +99,14 @@ export function CreatorDemoProvider({
     return uninstallCreatorDemoRuntime;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [basePath]);
+
+  // Picking another language refreshes the page with a seed written in it; the
+  // library this tab has been building follows, so the notes never stay in the
+  // language the app just left. A layout effect, so it lands before the
+  // selectors below re-read the store in their own (passive) effects.
+  useLayoutEffect(() => {
+    syncCreatorDemoLocale(seed.locale);
+  }, [seed.locale]);
 
   return (
     <CreatorDemoBasePathProvider value={basePath}>{children}</CreatorDemoBasePathProvider>

@@ -4,6 +4,7 @@
  * `/creator` page) and on the client (for notes "created" during a recording).
  */
 import type { Json, LectureRow, TranscriptSegmentRow } from "@/lib/database.types";
+import type { Locale } from "@/lib/i18n/locales";
 import { NOTE_DOC_VERSION, type EditableNoteDoc, type NoteMediaAsset } from "@/lib/note-doc";
 import {
   parseNoteTtsDocument,
@@ -19,6 +20,7 @@ import type {
 import {
   DEMO_SEED_FOLDERS,
   DEMO_SEED_NOTES,
+  getDemoContent,
   getDemoNotePack,
   type DemoNotePack,
 } from "@/lib/creator-demo/content";
@@ -122,6 +124,7 @@ export const EMPTY_PRACTICE_TEST_HISTORY: PracticeTestHistorySummary = {
 export function buildDemoLectureRow(params: {
   id: string;
   pack: DemoNotePack;
+  locale: Locale;
   createdAt: string;
   title?: string;
 }): LectureRow {
@@ -138,7 +141,9 @@ export function buildDemoLectureRow(params: {
     processing_metadata: buildProcessingMetadata(params.pack),
     duration_seconds: params.pack.durationSeconds,
     status: "ready",
-    language_hint: "sl",
+    // The note is written in the reader's language, so everything that reads
+    // it — the tutor, read-aloud, the podcast — speaks that language too.
+    language_hint: params.locale,
     error_message: null,
     created_at: params.createdAt,
     updated_at: params.createdAt,
@@ -148,14 +153,16 @@ export function buildDemoLectureRow(params: {
 export function buildDemoLectureDetail(params: {
   id: string;
   packKey: string;
+  locale: Locale;
   createdAt: string;
   title?: string;
 }): LectureDetail {
-  const pack = getDemoNotePack(params.packKey);
+  const pack = getDemoNotePack(params.packKey, params.locale);
   const { id, createdAt } = params;
   const lecture = buildDemoLectureRow({
     id,
     pack,
+    locale: params.locale,
     createdAt,
     title: params.title,
   });
@@ -303,6 +310,8 @@ export function buildDemoLectureDetail(params: {
 }
 
 export type DemoSeed = {
+  /** The language every note in the library is written in. */
+  locale: Locale;
   order: string[];
   details: Record<string, LectureDetail>;
   folders: AppLibraryFolder[];
@@ -310,10 +319,10 @@ export type DemoSeed = {
 };
 
 /**
- * The library every recording starts from. Dates are relative to "now" so the
- * demo never shows a stale-looking list.
+ * The library every recording starts from, in the reader's language. Dates are
+ * relative to "now" so the demo never shows a stale-looking list.
  */
-export function buildDemoSeed(now = Date.now()): DemoSeed {
+export function buildDemoSeed(locale: Locale, now = Date.now()): DemoSeed {
   const order: string[] = [];
   const details: Record<string, LectureDetail> = {};
   const packByLectureId: Record<string, string> = {};
@@ -324,21 +333,23 @@ export function buildDemoSeed(now = Date.now()): DemoSeed {
     details[note.id] = buildDemoLectureDetail({
       id: note.id,
       packKey: note.packKey,
+      locale,
       createdAt,
     });
     packByLectureId[note.id] = note.packKey;
   }
 
   const folderCreatedAt = new Date(now - 12 * DAY_MS).toISOString();
+  const { folderNames } = getDemoContent(locale);
   const folders: AppLibraryFolder[] = DEMO_SEED_FOLDERS.map((folder) => ({
     id: folder.id,
-    name: folder.name,
+    name: folderNames[folder.id] ?? folder.id,
     lectureIds: [...folder.noteIds],
     createdAt: folderCreatedAt,
     updatedAt: folderCreatedAt,
   }));
 
-  return { order, details, folders, packByLectureId };
+  return { locale, order, details, folders, packByLectureId };
 }
 
 /**
@@ -346,7 +357,7 @@ export function buildDemoSeed(now = Date.now()): DemoSeed {
  * recording are unknown to the server and resolve on the client, so there is no
  * reason to build the whole library on every navigation.
  */
-export function buildDemoSeedDetail(lectureId: string, now = Date.now()) {
+export function buildDemoSeedDetail(lectureId: string, locale: Locale, now = Date.now()) {
   const note = DEMO_SEED_NOTES.find((entry) => entry.id === lectureId);
 
   if (!note) {
@@ -356,6 +367,7 @@ export function buildDemoSeedDetail(lectureId: string, now = Date.now()) {
   return buildDemoLectureDetail({
     id: note.id,
     packKey: note.packKey,
+    locale,
     createdAt: new Date(now - note.daysAgo * DAY_MS).toISOString(),
   });
 }

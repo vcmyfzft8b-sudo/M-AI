@@ -844,7 +844,7 @@ async function previewBypassLectureDetail(lectureId: string): Promise<LectureDet
   }
 
   const { buildDemoSeedDetail } = await import("@/lib/creator-demo/build");
-  const detail = buildDemoSeedDetail(PREVIEW_BYPASS_DEMO_NOTE);
+  const detail = buildDemoSeedDetail(PREVIEW_BYPASS_DEMO_NOTE, "sl");
 
   if (!detail) {
     return null;

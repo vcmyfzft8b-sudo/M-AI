@@ -10,8 +10,8 @@ import { getCreatorDemoSeed } from "@/lib/creator-demo/server-seed";
  * same shell, same components — apart from the record flow, which the college
  * base path swaps for the live note-writing takeover.
  */
-export default function CollegeCreatorDemoHomePage() {
-  const seed = getCreatorDemoSeed();
+export default async function CollegeCreatorDemoHomePage() {
+  const seed = await getCreatorDemoSeed();
 
   return (
     <Suspense fallback={<DashboardLoading promoPlaceholder={false} />}>

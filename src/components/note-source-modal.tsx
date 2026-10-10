@@ -16,9 +16,9 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 
-import { CollegeLiveRecording } from "@/components/creator-demo/college-live-recording";
 import {
   useCreatorDemoBasePath,
   useIsCollegeCreatorDemo,
@@ -186,25 +186,36 @@ function sheetDescription() {
 /**
  * Creator demo: each source opens with a file already staged, so a recording
  * can go straight to "Ustvari". These are empty placeholder files — the demo
- * never reads a file's contents, it only shows its name.
+ * never reads a file's contents, it only shows its name, which is in the
+ * reader's language like the note it turns into.
  */
 const DEMO_STAGED_SOURCES = {
   recording: {
-    fileName: "posnetek-predavanje-4.m4a",
+    fileNameKey: "creatorDemo.stagedRecordingFile",
     mimeType: "audio/mp4",
     durationSeconds: 2842,
   },
   audio: {
-    fileName: "Predavanje-mikroekonomija-5.m4a",
+    fileNameKey: "creatorDemo.stagedAudioFile",
     mimeType: "audio/mp4",
     durationSeconds: 2842,
   },
   document: {
-    fileName: "Anatomija-zivcevje-skripta.pdf",
+    fileNameKey: "creatorDemo.stagedDocumentFile",
     mimeType: "application/pdf",
   },
-  link: "https://www.finance.si/erp-sistemi-v-praksi",
+  linkKey: "creatorDemo.stagedArticleLink",
 } as const;
+
+/*
+ * The `/creator/college` record takeover, loaded only when it is used: it carries the demo's
+ * scripted note in all five languages, which no real learner's bundle should pay for.
+ */
+const loadCollegeLiveRecording = () => import("@/components/creator-demo/college-live-recording");
+const CollegeLiveRecording = dynamic(
+  () => loadCollegeLiveRecording().then((module) => module.CollegeLiveRecording),
+  { ssr: false },
+);
 
 function createDemoStagedFile(fileName: string, mimeType: string) {
   return new File([new Uint8Array(0)], fileName, { type: mimeType });
@@ -452,7 +463,7 @@ export function NoteSourceModal({
         current?.origin === origin
           ? current
           : {
-              file: createDemoStagedFile(staged.fileName, staged.mimeType),
+              file: createDemoStagedFile(t(staged.fileNameKey), staged.mimeType),
               durationSeconds: staged.durationSeconds,
               previewUrl: "",
               origin,
@@ -472,7 +483,7 @@ export function NoteSourceModal({
         current || photoSourcesRef.current.length > 0
           ? current
           : createDemoStagedFile(
-              DEMO_STAGED_SOURCES.document.fileName,
+              t(DEMO_STAGED_SOURCES.document.fileNameKey),
               DEMO_STAGED_SOURCES.document.mimeType,
             ),
       );
@@ -480,9 +491,17 @@ export function NoteSourceModal({
     }
 
     if (selectedMode === "link") {
-      setLinkValue((current) => current || DEMO_STAGED_SOURCES.link);
+      setLinkValue((current) => current || t(DEMO_STAGED_SOURCES.linkKey));
     }
-  }, [isCreatorDemo, isRecording, open, selectedMode]);
+  }, [isCreatorDemo, isRecording, open, selectedMode, t]);
+
+  // Warm the college takeover while the sheet is open, so tapping record cuts
+  // straight to it.
+  useEffect(() => {
+    if (open && isCollegeCreatorDemo) {
+      void loadCollegeLiveRecording();
+    }
+  }, [isCollegeCreatorDemo, open]);
 
   const preparedRecording = audioSource?.origin === "recording" ? audioSource : null;
   const preparedUpload = audioSource?.origin === "upload" ? audioSource : null;

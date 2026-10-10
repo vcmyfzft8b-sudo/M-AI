@@ -19,7 +19,15 @@ import type { MindmapDoc } from "@/lib/mindmap-doc";
  * above them; kept as a level of their own they would give every branch of every demo map the
  * same three grey children.
  */
-const SCAFFOLD_HEADINGS = ["glavna ideja", "podrobni zapiski", "main idea", "detailed notes"];
+const SCAFFOLD_HEADINGS = [
+  "glavna ideja",
+  "podrobni zapiski",
+  "detaljne bilješke",
+  "detaljne beleške",
+  "core idea",
+  "main idea",
+  "detailed notes",
+];
 
 const MAX_BRANCHES = 9;
 const MAX_CHILDREN = 6;
@@ -74,7 +82,12 @@ function splitBullet(raw: string): DraftNode {
     : { label: words.slice(0, 6).join(" "), detail: text, children: [] };
 }
 
-export function buildDemoMindmap(params: { notesMd: string; title: string }): MindmapDoc | null {
+export function buildDemoMindmap(params: {
+  notesMd: string;
+  title: string;
+  /** The language the demo note is written in, which is the reader's. */
+  language: string;
+}): MindmapDoc | null {
   const branches: DraftNode[] = [];
   let branch: DraftNode | null = null;
   /** The `###` section currently open, or null while bullets belong straight to the topic. */
@@ -144,7 +157,7 @@ export function buildDemoMindmap(params: { notesMd: string; title: string }): Mi
   return {
     version: 1,
     title: params.title,
-    language: "sl",
+    language: params.language,
     branches: usable.map((entry, branchIndex) => withIds(entry, [branchIndex + 1])),
   };
 }

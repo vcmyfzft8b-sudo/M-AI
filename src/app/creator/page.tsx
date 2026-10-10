@@ -5,8 +5,8 @@ import { DashboardLoading } from "@/components/dashboard-loading";
 import { toLectureListItems } from "@/lib/creator-demo/build";
 import { getCreatorDemoSeed } from "@/lib/creator-demo/server-seed";
 
-export default function CreatorDemoHomePage() {
-  const seed = getCreatorDemoSeed();
+export default async function CreatorDemoHomePage() {
+  const seed = await getCreatorDemoSeed();
 
   return (
     <Suspense fallback={<DashboardLoading promoPlaceholder={false} />}>

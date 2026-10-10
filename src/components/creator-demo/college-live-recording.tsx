@@ -20,16 +20,16 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 
 import { BrandLogo } from "@/components/brand-logo";
-import { useT } from "@/components/i18n-provider";
+import { useTranslations } from "@/components/i18n-provider";
 import { CollegeRainbowWave } from "@/components/creator-demo/college-rainbow-wave";
 import { ViewportPortal } from "@/components/viewport-portal";
 import {
-  LIVE_NOTE_HIGHLIGHTS,
-  LIVE_NOTE_SEGMENTS,
+  getLiveNoteScript,
   LIVE_NOTE_STATUS_STEP_KEYS,
-  LIVE_NOTE_TITLE,
+  type LiveNoteScript,
   type LiveNoteSegment,
 } from "@/lib/creator-demo/college-live-note";
+import type { Locale } from "@/lib/i18n/locales";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { mapAppHref } from "@/lib/creator-demo/paths";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
@@ -86,12 +86,12 @@ type RevealStep = { at: number; chars: number };
  * Blocks matter for two reasons: a finished block never re-parses (see
  * `MarkdownBlock`), and a figure only appears once its anchor block is written.
  */
-function buildBlocks() {
+function buildBlocks(segments: LiveNoteSegment[]) {
   const blocks: LiveBlock[] = [];
   let text = "";
   let cursor = 0;
 
-  for (const segment of LIVE_NOTE_SEGMENTS) {
+  for (const segment of segments) {
     if (segment.kind === "figure") {
       blocks.push({ kind: "figure", segment, at: cursor });
       continue;
@@ -186,15 +186,48 @@ function splitWords(text: string) {
   return words;
 }
 
-const SCRIPT = buildBlocks();
-const SCHEDULE = buildSchedule(SCRIPT.blocks);
-const SCRIPT_DURATION_MS = SCHEDULE[SCHEDULE.length - 1]?.at ?? 0;
+/** The whole playback in one language: what is written, and when. */
+type LivePlayback = {
+  script: LiveNoteScript;
+  blocks: LiveBlock[];
+  totalChars: number;
+  schedule: RevealStep[];
+  durationMs: number;
+};
+
+const playbacks = new Map<Locale, LivePlayback>();
+
+/**
+ * Built once per language and kept: the schedule walks every word of the note,
+ * and a stable object per language keeps the memoised blocks below stable too.
+ */
+function getLivePlayback(locale: Locale): LivePlayback {
+  const cached = playbacks.get(locale);
+
+  if (cached) {
+    return cached;
+  }
+
+  const script = getLiveNoteScript(locale);
+  const { blocks, totalChars } = buildBlocks(script.segments);
+  const schedule = buildSchedule(blocks);
+  const playback = {
+    script,
+    blocks,
+    totalChars,
+    schedule,
+    durationMs: schedule[schedule.length - 1]?.at ?? 0,
+  };
+
+  playbacks.set(locale, playback);
+  return playback;
+}
 
 /** How many characters are written by `elapsed` milliseconds into the playback. */
-function charsWrittenAt(elapsed: number) {
+function charsWrittenAt(schedule: RevealStep[], elapsed: number) {
   let chars = 0;
 
-  for (const step of SCHEDULE) {
+  for (const step of schedule) {
     if (step.at > elapsed) {
       break;
     }
@@ -222,7 +255,7 @@ const HEAD_START_MS = 15_000;
  * rolled over hast rather than pulled from a util, because it only ever walks
  * text nodes and splits them.
  */
-function rehypeHighlightKeyPhrases() {
+function rehypeHighlightKeyPhrases({ highlights }: { highlights: LiveNoteScript["highlights"] }) {
   return (tree: HastParent) => {
     visit(tree);
   };
@@ -246,20 +279,20 @@ function rehypeHighlightKeyPhrases() {
         continue;
       }
 
-      next.push(...splitHighlights(child.value));
+      next.push(...splitHighlights(child.value, highlights));
     }
 
     node.children = next;
   }
 }
 
-function splitHighlights(value: string): HastNode[] {
+function splitHighlights(value: string, highlights: LiveNoteScript["highlights"]): HastNode[] {
   // Earliest match wins, not first-in-list: the phrase order in the script is
   // editorial, and taking them out of document order would split a text node
   // around a later phrase and lose an earlier one inside the head.
   let match: { phrase: string; color: string; at: number } | null = null;
 
-  for (const candidate of LIVE_NOTE_HIGHLIGHTS) {
+  for (const candidate of highlights) {
     const at = value.indexOf(candidate.phrase);
 
     if (at >= 0 && (!match || at < match.at)) {
@@ -287,7 +320,7 @@ function splitHighlights(value: string): HastNode[] {
   });
 
   // The tail can hold another phrase, so it goes back through the same split.
-  parts.push(...splitHighlights(value.slice(match.at + match.phrase.length)));
+  parts.push(...splitHighlights(value.slice(match.at + match.phrase.length), highlights));
 
   return parts.filter((part) => part.type !== "text" || part.value !== "");
 }
@@ -330,13 +363,19 @@ const NOTE_MARKDOWN_COMPONENTS = {
  * One block of the note. Memoised on its text, so a finished block stops
  * re-parsing and only the block under the cursor costs anything.
  */
-const MarkdownBlock = memo(function MarkdownBlock({ text }: { text: string }) {
+const MarkdownBlock = memo(function MarkdownBlock({
+  text,
+  highlights,
+}: {
+  text: string;
+  highlights: LiveNoteScript["highlights"];
+}) {
   return (
     <ReactMarkdown
       // Same math contract as MarkdownRenderer: no single-dollar math (currency amounts pair up
       // and explode tables), inline math arrives as \(...\) and is normalised to $$...$$.
       remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: false }]]}
-      rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: "ignore", errorColor: "inherit" }], rehypeHighlightKeyPhrases]}
+      rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: "ignore", errorColor: "inherit" }], [rehypeHighlightKeyPhrases, { highlights }]]}
       components={NOTE_MARKDOWN_COMPONENTS}
     >
       {normalizeMathDelimiters(text)}
@@ -366,21 +405,24 @@ export function CollegeLiveRecording({
   basePath: string | null;
   onClose: () => void;
 }) {
-  const t = useT();
+  const { t, locale } = useTranslations();
   const router = useRouter();
   const isDesktop = useIsDesktop();
+  const playback = getLivePlayback(locale);
   const noteScrollRef = useRef<HTMLDivElement | null>(null);
   const pendingLectureRef = useRef<{ id: string; commit: () => string } | null>(null);
   const followScrollRef = useRef(true);
 
-  const [typedChars, setTypedChars] = useState(() => charsWrittenAt(HEAD_START_MS));
+  const [typedChars, setTypedChars] = useState(() =>
+    charsWrittenAt(playback.schedule, HEAD_START_MS),
+  );
   const [elapsedSeconds, setElapsedSeconds] = useState(() =>
     Math.round(HEAD_START_MS / 1000),
   );
   const [statusStep, setStatusStep] = useState(0);
   const [finishStage, setFinishStage] = useState<MessageKey | null>(null);
 
-  const isComplete = typedChars >= SCRIPT.totalChars;
+  const isComplete = typedChars >= playback.totalChars;
 
   // Stage the note up front and warm its route, so stopping the recording is a
   // single cut into the finished note with no loading screen in between.
@@ -428,6 +470,7 @@ export function CollegeLiveRecording({
     // Rewind the clock by the head start, so playback continues from the text
     // that is already on screen instead of rewriting it.
     const startedAt = performance.now() - HEAD_START_MS;
+    const { schedule, durationMs } = playback;
     let stepIndex = 0;
 
     // An interval rather than a frame loop: reveals are word-sized, so 20 checks
@@ -437,24 +480,24 @@ export function CollegeLiveRecording({
     const intervalId = window.setInterval(() => {
       const elapsed = performance.now() - startedAt;
 
-      while (stepIndex + 1 < SCHEDULE.length && SCHEDULE[stepIndex + 1].at <= elapsed) {
+      while (stepIndex + 1 < schedule.length && schedule[stepIndex + 1].at <= elapsed) {
         stepIndex += 1;
       }
 
-      setTypedChars(SCHEDULE[stepIndex].chars);
+      setTypedChars(schedule[stepIndex].chars);
 
-      if (elapsed >= SCRIPT_DURATION_MS) {
+      if (elapsed >= durationMs) {
         window.clearInterval(intervalId);
       }
     }, TYPING_TICK_MS);
 
     return () => window.clearInterval(intervalId);
-  }, [finishStage, isDesktop]);
+  }, [finishStage, isDesktop, playback]);
 
   const visibleBlocks = useMemo(() => {
     const rendered: Array<{ key: string; node: LiveBlock; text?: string }> = [];
 
-    for (const [index, block] of SCRIPT.blocks.entries()) {
+    for (const [index, block] of playback.blocks.entries()) {
       if (block.kind === "figure") {
         if (typedChars >= block.at) {
           rendered.push({ key: `figure-${index}`, node: block });
@@ -476,7 +519,7 @@ export function CollegeLiveRecording({
     }
 
     return rendered;
-  }, [typedChars]);
+  }, [playback, typedChars]);
 
   const visibleFigureCount = visibleBlocks.filter((entry) => entry.node.kind === "figure").length;
 
@@ -610,7 +653,7 @@ export function CollegeLiveRecording({
                                 style, sitting on the page the way a document
                                 heading does — no date, no tab strip. */}
                             <h1 className="ios-large-title college-live-note-title">
-                              {LIVE_NOTE_TITLE}
+                              {playback.script.title}
                             </h1>
                             {visibleBlocks.map((entry) =>
                               entry.node.kind === "figure" ? (
@@ -640,7 +683,11 @@ export function CollegeLiveRecording({
                                   </figcaption>
                                 </figure>
                               ) : (
-                                <MarkdownBlock key={entry.key} text={entry.text ?? ""} />
+                                <MarkdownBlock
+                                  key={entry.key}
+                                  text={entry.text ?? ""}
+                                  highlights={playback.script.highlights}
+                                />
                               ),
                             )}
                           </div>

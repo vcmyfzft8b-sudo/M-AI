@@ -12,12 +12,20 @@
  * pulls them all forward. None of that touches the shared content pack, so
  * `/creator` is unaffected.
  *
+ * It is written in the reader's language, like the rest of the demo.
+ *
  * Nothing here is generated at runtime and nothing is transcribed: this is a
  * scripted playback for video, and it only exists under `/creator/college`.
  */
+import type { Locale } from "@/lib/i18n/locales";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 
-import { DEMO_CREATE_PACKS, getDemoNotePack } from "@/lib/creator-demo/content";
+import {
+  DEMO_CREATE_PACKS,
+  getDemoContent,
+  getDemoNotePack,
+  type DemoLocaleContent,
+} from "@/lib/creator-demo/content";
 
 export type LiveNoteSegment =
   | { kind: "markdown"; text: string }
@@ -25,112 +33,47 @@ export type LiveNoteSegment =
 
 const RECORD_PACK_KEY = DEMO_CREATE_PACKS.record[0];
 
-type LiveFigure = {
-  file: string;
-  fileName: string;
-  alt: string;
-  /** A distinctive phrase; the figure lands at the end of that paragraph. */
-  anchor: string;
+/**
+ * The figures and highlights themselves are per language (`liveFigures` and
+ * `liveHighlights` in `./locales`), because both are anchored to phrases in
+ * the note's own text.
+ *
+ * Figures: every figure the write-up shows, in note order. The first two are
+ * the pack's own, re-anchored to the opening so a short clip still catches
+ * one; the rest exist only here, so a long take keeps getting something new to
+ * land. Seven across the note means roughly one every section.
+ *
+ * Highlights: phrases the app marks as it writes them, with the colour it
+ * reaches for. Matched against the rendered text, so a highlight can only
+ * appear once its phrase is fully written — which is what makes it read as the
+ * app deciding that line mattered, rather than as formatting that was always
+ * there. Kept deliberately short — eight lines across the whole note. A
+ * marked-up page only reads as "these are the bits that matter" while most of
+ * it is unmarked. Two colours carry the distinction: green for what a thing
+ * *is* (definitions, conditions) and purple for what it *does* (mechanisms and
+ * the exam traps). Every phrase occurs exactly once in its language's note
+ * (`tests/creator-demo-locales.test.mjs`), so none can mis-mark or go missing.
+ */
+export type LiveNoteScript = {
+  title: string;
+  segments: LiveNoteSegment[];
+  highlights: DemoLocaleContent["liveHighlights"];
+  /** Total characters of markdown, so the typing engine can report progress. */
+  totalChars: number;
 };
-
-/**
- * Every figure the write-up shows, in note order. The first two are the pack's
- * own, re-anchored to the opening so a short clip still catches one; the rest
- * exist only here, so a long take keeps getting something new to land. Seven
- * across the note means roughly one every section.
- */
-const LIVE_FIGURES: LiveFigure[] = [
-  {
-    file: "ponudba-povprasevanje.svg",
-    fileName: "graf-ravnovesje.png",
-    alt: "Graf ponudbe in povpraševanja z ravnovesno točko",
-    anchor: "Ko se spremeni katerikoli dejavnik razen cene",
-  },
-  {
-    file: "elasticnost.svg",
-    fileName: "elasticnost-primerjava.png",
-    alt: "Primerjava elastičnega in neelastičnega povpraševanja",
-    anchor: "Elastičnost meri občutljivost količine na spremembo cene",
-  },
-  {
-    file: "premik-krivulje.svg",
-    fileName: "premik-povprasevanja.png",
-    alt: "Premik krivulje povpraševanja v desno in novo ravnovesje",
-    anchor: "Krivulja povpraševanja pada, ker vsaka dodatna enota",
-  },
-  {
-    file: "substituti-komplementi.svg",
-    fileName: "substituti-in-komplementi.png",
-    alt: "Substituti se nadomeščata, komplementa se uporabljata skupaj",
-    anchor: "dobrini, ki se med seboj nadomeščata",
-  },
-  {
-    file: "premik-ponudbe.svg",
-    fileName: "premik-ponudbe.png",
-    alt: "Premik krivulje ponudbe v desno zaradi nižjih stroškov",
-    anchor: "Stroški dela in surovin premaknejo krivuljo ponudbe",
-  },
-  {
-    file: "presezek-primanjkljaj.svg",
-    fileName: "presezek-in-primanjkljaj.png",
-    alt: "Presežek ponudbe nad ravnovesno ceno in primanjkljaj pod njo",
-    anchor: "Če je cena previsoka, ostane blago neprodano",
-  },
-  {
-    file: "prihodek-elasticnost.svg",
-    fileName: "prihodek-in-elasticnost.png",
-    alt: "Skupni prihodek je najvišji tam, kjer je elastičnost enaka 1",
-    anchor: "Kadar je rezultat po absolutni vrednosti večji od 1",
-  },
-];
-
-export type LiveHighlightColor = "green" | "purple";
-
-/**
- * Phrases the app marks as it writes them, with the colour it reaches for.
- *
- * Matched against the rendered text, so a highlight can only appear once its
- * phrase is fully written — which is what makes it read as the app deciding
- * that line mattered, rather than as formatting that was always there.
- *
- * Kept deliberately short — eight lines across the whole note. A marked-up page
- * only reads as "these are the bits that matter" while most of it is unmarked;
- * past that it just looks like decoration.
- *
- * Two colours carry the distinction: green for what a thing *is* (definitions,
- * conditions) and purple for what it *does* (mechanisms and the exam traps).
- * Every phrase is verified to occur exactly once in the pack's markdown, so
- * none of them can silently mis-mark or go missing.
- */
-export const LIVE_NOTE_HIGHLIGHTS: Array<{ phrase: string; color: LiveHighlightColor }> = [
-  { phrase: "Ta točka je tržno ravnovesje", color: "green" },
-  { phrase: "Cena ne premakne krivulje", color: "purple" },
-  { phrase: "Povpraševana količina je količina pri eni sami ceni", color: "green" },
-  {
-    phrase: "Ravnovesje je edina cena, pri kateri ni ne presežka ne primanjkljaja",
-    color: "green",
-  },
-  { phrase: "Premik po krivulji sproži samo sprememba cene", color: "purple" },
-  { phrase: "malo substitutov, kratek rok, nujne dobrine", color: "green" },
-  { phrase: "prihodek je največji tam, kjer je elastičnost enaka 1", color: "purple" },
-  {
-    phrase:
-      "Najpogostejša napaka na izpitu je zamenjava premika krivulje s premikom po krivulji",
-    color: "purple",
-  },
-];
 
 /**
  * Splits the note markdown at each figure's anchor phrase, so a figure lands
  * under the paragraph it belongs to. An anchor that no longer matches is
  * dropped rather than silently moving its figure.
  */
-function buildSegments(): LiveNoteSegment[] {
-  const pack = getDemoNotePack(RECORD_PACK_KEY);
-  const anchors = LIVE_FIGURES.map((figure) => ({
-    figure,
-    index: pack.notesMd.indexOf(figure.anchor),
-  }))
+function buildSegments(locale: Locale): LiveNoteSegment[] {
+  const pack = getDemoNotePack(RECORD_PACK_KEY, locale);
+  const anchors = getDemoContent(locale)
+    .liveFigures.map((figure) => ({
+      figure,
+      index: pack.notesMd.indexOf(figure.anchor),
+    }))
     .filter((entry) => entry.index >= 0)
     .sort((a, b) => a.index - b.index);
 
@@ -166,15 +109,30 @@ function buildSegments(): LiveNoteSegment[] {
   );
 }
 
-export const LIVE_NOTE_SEGMENTS = buildSegments();
+const scripts = new Map<Locale, LiveNoteScript>();
 
-export const LIVE_NOTE_TITLE = getDemoNotePack(RECORD_PACK_KEY).title;
+/** The write-up in `locale`, built once per language and then reused. */
+export function getLiveNoteScript(locale: Locale): LiveNoteScript {
+  const cached = scripts.get(locale);
 
-/** Total characters of markdown, so the typing engine can report progress. */
-export const LIVE_NOTE_TOTAL_CHARS = LIVE_NOTE_SEGMENTS.reduce(
-  (total, segment) => total + (segment.kind === "markdown" ? segment.text.length : 0),
-  0,
-);
+  if (cached) {
+    return cached;
+  }
+
+  const segments = buildSegments(locale);
+  const script: LiveNoteScript = {
+    title: getDemoNotePack(RECORD_PACK_KEY, locale).title,
+    segments,
+    highlights: getDemoContent(locale).liveHighlights,
+    totalChars: segments.reduce(
+      (total, segment) => total + (segment.kind === "markdown" ? segment.text.length : 0),
+      0,
+    ),
+  };
+
+  scripts.set(locale, script);
+  return script;
+}
 
 /**
  * Captions under the wave, replayed on a loop so the stage always reads as

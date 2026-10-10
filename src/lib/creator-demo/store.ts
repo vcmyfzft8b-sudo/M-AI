@@ -8,6 +8,9 @@
  *
  * State survives client navigation and reloads within the tab (sessionStorage)
  * and resets when the tab is closed.
+ *
+ * The library is written in one language at a time — the reader's — and
+ * follows them when they switch: see `localizeCreatorDemoState`.
  */
 import type { FlashcardConfidenceBucket } from "@/lib/database.types";
 import { demoT } from "@/lib/creator-demo/demo-translator";
@@ -20,9 +23,12 @@ import {
 } from "@/lib/creator-demo/build";
 import {
   DEMO_CREATE_PACKS,
+  DEMO_SEED_FOLDERS,
+  getDemoContent,
   getDemoNotePack,
   type DemoNotePack,
 } from "@/lib/creator-demo/content";
+import { DEFAULT_LOCALE, SOURCE_LOCALE, parseLocale, type Locale } from "@/lib/i18n/locales";
 import type { EditableNoteDoc } from "@/lib/note-doc";
 import { parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import { remapNoteAnnotations, replaceNoteWord, replaceNoteWordInJson } from "@/lib/note-word-fix";
@@ -82,10 +88,83 @@ export function initCreatorDemoState(seed: CreatorDemoState) {
 
 export function getCreatorDemoState(): CreatorDemoState {
   if (!state) {
-    state = buildDemoSeed();
+    state = buildDemoSeed(DEFAULT_LOCALE);
   }
 
   return state;
+}
+
+/**
+ * The same library, written in another language.
+ *
+ * Notes keep their ids, dates, folders and any title the creator typed; what
+ * the notes *say* — the note, cards, quiz, test, transcript — is rebuilt from
+ * the pack in the new language. Study progress and hand-made cards on those
+ * notes go with the old text: they were answers to questions that no longer
+ * read the same.
+ *
+ * A snapshot saved before the demo had languages carries no `locale`, and was
+ * Slovenian.
+ */
+export function localizeCreatorDemoState(
+  source: CreatorDemoState,
+  locale: Locale,
+): CreatorDemoState {
+  const previous = parseLocale(source.locale) ?? SOURCE_LOCALE;
+
+  if (previous === locale) {
+    return source.locale === locale ? source : { ...source, locale };
+  }
+
+  const details: CreatorDemoState["details"] = {};
+
+  for (const [id, detail] of Object.entries(source.details)) {
+    const packKey = source.packByLectureId[id];
+
+    if (!packKey) {
+      details[id] = detail;
+      continue;
+    }
+
+    const authoredTitle = getDemoNotePack(packKey, previous).title;
+    const title = detail.lecture.title?.trim();
+
+    details[id] = buildDemoLectureDetail({
+      id,
+      packKey,
+      locale,
+      createdAt: detail.lecture.created_at,
+      title: title && title !== authoredTitle ? title : undefined,
+    });
+  }
+
+  const previousNames = getDemoContent(previous).folderNames;
+  const nextNames = getDemoContent(locale).folderNames;
+  const seededFolderIds = new Set(DEMO_SEED_FOLDERS.map((folder) => folder.id));
+
+  return {
+    ...source,
+    locale,
+    details,
+    folders: source.folders.map((folder) =>
+      seededFolderIds.has(folder.id) && folder.name === previousNames[folder.id]
+        ? { ...folder, name: nextNames[folder.id] ?? folder.name }
+        : folder,
+    ),
+  };
+}
+
+/**
+ * Brings the library into the language the page is now rendered in — after
+ * the creator picks another language, the server re-renders with a seed in
+ * that language and this follows it.
+ */
+export function syncCreatorDemoLocale(locale: Locale) {
+  const current = getCreatorDemoState();
+
+  if (current.locale !== locale) {
+    setState(localizeCreatorDemoState(current, locale));
+  }
 }
 
 export function subscribeToCreatorDemo(listener: () => void) {
@@ -116,7 +195,8 @@ export function hydrateCreatorDemoFromSession() {
       return;
     }
 
-    setState(parsed);
+    // An earlier take in this tab may have been in another language.
+    setState(localizeCreatorDemoState(parsed, getCreatorDemoState().locale));
   } catch {
     // A corrupted snapshot just means the demo starts from the seed library.
   }
@@ -152,7 +232,7 @@ export function resetCreatorDemo() {
   }
 
   createCounter = 0;
-  setState(buildDemoSeed());
+  setState(buildDemoSeed(getCreatorDemoState().locale));
 }
 
 export function getDemoLectures(): AppLectureListItem[] {
@@ -168,7 +248,8 @@ export function getDemoLectureDetail(lectureId: string): LectureDetail | null {
 }
 
 function getPack(lectureId: string): DemoNotePack {
-  return getDemoNotePack(getCreatorDemoState().packByLectureId[lectureId] ?? "");
+  const current = getCreatorDemoState();
+  return getDemoNotePack(current.packByLectureId[lectureId] ?? "", current.locale);
 }
 
 function updateDetail(
@@ -229,7 +310,7 @@ export function prepareDemoLecture(kind: DemoCreateKind) {
         order: [id, ...current.order],
         details: {
           ...current.details,
-          [id]: buildDemoLectureDetail({ id, packKey, createdAt }),
+          [id]: buildDemoLectureDetail({ id, packKey, locale: current.locale, createdAt }),
         },
         packByLectureId: { ...current.packByLectureId, [id]: packKey },
       });

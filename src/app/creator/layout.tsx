@@ -30,9 +30,10 @@ export default async function CreatorDemoLayout({
 }) {
   const pathname = (await headers()).get("x-pathname") ?? "/creator";
   const basePath = resolveCreatorDemoBasePath(pathname);
+  const seed = await getCreatorDemoSeed();
 
   return (
-    <CreatorDemoProvider seed={getCreatorDemoSeed()} basePath={basePath}>
+    <CreatorDemoProvider seed={seed} basePath={basePath}>
       <NavigationFeedbackProvider>
         <AppShell hasPaidAccess initialPathname={pathname} className="creator-demo-shell">
           {children}

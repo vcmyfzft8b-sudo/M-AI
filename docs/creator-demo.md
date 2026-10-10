@@ -6,6 +6,24 @@ production, but there is no account, no upload and no AI.
 Open `https://memoai.eu/creator` (or `http://localhost:3000/creator`). No login,
 no paywall, nothing to set up.
 
+## Languages
+
+The demo runs in all five app languages — Slovenian, English, Croatian,
+Bosnian and Serbian — and the **notes follow the app**: the note text, summary,
+flashcards, quiz, practice test, transcript, chat answers, folder names,
+figures, podcast script and the college live write-up are all in the same
+language as the interface around them.
+
+The language is decided exactly like the rest of the site: the language the
+visitor picked (the `memo-locale` cookie), otherwise the country they are in
+(Slovenia → Slovenian, Croatia → Croatian, Bosnia and Herzegovina → Bosnian,
+Serbia → Serbian), otherwise English. A creator in Serbia opening `/creator`
+gets a Serbian app with Serbian notes without touching anything.
+
+Switching language in Nastavitve re-writes the library in the new language on
+the spot. Notes created during the take stay (with any title the creator
+typed); their study progress resets, since the questions now read differently.
+
 ## What works
 
 - **Library** — starts with four ready notes (audio lecture, PDF script, web
@@ -48,16 +66,27 @@ no paywall, nothing to set up.
 ## Changing the demo content
 
 All of it — notes, flashcards, quiz, practice questions, transcript, chat
-answers — lives in [`src/lib/creator-demo/content.ts`](../src/lib/creator-demo/content.ts).
-Note markdown follows the same "Structured Plus" format the real generator
-produces, so edits render exactly like production notes.
+answers, folder names, the podcast script and the college write-up's figures
+and highlights — lives in
+[`src/lib/creator-demo/locales/`](../src/lib/creator-demo/locales), one file per
+language. `sl.ts` is the source; the other four are translations of it with the
+same structure (same notes, same number of cards and questions in the same
+places). **An edit to one language is an edit to all five** —
+`tests/creator-demo-locales.test.mjs` fails if they drift apart, if an anchor
+stops matching, or if a copy is not written in its language.
 
-Figures are SVGs in `public/creator-demo/`, attached through each pack's
-`images` array. `afterText` is a phrase from the paragraph the figure should sit
-under, so rewording the notes can't silently detach an image.
+Note markdown follows the same "Structured Plus" format, with the same section
+headings per language, that the real generator produces (`getStructuredPlusLabels`),
+so edits render exactly like production notes.
 
-The file names that come pre-staged in the create sheet are
-`DEMO_STAGED_SOURCES` in
+Figures are SVGs in `public/creator-demo/` (Slovenian) and
+`public/creator-demo/<language>/` (translated labels), attached through each
+pack's `images` array. `afterText` is a phrase from the paragraph the figure
+should sit under, so rewording the notes can't silently detach an image.
+
+The file names and the article link that come pre-staged in the create sheet
+are ordinary catalogue strings (`creatorDemo.staged*` in
+`src/lib/i18n/messages/`), read by `DEMO_STAGED_SOURCES` in
 [`src/components/note-source-modal.tsx`](../src/components/note-source-modal.tsx).
 
 ## How it works

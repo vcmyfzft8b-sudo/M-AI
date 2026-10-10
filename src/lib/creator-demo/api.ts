@@ -10,6 +10,7 @@
  * the middle of a recording.
  */
 import { buildNoteTtsChunks, parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
+import { getDemoContent } from "@/lib/creator-demo/content";
 import { buildDemoMindmap } from "@/lib/creator-demo/mindmap";
 import { demoT } from "@/lib/creator-demo/demo-translator";
 import type { EditableNoteDoc } from "@/lib/note-doc";
@@ -439,6 +440,7 @@ async function handleLectureRoute(
           ? buildDemoMindmap({
               notesMd: detail.artifact?.structured_notes_md ?? "",
               title: detail.lecture.title ?? "",
+              language: getCreatorDemoState().locale,
             })
           : null;
 
@@ -561,26 +563,24 @@ async function handleFolderRoute(
 }
 
 /*
- * A demo episode: written once, spoken with clips that already ship.
+ * A demo episode: written once per language (`podcastTurns` in `./locales`), spoken with clips
+ * that already ship for that language.
  *
  * The turns are short and generic on purpose. They have to read as two people talking about
  * a note without knowing which note, because the demo carries four of them and writing four
  * scripts would be writing the feature rather than showing it.
  */
-const DEMO_PODCAST_TURNS: Array<{ speaker: "a" | "b"; text: string }> = [
-  { speaker: "a", text: "Pa poglejva ta zapisek — kaj je tisto, kar si moraš zares zapomniti?" },
-  { speaker: "b", text: "Najprej okvir: brez njega so posamezni podatki samo seznam." },
-  { speaker: "a", text: "Se pravi, da najprej razumeš, čemu služi, in šele nato podrobnosti." },
-  { speaker: "b", text: "Točno. In ko to enkrat sedi, si podrobnosti zapomniš skoraj same od sebe." },
-  { speaker: "a", text: "Dobro. Vzemiva zdaj po vrsti in preveriva, kje se najpogosteje zatakne." },
-  { speaker: "b", text: "Prav. In na koncu povzameva v enem stavku, da ti ostane za izpit." },
-];
+function demoPodcastScript() {
+  const { locale } = getCreatorDemoState();
+  return { language: locale, turns: getDemoContent(locale).podcastTurns };
+}
 
 /** Roughly what a turn of this length takes to say, so the transport has something to show. */
 const DEMO_PODCAST_SEGMENT_MS = 7_000;
 
 function demoPodcastPayload(lectureId: string) {
   const detail = getCreatorDemoState().details[lectureId];
+  const { language, turns } = demoPodcastScript();
 
   return {
     id: `demo-podcast-${lectureId}`,
@@ -588,9 +588,9 @@ function demoPodcastPayload(lectureId: string) {
     title: detail?.lecture?.title ?? null,
     format: "deep_dive",
     length: "standard",
-    language: "sl",
-    turns: DEMO_PODCAST_TURNS,
-    readySegments: DEMO_PODCAST_TURNS.map((_, segmentIndex) => ({
+    language,
+    turns,
+    readySegments: turns.map((_, segmentIndex) => ({
       segmentIndex,
       durationMs: DEMO_PODCAST_SEGMENT_MS,
     })),
@@ -626,13 +626,14 @@ async function handleDemoPodcastRoute(
   if (action === "segments") {
     const body = await readJsonBody(init, input);
     const segmentIndex = typeof body.segmentIndex === "number" ? body.segmentIndex : 0;
-    const speaker = DEMO_PODCAST_TURNS[segmentIndex]?.speaker ?? "a";
+    const { language, turns } = demoPodcastScript();
+    const speaker = turns[segmentIndex]?.speaker ?? "a";
     const voice = typeof body[speaker === "a" ? "voiceA" : "voiceB"] === "string"
       ? (body[speaker === "a" ? "voiceA" : "voiceB"] as string)
       : "Grace";
 
     return json({
-      audioUrl: `/tutor-demo/sl/${voice.toLowerCase()}-podcast.mp3`,
+      audioUrl: `/tutor-demo/${language}/${voice.toLowerCase()}-podcast.mp3`,
       durationMs: DEMO_PODCAST_SEGMENT_MS,
     });
   }
@@ -652,7 +653,7 @@ async function handleDemoPodcastRoute(
   return json({
     available: true,
     reason: null,
-    language: "sl",
+    language: podcast.language,
     podcast,
     episodes: [
       {
@@ -661,13 +662,13 @@ async function handleDemoPodcastRoute(
         length: podcast.length,
         language: podcast.language,
         title: podcast.title,
-        turnCount: DEMO_PODCAST_TURNS.length,
+        turnCount: podcast.turns.length,
         estimatedSeconds: Math.round(
-          (DEMO_PODCAST_TURNS.length * DEMO_PODCAST_SEGMENT_MS) / 1000,
+          (podcast.turns.length * DEMO_PODCAST_SEGMENT_MS) / 1000,
         ),
         createdAt: new Date().toISOString(),
         positionMs: 0,
-        durationMs: DEMO_PODCAST_TURNS.length * DEMO_PODCAST_SEGMENT_MS,
+        durationMs: podcast.turns.length * DEMO_PODCAST_SEGMENT_MS,
         finished: false,
       },
     ],

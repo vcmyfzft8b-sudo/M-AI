@@ -21,8 +21,8 @@ export type ShowcaseVideo = {
   views: number;
 };
 
-const SHOWCASE_SIZE = 10;
-const PER_CREATOR = 2;
+const SHOWCASE_SIZE = 16;
+const PER_CREATOR = 3;
 
 type VideoRow = {
   platform_video_id: string;
@@ -59,7 +59,7 @@ async function loadShowcaseVideos(): Promise<ShowcaseVideo[]> {
     .eq("creator.kind", "creator")
     .neq("creator.status", "archived")
     .order("views", { ascending: false })
-    .limit(60);
+    .limit(120);
 
   if (error || !data) {
     throw new Error(`Showcase videos could not be read: ${error?.message ?? "no data"}`);
@@ -95,7 +95,7 @@ async function loadShowcaseVideos(): Promise<ShowcaseVideo[]> {
   return found;
 }
 
-const cachedShowcaseVideos = unstable_cache(loadShowcaseVideos, ["ugc-creator-showcase-v1"], {
+const cachedShowcaseVideos = unstable_cache(loadShowcaseVideos, ["ugc-creator-showcase-v2"], {
   revalidate: 6 * 60 * 60,
 });
 

@@ -95,12 +95,14 @@ export function marketForCountry(country: string | null | undefined): CreatorMar
 }
 
 /**
- * The campaign a visitor is shown: their IP country when it is one of ours, otherwise the
- * language they read the page in (a Croatian, Bosnian or Serbian reader abroad is a
- * Balkan creator; anyone else gets Slovenia). There is no switch on the page.
+ * The campaign a visitor is shown, from their IP country and nothing else: a Balkan IP
+ * gets the Balkan program, every other visitor — Slovenia, anywhere else, or no country
+ * at all — gets Slovenia. Nothing the visitor controls (language, cookies, the URL)
+ * moves them across, so a Slovenian creator cannot reach the Balkan page by switching
+ * the page to Croatian.
  */
-export function defaultMarket(country: string | null | undefined, locale: string): CreatorMarket {
-  return marketForCountry(country) ?? (locale === "hr" || locale === "bs" || locale === "sr" ? "balkans" : "si");
+export function defaultMarket(country: string | null | undefined): CreatorMarket {
+  return marketForCountry(country) ?? "si";
 }
 
 export type EarningsEstimate = {

@@ -14,9 +14,11 @@ see in the admin which post brought each applicant).
 | Paid videos per month | 60 | 60 |
 | Discord | discord.gg/4mae76zNhj ("UGC Memo AI +") | discord.gg/Dur6dfF2qD ("UGC Memo AI - Balkan") |
 
-- The campaign is picked **on the server** from the IP country (`x-vercel-ip-country`):
-  SI → Slovenia, HR/BA/RS/ME/MK → Balkans, anyone else by page language (hr/bs/sr →
-  Balkans, otherwise Slovenia). There is no switch. `src/lib/ugc/creator-market.server.ts`.
+- The campaign is picked **on the server** from the IP country (`x-vercel-ip-country`, set
+  by Vercel's edge) and nothing else: HR/BA/RS/ME/MK → Balkans, every other visitor (SI,
+  any other country, or none) → Slovenia. The language, cookies and URL play no part, so a
+  Slovenian creator cannot reach the Balkan page by switching the page to Croatian.
+  `src/lib/ugc/creator-market.server.ts`.
 - The pay figures and Discord invites live in `src/lib/ugc/creator-campaigns.ts`, which
   only server code imports. The page receives its own campaign's terms as a prop, so the
   other campaign's pay is in neither the HTML nor the JavaScript. A test fails if a client
@@ -25,8 +27,8 @@ see in the admin which post brought each applicant).
   `/ugc/terms?market=…`); everyone else gets their own campaign whatever they type.
 - An application is stored under the campaign the server resolved, and its country must
   be one of that campaign's (or "other").
-- Locally there is no IP country, so the page follows the language cookie: Slovenian or
-  English shows Slovenia, Croatian/Bosnian/Serbian shows the Balkans.
+- Locally there is no IP country, so the page shows Slovenia; preview the Balkans as an
+  admin with `?market=balkans`, or send the header (`curl -H "x-vercel-ip-country: HR"`).
 
 The headline stats (50M+ views, 1,000+ videos, 100+ creators) are kept by hand in
 `CREATOR_PROGRAM_STATS` (`src/lib/ugc/creator-program.ts`); the source is not this

@@ -400,14 +400,10 @@ export function CreatorApplyDialog({
 
             {step === 0 ? (
               <div className="memo-cp-sheet-body">
-                <ul className="memo-cp-sheet-points">
-                  {(["ugcApply.briefPoint1", "ugcApply.briefPoint2", "ugcApply.briefPoint3"] as const).map((key) => (
-                    <li key={key}>
-                      <Msym name="check_circle" size="1.15rem" />
-                      <span>{t(key)}</span>
-                    </li>
-                  ))}
-                </ul>
+                <p className="memo-cp-sheet-brief">
+                  <Msym name="videocam" size="1.3rem" fill={false} />
+                  <span>{t("ugcApply.briefPoint1")}</span>
+                </p>
                 {videos.length > 0 ? (
                   <>
                     <p className="memo-cp-sheet-caption">{t("ugcApply.examplesTitle")}</p>
@@ -481,11 +477,7 @@ export function CreatorApplyDialog({
               <div className="memo-cp-sheet-body">
                 <div className="memo-cp-instructions">
                   <h3 className="memo-cp-sheet-title">{t("ugcApply.videoTitle")}</h3>
-                  <ol>
-                    {(["ugcApply.videoInstr1", "ugcApply.videoInstr2", "ugcApply.videoInstr3"] as const).map((key) => (
-                      <li key={key}>{t(key)}</li>
-                    ))}
-                  </ol>
+                  <p>{t("ugcApply.videoInstr1")}</p>
                 </div>
 
                 <div

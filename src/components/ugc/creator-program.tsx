@@ -8,7 +8,6 @@ import { InstantLink } from "@/components/instant-link";
 import { LocaleOptionList, useLocaleChange } from "@/components/language-picker";
 import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
-import { MascotFigure } from "@/components/onboarding-mascot";
 import { CreatorApplyDialog } from "@/components/ugc/creator-apply-dialog";
 import { creatorFont } from "@/components/ugc/creator-font";
 import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, BRAND_SUPPORT_EMAIL, SEO_BRAND_NAME } from "@/lib/brand";
@@ -62,6 +61,18 @@ const TIER_COPY: Record<string, { title: MessageKey; body: MessageKey; dots: num
   experienced: { title: "ugcApply.tier.experienced", body: "ugcApply.tier.experiencedBody", dots: 6 },
   ultra: { title: "ugcApply.tier.ultra", body: "ugcApply.tier.ultraBody", dots: 9 },
 };
+
+/**
+ * The mascot at full resolution. `MascotFigure` draws the app's 320px copy, which is fine
+ * at onboarding size and soft at the sizes this page shows it; this is the same artwork
+ * from the 3651px original, resized by the image optimiser for each screen.
+ */
+function CreatorMascot({ sizes }: { sizes: string }) {
+  return <Image src="/memo-logo.png" alt="" width={3651} height={3285} sizes={sizes} className="memo-cp-mascot-image" />;
+}
+
+/** The registered company behind the program, as on the terms and the legal pages. */
+const COMPANY_NAME = "Memo AI, Nace Valenčič s.p.";
 
 const MARKET_FLAGS: Record<CreatorMarket, string> = { si: "🇸🇮", balkans: "🇭🇷 🇧🇦 🇷🇸 🇲🇪 🇲🇰" };
 
@@ -210,12 +221,22 @@ export function CreatorProgram({
         </header>
 
         <section className="memo-cp-hero" data-has-videos={videos.length >= 4 || undefined}>
+          {videos.length >= 2 ? (
+            <div className="memo-cp-hero-decor" aria-hidden="true">
+              {videos.slice(0, 2).map((video, index) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={video.id} src={video.thumbnail} alt="" data-side={index === 0 ? "left" : "right"} referrerPolicy="no-referrer" />
+              ))}
+            </div>
+          ) : null}
           <div className="memo-cp-hero-copy">
             {hero("h1")}
             <div className="memo-cp-hero-actions">{applyButton()}</div>
           </div>
-          {videos.length >= 4 ? <VideoCollage videos={videos.slice(0, 5)} format={format} onPlay={setPlaying} /> : null}
+          {videos.length >= 4 ? <VideoCollage videos={videos} format={format} onPlay={setPlaying} /> : null}
         </section>
+
+        {videos.length >= 4 ? <VideoMarquee videos={videos} format={format} onPlay={setPlaying} /> : null}
 
         <section className="memo-cp-stats">
           <StatCard icon="visibility" value={stats.views} label={t("ugcApply.statViews")} />
@@ -399,16 +420,28 @@ export function CreatorProgram({
       </section>
 
       <footer className="memo-cp-footer">
-        <p className="memo-cp-chat">
-          <span>{t("ugcApply.chatTitle")}</span>
-          <a href={`mailto:${BRAND_SUPPORT_EMAIL}`}>{t("ugcApply.chatLink")}</a>
-        </p>
-        <p>
-          <InstantLink href={preview ? `/ugc/terms?market=${market}` : "/ugc/terms"}>{t("ugcApply.termsLink")}</InstantLink>
-          <span aria-hidden="true"> · </span>
-          <InstantLink href="/legal/privacy-policy">{t("landing.footer.privacy")}</InstantLink>
-        </p>
-        <p className="memo-cp-footer-run">{t("ugcApply.footerRun")}</p>
+        <div className="memo-cp-footer-inner">
+          <p className="memo-cp-chat">
+            <Msym name="near_me" size="2rem" />
+            <span>{t("ugcApply.chatTitle")}</span>
+          </p>
+          <a className="memo-cp-footer-support" href={`mailto:${BRAND_SUPPORT_EMAIL}`}>
+            {t("ugcApply.chatLink")}
+          </a>
+          <nav className="memo-cp-footer-links" aria-label={t("ugcApply.navLabel")}>
+            <InstantLink href={preview ? `/ugc/terms?market=${market}` : "/ugc/terms"}>{t("ugcApply.termsLink")}</InstantLink>
+            <InstantLink href="/legal/privacy-policy">{t("landing.footer.privacy")}</InstantLink>
+            <a href="https://www.tiktok.com/@memo_ai_si" target="_blank" rel="noreferrer">
+              TikTok
+            </a>
+            <InstantLink href="/">memoai.eu</InstantLink>
+          </nav>
+          <p>{t("ugcApply.footerRun")}</p>
+          <p>{t("ugcApply.footerRights", { company: COMPANY_NAME })}</p>
+        </div>
+        <div className="memo-cp-footer-mascot" aria-hidden="true">
+          <CreatorMascot sizes="(min-width: 640px) 352px, 80vw" />
+        </div>
       </footer>
 
       {applying ? (
@@ -560,16 +593,15 @@ function FeatureCard({ title, body, action }: { title: string; body: ReactNode; 
         {body}
         <div>{action}</div>
       </div>
-      <div className="memo-cp-feature-art" aria-hidden="true">
-        <div className="memo-cp-feature-mascot">
-          <MascotFigure lash={3} />
-        </div>
-      </div>
     </div>
   );
 }
 
-/** The hero's video wall: real campaign posts in two staggered columns that fade out at the bottom. */
+/**
+ * The hero's video wall: real campaign posts in two columns that drift past endlessly,
+ * one up and one down, and fade out at both ends. Each column is its list twice over and
+ * moves by exactly one list's height, so the loop has no seam. Hovering pauses it.
+ */
 function VideoCollage({
   videos,
   format,
@@ -579,19 +611,53 @@ function VideoCollage({
   format: Formatters;
   onPlay: (video: ShowcaseVideo) => void;
 }) {
-  const left = videos.filter((_, index) => index % 2 === 0);
-  const right = videos.filter((_, index) => index % 2 === 1);
+  const columns = [videos.filter((_, index) => index % 2 === 0), videos.filter((_, index) => index % 2 === 1)];
 
   return (
     <div className="memo-cp-collage">
-      <div className="memo-cp-collage-col">
-        {left.map((video) => (
-          <VideoTile key={video.id} video={video} format={format} onPlay={onPlay} />
-        ))}
-      </div>
-      <div className="memo-cp-collage-col" data-offset="">
-        {right.map((video) => (
-          <VideoTile key={video.id} video={video} format={format} onPlay={onPlay} />
+      {columns.map((column, columnIndex) => (
+        <div key={columnIndex} className="memo-cp-collage-col" data-direction={columnIndex === 0 ? "up" : "down"}>
+          <div className="memo-cp-collage-track">
+            {[...column, ...column].map((video, index) => (
+              <VideoTile
+                key={`${video.id}-${index}`}
+                video={video}
+                format={format}
+                onPlay={onPlay}
+                hidden={index >= column.length}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Below the wide layout the wall turns into a row that drifts sideways under the
+ * headline, as on the reference page: the list twice over, moving one copy's width.
+ */
+function VideoMarquee({
+  videos,
+  format,
+  onPlay,
+}: {
+  videos: ShowcaseVideo[];
+  format: Formatters;
+  onPlay: (video: ShowcaseVideo) => void;
+}) {
+  return (
+    <div className="memo-cp-marquee">
+      <div className="memo-cp-marquee-track">
+        {[...videos, ...videos].map((video, index) => (
+          <VideoTile
+            key={`${video.id}-${index}`}
+            video={video}
+            format={format}
+            onPlay={onPlay}
+            hidden={index >= videos.length}
+          />
         ))}
       </div>
     </div>
@@ -604,11 +670,14 @@ function VideoTile({
   format,
   onPlay,
   compact,
+  hidden,
 }: {
   video: ShowcaseVideo;
   format: Formatters;
   onPlay: (video: ShowcaseVideo) => void;
   compact?: boolean;
+  /** The loop's second copy: still clickable, but not read out or tabbed to twice. */
+  hidden?: boolean;
 }) {
   const { t } = useTranslations();
 
@@ -616,6 +685,8 @@ function VideoTile({
     <button
       type="button"
       className="memo-cp-video"
+      tabIndex={hidden ? -1 : undefined}
+      aria-hidden={hidden || undefined}
       data-compact={compact || undefined}
       aria-label={t("ugcApply.playVideo", { views: format.compact(video.views) })}
       onClick={() => onPlay(video)}

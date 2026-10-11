@@ -102,7 +102,7 @@ test("the calculator never offers more paid videos than the terms pay for", () =
   assert.equal(VIDEO_RANGE.max, PAID_VIDEOS_PER_MONTH);
 });
 
-test("the IP country picks the campaign, and the page language decides for anyone outside both", () => {
+test("the IP country picks the campaign, and nothing the visitor controls can change it", () => {
   assert.equal(marketForCountry("SI"), "si");
 
   for (const country of ["HR", "BA", "RS", "ME", "MK", "hr"]) {
@@ -111,9 +111,11 @@ test("the IP country picks the campaign, and the page language decides for anyon
 
   assert.equal(marketForCountry("DE"), null);
   assert.equal(marketForApplication("ZZ"), "other");
-  assert.equal(defaultMarket(null, "sr"), "balkans");
-  assert.equal(defaultMarket(null, "en"), "si");
-  assert.equal(defaultMarket("HR", "sl"), "balkans");
+  // The IP country alone decides; anyone not on a Balkan IP gets Slovenia.
+  assert.equal(defaultMarket("HR"), "balkans");
+  assert.equal(defaultMarket("SI"), "si");
+  assert.equal(defaultMarket("DE"), "si");
+  assert.equal(defaultMarket(null), "si");
 });
 
 test("each campaign's Discord is the invite checked against Discord's API", () => {
@@ -252,6 +254,8 @@ test("the campaign is decided on the server, never chosen on the page", () => {
 
   const resolver = readSource("src/lib/ugc/creator-market.server.ts");
   assert.match(resolver, /GEO_COUNTRY_HEADER/);
+  // The language (cookie) must not be an input: switching to Croatian must not reveal the Balkan page.
+  assert.doesNotMatch(resolver, /getLocale|LOCALE_COOKIE|cookies\(\)/);
   // Only an allowlisted admin may look at the other campaign's page.
   assert.match(resolver, /getAdminContext/);
 

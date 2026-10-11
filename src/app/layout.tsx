@@ -91,6 +91,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "mic",
   "mic_off",
   "more_horiz",
+  "near_me",
   "open_in_full",
   "palette",
   "password",

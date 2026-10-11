@@ -432,3 +432,34 @@ test("neither campaign's pay nor any Discord invite can reach the browser", () =
   // The pure module the page does load carries no figures of its own.
   assert.doesNotMatch(readSource("src/lib/ugc/creator-program.ts"), /perTikTok: \d|discord\.gg/);
 });
+
+test("the join page signs in one tap, at the top, and never on page load", () => {
+  const form = readSource("src/components/ugc/creator-join-form.tsx");
+  // No box to tick: the button is the agreement, with the sentence above it saying so.
+  assert.doesNotMatch(form, /type="checkbox"/);
+  assert.match(form, /ugcJoin\.agreeGuardian/);
+  assert.match(form, /href="#terms"/);
+
+  // Mail scanners open links on their own: accepting is a POST, never a GET.
+  const route = readSource("src/app/api/ugc/join/route.ts");
+  assert.match(route, /export async function POST/);
+  assert.doesNotMatch(route, /export async function GET/);
+
+  // The signing card comes before the terms.
+  const page = readSource("src/app/ugc/join/[token]/page.tsx");
+  assert.ok(page.indexOf("<CreatorJoinForm") < page.indexOf("/>\n    </I18nProvider>"));
+  assert.match(readSource("src/components/ugc/creator-terms-view.tsx"), /id="terms"/);
+});
+
+test("the acceptance email names the one button, and tells a minor a parent signs too", () => {
+  for (const locale of LOCALES) {
+    const t = createTranslator(locale, [CATALOGUES[locale]]);
+    const build = (needsGuardian) =>
+      buildAcceptanceEmail({ t, fullName: "Ana Novak", market: "si", joinUrl: "https://memoai.eu/ugc/join/x", needsGuardian });
+
+    assert.ok(build(false).text.includes(CATALOGUES[locale]["ugcJoin.submit"]), `${locale} names the button`);
+    assert.ok(!build(false).text.includes(CATALOGUES[locale]["ugcApply.email.guardian"]), `${locale} adult`);
+    assert.ok(build(true).text.includes(CATALOGUES[locale]["ugcApply.email.guardian"]), `${locale} minor text`);
+    assert.ok(build(true).html.includes(CATALOGUES[locale]["ugcApply.email.guardian"].replace(/'/g, "&#39;")), `${locale} minor html`);
+  }
+});

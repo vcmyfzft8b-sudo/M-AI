@@ -73,22 +73,23 @@ export default async function CreatorJoinPage({ params }: { params: Promise<{ to
       homeHref={CREATOR_CAMPAIGN_PATHS[market]}
       markdown={creatorTermsMarkdown(locale, market)}
       intro={
-        <div className="memo-cp-head memo-cp-doc-head">
-          <h1 className="memo-cp-title">{t("ugcJoin.title")}</h1>
-          <p className="memo-cp-lead">
-            {t("ugcJoin.lead", { campaign: t(market === "si" ? "ugcApply.market.si" : "ugcApply.market.balkans") })}
-          </p>
-        </div>
+        <>
+          <div className="memo-cp-head memo-cp-doc-head">
+            <h1 className="memo-cp-title">{t("ugcJoin.title")}</h1>
+            <p className="memo-cp-lead">
+              {t("ugcJoin.lead", { campaign: t(market === "si" ? "ugcApply.market.si" : "ugcApply.market.balkans") })}
+            </p>
+          </div>
+          <CreatorJoinForm
+            token={token}
+            version={CREATOR_TERMS_VERSION}
+            defaultName={application.full_name}
+            needsGuardian={application.age !== null && application.age < 18}
+            accepted={accepted ? { at: accepted, discordUrl: CREATOR_DISCORD_INVITES[market] } : null}
+          />
+        </>
       }
-    >
-      <CreatorJoinForm
-        token={token}
-        version={CREATOR_TERMS_VERSION}
-        defaultName={application.full_name}
-        needsGuardian={application.age !== null && application.age < 18}
-        accepted={accepted ? { at: accepted, discordUrl: CREATOR_DISCORD_INVITES[market] } : null}
-      />
-    </CreatorTermsView>
+    />
     </I18nProvider>
   );
 }

@@ -10,9 +10,14 @@ import type { MessageKey } from "@/lib/i18n/messages/keys";
 type Accepted = { at: string; discordUrl: string };
 
 /**
- * Accepting the creator terms: the typed name is the signature, a guardian signs too
- * for a minor, and the box confirms the version shown above. On success the campaign's
+ * Accepting the creator terms, at the top of the join page so it takes one tap: the name
+ * from the application is already filled in (the typed name is the signature), a parent
+ * or guardian types theirs for a minor, and the button itself is the agreement, with the
+ * sentence above it saying so and a link down to the full terms. On success the campaign's
  * Discord invite appears.
+ *
+ * Never on page load: mail scanners and link previews open the join link on their own, so
+ * accepting always takes the person's own tap (a POST), never a GET.
  */
 export function CreatorJoinForm({
   token,
@@ -30,7 +35,6 @@ export function CreatorJoinForm({
   const { t, locale } = useTranslations();
   const [name, setName] = useState(defaultName);
   const [guardian, setGuardian] = useState("");
-  const [agree, setAgree] = useState(false);
   const [error, setError] = useState<MessageKey | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [accepted, setAccepted] = useState<Accepted | null>(initiallyAccepted);
@@ -65,11 +69,6 @@ export function CreatorJoinForm({
 
     if (needsGuardian && guardian.trim().length < 3) {
       setError("ugcJoin.error.guardian");
-      return;
-    }
-
-    if (!agree) {
-      setError("ugcJoin.error.agree");
       return;
     }
 
@@ -141,12 +140,10 @@ export function CreatorJoinForm({
         </div>
       ) : null}
 
-      <div className="memo-cp-consent">
-        <label>
-          <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} />
-          <span>{t("ugcJoin.agree", { version })}</span>
-        </label>
-      </div>
+      <p className="memo-cp-join-statement">
+        {t(needsGuardian ? "ugcJoin.agreeGuardian" : "ugcJoin.agree", { button: t("ugcJoin.submit"), version })}{" "}
+        <a href="#terms">{t("ugcJoin.readTerms")}</a>
+      </p>
 
       {error ? (
         <p className="memo-cp-form-error memo-cp-form-alert" role="alert">

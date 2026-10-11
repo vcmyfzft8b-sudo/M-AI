@@ -30,6 +30,7 @@ export async function sendAcceptanceEmail({
   market,
   joinToken,
   idempotencyKey,
+  needsGuardian = false,
 }: {
   to: string;
   fullName: string;
@@ -37,6 +38,7 @@ export async function sendAcceptanceEmail({
   market: CreatorMarket;
   joinToken: string;
   idempotencyKey: string;
+  needsGuardian?: boolean;
 }): Promise<{ sent: true } | { sent: false; error: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
 
@@ -49,6 +51,7 @@ export async function sendAcceptanceEmail({
     fullName,
     market,
     joinUrl: creatorJoinUrl(joinToken),
+    needsGuardian,
   });
 
   try {

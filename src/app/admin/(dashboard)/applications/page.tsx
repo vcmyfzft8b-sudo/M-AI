@@ -372,6 +372,15 @@ function ApplicationCard({
             )}
             {application.terms_accepted_at ? (
               <p className="admin-help">
+                {application.discord_opened_at ? (
+                  <Badge tone="green">Opened the Discord invite {formatRelative(application.discord_opened_at)}</Badge>
+                ) : (
+                  <Badge tone="red">Has not opened the Discord invite yet</Badge>
+                )}
+              </p>
+            ) : null}
+            {application.terms_accepted_at ? (
+              <p className="admin-help">
                 <Badge tone="green">Terms signed</Badge> by {application.terms_signed_name}
                 {application.terms_guardian_name ? ` with guardian ${application.terms_guardian_name}` : ""} ·{" "}
                 {formatDateTime(application.terms_accepted_at)} · version {application.terms_version}

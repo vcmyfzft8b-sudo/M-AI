@@ -122,7 +122,16 @@ guardian's name, and their email says so. There is no checkbox: the tap is the a
 It is always the person's own tap (a POST to `/api/ugc/join`). Opening the link never
 signs anything, because mail scanners open links on their own. The acceptance is
 recorded (`terms_version`, time, typed names, IP, browser) and only then is the Discord
-invite shown. The admin card shows whether and when the terms were signed.
+invite shown.
+
+Signing is step one, and an applicant is not "in" yet. Step two follows on the same card:
+"One last step: join the Discord", with a Discord-blue button carrying Discord's mark.
+Tapping it opens the campaign's invite (the app or a new tab) and records
+`discord_opened_at`. Only when the page has been left and then comes back does it say
+"You're in", and reopening the link later goes straight there. The admin card shows
+whether the invite was opened. This records the invite being opened, not membership: the
+site cannot see who is inside a Discord server. Checking membership would need a Discord
+login and a bot in both servers. The admin card shows whether and when the terms were signed.
 
 ## Email
 

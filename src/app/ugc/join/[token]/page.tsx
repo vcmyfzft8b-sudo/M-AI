@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { I18nProvider } from "@/components/i18n-provider";
 import { CreatorJoinForm } from "@/components/ugc/creator-join-form";
 import { CreatorTermsView } from "@/components/ugc/creator-terms-view";
 import type { UgcCreatorApplicationRow } from "@/lib/database.types";
-import { getTranslations } from "@/lib/i18n/server";
+import { getMessages } from "@/lib/i18n/messages";
+import { getTranslations, getTranslationsFor } from "@/lib/i18n/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { CREATOR_DISCORD_INVITES } from "@/lib/ugc/creator-campaigns";
+import { CREATOR_CAMPAIGN_PATHS, CREATOR_DISCORD_INVITES } from "@/lib/ugc/creator-campaigns";
+import { campaignLocale } from "@/lib/ugc/creator-program";
 import { CREATOR_TERMS_VERSION, creatorTermsMarkdown } from "@/lib/ugc/creator-terms";
 
 export const dynamic = "force-dynamic";
@@ -34,10 +37,11 @@ export default async function CreatorJoinPage({ params }: { params: Promise<{ to
     notFound();
   }
 
-  const [{ locale, t }, { data }] = await Promise.all([
-    getTranslations(),
-    createSupabaseServiceRoleClient().from("ugc_creator_applications").select("*").eq("join_token", token).maybeSingle(),
-  ]);
+  const { data } = await createSupabaseServiceRoleClient()
+    .from("ugc_creator_applications")
+    .select("*")
+    .eq("join_token", token)
+    .maybeSingle();
   const application = data as UgcCreatorApplicationRow | null;
 
   if (!application || application.status !== "approved" || (application.market !== "si" && application.market !== "balkans")) {
@@ -46,10 +50,15 @@ export default async function CreatorJoinPage({ params }: { params: Promise<{ to
 
   const market = application.market;
   const accepted = application.terms_accepted_at;
+  // The campaign's own language, like its page: Slovenian, or the creator's Balkan language.
+  const locale = campaignLocale(market, application.locale);
+  const t = getTranslationsFor(locale);
 
   return (
+    <I18nProvider locale={locale} messages={getMessages(locale)} persist={false}>
     <CreatorTermsView
       label={t("ugcApply.navLabel")}
+      homeHref={CREATOR_CAMPAIGN_PATHS[market]}
       markdown={creatorTermsMarkdown(locale, market)}
       intro={
         <div className="memo-cp-head memo-cp-doc-head">
@@ -68,5 +77,6 @@ export default async function CreatorJoinPage({ params }: { params: Promise<{ to
         accepted={accepted ? { at: accepted, discordUrl: CREATOR_DISCORD_INVITES[market] } : null}
       />
     </CreatorTermsView>
+    </I18nProvider>
   );
 }

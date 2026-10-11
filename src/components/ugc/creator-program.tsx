@@ -1,17 +1,16 @@
 "use client";
 
 import Image from "next/image";
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 
 import { useTranslations } from "@/components/i18n-provider";
 import { InstantLink } from "@/components/instant-link";
-import { LocaleOptionList, useLocaleChange } from "@/components/language-picker";
 import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
 import { CreatorApplyDialog } from "@/components/ugc/creator-apply-dialog";
 import { creatorFont } from "@/components/ugc/creator-font";
 import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, BRAND_SUPPORT_EMAIL, SEO_BRAND_NAME } from "@/lib/brand";
-import { LOCALE_INTL_TAG, LOCALE_LABELS, type Locale } from "@/lib/i18n/locales";
+import { LOCALE_INTL_TAG, type Locale } from "@/lib/i18n/locales";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import {
   CREATOR_PROGRAM_STATS,
@@ -111,6 +110,7 @@ type Formatters = ReturnType<typeof useFormatters>;
 export function CreatorProgram({
   market,
   terms,
+  termsHref,
   videos,
   preview,
   referrer,
@@ -118,6 +118,9 @@ export function CreatorProgram({
   market: CreatorMarket;
   /** This campaign's pay, and only this campaign's: the other's never reaches the browser. */
   terms: CreatorTerms;
+  /** This campaign's terms page. */
+  termsHref: string;
+  /** Campaign videos, already shuffled for this visit; each section takes its own slice. */
   videos: ShowcaseVideo[];
   /** An admin looking at the other campaign's page with `?market=`. */
   preview: boolean;
@@ -137,6 +140,14 @@ export function CreatorProgram({
     videos: `${format.whole(CREATOR_PROGRAM_STATS.videos)}+`,
     creators: `${format.whole(CREATOR_PROGRAM_STATS.creators)}+`,
   };
+
+  // A different stretch of the shuffled pool for each section, so the same faces do not
+  // repeat from one section to the next.
+  const decor = take(videos, 0, 2);
+  const wall = take(videos, 2, WALL_SIZE);
+  const strip = take(videos, 2 + WALL_SIZE, 6);
+  const examples = take(videos, 8 + WALL_SIZE, 5);
+  const paidCovers = take(videos, 13 + WALL_SIZE, 3);
 
   const apply = () => setApplying(true);
 
@@ -213,7 +224,6 @@ export function CreatorProgram({
             </a>
           </nav>
           <div className="memo-cp-nav-actions">
-            <CreatorLanguageMenu />
             <button type="button" className="memo-cp-cta memo-cp-cta-small" onClick={apply}>
               <span>{t("ugcApply.applyNow")}</span>
               <Msym name="arrow_forward" size="1.05rem" />
@@ -224,7 +234,7 @@ export function CreatorProgram({
         <section className="memo-cp-hero" data-has-videos={videos.length >= 4 || undefined}>
           {videos.length >= 2 ? (
             <div className="memo-cp-hero-decor" aria-hidden="true">
-              {videos.slice(0, 2).map((video, index) => (
+              {decor.map((video, index) => (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img key={video.id} src={video.thumbnail} alt="" data-side={index === 0 ? "left" : "right"} referrerPolicy="no-referrer" />
               ))}
@@ -234,10 +244,10 @@ export function CreatorProgram({
             {hero("h1")}
             <div className="memo-cp-hero-actions">{applyButton()}</div>
           </div>
-          {videos.length >= 4 ? <VideoCollage videos={videos} format={format} onPlay={setPlaying} /> : null}
+          {videos.length >= 4 ? <VideoCollage videos={wall} format={format} onPlay={setPlaying} /> : null}
         </section>
 
-        {videos.length >= 4 ? <VideoMarquee videos={videos} format={format} onPlay={setPlaying} /> : null}
+        {videos.length >= 4 ? <VideoMarquee videos={wall} format={format} onPlay={setPlaying} /> : null}
 
         <section className="memo-cp-stats">
           <StatCard icon="visibility" value={stats.views} label={t("ugcApply.statViews")} />
@@ -266,7 +276,7 @@ export function CreatorProgram({
             <BenefitCard
               title={t("ugcApply.why.paidTitle")}
               body={t("ugcApply.why.paidBody", { perVideo })}
-              art={<PaidArt videos={videos} amount={perVideo} />}
+              art={<PaidArt videos={paidCovers} amount={perVideo} />}
             />
             <BenefitCard title={t("ugcApply.why.followersTitle")} body={t("ugcApply.why.followersBody")} art={<ProfileArt />} />
             <BenefitCard title={t("ugcApply.why.guideTitle")} body={t("ugcApply.why.guideBody")} art={<GuideArt />} />
@@ -385,7 +395,7 @@ export function CreatorProgram({
           </div>
           {videos.length > 0 ? (
             <div className="memo-cp-strip">
-              {videos.slice(-6).map((video) => (
+              {strip.map((video) => (
                 <VideoTile key={video.id} video={video} format={format} onPlay={setPlaying} compact />
               ))}
             </div>
@@ -430,7 +440,7 @@ export function CreatorProgram({
             {t("ugcApply.chatLink")}
           </a>
           <nav className="memo-cp-footer-links" aria-label={t("ugcApply.navLabel")}>
-            <InstantLink href={preview ? `/ugc/terms?market=${market}` : "/ugc/terms"}>{t("ugcApply.termsLink")}</InstantLink>
+            <InstantLink href={termsHref}>{t("ugcApply.termsLink")}</InstantLink>
             <InstantLink href="/legal/privacy-policy">{t("landing.footer.privacy")}</InstantLink>
             <a href="https://www.tiktok.com/@memo_ai_si" target="_blank" rel="noreferrer">
               TikTok
@@ -446,11 +456,25 @@ export function CreatorProgram({
       </footer>
 
       {applying ? (
-        <CreatorApplyDialog market={market} videos={videos} referrer={referrer} onClosed={() => setApplying(false)} />
+        <CreatorApplyDialog market={market} videos={examples} referrer={referrer} onClosed={() => setApplying(false)} />
       ) : null}
       {playing ? <VideoPlayer video={playing} onClose={() => setPlaying(null)} /> : null}
     </div>
   );
+}
+
+/** Videos in the hero wall (and the row that replaces it on narrow screens). */
+const WALL_SIZE = 20;
+
+/** `count` videos from `start` on, wrapping round when the pool is smaller than the page. */
+function take(videos: ShowcaseVideo[], start: number, count: number): ShowcaseVideo[] {
+  if (videos.length === 0) {
+    return [];
+  }
+
+  const length = Math.min(count, videos.length);
+
+  return Array.from({ length }, (_, index) => videos[(start + index) % videos.length]);
 }
 
 function StatCard({ icon, value, label }: { icon: string; value: string; label: string }) {
@@ -819,69 +843,6 @@ function EarningsCalculator({ terms, format }: { terms: CreatorTerms; format: Fo
               : t("ugcApply.calcViewNote", { amount: format.euros(terms.bonusCap) })}
         </p>
       </div>
-    </div>
-  );
-}
-
-/** The page's language switch: a globe in the bar opening the app's own language list. */
-function CreatorLanguageMenu() {
-  const { locale, t } = useTranslations();
-  const [open, setOpen] = useState(false);
-  const { change, pendingLocale } = useLocaleChange();
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    function onPointerDown(event: PointerEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    }
-
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
-
-  return (
-    <div className="memo-cp-lang" ref={containerRef}>
-      <button
-        type="button"
-        className="memo-cp-lang-trigger"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={`${t("settings.language.title")}: ${LOCALE_LABELS[locale]}`}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <Msym name="language" size="1.15rem" fill={false} />
-      </button>
-      {open ? (
-        <LocaleOptionList
-          className="memo-cp-lang-menu"
-          active={locale}
-          pendingLocale={pendingLocale}
-          onSelect={(next) => {
-            setOpen(false);
-
-            if (next !== locale) {
-              change(next);
-            }
-          }}
-        />
-      ) : null}
     </div>
   );
 }

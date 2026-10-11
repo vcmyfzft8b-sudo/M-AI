@@ -42,7 +42,7 @@ import {
   refreshAccountProfile,
 } from "@/lib/ugc/sync";
 import type { UgcCreatorApplicationRow } from "@/lib/database.types";
-import type { CreatorMarket } from "@/lib/ugc/creator-program";
+import { campaignLocale, type CreatorMarket } from "@/lib/ugc/creator-program";
 import { sendAcceptanceEmail } from "@/lib/ugc/send-acceptance-email";
 
 /**
@@ -1055,7 +1055,8 @@ async function deliverAcceptance(
   const result = await sendAcceptanceEmail({
     to: application.email,
     fullName: application.full_name,
-    locale: application.locale,
+    // The language of the campaign's pages, which the join link opens on.
+    locale: campaignLocale(market, application.locale),
     market,
     joinToken: application.join_token,
     idempotencyKey,

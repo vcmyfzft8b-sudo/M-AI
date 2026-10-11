@@ -32,3 +32,18 @@ export const CREATOR_DISCORD_INVITES: Record<CreatorMarket, string> = {
   si: "https://discord.gg/4mae76zNhj",
   balkans: "https://discord.gg/Dur6dfF2qD",
 };
+
+/**
+ * Each campaign's own link. Two pages, never one switching between them: a visitor whose
+ * IP belongs to the other campaign is redirected to their own (`creator-market.server.ts`).
+ */
+export const CREATOR_CAMPAIGN_PATHS: Record<CreatorMarket, string> = {
+  si: "/ugc/slovenija",
+  balkans: "/ugc/balkan",
+};
+
+/** Each campaign's Terms of Participation, under its own page. */
+export const CREATOR_TERMS_PATHS: Record<CreatorMarket, string> = {
+  si: "/ugc/slovenija/pogoji",
+  balkans: "/ugc/balkan/uvjeti",
+};

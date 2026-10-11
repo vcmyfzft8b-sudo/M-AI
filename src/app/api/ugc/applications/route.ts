@@ -13,7 +13,7 @@ import {
   invalidFields,
   normalizeReferrer,
 } from "@/lib/ugc/creator-application";
-import { resolveCreatorMarket } from "@/lib/ugc/creator-market.server";
+import { ipCampaign } from "@/lib/ugc/creator-market.server";
 import { MARKET_COUNTRIES, OTHER_COUNTRY } from "@/lib/ugc/creator-program";
 
 const ROUTE = "api:ugc:applications:post";
@@ -64,9 +64,10 @@ export async function POST(request: Request) {
 
   const application = result.data;
 
-  // The campaign is the one this visitor's page showed, decided here the same way
-  // rather than taken from the form; the country must be one of that campaign's.
-  const { market } = await resolveCreatorMarket();
+  // The campaign of the page that was sent from. A visitor from Slovenia or the Balkans
+  // can only have been shown their own (the pages redirect by IP), so their IP decides;
+  // anyone else applied on whichever link they had. The country must be that campaign's.
+  const market = (await ipCampaign()) ?? (body.market === "balkans" ? "balkans" : "si");
 
   if (application.country !== OTHER_COUNTRY && !MARKET_COUNTRIES[market].includes(application.country)) {
     return NextResponse.json({ error: "invalid", fields: ["country"] }, { status: 400 });

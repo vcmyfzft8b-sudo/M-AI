@@ -46,10 +46,17 @@ export function writeLocaleCookie(locale: Locale) {
 export function I18nProvider({
   locale,
   messages,
+  persist = true,
   children,
 }: {
   locale: Locale;
   messages: Messages;
+  /**
+   * False for a page shown in a fixed language whatever the visitor chose (the creator
+   * campaign pages): it sets `<html lang>` while mounted and leaves the visitor's own
+   * language cookie alone, so the app is not switched behind their back.
+   */
+  persist?: boolean;
   children: React.ReactNode;
 }) {
   const value = useMemo<I18nValue>(
@@ -69,16 +76,31 @@ export function I18nProvider({
    * browser's own translation prompt.
    */
   useEffect(() => {
+    const root = document.documentElement;
     const languageTag = LOCALE_BCP47[locale];
 
-    if (document.documentElement.lang !== languageTag) {
+    if (!persist) {
+      // A nested provider's effect runs before the root's, so it marks the tag as fixed
+      // and the root leaves it alone.
+      const previousTag = root.lang;
+
+      root.lang = languageTag;
+      root.dataset.fixedLang = languageTag;
+
+      return () => {
+        delete root.dataset.fixedLang;
+        root.lang = previousTag;
+      };
+    }
+
+    if (!root.dataset.fixedLang && root.lang !== languageTag) {
       document.documentElement.lang = languageTag;
     }
 
     if (readLocaleCookie() !== locale) {
       writeLocaleCookie(locale);
     }
-  }, [locale]);
+  }, [locale, persist]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

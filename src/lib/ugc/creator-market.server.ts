@@ -1,34 +1,65 @@
 import "server-only";
 
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { getAdminContext } from "@/lib/admin/auth";
 import { GEO_COUNTRY_HEADER } from "@/lib/i18n/server";
-import { defaultMarket, type CreatorMarket } from "@/lib/ugc/creator-program";
+import { CREATOR_CAMPAIGN_PATHS } from "@/lib/ugc/creator-campaigns";
+import { campaignLocale, defaultMarket, marketForCountry, type CampaignLocale, type CreatorMarket } from "@/lib/ugc/creator-program";
 
 /**
- * Which campaign this request belongs to, decided on the server and nowhere else.
+ * Which campaign a request may see, decided on the server and nowhere else.
  *
- * The Slovenian and Balkan programs are kept apart: the IP country (Vercel's
- * `x-vercel-ip-country`, set by Vercel's edge and not by the browser) picks one, and a
- * visitor has no way to ask for the other — not the language, not a cookie, not the URL. The one exception is an admin,
- * who can open either with `?market=` to check what each side sees.
+ * The Slovenian and Balkan programs have separate links (`/ugc/slovenija`,
+ * `/ugc/balkan`), each in its own language with no language switch. The IP country
+ * (Vercel's `x-vercel-ip-country`, set by Vercel's edge and not by the browser) guards
+ * them: a visitor from Slovenia who opens the Balkan link lands on the Slovenian page,
+ * and the other way round. A visitor from anywhere else sees the link they were given.
+ * An admin may open either, to check what each side sees.
  */
-export async function resolveCreatorMarket(requested?: string | string[]): Promise<{
-  market: CreatorMarket;
-  preview: boolean;
-}> {
-  const headerStore = await headers();
-  const detected = defaultMarket(headerStore.get(GEO_COUNTRY_HEADER));
-  const wanted = Array.isArray(requested) ? requested[0] : requested;
 
-  if ((wanted === "si" || wanted === "balkans") && wanted !== detected) {
-    const admin = await getAdminContext().catch(() => null);
+async function requestCountry(): Promise<string | null> {
+  return (await headers()).get(GEO_COUNTRY_HEADER);
+}
 
-    if (admin?.ok) {
-      return { market: wanted, preview: true };
-    }
+/** The campaign of the visitor's IP country, or `null` outside both. */
+export async function ipCampaign(): Promise<CreatorMarket | null> {
+  return marketForCountry(await requestCountry());
+}
+
+/** Where `/ugc` sends a visitor: the Balkan page for a Balkan IP, else the Slovenian. */
+export async function defaultCampaign(): Promise<CreatorMarket> {
+  return defaultMarket(await requestCountry());
+}
+
+/** The language a campaign page is rendered in for this request. */
+export async function campaignPageLocale(market: CreatorMarket): Promise<CampaignLocale> {
+  return campaignLocale(market, await requestCountry());
+}
+
+/**
+ * Lets the request see `market`'s page, or redirects it to the same page of its own
+ * campaign (`paths`: the landing by default, or the terms). `preview` is an admin
+ * looking at the other campaign's page.
+ */
+export async function guardCampaignPage(
+  market: CreatorMarket,
+  { paths = CREATOR_CAMPAIGN_PATHS, query }: { paths?: Record<CreatorMarket, string>; query?: URLSearchParams } = {},
+): Promise<{ preview: boolean }> {
+  const own = await ipCampaign();
+
+  if (!own || own === market) {
+    return { preview: false };
   }
 
-  return { market: detected, preview: false };
+  const admin = await getAdminContext().catch(() => null);
+
+  if (admin?.ok) {
+    return { preview: true };
+  }
+
+  const search = query && query.size > 0 ? `?${query.toString()}` : "";
+
+  redirect(`${paths[own]}${search}`);
 }

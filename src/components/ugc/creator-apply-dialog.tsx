@@ -271,7 +271,7 @@ export function CreatorApplyDialog({
       const response = await fetch("/api/ugc/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, locale, ref: referrer, website }),
+        body: JSON.stringify({ ...payload, locale, market, ref: referrer, website }),
       });
       const body = (await response.json().catch(() => ({}))) as {
         status?: "received" | "duplicate";

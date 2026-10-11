@@ -1,26 +1,11 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { CreatorTermsView } from "@/components/ugc/creator-terms-view";
-import { getTranslations } from "@/lib/i18n/server";
-import { resolveCreatorMarket } from "@/lib/ugc/creator-market.server";
-import { creatorTermsMarkdown } from "@/lib/ugc/creator-terms";
+import { CREATOR_TERMS_PATHS } from "@/lib/ugc/creator-campaigns";
+import { defaultCampaign } from "@/lib/ugc/creator-market.server";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const { t } = await getTranslations();
-
-  return { title: t("ugcApply.termsLink"), alternates: { canonical: "/ugc/terms" } };
-}
-
-/** The creator terms for the visitor's own campaign, decided like `/ugc`. */
-export default async function CreatorTermsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ market?: string | string[] }>;
-}) {
-  const [{ locale, t }, { market: requested }] = await Promise.all([getTranslations(), searchParams]);
-  const { market } = await resolveCreatorMarket(requested);
-
-  return <CreatorTermsView label={t("ugcApply.navLabel")} markdown={creatorTermsMarkdown(locale, market)} />;
+/** The terms live under each campaign's page; this older link sends a visitor to theirs. */
+export default async function CreatorTermsRedirect() {
+  redirect(CREATOR_TERMS_PATHS[await defaultCampaign()]);
 }

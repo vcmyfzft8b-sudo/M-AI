@@ -26,6 +26,7 @@ import {
   codeSaleBonus,
   PAID_VIDEOS_PER_MONTH,
   VIDEO_RANGE,
+  campaignLocale,
   defaultMarket,
   estimateEarnings,
   marketForCountry,
@@ -269,20 +270,58 @@ test("each campaign's terms show its own pay and never the other's", () => {
   }
 });
 
-test("the campaign is decided on the server, never chosen on the page", () => {
+test("each campaign has its own link, guarded by IP country, never chosen on the page", () => {
   const page = readSource("src/components/ugc/creator-program.tsx");
   assert.doesNotMatch(page, /role="radiogroup"|setMarket/);
+  // One language per campaign page: no language switch to reach the other campaign through.
+  assert.doesNotMatch(page, /LocaleOptionList|useLocaleChange|LanguageMenu/);
+  // The other campaign's link never reaches the page.
+  assert.doesNotMatch(page, /\/ugc\/(?:slovenija|balkan)/);
 
   const resolver = readSource("src/lib/ugc/creator-market.server.ts");
   assert.match(resolver, /GEO_COUNTRY_HEADER/);
   // The language (cookie) must not be an input: switching to Croatian must not reveal the Balkan page.
   assert.doesNotMatch(resolver, /getLocale|LOCALE_COOKIE|cookies\(\)/);
-  // Only an allowlisted admin may look at the other campaign's page.
+  // A visitor from the other campaign's country is redirected; only an allowlisted admin may stay.
+  assert.match(resolver, /redirect\(/);
   assert.match(resolver, /getAdminContext/);
 
+  for (const [route, market] of [
+    ["src/app/ugc/slovenija/page.tsx", "si"],
+    ["src/app/ugc/balkan/page.tsx", "balkans"],
+    ["src/app/ugc/slovenija/pogoji/page.tsx", "si"],
+    ["src/app/ugc/balkan/uvjeti/page.tsx", "balkans"],
+  ]) {
+    assert.match(readSource(route), new RegExp(`market="${market}"|\\("${market}"\\)`), route);
+  }
+
+  const shared = readSource("src/components/ugc/creator-campaign-page.tsx");
+  assert.equal(shared.match(/guardCampaignPage\(/g)?.length, 2, "both the page and its terms are guarded");
+  // The campaign's language is forced without touching the visitor's own language cookie.
+  assert.match(shared, /persist=\{false\}/);
+
   const route = readSource("src/app/api/ugc/applications/route.ts");
-  assert.match(route, /resolveCreatorMarket\(\)/);
+  assert.match(route, /await ipCampaign\(\)\) \?\?/);
   assert.match(route, /MARKET_COUNTRIES\[market\]\.includes/);
+});
+
+test("each campaign speaks one language: Slovenian, or the visitor's Balkan language", () => {
+  assert.equal(campaignLocale("si"), "sl");
+  assert.equal(campaignLocale("si", "HR"), "sl");
+  assert.equal(campaignLocale("si", "hr"), "sl");
+  assert.equal(campaignLocale("balkans"), "hr");
+  assert.equal(campaignLocale("balkans", "SI"), "hr");
+  assert.equal(campaignLocale("balkans", "BA"), "bs");
+  assert.equal(campaignLocale("balkans", "RS"), "sr");
+  assert.equal(campaignLocale("balkans", "ME"), "sr");
+  assert.equal(campaignLocale("balkans", "sr"), "sr");
+  assert.equal(campaignLocale("balkans", "en"), "hr");
+});
+
+test("the showcase is a mix of creators, shuffled on every visit", () => {
+  const showcase = readSource("src/lib/ugc/creator-showcase.ts");
+  assert.match(showcase, /return shuffleShowcase\(await cachedShowcaseVideos\(\)/);
+  assert.match(showcase, /PER_CREATOR/);
 });
 
 test("every language's terms carry the same numbered clauses", () => {

@@ -11,6 +11,7 @@ import { requireAdmin } from "@/lib/admin/auth";
 import type { UgcApplicationStatus, UgcCreatorApplicationRow } from "@/lib/database.types";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { APPLICATION_VIDEO_BUCKET, videoEmbedUrl } from "@/lib/ugc/creator-application";
+import { CREATOR_CAMPAIGN_PATHS, CREATOR_TERMS_PATHS } from "@/lib/ugc/creator-campaigns";
 import { creatorJoinUrl } from "@/lib/ugc/send-acceptance-email";
 
 export const dynamic = "force-dynamic";
@@ -93,14 +94,22 @@ export default async function ApplicationsPage({
           <h1 className="admin-title">Applications</h1>
           <p className="admin-subtitle">
             Creators who applied at{" "}
-            <a className="admin-link" href="https://memoai.eu/ugc" target="_blank" rel="noreferrer">
-              memoai.eu/ugc
+            <a className="admin-link" href={CREATOR_CAMPAIGN_PATHS.si} target="_blank" rel="noreferrer">
+              memoai.eu{CREATOR_CAMPAIGN_PATHS.si}
+            </a>{" "}
+            or{" "}
+            <a className="admin-link" href={CREATOR_CAMPAIGN_PATHS.balkans} target="_blank" rel="noreferrer">
+              memoai.eu{CREATOR_CAMPAIGN_PATHS.balkans}
             </a>
-            . Accepting emails them a link to sign the{" "}
-            <a className="admin-link" href="/ugc/terms" target="_blank" rel="noreferrer">
-              creator terms
+            . Accepting emails them a link to sign the creator terms (
+            <a className="admin-link" href={CREATOR_TERMS_PATHS.si} target="_blank" rel="noreferrer">
+              Slovenia
             </a>
-            ; signing reveals their campaign&apos;s Discord invite.
+            ,{" "}
+            <a className="admin-link" href={CREATOR_TERMS_PATHS.balkans} target="_blank" rel="noreferrer">
+              Balkans
+            </a>
+            ); signing reveals their campaign&apos;s Discord invite.
           </p>
         </div>
         <nav className="admin-range" aria-label="Status">

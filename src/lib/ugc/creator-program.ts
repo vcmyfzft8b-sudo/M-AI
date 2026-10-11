@@ -108,14 +108,40 @@ export function marketForCountry(country: string | null | undefined): CreatorMar
 }
 
 /**
- * The campaign a visitor is shown, from their IP country and nothing else: a Balkan IP
- * gets the Balkan program, every other visitor — Slovenia, anywhere else, or no country
- * at all — gets Slovenia. Nothing the visitor controls (language, cookies, the URL)
- * moves them across, so a Slovenian creator cannot reach the Balkan page by switching
- * the page to Croatian.
+ * The campaign `/ugc` sends a visitor to, from their IP country and nothing else: a
+ * Balkan IP goes to the Balkan page, every other visitor — Slovenia, anywhere else, or
+ * no country at all — to the Slovenian one. Nothing the visitor controls (language,
+ * cookies) moves them across.
  */
 export function defaultMarket(country: string | null | undefined): CreatorMarket {
   return marketForCountry(country) ?? "si";
+}
+
+/** The languages the Balkan page is shown in: one per visitor, never a switch. */
+export const BALKAN_LOCALES = ["hr", "bs", "sr"] as const;
+export type CampaignLocale = "sl" | (typeof BALKAN_LOCALES)[number];
+
+const BALKAN_COUNTRY_LOCALE: Record<string, (typeof BALKAN_LOCALES)[number]> = {
+  HR: "hr",
+  BA: "bs",
+  RS: "sr",
+  ME: "sr",
+  MK: "sr",
+};
+
+/**
+ * The one language a campaign's pages (landing, terms, join, email) are in. Slovenia is
+ * Slovenian. The Balkan campaign is in the visitor's own Balkan language when we know it
+ * (`hint`: a stored application's locale, or the IP country), and Croatian otherwise.
+ */
+export function campaignLocale(market: CreatorMarket, hint?: string | null): CampaignLocale {
+  if (market === "si") {
+    return "sl";
+  }
+
+  const fromLocale = (BALKAN_LOCALES as readonly string[]).includes(hint ?? "") ? (hint as CampaignLocale) : null;
+
+  return fromLocale ?? BALKAN_COUNTRY_LOCALE[hint?.trim().toUpperCase() ?? ""] ?? "hr";
 }
 
 export type EarningsEstimate = {

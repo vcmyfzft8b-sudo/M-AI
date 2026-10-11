@@ -1,54 +1,22 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { CreatorProgram } from "@/components/ugc/creator-program";
-import { SEO_SITE_URL } from "@/lib/brand";
-import { getTranslations } from "@/lib/i18n/server";
 import { normalizeReferrer } from "@/lib/ugc/creator-application";
-import { CREATOR_TERMS } from "@/lib/ugc/creator-campaigns";
-import { resolveCreatorMarket } from "@/lib/ugc/creator-market.server";
-import { getShowcaseVideos } from "@/lib/ugc/creator-showcase";
+import { CREATOR_CAMPAIGN_PATHS } from "@/lib/ugc/creator-campaigns";
+import { defaultCampaign } from "@/lib/ugc/creator-market.server";
 
-// The campaign is chosen per request from the visitor's IP country.
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const { t } = await getTranslations();
-  const title = t("ugcApply.metaTitle");
-  const description = t("ugcApply.metaDescription");
-
-  return {
-    title,
-    description,
-    alternates: { canonical: "/ugc" },
-    openGraph: { title, description, url: `${SEO_SITE_URL}/ugc`, type: "website" },
-    twitter: { card: "summary_large_image", title, description },
-  };
-}
-
 /**
- * The creator program's public page: the link shared to recruit UGC creators.
- * Applications land in `/admin/applications`. See docs/ugc-creator-program.md.
- *
- * One link for both campaigns: a visitor from Slovenia gets the Slovenian program and
- * one from the Balkans the Balkan program, each with only its own pay
- * (`resolveCreatorMarket`). `?ref=` tags the link (`?ref=instagram-story`) and is stored
- * with each application, so the admin can tell which post brought whom.
+ * The creator program has one link per campaign (`/ugc/slovenija`, `/ugc/balkan`); this
+ * short one sends a visitor to theirs by IP country, keeping a `?ref=` tag.
  */
-export default async function UgcCreatorProgramPage({
+export default async function UgcCreatorProgramRedirect({
   searchParams,
 }: {
-  searchParams: Promise<{ ref?: string | string[]; market?: string | string[] }>;
+  searchParams: Promise<{ ref?: string | string[] }>;
 }) {
-  const { ref, market: requested } = await searchParams;
-  const [{ market, preview }, videos] = await Promise.all([resolveCreatorMarket(requested), getShowcaseVideos()]);
+  const { ref } = await searchParams;
+  const referrer = normalizeReferrer(Array.isArray(ref) ? ref[0] : ref);
 
-  return (
-    <CreatorProgram
-      market={market}
-      terms={CREATOR_TERMS[market]}
-      videos={videos}
-      preview={preview}
-      referrer={normalizeReferrer(Array.isArray(ref) ? ref[0] : ref)}
-    />
-  );
+  redirect(`${CREATOR_CAMPAIGN_PATHS[await defaultCampaign()]}${referrer ? `?ref=${encodeURIComponent(referrer)}` : ""}`);
 }

@@ -22311,7 +22311,7 @@ html[data-native] .memo-toast.subtle {
 }
 
 /*
- * The UGC creator program (`/ugc`, `/ugc/terms`, `/ugc/join/<token>`;
+ * The UGC creator program (`/ugc/slovenija`, `/ugc/balkan`, their terms, `/ugc/join/<token>`;
  * src/components/ugc/creator-program.tsx and its apply sheet).
  *
  * A deliberate exception to the app's look: the page is built one-to-one on the campaign
@@ -22485,50 +22485,6 @@ html[data-native] .memo-toast.subtle {
   gap: 0.5rem;
 }
 
-.memo-cp-lang {
-  position: relative;
-}
-
-.memo-cp-lang-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--cp-ink);
-  cursor: pointer;
-}
-
-.memo-cp-lang-trigger:hover {
-  background: var(--cp-soft);
-}
-
-.memo-cp-lang-menu {
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  right: 0;
-  z-index: 30;
-  display: grid;
-  gap: 0.15rem;
-  width: 12.5rem;
-  padding: 0.4rem;
-  border-radius: 16px;
-  background: var(--cp-surface);
-  box-shadow: var(--cp-shadow-lg), 0 0 0 1px var(--cp-line);
-}
-
-.memo-cp-lang-menu .memo-language-option {
-  color: var(--cp-ink);
-}
-
-.memo-cp-lang-menu .memo-language-option:hover,
-.memo-cp-lang-menu .memo-language-option.active {
-  background: var(--cp-soft);
-}
-
 /* --- buttons -------------------------------------------------------------- */
 
 .memo-cp-cta {
@@ -22560,8 +22516,7 @@ html[data-native] .memo-toast.subtle {
 .memo-cp-cta:focus-visible,
 .memo-cp-ghost:focus-visible,
 .memo-cp-faq-item summary:focus-visible,
-.memo-cp-video:focus-visible,
-.memo-cp-lang-trigger:focus-visible {
+.memo-cp-video:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(239, 75, 69, 0.35);
 }

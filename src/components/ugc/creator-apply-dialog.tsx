@@ -408,7 +408,7 @@ export function CreatorApplyDialog({
                   <>
                     <p className="memo-cp-sheet-caption">{t("ugcApply.examplesTitle")}</p>
                     <div className="memo-cp-sheet-examples">
-                      {videos.slice(0, 3).map((video) => (
+                      {videos.slice(0, 5).map((video) => (
                         <a key={video.id} href={video.url} target="_blank" rel="noreferrer" className="memo-cp-sheet-example">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={video.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" />

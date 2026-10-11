@@ -38,22 +38,23 @@ views at €32.50 collected.
 
 ## Example videos
 
-The hero grid and the strip under the application card are real campaign posts: TikTok
-videos classified as Memo AI, from creator accounts (not our own), most viewed first, at
-most two per creator (`src/lib/ugc/creator-showcase.ts`). Stored covers expire, so
-thumbnails come from TikTok's oEmbed and the list is cached for six hours. A tap plays the
-post in TikTok's embed player. Both campaigns currently show the same posts.
+The hero wall, the sideways row, the strip under the application card and the examples
+in the form are real campaign posts (`src/lib/ugc/creator-showcase.ts`):
 
-## Design
+- from the dashboard: TikTok videos classified as Memo AI, from creator accounts (not our
+  own), most viewed first, at most three per creator;
+- plus the profiles in `SHOWCASE_PROFILES` (now `school.hacks.byklara`), read from TikTok's
+  public creator embed (`tiktok.com/embed/@handle`), keeping posts whose caption mentions
+  Memo. Add a handle there to feature another creator the dashboard does not track.
 
-The page is built one-to-one on the campaign page creators know from the owner's other
-brand (megasheet.app/parakeet-ai), section for section, with Memo AI's logo, mascot and
-coral in place of that brand's green: amber banner, floating nav, headline beside a
-collage of real campaign videos, stats, calculator, five benefit cards, tiers, "who we're
-looking for", four steps, "you're not doing this alone", the apply card and a two-column
-FAQ. It uses Inter and a fixed light palette (`--cp-*` in `redesign.css`), so it looks the
-same whatever the visitor's appearance setting. Copy uses `[[...]]` to mark the words set
-in the accent colour.
+Covers expire, so thumbnails come from TikTok's oEmbed, three requests at a time with one
+retry (TikTok answers bursts with 503s). The list is cached for six hours; an empty result
+is never cached, so a TikTok hiccup costs one visitor the videos, not six hours of them.
+A tap plays the post in TikTok's embed player. Both campaigns show the same posts.
+
+The hero follows the reference page's breakpoint, 1024px: wider, the headline sits left
+and two columns of mixed-height tiles drift up and down; narrower, the headline is centred
+over two faded covers with a row drifting sideways underneath.
 
 ## Applying
 
@@ -102,3 +103,12 @@ They have not been reviewed by a lawyer.
 
 Migration `0058_ugc_creator_applications.sql`: the `ugc_creator_applications` table
 (service role only, RLS on, no policies) and the private `ugc-application-videos` bucket.
+Until it reaches production (on merge), submitting from a dev server on the production
+`.env.local` fails with a 500: the table is not there.
+
+**Tested end to end on shared staging on 2026-10-11** (0058 applied there with
+`supabase db push --db-url <staging>`, the only pending migration): applying with a link
+and with an upload, duplicate email, missing video, wrong country for the IP, a never-
+uploaded path, the admin queue, accept (email recorded as not sent without Resend),
+the join page with a guardian, and reject. The test rows, the uploaded file and the
+temporary admin were removed afterwards; 0058 stays on staging as the PR under test.

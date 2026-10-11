@@ -254,6 +254,12 @@ function ApplicationCard({
               </dd>
             </div>
           ) : null}
+          {application.referral_code ? (
+            <div>
+              <dt>Referral code</dt>
+              <dd>{application.referral_code}</dd>
+            </div>
+          ) : null}
           {application.studies ? (
             <div>
               <dt>Studies</dt>

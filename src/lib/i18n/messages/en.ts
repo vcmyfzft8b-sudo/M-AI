@@ -1472,7 +1472,7 @@ export const en: Messages = {
   "ugcApply.calcTotal": "Estimated payout",
   "ugcApply.calcPerMonth": "/month",
   "ugcApply.calcCapped": "You've reached the monthly bonus cap ({amount}).",
-  "ugcApply.calcCodeNote": "The code bonus is an estimate: we assume one sale per 10,000 views. What you actually earn depends on how many people buy with your discount code.",
+  "ugcApply.calcCodeNote": "You get {monthly} for every monthly and {yearly} for every yearly subscription sold with your code: 20% of the price after the 50% discount. The estimate assumes one sale per 10,000 views.",
   "ugcApply.calcViewNote": "The view bonus is capped at {amount} a month.",
   "ugcApply.whyTitle": "Why [[{creators} Creators]] Joined This Program",
   "ugcApply.whyLead": "This program was built for complete beginners who want to start making money creating content. You don't need followers, editing skills or any prior experience.",

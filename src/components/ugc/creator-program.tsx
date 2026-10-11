@@ -18,6 +18,7 @@ import {
   INITIAL_VIEW_STEP,
   VIDEO_RANGE,
   VIEW_STEPS,
+  codeSaleBonus,
   estimateEarnings,
   perVideoTotal,
   tierRanges,
@@ -602,6 +603,8 @@ function FeatureCard({ title, body, action }: { title: string; body: ReactNode; 
  * one up and one down, and fade out at both ends. Each column is its list twice over and
  * moves by exactly one list's height, so the loop has no seam. Hovering pauses it.
  */
+const COLLAGE_SHAPES = ["short", "tall", "mid", "tall"] as const;
+
 function VideoCollage({
   videos,
   format,
@@ -625,6 +628,7 @@ function VideoCollage({
                 format={format}
                 onPlay={onPlay}
                 hidden={index >= column.length}
+                shape={COLLAGE_SHAPES[((index % column.length) + columnIndex) % COLLAGE_SHAPES.length]}
               />
             ))}
           </div>
@@ -671,6 +675,7 @@ function VideoTile({
   onPlay,
   compact,
   hidden,
+  shape,
 }: {
   video: ShowcaseVideo;
   format: Formatters;
@@ -678,6 +683,8 @@ function VideoTile({
   compact?: boolean;
   /** The loop's second copy: still clickable, but not read out or tabbed to twice. */
   hidden?: boolean;
+  /** The tile's height in the hero wall. */
+  shape?: (typeof COLLAGE_SHAPES)[number];
 }) {
   const { t } = useTranslations();
 
@@ -688,7 +695,10 @@ function VideoTile({
       tabIndex={hidden ? -1 : undefined}
       aria-hidden={hidden || undefined}
       data-compact={compact || undefined}
-      aria-label={t("ugcApply.playVideo", { views: format.compact(video.views) })}
+      data-shape={shape}
+      aria-label={
+        video.views > 0 ? t("ugcApply.playVideo", { views: format.compact(video.views) }) : t("ugcApply.examplesLabel")
+      }
       onClick={() => onPlay(video)}
     >
       {/* TikTok's CDN signs and expires these, so they bypass the image optimiser. */}
@@ -802,7 +812,10 @@ function EarningsCalculator({ terms, format }: { terms: CreatorTerms; format: Fo
           {estimate.capped
             ? t("ugcApply.calcCapped", { amount: format.euros(terms.bonusCap) })
             : terms.codeSharePercent > 0
-              ? t("ugcApply.calcCodeNote")
+              ? t("ugcApply.calcCodeNote", {
+                  monthly: format.euros(codeSaleBonus(terms, "monthly")),
+                  yearly: format.euros(codeSaleBonus(terms, "yearly")),
+                })
               : t("ugcApply.calcViewNote", { amount: format.euros(terms.bonusCap) })}
         </p>
       </div>

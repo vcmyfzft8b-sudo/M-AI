@@ -44,17 +44,30 @@ export function perVideoTotal(terms: CreatorTerms): number {
 export const PAID_VIDEOS_PER_MONTH = 60;
 
 /**
- * The code bonus is a share of sales, not of views, so the calculator has to guess the
- * sales a month of views brings. These two numbers are that guess, and the page says so
- * under the figure.
- *
- * Every creator code gives 50% off the first period, so a sale collects €10 (monthly)
- * or €65 (yearly) and 20% of that is €2 or €13. €6.50 assumes roughly two monthly
- * sales for every yearly one; one sale per 10,000 views is the optimistic end of what
- * the campaign has seen.
+ * What a sale made with a creator's code is worth to them. Every creator code gives 50%
+ * off the first period (`memo50-first-cycle`), and the bonus is 20% of what the customer
+ * actually pays — so a monthly sale (€20, paid €10) earns €2 and a yearly one (€130, paid
+ * €65) earns €13. The list prices are `BILLING_PLANS` in `src/lib/billing.ts`; a test
+ * fails if the two drift apart.
+ */
+export const PLAN_LIST_PRICES = { monthly: 20, yearly: 130 } as const;
+export const CODE_DISCOUNT_PERCENT = 50;
+
+export type CodePlan = keyof typeof PLAN_LIST_PRICES;
+
+/** The bonus one sale of `plan` with the creator's code earns them, in euros. */
+export function codeSaleBonus(terms: CreatorTerms, plan: CodePlan): number {
+  const paid = PLAN_LIST_PRICES[plan] * (1 - CODE_DISCOUNT_PERCENT / 100);
+
+  return Math.round(paid * terms.codeSharePercent) / 100;
+}
+
+/**
+ * The calculator has to guess how many sales a month of views brings, and the page
+ * says so under the figure: one sale per 10,000 views, one sale in three yearly.
  */
 export const CODE_SALES_PER_1K_VIEWS = 0.1;
-export const AVERAGE_CODE_SALE_CASH = 32.5;
+export const YEARLY_SALE_SHARE = 1 / 3;
 
 /** The campaign so far, for the stats band. Kept by hand: the source is not this database. */
 export const CREATOR_PROGRAM_STATS = {
@@ -126,7 +139,9 @@ export function estimateEarnings(terms: CreatorTerms, videos: number, views: num
   const instagramPay = paidVideos * terms.perInstagram;
   const videoPay = tiktokPay + instagramPay;
 
-  const codeBonus = thousands * CODE_SALES_PER_1K_VIEWS * AVERAGE_CODE_SALE_CASH * (terms.codeSharePercent / 100);
+  const bonusPerSale =
+    (1 - YEARLY_SALE_SHARE) * codeSaleBonus(terms, "monthly") + YEARLY_SALE_SHARE * codeSaleBonus(terms, "yearly");
+  const codeBonus = thousands * CODE_SALES_PER_1K_VIEWS * bonusPerSale;
   const viewBonus = thousands * terms.viewRatePer1k;
   const capped = codeBonus + viewBonus > terms.bonusCap;
   const bonus = Math.round(Math.min(codeBonus + viewBonus, terms.bonusCap));

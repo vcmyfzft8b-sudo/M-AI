@@ -23942,11 +23942,25 @@ html[data-native] .memo-toast.subtle {
   font-size: 0.875rem;
 }
 
+/* The examples fill the sheet's width evenly: three across on a phone, five on wider screens. */
 .memo-cp-sheet-examples {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
-  max-width: 24rem;
+  gap: 0.6rem;
+}
+
+.memo-cp-sheet-example:nth-child(n + 4) {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .memo-cp-sheet-examples {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .memo-cp-sheet-example:nth-child(n + 4) {
+    display: block;
+  }
 }
 
 .memo-cp-sheet-example {
@@ -24382,36 +24396,6 @@ select.memo-cp-input {
     gap: 2rem;
   }
 
-  .memo-cp-hero[data-has-videos] {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 30rem);
-  }
-
-  .memo-cp-hero {
-    align-items: center;
-    gap: 4rem;
-    padding: 3.5rem 1rem 3.5rem;
-  }
-
-  .memo-cp-hero[data-has-videos] .memo-cp-collage {
-    display: grid;
-    justify-self: end;
-    height: 35rem;
-  }
-
-  .memo-cp-hero-decor,
-  .memo-cp-marquee {
-    display: none;
-  }
-
-  .memo-cp-hero-copy {
-    justify-items: start;
-    text-align: left;
-  }
-
-  .memo-cp-hero-title {
-    font-size: 3.25rem;
-  }
-
   .memo-cp-band {
     padding: 6rem 1rem;
   }
@@ -24486,11 +24470,63 @@ select.memo-cp-input {
   }
 }
 
-@media (max-width: 1099px) {
+@media (max-width: 1023px) {
   /* Centred, the amount stays on the first line with "Get paid", as on the reference. */
   .memo-cp-hero-title > span:nth-child(-n + 2) {
     display: inline;
   }
+}
+
+/*
+ * The hero follows the reference page's own breakpoint (1024px) rather than the app's
+ * 1100px: from there the headline sits left and the video wall drifts beside it; below
+ * it the headline is centred over two faded covers with a sideways row underneath.
+ */
+@media (min-width: 1024px) {
+  .memo-cp-hero {
+    align-items: center;
+    gap: 3rem;
+    padding: 3rem 2rem 3.5rem;
+  }
+
+  .memo-cp-hero[data-has-videos] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 28rem);
+  }
+
+  .memo-cp-hero[data-has-videos] .memo-cp-collage {
+    display: grid;
+    justify-self: end;
+    width: 100%;
+    height: 34rem;
+  }
+
+  .memo-cp-hero-decor,
+  .memo-cp-marquee {
+    display: none;
+  }
+
+  .memo-cp-hero-copy {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .memo-cp-hero-title {
+    font-size: 3.25rem;
+  }
+}
+
+/* Tiles in the wall come in the reference's mix of heights; the shape is set per column
+   position, so both copies of a column match and the loop stays seamless. */
+.memo-cp-collage-track .memo-cp-video[data-shape="short"] {
+  aspect-ratio: 4 / 3.6;
+}
+
+.memo-cp-collage-track .memo-cp-video[data-shape="tall"] {
+  aspect-ratio: 9 / 16;
+}
+
+.memo-cp-collage-track .memo-cp-video[data-shape="mid"] {
+  aspect-ratio: 3 / 4;
 }
 
 @media (min-width: 860px) {
@@ -24500,7 +24536,7 @@ select.memo-cp-input {
   }
 }
 
-@media (min-width: 640px) and (max-width: 1099px) {
+@media (min-width: 640px) and (max-width: 1023px) {
   .memo-cp-hero-title {
     font-size: 3rem;
   }

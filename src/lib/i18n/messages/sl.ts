@@ -1497,7 +1497,7 @@ export const sl = {
   "ugcApply.calcTotal": "Ocenjeno izplačilo",
   "ugcApply.calcPerMonth": "/mesec",
   "ugcApply.calcCapped": "Dosežen je najvišji mesečni bonus ({amount}).",
-  "ugcApply.calcCodeNote": "Bonus s kodo je ocena: računamo z eno prodajo na 10.000 ogledov. Dejanski znesek je odvisen od tega, koliko ljudi kupi s tvojo kodo za popust.",
+  "ugcApply.calcCodeNote": "Za vsako naročnino, prodano s tvojo kodo, dobiš {monthly} (mesečna) ali {yearly} (letna), tj. 20 % cene s 50-odstotnim popustom. Ocena računa z eno prodajo na 10.000 ogledov.",
   "ugcApply.calcViewNote": "Bonus za oglede je omejen na {amount} na mesec.",
   "ugcApply.whyTitle": "Zakaj se je programu pridružilo [[{creators} ustvarjalcev]]",
   "ugcApply.whyLead": "Program je narejen za popolne začetnike, ki želijo začeti služiti z ustvarjanjem vsebin. Ne potrebuješ sledilcev, znanja montaže ali predhodnih izkušenj.",

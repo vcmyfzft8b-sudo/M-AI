@@ -22,6 +22,8 @@ import {
 import { CREATOR_DISCORD_INVITES, CREATOR_TERMS } from "../src/lib/ugc/creator-campaigns.ts";
 import {
   MARKET_COUNTRIES,
+  PLAN_LIST_PRICES,
+  codeSaleBonus,
   PAID_VIDEOS_PER_MONTH,
   VIDEO_RANGE,
   defaultMarket,
@@ -78,13 +80,23 @@ test("videos past the monthly cap earn nothing more", () => {
   assert.equal(estimateEarnings(CREATOR_TERMS.balkans, 61, 0).videoPay, 60 * 12);
 });
 
-test("the Slovenian code bonus is 20% of an estimated sale per 10,000 views", () => {
-  // 500k views -> 50 sales x €32.50 collected x 20% = €325.
+test("a code sale earns 20% of the discounted price: €2 monthly, €13 yearly", () => {
+  assert.equal(codeSaleBonus(CREATOR_TERMS.si, "monthly"), 2);
+  assert.equal(codeSaleBonus(CREATOR_TERMS.si, "yearly"), 13);
+
+  // The list prices must be the ones the app charges.
+  const billing = readSource("src/lib/billing.ts");
+  assert.match(billing, new RegExp(`monthly: \\{[^}]*amount: ${PLAN_LIST_PRICES.monthly},`, "s"));
+  assert.match(billing, new RegExp(`yearly: \\{[^}]*amount: ${PLAN_LIST_PRICES.yearly},`, "s"));
+});
+
+test("the Slovenian code bonus estimate is one sale per 10,000 views, one in three yearly", () => {
+  // 500k views -> 50 sales; (2/3 x €2 + 1/3 x €13) = €5.67 a sale -> €283.
   const estimate = estimateEarnings(CREATOR_TERMS.si, 60, 500_000);
   assert.equal(estimate.tiktokPay, 300);
   assert.equal(estimate.instagramPay, 60);
-  assert.equal(estimate.bonus, 325);
-  assert.equal(estimate.total, 685);
+  assert.equal(estimate.bonus, 283);
+  assert.equal(estimate.total, 643);
   assert.equal(estimateEarnings(CREATOR_TERMS.si, 0, 0).total, 0);
 });
 

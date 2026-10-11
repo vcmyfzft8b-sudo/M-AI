@@ -1480,7 +1480,7 @@ export const bs: Messages = {
   "ugcApply.calcTotal": "Procijenjena isplata",
   "ugcApply.calcPerMonth": "/mjesec",
   "ugcApply.calcCapped": "Dostignut je najveći mjesečni bonus ({amount}).",
-  "ugcApply.calcCodeNote": "Bonus sa kodom je procjena: računamo sa jednom prodajom na 10.000 pregleda. Stvarni iznos zavisi od toga koliko ljudi kupi sa tvojim kodom za popust.",
+  "ugcApply.calcCodeNote": "Za svaku pretplatu prodanu tvojim kodom dobijaš {monthly} (mjesečna) ili {yearly} (godišnja), tj. 20 % cijene s popustom od 50 %. Procjena računa s jednom prodajom na 10.000 pregleda.",
   "ugcApply.calcViewNote": "Bonus za preglede ograničen je na {amount} mjesečno.",
   "ugcApply.whyTitle": "Zašto se programu pridružilo [[{creators} kreatora]]",
   "ugcApply.whyLead": "Program je napravljen za potpune početnike koji žele početi zarađivati pravljenjem sadržaja. Ne trebaju ti pratioci, znanje montaže ni prethodno iskustvo.",

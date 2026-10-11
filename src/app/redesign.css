@@ -22365,7 +22365,7 @@ html[data-native] .memo-toast.subtle {
   color: var(--cp-accent);
 }
 
-/* What an admin sees when opening the other campaign's page with ?market=. */
+/* What an admin sees on the other campaign's page (admins are not redirected). */
 .memo-cp-preview {
   margin: 0;
   padding: max(0.5rem, var(--memo-safe-top, 0px)) 1rem 0.5rem;

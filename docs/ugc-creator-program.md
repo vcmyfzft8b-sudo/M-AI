@@ -40,7 +40,8 @@ Add `?ref=<tag>` to see in the admin which post brought each applicant. The shor
   campaign's page.
 - An application's campaign is the visitor's IP campaign when they have one (they can only
   have seen that page), else the page they applied on; the country must be one of that
-  campaign's (or "other").
+  campaign's (or "other"). So every new application is stored as `si` or `balkans`; the
+  `other` market (and its two "Accept into …" buttons in the admin) only covers older rows.
 - Locally there is no IP country, so both links open; send the header to test the
   redirects (`curl -H "x-vercel-ip-country: HR" localhost:<port>/ugc/slovenija` → 307).
 
@@ -95,7 +96,9 @@ application per email.
 The queue shows each applicant's video (uploaded file or embedded link) beside their
 details. **Accept** saves the decision first, then emails the creator, in the language
 they applied in, a personal join link (`/ugc/join/<token>`). **Reject** sends nothing.
-Applicants from outside both campaigns get two accept buttons, one per campaign.
+An application stored without a campaign (`other`, older rows only) gets two accept
+buttons, one per campaign. Uploaded videos stay in the bucket's `pending/` folder; nothing
+clears ones that were never submitted yet.
 
 The join page shows the Terms of Participation for their campaign. The creator types
 their name (a parent or guardian's too if they are under 18) and ticks the box; that

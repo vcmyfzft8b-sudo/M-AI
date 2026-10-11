@@ -33,8 +33,9 @@ const checked = z.literal(true);
 
 export const applicationSchema = z
   .object({
-    firstName: z.string().trim().min(1).max(60),
-    lastName: z.string().trim().min(1).max(60),
+    // 59 + space + 59 fits the table's 120-character full_name.
+    firstName: z.string().trim().min(1).max(59),
+    lastName: z.string().trim().min(1).max(59),
     email: z.string().trim().toLowerCase().max(254).email(),
     phone: z
       .string()

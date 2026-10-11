@@ -38,7 +38,7 @@ export function CreatorJoinForm({
   if (accepted) {
     // Croatian, Bosnian and Serbian long dates end in a full stop ("11. listopada 2026."),
     // which the sentence around it already supplies.
-    const date = new Intl.DateTimeFormat(LOCALE_INTL_TAG[locale], { dateStyle: "long" })
+    const date = new Intl.DateTimeFormat(LOCALE_INTL_TAG[locale], { dateStyle: "long", timeZone: "Europe/Ljubljana" })
       .format(new Date(accepted.at))
       .replace(/\.$/, "");
 

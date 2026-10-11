@@ -1,6 +1,7 @@
 import "server-only";
 
 import { unstable_cache } from "next/cache";
+import { after } from "next/server";
 
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
@@ -305,9 +306,46 @@ const cachedShowcaseVideos = unstable_cache(loadShowcaseVideos, ["ugc-creator-sh
   revalidate: 6 * 60 * 60,
 });
 
-/** The cached pool in a fresh random order: a different wall on every visit. */
+/** How long a page waits for the pool before rendering without videos. */
+const SHOWCASE_DEADLINE_MS = 3_500;
+/** After a failed load, this instance stops asking TikTok for a while. */
+const RETRY_AFTER_FAILURE_MS = 5 * 60 * 1000;
+let lastFailureAt = 0;
+
+/**
+ * The cached pool in a fresh random order: a different wall on every visit.
+ *
+ * Never holds the page up for long. A cold or failing load (TikTok slow, blocked, or
+ * answering with nothing) can take tens of seconds, so the page waits at most
+ * `SHOWCASE_DEADLINE_MS` and renders without videos; the load carries on after the
+ * response (`after`) and fills the cache for the next visitor. A load that fails is not
+ * retried by this instance for a few minutes, so an outage does not mean a fresh scrape
+ * on every visit.
+ */
 export async function getShowcaseVideos(): Promise<ShowcaseVideo[]> {
-  return shuffleShowcase(await cachedShowcaseVideos().catch(() => []));
+  if (Date.now() - lastFailureAt < RETRY_AFTER_FAILURE_MS) {
+    return [];
+  }
+
+  const load = cachedShowcaseVideos().catch((): ShowcaseVideo[] => {
+    lastFailureAt = Date.now();
+    return [];
+  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<ShowcaseVideo[]>((resolve) => {
+    timer = setTimeout(() => resolve([]), SHOWCASE_DEADLINE_MS);
+  });
+
+  try {
+    after(load);
+  } catch {
+    // Outside a request (a test, a script) there is nothing to keep alive.
+  }
+
+  const videos = await Promise.race([load, deadline]);
+  clearTimeout(timer);
+
+  return shuffleShowcase(videos);
 }
 
 /** Fisher-Yates, on a copy. */

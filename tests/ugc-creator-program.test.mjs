@@ -121,6 +121,18 @@ test("tier ranges come from the calculator's own arithmetic, the top tier open-e
   assert.equal(tierRanges(CREATOR_TERMS.balkans)[2].low, 2700);
 });
 
+test("no campaign's pay figure is written into the shared language files", () => {
+  // Every page gets the whole catalogue for its language, so a figure typed into a
+  // string reaches both campaigns' browsers. Pay comes in through placeholders.
+  for (const [locale, catalogue] of Object.entries(CATALOGUES)) {
+    for (const [key, value] of Object.entries(catalogue)) {
+      if (key.startsWith("ugcApply.") || key.startsWith("ugcJoin.")) {
+        assert.doesNotMatch(value, /\d\s?%|\d+-odstot|€\s?\d|\d\s?€/, `${locale} ${key}`);
+      }
+    }
+  }
+});
+
 test("the views slider stops at 2M, where the Balkan view bonus hits its cap", () => {
   const top = VIEW_STEPS[VIEW_STEPS.length - 1];
   assert.equal(top, 2_000_000);
@@ -327,7 +339,9 @@ test("each campaign speaks one language: Slovenian, or the visitor's Balkan lang
 
 test("the showcase is a mix of creators, shuffled on every visit", () => {
   const showcase = readSource("src/lib/ugc/creator-showcase.ts");
-  assert.match(showcase, /return shuffleShowcase\(await cachedShowcaseVideos\(\)/);
+  assert.match(showcase, /return shuffleShowcase\(videos\)/);
+  // TikTok being slow or down must never hold the page up.
+  assert.match(showcase, /Promise\.race\(\[load, deadline\]\)/);
   assert.match(showcase, /PER_CREATOR/);
 });
 

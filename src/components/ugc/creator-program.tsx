@@ -13,6 +13,8 @@ import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, BRAND_SUPPOR
 import { LOCALE_INTL_TAG, type Locale } from "@/lib/i18n/locales";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import {
+  CODE_DISCOUNT_PERCENT,
+  CODE_SALES_PER_1K_VIEWS,
   CREATOR_PROGRAM_STATS,
   INITIAL_VIEW_STEP,
   VIDEO_RANGE,
@@ -27,14 +29,14 @@ import {
 import { formatCurrency } from "@/lib/utils";
 
 /**
- * The public creator-program page at `/ugc`, built section for section on the campaign
+ * The public creator-program page, one per campaign, built section for section on the campaign
  * page creators already know from our other brand (megasheet.app/parakeet-ai), in Memo
  * AI's colours: the banner, the floating nav, the headline beside a collage of real
  * campaign videos, the numbers, the earnings calculator, the benefit cards, the tiers,
  * "who we're looking for", the four steps, the apply card and the FAQ.
  *
  * Slovenia and the Balkans are separate programs with different pay. The server decides
- * which one this visitor gets (`resolveCreatorMarket`, from the IP country) and hands
+ * which page this visitor may see (`guardCampaignPage`, from the IP country) and hands
  * over only that campaign's terms: there is no switch, and the other's pay is not in
  * the page at all. The videos are real campaign posts (`creator-showcase.ts`).
  */
@@ -122,7 +124,7 @@ export function CreatorProgram({
   termsHref: string;
   /** Campaign videos, already shuffled for this visit; each section takes its own slice. */
   videos: ShowcaseVideo[];
-  /** An admin looking at the other campaign's page with `?market=`. */
+  /** An admin looking at the other campaign's page (admins are not redirected). */
   preview: boolean;
   referrer: string | null;
 }) {
@@ -274,7 +276,7 @@ export function CreatorProgram({
 
           <div className="memo-cp-benefits">
             <BenefitCard
-              title={t("ugcApply.why.paidTitle")}
+              title={t(terms.codeSharePercent > 0 ? "ugcApply.why.paidTitleCode" : "ugcApply.why.paidTitle")}
               body={t("ugcApply.why.paidBody", { perVideo })}
               art={<PaidArt videos={paidCovers} amount={perVideo} />}
             />
@@ -839,6 +841,9 @@ function EarningsCalculator({ terms, format }: { terms: CreatorTerms; format: Fo
               ? t("ugcApply.calcCodeNote", {
                   monthly: format.euros(codeSaleBonus(terms, "monthly")),
                   yearly: format.euros(codeSaleBonus(terms, "yearly")),
+                  share: terms.codeSharePercent,
+                  discount: CODE_DISCOUNT_PERCENT,
+                  views: format.whole(1000 / CODE_SALES_PER_1K_VIEWS),
                 })
               : t("ugcApply.calcViewNote", { amount: format.euros(terms.bonusCap) })}
         </p>

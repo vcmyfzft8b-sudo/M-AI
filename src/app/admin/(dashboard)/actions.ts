@@ -1062,10 +1062,19 @@ async function deliverAcceptance(
     idempotencyKey,
   });
 
-  await updateIn(createSupabaseServiceRoleClient(), "ugc_creator_applications", {
+  const { error } = await updateIn(createSupabaseServiceRoleClient(), "ugc_creator_applications", {
     accepted_email_sent_at: result.sent ? new Date().toISOString() : null,
     accepted_email_error: result.sent ? null : result.error,
   }).eq("id", application.id);
+
+  if (error) {
+    return {
+      sent: false,
+      error: result.sent
+        ? `The email was sent, but recording that failed: ${error.message}`
+        : `${result.error} Recording that also failed: ${error.message}`,
+    };
+  }
 
   return result;
 }

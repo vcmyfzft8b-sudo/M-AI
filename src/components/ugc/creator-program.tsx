@@ -271,8 +271,8 @@ export function CreatorProgram({
             <BenefitCard title={t("ugcApply.why.guideTitle")} body={t("ugcApply.why.guideBody")} art={<GuideArt />} />
             <BenefitCard
               wide
-              title={t("ugcApply.why.unlimitedTitle")}
-              body={t("ugcApply.why.unlimitedBody", { top: format.euros(topTier.low) })}
+              title={t("ugcApply.why.unlimitedTitle", { cap: format.euros(terms.bonusCap) })}
+              body={t("ugcApply.why.unlimitedBody", { top: format.euros(topTier.low), cap: format.euros(terms.bonusCap) })}
               art={<EarningsArt amount={format.euros(topTier.low)} />}
             />
             <BenefitCard
@@ -800,10 +800,10 @@ function EarningsCalculator({ terms, format }: { terms: CreatorTerms; format: Fo
         </p>
         <p className="memo-cp-payout-note">
           {estimate.capped
-            ? t("ugcApply.calcCapped", { amount: format.euros(terms.viewBonusCap ?? 0) })
+            ? t("ugcApply.calcCapped", { amount: format.euros(terms.bonusCap) })
             : terms.codeSharePercent > 0
               ? t("ugcApply.calcCodeNote")
-              : t("ugcApply.calcViewNote", { amount: format.euros(terms.viewBonusCap ?? 0) })}
+              : t("ugcApply.calcViewNote", { amount: format.euros(terms.bonusCap) })}
         </p>
       </div>
     </div>

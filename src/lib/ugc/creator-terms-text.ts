@@ -59,7 +59,7 @@ Pogodba je sklenjena, ko po sprejetju tvoje prijave odpreš svojo osebno povezav
 ### Kampanja Slovenija
 
 - **{siTikTok} za vsak upravičen video, objavljen na TikToku**, in še **{siInstagram}**, ko isti video objaviš tudi v Instagram Reels (skupaj do {siVideo} na video).
-- **Bonus {siShare} %** zneska, ki so ga v koledarskem mesecu dejansko plačali kupci, ki so naročnino Memo AI kupili s tvojo kodo za popust, brez DDV, vračil in povratnih bremenitev. Brez zgornje meje.
+- **Bonus {siShare} %** zneska, ki so ga v koledarskem mesecu dejansko plačali kupci, ki so naročnino Memo AI kupili s tvojo kodo za popust, brez DDV, vračil in povratnih bremenitev, do največ **{siCap} na mesec**.
 <!--/si-->
 
 <!--balkans-->
@@ -188,7 +188,7 @@ If you are under 18, a parent or legal guardian must accept these Terms with you
 ### Slovenia Campaign
 
 - **{siTikTok} for every Eligible Video published on TikTok**, and **{siInstagram} more** when you also publish the same Video on Instagram Reels (up to {siVideo} per Video).
-- **A {siShare}% bonus** on the amount actually paid in the calendar month by customers who bought a Memo AI subscription with your Discount Code, excluding VAT, refunds and chargebacks. No upper limit.
+- **A {siShare}% bonus** on the amount actually paid in the calendar month by customers who bought a Memo AI subscription with your Discount Code, excluding VAT, refunds and chargebacks, up to **{siCap} a month**.
 <!--/si-->
 
 <!--balkans-->
@@ -317,7 +317,7 @@ Ako imaš manje od 18 godina, uvjete s tobom mora prihvatiti roditelj ili zakons
 ### Kampanja Slovenija
 
 - **{siTikTok} za svaki prihvatljiv video objavljen na TikToku** i još **{siInstagram}** kad isti video objaviš i u Instagram Reelsima (ukupno do {siVideo} po videu).
-- **Bonus od {siShare} %** iznosa koji su u kalendarskom mjesecu stvarno platili kupci koji su pretplatu na Memo AI kupili s tvojim kodom za popust, bez PDV-a, povrata i storniranih plaćanja. Bez gornje granice.
+- **Bonus od {siShare} %** iznosa koji su u kalendarskom mjesecu stvarno platili kupci koji su pretplatu na Memo AI kupili s tvojim kodom za popust, bez PDV-a, povrata i storniranih plaćanja, do najviše **{siCap} mjesečno**.
 <!--/si-->
 
 <!--balkans-->
@@ -446,7 +446,7 @@ Ako imaš manje od 18 godina, uslove s tobom mora prihvatiti roditelj ili zakons
 ### Kampanja Slovenija
 
 - **{siTikTok} za svaki prihvatljiv video objavljen na TikToku** i još **{siInstagram}** kad isti video objaviš i u Instagram Reelsima (ukupno do {siVideo} po videu).
-- **Bonus od {siShare} %** iznosa koji su u kalendarskom mjesecu stvarno platili kupci koji su pretplatu na Memo AI kupili s tvojim kodom za popust, bez PDV-a, povrata i storniranih plaćanja. Bez gornje granice.
+- **Bonus od {siShare} %** iznosa koji su u kalendarskom mjesecu stvarno platili kupci koji su pretplatu na Memo AI kupili s tvojim kodom za popust, bez PDV-a, povrata i storniranih plaćanja, do najviše **{siCap} mjesečno**.
 <!--/si-->
 
 <!--balkans-->
@@ -575,7 +575,7 @@ Ako imaš manje od 18 godina, uslove sa tobom mora da prihvati roditelj ili zako
 ### Kampanja Slovenija
 
 - **{siTikTok} za svaki prihvatljiv snimak objavljen na TikToku** i još **{siInstagram}** kad isti snimak objaviš i u Instagram Reels-u (ukupno do {siVideo} po snimku).
-- **Bonus od {siShare} %** iznosa koji su u kalendarskom mesecu zaista platili kupci koji su pretplatu na Memo AI kupili sa tvojim kodom za popust, bez PDV-a, povraćaja i storniranih plaćanja. Bez gornje granice.
+- **Bonus od {siShare} %** iznosa koji su u kalendarskom mesecu zaista platili kupci koji su pretplatu na Memo AI kupili sa tvojim kodom za popust, bez PDV-a, povraćaja i storniranih plaćanja, do najviše **{siCap} mesečno**.
 <!--/si-->
 
 <!--balkans-->

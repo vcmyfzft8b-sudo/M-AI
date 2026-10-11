@@ -30,11 +30,12 @@ export function creatorTermsMarkdown(locale: Locale, market: CreatorMarket): str
     siInstagram: euros(si.perInstagram),
     siVideo: euros(perVideoTotal(si)),
     siShare: String(si.codeSharePercent),
+    siCap: euros(si.bonusCap),
     bkTikTok: euros(balkans.perTikTok),
     bkInstagram: euros(balkans.perInstagram),
     bkVideo: euros(perVideoTotal(balkans)),
     bkRate: euros(balkans.viewRatePer1k),
-    bkCap: euros(balkans.viewBonusCap ?? 0),
+    bkCap: euros(balkans.bonusCap),
   };
 
   return CREATOR_TERMS_TEXT[locale]

@@ -31,8 +31,8 @@ export type CreatorTerms = {
   codeSharePercent: number;
   /** Euros per 1,000 views. 0 when not offered. */
   viewRatePer1k: number;
-  /** Most the view bonus pays in a month, in euros. Null when uncapped. */
-  viewBonusCap: number | null;
+  /** Most the bonus (code share and views together) pays in a month, in euros. */
+  bonusCap: number;
 };
 
 /** The most one video can earn in flat fees: posted on TikTok and on Instagram. */
@@ -128,9 +128,8 @@ export function estimateEarnings(terms: CreatorTerms, videos: number, views: num
 
   const codeBonus = thousands * CODE_SALES_PER_1K_VIEWS * AVERAGE_CODE_SALE_CASH * (terms.codeSharePercent / 100);
   const viewBonus = thousands * terms.viewRatePer1k;
-  const cap = terms.viewBonusCap ?? Number.POSITIVE_INFINITY;
-  const capped = viewBonus > cap;
-  const bonus = Math.round(codeBonus + Math.min(viewBonus, cap));
+  const capped = codeBonus + viewBonus > terms.bonusCap;
+  const bonus = Math.round(Math.min(codeBonus + viewBonus, terms.bonusCap));
 
   return { tiktokPay, instagramPay, videoPay, bonus, total: videoPay + bonus, capped };
 }

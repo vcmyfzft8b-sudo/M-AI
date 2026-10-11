@@ -40,9 +40,9 @@ function readSource(relativePath) {
 
 test("the published pay is what was agreed: per platform, 60 videos a month", () => {
   // Slovenia: €5 on TikTok + €1 more on Instagram, and 20% of code sales.
-  assert.deepEqual(CREATOR_TERMS.si, { perTikTok: 5, perInstagram: 1, codeSharePercent: 20, viewRatePer1k: 0, viewBonusCap: null });
+  assert.deepEqual(CREATOR_TERMS.si, { perTikTok: 5, perInstagram: 1, codeSharePercent: 20, viewRatePer1k: 0, bonusCap: 2000 });
   // Balkans: €7 on TikTok + €5 more on Instagram (€12), and €1 per 1,000 views up to €2,000.
-  assert.deepEqual(CREATOR_TERMS.balkans, { perTikTok: 7, perInstagram: 5, codeSharePercent: 0, viewRatePer1k: 1, viewBonusCap: 2000 });
+  assert.deepEqual(CREATOR_TERMS.balkans, { perTikTok: 7, perInstagram: 5, codeSharePercent: 0, viewRatePer1k: 1, bonusCap: 2000 });
   assert.equal(perVideoTotal(CREATOR_TERMS.si), 6);
   assert.equal(perVideoTotal(CREATOR_TERMS.balkans), 12);
   assert.equal(PAID_VIDEOS_PER_MONTH, 60);
@@ -62,6 +62,15 @@ test("the Balkan view bonus pays €1 per thousand views and stops at the cap", 
   assert.equal(capped.bonus, 2000);
   assert.equal(capped.capped, true);
   assert.equal(capped.total, 60 * 12 + 2000);
+});
+
+test("the Slovenian code bonus is capped at €2,000 a month too", () => {
+  const estimate = estimateEarnings(CREATOR_TERMS.si, 60, 5_000_000);
+
+  assert.equal(estimate.bonus, 2000);
+  assert.equal(estimate.capped, true);
+  assert.equal(estimate.total, 60 * 6 + 2000);
+  assert.match(creatorTermsMarkdown("en", "si"), /up to \*\*€2,000 a month\*\*/);
 });
 
 test("videos past the monthly cap earn nothing more", () => {
@@ -235,7 +244,7 @@ test("each campaign's terms show its own pay and never the other's", () => {
   assert.match(si, /€1 more/);
   assert.match(si, /20% bonus/);
   assert.match(si, /60 Eligible Videos per calendar month/);
-  assert.doesNotMatch(si, /€7|€12|€2,000|Balkans|Croatia\b/);
+  assert.doesNotMatch(si, /€7|€12|per 1,000 Views|Balkans|Croatia\b/);
 
   assert.match(balkans, /€7 for every Eligible Video published on TikTok/);
   assert.match(balkans, /€5 more/);

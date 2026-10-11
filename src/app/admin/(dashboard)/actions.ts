@@ -41,8 +41,9 @@ import {
   reclassifyAll,
   refreshAccountProfile,
 } from "@/lib/ugc/sync";
-import type { UgcCreatorApplicationRow } from "@/lib/database.types";
+import type { Json, UgcCreatorApplicationRow } from "@/lib/database.types";
 import { campaignLocale, type CreatorMarket } from "@/lib/ugc/creator-program";
+import { contractPaySchema } from "@/lib/ugc/creator-pay";
 import { sendAcceptanceEmail } from "@/lib/ugc/send-acceptance-email";
 
 /**
@@ -1217,4 +1218,106 @@ export async function readOnlineCountAction(): Promise<number> {
   const live = await getRealtimeVisitors();
 
   return live ?? (await getOnlineVisitors()).length;
+}
+
+/* ----------------------------------------------------------- contracts -- */
+
+const CONTRACT_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Creates a contract for a creator already in the program, with the deal entered here
+ * (`ContractPay`). Nothing is emailed: the page shows the signing link
+ * (`/ugc/join/<token>`), and the admin sends it to the creator themselves. A contract
+ * is never edited once created: a changed deal is a new contract, and the old one can be
+ * withdrawn.
+ */
+export async function createCreatorContractAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const context = await requireAdmin();
+  const creatorId = readString(formData, "creator_id");
+  const fullName = readString(formData, "full_name");
+  const email = readString(formData, "email").toLowerCase();
+  const market = readString(formData, "market");
+  const requestedLocale = readString(formData, "locale");
+
+  if (!creatorId) {
+    return fail("Missing creator.");
+  }
+
+  if (fullName.length < 3 || fullName.length > 120) {
+    return fail("Enter their full name as it should appear on the contract.");
+  }
+
+  if (email && (!CONTRACT_EMAIL.test(email) || email.length > 254)) {
+    return fail("That email address does not look right (or leave it empty).");
+  }
+
+  if (market !== "si" && market !== "balkans") {
+    return fail("Pick the campaign: Slovenia or Balkans.");
+  }
+
+  const pay = contractPaySchema.safeParse({
+    perTikTok: readString(formData, "per_tiktok") || 0,
+    perInstagram: readString(formData, "per_instagram") || 0,
+    viewRatePer1k: readString(formData, "view_rate") || 0,
+    codeSharePercent: readString(formData, "code_share") || 0,
+    monthlyFee: readString(formData, "monthly_fee") || 0,
+    bonusCap: readString(formData, "bonus_cap"),
+    videosPerMonth: readString(formData, "videos_per_month"),
+    note: readString(formData, "note"),
+  });
+
+  if (!pay.success) {
+    return fail("Check the pay: amounts are 0 or more, the deal has to pay something, and the note fits in 2,000 characters.");
+  }
+
+  const serviceRole = createSupabaseServiceRoleClient();
+  const { data: creator } = await serviceRole.from("ugc_creators").select("id").eq("id", creatorId).maybeSingle();
+
+  if (!creator) {
+    return fail("That creator no longer exists.");
+  }
+
+  const { error } = await insertInto(serviceRole, "ugc_creator_contracts", {
+    creator_id: creatorId,
+    email: email || null,
+    full_name: fullName,
+    market,
+    locale: campaignLocale(market, requestedLocale),
+    minor: formData.get("minor") === "on",
+    pay: pay.data as unknown as Json,
+    created_by: context.user.email ?? null,
+  });
+
+  if (error) {
+    return fail(`Could not save the contract: ${error.message}`);
+  }
+
+  return ok(`Contract for ${fullName} created. Copy its signing link below and send it to them.`);
+}
+
+/** Withdraws an unsigned contract: its link stops working. A signed one stays on record. */
+export async function voidCreatorContractAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireAdmin();
+  const id = readString(formData, "contract_id");
+
+  if (!id) {
+    return fail("Missing contract.");
+  }
+
+  const { data, error } = await updateIn(createSupabaseServiceRoleClient(), "ugc_creator_contracts", { status: "void" })
+    .eq("id", id)
+    .eq("status", "sent")
+    .select("id");
+
+  if (error) {
+    return fail(`Could not withdraw it: ${error.message}`);
+  }
+
+  return data && data.length > 0 ? ok("Contract withdrawn; its link no longer opens.") : fail("Only an unsigned contract can be withdrawn.");
 }

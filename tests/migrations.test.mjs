@@ -166,6 +166,7 @@ test("every migration applies in order on an empty database", options, async () 
     "ugc_classification_rules",
     "ugc_creator_accounts",
     "ugc_creator_applications",
+    "ugc_creator_contracts",
     "ugc_creator_payouts",
     "ugc_creators",
     "ugc_sync_runs",

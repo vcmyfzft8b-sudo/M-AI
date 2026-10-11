@@ -6,10 +6,15 @@
  * `CREATOR_TERMS_VERSION` in `creator-terms.ts` whenever the meaning changes, so every
  * acceptance stays tied to the words that were accepted.
  *
- * `{placeholders}` are filled from the program config (pay, caps). Everything that is
- * one campaign's alone sits between `<!--si-->`/`<!--/si-->` or
- * `<!--balkans-->`/`<!--/balkans-->` markers: the two campaigns are separate programs,
- * and a creator's copy never shows the other campaign's pay or terms.
+ * `{placeholders}` are filled in by `creatorTermsMarkdown`: the pay list, the monthly
+ * video limit and any special agreement come from the creator's own deal (`ContractPay`),
+ * so one template serves the standard campaigns and every individual contract. Marked
+ * blocks are kept or dropped per contract:
+ *
+ * - `<!--si-->` / `<!--balkans-->`: one campaign's alone. The two campaigns are separate
+ *   programs, and a creator's copy never shows the other campaign's terms.
+ * - `<!--code-->` / `<!--views-->`: only when the deal pays a code share / a view bonus.
+ * - `<!--applied-->`: only for creators who applied with a sample video.
  */
 
 export const CREATOR_TERMS_TEXT = {
@@ -21,7 +26,7 @@ Različica {version}
 
 Ti pogoji sodelovanja („pogoji“) so pogodba med teboj („ustvarjalec“) in **Memo AI, Nace Valenčič s.p., poslovno svetovanje**, Zgoša 87, 4275 Begunje na Gorenjskem, Slovenija, matična številka 7578474000, davčna številka 52958248 („Memo AI“, „mi“), ki razvija aplikacijo za učenje Memo AI.
 
-Pogodba je sklenjena, ko po sprejetju tvoje prijave odpreš svojo osebno povezavo za pridružitev, vpišeš svoje ime in klikneš „Sprejmi in se pridruži“. Hranimo zapis o različici pogojev, ki si jo sprejel, datumu in uri ter vpisanem imenu. Od takrat ti pogoji urejajo tvoje sodelovanje, dokler se to ne konča po 9. točki.
+Pogodba je sklenjena, ko odpreš svojo osebno povezavo za pridružitev, ki ti jo pošljemo, vpišeš svoje ime in klikneš „Sprejmi in se pridruži“. Hranimo zapis o različici pogojev, ki si jo sprejel, datumu in uri ter vpisanem imenu. Od takrat ti pogoji urejajo tvoje sodelovanje, dokler se to ne konča po 9. točki.
 
 Če si mlajši od 18 let, mora pogoje skupaj s tabo sprejeti eden od staršev ali zakoniti zastopnik. Z vpisom njegovega imena potrjuješ, da jih je prebral in se z njimi strinja.
 
@@ -36,9 +41,9 @@ Pogodba je sklenjena, ko po sprejetju tvoje prijave odpreš svojo osebno povezav
 - **Video**: nov, izviren kratek video o Memo AI, ki ga posnameš za program in še ni bil objavljen na nobenem profilu.
 - **Upravičen video**: video, ki izpolnjuje točko 3.2, je objavljen na javnem profilu TikTok ali Instagram, ki ga upravljaš, in ostane objavljen, kot zahteva 7. točka.
 - **Navodila**: navodila, formati, primeri in povratne informacije, ki ti jih damo na Discordu kampanje ali po e-pošti.
-<!--si-->
+<!--code-->
 - **Koda za popust**: tvoja osebna koda Memo AI.
-<!--/si-->
+<!--/code-->
 - **Ogledi**: ogledi tvojih upravičenih videov, kot jih kaže analitika platforme.
 
 Izrazi v moški slovnični obliki (na primer ustvarjalec) so uporabljeni kot nevtralni in veljajo enako za vse spole.
@@ -47,11 +52,11 @@ Izrazi v moški slovnični obliki (na primer ustvarjalec) so uporabljeni kot nev
 
 3.1 Videe ustvarjaš in objavljaš samostojno, po svojem urniku in v skladu z navodili. Najmanjšega števila videov ni, priporočamo pa vsakodnevno objavljanje. Če 14 dni zapored ne objaviš ničesar, lahko tvoje sodelovanje končamo (9. točka).
 
-3.2 Video je upravičen, če: sledi navodilom in našim povratnim informacijam; je vsaj tako kakovosten kot testni video, s katerim si se prijavil; si v njem ti; je pravilno označen kot oglas (6. točka); in ne krši teh pogojev, zakona ali pravil platforme.
+3.2 Video je upravičen, če: sledi navodilom in našim povratnim informacijam<!--applied-->; je vsaj tako kakovosten kot testni video, s katerim si se prijavil<!--/applied-->; si v njem ti; je pravilno označen kot oglas (6. točka); in ne krši teh pogojev, zakona ali pravil platforme.
 
 3.3 Vsak video objaviš na TikToku in isti video lahko objaviš tudi v Instagram Reels; še vedno je to en upravičen video, plačan po platformah, kot določa 4. točka. Ponovna objava starejšega videa je dovoljena, a ni nov upravičen video (njegovi ogledi se štejejo, kjer se plačujejo ogledi).
 
-3.4 Plačilo na video velja za največ **{monthCap} upravičenih videov na koledarski mesec**.
+3.4 {videoLimit}
 
 3.5 Uporabljaš svoj telefon in opremo ter sam kriješ svoje stroške.
 
@@ -59,17 +64,14 @@ Izrazi v moški slovnični obliki (na primer ustvarjalec) so uporabljeni kot nev
 
 <!--si-->
 ### Kampanja Slovenija
-
-- **{siTikTok} za vsak upravičen video, objavljen na TikToku**, in še **{siInstagram}**, ko isti video objaviš tudi v Instagram Reels (skupaj do {siVideo} na video).
-- **Bonus {siShare} %** zneska, ki so ga v koledarskem mesecu dejansko plačali kupci, ki so naročnino Memo AI kupili s tvojo kodo za popust, brez DDV, vračil in povratnih bremenitev, do največ **{siCap} na mesec**.
 <!--/si-->
-
 <!--balkans-->
 ### Kampanja Balkan
-
-- **{bkTikTok} za vsak upravičen video, objavljen na TikToku**, in še **{bkInstagram}**, ko isti video objaviš tudi v Instagram Reels (skupaj do {bkVideo} na video).
-- **Bonus za oglede {bkRate} na 1000 ogledov**, ki jih tvoji upravičeni videi zberejo v koledarskem mesecu, do največ **{bkCap} na mesec**.
 <!--/balkans-->
+
+{payList}
+
+{payNote}
 
 ### Izplačilo
 
@@ -77,7 +79,7 @@ Izrazi v moški slovnični obliki (na primer ustvarjalec) so uporabljeni kot nev
 
 4.2 Izplačujemo enkrat na mesec, za pretekli koledarski mesec, v 15 dneh po tem, ko pošlješ mesečno poročilo (8. točka), na bančni račun (IBAN) ali Revolut.
 
-4.3 Ocene in primeri zaslužka na naši spletni strani so ponazoritve, ne zagotovila. Plačamo samo upravičene videe in bonus po tej točki.
+4.3 Ocene in primeri zaslužka na naši spletni strani so ponazoritve, ne zagotovila. Plačamo samo, kar določa ta točka.
 
 4.4 Če po izplačilu ugotovimo, da video ni bil upravičen, lahko znesek pobotamo z naslednjim izplačilom.
 
@@ -101,13 +103,13 @@ Videi so plačani oglasi. Vsak video moraš označiti kot oglas z nastavitvijo p
 
 ## 8. Mesečno poročilo
 
-Do 5. dne v mesecu nam prek Discorda ali e-pošte pošlješ povezave do videov, objavljenih v preteklem mesecu, in posnetke zaslona analitike z ogledi ali kar zahtevamo. Za vsak video lahko zahtevamo celotno analitiko. Izplačilo je odvisno od poročila: če ga ne pošlješ v 30 dneh po koncu meseca, plačamo le plačilo na video za videe, ki jih lahko preverimo sami<!--balkans-->, bonus za oglede za ta mesec pa zapade<!--/balkans-->.
+Do 5. dne v mesecu nam prek Discorda ali e-pošte pošlješ povezave do videov, objavljenih v preteklem mesecu, in posnetke zaslona analitike z ogledi ali kar zahtevamo. Za vsak video lahko zahtevamo celotno analitiko. Izplačilo je odvisno od poročila: če ga ne pošlješ v 30 dneh po koncu meseca, plačamo le plačilo na video za videe, ki jih lahko preverimo sami<!--views-->, bonus za oglede za ta mesec pa zapade<!--/views-->.
 
 ## 9. Konec sodelovanja
 
 9.1 Ti ali mi lahko sodelovanje kadar koli končamo s takojšnjim učinkom, s sporočilom po e-pošti ali na Discordu. Razlog ni potreben.
 
-9.2 Ob koncu plačamo upravičene videe, objavljene do tega dne, in zaslužen bonus, ko v 7 dneh pošlješ zadnje poročilo.
+9.2 Ob koncu plačamo vse, kar si po 4. točki zaslužil do tega dne, ko v 7 dneh pošlješ zadnje poročilo.
 
 9.3 Točke 5, 7, 10, 11.3 in 13 veljajo tudi po koncu sodelovanja.
 
@@ -152,7 +154,7 @@ Version {version}
 
 These Terms of Participation (the "Terms") are the agreement between you (the "Creator") and **Memo AI, Nace Valenčič s.p., poslovno svetovanje**, Zgoša 87, 4275 Begunje na Gorenjskem, Slovenia, registration number 7578474000, tax number 52958248 ("Memo AI", "we"), which makes the Memo AI study app.
 
-The agreement is concluded when, after we have accepted your application, you open your personal join link, type your name and click "Accept and join". We keep a record of the version you accepted, the date and time, and the name you typed. From then on these Terms govern your participation until it ends under Section 9.
+The agreement is concluded when you open the personal join link we send you, type your name and click "Accept and join". We keep a record of the version you accepted, the date and time, and the name you typed. From then on these Terms govern your participation until it ends under Section 9.
 
 If you are under 18, a parent or legal guardian must accept these Terms with you. By typing their name you confirm that they have read and agree to them.
 
@@ -167,20 +169,20 @@ If you are under 18, a parent or legal guardian must accept these Terms with you
 - **Video**: a new, original short-form video about Memo AI that you make for the Program and that has not been published on any account before.
 - **Eligible Video**: a Video that meets Section 3.2, is published on a public TikTok or Instagram account you manage, and stays published as Section 7 requires.
 - **Brief**: the instructions, formats, examples and feedback we give you in your Campaign's Discord or by email.
-<!--si-->
+<!--code-->
 - **Discount Code**: your personal Memo AI code.
-<!--/si-->
+<!--/code-->
 - **Views**: views of your Eligible Videos as shown in the platform's own analytics.
 
 ## 3. What you do
 
 3.1 You create and publish Videos independently, on your own schedule, following the Brief. There is no minimum number of Videos, but we recommend posting daily. If you post nothing for 14 days in a row we may end your participation (Section 9).
 
-3.2 A Video is eligible if it: follows the Brief and our feedback; is at least as good as the sample video you applied with; features you; is properly labelled as an advertisement (Section 6); and does not break these Terms, the law or the platform's rules.
+3.2 A Video is eligible if it: follows the Brief and our feedback<!--applied-->; is at least as good as the sample video you applied with<!--/applied-->; features you; is properly labelled as an advertisement (Section 6); and does not break these Terms, the law or the platform's rules.
 
 3.3 You publish each Video on TikTok and may publish the same Video on Instagram Reels too; it is still one Eligible Video, paid per platform as Section 4 sets out. Reposting an earlier Video is allowed but is not a new Eligible Video (its Views still count where Views are paid).
 
-3.4 The per-video fees are paid for at most **{monthCap} Eligible Videos per calendar month**.
+3.4 {videoLimit}
 
 3.5 You use your own phone and equipment and bear your own costs.
 
@@ -188,17 +190,14 @@ If you are under 18, a parent or legal guardian must accept these Terms with you
 
 <!--si-->
 ### Slovenia Campaign
-
-- **{siTikTok} for every Eligible Video published on TikTok**, and **{siInstagram} more** when you also publish the same Video on Instagram Reels (up to {siVideo} per Video).
-- **A {siShare}% bonus** on the amount actually paid in the calendar month by customers who bought a Memo AI subscription with your Discount Code, excluding VAT, refunds and chargebacks, up to **{siCap} a month**.
 <!--/si-->
-
 <!--balkans-->
 ### Balkans Campaign
-
-- **{bkTikTok} for every Eligible Video published on TikTok**, and **{bkInstagram} more** when you also publish the same Video on Instagram Reels (up to {bkVideo} per Video).
-- **A view bonus of {bkRate} per 1,000 Views** your Eligible Videos gain in the calendar month, up to **{bkCap} a month**.
 <!--/balkans-->
+
+{payList}
+
+{payNote}
 
 ### Payment
 
@@ -206,7 +205,7 @@ If you are under 18, a parent or legal guardian must accept these Terms with you
 
 4.2 We pay once a month, for the previous calendar month, within 15 days of receiving your monthly report (Section 8), by bank transfer (IBAN) or Revolut.
 
-4.3 Estimates and earnings examples on our website are illustrations, not guarantees. Only Eligible Videos and the bonus under this Section are paid.
+4.3 Estimates and earnings examples on our website are illustrations, not guarantees. Only what this Section sets out is paid.
 
 4.4 If we find after paying that a Video was not eligible, we may set the amount off against your next payout.
 
@@ -230,13 +229,13 @@ Videos are paid advertising. You must label every Video as an advertisement usin
 
 ## 8. Monthly report
 
-By the 5th day of each month you send us, through Discord or by email, the links of the Videos you published in the previous month and screenshots of their analytics showing Views, or whatever we ask for. We may ask for the full analytics of any Video. Payment depends on the report: if you do not send it within 30 days of the month's end, we pay only the per-video fee for Videos we can verify ourselves<!--balkans-->, and that month's view bonus lapses<!--/balkans-->.
+By the 5th day of each month you send us, through Discord or by email, the links of the Videos you published in the previous month and screenshots of their analytics showing Views, or whatever we ask for. We may ask for the full analytics of any Video. Payment depends on the report: if you do not send it within 30 days of the month's end, we pay only the per-video fee for Videos we can verify ourselves<!--views-->, and that month's view bonus lapses<!--/views-->.
 
 ## 9. Ending participation
 
 9.1 You or we may end your participation at any time, with immediate effect, by a message by email or on Discord. No reason is needed.
 
-9.2 When it ends, we pay for the Eligible Videos published, and the bonus earned, up to that day, once you send the final report within 7 days.
+9.2 When it ends, we pay everything earned under Section 4 up to that day, once you send the final report within 7 days.
 
 9.3 Sections 5, 7, 10, 11.3 and 13 continue to apply after it ends.
 
@@ -281,7 +280,7 @@ Verzija {version}
 
 Ovi uvjeti sudjelovanja („uvjeti”) ugovor su između tebe („kreator”) i **Memo AI, Nace Valenčič s.p., poslovno svetovanje**, Zgoša 87, 4275 Begunje na Gorenjskem, Slovenija, matični broj 7578474000, porezni broj 52958248 („Memo AI”, „mi”), koji razvija aplikaciju za učenje Memo AI.
 
-Ugovor je sklopljen kada nakon prihvaćanja tvoje prijave otvoriš svoju osobnu poveznicu za pridruživanje, upišeš svoje ime i klikneš „Prihvati i pridruži se”. Čuvamo zapis o verziji uvjeta koju si prihvatio, datumu i vremenu te upisanom imenu. Od tada ovi uvjeti uređuju tvoje sudjelovanje dok ono ne završi prema točki 9.
+Ugovor je sklopljen kada otvoriš osobnu poveznicu za pridruživanje koju ti pošaljemo, upišeš svoje ime i klikneš „Prihvati i pridruži se”. Čuvamo zapis o verziji uvjeta koju si prihvatio, datumu i vremenu te upisanom imenu. Od tada ovi uvjeti uređuju tvoje sudjelovanje dok ono ne završi prema točki 9.
 
 Ako imaš manje od 18 godina, uvjete s tobom mora prihvatiti roditelj ili zakonski skrbnik. Upisom njegova imena potvrđuješ da ih je pročitao i da se s njima slaže.
 
@@ -296,9 +295,9 @@ Ako imaš manje od 18 godina, uvjete s tobom mora prihvatiti roditelj ili zakons
 - **Video**: novi, izvorni kratki video o Memo AI koji snimiš za program i koji još nije objavljen ni na jednom profilu.
 - **Prihvatljiv video**: video koji ispunjava točku 3.2, objavljen je na javnom TikTok ili Instagram profilu kojim upravljaš i ostaje objavljen kako zahtijeva točka 7.
 - **Upute**: upute, formati, primjeri i povratne informacije koje ti dajemo na Discordu kampanje ili e-poštom.
-<!--si-->
+<!--code-->
 - **Kod za popust**: tvoj osobni Memo AI kod.
-<!--/si-->
+<!--/code-->
 - **Pregledi**: pregledi tvojih prihvatljivih videa prema analitici platforme.
 
 Izrazi u muškom rodu (na primjer kreator) koriste se neutralno i jednako se odnose na sve spolove.
@@ -307,11 +306,11 @@ Izrazi u muškom rodu (na primjer kreator) koriste se neutralno i jednako se odn
 
 3.1 Videa izrađuješ i objavljuješ samostalno, prema vlastitom rasporedu i u skladu s uputama. Najmanji broj videa ne postoji, ali preporučujemo svakodnevno objavljivanje. Ako 14 dana zaredom ništa ne objaviš, možemo završiti tvoje sudjelovanje (točka 9).
 
-3.2 Video je prihvatljiv ako: slijedi upute i naše povratne informacije; kvalitetom je barem jednak probnom videu s kojim si se prijavio; u njemu si ti; pravilno je označen kao oglas (točka 6); i ne krši ove uvjete, zakon ni pravila platforme.
+3.2 Video je prihvatljiv ako: slijedi upute i naše povratne informacije<!--applied-->; kvalitetom je barem jednak probnom videu s kojim si se prijavio<!--/applied-->; u njemu si ti; pravilno je označen kao oglas (točka 6); i ne krši ove uvjete, zakon ni pravila platforme.
 
 3.3 Svaki video objavljuješ na TikToku, a isti video možeš objaviti i u Instagram Reelsima; to je i dalje jedan prihvatljiv video, plaćen po platformama kako određuje točka 4. Ponovna objava starijeg videa dopuštena je, ali nije novi prihvatljiv video (njegovi se pregledi broje tamo gdje se plaćaju pregledi).
 
-3.4 Naknade po videu plaćaju se za najviše **{monthCap} prihvatljivih videa po kalendarskom mjesecu**.
+3.4 {videoLimit}
 
 3.5 Koristiš vlastiti mobitel i opremu te sam snosiš svoje troškove.
 
@@ -319,17 +318,14 @@ Izrazi u muškom rodu (na primjer kreator) koriste se neutralno i jednako se odn
 
 <!--si-->
 ### Kampanja Slovenija
-
-- **{siTikTok} za svaki prihvatljiv video objavljen na TikToku** i još **{siInstagram}** kad isti video objaviš i u Instagram Reelsima (ukupno do {siVideo} po videu).
-- **Bonus od {siShare} %** iznosa koji su u kalendarskom mjesecu stvarno platili kupci koji su pretplatu na Memo AI kupili s tvojim kodom za popust, bez PDV-a, povrata i storniranih plaćanja, do najviše **{siCap} mjesečno**.
 <!--/si-->
-
 <!--balkans-->
 ### Kampanja Balkan
-
-- **{bkTikTok} za svaki prihvatljiv video objavljen na TikToku** i još **{bkInstagram}** kad isti video objaviš i u Instagram Reelsima (ukupno do {bkVideo} po videu).
-- **Bonus za preglede od {bkRate} na 1000 pregleda** koje tvoji prihvatljivi videi skupe u kalendarskom mjesecu, do najviše **{bkCap} mjesečno**.
 <!--/balkans-->
+
+{payList}
+
+{payNote}
 
 ### Isplata
 
@@ -337,7 +333,7 @@ Izrazi u muškom rodu (na primjer kreator) koriste se neutralno i jednako se odn
 
 4.2 Isplaćujemo jednom mjesečno, za prethodni kalendarski mjesec, u roku od 15 dana nakon što pošalješ mjesečni izvještaj (točka 8), na bankovni račun (IBAN) ili Revolut.
 
-4.3 Procjene i primjeri zarade na našoj web stranici ilustracije su, a ne jamstva. Plaćamo samo prihvatljiva videa i bonus prema ovoj točki.
+4.3 Procjene i primjeri zarade na našoj web stranici ilustracije su, a ne jamstva. Plaćamo samo ono što određuje ova točka.
 
 4.4 Ako nakon isplate utvrdimo da video nije bio prihvatljiv, iznos možemo prebiti sa sljedećom isplatom.
 
@@ -361,13 +357,13 @@ Videa su plaćeni oglasi. Svaki video moraš označiti kao oglas postavkom platf
 
 ## 8. Mjesečni izvještaj
 
-Do 5. dana u mjesecu putem Discorda ili e-pošte šalješ nam poveznice na videa objavljena u prethodnom mjesecu i snimke zaslona analitike s pregledima ili ono što zatražimo. Za svaki video možemo zatražiti cjelokupnu analitiku. Isplata ovisi o izvještaju: ako ga ne pošalješ u roku od 30 dana od kraja mjeseca, plaćamo samo naknadu po videu za videa koja možemo sami provjeriti<!--balkans-->, a bonus za preglede za taj mjesec propada<!--/balkans-->.
+Do 5. dana u mjesecu putem Discorda ili e-pošte šalješ nam poveznice na videa objavljena u prethodnom mjesecu i snimke zaslona analitike s pregledima ili ono što zatražimo. Za svaki video možemo zatražiti cjelokupnu analitiku. Isplata ovisi o izvještaju: ako ga ne pošalješ u roku od 30 dana od kraja mjeseca, plaćamo samo naknadu po videu za videa koja možemo sami provjeriti<!--views-->, a bonus za preglede za taj mjesec propada<!--/views-->.
 
 ## 9. Završetak sudjelovanja
 
 9.1 Ti ili mi možemo u bilo kojem trenutku završiti sudjelovanje s trenutačnim učinkom, porukom e-poštom ili na Discordu. Razlog nije potreban.
 
-9.2 Po završetku plaćamo prihvatljiva videa objavljena do tog dana i zarađeni bonus, nakon što u roku od 7 dana pošalješ završni izvještaj.
+9.2 Po završetku plaćamo sve što si prema točki 4 zaradio do tog dana, nakon što u roku od 7 dana pošalješ završni izvještaj.
 
 9.3 Točke 5, 7, 10, 11.3 i 13 vrijede i nakon završetka.
 
@@ -412,7 +408,7 @@ Verzija {version}
 
 Ovi uslovi učešća („uslovi”) su ugovor između tebe („kreator”) i **Memo AI, Nace Valenčič s.p., poslovno svetovanje**, Zgoša 87, 4275 Begunje na Gorenjskem, Slovenija, matični broj 7578474000, poreski broj 52958248 („Memo AI”, „mi”), koji razvija aplikaciju za učenje Memo AI.
 
-Ugovor je zaključen kada nakon prihvatanja tvoje prijave otvoriš svoj lični link za pridruživanje, upišeš svoje ime i klikneš „Prihvati i pridruži se”. Čuvamo zapis o verziji uslova koju si prihvatio, datumu i vremenu te upisanom imenu. Od tada ovi uslovi uređuju tvoje učešće dok ono ne završi prema tački 9.
+Ugovor je zaključen kada otvoriš lični link za pridruživanje koji ti pošaljemo, upišeš svoje ime i klikneš „Prihvati i pridruži se”. Čuvamo zapis o verziji uslova koju si prihvatio, datumu i vremenu te upisanom imenu. Od tada ovi uslovi uređuju tvoje učešće dok ono ne završi prema tački 9.
 
 Ako imaš manje od 18 godina, uslove s tobom mora prihvatiti roditelj ili zakonski staratelj. Upisom njegovog imena potvrđuješ da ih je pročitao i da se s njima slaže.
 
@@ -427,9 +423,9 @@ Ako imaš manje od 18 godina, uslove s tobom mora prihvatiti roditelj ili zakons
 - **Video**: novi, originalni kratki video o Memo AI koji snimiš za program i koji još nije objavljen ni na jednom profilu.
 - **Prihvatljiv video**: video koji ispunjava tačku 3.2, objavljen je na javnom TikTok ili Instagram profilu kojim upravljaš i ostaje objavljen kako zahtijeva tačka 7.
 - **Upute**: upute, formati, primjeri i povratne informacije koje ti dajemo na Discordu kampanje ili e-poštom.
-<!--si-->
+<!--code-->
 - **Kod za popust**: tvoj lični Memo AI kod.
-<!--/si-->
+<!--/code-->
 - **Pregledi**: pregledi tvojih prihvatljivih videa prema analitici platforme.
 
 Izrazi u muškom rodu (na primjer kreator) koriste se neutralno i jednako se odnose na sve spolove.
@@ -438,11 +434,11 @@ Izrazi u muškom rodu (na primjer kreator) koriste se neutralno i jednako se odn
 
 3.1 Videe praviš i objavljuješ samostalno, prema vlastitom rasporedu i u skladu s uputama. Najmanji broj videa ne postoji, ali preporučujemo svakodnevno objavljivanje. Ako 14 dana zaredom ništa ne objaviš, možemo završiti tvoje učešće (tačka 9).
 
-3.2 Video je prihvatljiv ako: prati upute i naše povratne informacije; kvalitetom je barem jednak probnom videu s kojim si se prijavio; u njemu si ti; pravilno je označen kao oglas (tačka 6); i ne krši ove uslove, zakon ni pravila platforme.
+3.2 Video je prihvatljiv ako: prati upute i naše povratne informacije<!--applied-->; kvalitetom je barem jednak probnom videu s kojim si se prijavio<!--/applied-->; u njemu si ti; pravilno je označen kao oglas (tačka 6); i ne krši ove uslove, zakon ni pravila platforme.
 
 3.3 Svaki video objavljuješ na TikToku, a isti video možeš objaviti i u Instagram Reelsima; to je i dalje jedan prihvatljiv video, plaćen po platformama kako određuje tačka 4. Ponovna objava starijeg videa je dozvoljena, ali nije novi prihvatljiv video (njegovi pregledi se broje tamo gdje se plaćaju pregledi).
 
-3.4 Naknade po videu plaćaju se za najviše **{monthCap} prihvatljivih videa po kalendarskom mjesecu**.
+3.4 {videoLimit}
 
 3.5 Koristiš vlastiti mobitel i opremu te sam snosiš svoje troškove.
 
@@ -450,17 +446,14 @@ Izrazi u muškom rodu (na primjer kreator) koriste se neutralno i jednako se odn
 
 <!--si-->
 ### Kampanja Slovenija
-
-- **{siTikTok} za svaki prihvatljiv video objavljen na TikToku** i još **{siInstagram}** kad isti video objaviš i u Instagram Reelsima (ukupno do {siVideo} po videu).
-- **Bonus od {siShare} %** iznosa koji su u kalendarskom mjesecu stvarno platili kupci koji su pretplatu na Memo AI kupili s tvojim kodom za popust, bez PDV-a, povrata i storniranih plaćanja, do najviše **{siCap} mjesečno**.
 <!--/si-->
-
 <!--balkans-->
 ### Kampanja Balkan
-
-- **{bkTikTok} za svaki prihvatljiv video objavljen na TikToku** i još **{bkInstagram}** kad isti video objaviš i u Instagram Reelsima (ukupno do {bkVideo} po videu).
-- **Bonus za preglede od {bkRate} na 1000 pregleda** koje tvoji prihvatljivi videi skupe u kalendarskom mjesecu, do najviše **{bkCap} mjesečno**.
 <!--/balkans-->
+
+{payList}
+
+{payNote}
 
 ### Isplata
 
@@ -468,7 +461,7 @@ Izrazi u muškom rodu (na primjer kreator) koriste se neutralno i jednako se odn
 
 4.2 Isplaćujemo jednom mjesečno, za prethodni kalendarski mjesec, u roku od 15 dana nakon što pošalješ mjesečni izvještaj (tačka 8), na bankovni račun (IBAN) ili Revolut.
 
-4.3 Procjene i primjeri zarade na našoj web stranici su ilustracije, a ne garancije. Plaćamo samo prihvatljive videe i bonus prema ovoj tački.
+4.3 Procjene i primjeri zarade na našoj web stranici su ilustracije, a ne garancije. Plaćamo samo ono što određuje ova tačka.
 
 4.4 Ako nakon isplate utvrdimo da video nije bio prihvatljiv, iznos možemo prebiti sa sljedećom isplatom.
 
@@ -492,13 +485,13 @@ Videi su plaćeni oglasi. Svaki video moraš označiti kao oglas postavkom platf
 
 ## 8. Mjesečni izvještaj
 
-Do 5. dana u mjesecu putem Discorda ili e-pošte šalješ nam linkove na videe objavljene u prethodnom mjesecu i snimke ekrana analitike s pregledima ili ono što zatražimo. Za svaki video možemo zatražiti kompletnu analitiku. Isplata zavisi od izvještaja: ako ga ne pošalješ u roku od 30 dana od kraja mjeseca, plaćamo samo naknadu po videu za videe koje možemo sami provjeriti<!--balkans-->, a bonus za preglede za taj mjesec propada<!--/balkans-->.
+Do 5. dana u mjesecu putem Discorda ili e-pošte šalješ nam linkove na videe objavljene u prethodnom mjesecu i snimke ekrana analitike s pregledima ili ono što zatražimo. Za svaki video možemo zatražiti kompletnu analitiku. Isplata zavisi od izvještaja: ako ga ne pošalješ u roku od 30 dana od kraja mjeseca, plaćamo samo naknadu po videu za videe koje možemo sami provjeriti<!--views-->, a bonus za preglede za taj mjesec propada<!--/views-->.
 
 ## 9. Završetak učešća
 
 9.1 Ti ili mi možemo u bilo kojem trenutku završiti učešće s trenutnim učinkom, porukom e-poštom ili na Discordu. Razlog nije potreban.
 
-9.2 Po završetku plaćamo prihvatljive videe objavljene do tog dana i zarađeni bonus, nakon što u roku od 7 dana pošalješ završni izvještaj.
+9.2 Po završetku plaćamo sve što si prema tački 4 zaradio do tog dana, nakon što u roku od 7 dana pošalješ završni izvještaj.
 
 9.3 Tačke 5, 7, 10, 11.3 i 13 važe i nakon završetka.
 
@@ -543,7 +536,7 @@ Verzija {version}
 
 Ovi uslovi učešća („uslovi”) su ugovor između tebe („kreator”) i **Memo AI, Nace Valenčič s.p., poslovno svetovanje**, Zgoša 87, 4275 Begunje na Gorenjskem, Slovenija, matični broj 7578474000, poreski broj 52958248 („Memo AI”, „mi”), koji razvija aplikaciju za učenje Memo AI.
 
-Ugovor je zaključen kada nakon prihvatanja tvoje prijave otvoriš svoj lični link za pridruživanje, upišeš svoje ime i klikneš „Prihvati i pridruži se”. Čuvamo zapis o verziji uslova koju si prihvatio, datumu i vremenu i upisanom imenu. Od tada ovi uslovi uređuju tvoje učešće dok se ono ne završi prema tački 9.
+Ugovor je zaključen kada otvoriš lični link za pridruživanje koji ti pošaljemo, upišeš svoje ime i klikneš „Prihvati i pridruži se”. Čuvamo zapis o verziji uslova koju si prihvatio, datumu i vremenu i upisanom imenu. Od tada ovi uslovi uređuju tvoje učešće dok se ono ne završi prema tački 9.
 
 Ako imaš manje od 18 godina, uslove sa tobom mora da prihvati roditelj ili zakonski staratelj. Upisom njegovog imena potvrđuješ da ih je pročitao i da se sa njima slaže.
 
@@ -558,9 +551,9 @@ Ako imaš manje od 18 godina, uslove sa tobom mora da prihvati roditelj ili zako
 - **Snimak**: nov, originalan kratak video o Memo AI koji snimiš za program i koji još nije objavljen ni na jednom nalogu.
 - **Prihvatljiv snimak**: snimak koji ispunjava tačku 3.2, objavljen je na javnom TikTok ili Instagram nalogu kojim upravljaš i ostaje objavljen kako zahteva tačka 7.
 - **Uputstva**: uputstva, formati, primeri i povratne informacije koje ti dajemo na Discordu kampanje ili imejlom.
-<!--si-->
+<!--code-->
 - **Kod za popust**: tvoj lični Memo AI kod.
-<!--/si-->
+<!--/code-->
 - **Pregledi**: pregledi tvojih prihvatljivih snimaka prema analitici platforme.
 
 Izrazi u muškom rodu (na primer kreator) koriste se neutralno i jednako se odnose na sve polove.
@@ -569,11 +562,11 @@ Izrazi u muškom rodu (na primer kreator) koriste se neutralno i jednako se odno
 
 3.1 Snimke praviš i objavljuješ samostalno, prema sopstvenom rasporedu i u skladu sa uputstvima. Najmanji broj snimaka ne postoji, ali preporučujemo svakodnevno objavljivanje. Ako 14 dana zaredom ništa ne objaviš, možemo da završimo tvoje učešće (tačka 9).
 
-3.2 Snimak je prihvatljiv ako: prati uputstva i naše povratne informacije; kvalitetom je bar jednak probnom snimku sa kojim si se prijavio; u njemu si ti; pravilno je označen kao oglas (tačka 6); i ne krši ove uslove, zakon ni pravila platforme.
+3.2 Snimak je prihvatljiv ako: prati uputstva i naše povratne informacije<!--applied-->; kvalitetom je bar jednak probnom snimku sa kojim si se prijavio<!--/applied-->; u njemu si ti; pravilno je označen kao oglas (tačka 6); i ne krši ove uslove, zakon ni pravila platforme.
 
 3.3 Svaki snimak objavljuješ na TikToku, a isti snimak možeš da objaviš i u Instagram Reels-u; to je i dalje jedan prihvatljiv snimak, plaćen po platformama kako određuje tačka 4. Ponovna objava starijeg snimka je dozvoljena, ali nije nov prihvatljiv snimak (njegovi pregledi se broje tamo gde se plaćaju pregledi).
 
-3.4 Naknade po snimku plaćaju se za najviše **{monthCap} prihvatljivih snimaka po kalendarskom mesecu**.
+3.4 {videoLimit}
 
 3.5 Koristiš sopstveni telefon i opremu i sam snosiš svoje troškove.
 
@@ -581,17 +574,14 @@ Izrazi u muškom rodu (na primer kreator) koriste se neutralno i jednako se odno
 
 <!--si-->
 ### Kampanja Slovenija
-
-- **{siTikTok} za svaki prihvatljiv snimak objavljen na TikToku** i još **{siInstagram}** kad isti snimak objaviš i u Instagram Reels-u (ukupno do {siVideo} po snimku).
-- **Bonus od {siShare} %** iznosa koji su u kalendarskom mesecu zaista platili kupci koji su pretplatu na Memo AI kupili sa tvojim kodom za popust, bez PDV-a, povraćaja i storniranih plaćanja, do najviše **{siCap} mesečno**.
 <!--/si-->
-
 <!--balkans-->
 ### Kampanja Balkan
-
-- **{bkTikTok} za svaki prihvatljiv snimak objavljen na TikToku** i još **{bkInstagram}** kad isti snimak objaviš i u Instagram Reels-u (ukupno do {bkVideo} po snimku).
-- **Bonus za preglede od {bkRate} na 1000 pregleda** koje tvoji prihvatljivi snimci sakupe u kalendarskom mesecu, do najviše **{bkCap} mesečno**.
 <!--/balkans-->
+
+{payList}
+
+{payNote}
 
 ### Isplata
 
@@ -599,7 +589,7 @@ Izrazi u muškom rodu (na primer kreator) koriste se neutralno i jednako se odno
 
 4.2 Isplaćujemo jednom mesečno, za prethodni kalendarski mesec, u roku od 15 dana nakon što pošalješ mesečni izveštaj (tačka 8), na bankovni račun (IBAN) ili Revolut.
 
-4.3 Procene i primeri zarade na našem sajtu su ilustracije, a ne garancije. Plaćamo samo prihvatljive snimke i bonus prema ovoj tački.
+4.3 Procene i primeri zarade na našem sajtu su ilustracije, a ne garancije. Plaćamo samo ono što određuje ova tačka.
 
 4.4 Ako nakon isplate utvrdimo da snimak nije bio prihvatljiv, iznos možemo da prebijemo sa sledećom isplatom.
 
@@ -623,13 +613,13 @@ Snimci su plaćeni oglasi. Svaki snimak moraš da označiš kao oglas podešavan
 
 ## 8. Mesečni izveštaj
 
-Do 5. dana u mesecu preko Discorda ili imejla šalješ nam linkove do snimaka objavljenih u prethodnom mesecu i snimke ekrana analitike sa pregledima ili ono što zatražimo. Za svaki snimak možemo da zatražimo kompletnu analitiku. Isplata zavisi od izveštaja: ako ga ne pošalješ u roku od 30 dana od kraja meseca, plaćamo samo naknadu po snimku za snimke koje možemo sami da proverimo<!--balkans-->, a bonus za preglede za taj mesec propada<!--/balkans-->.
+Do 5. dana u mesecu preko Discorda ili imejla šalješ nam linkove do snimaka objavljenih u prethodnom mesecu i snimke ekrana analitike sa pregledima ili ono što zatražimo. Za svaki snimak možemo da zatražimo kompletnu analitiku. Isplata zavisi od izveštaja: ako ga ne pošalješ u roku od 30 dana od kraja meseca, plaćamo samo naknadu po snimku za snimke koje možemo sami da proverimo<!--views-->, a bonus za preglede za taj mesec propada<!--/views-->.
 
 ## 9. Završetak učešća
 
 9.1 Ti ili mi možemo u bilo kom trenutku da završimo učešće sa trenutnim dejstvom, porukom imejlom ili na Discordu. Razlog nije potreban.
 
-9.2 Po završetku plaćamo prihvatljive snimke objavljene do tog dana i zarađeni bonus, nakon što u roku od 7 dana pošalješ završni izveštaj.
+9.2 Po završetku plaćamo sve što si prema tački 4 zaradio do tog dana, nakon što u roku od 7 dana pošalješ završni izveštaj.
 
 9.3 Tačke 5, 7, 10, 11.3 i 13 važe i nakon završetka.
 

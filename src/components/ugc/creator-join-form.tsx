@@ -7,7 +7,7 @@ import { Msym } from "@/components/msym";
 import { LOCALE_INTL_TAG } from "@/lib/i18n/locales";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 
-type Accepted = { at: string; discordUrl: string };
+type Accepted = { at: string; discordUrl: string | null };
 
 /**
  * Accepting the creator terms, at the top of the join page so it takes one tap: the name
@@ -24,12 +24,15 @@ export function CreatorJoinForm({
   version,
   defaultName,
   needsGuardian,
+  kind = "application",
   accepted: initiallyAccepted,
 }: {
   token: string;
   version: string;
   defaultName: string;
   needsGuardian: boolean;
+  /** A contract is signed by a creator already in the program: no Discord to hand over. */
+  kind?: "application" | "contract";
   accepted: Accepted | null;
 }) {
   const { t, locale } = useTranslations();
@@ -51,12 +54,14 @@ export function CreatorJoinForm({
         <span className="memo-cp-done-tile">
           <Msym name="check" size="1.8rem" />
         </span>
-        <h2 className="memo-cp-title">{t("ugcJoin.doneTitle")}</h2>
-        <p className="memo-cp-lead">{t("ugcJoin.doneBody", { date })}</p>
-        <a className="memo-cp-cta memo-cp-cta-plain" href={accepted.discordUrl} target="_blank" rel="noreferrer">
-          <span>{t("ugcJoin.discordButton")}</span>
-          <Msym name="arrow_forward" size="1.25rem" />
-        </a>
+        <h2 className="memo-cp-title">{t(kind === "contract" ? "ugcContract.doneTitle" : "ugcJoin.doneTitle")}</h2>
+        <p className="memo-cp-lead">{t(kind === "contract" ? "ugcContract.doneBody" : "ugcJoin.doneBody", { date })}</p>
+        {accepted.discordUrl ? (
+          <a className="memo-cp-cta memo-cp-cta-plain" href={accepted.discordUrl} target="_blank" rel="noreferrer">
+            <span>{t("ugcJoin.discordButton")}</span>
+            <Msym name="arrow_forward" size="1.25rem" />
+          </a>
+        ) : null}
       </section>
     );
   }
@@ -81,10 +86,14 @@ export function CreatorJoinForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, version, signedName: name, guardianName: guardian, agree: true }),
       });
-      const body = (await response.json().catch(() => ({}))) as { discordUrl?: string; acceptedAt?: string; error?: string };
+      const body = (await response.json().catch(() => ({}))) as {
+        discordUrl?: string | null;
+        acceptedAt?: string;
+        error?: string;
+      };
 
-      if (response.ok && body.discordUrl && body.acceptedAt) {
-        setAccepted({ at: body.acceptedAt, discordUrl: body.discordUrl });
+      if (response.ok && body.acceptedAt) {
+        setAccepted({ at: body.acceptedAt, discordUrl: body.discordUrl ?? null });
       } else if (body.error === "stale") {
         setError("ugcJoin.error.stale");
         window.setTimeout(() => window.location.reload(), 2500);

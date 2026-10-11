@@ -35,6 +35,7 @@ import {
   tierRanges,
 } from "../src/lib/ugc/creator-program.ts";
 import { CREATOR_TERMS_VERSION, creatorTermsMarkdown } from "../src/lib/ugc/creator-terms.ts";
+import { parseContractPay } from "../src/lib/ugc/creator-pay.ts";
 
 const CATALOGUES = { sl, en, hr, bs, sr };
 
@@ -378,13 +379,16 @@ test("the acceptance email links the join page in the creator's language and esc
 
 test("the Discord invite is handed out only after the terms are accepted", () => {
   const join = readSource("src/app/api/ugc/join/route.ts");
-
-  assert.match(join, /terms_accepted_at: acceptedAt/);
   assert.match(join, /version !== CREATOR_TERMS_VERSION/);
-  assert.match(join, /\.is\("terms_accepted_at", null\)/);
+  assert.match(join, /await recordSignature\(/);
+
+  const signing = readSource("src/lib/ugc/creator-signing.server.ts");
+  assert.match(signing, /terms_accepted_at: signature\.at/);
+  assert.match(signing, /\.is\("terms_accepted_at", null\)/);
+  assert.match(signing, /\.is\("signed_at", null\)/);
 
   const page = readSource("src/app/ugc/join/[token]/page.tsx");
-  assert.match(page, /accepted \? \{ at: accepted, discordUrl/);
+  assert.match(page, /signable\.acceptedAt\s*\?\s*\{ at: signable\.acceptedAt, discordUrl/);
 });
 
 test("every application route and the admin's actions are guarded", () => {
@@ -394,7 +398,13 @@ test("every application route and the admin's actions are guarded", () => {
 
   const actions = readSource("src/app/admin/(dashboard)/actions.ts");
 
-  for (const name of ["reviewApplicationAction", "resendAcceptanceEmailAction", "saveApplicationNotesAction"]) {
+  for (const name of [
+    "reviewApplicationAction",
+    "resendAcceptanceEmailAction",
+    "saveApplicationNotesAction",
+    "createCreatorContractAction",
+    "voidCreatorContractAction",
+  ]) {
     const body = actions.slice(actions.indexOf(`export async function ${name}`));
     assert.match(body.slice(0, 400), /await requireAdmin\(\)/, `${name} must re-check the allowlist`);
   }
@@ -462,4 +472,47 @@ test("the acceptance email names the one button, and tells a minor a parent sign
     assert.ok(build(true).text.includes(CATALOGUES[locale]["ugcApply.email.guardian"]), `${locale} minor text`);
     assert.ok(build(true).html.includes(CATALOGUES[locale]["ugcApply.email.guardian"].replace(/'/g, "&#39;")), `${locale} minor html`);
   }
+});
+
+const PIJA = { perTikTok: 10, perInstagram: 1, viewRatePer1k: 0, codeSharePercent: 20, monthlyFee: 0, bonusCap: null, videosPerMonth: null, note: null };
+const VIEWS_AND_CODE = { perTikTok: 0, perInstagram: 0, viewRatePer1k: 2, codeSharePercent: 20, monthlyFee: 0, bonusCap: 2000, videosPerMonth: null, note: "Kodo DAVID50 si delita." };
+
+test("a creator's own deal is what their contract says, in every language", () => {
+  for (const locale of LOCALES) {
+    const pija = creatorTermsMarkdown(locale, "si", { pay: PIJA, applied: false });
+    assert.match(pija, /10\s?€|€10/, `${locale} per-video fee`);
+    assert.match(pija, /11\s?€|€11/, `${locale} TikTok + Instagram`);
+    assert.doesNotMatch(pija, /\{\w+\}/, `${locale} unfilled placeholder`);
+    // Not an applicant: nothing compares their videos to a sample video.
+    assert.doesNotMatch(pija, /applied with|s katerim si se prijavil|s kojim si se prijavio|sa kojim si se prijavio/, `${locale} applied clause`);
+    // No view bonus in this deal, so no clause about it lapsing.
+    assert.doesNotMatch(pija, /view bonus lapses|bonus za oglede za ta mesec pa zapade|bonus za preglede za taj/, `${locale} views clause`);
+
+    const shared = creatorTermsMarkdown(locale, "si", { pay: VIEWS_AND_CODE, applied: false });
+    assert.match(shared, /Kodo DAVID50 si delita\./, `${locale} special agreement`);
+    assert.match(shared, /2000\s?€|€2000|2\.000\s?€|€2,000/, `${locale} shared cap`);
+  }
+
+  // The standard campaigns still read as before: applicants keep the sample-video clause.
+  assert.match(creatorTermsMarkdown("en", "si"), /sample video you applied with/);
+  assert.match(creatorTermsMarkdown("en", "balkans"), /view bonus lapses/);
+  assert.doesNotMatch(creatorTermsMarkdown("en", "balkans"), /Discount Code/);
+});
+
+test("a deal must pay something, and amounts are never negative", () => {
+  const base = { perTikTok: 0, perInstagram: 0, viewRatePer1k: 0, codeSharePercent: 0, monthlyFee: 0, bonusCap: "", videosPerMonth: "", note: "" };
+  assert.equal(parseContractPay(base), null);
+  assert.equal(parseContractPay({ ...base, perTikTok: -5 }), null);
+  assert.equal(parseContractPay({ ...base, codeSharePercent: 120 }), null);
+  assert.deepEqual(parseContractPay({ ...base, codeSharePercent: "20" }), { ...base, codeSharePercent: 20, bonusCap: null, videosPerMonth: null, note: null });
+});
+
+test("contracts are never emailed from the admin, and every signature keeps its text", () => {
+  const actions = readSource("src/app/admin/(dashboard)/actions.ts");
+  const create = actions.slice(actions.indexOf("export async function createCreatorContractAction"));
+  const body = create.slice(0, create.indexOf("\nexport async function"));
+  assert.doesNotMatch(body, /sendAcceptanceEmail|resend\.com|fetch\(/, "creating a contract must not send anything");
+
+  const signing = readSource("src/lib/ugc/creator-signing.server.ts");
+  assert.equal(signing.match(/terms_snapshot: signableTerms\(signable\)/g)?.length, 2, "both applicants and contracts store the signed text");
 });

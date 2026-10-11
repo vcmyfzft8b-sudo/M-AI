@@ -41,6 +41,8 @@ Pogodba je sklenjena, ko po sprejetju tvoje prijave odpreš svojo osebno povezav
 <!--/si-->
 - **Ogledi**: ogledi tvojih upravičenih videov, kot jih kaže analitika platforme.
 
+Izrazi v moški slovnični obliki (na primer ustvarjalec) so uporabljeni kot nevtralni in veljajo enako za vse spole.
+
 ## 3. Kaj delaš
 
 3.1 Videe ustvarjaš in objavljaš samostojno, po svojem urniku in v skladu z navodili. Najmanjšega števila videov ni, priporočamo pa vsakodnevno objavljanje. Če 14 dni zapored ne objaviš ničesar, lahko tvoje sodelovanje končamo (9. točka).
@@ -99,7 +101,7 @@ Videi so plačani oglasi. Vsak video moraš označiti kot oglas z nastavitvijo p
 
 ## 8. Mesečno poročilo
 
-Do 5. dne v mesecu nam prek Discorda ali e-pošte pošlješ povezave do videov, objavljenih v preteklem mesecu, in posnetke zaslona analitike z ogledi ali kar zahtevamo. Za vsak video lahko zahtevamo celotno analitiko. Izplačilo je odvisno od poročila: če ga ne pošlješ v 30 dneh po koncu meseca, plačamo le plačilo na video za videe, ki jih lahko preverimo sami, bonus za oglede za ta mesec pa zapade.
+Do 5. dne v mesecu nam prek Discorda ali e-pošte pošlješ povezave do videov, objavljenih v preteklem mesecu, in posnetke zaslona analitike z ogledi ali kar zahtevamo. Za vsak video lahko zahtevamo celotno analitiko. Izplačilo je odvisno od poročila: če ga ne pošlješ v 30 dneh po koncu meseca, plačamo le plačilo na video za videe, ki jih lahko preverimo sami<!--balkans-->, bonus za oglede za ta mesec pa zapade<!--/balkans-->.
 
 ## 9. Konec sodelovanja
 
@@ -228,7 +230,7 @@ Videos are paid advertising. You must label every Video as an advertisement usin
 
 ## 8. Monthly report
 
-By the 5th day of each month you send us, through Discord or by email, the links of the Videos you published in the previous month and screenshots of their analytics showing Views, or whatever we ask for. We may ask for the full analytics of any Video. Payment depends on the report: if you do not send it within 30 days of the month's end, we pay only the per-video fee for Videos we can verify ourselves, and that month's view bonus lapses.
+By the 5th day of each month you send us, through Discord or by email, the links of the Videos you published in the previous month and screenshots of their analytics showing Views, or whatever we ask for. We may ask for the full analytics of any Video. Payment depends on the report: if you do not send it within 30 days of the month's end, we pay only the per-video fee for Videos we can verify ourselves<!--balkans-->, and that month's view bonus lapses<!--/balkans-->.
 
 ## 9. Ending participation
 
@@ -299,6 +301,8 @@ Ako imaš manje od 18 godina, uvjete s tobom mora prihvatiti roditelj ili zakons
 <!--/si-->
 - **Pregledi**: pregledi tvojih prihvatljivih videa prema analitici platforme.
 
+Izrazi u muškom rodu (na primjer kreator) koriste se neutralno i jednako se odnose na sve spolove.
+
 ## 3. Što radiš
 
 3.1 Videa izrađuješ i objavljuješ samostalno, prema vlastitom rasporedu i u skladu s uputama. Najmanji broj videa ne postoji, ali preporučujemo svakodnevno objavljivanje. Ako 14 dana zaredom ništa ne objaviš, možemo završiti tvoje sudjelovanje (točka 9).
@@ -357,7 +361,7 @@ Videa su plaćeni oglasi. Svaki video moraš označiti kao oglas postavkom platf
 
 ## 8. Mjesečni izvještaj
 
-Do 5. dana u mjesecu putem Discorda ili e-pošte šalješ nam poveznice na videa objavljena u prethodnom mjesecu i snimke zaslona analitike s pregledima ili ono što zatražimo. Za svaki video možemo zatražiti cjelokupnu analitiku. Isplata ovisi o izvještaju: ako ga ne pošalješ u roku od 30 dana od kraja mjeseca, plaćamo samo naknadu po videu za videa koja možemo sami provjeriti, a bonus za preglede za taj mjesec propada.
+Do 5. dana u mjesecu putem Discorda ili e-pošte šalješ nam poveznice na videa objavljena u prethodnom mjesecu i snimke zaslona analitike s pregledima ili ono što zatražimo. Za svaki video možemo zatražiti cjelokupnu analitiku. Isplata ovisi o izvještaju: ako ga ne pošalješ u roku od 30 dana od kraja mjeseca, plaćamo samo naknadu po videu za videa koja možemo sami provjeriti<!--balkans-->, a bonus za preglede za taj mjesec propada<!--/balkans-->.
 
 ## 9. Završetak sudjelovanja
 
@@ -428,6 +432,8 @@ Ako imaš manje od 18 godina, uslove s tobom mora prihvatiti roditelj ili zakons
 <!--/si-->
 - **Pregledi**: pregledi tvojih prihvatljivih videa prema analitici platforme.
 
+Izrazi u muškom rodu (na primjer kreator) koriste se neutralno i jednako se odnose na sve spolove.
+
 ## 3. Šta radiš
 
 3.1 Videe praviš i objavljuješ samostalno, prema vlastitom rasporedu i u skladu s uputama. Najmanji broj videa ne postoji, ali preporučujemo svakodnevno objavljivanje. Ako 14 dana zaredom ništa ne objaviš, možemo završiti tvoje učešće (tačka 9).
@@ -486,7 +492,7 @@ Videi su plaćeni oglasi. Svaki video moraš označiti kao oglas postavkom platf
 
 ## 8. Mjesečni izvještaj
 
-Do 5. dana u mjesecu putem Discorda ili e-pošte šalješ nam linkove na videe objavljene u prethodnom mjesecu i snimke ekrana analitike s pregledima ili ono što zatražimo. Za svaki video možemo zatražiti kompletnu analitiku. Isplata zavisi od izvještaja: ako ga ne pošalješ u roku od 30 dana od kraja mjeseca, plaćamo samo naknadu po videu za videe koje možemo sami provjeriti, a bonus za preglede za taj mjesec propada.
+Do 5. dana u mjesecu putem Discorda ili e-pošte šalješ nam linkove na videe objavljene u prethodnom mjesecu i snimke ekrana analitike s pregledima ili ono što zatražimo. Za svaki video možemo zatražiti kompletnu analitiku. Isplata zavisi od izvještaja: ako ga ne pošalješ u roku od 30 dana od kraja mjeseca, plaćamo samo naknadu po videu za videe koje možemo sami provjeriti<!--balkans-->, a bonus za preglede za taj mjesec propada<!--/balkans-->.
 
 ## 9. Završetak učešća
 
@@ -557,6 +563,8 @@ Ako imaš manje od 18 godina, uslove sa tobom mora da prihvati roditelj ili zako
 <!--/si-->
 - **Pregledi**: pregledi tvojih prihvatljivih snimaka prema analitici platforme.
 
+Izrazi u muškom rodu (na primer kreator) koriste se neutralno i jednako se odnose na sve polove.
+
 ## 3. Šta radiš
 
 3.1 Snimke praviš i objavljuješ samostalno, prema sopstvenom rasporedu i u skladu sa uputstvima. Najmanji broj snimaka ne postoji, ali preporučujemo svakodnevno objavljivanje. Ako 14 dana zaredom ništa ne objaviš, možemo da završimo tvoje učešće (tačka 9).
@@ -615,7 +623,7 @@ Snimci su plaćeni oglasi. Svaki snimak moraš da označiš kao oglas podešavan
 
 ## 8. Mesečni izveštaj
 
-Do 5. dana u mesecu preko Discorda ili imejla šalješ nam linkove do snimaka objavljenih u prethodnom mesecu i snimke ekrana analitike sa pregledima ili ono što zatražimo. Za svaki snimak možemo da zatražimo kompletnu analitiku. Isplata zavisi od izveštaja: ako ga ne pošalješ u roku od 30 dana od kraja meseca, plaćamo samo naknadu po snimku za snimke koje možemo sami da proverimo, a bonus za preglede za taj mesec propada.
+Do 5. dana u mesecu preko Discorda ili imejla šalješ nam linkove do snimaka objavljenih u prethodnom mesecu i snimke ekrana analitike sa pregledima ili ono što zatražimo. Za svaki snimak možemo da zatražimo kompletnu analitiku. Isplata zavisi od izveštaja: ako ga ne pošalješ u roku od 30 dana od kraja meseca, plaćamo samo naknadu po snimku za snimke koje možemo sami da proverimo<!--balkans-->, a bonus za preglede za taj mesec propada<!--/balkans-->.
 
 ## 9. Završetak učešća
 

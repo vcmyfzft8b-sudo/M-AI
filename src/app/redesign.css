@@ -24287,21 +24287,25 @@ select.memo-cp-input {
   text-align: center;
 }
 
-.memo-cp-consent label {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.65rem;
-  font-size: 0.95rem;
-  line-height: 1.45;
-  cursor: pointer;
+/* The sentence over the join button that makes the tap the agreement, with the link
+   down to the full terms. */
+.memo-cp-join-statement {
+  margin: 0;
+  color: var(--cp-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
-.memo-cp-consent input {
-  flex: 0 0 auto;
-  width: 1.1rem;
-  height: 1.1rem;
-  margin-top: 0.15rem;
-  accent-color: var(--cp-accent);
+.memo-cp-join-statement a {
+  color: var(--cp-accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* The terms sit under the signing card; "Read the terms" scrolls there. */
+.memo-cp-doc-body {
+  scroll-margin-top: 1rem;
 }
 
 /* --- wider screens -------------------------------------------------------- */

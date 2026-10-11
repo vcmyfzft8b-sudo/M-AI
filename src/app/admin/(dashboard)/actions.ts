@@ -1060,6 +1060,8 @@ async function deliverAcceptance(
     market,
     joinToken: application.join_token,
     idempotencyKey,
+    // Under 18: the email tells them a parent signs on the same page.
+    needsGuardian: application.age !== null && application.age < 18,
   });
 
   const { error } = await updateIn(createSupabaseServiceRoleClient(), "ugc_creator_applications", {

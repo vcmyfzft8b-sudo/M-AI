@@ -113,10 +113,16 @@ A referenced video is never deleted, however old, and the job deletes nothing if
 read which ones are referenced. Each run logs `[ugc-pending-uploads] Sweep complete` with
 its counts; a failed delete goes to Sentry.
 
-The join page shows the Terms of Participation for their campaign. The creator types
-their name (a parent or guardian's too if they are under 18) and ticks the box; that
-acceptance is recorded (`terms_version`, time, typed names, IP, browser) and only then is
-the Discord invite shown. The admin card shows whether and when the terms were signed.
+Signing takes one tap. The email's button ("Accept the terms and join") opens the join
+page on a signing card, with the name from the application already filled in and one
+button, "Accept and join". The sentence above the button says that tapping it accepts the
+terms (version shown), and the full Terms of Participation for their campaign follow
+below, linked from the card. A creator under 18 also gets a field for the parent or
+guardian's name, and their email says so. There is no checkbox: the tap is the agreement.
+It is always the person's own tap (a POST to `/api/ugc/join`). Opening the link never
+signs anything, because mail scanners open links on their own. The acceptance is
+recorded (`terms_version`, time, typed names, IP, browser) and only then is the Discord
+invite shown. The admin card shows whether and when the terms were signed.
 
 ## Email
 

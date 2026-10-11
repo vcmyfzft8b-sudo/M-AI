@@ -27,24 +27,28 @@ export function buildAcceptanceEmail({
   fullName,
   market,
   joinUrl,
+  needsGuardian = false,
 }: {
   t: Translate;
   fullName: string;
   market: CreatorMarket;
   joinUrl: string;
+  /** Under 18: a parent or guardian signs on the same page, and the email says so. */
+  needsGuardian?: boolean;
 }): AcceptanceEmail {
   const firstName = fullName.trim().split(/\s+/)[0] ?? fullName;
   const campaign = t(market === "si" ? "ugcApply.market.si" : "ugcApply.market.balkans");
 
   const greeting = t("ugcApply.email.greeting", { name: firstName });
   const accepted = t("ugcApply.email.accepted", { campaign });
-  const discord = t("ugcApply.email.discord");
+  const discord = t("ugcApply.email.discord", { button: t("ugcJoin.submit") });
+  const guardian = needsGuardian ? t("ugcApply.email.guardian") : null;
   const button = t("ugcApply.email.button");
   const fallback = t("ugcApply.email.linkFallback", { link: joinUrl });
   const closing = t("ugcApply.email.closing");
   const signoff = t("ugcApply.email.signoff");
 
-  const text = [greeting, "", accepted, "", discord, "", `${button}: ${joinUrl}`, "", closing, signoff].join("\n");
+  const text = [greeting, "", accepted, "", discord, ...(guardian ? ["", guardian] : []), "", `${button}: ${joinUrl}`, "", closing, signoff].join("\n");
 
   // Inline styles only: mail clients drop <style> blocks and ignore CSS variables.
   const paragraph = (content: string) =>
@@ -58,6 +62,7 @@ export function buildAcceptanceEmail({
         ${paragraph(escapeHtml(greeting))}
         ${paragraph(escapeHtml(accepted))}
         ${paragraph(escapeHtml(discord))}
+        ${guardian ? paragraph(escapeHtml(guardian)) : ""}
         <p style="margin:24px 0">
           <a href="${joinUrl}" style="display:inline-block;padding:14px 26px;border-radius:999px;background:#f45f5a;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none">${escapeHtml(button)}</a>
         </p>

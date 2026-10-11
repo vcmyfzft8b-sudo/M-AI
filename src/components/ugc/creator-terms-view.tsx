@@ -42,7 +42,7 @@ export function CreatorTermsView({
 
       <div className="memo-cp-doc">
         {intro}
-        <article className="memo-cp-card memo-cp-doc-body">
+        <article className="memo-cp-card memo-cp-doc-body" id="terms">
           <MarkdownRenderer content={markdown} />
         </article>
         {children}

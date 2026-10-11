@@ -97,8 +97,15 @@ The queue shows each applicant's video (uploaded file or embedded link) beside t
 details. **Accept** saves the decision first, then emails the creator, in the language
 they applied in, a personal join link (`/ugc/join/<token>`). **Reject** sends nothing.
 An application stored without a campaign (`other`, older rows only) gets two accept
-buttons, one per campaign. Uploaded videos stay in the bucket's `pending/` folder; nothing
-clears ones that were never submitted yet.
+buttons, one per campaign. Uploaded videos stay in the bucket's `pending/` folder.
+
+An applicant uploads their video before sending the form, so an abandoned form or a
+duplicate email leaves a file nothing points at. A daily job
+(`/api/cron/ugc-pending-uploads`, 03:25 UTC, `CRON_SECRET`) deletes every `pending/` object
+older than 24 hours that no application references (rule: `src/lib/ugc/pending-upload-plan.ts`).
+A referenced video is never deleted, however old, and the job deletes nothing if it cannot
+read which ones are referenced. Each run logs `[ugc-pending-uploads] Sweep complete` with
+its counts; a failed delete goes to Sentry.
 
 The join page shows the Terms of Participation for their campaign. The creator types
 their name (a parent or guardian's too if they are under 18) and ticks the box; that

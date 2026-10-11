@@ -22309,3 +22309,1205 @@ html[data-native] .memo-toast.subtle {
     padding: 1.5rem 0.5rem 1rem;
   }
 }
+
+/*
+ * The UGC creator program (`/ugc`, src/components/ugc/creator-program.tsx): the public
+ * page that recruits creators, and its apply sheet. Phone first, a single column; from
+ * 1100px the hero and the calculator sit in two columns. Headline numbers use the
+ * display size the wheel prize already uses (2.6rem), nothing larger.
+ */
+.memo-cp {
+  --memo-shadow: var(--hover-ring);
+  min-height: 100dvh;
+  padding-bottom: max(2rem, var(--memo-safe-bottom, 0px));
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* What an admin sees when opening the other campaign's page with ?market=. */
+.memo-cp-preview {
+  margin: 0;
+  padding: max(0.6rem, var(--memo-safe-top, 0px)) 1rem 0.6rem;
+  background: var(--upgrade-tint);
+  color: var(--upgrade-ink);
+  font-size: 0.92rem;
+  font-weight: 650;
+  text-align: center;
+}
+
+.memo-cp-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 0.85rem;
+  margin: 0;
+  padding: max(0.6rem, var(--memo-safe-top, 0px)) 1rem 0.6rem;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 0.92rem;
+  font-weight: 650;
+  text-align: center;
+}
+
+.memo-cp-banner-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.memo-cp-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--promo);
+  animation: memo-breathe 1.6s ease-in-out infinite;
+}
+
+.memo-cp-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0.85rem 1rem;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.memo-cp-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.memo-cp-lockup {
+  width: auto;
+  height: 1.9rem;
+}
+
+.memo-cp-brand-label {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-cp-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.memo-cp-lang {
+  position: relative;
+}
+
+.memo-cp-lang-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 2.6rem;
+  padding: 0 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.memo-cp-lang-trigger:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-cp-lang-name {
+  display: none;
+}
+
+.memo-cp-lang-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  gap: 0.25rem;
+  width: 13rem;
+  padding: 0.5rem;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line), 0 8px 22px rgba(0, 0, 0, 0.16);
+  animation: memo-pop-in 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.memo-cp-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  height: 3.4rem;
+  padding: 0 1.6rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--coral);
+  box-shadow: var(--memo-coral-glow);
+  color: #fff;
+  cursor: pointer;
+  font-size: 1.05rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.memo-cp-cta:hover {
+  box-shadow: var(--memo-coral-glow), inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-cp-cta:focus-visible,
+.memo-cp-lang-trigger:focus-visible,
+.memo-cp-faq-item summary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-cp-cta-small {
+  height: 2.6rem;
+  padding: 0 1rem;
+  font-size: 0.92rem;
+}
+
+.memo-cp-hero {
+  display: grid;
+  gap: 1.6rem;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.6rem 1rem 0;
+}
+
+.memo-cp-eyebrow {
+  margin: 0 0 0.6rem;
+  color: var(--promo);
+}
+
+.memo-cp-hero-title {
+  margin: 0 0 0.85rem;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.memo-cp-lead {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.memo-cp-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 1.6rem;
+}
+
+.memo-cp-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  max-width: 72rem;
+  margin: 1.6rem auto 0;
+  padding: 0 1rem;
+}
+
+.memo-cp-stat {
+  display: grid;
+  gap: 0.2rem;
+  padding: 1.2rem 1.15rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-cp-stat strong {
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-cp-stat span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.memo-cp-section {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 3.4rem 1rem 0;
+}
+
+.memo-cp-head {
+  max-width: 40rem;
+  margin: 0 auto 1.6rem;
+  text-align: center;
+}
+
+.memo-cp-title {
+  margin: 0 0 0.6rem;
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.memo-cp-note {
+  margin: 0.6rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.memo-cp-calc {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.memo-cp-calc-inputs,
+.memo-cp-calc-result {
+  padding: 1.5rem 1.6rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-cp-calc-inputs {
+  display: grid;
+  gap: 1.6rem;
+}
+
+.memo-cp-slider {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.memo-cp-slider-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.85rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.memo-cp-slider-head strong {
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-cp-slider input {
+  width: 100%;
+  height: 2.6rem;
+  margin: 0;
+  accent-color: var(--promo);
+  cursor: pointer;
+}
+
+.memo-cp-calc-total {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0.35rem 0 1.15rem;
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-cp-per {
+  color: var(--muted);
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.memo-cp-calc-lines {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding-top: 1.15rem;
+  border-top: 1px solid var(--line);
+}
+
+.memo-cp-calc-lines div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.85rem;
+  font-size: 0.95rem;
+}
+
+.memo-cp-calc-lines dt {
+  color: var(--muted);
+}
+
+.memo-cp-calc-lines dd {
+  margin: 0;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-cp-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.memo-cp-card {
+  padding: 1.5rem 1.6rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-cp-card h3,
+.memo-cp-tier h3,
+.memo-cp-step h3 {
+  margin: 0.85rem 0 0.35rem;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.memo-cp-card p,
+.memo-cp-tier p,
+.memo-cp-step p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.memo-cp-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.9rem;
+  height: 2.9rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--upgrade-tint);
+  color: var(--upgrade-ink);
+}
+
+.memo-cp-center {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.6rem;
+}
+
+.memo-cp-tiers {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.memo-cp-tier {
+  padding: 1.5rem 1.6rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-cp-tier h3 {
+  margin-top: 0;
+}
+
+.memo-cp-tier[data-tier="ultra"] {
+  box-shadow: var(--shadow), inset 0 0 0 1.5px var(--promo);
+}
+
+.memo-cp-tier-range.memo-cp-tier-range {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.35rem 0 0.6rem;
+  color: var(--text);
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-cp-coach {
+  display: grid;
+  gap: 0.6rem;
+  text-align: center;
+}
+
+.memo-cp-coach .memo-cp-title {
+  margin: 0;
+}
+
+.memo-cp-who {
+  display: grid;
+  gap: 0.85rem;
+  text-align: center;
+  justify-items: center;
+}
+
+.memo-cp-who .memo-cp-title {
+  margin: 0;
+}
+
+.memo-cp-steps {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-cp-step {
+  padding: 1.5rem 1.6rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-cp-step-label {
+  color: var(--promo);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.memo-cp-step h3 {
+  margin-top: 0.35rem;
+}
+
+.memo-cp-format {
+  display: grid;
+  gap: 1.15rem;
+  max-width: 56rem;
+  margin: 0 auto;
+}
+
+.memo-cp-format-row {
+  display: grid;
+  gap: 1.15rem;
+  align-items: center;
+}
+
+.memo-cp-format h3 {
+  margin-top: 0;
+}
+
+.memo-cp-faq {
+  display: grid;
+  gap: 0.6rem;
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+.memo-cp-faq-item {
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-cp-faq-item summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 1.2rem 1.6rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  list-style: none;
+}
+
+.memo-cp-faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.memo-cp-faq-item summary .msym {
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.memo-cp-faq-item[open] summary .msym {
+  transform: rotate(180deg);
+}
+
+.memo-cp-faq-item p {
+  margin: 0;
+  padding: 0 1.6rem 1.2rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.memo-cp-final {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+.memo-cp-footer {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 72rem;
+  margin: 3.4rem auto 0;
+  padding: 1.6rem 1rem 0;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.92rem;
+  text-align: center;
+}
+
+.memo-cp-footer p {
+  margin: 0;
+}
+
+.memo-cp-footer a {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* --- campaign videos ------------------------------------------------------
+   Real posts (portrait covers from TikTok): four beside the headline, the rest in a
+   strip under the application card. A tap plays the post in TikTok's own player. */
+
+.memo-cp-hero-videos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  width: min(100%, 26rem);
+  justify-self: center;
+}
+
+.memo-cp-strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(7.5rem, 1fr);
+  gap: 0.6rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.memo-cp-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.memo-cp-video {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 18px;
+  background: var(--sunken);
+  cursor: pointer;
+}
+
+.memo-cp-video img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.memo-cp-video:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-cp-video:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-cp-video-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.9rem;
+  height: 2.9rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  transform: translate(-50%, -50%);
+}
+
+.memo-cp-video-views {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.2rem 0.5rem 0.2rem 0.3rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.memo-cp-player {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 136;
+  width: min(22rem, calc(100vw - 2rem));
+  height: min(39rem, calc(100dvh - 2rem));
+  overflow: hidden;
+  border-radius: 22px;
+  background: #000;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.26);
+  transform: translate(-50%, -50%);
+}
+
+.memo-cp-player iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.memo-cp-player-close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+}
+
+/* --- the apply sheet ---------------------------------------------------- */
+
+.memo-cp-apply-sheet {
+  width: min(34rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  padding-top: 1.5rem;
+}
+
+.memo-cp-apply-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.memo-confirm .memo-cp-apply-head h2 {
+  margin: 0;
+}
+
+.memo-cp-apply-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin: 1.15rem 0 1.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-cp-apply-steps li {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.memo-cp-apply-step-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.memo-cp-apply-steps li[data-state="current"] {
+  color: var(--text);
+}
+
+.memo-cp-apply-steps li[data-state="current"] .memo-cp-apply-step-dot,
+.memo-cp-apply-steps li[data-state="done"] .memo-cp-apply-step-dot {
+  background: var(--coral);
+  color: #fff;
+}
+
+.memo-cp-brief h3,
+.memo-cp-video-intro h3,
+.memo-cp-confirm-title {
+  margin: 0 0 0.6rem;
+  font-size: 1.3rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+}
+
+.memo-cp-brief ul {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-cp-brief li {
+  display: flex;
+  gap: 0.6rem;
+  font-size: 1.02rem;
+  line-height: 1.5;
+}
+
+.memo-cp-brief li .msym {
+  flex: 0 0 auto;
+  margin-top: 0.1rem;
+  color: var(--promo);
+}
+
+.memo-cp-video-intro p {
+  margin: 0;
+}
+
+.memo-cp-form-fields {
+  display: grid;
+  gap: 1.15rem;
+}
+
+.memo-cp-form-row {
+  display: grid;
+  gap: 1.15rem;
+}
+
+.memo-cp-form-field {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.memo-cp-form-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 1.02rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.memo-cp-optional {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 400;
+}
+
+.memo-cp-form-field[data-invalid] .memo-field,
+.memo-cp-form-field[data-invalid] .memo-textarea {
+  border-color: var(--danger);
+}
+
+.memo-confirm .memo-cp-form-hint,
+.memo-cp-form-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.memo-confirm .memo-cp-form-error,
+.memo-cp-form-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.memo-cp-form-alert {
+  margin-top: 1.15rem;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: var(--danger-tint);
+}
+
+.memo-cp-select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.memo-cp-textarea {
+  height: auto;
+  min-height: 6rem;
+}
+
+.memo-cp-upload {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.memo-cp-file {
+  display: none;
+}
+
+.memo-cp-upload-pick {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: 1.5rem 1rem;
+  border: 1.5px dashed var(--line);
+  border-radius: 20px;
+  background: var(--sunken);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+
+.memo-cp-upload-pick .msym {
+  color: var(--promo);
+}
+
+.memo-cp-upload-pick:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-cp-upload[data-invalid] .memo-cp-upload-pick {
+  border-color: var(--danger);
+}
+
+.memo-cp-upload-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  padding: 1rem 1.15rem;
+  border-radius: 20px;
+  background: var(--sunken);
+}
+
+.memo-cp-upload-row > .msym {
+  color: var(--promo);
+}
+
+.memo-cp-upload-name {
+  overflow: hidden;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-cp-upload-meta {
+  color: var(--muted);
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+
+.memo-cp-upload-row .memo-chip {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.memo-cp-upload-bar {
+  grid-column: 1 / -1;
+  height: 0.4rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--track);
+}
+
+.memo-cp-upload-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--coral);
+  transition: width 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.memo-cp-or {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.memo-cp-or::before,
+.memo-cp-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.memo-cp-summary {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 1.2rem 1.15rem;
+  border-radius: 20px;
+  background: var(--sunken);
+}
+
+.memo-cp-summary div {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 0.85rem;
+  font-size: 0.95rem;
+}
+
+.memo-cp-summary dt {
+  color: var(--muted);
+}
+
+.memo-cp-summary dd {
+  margin: 0;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.memo-cp-consent label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.memo-cp-consent input {
+  flex: 0 0 auto;
+  width: 1.2rem;
+  height: 1.2rem;
+  margin-top: 0.15rem;
+  accent-color: var(--promo);
+}
+
+.memo-cp-consent a {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.memo-cp-consent[data-invalid] label {
+  color: var(--danger);
+}
+
+.memo-cp-honeypot {
+  position: absolute;
+  left: -100vw;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.memo-cp-apply-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1.6rem;
+}
+
+.memo-cp-apply-actions .memo-confirm-cancel {
+  flex: 0 0 auto;
+  padding: 0 1.4rem;
+}
+
+.memo-cp-apply-done {
+  display: grid;
+  justify-items: center;
+  gap: 1.15rem;
+  padding: 1.15rem 0 0.35rem;
+  text-align: center;
+}
+
+.memo-confirm .memo-cp-apply-done p {
+  margin: 0;
+}
+
+.memo-cp-apply-done .memo-button-coral {
+  width: 100%;
+}
+
+.memo-cp-done-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.6rem;
+  height: 3.6rem;
+  border-radius: 999px;
+  background: var(--coral);
+  color: #fff;
+}
+
+@media (min-width: 640px) {
+  .memo-cp-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .memo-cp-lang-name {
+    display: inline;
+  }
+
+  .memo-cp-form-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .memo-cp-grid,
+  .memo-cp-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .memo-cp-format-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+}
+
+@media (min-width: 1100px) {
+  .memo-cp-nav,
+  .memo-cp-hero,
+  .memo-cp-stats,
+  .memo-cp-section,
+  .memo-cp-footer {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+
+  .memo-cp-hero {
+    align-items: center;
+    gap: 3.4rem;
+    padding-top: 3.4rem;
+  }
+
+  .memo-cp-hero[data-has-videos] {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  }
+
+  .memo-cp-hero-title {
+    font-size: 2.6rem;
+  }
+
+  .memo-cp-calc {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    max-width: 56rem;
+    margin: 0 auto;
+  }
+
+  .memo-cp-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .memo-cp-tiers {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .memo-cp-steps {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .memo-cp-coach,
+  .memo-cp-who {
+    max-width: 44rem;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 1099px) {
+  /* The phone sheet is the shared bottom sheet: it brings its own width, height
+     cap and scrolling; only the drag has to give way to the form's scroll. */
+  .memo-cp-apply-sheet {
+    width: auto;
+    max-height: var(--memo-sheet-max);
+    padding-top: 0.6rem;
+    touch-action: pan-y;
+  }
+}
+
+/* The creator terms (`/ugc/terms`) and a creator's join link (`/ugc/join/<token>`):
+   the document in a card, the acceptance form under it. */
+.memo-cp-doc {
+  display: grid;
+  gap: 1.15rem;
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 1.6rem 1rem 0;
+}
+
+.memo-cp-doc-head {
+  margin-bottom: 0.35rem;
+}
+
+.memo-cp-doc-body {
+  overflow-wrap: anywhere;
+}
+
+.memo-cp-join {
+  display: grid;
+  gap: 1.15rem;
+}
+
+.memo-cp-join .memo-cp-title {
+  margin: 0;
+}
+
+.memo-cp-join-submit {
+  width: 100%;
+  flex: none;
+}
+
+.memo-cp-join-done {
+  justify-items: center;
+  text-align: center;
+}
+
+.memo-cp-join-done .memo-cp-lead {
+  margin: 0;
+}
+
+.memo-cp-join-done .memo-cp-cta {
+  text-decoration: none;
+}
+
+/* A contract is read clause by clause: separate the paragraphs, and keep body copy at
+   full ink rather than the muted grey of a help article. */
+.memo-cp-doc-body p {
+  margin: 0 0 0.85rem;
+  color: var(--text);
+}
+
+.memo-cp-doc-body li {
+  color: var(--text);
+}

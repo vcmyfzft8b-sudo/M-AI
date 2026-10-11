@@ -3,6 +3,7 @@
 import {
   BarChart3,
   CreditCard,
+  Inbox,
   LayoutDashboard,
   Menu,
   Receipt,
@@ -23,6 +24,7 @@ import { PendingLink } from "./pending-link";
 export const ADMIN_LINKS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/creators", label: "Creators", icon: Video, badge: "review" },
+  { href: "/admin/applications", label: "Applications", icon: Inbox, badge: "applications" },
   { href: "/admin/payouts", label: "Payouts", icon: Wallet },
   { href: "/admin/finance", label: "Finance", icon: CreditCard },
   { href: "/admin/costs", label: "Costs", icon: Receipt },
@@ -38,9 +40,11 @@ function isActive(href: string, pathname: string) {
 
 function NavLinks({
   reviewCount,
+  applicationCount,
   onNavigate,
 }: {
   reviewCount: number;
+  applicationCount: number;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -68,6 +72,14 @@ function NavLinks({
                 {reviewCount > 99 ? "99+" : reviewCount}
               </span>
             )}
+            {"badge" in link && link.badge === "applications" && applicationCount > 0 && (
+              <span
+                className="admin-nav-badge"
+                title={`${applicationCount} applications to review`}
+              >
+                {applicationCount > 99 ? "99+" : applicationCount}
+              </span>
+            )}
           </PendingLink>
         );
       })}
@@ -75,8 +87,14 @@ function NavLinks({
   );
 }
 
-export function AdminNav({ reviewCount }: { reviewCount: number }) {
-  return <NavLinks reviewCount={reviewCount} />;
+export function AdminNav({
+  reviewCount,
+  applicationCount,
+}: {
+  reviewCount: number;
+  applicationCount: number;
+}) {
+  return <NavLinks reviewCount={reviewCount} applicationCount={applicationCount} />;
 }
 
 function AccountFooter({ email, role }: { email: string; role: string }) {
@@ -109,10 +127,12 @@ export { AccountFooter };
  */
 export function AdminMobileNav({
   reviewCount,
+  applicationCount,
   email,
   role,
 }: {
   reviewCount: number;
+  applicationCount: number;
   email: string;
   role: string;
 }) {
@@ -206,7 +226,7 @@ export function AdminMobileNav({
               </button>
             </div>
 
-            <NavLinks reviewCount={reviewCount} onNavigate={close} />
+            <NavLinks reviewCount={reviewCount} applicationCount={applicationCount} onNavigate={close} />
 
             <AccountFooter email={email} role={role} />
           </div>

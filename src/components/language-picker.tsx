@@ -20,7 +20,7 @@ import { LOCALES, LOCALE_LABELS, type Locale } from "@/lib/i18n/locales";
  * looks like the picker did nothing. Writing it here first makes the ordering
  * ours.
  */
-function useLocaleChange() {
+export function useLocaleChange() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [pendingLocale, setPendingLocale] = useState<Locale | null>(null);
@@ -53,7 +53,7 @@ function useLocaleChange() {
   return { change, isPending, pendingLocale };
 }
 
-function LocaleOptionList({
+export function LocaleOptionList({
   active,
   pendingLocale,
   onSelect,

@@ -176,6 +176,19 @@ export const rateLimitPresets = {
   // Switching language is a cookie write and at most one profile update, and
   // somebody comparing two languages will flip back and forth a few times. Kept
   // in memory: it is not worth a database round trip to police.
+  // The public creator-program form: a person applies once, so a handful an hour
+  // from one address covers a shared dorm network without letting a script fill the table.
+  creatorApplication: [
+    { windowSeconds: 3600, maxRequests: 8, scope: "ip" },
+  ] satisfies RateLimitRule[],
+  // Accepting the creator terms from the join link: one success per creator, a few retries.
+  creatorJoin: [
+    { windowSeconds: 3600, maxRequests: 20, scope: "ip" },
+  ] satisfies RateLimitRule[],
+  // An upload slot for the application's video; a retry after a dropped upload asks again.
+  creatorApplicationVideo: [
+    { windowSeconds: 3600, maxRequests: 12, scope: "ip" },
+  ] satisfies RateLimitRule[],
   localePreference: [
     { windowSeconds: 300, maxRequests: 60, scope: "user_or_ip", storage: "memory" },
   ] satisfies RateLimitRule[],

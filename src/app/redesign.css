@@ -22340,6 +22340,10 @@ html[data-native] .memo-toast.subtle {
   --cp-light-button-ink: #3b0d0b;
   --cp-footer: #2a1211;
   --cp-banner: #fcd34d;
+  /* Discord's brand blue, for the button that opens the campaign's server. */
+  --cp-discord: #5865f2;
+  --cp-on-discord: #fff;
+  --cp-discord-ring: rgba(88, 101, 242, 0.35);
   --cp-banner-ink: #451a03;
   --cp-danger: #dc2626;
   --cp-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
@@ -24285,6 +24289,87 @@ select.memo-cp-input {
 .memo-cp-join-done {
   justify-items: center;
   text-align: center;
+}
+
+/* After signing: step one done, step two is the Discord. */
+.memo-cp-join-steps {
+  display: flex;
+  justify-content: center;
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--cp-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.memo-cp-join-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.memo-cp-join-steps li[data-done] {
+  color: var(--cp-accent);
+}
+
+.memo-cp-join-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+  font-size: 0.75rem;
+}
+
+/* Discord's own button: its blue and its mark, so it reads as "go to Discord". */
+.memo-cp-discord {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  width: 100%;
+  height: 3.5rem;
+  border-radius: 999px;
+  background: var(--cp-discord);
+  color: var(--cp-on-discord);
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: filter 0.16s ease;
+}
+
+.memo-cp-discord:hover {
+  filter: brightness(1.06);
+}
+
+.memo-cp-discord:focus-visible,
+.memo-cp-join-discord-again:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--cp-discord-ring);
+}
+
+.memo-cp-discord-logo {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 auto;
+}
+
+.memo-cp-join-discord-again {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--cp-discord);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.memo-cp-join-discord-again .memo-cp-discord-logo {
+  width: 1.2rem;
+  height: 1.2rem;
 }
 
 /* The sentence over the join button that makes the tap the agreement, with the link

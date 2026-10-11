@@ -31,6 +31,8 @@ export type Signable = {
   /** Applied with a sample video (the terms compare later videos to it). */
   applied: boolean;
   acceptedAt: string | null;
+  /** An applicant opened their campaign's Discord invite after signing (never for contracts). */
+  discordOpenedAt: string | null;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -59,6 +61,7 @@ async function readSignable(token: string): Promise<Signable | null> {
       pay: campaignPay(CREATOR_TERMS[application.market]),
       applied: true,
       acceptedAt: application.terms_accepted_at,
+      discordOpenedAt: application.discord_opened_at,
     };
   }
 
@@ -75,6 +78,7 @@ async function readSignable(token: string): Promise<Signable | null> {
       pay,
       applied: false,
       acceptedAt: contract.signed_at,
+      discordOpenedAt: null,
     };
   }
 

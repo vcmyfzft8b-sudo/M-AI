@@ -1504,6 +1504,7 @@ export type Database = {
           terms_accepted_ip: string | null;
           terms_accepted_user_agent: string | null;
           terms_snapshot: string | null;
+          discord_opened_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1544,6 +1545,7 @@ export type Database = {
           terms_accepted_ip?: string | null;
           terms_accepted_user_agent?: string | null;
           terms_snapshot?: string | null;
+          discord_opened_at?: string | null;
         };
       };
       ugc_creator_contracts: {

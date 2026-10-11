@@ -68,7 +68,11 @@ export default async function CreatorJoinPage({ params }: { params: Promise<{ to
               kind={signable.kind}
               accepted={
                 signable.acceptedAt
-                  ? { at: signable.acceptedAt, discordUrl: contract ? null : CREATOR_DISCORD_INVITES[market] }
+                  ? {
+                      at: signable.acceptedAt,
+                      discordUrl: contract ? null : CREATOR_DISCORD_INVITES[market],
+                      discordOpenedAt: signable.discordOpenedAt,
+                    }
                   : null
               }
             />

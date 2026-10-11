@@ -388,7 +388,7 @@ test("the Discord invite is handed out only after the terms are accepted", () =>
   assert.match(signing, /\.is\("signed_at", null\)/);
 
   const page = readSource("src/app/ugc/join/[token]/page.tsx");
-  assert.match(page, /signable\.acceptedAt\s*\?\s*\{ at: signable\.acceptedAt, discordUrl/);
+  assert.match(page, /signable\.acceptedAt\s*\?\s*\{\s*at: signable\.acceptedAt,\s*discordUrl/);
 });
 
 test("every application route and the admin's actions are guarded", () => {
@@ -550,4 +550,22 @@ test("a signed agreement stays on record", () => {
 
   // A tap that wrote nothing is never reported as signed.
   assert.match(readSource("src/app/api/ugc/join/route.ts"), /if \(!stored\)/);
+});
+
+test("after signing, an applicant's next step is the Discord, and 'you're in' comes after it", () => {
+  const form = readSource("src/components/ugc/creator-join-form.tsx");
+  // Signed is step one; the Discord step shows its button with Discord's mark…
+  assert.match(form, /function DiscordStep/);
+  assert.match(form, /className="memo-cp-discord"/);
+  assert.match(form, /<DiscordLogo \/>/);
+  // …and "you're in" only once the invite was opened and they came back (or did before).
+  assert.match(form, /visibilitychange/);
+  // Leaving the page is required first: a focus event from the tap itself is not "back".
+  assert.match(form, /if \(left && document\.visibilityState === "visible"\)/);
+  assert.match(form, /useState\(openedAt !== null\)/);
+
+  // Opening the invite is recorded, only for a signed applicant.
+  const route = readSource("src/app/api/ugc/join/discord/route.ts");
+  assert.match(route, /signable\.kind !== "application" \|\| !signable\.acceptedAt/);
+  assert.match(route, /\.is\("discord_opened_at", null\)/);
 });

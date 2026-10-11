@@ -88,17 +88,14 @@ export async function POST(request: Request) {
 
   const { error } = await insertInto(serviceRole, "ugc_creator_applications", {
     email: application.email,
-    full_name: application.fullName,
+    full_name: `${application.firstName} ${application.lastName}`,
     country: application.country,
     market,
     age: application.age,
     phone: application.phone,
-    studies: application.studies,
-    tiktok_handle: application.tiktok,
-    instagram_handle: application.instagram,
+    referral_code: application.referralCode,
     sample_video_url: application.sampleVideoUrl,
     sample_video_path: application.sampleVideoPath,
-    message: application.message,
     locale: parseLocale(typeof body.locale === "string" ? body.locale : undefined) ?? "en",
     referrer: normalizeReferrer(body.ref),
   });

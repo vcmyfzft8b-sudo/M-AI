@@ -42,14 +42,29 @@ most two per creator (`src/lib/ugc/creator-showcase.ts`). Stored covers expire, 
 thumbnails come from TikTok's oEmbed and the list is cached for six hours. A tap plays the
 post in TikTok's embed player. Both campaigns currently show the same posts.
 
+## Design
+
+The page is built one-to-one on the campaign page creators know from the owner's other
+brand (megasheet.app/parakeet-ai), section for section, with Memo AI's logo, mascot and
+coral in place of that brand's green: amber banner, floating nav, headline beside a
+collage of real campaign videos, stats, calculator, five benefit cards, tiers, "who we're
+looking for", four steps, "you're not doing this alone", the apply card and a two-column
+FAQ. It uses Inter and a fixed light palette (`--cp-*` in `redesign.css`), so it looks the
+same whatever the visitor's appearance setting. Copy uses `[[...]]` to mark the words set
+in the accent colour.
+
 ## Applying
 
-The sheet has four steps: format brief, details, sample video, confirm. The video is
-required: an upload (straight from the phone to the private `ugc-application-videos`
-bucket on a signed URL, up to 200 MB, MP4/MOV/WebM/M4V/3GP) or a TikTok, Reel, YouTube or
-Drive link. `POST /api/ugc/applications` validates with the same schema as the form, is
-rate limited per IP, drops honeypot submissions silently, and keeps one application per
-email.
+The same four steps as that page: **Format** (what to film, three example posts),
+**Details** (legal first and last name, email, phone, country, age, optional referral
+code — "for communication, contracts and payments"), **Demo video** (instructions: a title
+on screen for the first 7 seconds, talk to the camera, show Memo AI; then an upload or a
+link, one or the other) and **Confirm** (three checks — followed the instructions, title
+visible for the first 7 seconds, not a random video — plus consent). Uploads go straight
+from the phone to the private `ugc-application-videos` bucket on a signed URL (up to 200
+MB, MP4/MOV/WebM/M4V/3GP). `POST /api/ugc/applications` validates with the same schema as
+the form, is rate limited per IP, drops honeypot submissions silently, and keeps one
+application per email.
 
 ## Reviewing (`/admin/applications`)
 

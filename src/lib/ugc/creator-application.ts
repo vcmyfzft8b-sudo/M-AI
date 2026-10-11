@@ -29,50 +29,26 @@ export const APPLICATION_VIDEO_TYPES: Record<string, string> = {
 /** Where an upload lands: `pending/<uuid>.<ext>`. The server makes the name; the form only echoes it. */
 export const APPLICATION_VIDEO_PATH = /^pending\/[0-9a-f-]{36}\.(?:mp4|mov|webm|m4v|3gp)$/;
 
-/** A TikTok or Instagram username: what the form keeps from `@name`, `name` or a profile link. */
-const HANDLE = /^[A-Za-z0-9._]{1,30}$/;
-
-export function normalizeHandle(value: string): string {
-  const trimmed = value.trim();
-
-  if (!trimmed) {
-    return "";
-  }
-
-  // A pasted profile link: keep the first path segment, without the "@".
-  const fromUrl = trimmed.match(/^(?:https?:\/\/)?(?:[\w-]+\.)*(?:tiktok|instagram)\.com\/@?([^/?#\s]+)/i);
-
-  return (fromUrl ? fromUrl[1] : trimmed).replace(/^@+/, "");
-}
-
-const optionalText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .transform((value) => value || null);
-
-const optionalHandle = z
-  .string()
-  .transform(normalizeHandle)
-  .refine((value) => value === "" || HANDLE.test(value))
-  .transform((value) => value || null);
+const checked = z.literal(true);
 
 export const applicationSchema = z
   .object({
-    fullName: z.string().trim().min(2).max(120),
+    firstName: z.string().trim().min(1).max(60),
+    lastName: z.string().trim().min(1).max(60),
     email: z.string().trim().toLowerCase().max(254).email(),
-    country: z.enum([...APPLICATION_COUNTRIES, OTHER_COUNTRY]),
-    age: z.coerce.number().int().min(13).max(99),
     phone: z
       .string()
       .trim()
       .max(40)
-      .refine((value) => value === "" || /^\+?[0-9 ()./-]{6,}$/.test(value))
-      .transform((value) => value || null),
-    studies: optionalText(160),
-    tiktok: optionalHandle,
-    instagram: optionalHandle,
+      .regex(/^\+?[0-9 ()./-]{6,}$/),
+    country: z.enum([...APPLICATION_COUNTRIES, OTHER_COUNTRY]),
+    age: z.coerce.number().int().min(13).max(99),
+    referralCode: z
+      .string()
+      .trim()
+      .max(40)
+      .refine((value) => value === "" || /^[A-Za-z0-9_-]+$/.test(value))
+      .transform((value) => (value ? value.toUpperCase() : null)),
     sampleVideoPath: z
       .string()
       .refine((value) => value === "" || APPLICATION_VIDEO_PATH.test(value))
@@ -83,10 +59,13 @@ export const applicationSchema = z
       .max(500)
       .refine((value) => value === "" || /^https?:\/\/[^\s]+\.[^\s]+/i.test(value))
       .transform((value) => value || null),
-    message: optionalText(1000),
-    consent: z.literal(true),
+    // The three checks the form asks for before it sends, and consent to keep the application.
+    followedInstructions: checked,
+    titleVisible: checked,
+    notRandom: checked,
+    consent: checked,
   })
-  // The video is the application: an upload, a link, or both, but never neither.
+  // The video is the application: an upload or a link, never neither.
   .refine((value) => value.sampleVideoPath || value.sampleVideoUrl, { path: ["sampleVideo"] });
 
 export type ApplicationInput = z.input<typeof applicationSchema>;
@@ -95,12 +74,12 @@ export type Application = z.output<typeof applicationSchema>;
 /** The form's fields, plus `sampleVideo` for "neither an upload nor a link". */
 export type ApplicationField = keyof ApplicationInput | "sampleVideo";
 
-/** The fields each step of the form asks for, in order. */
+/** The fields each step of the form asks for, in order: format, details, demo video, confirm. */
 export const APPLICATION_STEPS: ReadonlyArray<ReadonlyArray<ApplicationField>> = [
   [],
-  ["fullName", "email", "country", "age", "phone", "studies", "tiktok", "instagram"],
-  ["sampleVideo", "sampleVideoPath", "sampleVideoUrl", "message"],
-  ["consent"],
+  ["firstName", "lastName", "email", "phone", "country", "age", "referralCode"],
+  ["sampleVideo", "sampleVideoPath", "sampleVideoUrl"],
+  ["followedInstructions", "titleVisible", "notRandom", "consent"],
 ];
 
 /** The fields that failed, in the order the form shows them. */

@@ -30,6 +30,7 @@ create table if not exists public.ugc_creator_applications (
   sample_video_url text check (char_length(sample_video_url) <= 500),
   sample_video_path text check (char_length(sample_video_path) <= 200),
   message text check (char_length(message) <= 1000),
+  referral_code text check (char_length(referral_code) <= 40),
   -- The page language the application was written in, and the `?ref=` the
   -- link was shared with, so a campaign can tell which post brought people.
   locale text not null default 'en',

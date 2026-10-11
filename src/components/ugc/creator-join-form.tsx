@@ -45,7 +45,7 @@ export function CreatorJoinForm({
         </span>
         <h2 className="memo-cp-title">{t("ugcJoin.doneTitle")}</h2>
         <p className="memo-cp-lead">{t("ugcJoin.doneBody", { date })}</p>
-        <a className="memo-cp-cta" href={accepted.discordUrl} target="_blank" rel="noreferrer">
+        <a className="memo-cp-cta memo-cp-cta-plain" href={accepted.discordUrl} target="_blank" rel="noreferrer">
           <span>{t("ugcJoin.discordButton")}</span>
           <Msym name="arrow_forward" size="1.25rem" />
         </a>
@@ -114,7 +114,7 @@ export function CreatorJoinForm({
         </label>
         <input
           id="cp-join-name"
-          className="memo-field"
+          className="memo-cp-input"
           autoComplete="name"
           value={name}
           onChange={(event) => setName(event.target.value)}
@@ -129,7 +129,7 @@ export function CreatorJoinForm({
           </label>
           <input
             id="cp-join-guardian"
-            className="memo-field"
+            className="memo-cp-input"
             value={guardian}
             onChange={(event) => setGuardian(event.target.value)}
           />
@@ -150,8 +150,8 @@ export function CreatorJoinForm({
         </p>
       ) : null}
 
-      <button type="submit" className="memo-button-coral memo-cp-join-submit" disabled={submitting}>
-        {submitting ? t("ugcJoin.submitting") : t("ugcJoin.submit")}
+      <button type="submit" className="memo-cp-cta memo-cp-cta-block" disabled={submitting}>
+        <span>{submitting ? t("ugcJoin.submitting") : t("ugcJoin.submit")}</span>
       </button>
     </form>
   );

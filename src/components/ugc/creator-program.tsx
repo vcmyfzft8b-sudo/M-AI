@@ -1,21 +1,22 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { useTranslations } from "@/components/i18n-provider";
 import { InstantLink } from "@/components/instant-link";
 import { LocaleOptionList, useLocaleChange } from "@/components/language-picker";
 import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
+import { MascotFigure } from "@/components/onboarding-mascot";
 import { CreatorApplyDialog } from "@/components/ugc/creator-apply-dialog";
+import { creatorFont } from "@/components/ugc/creator-font";
 import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, BRAND_SUPPORT_EMAIL, SEO_BRAND_NAME } from "@/lib/brand";
 import { LOCALE_INTL_TAG, LOCALE_LABELS, type Locale } from "@/lib/i18n/locales";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import {
   CREATOR_PROGRAM_STATS,
   INITIAL_VIEW_STEP,
-  PAID_VIDEOS_PER_MONTH,
   VIDEO_RANGE,
   VIEW_STEPS,
   estimateEarnings,
@@ -27,37 +28,19 @@ import {
 import { formatCurrency } from "@/lib/utils";
 
 /**
- * The public creator-program page at `/ugc`, laid out like the campaign pages creators
- * already know: a headline with real videos beside it, the numbers, an earnings
- * calculator, what it pays, how to join, the application and a short FAQ.
+ * The public creator-program page at `/ugc`, built section for section on the campaign
+ * page creators already know from our other brand (megasheet.app/parakeet-ai), in Memo
+ * AI's colours: the banner, the floating nav, the headline beside a collage of real
+ * campaign videos, the numbers, the earnings calculator, the benefit cards, the tiers,
+ * "who we're looking for", the four steps, the apply card and the FAQ.
  *
  * Slovenia and the Balkans are separate programs with different pay. The server decides
  * which one this visitor gets (`resolveCreatorMarket`, from the IP country) and hands
  * over only that campaign's terms: there is no switch, and the other's pay is not in
- * the page at all. The example videos are real campaign posts (`creator-showcase.ts`).
+ * the page at all. The videos are real campaign posts (`creator-showcase.ts`).
  */
 
 export type ShowcaseVideo = { id: string; url: string; thumbnail: string; views: number };
-
-const WHY: Array<{ icon: string; title: MessageKey; body: MessageKey }> = [
-  { icon: "payments", title: "ugcApply.why.paidTitle", body: "ugcApply.why.paidBody" },
-  { icon: "person", title: "ugcApply.why.followersTitle", body: "ugcApply.why.followersBody" },
-  { icon: "assignment", title: "ugcApply.why.guideTitle", body: "ugcApply.why.guideBody" },
-  { icon: "trending_up", title: "ugcApply.why.unlimitedTitle", body: "ugcApply.why.unlimitedBody" },
-];
-
-const STEPS: Array<{ title: MessageKey; body: MessageKey }> = [
-  { title: "ugcApply.step.applyTitle", body: "ugcApply.step.applyBody" },
-  { title: "ugcApply.step.reviewTitle", body: "ugcApply.step.reviewBody" },
-  { title: "ugcApply.step.testTitle", body: "ugcApply.step.testBody" },
-  { title: "ugcApply.step.startTitle", body: "ugcApply.step.startBody" },
-];
-
-const TIER_COPY: Record<string, { title: MessageKey; body: MessageKey }> = {
-  beginner: { title: "ugcApply.tier.beginner", body: "ugcApply.tier.beginnerBody" },
-  experienced: { title: "ugcApply.tier.experienced", body: "ugcApply.tier.experiencedBody" },
-  ultra: { title: "ugcApply.tier.ultra", body: "ugcApply.tier.ultraBody" },
-};
 
 const FAQ: Array<{ q: MessageKey; a: MessageKey }> = [
   { q: "ugcApply.faq.faceQ", a: "ugcApply.faq.faceA" },
@@ -67,22 +50,46 @@ const FAQ: Array<{ q: MessageKey; a: MessageKey }> = [
   { q: "ugcApply.faq.payQ", a: "ugcApply.faq.payA" },
 ];
 
+const STEPS: Array<{ icon: string; title: MessageKey; body: MessageKey }> = [
+  { icon: "check_circle", title: "ugcApply.step.applyTitle", body: "ugcApply.step.applyBody" },
+  { icon: "videocam", title: "ugcApply.step.reviewTitle", body: "ugcApply.step.reviewBody" },
+  { icon: "search", title: "ugcApply.step.testTitle", body: "ugcApply.step.testBody" },
+  { icon: "rocket_launch", title: "ugcApply.step.startTitle", body: "ugcApply.step.startBody" },
+];
+
+const TIER_COPY: Record<string, { title: MessageKey; body: MessageKey; dots: number }> = {
+  beginner: { title: "ugcApply.tier.beginner", body: "ugcApply.tier.beginnerBody", dots: 3 },
+  experienced: { title: "ugcApply.tier.experienced", body: "ugcApply.tier.experiencedBody", dots: 6 },
+  ultra: { title: "ugcApply.tier.ultra", body: "ugcApply.tier.ultraBody", dots: 9 },
+};
+
 const MARKET_FLAGS: Record<CreatorMarket, string> = { si: "🇸🇮", balkans: "🇭🇷 🇧🇦 🇷🇸 🇲🇪 🇲🇰" };
 
 const MARKET_BANNER: Record<CreatorMarket, MessageKey> = { si: "ugcApply.banner.si", balkans: "ugcApply.banner.balkans" };
+
+/** `[[words]]` in a translated string are the words the design sets in the accent colour. */
+function rich(text: string): ReactNode {
+  return text.split(/\[\[(.+?)\]\]/).map((part, index) =>
+    index % 2 === 1 ? (
+      <span key={index} className="memo-cp-accent">
+        {part}
+      </span>
+    ) : (
+      <Fragment key={index}>{part}</Fragment>
+    ),
+  );
+}
 
 function useFormatters(locale: Locale) {
   return useMemo(() => {
     const tag = LOCALE_INTL_TAG[locale];
     const compact = new Intl.NumberFormat(tag, { notation: "compact", maximumFractionDigits: 1 });
     const whole = new Intl.NumberFormat(tag);
-    const percent = new Intl.NumberFormat(tag, { style: "percent" });
 
     return {
       euros: (value: number) => formatCurrency(value, locale),
       compact: (value: number) => compact.format(value),
       whole: (value: number) => whole.format(value),
-      percent: (value: number) => percent.format(value / 100),
     };
   }, [locale]);
 }
@@ -111,7 +118,7 @@ export function CreatorProgram({
 
   const tiers = tierRanges(terms);
   const topTier = tiers[tiers.length - 1];
-  const headline = t("ugcApply.heroTitle", { amount: format.euros(topTier.low) });
+  const perVideo = format.euros(perVideoTotal(terms));
 
   const stats = {
     views: `${format.compact(CREATOR_PROGRAM_STATS.views)}+`,
@@ -121,130 +128,159 @@ export function CreatorProgram({
 
   const apply = () => setApplying(true);
 
-  // The address is a link inside a translated sentence, so the sentence is split around it.
-  const [contactBefore, contactAfter = ""] = t("ugcApply.contact", { email: "\u0000" }).split("\u0000");
-
-  const applyButton = (
-    <button type="button" className="memo-cp-cta" onClick={apply}>
+  const applyButton = (light = false) => (
+    <button type="button" className={light ? "memo-cp-cta memo-cp-cta-light" : "memo-cp-cta"} onClick={apply}>
       <span>{t("ugcApply.applyNow")}</span>
-      <Msym name="arrow_forward" size="1.25rem" />
+      <Msym name="arrow_forward" size="1.15rem" />
     </button>
   );
 
+  const hero = (headingLevel: "h1" | "h2") => {
+    const Heading = headingLevel;
+
+    return (
+      <>
+        <p className="memo-cp-eyebrow">{t("ugcApply.heroEyebrow")}</p>
+        <Heading className="memo-cp-hero-title">
+          <span>{t("ugcApply.heroTitleStart")}</span>{" "}
+          <span className="memo-cp-accent">{t("ugcApply.heroTitleAmount", { amount: format.euros(topTier.low) })}</span>{" "}
+          <span>{t("ugcApply.heroTitleEnd")}</span>
+        </Heading>
+        <p className="memo-cp-hero-lead">{t("ugcApply.heroLead", { creators: stats.creators, views: stats.views })}</p>
+      </>
+    );
+  };
+
   return (
-    <div className="memo-cp">
+    <div className={`memo-cp ${creatorFont.className}`}>
       {preview ? (
         <p className="memo-cp-preview">
           Admin preview: {market === "si" ? "Slovenia" : "Balkans"} page. Visitors only see the page for their own country.
         </p>
       ) : null}
+
       <p className="memo-cp-banner">
-        <span aria-hidden="true">{MARKET_FLAGS[market]}</span>
-        <span>{t(MARKET_BANNER[market])}</span>
+        <span>
+          <span aria-hidden="true">{MARKET_FLAGS[market]}</span> {t(MARKET_BANNER[market])}
+        </span>
+        <span className="memo-cp-banner-sep" aria-hidden="true" />
         <span className="memo-cp-banner-open">
-          <span className="memo-cp-dot" aria-hidden="true" />
+          <Msym name="schedule" size="1.1rem" fill={false} />
           <span>{t("ugcApply.bannerOpen")}</span>
         </span>
       </p>
 
-      <header className="memo-cp-nav">
-        <InstantLink href="/" className="memo-cp-brand" aria-label={SEO_BRAND_NAME}>
-          <Image
-            src={BRAND_LOCKUP_SRC}
-            alt={SEO_BRAND_NAME}
-            width={BRAND_LOCKUP_WIDTH}
-            height={BRAND_LOCKUP_HEIGHT}
-            className="memo-cp-lockup"
-            priority
-          />
-        </InstantLink>
-        <div className="memo-cp-nav-actions">
-          <CreatorLanguageMenu />
-          <button type="button" className="memo-cp-cta memo-cp-cta-small" onClick={apply}>
-            {t("ugcApply.applyNow")}
-          </button>
-        </div>
-      </header>
-
-      <section className="memo-cp-hero" data-has-videos={videos.length >= 4 || undefined}>
-        <div className="memo-cp-hero-copy">
-          <p className="memo-eyebrow memo-cp-eyebrow">{t("ugcApply.heroEyebrow")}</p>
-          <h1 className="memo-cp-hero-title">{headline}</h1>
-          <p className="memo-cp-lead">{t("ugcApply.heroLead", { creators: stats.creators, views: stats.views })}</p>
-          <div className="memo-cp-hero-actions">{applyButton}</div>
-        </div>
-
-        {videos.length >= 4 ? (
-          <div className="memo-cp-hero-videos">
-            {videos.slice(0, 4).map((video) => (
-              <VideoTile key={video.id} video={video} format={format} onPlay={setPlaying} />
-            ))}
+      <div className="memo-cp-gradient">
+        <header className="memo-cp-nav">
+          <InstantLink href="/" className="memo-cp-brand" aria-label={SEO_BRAND_NAME}>
+            <Image
+              src={BRAND_LOCKUP_SRC}
+              alt={SEO_BRAND_NAME}
+              width={BRAND_LOCKUP_WIDTH}
+              height={BRAND_LOCKUP_HEIGHT}
+              className="memo-cp-lockup"
+              priority
+            />
+          </InstantLink>
+          <nav className="memo-cp-nav-links" aria-label={t("ugcApply.navLabel")}>
+            <a href="#benefits">
+              <Msym name="auto_awesome" size="1.05rem" fill={false} />
+              <span>{t("ugcApply.navBenefits")}</span>
+            </a>
+            <a href="#earnings">
+              <Msym name="euro" size="1.05rem" fill={false} />
+              <span>{t("ugcApply.navEarnings")}</span>
+            </a>
+            <a href="#how">
+              <Msym name="info" size="1.05rem" fill={false} />
+              <span>{t("ugcApply.navHow")}</span>
+            </a>
+            <a href="#faq">
+              <Msym name="help" size="1.05rem" fill={false} />
+              <span>{t("ugcApply.navFaq")}</span>
+            </a>
+          </nav>
+          <div className="memo-cp-nav-actions">
+            <CreatorLanguageMenu />
+            <button type="button" className="memo-cp-cta memo-cp-cta-small" onClick={apply}>
+              <span>{t("ugcApply.applyNow")}</span>
+              <Msym name="arrow_forward" size="1.05rem" />
+            </button>
           </div>
-        ) : null}
-      </section>
+        </header>
 
-      <section className="memo-cp-stats">
-        <div className="memo-cp-stat">
-          <strong>{stats.views}</strong>
-          <span>{t("ugcApply.statViews")}</span>
-        </div>
-        <div className="memo-cp-stat">
-          <strong>{stats.videos}</strong>
-          <span>{t("ugcApply.statVideos")}</span>
-        </div>
-        <div className="memo-cp-stat">
-          <strong>{stats.creators}</strong>
-          <span>{t("ugcApply.statCreators")}</span>
-        </div>
-        <div className="memo-cp-stat">
-          <strong>{format.euros(perVideoTotal(terms))}</strong>
-          <span>{t("ugcApply.statPerVideo")}</span>
-        </div>
-      </section>
+        <section className="memo-cp-hero" data-has-videos={videos.length >= 4 || undefined}>
+          <div className="memo-cp-hero-copy">
+            {hero("h1")}
+            <div className="memo-cp-hero-actions">{applyButton()}</div>
+          </div>
+          {videos.length >= 4 ? <VideoCollage videos={videos.slice(0, 5)} format={format} onPlay={setPlaying} /> : null}
+        </section>
 
-      <section className="memo-cp-section" id="earnings">
-        <div className="memo-cp-head">
-          <p className="memo-eyebrow memo-cp-eyebrow">{t("ugcApply.calcEyebrow")}</p>
-          <h2 className="memo-cp-title">{t("ugcApply.calcTitle")}</h2>
+        <section className="memo-cp-stats">
+          <StatCard icon="visibility" value={stats.views} label={t("ugcApply.statViews")} />
+          <StatCard icon="videocam" value={stats.videos} label={t("ugcApply.statVideos")} />
+          <StatCard icon="group" value={stats.creators} label={t("ugcApply.statCreators")} />
+          <StatCard icon="euro" value={perVideo} label={t("ugcApply.statPerVideo")} />
+        </section>
+      </div>
+
+      <section className="memo-cp-gradient memo-cp-band" id="earnings">
+        <div className="memo-cp-center-head">
+          <p className="memo-cp-eyebrow">{t("ugcApply.calcEyebrow")}</p>
+          <h2 className="memo-cp-h2">{t("ugcApply.calcTitle")}</h2>
+          <p className="memo-cp-sub">{t("ugcApply.calcLead")}</p>
         </div>
         <EarningsCalculator terms={terms} format={format} />
       </section>
 
-      <section className="memo-cp-section">
-        <div className="memo-cp-head">
-          <h2 className="memo-cp-title">{t("ugcApply.whyTitle")}</h2>
-          <p className="memo-cp-lead">{t("ugcApply.whyLead")}</p>
+      <section className="memo-cp-band memo-cp-white" id="benefits">
+        <div className="memo-cp-wrap">
+          <h2 className="memo-cp-h2 memo-cp-left">{rich(t("ugcApply.whyTitle", { creators: stats.creators }))}</h2>
+          <p className="memo-cp-sub memo-cp-left">{t("ugcApply.whyLead")}</p>
+          <p className="memo-cp-strong memo-cp-left">{t("ugcApply.whyStrong")}</p>
+
+          <div className="memo-cp-benefits">
+            <BenefitCard
+              title={t("ugcApply.why.paidTitle")}
+              body={t("ugcApply.why.paidBody", { perVideo })}
+              art={<PaidArt videos={videos} amount={perVideo} />}
+            />
+            <BenefitCard title={t("ugcApply.why.followersTitle")} body={t("ugcApply.why.followersBody")} art={<ProfileArt />} />
+            <BenefitCard title={t("ugcApply.why.guideTitle")} body={t("ugcApply.why.guideBody")} art={<GuideArt />} />
+            <BenefitCard
+              wide
+              title={t("ugcApply.why.unlimitedTitle")}
+              body={t("ugcApply.why.unlimitedBody", { top: format.euros(topTier.low) })}
+              art={<EarningsArt amount={format.euros(topTier.low)} />}
+            />
+            <BenefitCard
+              wide
+              title={t("ugcApply.why.appTitle")}
+              body={t("ugcApply.why.appBody", { views: stats.views })}
+              art={<ViralArt stats={stats} />}
+            />
+          </div>
         </div>
-        <div className="memo-cp-grid">
-          {WHY.map((item) => (
-            <article key={item.title} className="memo-cp-card">
-              <span className="memo-cp-tile">
-                <Msym name={item.icon} size="1.35rem" />
-              </span>
-              <h3>{t(item.title)}</h3>
-              <p>{t(item.body)}</p>
-            </article>
-          ))}
-        </div>
-        <div className="memo-cp-center">{applyButton}</div>
       </section>
 
-      <section className="memo-cp-section" id="tiers">
-        <div className="memo-cp-head">
-          <p className="memo-eyebrow memo-cp-eyebrow">{t("ugcApply.tiersEyebrow")}</p>
-          <h2 className="memo-cp-title">{t("ugcApply.tiersTitle")}</h2>
+      <section className="memo-cp-gradient memo-cp-band" id="tiers">
+        <div className="memo-cp-center-head">
+          <h2 className="memo-cp-h2">{rich(t("ugcApply.tiersTitle"))}</h2>
+          <p className="memo-cp-sub">{t("ugcApply.tiersLead", { amount: format.euros(tiers[1].low) })}</p>
         </div>
         <div className="memo-cp-tiers">
           {tiers.map((tier) => (
-            <article key={tier.key} className="memo-cp-tier" data-tier={tier.key}>
+            <article key={tier.key} className="memo-cp-tier">
+              <span className="memo-cp-dots" aria-hidden="true">
+                {Array.from({ length: 9 }, (_, index) => (
+                  <span key={index} data-on={index < TIER_COPY[tier.key].dots || undefined} />
+                ))}
+              </span>
               <h3>{t(TIER_COPY[tier.key].title)}</h3>
               <p className="memo-cp-tier-range">
-                <span>
-                  {tier.high === null
-                    ? `${format.euros(tier.low)}+`
-                    : `${format.euros(tier.low)} – ${format.euros(tier.high)}`}
-                </span>
-                <span className="memo-cp-per">{t("ugcApply.calcPerMonth")}</span>
+                {tier.high === null ? `${format.euros(tier.low)}+` : `${format.euros(tier.low)} – ${format.euros(tier.high)}`}
+                {t("ugcApply.calcPerMonth")}
               </p>
               <p>{t(TIER_COPY[tier.key].body, { videos: tier.videos })}</p>
             </article>
@@ -252,104 +288,312 @@ export function CreatorProgram({
         </div>
       </section>
 
-      <section className="memo-cp-section">
-        <div className="memo-cp-card memo-cp-who">
-          <h2 className="memo-cp-title">{t("ugcApply.whoTitle")}</h2>
-          <p>{t("ugcApply.whoBody")}</p>
-          <div>{applyButton}</div>
+      <section className="memo-cp-band memo-cp-white">
+        <FeatureCard
+          title={t("ugcApply.whoTitle")}
+          body={
+            <>
+              <p>{t("ugcApply.whoBody")}</p>
+              <p>
+                <strong>{t("ugcApply.whoStrong")}</strong> {t("ugcApply.whoBody2")}
+              </p>
+            </>
+          }
+          action={applyButton(true)}
+        />
+      </section>
+
+      <section className="memo-cp-band memo-cp-white" id="how">
+        <div className="memo-cp-center-head">
+          <h2 className="memo-cp-h2">{rich(t("ugcApply.stepsTitle"))}</h2>
+          <p className="memo-cp-sub">{t("ugcApply.stepsLead")}</p>
+        </div>
+        <div className="memo-cp-wrap">
+          <ol className="memo-cp-step-pills" aria-hidden="true">
+            {STEPS.map((step, index) => (
+              <li key={step.title}>{t("ugcApply.stepLabel", { number: index + 1 })}</li>
+            ))}
+          </ol>
+          <ol className="memo-cp-steps">
+            {STEPS.map((step, index) => (
+              <li key={step.title} className="memo-cp-step">
+                <span className="memo-cp-step-pill">{t("ugcApply.stepLabel", { number: index + 1 })}</span>
+                <Msym name={step.icon} size="1.9rem" fill={false} weight={300} />
+                <h3>{t(step.title)}</h3>
+                <p>{t(step.body)}</p>
+              </li>
+            ))}
+          </ol>
         </div>
       </section>
 
-      <section className="memo-cp-section" id="how">
-        <div className="memo-cp-head">
-          <h2 className="memo-cp-title">{t("ugcApply.stepsTitle")}</h2>
-        </div>
-        <ol className="memo-cp-steps">
-          {STEPS.map((step, index) => (
-            <li key={step.title} className="memo-cp-step">
-              <span className="memo-cp-step-label">{t("ugcApply.stepLabel", { number: index + 1 })}</span>
-              <h3>{t(step.title)}</h3>
-              <p>{t(step.body)}</p>
-            </li>
-          ))}
-        </ol>
+      <section className="memo-cp-band memo-cp-white memo-cp-band-tight">
+        <FeatureCard
+          title={t("ugcApply.coachTitle")}
+          body={
+            <>
+              <p>{t("ugcApply.coachBody")}</p>
+              <p>
+                <strong>{t("ugcApply.coachStrong")}</strong> {t("ugcApply.coachBody2")}
+              </p>
+            </>
+          }
+          action={applyButton(true)}
+        />
       </section>
 
-      <section className="memo-cp-section">
-        <div className="memo-cp-card memo-cp-coach">
-          <h2 className="memo-cp-title">{t("ugcApply.coachTitle")}</h2>
-          <p>{t("ugcApply.coachBody")}</p>
+      <section className="memo-cp-gradient memo-cp-band" id="apply">
+        <div className="memo-cp-center-head">
+          <h2 className="memo-cp-h2">{rich(t("ugcApply.applyTitle"))}</h2>
+          <p className="memo-cp-sub">{t("ugcApply.applyLead")}</p>
         </div>
-      </section>
-
-      <section className="memo-cp-section memo-cp-apply" id="apply">
-        <div className="memo-cp-head">
-          <h2 className="memo-cp-title">{t("ugcApply.applyTitle")}</h2>
-          <p className="memo-cp-lead">{t("ugcApply.applyLead")}</p>
-        </div>
-        <div className="memo-cp-card memo-cp-format">
+        <div className="memo-cp-format">
           <div className="memo-cp-format-row">
-            <span className="memo-cp-tile">
-              <Msym name="videocam" size="1.35rem" />
+            <span className="memo-cp-format-icon">
+              <Msym name="person_add" size="1.3rem" fill={false} />
             </span>
             <div className="memo-cp-format-copy">
               <h3>{t("ugcApply.formatTitle")}</h3>
               <p>{t("ugcApply.formatBody")}</p>
             </div>
-            <button type="button" className="memo-cp-cta memo-cp-cta-small" onClick={apply}>
+            <button type="button" className="memo-cp-cta memo-cp-cta-small memo-cp-cta-plain" onClick={apply}>
               <span>{t("ugcApply.applyNow")}</span>
-              <Msym name="chevron_right" size="1.2rem" />
+              <Msym name="chevron_right" size="1.1rem" />
             </button>
           </div>
           {videos.length > 0 ? (
             <div className="memo-cp-strip">
-              {videos.slice(videos.length > 4 ? 4 : 0).map((video) => (
-                <VideoTile key={video.id} video={video} format={format} onPlay={setPlaying} />
+              {videos.slice(-6).map((video) => (
+                <VideoTile key={video.id} video={video} format={format} onPlay={setPlaying} compact />
               ))}
             </div>
           ) : null}
         </div>
       </section>
 
-      <section className="memo-cp-section" id="faq">
-        <div className="memo-cp-head">
-          <p className="memo-eyebrow memo-cp-eyebrow">{t("ugcApply.faqEyebrow")}</p>
-          <h2 className="memo-cp-title">{t("ugcApply.faqTitle")}</h2>
-        </div>
-        <div className="memo-cp-faq">
-          {FAQ.map((item) => (
-            <details key={item.q} className="memo-cp-faq-item">
-              <summary>
-                <span>{t(item.q)}</span>
-                <Msym name="expand_more" size="1.5rem" fill={false} weight={400} />
-              </summary>
-              <p>{t(item.a)}</p>
-            </details>
-          ))}
+      <section className="memo-cp-band memo-cp-white" id="faq">
+        <div className="memo-cp-wrap memo-cp-faq-layout">
+          <div>
+            <p className="memo-cp-eyebrow">{t("ugcApply.faqEyebrow")}</p>
+            <h2 className="memo-cp-faq-title">{t("ugcApply.faqTitle")}</h2>
+          </div>
+          <div className="memo-cp-faq">
+            {FAQ.map((item) => (
+              <details key={item.q} className="memo-cp-faq-item">
+                <summary>
+                  <span>{t(item.q)}</span>
+                  <Msym name="expand_more" size="1.4rem" fill={false} weight={400} />
+                </summary>
+                <p>{t(item.a)}</p>
+              </details>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section className="memo-cp-section memo-cp-final">
-        <p className="memo-eyebrow memo-cp-eyebrow">{t("ugcApply.heroEyebrow")}</p>
-        <h2 className="memo-cp-hero-title">{headline}</h2>
-        {applyButton}
+      <section className="memo-cp-gradient memo-cp-band memo-cp-final">
+        <div className="memo-cp-final-copy">
+          {hero("h2")}
+          {applyButton()}
+        </div>
       </section>
 
       <footer className="memo-cp-footer">
-        <p>
-          {contactBefore}
-          <a href={`mailto:${BRAND_SUPPORT_EMAIL}`}>{BRAND_SUPPORT_EMAIL}</a>
-          {contactAfter}
+        <p className="memo-cp-chat">
+          <span>{t("ugcApply.chatTitle")}</span>
+          <a href={`mailto:${BRAND_SUPPORT_EMAIL}`}>{t("ugcApply.chatLink")}</a>
         </p>
         <p>
           <InstantLink href={preview ? `/ugc/terms?market=${market}` : "/ugc/terms"}>{t("ugcApply.termsLink")}</InstantLink>
-          {" · "}
+          <span aria-hidden="true"> · </span>
           <InstantLink href="/legal/privacy-policy">{t("landing.footer.privacy")}</InstantLink>
         </p>
+        <p className="memo-cp-footer-run">{t("ugcApply.footerRun")}</p>
       </footer>
 
-      {applying ? <CreatorApplyDialog market={market} referrer={referrer} onClosed={() => setApplying(false)} /> : null}
+      {applying ? (
+        <CreatorApplyDialog market={market} videos={videos} referrer={referrer} onClosed={() => setApplying(false)} />
+      ) : null}
       {playing ? <VideoPlayer video={playing} onClose={() => setPlaying(null)} /> : null}
+    </div>
+  );
+}
+
+function StatCard({ icon, value, label }: { icon: string; value: string; label: string }) {
+  return (
+    <div className="memo-cp-stat">
+      <Msym name={icon} size="1.5rem" fill={false} weight={300} />
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function BenefitCard({ title, body, art, wide }: { title: string; body: string; art: ReactNode; wide?: boolean }) {
+  return (
+    <article className="memo-cp-benefit" data-wide={wide || undefined}>
+      <h3>{title}</h3>
+      <div className="memo-cp-art" aria-hidden="true">
+        {art}
+      </div>
+      <p>{body}</p>
+    </article>
+  );
+}
+
+function PaidArt({ videos, amount }: { videos: ShowcaseVideo[]; amount: string }) {
+  const covers = videos.slice(0, 3);
+
+  return (
+    <div className="memo-cp-art-paid">
+      {covers.map((video, index) => (
+        <div key={video.id} className="memo-cp-art-reel" data-index={index}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={video.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" />
+          <span>+{amount}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ProfileArt() {
+  const { t } = useTranslations();
+
+  return (
+    <div className="memo-cp-art-profile">
+      <div className="memo-cp-art-profile-head">
+        <span className="memo-cp-art-avatar">
+          <Msym name="person" size="1.2rem" />
+        </span>
+        <strong>@memo.creator</strong>
+        <span className="memo-cp-art-badge">{t("ugcApply.illus.newProfile")}</span>
+      </div>
+      <div className="memo-cp-art-profile-stats">
+        <span>
+          <strong>0</strong>
+          {t("ugcApply.illus.posts")}
+        </span>
+        <span>
+          <strong>0</strong>
+          {t("ugcApply.illus.followers")}
+        </span>
+        <span>
+          <strong>0</strong>
+          {t("ugcApply.illus.following")}
+        </span>
+      </div>
+      <span className="memo-cp-art-start">
+        {t("ugcApply.illus.startPosting")} <Msym name="arrow_forward" size="0.9rem" />
+      </span>
+    </div>
+  );
+}
+
+function GuideArt() {
+  const { t } = useTranslations();
+  const items: MessageKey[] = ["ugcApply.illus.tutorials", "ugcApply.illus.examples", "ugcApply.illus.instructions"];
+
+  return (
+    <div className="memo-cp-art-guide">
+      {items.map((key, index) => (
+        <span key={key} data-index={index}>
+          <Msym name="check_circle" size="1.15rem" />
+          {t(key)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function EarningsArt({ amount }: { amount: string }) {
+  const { t } = useTranslations();
+
+  return (
+    <div className="memo-cp-art-earnings">
+      <span className="memo-cp-art-coin" data-index={0}>
+        <Msym name="euro" size="1.1rem" />
+      </span>
+      <span className="memo-cp-art-coin" data-index={1}>
+        <Msym name="euro" size="0.9rem" />
+      </span>
+      <span className="memo-cp-art-coin" data-index={2}>
+        <Msym name="euro" size="0.9rem" />
+      </span>
+      <div className="memo-cp-art-earnings-card">
+        <span>{t("ugcApply.illus.earnings")}</span>
+        <strong>{amount}+</strong>
+        <small>{t("ugcApply.calcPerMonth")}</small>
+      </div>
+    </div>
+  );
+}
+
+function ViralArt({ stats }: { stats: { views: string; videos: string; creators: string } }) {
+  const { t } = useTranslations();
+  const tiles: Array<{ icon: string; label: MessageKey; value: string }> = [
+    { icon: "visibility", label: "ugcApply.illus.views", value: stats.views },
+    { icon: "videocam", label: "ugcApply.illus.videos", value: stats.videos },
+    { icon: "group", label: "ugcApply.illus.creators", value: stats.creators },
+  ];
+
+  return (
+    <div className="memo-cp-art-viral">
+      {tiles.map((tile) => (
+        <div key={tile.label}>
+          <span>
+            <Msym name={tile.icon} size="1.15rem" />
+            {t(tile.label)}
+          </span>
+          <strong>{tile.value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FeatureCard({ title, body, action }: { title: string; body: ReactNode; action: ReactNode }) {
+  return (
+    <div className="memo-cp-feature">
+      <div className="memo-cp-feature-copy">
+        <h2>{title}</h2>
+        {body}
+        <div>{action}</div>
+      </div>
+      <div className="memo-cp-feature-art" aria-hidden="true">
+        <div className="memo-cp-feature-mascot">
+          <MascotFigure lash={3} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The hero's video wall: real campaign posts in two staggered columns that fade out at the bottom. */
+function VideoCollage({
+  videos,
+  format,
+  onPlay,
+}: {
+  videos: ShowcaseVideo[];
+  format: Formatters;
+  onPlay: (video: ShowcaseVideo) => void;
+}) {
+  const left = videos.filter((_, index) => index % 2 === 0);
+  const right = videos.filter((_, index) => index % 2 === 1);
+
+  return (
+    <div className="memo-cp-collage">
+      <div className="memo-cp-collage-col">
+        {left.map((video) => (
+          <VideoTile key={video.id} video={video} format={format} onPlay={onPlay} />
+        ))}
+      </div>
+      <div className="memo-cp-collage-col" data-offset="">
+        {right.map((video) => (
+          <VideoTile key={video.id} video={video} format={format} onPlay={onPlay} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -359,10 +603,12 @@ function VideoTile({
   video,
   format,
   onPlay,
+  compact,
 }: {
   video: ShowcaseVideo;
   format: Formatters;
   onPlay: (video: ShowcaseVideo) => void;
+  compact?: boolean;
 }) {
   const { t } = useTranslations();
 
@@ -370,6 +616,7 @@ function VideoTile({
     <button
       type="button"
       className="memo-cp-video"
+      data-compact={compact || undefined}
       aria-label={t("ugcApply.playVideo", { views: format.compact(video.views) })}
       onClick={() => onPlay(video)}
     >
@@ -377,11 +624,7 @@ function VideoTile({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={video.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" />
       <span className="memo-cp-video-play" aria-hidden="true">
-        <Msym name="play_arrow" size="1.6rem" />
-      </span>
-      <span className="memo-cp-video-views">
-        <Msym name="play_arrow" size="1rem" />
-        <span>{format.compact(video.views)}</span>
+        <Msym name="play_arrow" size={compact ? "1.2rem" : "1.6rem"} />
       </span>
     </button>
   );
@@ -412,7 +655,7 @@ function VideoPlayer({ video, onClose }: { video: ShowcaseVideo; onClose: () => 
           allow="autoplay; encrypted-media; fullscreen"
           allowFullScreen
         />
-        <button type="button" className="memo-icon-button memo-cp-player-close" aria-label={t("common.close")} onClick={onClose}>
+        <button type="button" className="memo-cp-player-close" aria-label={t("common.close")} onClick={onClose}>
           <Msym name="close" size="1.3rem" />
         </button>
       </div>
@@ -427,12 +670,16 @@ function EarningsCalculator({ terms, format }: { terms: CreatorTerms; format: Fo
 
   const views = VIEW_STEPS[viewStep];
   const estimate = estimateEarnings(terms, videos, views);
+  const fill = (value: number, max: number, min = 0) => `${((value - min) / (max - min)) * 100}%`;
 
   return (
     <div className="memo-cp-calc">
       <div className="memo-cp-calc-inputs">
         <label className="memo-cp-slider">
           <span className="memo-cp-slider-head">
+            <span className="memo-cp-slider-icon">
+              <Msym name="videocam" size="1rem" fill={false} />
+            </span>
             <span>{t("ugcApply.calcVideos")}</span>
             <strong>{format.whole(videos)}</strong>
           </span>
@@ -442,11 +689,15 @@ function EarningsCalculator({ terms, format }: { terms: CreatorTerms; format: Fo
             max={VIDEO_RANGE.max}
             step={VIDEO_RANGE.step}
             value={videos}
+            style={{ "--fill": fill(videos, VIDEO_RANGE.max, VIDEO_RANGE.min) } as CSSProperties}
             onChange={(event) => setVideos(Number(event.target.value))}
           />
         </label>
         <label className="memo-cp-slider">
           <span className="memo-cp-slider-head">
+            <span className="memo-cp-slider-icon">
+              <Msym name="visibility" size="1rem" fill={false} />
+            </span>
             <span>{t("ugcApply.calcViews")}</span>
             <strong>{format.compact(views)}</strong>
           </span>
@@ -457,42 +708,31 @@ function EarningsCalculator({ terms, format }: { terms: CreatorTerms; format: Fo
             step={1}
             value={viewStep}
             aria-valuetext={format.whole(views)}
+            style={{ "--fill": fill(viewStep, VIEW_STEPS.length - 1) } as CSSProperties}
             onChange={(event) => setViewStep(Number(event.target.value))}
           />
         </label>
       </div>
 
-      <div className="memo-cp-calc-result" aria-live="polite">
-        <span className="memo-eyebrow">{t("ugcApply.calcTotal")}</span>
-        <p className="memo-cp-calc-total">
-          <span>{format.euros(estimate.total)}</span>
-          <span className="memo-cp-per">{t("ugcApply.calcPerMonth")}</span>
+      <div className="memo-cp-payout" aria-live="polite">
+        <span className="memo-cp-payout-label">{t("ugcApply.calcTotal")}</span>
+        <p className="memo-cp-payout-total">
+          <strong>{format.euros(estimate.total)}</strong>
+          <span>{t("ugcApply.calcPerMonth")}</span>
         </p>
-        <dl className="memo-cp-calc-lines">
-          <div>
-            <dt>{t("ugcApply.calcTikTokPay", { count: videos, amount: format.euros(terms.perTikTok) })}</dt>
-            <dd>{format.euros(estimate.tiktokPay)}</dd>
-          </div>
-          <div>
-            <dt>{t("ugcApply.calcInstagramPay", { count: videos, amount: format.euros(terms.perInstagram) })}</dt>
-            <dd>{format.euros(estimate.instagramPay)}</dd>
-          </div>
-          <div>
-            <dt>
-              {terms.codeSharePercent > 0
-                ? t("ugcApply.calcCodeBonus", { percent: format.percent(terms.codeSharePercent) })
-                : t("ugcApply.calcViewBonus", { amount: format.euros(terms.viewRatePer1k) })}
-            </dt>
-            <dd>{format.euros(estimate.bonus)}</dd>
-          </div>
-        </dl>
-        <p className="memo-cp-note">
+        <p className="memo-cp-payout-lines">
+          {t("ugcApply.calcBreakdown", {
+            tiktok: format.euros(estimate.tiktokPay),
+            instagram: format.euros(estimate.instagramPay),
+            bonus: format.euros(estimate.bonus),
+          })}
+        </p>
+        <p className="memo-cp-payout-note">
           {estimate.capped
             ? t("ugcApply.calcCapped", { amount: format.euros(terms.viewBonusCap ?? 0) })
             : terms.codeSharePercent > 0
               ? t("ugcApply.calcCodeNote")
-              : t("ugcApply.calcViewNote", { amount: format.euros(terms.viewBonusCap ?? 0) })}{" "}
-          {t("ugcApply.calcPlatformsNote", { max: PAID_VIDEOS_PER_MONTH })}
+              : t("ugcApply.calcViewNote", { amount: format.euros(terms.viewBonusCap ?? 0) })}
         </p>
       </div>
     </div>
@@ -542,8 +782,7 @@ function CreatorLanguageMenu() {
         aria-label={`${t("settings.language.title")}: ${LOCALE_LABELS[locale]}`}
         onClick={() => setOpen((value) => !value)}
       >
-        <Msym name="language" size="1.2rem" />
-        <span className="memo-cp-lang-name">{LOCALE_LABELS[locale]}</span>
+        <Msym name="language" size="1.15rem" fill={false} />
       </button>
       {open ? (
         <LocaleOptionList

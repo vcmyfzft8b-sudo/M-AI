@@ -1486,6 +1486,7 @@ export type Database = {
           sample_video_url: string | null;
           sample_video_path: string | null;
           message: string | null;
+          referral_code: string | null;
           locale: string;
           referrer: string | null;
           status: UgcApplicationStatus;
@@ -1518,6 +1519,7 @@ export type Database = {
           sample_video_url?: string | null;
           sample_video_path?: string | null;
           message?: string | null;
+          referral_code?: string | null;
           locale?: string;
           referrer?: string | null;
           status?: UgcApplicationStatus;

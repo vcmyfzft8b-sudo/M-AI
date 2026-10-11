@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { InstantLink } from "@/components/instant-link";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
+import { creatorFont } from "@/components/ugc/creator-font";
 import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, SEO_BRAND_NAME } from "@/lib/brand";
 
 /**
@@ -21,7 +22,7 @@ export function CreatorTermsView({
   children?: ReactNode;
 }) {
   return (
-    <div className="memo-cp memo-cp-terms-page">
+    <div className={`memo-cp memo-cp-terms-page ${creatorFont.className}`}>
       <header className="memo-cp-nav">
         <InstantLink href="/ugc" className="memo-cp-brand" aria-label={SEO_BRAND_NAME}>
           <Image
@@ -38,7 +39,7 @@ export function CreatorTermsView({
 
       <div className="memo-cp-doc">
         {intro}
-        <article className="memo-cp-card memo-help-intro memo-article-body memo-legal-body memo-cp-doc-body">
+        <article className="memo-cp-card memo-cp-doc-body">
           <MarkdownRenderer content={markdown} />
         </article>
         {children}

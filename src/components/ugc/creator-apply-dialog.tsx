@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useTranslations } from "@/components/i18n-provider";
 import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
+import { creatorFont } from "@/components/ugc/creator-font";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { LOCALE_INTL_TAG } from "@/lib/i18n/locales";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -15,50 +16,56 @@ import {
   APPLICATION_VIDEO_MAX_BYTES,
   APPLICATION_VIDEO_TYPES,
   invalidFields,
-  normalizeHandle,
   type ApplicationField,
 } from "@/lib/ugc/creator-application";
 import { MARKET_COUNTRIES, OTHER_COUNTRY, type CreatorMarket } from "@/lib/ugc/creator-program";
 
+import type { ShowcaseVideo } from "./creator-program";
+
 /**
- * The application form: a four-step sheet (format, details, video, confirm) that posts
- * to `/api/ugc/applications`. Each step is checked with the same schema the server uses
- * before the next one opens, so a mistake is shown on the step it was made.
+ * The application, step for step as on the campaign pages creators already know: the
+ * format with examples, your details, the demo video (instructions, then an upload or a
+ * link, one or the other) and three confirmations before it sends. It posts to
+ * `/api/ugc/applications`; each step is checked with the server's own schema before the
+ * next one opens.
  *
- * The sample video goes straight from the phone to storage on a signed URL (see
+ * The demo video goes straight from the phone to storage on a signed URL (see
  * `/api/ugc/applications/video`); the application only carries its path.
  */
 
-type TextField = Exclude<ApplicationField, "consent" | "sampleVideo" | "sampleVideoPath">;
+type TextField = "firstName" | "lastName" | "email" | "phone" | "country" | "age" | "referralCode" | "sampleVideoUrl";
+type CheckField = "followedInstructions" | "titleVisible" | "notRandom" | "consent";
 type Values = Record<TextField, string>;
 
 const EMPTY: Values = {
-  fullName: "",
+  firstName: "",
+  lastName: "",
   email: "",
+  phone: "",
   country: "",
   age: "",
-  phone: "",
-  studies: "",
-  tiktok: "",
-  instagram: "",
+  referralCode: "",
   sampleVideoUrl: "",
-  message: "",
 };
 
-const ERROR_KEYS: Record<ApplicationField, MessageKey> = {
-  fullName: "ugcApply.error.fullName",
+const NO_CHECKS: Record<CheckField, boolean> = {
+  followedInstructions: false,
+  titleVisible: false,
+  notRandom: false,
+  consent: false,
+};
+
+const ERROR_KEYS: Partial<Record<ApplicationField, MessageKey>> = {
+  firstName: "ugcApply.error.firstName",
+  lastName: "ugcApply.error.lastName",
   email: "ugcApply.error.email",
+  phone: "ugcApply.error.phone",
   country: "ugcApply.error.country",
   age: "ugcApply.error.age",
-  phone: "ugcApply.error.phone",
-  studies: "ugcApply.error.studies",
-  tiktok: "ugcApply.error.handle",
-  instagram: "ugcApply.error.handle",
+  referralCode: "ugcApply.error.referral",
   sampleVideo: "ugcApply.error.sampleVideo",
   sampleVideoPath: "ugcApply.error.videoUpload",
   sampleVideoUrl: "ugcApply.error.sampleVideoUrl",
-  message: "ugcApply.error.message",
-  consent: "ugcApply.error.consent",
 };
 
 const STEP_LABELS: MessageKey[] = [
@@ -68,12 +75,10 @@ const STEP_LABELS: MessageKey[] = [
   "ugcApply.formStep.confirm",
 ];
 
-const BRIEF: MessageKey[] = [
-  "ugcApply.briefPoint1",
-  "ugcApply.briefPoint2",
-  "ugcApply.briefPoint3",
-  "ugcApply.briefPoint4",
-  "ugcApply.briefPoint5",
+const CONFIRMATIONS: Array<{ field: Exclude<CheckField, "consent">; label: MessageKey }> = [
+  { field: "followedInstructions", label: "ugcApply.confirm1" },
+  { field: "titleVisible", label: "ugcApply.confirm2" },
+  { field: "notRandom", label: "ugcApply.confirm3" },
 ];
 
 type Outcome = { kind: "received" | "duplicate"; email: string };
@@ -119,20 +124,22 @@ function putToSignedUrl(
 
 export function CreatorApplyDialog({
   market,
+  videos,
   referrer,
   onClosed,
 }: {
   /** The campaign this page is for: the form lists only its countries. */
   market: CreatorMarket;
+  videos: ShowcaseVideo[];
   referrer: string | null;
   onClosed: () => void;
 }) {
-  const countries = MARKET_COUNTRIES[market];
   const { t, locale } = useTranslations();
+  const countries = MARKET_COUNTRIES[market];
   const [step, setStep] = useState(0);
   const [values, setValues] = useState<Values>({ ...EMPTY, country: countries.length === 1 ? countries[0] : "" });
+  const [checks, setChecks] = useState(NO_CHECKS);
   const [upload, setUpload] = useState<Upload>({ state: "idle" });
-  const [consent, setConsent] = useState(false);
   // Hidden from people; a bot that fills every field fills this one too.
   const [website, setWebsite] = useState("");
   const [errors, setErrors] = useState<ApplicationField[]>([]);
@@ -166,7 +173,7 @@ export function CreatorApplyDialog({
   const payload = {
     ...values,
     sampleVideoPath: upload.state === "done" ? upload.path : "",
-    consent,
+    ...checks,
   };
 
   const clearErrors = useCallback((...fields: ApplicationField[]) => {
@@ -185,8 +192,7 @@ export function CreatorApplyDialog({
     // Some Android pickers hand over a file with no type; the extension still says what it is.
     const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
     const contentType =
-      file.type ||
-      (Object.entries(APPLICATION_VIDEO_TYPES).find(([, ext]) => ext === extension)?.[0] ?? "");
+      file.type || (Object.entries(APPLICATION_VIDEO_TYPES).find(([, ext]) => ext === extension)?.[0] ?? "");
 
     if (!APPLICATION_VIDEO_TYPES[contentType]) {
       setUpload({ state: "failed", error: "ugcApply.error.videoType" });
@@ -292,53 +298,34 @@ export function CreatorApplyDialog({
     }
   }
 
-  const fieldProps = (name: TextField) => ({
+  const inputProps = (name: TextField) => ({
     id: `cp-${name}`,
     name,
+    className: "memo-cp-input",
     value: values[name],
     "aria-invalid": errors.includes(name) || undefined,
-    "aria-describedby": errors.includes(name) ? `cp-${name}-error` : undefined,
     onChange: (event: { target: { value: string } }) => set(name, event.target.value),
   });
 
-  const field = (
-    name: ApplicationField,
-    label: ReactNode,
-    control: ReactNode,
-    options?: { optional?: boolean; hint?: string },
-  ) => (
-    <div className="memo-cp-form-field" data-invalid={errors.includes(name) || undefined}>
-      <label className="memo-cp-form-label" htmlFor={`cp-${name}`}>
-        <span>{label}</span>
-        {options?.optional ? <span className="memo-cp-optional">{t("ugcApply.optional")}</span> : null}
-      </label>
-      {control}
-      {errors.includes(name) ? (
-        <p className="memo-cp-form-error" id={`cp-${name}-error`}>
-          {t(ERROR_KEYS[name])}
-        </p>
-      ) : options?.hint ? (
-        <p className="memo-cp-form-hint">{options.hint}</p>
-      ) : null}
-    </div>
-  );
+  const field = (name: TextField, label: string, control: ReactNode, hint?: string) => {
+    const error = ERROR_KEYS[name];
 
-  const summary: Array<[MessageKey, string]> = [
-    ["ugcApply.field.fullName", values.fullName.trim()],
-    ["ugcApply.field.email", values.email.trim()],
-    [
-      "ugcApply.field.country",
-      values.country === OTHER_COUNTRY ? t("ugcApply.field.countryOther") : (countryNames[values.country] ?? ""),
-    ],
-    ["ugcApply.field.age", values.age.trim()],
-    ["ugcApply.field.phone", values.phone.trim()],
-    ["ugcApply.field.studies", values.studies.trim()],
-    ["ugcApply.field.tiktok", values.tiktok.trim() ? `@${normalizeHandle(values.tiktok)}` : ""],
-    ["ugcApply.field.instagram", values.instagram.trim() ? `@${normalizeHandle(values.instagram)}` : ""],
-    ["ugcApply.videoTitle", upload.state === "done" ? upload.name : ""],
-    ["ugcApply.field.sampleVideo", values.sampleVideoUrl.trim()],
-  ];
+    return (
+      <div className="memo-cp-form-field" data-invalid={errors.includes(name) || undefined}>
+        <label className="memo-cp-form-label" htmlFor={`cp-${name}`}>
+          {label}
+        </label>
+        {control}
+        {errors.includes(name) && error ? (
+          <p className="memo-cp-form-error">{t(error)}</p>
+        ) : hint ? (
+          <p className="memo-cp-form-hint">{hint}</p>
+        ) : null}
+      </div>
+    );
+  };
 
+  const confirmMissing = CONFIRMATIONS.some((item) => errors.includes(item.field));
   const lastStep = STEP_LABELS.length - 1;
 
   return (
@@ -350,46 +337,41 @@ export function CreatorApplyDialog({
         onClick={() => sheet.dismiss()}
       />
       <div
-        className={sheetClass("memo-confirm memo-confirm-fixed memo-cp-apply-sheet", sheet.closing)}
+        className={`${sheetClass("memo-confirm-fixed memo-cp-sheet", sheet.closing)} ${creatorFont.className}`}
         role="dialog"
         aria-modal="true"
-        aria-label={t("ugcApply.formTitle")}
+        aria-label={t("ugcApply.formatTitle")}
         {...sheet.dragProps}
       >
         <div className="memo-grab" data-drag-handle />
-        <div className="memo-cp-apply-head" data-drag-zone>
+        <div className="memo-cp-sheet-head" data-drag-zone>
           <h2>
             {outcome
               ? t(outcome.kind === "received" ? "ugcApply.successTitle" : "ugcApply.duplicateTitle")
-              : t("ugcApply.formTitle")}
+              : t("ugcApply.formatTitle")}
           </h2>
-          <button
-            type="button"
-            className="memo-icon-button memo-cp-apply-close"
-            aria-label={t("common.close")}
-            onClick={() => sheet.dismiss()}
-          >
-            <Msym name="close" size="1.3rem" />
-          </button>
         </div>
 
         {outcome ? (
-          <div className="memo-cp-apply-done">
+          <div className="memo-cp-sheet-done">
             <span className="memo-cp-done-tile">
               <Msym name="check" size="1.8rem" />
             </span>
             <p>
-              {t(outcome.kind === "received" ? "ugcApply.successBody" : "ugcApply.duplicateBody", {
-                email: outcome.email,
-              })}
+              {t(outcome.kind === "received" ? "ugcApply.successBody" : "ugcApply.duplicateBody", { email: outcome.email })}
             </p>
-            <button type="button" className="memo-button-coral" onClick={() => sheet.dismiss(undefined, { force: true })}>
-              {t("common.close")}
+            {outcome.kind === "received" ? <p className="memo-cp-strong">{t("ugcApply.successThanks")}</p> : null}
+            <button
+              type="button"
+              className="memo-cp-cta memo-cp-cta-block"
+              onClick={() => sheet.dismiss(undefined, { force: true })}
+            >
+              <span>{t("ugcApply.done")}</span>
             </button>
           </div>
         ) : (
           <form
-            className="memo-cp-apply-form"
+            className="memo-cp-sheet-form"
             noValidate
             onSubmit={(event) => {
               event.preventDefault();
@@ -401,48 +383,71 @@ export function CreatorApplyDialog({
               }
             }}
           >
-            <ol className="memo-cp-apply-steps">
+            <ol className="memo-cp-sheet-steps">
               {STEP_LABELS.map((label, index) => (
-                <li key={label} data-state={index < step ? "done" : index === step ? "current" : "todo"}>
-                  <span className="memo-cp-apply-step-dot">
-                    {index < step ? <Msym name="check" size="0.95rem" /> : <span>{index + 1}</span>}
+                <li
+                  key={label}
+                  aria-current={index === step ? "step" : undefined}
+                  data-state={index < step ? "done" : index === step ? "current" : "todo"}
+                >
+                  <span className="memo-cp-sheet-step-dot">
+                    {index < step ? <Msym name="check" size="0.9rem" /> : <span>{index + 1}</span>}
                   </span>
-                  <span className="memo-cp-apply-step-label">{t(label)}</span>
+                  <span>{t(label)}</span>
                 </li>
               ))}
             </ol>
 
             {step === 0 ? (
-              <div className="memo-cp-brief">
-                <h3>{t("ugcApply.briefTitle")}</h3>
-                <ul>
-                  {BRIEF.map((key) => (
+              <div className="memo-cp-sheet-body">
+                <ul className="memo-cp-sheet-points">
+                  {(["ugcApply.briefPoint1", "ugcApply.briefPoint2", "ugcApply.briefPoint3"] as const).map((key) => (
                     <li key={key}>
-                      <Msym name="check_circle" size="1.2rem" />
+                      <Msym name="check_circle" size="1.15rem" />
                       <span>{t(key)}</span>
                     </li>
                   ))}
                 </ul>
+                {videos.length > 0 ? (
+                  <>
+                    <p className="memo-cp-sheet-caption">{t("ugcApply.examplesTitle")}</p>
+                    <div className="memo-cp-sheet-examples">
+                      {videos.slice(0, 3).map((video) => (
+                        <a key={video.id} href={video.url} target="_blank" rel="noreferrer" className="memo-cp-sheet-example">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={video.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                          <span aria-hidden="true">
+                            <Msym name="play_arrow" size="1.2rem" />
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
               </div>
             ) : null}
 
             {step === 1 ? (
-              <div className="memo-cp-form-fields">
-                {field(
-                  "fullName",
-                  t("ugcApply.field.fullName"),
-                  <input className="memo-field" autoComplete="name" {...fieldProps("fullName")} />,
-                )}
+              <div className="memo-cp-sheet-body">
+                <div>
+                  <h3 className="memo-cp-sheet-title">{t("ugcApply.detailsTitle")}</h3>
+                  <p className="memo-cp-form-hint">{t("ugcApply.detailsLead")}</p>
+                </div>
+                <div className="memo-cp-form-row">
+                  {field("firstName", t("ugcApply.field.firstName"), <input autoComplete="given-name" {...inputProps("firstName")} />)}
+                  {field("lastName", t("ugcApply.field.lastName"), <input autoComplete="family-name" {...inputProps("lastName")} />)}
+                </div>
                 {field(
                   "email",
                   t("ugcApply.field.email"),
-                  <input className="memo-field" type="email" inputMode="email" autoComplete="email" {...fieldProps("email")} />,
+                  <input type="email" inputMode="email" autoComplete="email" {...inputProps("email")} />,
                 )}
+                {field("phone", t("ugcApply.field.phone"), <input type="tel" autoComplete="tel" {...inputProps("phone")} />)}
                 <div className="memo-cp-form-row">
                   {field(
                     "country",
                     t("ugcApply.field.country"),
-                    <select className="memo-field memo-cp-select" {...fieldProps("country")}>
+                    <select {...inputProps("country")}>
                       <option value="" disabled>
                         {t("ugcApply.field.countryPick")}
                       </option>
@@ -457,56 +462,30 @@ export function CreatorApplyDialog({
                   {field(
                     "age",
                     t("ugcApply.field.age"),
-                    <input className="memo-field" type="number" inputMode="numeric" min={13} max={99} {...fieldProps("age")} />,
+                    <input type="number" inputMode="numeric" min={13} max={99} {...inputProps("age")} />,
                   )}
                 </div>
                 {field(
-                  "phone",
-                  t("ugcApply.field.phone"),
-                  <input className="memo-field" type="tel" autoComplete="tel" {...fieldProps("phone")} />,
-                  { optional: true },
+                  "referralCode",
+                  t("ugcApply.field.referral"),
+                  <input
+                    autoCapitalize="characters"
+                    placeholder={t("ugcApply.field.referralPlaceholder")}
+                    {...inputProps("referralCode")}
+                  />,
                 )}
-                {field(
-                  "studies",
-                  t("ugcApply.field.studies"),
-                  <input className="memo-field" placeholder={t("ugcApply.field.studiesPlaceholder")} {...fieldProps("studies")} />,
-                  { optional: true },
-                )}
-                <div className="memo-cp-form-row">
-                  {field(
-                    "tiktok",
-                    t("ugcApply.field.tiktok"),
-                    <input
-                      className="memo-field"
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      placeholder={t("ugcApply.field.handlePlaceholder")}
-                      {...fieldProps("tiktok")}
-                    />,
-                    { optional: true },
-                  )}
-                  {field(
-                    "instagram",
-                    t("ugcApply.field.instagram"),
-                    <input
-                      className="memo-field"
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      placeholder={t("ugcApply.field.handlePlaceholder")}
-                      {...fieldProps("instagram")}
-                    />,
-                    { optional: true },
-                  )}
-                </div>
-                <p className="memo-cp-form-hint">{t("ugcApply.field.profilesHint")}</p>
               </div>
             ) : null}
 
             {step === 2 ? (
-              <div className="memo-cp-form-fields">
-                <div className="memo-cp-video-intro">
-                  <h3>{t("ugcApply.videoTitle")}</h3>
-                  <p>{t("ugcApply.videoLead")}</p>
+              <div className="memo-cp-sheet-body">
+                <div className="memo-cp-instructions">
+                  <h3 className="memo-cp-sheet-title">{t("ugcApply.videoTitle")}</h3>
+                  <ol>
+                    {(["ugcApply.videoInstr1", "ugcApply.videoInstr2", "ugcApply.videoInstr3"] as const).map((key) => (
+                      <li key={key}>{t(key)}</li>
+                    ))}
+                  </ol>
                 </div>
 
                 <div
@@ -530,7 +509,7 @@ export function CreatorApplyDialog({
                   />
                   {upload.state === "uploading" ? (
                     <div className="memo-cp-upload-row">
-                      <Msym name="progress_activity" size="1.35rem" className="memo-spin" />
+                      <Msym name="progress_activity" size="1.3rem" className="memo-spin" />
                       <span className="memo-cp-upload-name">{upload.name}</span>
                       <span className="memo-cp-upload-meta">{t("ugcApply.videoUploading", { percent: upload.percent })}</span>
                       <span className="memo-cp-upload-bar" aria-hidden="true">
@@ -539,23 +518,26 @@ export function CreatorApplyDialog({
                     </div>
                   ) : upload.state === "done" ? (
                     <div className="memo-cp-upload-row">
-                      <Msym name="check_circle" size="1.35rem" />
+                      <Msym name="check_circle" size="1.3rem" />
                       <span className="memo-cp-upload-name">{upload.name}</span>
                       <span className="memo-cp-upload-meta">{t("ugcApply.videoUploaded")}</span>
-                      <button type="button" className="memo-chip" onClick={() => setUpload({ state: "idle" })}>
+                      <button type="button" className="memo-cp-link-button" onClick={() => setUpload({ state: "idle" })}>
                         {t("ugcApply.videoRemove")}
                       </button>
                     </div>
                   ) : (
-                    <button type="button" className="memo-cp-upload-pick" onClick={() => fileInputRef.current?.click()}>
-                      <Msym name="videocam" size="1.6rem" />
+                    <button
+                      type="button"
+                      className="memo-cp-upload-pick"
+                      disabled={values.sampleVideoUrl.trim() !== ""}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Msym name="cloud_upload" size="1.6rem" fill={false} />
                       <span>{t("ugcApply.videoChoose")}</span>
                     </button>
                   )}
                   {upload.state === "failed" ? <p className="memo-cp-form-error">{t(upload.error)}</p> : null}
-                  {errors.includes("sampleVideo") ? (
-                    <p className="memo-cp-form-error">{t("ugcApply.error.sampleVideo")}</p>
-                  ) : null}
+                  {errors.includes("sampleVideo") ? <p className="memo-cp-form-error">{t("ugcApply.error.sampleVideo")}</p> : null}
                 </div>
 
                 <p className="memo-cp-or">
@@ -566,44 +548,45 @@ export function CreatorApplyDialog({
                   "sampleVideoUrl",
                   t("ugcApply.field.sampleVideo"),
                   <input
-                    className="memo-field"
                     type="url"
                     inputMode="url"
                     autoCapitalize="none"
                     placeholder="https://"
-                    {...fieldProps("sampleVideoUrl")}
+                    disabled={upload.state === "done" || uploading}
+                    {...inputProps("sampleVideoUrl")}
                   />,
-                  { hint: t("ugcApply.field.sampleVideoHint") },
-                )}
-                {field(
-                  "message",
-                  t("ugcApply.field.message"),
-                  <textarea className="memo-textarea memo-cp-textarea" rows={3} maxLength={1000} {...fieldProps("message")} />,
-                  { optional: true },
+                  upload.state === "done" ? t("ugcApply.videoLinkLocked") : t("ugcApply.field.sampleVideoHint"),
                 )}
               </div>
             ) : null}
 
             {step === lastStep ? (
-              <div className="memo-cp-form-fields">
-                <h3 className="memo-cp-confirm-title">{t("ugcApply.confirmTitle")}</h3>
-                <dl className="memo-cp-summary">
-                  {summary
-                    .filter(([, value]) => value)
-                    .map(([label, value]) => (
-                      <div key={label}>
-                        <dt>{t(label)}</dt>
-                        <dd>{value}</dd>
-                      </div>
-                    ))}
-                </dl>
-                <div className="memo-cp-consent" data-invalid={errors.includes("consent") || undefined}>
-                  <label>
+              <div className="memo-cp-sheet-body">
+                <h3 className="memo-cp-sheet-title">{t("ugcApply.confirmTitle")}</h3>
+                <p className="memo-cp-warning">
+                  <Msym name="warning" size="1.15rem" />
+                  <span>{t("ugcApply.confirmWarning")}</span>
+                </p>
+                <div className="memo-cp-checks">
+                  {CONFIRMATIONS.map((item) => (
+                    <label key={item.field} className="memo-cp-check" data-invalid={errors.includes(item.field) || undefined}>
+                      <input
+                        type="checkbox"
+                        checked={checks[item.field]}
+                        onChange={(event) => {
+                          setChecks((current) => ({ ...current, [item.field]: event.target.checked }));
+                          clearErrors(item.field);
+                        }}
+                      />
+                      <span>{t(item.label)}</span>
+                    </label>
+                  ))}
+                  <label className="memo-cp-check" data-invalid={errors.includes("consent") || undefined}>
                     <input
                       type="checkbox"
-                      checked={consent}
+                      checked={checks.consent}
                       onChange={(event) => {
-                        setConsent(event.target.checked);
+                        setChecks((current) => ({ ...current, consent: event.target.checked }));
                         clearErrors("consent");
                       }}
                     />
@@ -614,8 +597,9 @@ export function CreatorApplyDialog({
                       </a>
                     </span>
                   </label>
-                  {errors.includes("consent") ? <p className="memo-cp-form-error">{t("ugcApply.error.consent")}</p> : null}
                 </div>
+                <p className={confirmMissing ? "memo-cp-form-error" : "memo-cp-form-hint"}>{t("ugcApply.confirmHint")}</p>
+                {errors.includes("consent") ? <p className="memo-cp-form-error">{t("ugcApply.error.consent")}</p> : null}
               </div>
             ) : null}
 
@@ -636,11 +620,11 @@ export function CreatorApplyDialog({
               </p>
             ) : null}
 
-            <div className="memo-cp-apply-actions">
+            <div className="memo-cp-sheet-actions">
               {step > 0 ? (
                 <button
                   type="button"
-                  className="memo-confirm-cancel"
+                  className="memo-cp-ghost"
                   disabled={submitting}
                   onClick={() => {
                     setErrors([]);
@@ -650,18 +634,18 @@ export function CreatorApplyDialog({
                   {t("common.back")}
                 </button>
               ) : null}
-              <button type="submit" className="memo-button-coral" disabled={submitting || uploading}>
-                {step === 0
-                  ? t("ugcApply.briefContinue")
-                  : step === lastStep
-                    ? submitting
-                      ? t("ugcApply.submitting")
-                      : t("ugcApply.submit")
-                    : t("common.continue")}
+              <button type="submit" className="memo-cp-cta memo-cp-cta-block" disabled={submitting || uploading}>
+                <span>
+                  {step === lastStep ? (submitting ? t("ugcApply.submitting") : t("ugcApply.submit")) : t("ugcApply.next")}
+                </span>
               </button>
             </div>
           </form>
         )}
+
+        <button type="button" className="memo-cp-sheet-close" aria-label={t("common.close")} onClick={() => sheet.dismiss()}>
+          <Msym name="close" size="1.25rem" />
+        </button>
       </div>
     </MemoPortal>
   );

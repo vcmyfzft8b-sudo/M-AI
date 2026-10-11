@@ -16,7 +16,6 @@ import {
   applicationSchema,
   invalidFields,
   marketForApplication,
-  normalizeHandle,
   normalizeReferrer,
   videoEmbedUrl,
 } from "../src/lib/ugc/creator-application.ts";
@@ -124,17 +123,18 @@ test("each campaign's Discord is the invite checked against Discord's API", () =
 });
 
 const VALID = {
-  fullName: "Ana Novak",
+  firstName: "Ana",
+  lastName: "Novak",
   email: " Ana@Example.com ",
+  phone: "+386 41 123 456",
   country: "SI",
   age: "19",
-  phone: "",
-  studies: "",
-  tiktok: "https://www.tiktok.com/@ana.studira?lang=sl",
-  instagram: "@ana",
+  referralCode: "pija50",
   sampleVideoPath: "",
   sampleVideoUrl: "https://www.tiktok.com/@ana.studira/video/7400000000000000000",
-  message: "",
+  followedInstructions: true,
+  titleVisible: true,
+  notRandom: true,
   consent: true,
 };
 
@@ -142,15 +142,26 @@ test("an application is accepted with a link instead of an upload, and normalise
   const parsed = applicationSchema.parse(VALID);
 
   assert.equal(parsed.email, "ana@example.com");
-  assert.equal(parsed.tiktok, "ana.studira");
-  assert.equal(parsed.instagram, "ana");
+  assert.equal(parsed.referralCode, "PIJA50");
   assert.equal(parsed.age, 19);
   assert.equal(parsed.sampleVideoPath, null);
 });
 
+test("the three confirmations and consent are all required, as on the form", () => {
+  for (const field of ["followedInstructions", "titleVisible", "notRandom", "consent"]) {
+    assert.deepEqual(invalidFields({ ...VALID, [field]: false }), [field], field);
+  }
+});
+
+test("details need a legal name and a phone number; the referral code is optional", () => {
+  assert.deepEqual(invalidFields({ ...VALID, firstName: " ", lastName: "", phone: "abc" }), ["firstName", "lastName", "phone"]);
+  assert.deepEqual(invalidFields({ ...VALID, referralCode: "" }), []);
+  assert.deepEqual(invalidFields({ ...VALID, referralCode: "not a code!" }), ["referralCode"]);
+});
+
 test("an application needs a video: an upload, a link, or both", () => {
   assert.deepEqual(invalidFields({ ...VALID, sampleVideoUrl: "" }), ["sampleVideo"]);
-  // Reported on its own step even while the consent box further on is still empty.
+  // Reported on its own step even while the confirmations further on are still empty.
   assert.deepEqual(invalidFields({ ...VALID, sampleVideoUrl: "", consent: false }, ["sampleVideo", "sampleVideoUrl"]), [
     "sampleVideo",
   ]);
@@ -166,14 +177,12 @@ test("an upload path is only ever one the server could have named", () => {
 });
 
 test("the form reports a step's own mistakes in the order it shows them", () => {
-  const failed = invalidFields({ ...VALID, fullName: "", email: "nope", consent: false }, ["fullName", "email", "country"]);
+  const failed = invalidFields({ ...VALID, firstName: "", email: "nope", consent: false }, ["firstName", "email", "country"]);
 
-  assert.deepEqual(failed, ["fullName", "email"]);
+  assert.deepEqual(failed, ["firstName", "email"]);
 });
 
-test("handles and referrers are cleaned rather than trusted", () => {
-  assert.equal(normalizeHandle("@@memo.ai"), "memo.ai");
-  assert.equal(normalizeHandle("instagram.com/memo.ai/"), "memo.ai");
+test("referrers are cleaned rather than trusted", () => {
   assert.equal(normalizeReferrer("instagram-story"), "instagram-story");
   assert.equal(normalizeReferrer("<script>"), null);
   assert.equal(normalizeReferrer(["a"]), null);

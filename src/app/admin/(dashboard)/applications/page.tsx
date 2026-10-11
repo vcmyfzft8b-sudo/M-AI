@@ -27,6 +27,27 @@ const FILTERS: Array<{ value: Filter; label: string }> = [
 
 const MARKET_LABEL: Record<string, string> = { si: "Slovenia", balkans: "Balkans", other: "Other country" };
 
+type Campaign = "si" | "balkans" | "other";
+
+/**
+ * The two campaigns are reviewed separately, each with its own queue, counts and links.
+ * `other` only exists for applications stored without a campaign (none since the two
+ * pages split), so its tab appears only when there is one.
+ */
+const CAMPAIGNS: Array<{ value: Campaign; label: string; flag: string; discord?: string }> = [
+  { value: "si", label: "Slovenia", flag: "🇸🇮", discord: "UGC Memo AI +" },
+  { value: "balkans", label: "Balkans", flag: "🇭🇷🇧🇦🇷🇸🇲🇪🇲🇰", discord: "UGC Memo AI - Balkan" },
+  { value: "other", label: "No campaign", flag: "" },
+];
+
+function isCampaign(value: unknown): value is Campaign {
+  return value === "si" || value === "balkans" || value === "other";
+}
+
+function applicationsHref(campaign: Campaign, status: Filter) {
+  return `/admin/applications?campaign=${campaign}&status=${status}`;
+}
+
 const COUNTRY_NAMES = new Intl.DisplayNames(["en"], { type: "region" });
 
 function countryName(code: string) {
@@ -61,7 +82,7 @@ async function signVideoUrls(rows: UgcCreatorApplicationRow[]): Promise<Map<stri
 export default async function ApplicationsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ status?: string }>;
+  searchParams?: Promise<{ status?: string; campaign?: string }>;
 }) {
   // The layout checks too, but this page shows applicants' contact details.
   await requireAdmin();
@@ -69,7 +90,23 @@ export default async function ApplicationsPage({
   const params = await searchParams;
   const filter: Filter = params?.status === "all" || isApplicationStatus(params?.status) ? (params?.status as Filter) : "new";
 
-  const applications = await listApplications();
+  const campaign: Campaign = isCampaign(params?.campaign) ? (params?.campaign as Campaign) : "si";
+  const everyApplication = await listApplications();
+  const campaignOf = (row: UgcCreatorApplicationRow): Campaign => (isCampaign(row.market) ? row.market : "other");
+  const perCampaign = Object.fromEntries(
+    CAMPAIGNS.map((option) => [
+      option.value,
+      {
+        all: everyApplication.filter((row) => campaignOf(row) === option.value).length,
+        new: everyApplication.filter((row) => campaignOf(row) === option.value && row.status === "new").length,
+      },
+    ]),
+  ) as Record<Campaign, { all: number; new: number }>;
+  const campaigns = CAMPAIGNS.filter((option) => option.value !== "other" || perCampaign.other.all > 0 || campaign === "other");
+  const current = CAMPAIGNS.find((option) => option.value === campaign) ?? CAMPAIGNS[0];
+
+  // Everything below is the chosen campaign's alone.
+  const applications = everyApplication.filter((row) => campaignOf(row) === campaign);
   const counts = {
     new: applications.filter((row) => row.status === "new").length,
     approved: applications.filter((row) => row.status === "approved").length,
@@ -90,33 +127,57 @@ export default async function ApplicationsPage({
   return (
     <>
       <header className="admin-header">
+        <h1 className="admin-title">Applications</h1>
+      </header>
+
+      <nav className="admin-campaigns" aria-label="Campaign">
+        {campaigns.map((option) => (
+          <PendingLink
+            key={option.value}
+            href={applicationsHref(option.value, filter)}
+            className="admin-campaign"
+            data-active={option.value === campaign}
+          >
+            {option.flag ? (
+              <span className="admin-campaign-flag" aria-hidden="true">
+                {option.flag}
+              </span>
+            ) : null}
+            <span className="admin-campaign-name">{option.label}</span>
+            <span className="admin-campaign-meta">
+              {perCampaign[option.value].new > 0
+                ? `${perCampaign[option.value].new} to review`
+                : `${perCampaign[option.value].all} application${perCampaign[option.value].all === 1 ? "" : "s"}`}
+            </span>
+          </PendingLink>
+        ))}
+      </nav>
+
+      <div className="admin-header">
         <div>
-          <h1 className="admin-title">Applications</h1>
           <p className="admin-subtitle">
-            Creators who applied at{" "}
-            <a className="admin-link" href={CREATOR_CAMPAIGN_PATHS.si} target="_blank" rel="noreferrer">
-              memoai.eu{CREATOR_CAMPAIGN_PATHS.si}
-            </a>{" "}
-            or{" "}
-            <a className="admin-link" href={CREATOR_CAMPAIGN_PATHS.balkans} target="_blank" rel="noreferrer">
-              memoai.eu{CREATOR_CAMPAIGN_PATHS.balkans}
-            </a>
-            . Accepting emails them a link to sign the creator terms (
-            <a className="admin-link" href={CREATOR_TERMS_PATHS.si} target="_blank" rel="noreferrer">
-              Slovenia
-            </a>
-            ,{" "}
-            <a className="admin-link" href={CREATOR_TERMS_PATHS.balkans} target="_blank" rel="noreferrer">
-              Balkans
-            </a>
-            ); signing reveals their campaign&apos;s Discord invite.
+            {campaign === "other" ? (
+              <>Applications stored without a campaign. Accept each into Slovenia or the Balkans.</>
+            ) : (
+              <>
+                {current.label} campaign: creators who applied at{" "}
+                <a className="admin-link" href={CREATOR_CAMPAIGN_PATHS[campaign]} target="_blank" rel="noreferrer">
+                  memoai.eu{CREATOR_CAMPAIGN_PATHS[campaign]}
+                </a>
+                . Accepting emails them a link to sign the{" "}
+                <a className="admin-link" href={CREATOR_TERMS_PATHS[campaign]} target="_blank" rel="noreferrer">
+                  {current.label} terms
+                </a>
+                ; signing reveals the “{current.discord}” Discord.
+              </>
+            )}
           </p>
         </div>
         <nav className="admin-range" aria-label="Status">
           {FILTERS.map((option) => (
             <PendingLink
               key={option.value}
-              href={`/admin/applications?status=${option.value}`}
+              href={applicationsHref(campaign, option.value)}
               className="admin-range-item"
               data-active={option.value === filter}
             >
@@ -124,7 +185,7 @@ export default async function ApplicationsPage({
             </PendingLink>
           ))}
         </nav>
-      </header>
+      </div>
 
       <div className="admin-grid">
         <StatCard label="To review" value={String(counts.new)} meta="Waiting for a decision" />
@@ -137,21 +198,35 @@ export default async function ApplicationsPage({
               : `${signedTerms} of ${counts.approved} signed the terms`
           }
         />
-        <StatCard label="Rejected" value={String(counts.rejected)} meta={`${counts.all} applications in all`} />
+        <StatCard
+          label="Rejected"
+          value={String(counts.rejected)}
+          meta={`${counts.all} ${current.label} application${counts.all === 1 ? "" : "s"} in all`}
+        />
       </div>
 
       <Section
         title={FILTERS.find((option) => option.value === filter)?.label}
         hint={
           filter === "new"
-            ? "Oldest first. Slovenia joins the “UGC Memo AI +” Discord, the Balkans join “UGC Memo AI - Balkan”."
+            ? campaign === "other"
+              ? "Oldest first. Pick the campaign each creator joins."
+              : `Oldest first. Accepted creators join the “${current.discord}” Discord.`
             : undefined
         }
       >
         {shown.length === 0 ? (
-          <EmptyState title={filter === "new" ? "Nothing waiting for review" : "No applications here yet"}>
-            Share memoai.eu{CREATOR_CAMPAIGN_PATHS.si} or memoai.eu{CREATOR_CAMPAIGN_PATHS.balkans} (add{" "}
-            <code>?ref=name</code> to see where people came from).
+          <EmptyState
+            title={filter === "new" ? `Nothing from ${current.label} waiting for review` : "No applications here yet"}
+          >
+            {campaign === "other" ? (
+              "Every new application belongs to a campaign."
+            ) : (
+              <>
+                Share memoai.eu{CREATOR_CAMPAIGN_PATHS[campaign]} (add <code>?ref=name</code> to see where people
+                came from).
+              </>
+            )}
           </EmptyState>
         ) : (
           <div className="admin-applications">
@@ -213,7 +288,9 @@ function ApplicationCard({
           </div>
           <div className="admin-application-badges">
             <Badge tone={application.market === "other" ? "red" : "blue"}>
-              {MARKET_LABEL[application.market]} · {countryName(application.country)}
+              {application.market === "other"
+                ? `${MARKET_LABEL.other} · ${countryName(application.country)}`
+                : countryName(application.country)}
             </Badge>
             {application.status === "approved" ? <Badge tone="green">Accepted</Badge> : null}
             {application.status === "rejected" ? <Badge tone="grey">Rejected</Badge> : null}

@@ -1871,6 +1871,55 @@
 
 /* --------------------------------------------------------- applications -- */
 
+/* The campaign switch on /admin/applications: Slovenia and the Balkans are reviewed
+   apart, so it sits above everything else on the page and every figure follows it. */
+.admin-campaigns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.admin-campaign {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.625rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-radius: 0.875rem;
+  background: var(--surface-muted);
+  color: var(--secondary-label);
+  text-decoration: none;
+}
+
+.admin-campaign[data-active="true"] {
+  background: var(--surface-solid);
+  color: var(--label);
+  box-shadow: var(--shadow-soft), inset 0 0 0 1px var(--separator-strong);
+}
+
+.admin-campaign:active {
+  background: var(--pressed);
+}
+
+.admin-campaign-flag {
+  grid-row: 1 / span 2;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.admin-campaign-name {
+  font-size: 0.9375rem;
+  font-weight: 650;
+}
+
+.admin-campaign-meta {
+  grid-column: 2;
+  font-size: 0.75rem;
+  color: var(--secondary-label);
+}
+
 /* One application per card: the sample video beside who sent it and the
    decision. The video is portrait (that is what creators film), so it gets a
    fixed column and the details take the rest; on a phone they stack. */

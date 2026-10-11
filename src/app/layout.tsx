@@ -210,6 +210,17 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description,
     applicationName: SEO_BRAND_NAME,
+    /*
+     * iOS Safari turns digit runs it takes for phone numbers (the registration
+     * number in the creator terms and the legal copy) into `tel:` links before
+     * React hydrates, and React reports #418 for the anchor it never rendered.
+     * Every real link on the site is written as one, so nothing is lost.
+     */
+    formatDetection: {
+      telephone: false,
+      address: false,
+      email: false,
+    },
     openGraph: {
       title: siteTitle,
       description,

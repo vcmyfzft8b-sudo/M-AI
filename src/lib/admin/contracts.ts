@@ -114,7 +114,7 @@ export async function listAllContracts(): Promise<ContractRecord[]> {
       supabase
         .from("ugc_creator_applications")
         .select("*")
-        .eq("status", "approved")
+        .or("status.eq.approved,terms_accepted_at.not.is.null")
         .in("market", ["si", "balkans"])
         .order("created_at", { ascending: false })
         .order("id", { ascending: true })
@@ -143,7 +143,7 @@ export async function getContractRecord(id: string): Promise<ContractRecord | nu
 
   const row = application as UgcCreatorApplicationRow | null;
 
-  return row && row.status === "approved" && (row.market === "si" || row.market === "balkans")
+  return row && (row.status === "approved" || row.terms_accepted_at) && (row.market === "si" || row.market === "balkans")
     ? fromApplication(row as UgcCreatorApplicationRow & { market: "si" | "balkans" })
     : null;
 }

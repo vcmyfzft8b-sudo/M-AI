@@ -56,7 +56,10 @@ export function hasBonus(pay: ContractPay): boolean {
   return pay.viewRatePer1k > 0 || pay.codeSharePercent > 0;
 }
 
-const euros = (max: number) => z.coerce.number().min(0).max(max).transform((value) => Math.round(value * 100) / 100);
+/** "7,5" and "7.5" alike: the admin types amounts the Slovenian way too. */
+const decimal = (value: unknown) => (typeof value === "string" ? value.trim().replace(",", ".") : value);
+const twoDecimals = (value: number) => Math.round(value * 100) / 100;
+const euros = (max: number) => z.preprocess(decimal, z.coerce.number().min(0).max(max)).transform(twoDecimals);
 const optional = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess((value) => (value === "" || value === undefined || value === null ? null : value), schema.nullable());
 
@@ -66,7 +69,8 @@ export const contractPaySchema = z
     perTikTok: euros(1000),
     perInstagram: euros(1000),
     viewRatePer1k: euros(100),
-    codeSharePercent: z.coerce.number().min(0).max(100),
+    // Rounded to what the contract prints (two decimals at most).
+    codeSharePercent: z.preprocess(decimal, z.coerce.number().min(0).max(100)).transform(twoDecimals),
     monthlyFee: euros(100000),
     bonusCap: optional(euros(1000000).refine((value) => value > 0)),
     videosPerMonth: optional(z.coerce.number().int().min(1).max(1000)),

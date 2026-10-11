@@ -516,3 +516,38 @@ test("contracts are never emailed from the admin, and every signature keeps its 
   const signing = readSource("src/lib/ugc/creator-signing.server.ts");
   assert.equal(signing.match(/terms_snapshot: signableTerms\(signable\)/g)?.length, 2, "both applicants and contracts store the signed text");
 });
+
+test("the terms' wording only changes together with their version", async () => {
+  // Every signature stores its version; a stored snapshot is only trustworthy if the
+  // words cannot change under the same version. If this fails after an intended wording
+  // or pay change, bump CREATOR_TERMS_VERSION and record the new hash here.
+  const { createHash } = await import("node:crypto");
+  const DEAL = { perTikTok: 7.5, perInstagram: 1, viewRatePer1k: 2, codeSharePercent: 12.5, monthlyFee: 100, bonusCap: 1500, videosPerMonth: 40, note: "Note." };
+  const hash = createHash("sha256");
+
+  for (const locale of ["sl", "en", "hr", "bs", "sr"]) {
+    for (const market of ["si", "balkans"]) {
+      hash.update(creatorTermsMarkdown(locale, market));
+      hash.update(creatorTermsMarkdown(locale, market, { pay: DEAL, applied: false }));
+    }
+  }
+
+  const TERMS_HASHES = { "2026-10-11.2": "bc831bcf88201e2d" };
+  assert.equal(TERMS_HASHES[CREATOR_TERMS_VERSION], hash.digest("hex").slice(0, 16));
+});
+
+test("pay is read the way the admin types it, and stored as the contract prints it", () => {
+  const base = { perTikTok: "7,5", perInstagram: "", viewRatePer1k: 0, codeSharePercent: "12,345", monthlyFee: 0, bonusCap: "", videosPerMonth: "", note: "" };
+  const pay = parseContractPay(base);
+  assert.equal(pay.perTikTok, 7.5);
+  assert.equal(pay.codeSharePercent, 12.35);
+});
+
+test("a signed agreement stays on record", () => {
+  const actions = readSource("src/app/admin/(dashboard)/actions.ts");
+  const review = actions.slice(actions.indexOf("export async function reviewApplicationAction"));
+  assert.match(review.slice(0, 1200), /if \(application\.terms_accepted_at\)/);
+
+  // A tap that wrote nothing is never reported as signed.
+  assert.match(readSource("src/app/api/ugc/join/route.ts"), /if \(!stored\)/);
+});

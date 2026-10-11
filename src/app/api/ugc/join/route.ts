@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
   const acceptedAt = new Date().toISOString();
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || null;
-  const { error } = await recordSignature(signable, {
+  const { error, stored } = await recordSignature(signable, {
     signedName,
     guardianName: signable.minor ? guardianName : null,
     ip: ip?.slice(0, 64) ?? null,
@@ -79,6 +79,16 @@ export async function POST(request: Request) {
     captureRouteError(error, { route: ROUTE, operation: "record_terms_acceptance", request });
 
     return NextResponse.json({ error: "unavailable" }, { status: 500 });
+  }
+
+  // Nothing written: signed in another tab (answer with that signature) or withdrawn
+  // in the meantime. Never report a signature that is not on record.
+  if (!stored) {
+    const current = await loadSignable.uncached(token);
+
+    return current?.acceptedAt
+      ? NextResponse.json({ discordUrl, acceptedAt: current.acceptedAt })
+      : NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
   return NextResponse.json({ discordUrl, acceptedAt });

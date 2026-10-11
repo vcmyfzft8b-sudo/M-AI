@@ -35,7 +35,7 @@ export type Signable = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const loadSignable = cache(async function loadSignable(token: string): Promise<Signable | null> {
+async function readSignable(token: string): Promise<Signable | null> {
   if (!UUID.test(token)) {
     return null;
   }
@@ -79,6 +79,12 @@ export const loadSignable = cache(async function loadSignable(token: string): Pr
   }
 
   return null;
+}
+
+/** Cached per request, so the page and its metadata read the link once. */
+export const loadSignable = Object.assign(cache(readSignable), {
+  /** A fresh read, for after a write in the same request. */
+  uncached: readSignable,
 });
 
 /** The exact terms this link is signed for. */
@@ -89,16 +95,17 @@ export function signableTerms(signable: Signable): string {
 /**
  * Records the signature, with the full text that was signed, word for word, so every
  * signed contract can be shown exactly as accepted later. Never overwrites an earlier
- * signature (two tabs at once).
+ * signature (two tabs at once), and `stored` is false when nothing was written (already
+ * signed in another tab, or withdrawn in the meantime).
  */
 export async function recordSignature(
   signable: Signable,
   signature: { signedName: string; guardianName: string | null; ip: string | null; userAgent: string | null; at: string },
-): Promise<{ error: { message: string } | null }> {
+): Promise<{ error: { message: string } | null; stored: boolean }> {
   const supabase = createSupabaseServiceRoleClient();
 
   if (signable.kind === "application") {
-    const { error } = await updateIn(supabase, "ugc_creator_applications", {
+    const { data, error } = await updateIn(supabase, "ugc_creator_applications", {
       terms_version: CREATOR_TERMS_VERSION,
       terms_accepted_at: signature.at,
       terms_signed_name: signature.signedName,
@@ -108,12 +115,14 @@ export async function recordSignature(
       terms_snapshot: signableTerms(signable),
     })
       .eq("id", signable.id)
-      .is("terms_accepted_at", null);
+      .eq("status", "approved")
+      .is("terms_accepted_at", null)
+      .select("id");
 
-    return { error };
+    return { error, stored: (data?.length ?? 0) > 0 };
   }
 
-  const { error } = await updateIn(supabase, "ugc_creator_contracts", {
+  const { data, error } = await updateIn(supabase, "ugc_creator_contracts", {
     status: "signed",
     terms_version: CREATOR_TERMS_VERSION,
     signed_at: signature.at,
@@ -125,7 +134,8 @@ export async function recordSignature(
   })
     .eq("id", signable.id)
     .eq("status", "sent")
-    .is("signed_at", null);
+    .is("signed_at", null)
+    .select("id");
 
-  return { error };
+  return { error, stored: (data?.length ?? 0) > 0 };
 }

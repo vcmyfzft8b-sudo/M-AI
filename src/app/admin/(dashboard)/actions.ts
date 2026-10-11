@@ -1105,6 +1105,12 @@ export async function reviewApplicationAction(
   const serviceRole = createSupabaseServiceRoleClient();
   const reviewer = context.user.email ?? null;
 
+  // A signed agreement is on record for good: no rejecting, reopening or moving it to
+  // the other campaign afterwards.
+  if (application.terms_accepted_at) {
+    return fail(`${application.full_name} already signed the terms, so this application can no longer be changed.`);
+  }
+
   if (decision === "reject" || decision === "reopen") {
     const { error } = await updateIn(serviceRole, "ugc_creator_applications", {
       status: decision === "reject" ? "rejected" : "new",

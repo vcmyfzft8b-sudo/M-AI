@@ -24,6 +24,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/ugc-pending-uploads",
+      "schedule": "25 3 * * *"
+    },
+    {
       "path": "/api/cron/push-queue",
       "schedule": "* * * * *"
     }

@@ -36,7 +36,11 @@ export function CreatorJoinForm({
   const [accepted, setAccepted] = useState<Accepted | null>(initiallyAccepted);
 
   if (accepted) {
-    const date = new Intl.DateTimeFormat(LOCALE_INTL_TAG[locale], { dateStyle: "long" }).format(new Date(accepted.at));
+    // Croatian, Bosnian and Serbian long dates end in a full stop ("11. listopada 2026."),
+    // which the sentence around it already supplies.
+    const date = new Intl.DateTimeFormat(LOCALE_INTL_TAG[locale], { dateStyle: "long" })
+      .format(new Date(accepted.at))
+      .replace(/\.$/, "");
 
     return (
       <section className="memo-cp-card memo-cp-join memo-cp-join-done">

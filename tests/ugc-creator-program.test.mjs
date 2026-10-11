@@ -26,6 +26,7 @@ import {
   codeSaleBonus,
   PAID_VIDEOS_PER_MONTH,
   VIDEO_RANGE,
+  VIEW_STEPS,
   campaignLocale,
   defaultMarket,
   estimateEarnings,
@@ -118,6 +119,12 @@ test("tier ranges come from the calculator's own arithmetic, the top tier open-e
 
   assert.equal(tierRanges(CREATOR_TERMS.balkans)[2].videos, PAID_VIDEOS_PER_MONTH);
   assert.equal(tierRanges(CREATOR_TERMS.balkans)[2].low, 2700);
+});
+
+test("the views slider stops at 2M, where the Balkan view bonus hits its cap", () => {
+  const top = VIEW_STEPS[VIEW_STEPS.length - 1];
+  assert.equal(top, 2_000_000);
+  assert.equal(CREATOR_TERMS.balkans.viewRatePer1k * (top / 1000), CREATOR_TERMS.balkans.bonusCap);
 });
 
 test("the calculator never offers more paid videos than the terms pay for", () => {

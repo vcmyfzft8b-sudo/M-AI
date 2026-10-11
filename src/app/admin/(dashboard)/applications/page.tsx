@@ -150,7 +150,8 @@ export default async function ApplicationsPage({
       >
         {shown.length === 0 ? (
           <EmptyState title={filter === "new" ? "Nothing waiting for review" : "No applications here yet"}>
-            Share memoai.eu/ugc (add <code>?ref=name</code> to see where people came from).
+            Share memoai.eu{CREATOR_CAMPAIGN_PATHS.si} or memoai.eu{CREATOR_CAMPAIGN_PATHS.balkans} (add{" "}
+            <code>?ref=name</code> to see where people came from).
           </EmptyState>
         ) : (
           <div className="admin-applications">

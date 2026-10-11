@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 import { I18nProvider } from "@/components/i18n-provider";
 import { CreatorJoinForm } from "@/components/ugc/creator-join-form";
@@ -14,14 +15,35 @@ import { CREATOR_TERMS_VERSION, creatorTermsMarkdown } from "@/lib/ugc/creator-t
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const { t } = await getTranslations();
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const application = await loadApplication((await params).token);
+  const t = application ? getTranslationsFor(campaignLocale(application.market, application.locale)) : (await getTranslations()).t;
 
   // A personal link: never indexed, never sent on as a referrer.
   return { title: t("ugcJoin.metaTitle"), robots: { index: false, follow: false }, referrer: "no-referrer" };
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The accepted application behind a join link, or `null` for anything else. */
+const loadApplication = cache(async function loadApplication(
+  token: string,
+): Promise<(UgcCreatorApplicationRow & { market: "si" | "balkans" }) | null> {
+  if (!UUID.test(token)) {
+    return null;
+  }
+
+  const { data } = await createSupabaseServiceRoleClient()
+    .from("ugc_creator_applications")
+    .select("*")
+    .eq("join_token", token)
+    .maybeSingle();
+  const application = data as UgcCreatorApplicationRow | null;
+
+  return application?.status === "approved" && (application.market === "si" || application.market === "balkans")
+    ? (application as UgcCreatorApplicationRow & { market: "si" | "balkans" })
+    : null;
+});
 
 /**
  * An accepted creator's personal join link, from the acceptance email.
@@ -32,19 +54,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  */
 export default async function CreatorJoinPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+  const application = await loadApplication(token);
 
-  if (!UUID.test(token)) {
-    notFound();
-  }
-
-  const { data } = await createSupabaseServiceRoleClient()
-    .from("ugc_creator_applications")
-    .select("*")
-    .eq("join_token", token)
-    .maybeSingle();
-  const application = data as UgcCreatorApplicationRow | null;
-
-  if (!application || application.status !== "approved" || (application.market !== "si" && application.market !== "balkans")) {
+  if (!application) {
     notFound();
   }
 

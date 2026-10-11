@@ -1138,9 +1138,15 @@ export async function reviewApplicationAction(
 
   const sent = await deliverAcceptance(application, market, `ugc-accept-${application.id}`);
 
-  return sent.sent
-    ? ok(`Accepted ${application.full_name} and emailed ${application.email} the terms and the ${market === "si" ? "Slovenia" : "Balkan"} Discord invite.`)
-    : fail(`Accepted ${application.full_name}, but the email was not sent: ${sent.error}`);
+  // The decision is saved either way, so a failed send still answers as a success: the
+  // page must refresh to show the accepted card, which carries the send error and a
+  // "send again" button. (The buttons hide their message; an error would leave the card
+  // looking untouched, as if the click had done nothing.)
+  return ok(
+    sent.sent
+      ? `Accepted ${application.full_name} and emailed ${application.email} the terms and the ${market === "si" ? "Slovenia" : "Balkan"} Discord invite.`
+      : `Accepted ${application.full_name}, but the email was not sent: ${sent.error}`,
+  );
 }
 
 /** Sends the welcome email again: after a failed send, or when they say it never came. */
@@ -1162,7 +1168,8 @@ export async function resendAcceptanceEmailAction(
   // A fresh key: this is a deliberate second send, not a double click.
   const sent = await deliverAcceptance(application, application.market, `ugc-accept-${application.id}-${Date.now()}`);
 
-  return sent.sent ? ok(`Email sent to ${application.email}.`) : fail(`The email was not sent: ${sent.error}`);
+  // Recorded on the row either way; answered as a success so the card refreshes to show it.
+  return ok(sent.sent ? `Email sent to ${application.email}.` : `The email was not sent: ${sent.error}`);
 }
 
 export async function saveApplicationNotesAction(

@@ -9,6 +9,7 @@ import {
 import { NavigationProgress, PendingLink } from "@/components/admin/pending-link";
 import { BrandLogo } from "@/components/brand-logo";
 import { requireAdmin, touchAdminLastSeen } from "@/lib/admin/auth";
+import { countNewApplications } from "@/lib/admin/applications";
 import { countVideosNeedingReview } from "@/lib/admin/ugc";
 
 // Every panel reads live data, so nothing here may be cached or prerendered.
@@ -22,7 +23,10 @@ export default async function AdminDashboardLayout({
   const context = await requireAdmin();
 
   // Best effort: a failed bookkeeping write must not block the dashboard.
-  const reviewCount = await countVideosNeedingReview().catch(() => 0);
+  const [reviewCount, applicationCount] = await Promise.all([
+    countVideosNeedingReview().catch(() => 0),
+    countNewApplications().catch(() => 0),
+  ]);
   void touchAdminLastSeen(context.admin.id).catch(() => undefined);
 
   return (
@@ -37,7 +41,7 @@ export default async function AdminDashboardLayout({
           <span className="admin-brand-label">admin</span>
         </PendingLink>
 
-        <AdminNav reviewCount={reviewCount} />
+        <AdminNav reviewCount={reviewCount} applicationCount={applicationCount} />
 
         <AccountFooter
           email={context.user.email ?? ""}
@@ -47,6 +51,7 @@ export default async function AdminDashboardLayout({
 
       <AdminMobileNav
         reviewCount={reviewCount}
+        applicationCount={applicationCount}
         email={context.user.email ?? ""}
         role={context.isOwner ? "Owner" : "Admin"}
       />

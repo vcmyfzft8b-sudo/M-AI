@@ -46,6 +46,8 @@ export type UgcRateKind =
   | "per_month"
   | "per_1k_views"
   | "revenue_share";
+export type UgcApplicationMarket = "si" | "balkans" | "other";
+export type UgcApplicationStatus = "new" | "approved" | "rejected";
 
 export type SiteDeviceType = "mobile" | "tablet" | "desktop" | "bot" | "unknown";
 
@@ -1469,6 +1471,78 @@ export type Database = {
           paid_by?: string | null;
         };
       };
+      ugc_creator_applications: {
+        Row: {
+          id: string;
+          email: string;
+          full_name: string;
+          country: string;
+          market: UgcApplicationMarket;
+          age: number | null;
+          phone: string | null;
+          studies: string | null;
+          tiktok_handle: string | null;
+          instagram_handle: string | null;
+          sample_video_url: string | null;
+          sample_video_path: string | null;
+          message: string | null;
+          referral_code: string | null;
+          locale: string;
+          referrer: string | null;
+          status: UgcApplicationStatus;
+          admin_notes: string | null;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+          accepted_email_sent_at: string | null;
+          accepted_email_error: string | null;
+          join_token: string;
+          terms_version: string | null;
+          terms_accepted_at: string | null;
+          terms_signed_name: string | null;
+          terms_guardian_name: string | null;
+          terms_accepted_ip: string | null;
+          terms_accepted_user_agent: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          email: string;
+          full_name: string;
+          country: string;
+          market: UgcApplicationMarket;
+          age?: number | null;
+          phone?: string | null;
+          studies?: string | null;
+          tiktok_handle?: string | null;
+          instagram_handle?: string | null;
+          sample_video_url?: string | null;
+          sample_video_path?: string | null;
+          message?: string | null;
+          referral_code?: string | null;
+          locale?: string;
+          referrer?: string | null;
+          status?: UgcApplicationStatus;
+          admin_notes?: string | null;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+        };
+        Update: {
+          market?: UgcApplicationMarket;
+          status?: UgcApplicationStatus;
+          admin_notes?: string | null;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          accepted_email_sent_at?: string | null;
+          accepted_email_error?: string | null;
+          terms_version?: string | null;
+          terms_accepted_at?: string | null;
+          terms_signed_name?: string | null;
+          terms_guardian_name?: string | null;
+          terms_accepted_ip?: string | null;
+          terms_accepted_user_agent?: string | null;
+        };
+      };
       ugc_creator_accounts: {
         Row: {
           id: string;
@@ -2018,6 +2092,8 @@ export type AdminFixedCostRow =
   Database["public"]["Tables"]["admin_fixed_costs"]["Row"];
 export type UgcCreatorPayoutRow =
   Database["public"]["Tables"]["ugc_creator_payouts"]["Row"];
+export type UgcCreatorApplicationRow =
+  Database["public"]["Tables"]["ugc_creator_applications"]["Row"];
 export type UgcCreatorAccountRow =
   Database["public"]["Tables"]["ugc_creator_accounts"]["Row"];
 export type UgcVideoRow = Database["public"]["Tables"]["ugc_videos"]["Row"];

@@ -41,6 +41,9 @@ import {
   reclassifyAll,
   refreshAccountProfile,
 } from "@/lib/ugc/sync";
+import type { UgcCreatorApplicationRow } from "@/lib/database.types";
+import { campaignLocale, type CreatorMarket } from "@/lib/ugc/creator-program";
+import { sendAcceptanceEmail } from "@/lib/ugc/send-acceptance-email";
 
 /**
  * Server actions behind the admin dashboard.
@@ -1022,6 +1025,178 @@ export async function removeAdminAction(
   }
 
   return ok("Admin access removed.");
+}
+
+// ------------------------------------------------------------ applications --
+
+async function loadApplication(id: string): Promise<UgcCreatorApplicationRow | null> {
+  if (!id) {
+    return null;
+  }
+
+  const { data } = await createSupabaseServiceRoleClient()
+    .from("ugc_creator_applications")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  return (data as UgcCreatorApplicationRow | null) ?? null;
+}
+
+/**
+ * Sends the acceptance email and records how it went on the row, so a failed send
+ * is visible on the card and can be retried rather than silently lost.
+ */
+async function deliverAcceptance(
+  application: UgcCreatorApplicationRow,
+  market: CreatorMarket,
+  idempotencyKey: string,
+): Promise<{ sent: true } | { sent: false; error: string }> {
+  const result = await sendAcceptanceEmail({
+    to: application.email,
+    fullName: application.full_name,
+    // The language of the campaign's pages, which the join link opens on.
+    locale: campaignLocale(market, application.locale),
+    market,
+    joinToken: application.join_token,
+    idempotencyKey,
+  });
+
+  const { error } = await updateIn(createSupabaseServiceRoleClient(), "ugc_creator_applications", {
+    accepted_email_sent_at: result.sent ? new Date().toISOString() : null,
+    accepted_email_error: result.sent ? null : result.error,
+  }).eq("id", application.id);
+
+  if (error) {
+    return {
+      sent: false,
+      error: result.sent
+        ? `The email was sent, but recording that failed: ${error.message}`
+        : `${result.error} Recording that also failed: ${error.message}`,
+    };
+  }
+
+  return result;
+}
+
+/**
+ * Accept, reject or reopen an application.
+ *
+ * Accepting sends the welcome email with the Discord invite of the campaign the
+ * creator joins: their own market, or — for an applicant from outside both — the one
+ * the admin picked with the button. The status is saved first, so an email that
+ * fails to send never undoes the decision.
+ */
+export async function reviewApplicationAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const context = await requireAdmin();
+  const application = await loadApplication(readString(formData, "application_id"));
+
+  if (!application) {
+    return fail("That application no longer exists.");
+  }
+
+  const decision = readString(formData, "decision");
+  const serviceRole = createSupabaseServiceRoleClient();
+  const reviewer = context.user.email ?? null;
+
+  if (decision === "reject" || decision === "reopen") {
+    const { error } = await updateIn(serviceRole, "ugc_creator_applications", {
+      status: decision === "reject" ? "rejected" : "new",
+      reviewed_at: decision === "reject" ? new Date().toISOString() : null,
+      reviewed_by: decision === "reject" ? reviewer : null,
+    }).eq("id", application.id);
+
+    return error
+      ? fail(`Could not save: ${error.message}`)
+      : ok(decision === "reject" ? `Rejected ${application.full_name}.` : `${application.full_name} is back in the queue.`);
+  }
+
+  if (decision !== "approve") {
+    return fail("Unknown decision.");
+  }
+
+  const campaign = readString(formData, "campaign");
+  const market: CreatorMarket | null =
+    campaign === "si" || campaign === "balkans"
+      ? campaign
+      : application.market === "si" || application.market === "balkans"
+        ? application.market
+        : null;
+
+  if (!market) {
+    return fail("Pick the campaign (Slovenia or Balkans) this creator joins.");
+  }
+
+  const { error } = await updateIn(serviceRole, "ugc_creator_applications", {
+    status: "approved",
+    market,
+    reviewed_at: new Date().toISOString(),
+    reviewed_by: reviewer,
+  }).eq("id", application.id);
+
+  if (error) {
+    return fail(`Could not save: ${error.message}`);
+  }
+
+  if (application.accepted_email_sent_at) {
+    return ok(`Accepted ${application.full_name}. The welcome email had already been sent.`);
+  }
+
+  const sent = await deliverAcceptance(application, market, `ugc-accept-${application.id}`);
+
+  // The decision is saved either way, so a failed send still answers as a success: the
+  // page must refresh to show the accepted card, which carries the send error and a
+  // "send again" button. (The buttons hide their message; an error would leave the card
+  // looking untouched, as if the click had done nothing.)
+  return ok(
+    sent.sent
+      ? `Accepted ${application.full_name} and emailed ${application.email} the terms and the ${market === "si" ? "Slovenia" : "Balkan"} Discord invite.`
+      : `Accepted ${application.full_name}, but the email was not sent: ${sent.error}`,
+  );
+}
+
+/** Sends the welcome email again: after a failed send, or when they say it never came. */
+export async function resendAcceptanceEmailAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireAdmin();
+  const application = await loadApplication(readString(formData, "application_id"));
+
+  if (!application || application.status !== "approved") {
+    return fail("Only an accepted application gets the welcome email.");
+  }
+
+  if (application.market !== "si" && application.market !== "balkans") {
+    return fail("This application has no campaign yet.");
+  }
+
+  // A fresh key: this is a deliberate second send, not a double click.
+  const sent = await deliverAcceptance(application, application.market, `ugc-accept-${application.id}-${Date.now()}`);
+
+  // Recorded on the row either way; answered as a success so the card refreshes to show it.
+  return ok(sent.sent ? `Email sent to ${application.email}.` : `The email was not sent: ${sent.error}`);
+}
+
+export async function saveApplicationNotesAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireAdmin();
+  const id = readString(formData, "application_id");
+
+  if (!id) {
+    return fail("Missing application.");
+  }
+
+  const { error } = await updateIn(createSupabaseServiceRoleClient(), "ugc_creator_applications", {
+    admin_notes: readOptional(formData, "admin_notes"),
+  }).eq("id", id);
+
+  return error ? fail(`Could not save the note: ${error.message}`) : ok("Note saved.");
 }
 
 /**

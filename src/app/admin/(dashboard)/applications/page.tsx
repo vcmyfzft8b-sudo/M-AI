@@ -426,9 +426,12 @@ function ApplicationCard({
                   {application.accepted_email_sent_at ? "Send email again" : "Send welcome email"}
                 </InlineAction>
               ) : null}
-              <InlineAction action={reviewApplicationAction} fields={{ ...id, decision: "reopen" }}>
-                Move back to review
-              </InlineAction>
+              {/* A signed agreement stays on record: it cannot be reopened or rejected. */}
+              {application.terms_accepted_at ? null : (
+                <InlineAction action={reviewApplicationAction} fields={{ ...id, decision: "reopen" }}>
+                  Move back to review
+                </InlineAction>
+              )}
             </>
           )}
         </div>

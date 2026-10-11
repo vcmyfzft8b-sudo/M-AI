@@ -7,6 +7,8 @@ import {
   updateAccountAction,
 } from "@/app/admin/(dashboard)/actions";
 import { AreaChart } from "@/components/admin/chart";
+import { ContractForm } from "@/components/admin/contract-form";
+import { ContractRow } from "@/components/admin/contract-row";
 import { AddAccountForm, EditCreatorForm } from "@/components/admin/creator-form";
 import { ActionForm, Disclosure, InlineAction, SubmitButton } from "@/components/admin/forms";
 import { PayoutForm } from "@/components/admin/payout-form";
@@ -35,6 +37,7 @@ import {
   estimateRevenue,
   VALUE_BASELINE_DAYS,
 } from "@/lib/admin/campaign-value";
+import { listCreatorContracts } from "@/lib/admin/contracts";
 import { listPayoutsForCreator } from "@/lib/admin/payouts";
 import {
   defaultPayoutPeriod,
@@ -84,7 +87,7 @@ export default async function CreatorDetailPage({
   // One batch for everything the page reads.
   const creatorPromise = getCreator(id);
 
-  const [creator, metrics, deltas, videos, salesData, baseline, payouts] = await Promise.all([
+  const [creator, metrics, deltas, videos, salesData, baseline, payouts, contracts] = await Promise.all([
     creatorPromise,
     getCreatorMetrics(
       creatorPromise.then((row) => (row ? [row] : [])),
@@ -99,6 +102,8 @@ export default async function CreatorDetailPage({
     // Optional, like Stripe: a missing payouts table (the minutes between a
     // deploy and its migration) must not take the creator page down with it.
     listPayoutsForCreator(id).catch(() => []),
+    // Optional too: the contracts table arrives with its own migration.
+    listCreatorContracts(id).catch(() => []),
   ]);
 
   if (!creator) {
@@ -380,6 +385,41 @@ export default async function CreatorDetailPage({
           <EditCreatorForm creator={creator} />
         </Section>
       </div>
+
+      <Section
+        title="Contract"
+        hint="Create a contract with this creator's own pay, then copy its signing link and send it to them yourself. Nothing is emailed. A changed deal is a new contract."
+      >
+        {contracts.length === 0 ? (
+          <EmptyState title="No contract yet" />
+        ) : (
+          <div className="admin-contracts">
+            {contracts.map((contract) => (
+              <ContractRow key={contract.id} contract={contract} />
+            ))}
+          </div>
+        )}
+
+        <div className="admin-subblock">
+          <Disclosure label={contracts.length === 0 ? "Create a contract" : "Create a new contract"}>
+            <ContractForm
+              creatorId={creator.id}
+              defaultName={creator.name}
+              defaultEmail={creator.contact_email ?? ""}
+              defaultPay={{
+                perTikTok: creator.rate_kind === "per_video" ? Number(creator.rate_amount ?? 0) : 0,
+                perInstagram: 0,
+                viewRatePer1k: creator.rate_kind === "per_1k_views" ? Number(creator.rate_amount ?? 0) : 0,
+                codeSharePercent: Number(creator.revenue_share_percent ?? 0),
+                monthlyFee: creator.rate_kind === "per_month" ? Number(creator.rate_amount ?? 0) : 0,
+                bonusCap: null,
+                videosPerMonth: null,
+                note: null,
+              }}
+            />
+          </Disclosure>
+        </div>
+      </Section>
 
       <Section
         title="Payouts"

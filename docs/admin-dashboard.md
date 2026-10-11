@@ -38,6 +38,7 @@ written server-side with the service role after the allowlist check.
 | `/admin/creators` | Per-creator views, videos, engagement, followers, attributed revenue; add creators; review queue |
 | `/admin/creators/[id]` | One creator: their accounts, every post, and the Memo AI decision per post |
 | `/admin/applications` | Creator applications, one campaign at a time (Slovenia / Balkans switch): watch the sample video, accept (emails the terms and the campaign's Discord invite) or reject. See [ugc-creator-program.md](ugc-creator-program.md) |
+| `/admin/contracts` | Every creator contract, stored for good: contracts created on a creator's page for creators already in the program (their own pay; copy the signing link and send it yourself, nothing is emailed) and the terms accepted applicants signed. Each signed one shows the exact text accepted. See [ugc-creator-program.md](ugc-creator-program.md) |
 | `/admin/sales` | Revenue, MRR, trial pipeline and projections, revenue by discount code |
 | `/admin/visitors` | Visits, page views, who is online, top pages, referrers, countries, devices |
 | `/admin/users` | Every account, plan and subscription status, searchable; the onboarding survey broken down per question; open any account with **View as user** |

@@ -3,6 +3,7 @@
 import {
   BarChart3,
   CreditCard,
+  FileSignature,
   Inbox,
   LayoutDashboard,
   Menu,
@@ -25,6 +26,7 @@ export const ADMIN_LINKS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/creators", label: "Creators", icon: Video, badge: "review" },
   { href: "/admin/applications", label: "Applications", icon: Inbox, badge: "applications" },
+  { href: "/admin/contracts", label: "Contracts", icon: FileSignature },
   { href: "/admin/payouts", label: "Payouts", icon: Wallet },
   { href: "/admin/finance", label: "Finance", icon: CreditCard },
   { href: "/admin/costs", label: "Costs", icon: Receipt },

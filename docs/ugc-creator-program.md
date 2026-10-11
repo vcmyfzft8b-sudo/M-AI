@@ -137,16 +137,58 @@ of that key, so the app cannot reuse it. It needs its own key in Vercel (Product
 - `UGC_EMAIL_FROM` — optional, default `Memo AI <creators@memoai.eu>` (any address on
   memoai.eu works, the domain is already verified). Replies go to info@memoai.eu.
 
+## Contracts for creators already in the program
+
+Creators who were in the program before applications existed each have their own deal,
+so they get a contract with their own pay. On a creator's admin page, **Contract → Create a
+contract** takes:
+- the name to sign;
+- an optional email, kept for the record (nothing is emailed);
+- the campaign, plus the language for the Balkans;
+- whether they are under 18;
+- the pay, prefilled from the creator's dashboard rates:
+  - per TikTok video;
+  - the extra for the same video on Instagram;
+  - per 1,000 views;
+  - % of code sales;
+  - a fixed monthly fee;
+  - an optional bonus cap and video limit;
+  - an optional special agreement, printed as its own clause.
+
+**Nothing is sent to the creator.** The contract shows a signing link (`/ugc/join/<token>`)
+with a Copy button, and the admin sends it themselves. The creator signs it like an
+applicant: one tap, with a parent or guardian for a minor. A contract is never edited: a
+changed deal is a new contract, and an unsigned one can be withdrawn (its link stops
+opening). Two people sharing one creator row get a contract each.
+
+**Every signature is stored for good**, with the exact text signed (`terms_snapshot`):
+- contracts in `ugc_creator_contracts`;
+- accepted applicants on their `ugc_creator_applications` row.
+
+Alongside it go the typed names, the time, the terms version, the IP address and the
+browser. **`/admin/contracts`** lists all of them, waiting, signed and withdrawn. Each
+signed one opens the signature record and the text exactly as accepted.
+
 ## Terms of Participation
 
 `src/lib/ugc/creator-terms-text.ts` holds the terms in all five languages (Slovenian
-governs); `creator-terms.ts` fills in the pay and strips the other campaign's clauses.
+governs). `creator-terms.ts` fills them from a deal (`ContractPay`,
+`src/lib/ugc/creator-pay.ts`): the campaign's standard pay for applicants, or a creator's
+own pay for a contract. It writes section 4's pay list from whichever parts the deal has,
+and 3.4's video limit. It keeps the code clauses only when the deal pays a code share,
+and the view-bonus clause only when it pays for views. It drops the sample-video
+comparison for creators who never applied, and strips the other campaign's clauses.
 **Bump `CREATOR_TERMS_VERSION` whenever a clause's meaning changes**, in every language
 in the same commit; a creator whose page showed an older version is asked to reload.
 Adapted from a third-party template for Memo AI, Nace Valenčič s.p., poslovno svetovanje.
 They have not been reviewed by a lawyer.
 
 ## Database
+
+Migration `0059_ugc_creator_contracts.sql`: `ugc_creator_contracts` (service role only,
+RLS on, no policies) and `terms_snapshot` on applications. It was applied to shared staging
+on 2026-10-11 to test creating, signing (adult and minor), withdrawing and storing
+contracts end to end; production gets it on merge.
 
 Migration `0058_ugc_creator_applications.sql`: the `ugc_creator_applications` table
 (service role only, RLS on, no policies) and the private `ugc-application-videos` bucket.

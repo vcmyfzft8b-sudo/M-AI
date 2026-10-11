@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { updateIn } from "@/lib/admin/db";
-import type { UgcCreatorApplicationRow } from "@/lib/database.types";
 import { captureRouteError } from "@/lib/monitoring";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
-import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { CREATOR_DISCORD_INVITES } from "@/lib/ugc/creator-campaigns";
+import { loadSignable, recordSignature } from "@/lib/ugc/creator-signing.server";
 import { CREATOR_TERMS_VERSION } from "@/lib/ugc/creator-terms";
 
 const ROUTE = "api:ugc:join:post";
@@ -21,12 +19,14 @@ const joinSchema = z.object({
 });
 
 /**
- * An accepted creator agreeing to the Terms of Participation from their join link.
+ * A creator signing the Terms of Participation from their join link: an accepted
+ * applicant (campaign pay), or a creator already in the program signing the contract
+ * the admin sent them (their own pay). See `creator-signing.server.ts`.
  *
  * This is the moment the agreement is concluded (Terms, 1.), so it records what was
  * accepted and how: the terms version, the time, the typed name (and a guardian's for
- * a minor), the IP address and the browser. Only then is the campaign's Discord
- * invite handed over. Accepting twice changes nothing and answers with the invite.
+ * a minor), the IP address and the browser. Only then is an applicant's campaign
+ * Discord invite handed over. Signing twice changes nothing.
  */
 export async function POST(request: Request) {
   const limited = await enforceRateLimit({ request, route: ROUTE, rules: rateLimitPresets.creatorJoin });
@@ -42,22 +42,18 @@ export async function POST(request: Request) {
   }
 
   const { token, version, signedName, guardianName } = parsed.data;
-  const serviceRole = createSupabaseServiceRoleClient();
-  const { data } = await serviceRole
-    .from("ugc_creator_applications")
-    .select("*")
-    .eq("join_token", token)
-    .maybeSingle();
-  const application = data as UgcCreatorApplicationRow | null;
+  const signable = await loadSignable(token);
 
-  if (!application || application.status !== "approved" || (application.market !== "si" && application.market !== "balkans")) {
+  if (!signable) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const discordUrl = CREATOR_DISCORD_INVITES[application.market];
+  // An application unlocks its campaign's Discord. A contract goes to a creator who is
+  // already in the program, so there is nothing to hand over.
+  const discordUrl = signable.kind === "application" ? CREATOR_DISCORD_INVITES[signable.market] : null;
 
-  if (application.terms_accepted_at) {
-    return NextResponse.json({ discordUrl, acceptedAt: application.terms_accepted_at });
+  if (signable.acceptedAt) {
+    return NextResponse.json({ discordUrl, acceptedAt: signable.acceptedAt });
   }
 
   // The page showed one version; if the terms changed under it, they must read the new one.
@@ -65,31 +61,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "stale" }, { status: 409 });
   }
 
-  const isMinor = application.age !== null && application.age < 18;
-
-  if (isMinor && guardianName.length < 3) {
+  if (signable.minor && guardianName.length < 3) {
     return NextResponse.json({ error: "guardian" }, { status: 400 });
   }
 
   const acceptedAt = new Date().toISOString();
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || null;
-
-  const { error } = await updateIn(serviceRole, "ugc_creator_applications", {
-    terms_version: CREATOR_TERMS_VERSION,
-    terms_accepted_at: acceptedAt,
-    terms_signed_name: signedName,
-    terms_guardian_name: isMinor ? guardianName : null,
-    terms_accepted_ip: ip?.slice(0, 64) ?? null,
-    terms_accepted_user_agent: request.headers.get("user-agent")?.slice(0, 400) ?? null,
-  })
-    .eq("id", application.id)
-    // Never overwrite an earlier acceptance if two tabs submit at once.
-    .is("terms_accepted_at", null);
+  const { error, stored } = await recordSignature(signable, {
+    signedName,
+    guardianName: signable.minor ? guardianName : null,
+    ip: ip?.slice(0, 64) ?? null,
+    userAgent: request.headers.get("user-agent")?.slice(0, 400) ?? null,
+    at: acceptedAt,
+  });
 
   if (error) {
     captureRouteError(error, { route: ROUTE, operation: "record_terms_acceptance", request });
 
     return NextResponse.json({ error: "unavailable" }, { status: 500 });
+  }
+
+  // Nothing written: signed in another tab (answer with that signature) or withdrawn
+  // in the meantime. Never report a signature that is not on record.
+  if (!stored) {
+    const current = await loadSignable.uncached(token);
+
+    return current?.acceptedAt
+      ? NextResponse.json({ discordUrl, acceptedAt: current.acceptedAt })
+      : NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
   return NextResponse.json({ discordUrl, acceptedAt });

@@ -47,6 +47,7 @@ export type UgcRateKind =
   | "per_1k_views"
   | "revenue_share";
 export type UgcApplicationMarket = "si" | "balkans" | "other";
+export type UgcContractStatus = "sent" | "signed" | "void";
 export type UgcApplicationStatus = "new" | "approved" | "rejected";
 
 export type SiteDeviceType = "mobile" | "tablet" | "desktop" | "bot" | "unknown";
@@ -1502,6 +1503,7 @@ export type Database = {
           terms_guardian_name: string | null;
           terms_accepted_ip: string | null;
           terms_accepted_user_agent: string | null;
+          terms_snapshot: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1541,7 +1543,55 @@ export type Database = {
           terms_guardian_name?: string | null;
           terms_accepted_ip?: string | null;
           terms_accepted_user_agent?: string | null;
+          terms_snapshot?: string | null;
         };
+      };
+      ugc_creator_contracts: {
+        Row: {
+          id: string;
+          creator_id: string | null;
+          email: string | null;
+          full_name: string;
+          market: "si" | "balkans";
+          locale: string;
+          minor: boolean;
+          pay: Json;
+          status: UgcContractStatus;
+          join_token: string;
+          terms_version: string | null;
+          signed_at: string | null;
+          signed_name: string | null;
+          guardian_name: string | null;
+          signed_ip: string | null;
+          signed_user_agent: string | null;
+          terms_snapshot: string | null;
+          created_at: string;
+          updated_at: string;
+          created_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          creator_id?: string | null;
+          email?: string | null;
+          full_name: string;
+          market: "si" | "balkans";
+          locale?: string;
+          minor?: boolean;
+          pay: Json;
+          status?: UgcContractStatus;
+          created_by?: string | null;
+        };
+        Update: {
+          status?: UgcContractStatus;
+          terms_version?: string | null;
+          signed_at?: string | null;
+          signed_name?: string | null;
+          guardian_name?: string | null;
+          signed_ip?: string | null;
+          signed_user_agent?: string | null;
+          terms_snapshot?: string | null;
+        };
+        Relationships: [];
       };
       ugc_creator_accounts: {
         Row: {
@@ -2094,6 +2144,8 @@ export type UgcCreatorPayoutRow =
   Database["public"]["Tables"]["ugc_creator_payouts"]["Row"];
 export type UgcCreatorApplicationRow =
   Database["public"]["Tables"]["ugc_creator_applications"]["Row"];
+export type UgcCreatorContractRow =
+  Database["public"]["Tables"]["ugc_creator_contracts"]["Row"];
 export type UgcCreatorAccountRow =
   Database["public"]["Tables"]["ugc_creator_accounts"]["Row"];
 export type UgcVideoRow = Database["public"]["Tables"]["ugc_videos"]["Row"];

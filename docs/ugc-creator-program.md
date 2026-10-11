@@ -93,6 +93,12 @@ application per email.
 
 ## Reviewing (`/admin/applications`)
 
+The two campaigns are reviewed apart. A switch at the top picks **Slovenia** or **Balkans**
+(`?campaign=si|balkans`, Slovenia by default), each showing how many applications wait
+for review. Everything below it belongs to that campaign only: the status tabs and their
+counts, the stat cards, the page and terms links, and the Discord named in the hints. A
+third "No campaign" tab appears only if an application was ever stored without one.
+
 The queue shows each applicant's video (uploaded file or embedded link) beside their
 details. **Accept** saves the decision first, then emails the creator, in the language
 they applied in, a personal join link (`/ugc/join/<token>`). **Reject** sends nothing.

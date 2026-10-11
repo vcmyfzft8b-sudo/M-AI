@@ -104,12 +104,16 @@ the Discord invite shown. The admin card shows whether and when the terms were s
 
 ## Email
 
-Sent through Resend's HTTP API. Set in Vercel (Production):
+Sent through Resend's HTTP API, on the same Resend account and verified domain
+(memoai.eu) as the sign-in codes. Those go out through Supabase Auth's SMTP settings
+(`smtp.resend.com`, sender `Memo <no-reply@memoai.eu>`), and Supabase keeps only a hash
+of that key, so the app cannot reuse it. It needs its own key in Vercel (Production):
 
-- `RESEND_API_KEY` — without it, Accept still works and the card says the email was not
-  sent; **Send welcome email** retries once the key is set.
-- `UGC_EMAIL_FROM` — optional, default `Memo AI <creators@memoai.eu>`. The domain must be
-  verified in Resend. Replies go to info@memoai.eu.
+- `RESEND_API_KEY` — a Resend API key with sending access (resend.com → API Keys). Without
+  it, Accept still works and the card says the email was not sent; **Send welcome email**
+  retries once the key is set.
+- `UGC_EMAIL_FROM` — optional, default `Memo AI <creators@memoai.eu>` (any address on
+  memoai.eu works, the domain is already verified). Replies go to info@memoai.eu.
 
 ## Terms of Participation
 

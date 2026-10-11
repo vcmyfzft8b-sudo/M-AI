@@ -41,6 +41,7 @@ const LOGIN_PATH_SEGMENTS = new Set([
 
 // Some stacks put the whole thing in a file name rather than a directory.
 const LOGIN_FILE_NAMES = new Set([
+  "authenticate.aspx",
   "login.aspx",
   "login.jsp",
   "login.php",

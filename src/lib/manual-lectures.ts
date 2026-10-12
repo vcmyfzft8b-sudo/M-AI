@@ -83,6 +83,7 @@ import {
   repositoryDocumentTitle,
   sessionCookieHeader,
 } from "@/lib/link-repository-documents";
+import { mergeCookieHeaders, shareLinkDownloadUrl } from "@/lib/link-share-downloads";
 import { serializeVector } from "@/lib/utils";
 import { looksLikeBotChallenge } from "@/lib/link-bot-challenge";
 import {
@@ -1244,7 +1245,9 @@ async function fetchReadableWebpageResponse(
   sawLoginWall: boolean;
 }> {
   if (redirectCount > MAX_LINK_FETCH_REDIRECTS) {
-    throw expectedInputFailure("too_many_link_redirects");
+    // A chain that has already passed a sign-in page is still bouncing between identity
+    // providers; the learner needs to know it is private, not that it redirects too much.
+    throw expectedInputFailure(sawLoginWall ? LINK_LOGIN_WALL_CODE : "too_many_link_redirects");
   }
 
   await assertPublicHostname(targetUrl.hostname);
@@ -1280,6 +1283,20 @@ async function fetchReadableWebpageResponse(
         throw expectedInputFailure("unsupported_link_protocol");
       }
 
+      // A session a redirect sets travels on to the same host, as a browser's would: an
+      // anonymous SharePoint share sets its guest cookie on exactly such a hop.
+      const setCookie = sessionCookieHeader(response.headers);
+      const nextCookie =
+        setCookie && nextUrl.hostname === targetUrl.hostname
+          ? {
+              hostname: targetUrl.hostname,
+              value: mergeCookieHeaders(
+                hostCookie?.hostname === targetUrl.hostname ? hostCookie.value : "",
+                setCookie,
+              ),
+            }
+          : hostCookie;
+
       // Note where the chain went, but keep following it. A sign-in wall only ever
       // rewords a failure further down; deciding here would let a false positive turn a
       // page we can actually read into an error.
@@ -1287,7 +1304,7 @@ async function fetchReadableWebpageResponse(
         nextUrl,
         redirectCount + 1,
         sawLoginWall || isLoginWallUrl(nextUrl),
-        hostCookie,
+        nextCookie,
       );
     }
 
@@ -1485,20 +1502,18 @@ export type LinkSource =
  * downloading it is exactly what we can do ourselves.
  */
 export async function fetchLinkSource(params: { url: string }): Promise<LinkSource> {
+  const shareDownload = await fetchShareLinkDownload(params.url);
+
+  if (shareDownload) {
+    return shareDownload;
+  }
+
   const opened = await openLinkResponse(params);
   const contentType = opened.response.headers.get("content-type") ?? "";
   const documentType = resolveLinkDocumentType(contentType, opened.url);
 
   if (documentType) {
-    const bytes = await readResponseBytesWithLimit(opened.response, MAX_LINK_DOCUMENT_BYTES);
-    const fileName = linkDocumentFileName(opened.url, documentType);
-
-    return {
-      kind: "document",
-      file: new File([bytes], fileName, { type: documentType.mimeType }),
-      finalUrl: opened.url.toString(),
-      title: fileName.replace(/\.[a-z0-9]+$/i, ""),
-    };
+    return readLinkDocument(opened, documentType);
   }
 
   if (isUnsupportedVideoContentType(contentType)) {
@@ -1522,6 +1537,57 @@ export async function fetchLinkSource(params: { url: string }): Promise<LinkSour
   }
 
   return { kind: "webpage", ...(await readWebpageFromResponse(opened)) };
+}
+
+async function readLinkDocument(
+  opened: { url: URL; response: Response },
+  documentType: LinkDocumentType,
+): Promise<LinkSource> {
+  const bytes = await readResponseBytesWithLimit(opened.response, MAX_LINK_DOCUMENT_BYTES);
+  const fileName = linkDocumentFileName(opened.url, documentType);
+
+  return {
+    kind: "document",
+    file: new File([bytes], fileName, { type: documentType.mimeType }),
+    finalUrl: opened.url.toString(),
+    title: fileName.replace(/\.[a-z0-9]+$/i, ""),
+  };
+}
+
+/**
+ * The document behind a SharePoint share link, downloaded rather than opened in the online
+ * viewer, or null when the link is not such a share or the download is refused (a share can
+ * forbid downloads) -- the link is then opened as pasted, and fails or succeeds as it did before.
+ */
+async function fetchShareLinkDownload(url: string): Promise<LinkSource | null> {
+  let downloadUrl: URL | null;
+
+  try {
+    downloadUrl = shareLinkDownloadUrl(new URL(url));
+  } catch {
+    return null;
+  }
+
+  if (!downloadUrl) {
+    return null;
+  }
+
+  try {
+    const opened = await openLinkResponse({ url: downloadUrl.toString() });
+    const documentType = resolveLinkDocumentType(
+      opened.response.headers.get("content-type") ?? "",
+      opened.url,
+    );
+
+    if (!documentType) {
+      await opened.response.body?.cancel().catch(() => null);
+      return null;
+    }
+
+    return await readLinkDocument(opened, documentType);
+  } catch {
+    return null;
+  }
 }
 
 /**

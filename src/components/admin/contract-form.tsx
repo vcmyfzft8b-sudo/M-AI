@@ -6,12 +6,15 @@ import type { ContractPay } from "@/lib/ugc/creator-pay";
 import { ActionForm, SubmitButton } from "./forms";
 
 /**
- * Creates a contract for a creator already in the program, with their own deal. Nothing
- * is emailed: the contract list shows its signing link to copy and send them.
+ * Creates a contract with its own deal: for a creator already in the program (on their
+ * page, with `creatorId`), or for anyone not in the dashboard yet (on `/admin/contracts`,
+ * without). Nothing is emailed: the contract list shows its signing link to copy and
+ * send them.
  *
  * Every pay field is optional (empty or 0 means "not part of the deal"); the contract's
- * pay section is written from whichever are filled in. The defaults come from what the
- * dashboard already knows about this creator's pay.
+ * pay section is written from whichever are filled in. On a creator's page the defaults
+ * come from what the dashboard already knows about their pay; otherwise from the
+ * campaign's standard pay.
  */
 export function ContractForm({
   creatorId,
@@ -19,9 +22,9 @@ export function ContractForm({
   defaultEmail,
   defaultPay,
 }: {
-  creatorId: string;
-  defaultName: string;
-  defaultEmail: string;
+  creatorId?: string;
+  defaultName?: string;
+  defaultEmail?: string;
   defaultPay: ContractPay;
 }) {
   const amount = (value: number) => (value > 0 ? String(value) : "");
@@ -45,7 +48,7 @@ export function ContractForm({
 
   return (
     <ActionForm action={createCreatorContractAction}>
-      <input type="hidden" name="creator_id" value={creatorId} />
+      {creatorId ? <input type="hidden" name="creator_id" value={creatorId} /> : null}
 
       <div className="admin-form-grid">
         <div className="admin-field">

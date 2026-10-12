@@ -1,8 +1,12 @@
+import { ContractForm } from "@/components/admin/contract-form";
 import { ContractRow } from "@/components/admin/contract-row";
+import { Disclosure } from "@/components/admin/forms";
 import { PendingLink } from "@/components/admin/pending-link";
 import { EmptyState, Section, StatCard } from "@/components/admin/ui";
 import { requireAdmin } from "@/lib/admin/auth";
 import { listAllContracts, type ContractRecord } from "@/lib/admin/contracts";
+import { CREATOR_TERMS } from "@/lib/ugc/creator-campaigns";
+import { campaignPay } from "@/lib/ugc/creator-pay";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +25,9 @@ function isFilter(value: unknown): value is Filter {
 
 /**
  * Every creator contract in one place, stored for good: the contracts created for
- * creators already in the program (from their creator page) and the terms every accepted
- * applicant signed. Each signed one links to the exact text that was accepted.
+ * creators already in the program (from their creator page), the ones created here for
+ * anyone not in the dashboard yet, and the terms every accepted applicant signed. Each
+ * signed one links to the exact text that was accepted.
  */
 export default async function ContractsPage({ searchParams }: { searchParams?: Promise<{ status?: string }> }) {
   // The layout checks too, but this page shows names, emails and signatures.
@@ -40,7 +45,8 @@ export default async function ContractsPage({ searchParams }: { searchParams?: P
         <div>
           <h1 className="admin-title">Contracts</h1>
           <p className="admin-subtitle">
-            Every creator contract, kept for good. Create one for a creator already in the program on their{" "}
+            Every creator contract, kept for good. Create one below for anyone, or for a creator already in the
+            program on their{" "}
             <PendingLink className="admin-link" href="/admin/creators">
               creator page
             </PendingLink>
@@ -67,9 +73,18 @@ export default async function ContractsPage({ searchParams }: { searchParams?: P
         <StatCard label="Withdrawn" value={String(count("void"))} meta="Links that no longer open" />
       </div>
 
+      <Section
+        title="New contract"
+        hint="For someone not in the dashboard yet. Set their pay, create it, then copy its signing link from the list and send it to them yourself. Nothing is emailed."
+      >
+        <Disclosure label="Create a contract">
+          <ContractForm defaultPay={campaignPay(CREATOR_TERMS.si)} />
+        </Disclosure>
+      </Section>
+
       <Section title={FILTERS.find((option) => option.value === filter)?.label}>
         {shown.length === 0 ? (
-          <EmptyState title="No contracts here yet">Create one from a creator&apos;s page.</EmptyState>
+          <EmptyState title="No contracts here yet">Create one above, or from a creator&apos;s page.</EmptyState>
         ) : (
           <div className="admin-contracts">
             {shown.map((contract) => (

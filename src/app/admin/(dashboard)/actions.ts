@@ -1231,10 +1231,11 @@ export async function readOnlineCountAction(): Promise<number> {
 const CONTRACT_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * Creates a contract for a creator already in the program, with the deal entered here
- * (`ContractPay`). Nothing is emailed: the page shows the signing link
- * (`/ugc/join/<token>`), and the admin sends it to the creator themselves. A contract
- * is never edited once created: a changed deal is a new contract, and the old one can be
+ * Creates a contract with the deal entered here (`ContractPay`), either for a creator
+ * already in the program (from their page, `creator_id` set) or for anyone else (from
+ * `/admin/contracts`, no creator). Nothing is emailed: the page shows the signing link
+ * (`/ugc/join/<token>`), and the admin sends it to them themselves. A contract is never
+ * edited once created: a changed deal is a new contract, and the old one can be
  * withdrawn.
  */
 export async function createCreatorContractAction(
@@ -1247,10 +1248,6 @@ export async function createCreatorContractAction(
   const email = readString(formData, "email").toLowerCase();
   const market = readString(formData, "market");
   const requestedLocale = readString(formData, "locale");
-
-  if (!creatorId) {
-    return fail("Missing creator.");
-  }
 
   if (fullName.length < 3 || fullName.length > 120) {
     return fail("Enter their full name as it should appear on the contract.");
@@ -1280,14 +1277,17 @@ export async function createCreatorContractAction(
   }
 
   const serviceRole = createSupabaseServiceRoleClient();
-  const { data: creator } = await serviceRole.from("ugc_creators").select("id").eq("id", creatorId).maybeSingle();
 
-  if (!creator) {
-    return fail("That creator no longer exists.");
+  if (creatorId) {
+    const { data: creator } = await serviceRole.from("ugc_creators").select("id").eq("id", creatorId).maybeSingle();
+
+    if (!creator) {
+      return fail("That creator no longer exists.");
+    }
   }
 
   const { error } = await insertInto(serviceRole, "ugc_creator_contracts", {
-    creator_id: creatorId,
+    creator_id: creatorId || null,
     email: email || null,
     full_name: fullName,
     market,

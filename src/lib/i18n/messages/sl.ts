@@ -1358,6 +1358,7 @@ export const sl = {
   "file.binaryText": "Naložena besedilna datoteka vsebuje nepodprte binarne podatke.",
   "file.audioCheckFailed": "Naložene zvočne datoteke ni bilo mogoče preveriti.",
   "file.audioCheckFailedStatus": "Naložene zvočne datoteke ni bilo mogoče preveriti ({status}).",
+  "file.audioEmpty": "Posnetek je do nas prišel prazen. Posnemi ali naloži ga znova.",
   "file.audioTooLarge": "Zvočna datoteka je prevelika. Trenutna omejitev je 300 MB.",
   "file.audioFormatMismatch": "Naložena zvočna datoteka ne ustreza pričakovanemu formatu .{extension}.",
 

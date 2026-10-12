@@ -304,6 +304,15 @@ async function fetchStorageObjectHead(path: string) {
     cache: "no-store",
   });
 
+  // A range that starts at byte 0 is unsatisfiable only when the object has no bytes at all: the
+  // upload arrived empty. That is a verdict on the file, not a failed check.
+  if (response.status === 416) {
+    return {
+      totalBytes: 0,
+      headBytes: new Uint8Array(),
+    };
+  }
+
   if (!response.ok && response.status !== 206) {
     throw new Error(await tr("file.audioCheckFailedStatus", { status: response.status }));
   }
@@ -324,6 +333,13 @@ async function fetchStorageObjectHead(path: string) {
 
 export async function validateStoredAudioFile(params: { path: string }) {
   const { totalBytes, headBytes } = await fetchStorageObjectHead(params.path);
+
+  if (totalBytes === 0) {
+    return {
+      ok: false,
+      error: await tr("file.audioEmpty"),
+    };
+  }
 
   if (!Number.isFinite(totalBytes) || totalBytes <= 0) {
     return {

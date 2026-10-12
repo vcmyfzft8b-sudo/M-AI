@@ -1342,6 +1342,7 @@ export const hr: Messages = {
   "file.binaryText": "Učitana tekstualna datoteka sadrži nepodržane binarne podatke.",
   "file.audioCheckFailed": "Učitanu zvučnu datoteku nije bilo moguće provjeriti.",
   "file.audioCheckFailedStatus": "Učitanu zvučnu datoteku nije bilo moguće provjeriti ({status}).",
+  "file.audioEmpty": "Snimka je do nas stigla prazna. Snimi je ili učitaj ponovno.",
   "file.audioTooLarge": "Zvučna datoteka je prevelika. Trenutačno ograničenje je 300 MB.",
   "file.audioFormatMismatch": "Učitana zvučna datoteka ne odgovara očekivanom formatu .{extension}.",
 

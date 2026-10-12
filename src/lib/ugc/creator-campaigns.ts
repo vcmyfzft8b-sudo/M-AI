@@ -14,13 +14,13 @@ import type { CreatorMarket, CreatorTerms } from "./creator-program.ts";
 
 /**
  * One video is paid per platform it goes out on: TikTok, then the same video on
- * Instagram Reels for a little more. Slovenia: €5 + €1. Balkans: €7 + €5. The bonus on
- * top (Slovenia: 20% of code sales; Balkans: €1 per 1,000 views) is capped at €2,000 a
+ * Instagram Reels on top. Slovenia: €5 + €1. Balkans: €4 + €3. The bonus on top
+ * (Slovenia: 20% of code sales; Balkans: €0.50 per 1,000 views) is capped at €2,000 a
  * month in both.
  */
 export const CREATOR_TERMS: Record<CreatorMarket, CreatorTerms> = {
   si: { perTikTok: 5, perInstagram: 1, codeSharePercent: 20, viewRatePer1k: 0, bonusCap: 2000 },
-  balkans: { perTikTok: 7, perInstagram: 5, codeSharePercent: 0, viewRatePer1k: 1, bonusCap: 2000 },
+  balkans: { perTikTok: 4, perInstagram: 3, codeSharePercent: 0, viewRatePer1k: 0.5, bonusCap: 2000 },
 };
 
 /**

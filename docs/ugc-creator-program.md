@@ -13,9 +13,9 @@ Add `?ref=<tag>` to see in the admin which post brought each applicant. The shor
 
 | | Slovenia | Balkans (HR, BA, RS, ME, MK) |
 | --- | --- | --- |
-| TikTok, per video | €5 | €7 |
-| Same video on Instagram Reels | +€1 | +€5 |
-| Bonus | 20% of cash collected through the creator's code | €1 per 1,000 views, max €2,000 / month |
+| TikTok, per video | €5 | €4 |
+| Same video on Instagram Reels | +€1 | +€3 |
+| Bonus | 20% of cash collected through the creator's code | €0.50 per 1,000 views, max €2,000 / month |
 | Paid videos per month | 60 | 60 |
 | Discord | discord.gg/4mae76zNhj ("UGC Memo AI +") | discord.gg/Dur6dfF2qD ("UGC Memo AI - Balkan") |
 

@@ -13,9 +13,9 @@ Add `?ref=<tag>` to see in the admin which post brought each applicant. The shor
 
 | | Slovenia | Balkans (HR, BA, RS, ME, MK) |
 | --- | --- | --- |
-| TikTok, per video | €5 | €7 |
-| Same video on Instagram Reels | +€1 | +€5 |
-| Bonus | 20% of cash collected through the creator's code | €1 per 1,000 views, max €2,000 / month |
+| TikTok, per video | €5 | €4 |
+| Same video on Instagram Reels | +€1 | +€3 |
+| Bonus | 20% of cash collected through the creator's code | €0.50 per 1,000 views, max €2,000 / month |
 | Paid videos per month | 60 | 60 |
 | Discord | discord.gg/4mae76zNhj ("UGC Memo AI +") | discord.gg/Dur6dfF2qD ("UGC Memo AI - Balkan") |
 
@@ -189,6 +189,11 @@ and the view-bonus clause only when it pays for views. It drops the sample-video
 comparison for creators who never applied, and strips the other campaign's clauses.
 **Bump `CREATOR_TERMS_VERSION` whenever a clause's meaning changes**, in every language
 in the same commit; a creator whose page showed an older version is asked to reload.
+**Changing a campaign's pay** (`CREATOR_TERMS`) also bumps the version, and the old pay goes
+into `EARLIER_CREATOR_TERMS` with the last version that carried it: the admin shows every
+signed applicant the pay of the version they signed (`campaignTermsAt`), and a signed join
+link shows the stored text that was signed, never today's. Balkan pay was €7 + €5 and €1 per
+1,000 views through `2026-10-12.1`.
 Adapted from a third-party template for Memo AI, Nace Valenčič s.p., poslovno svetovanje.
 They have not been reviewed by a lawyer.
 

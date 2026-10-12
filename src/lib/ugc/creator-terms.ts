@@ -12,7 +12,7 @@ import { CREATOR_TERMS_TEXT } from "./creator-terms-text.ts";
  * `creator-terms-text.ts`): each acceptance stores the version it was given, and
  * that is the only way to tell later which words a creator agreed to.
  */
-export const CREATOR_TERMS_VERSION = "2026-10-12.1";
+export const CREATOR_TERMS_VERSION = "2026-10-12.2";
 
 type PayWords = {
   tiktokAndInstagram: string;

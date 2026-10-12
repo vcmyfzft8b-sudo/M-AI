@@ -210,9 +210,10 @@ export function tierRanges(terms: CreatorTerms): TierRange[] {
 }
 
 /** The calculator's view slider: a stepped scale, because views span three orders of magnitude. */
-/** Up to 2M views a month: the Balkan view bonus (€1 per 1,000) reaches its €2,000 cap there. */
+/** Up to 4M views a month: the Balkan view bonus (€0.50 per 1,000) reaches its €2,000 cap there. */
 export const VIEW_STEPS = [
-  10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 750_000, 1_000_000, 1_500_000, 2_000_000,
+  10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 750_000, 1_000_000, 1_500_000, 2_000_000, 3_000_000,
+  4_000_000,
 ] as const;
 
 export const VIDEO_RANGE = { min: 5, max: PAID_VIDEOS_PER_MONTH, step: 5, initial: 30 } as const;

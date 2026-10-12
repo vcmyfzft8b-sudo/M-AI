@@ -19,7 +19,7 @@ import {
   normalizeReferrer,
   videoEmbedUrl,
 } from "../src/lib/ugc/creator-application.ts";
-import { CREATOR_DISCORD_INVITES, CREATOR_TERMS } from "../src/lib/ugc/creator-campaigns.ts";
+import { CREATOR_DISCORD_INVITES, CREATOR_TERMS, campaignTermsAt } from "../src/lib/ugc/creator-campaigns.ts";
 import {
   MARKET_COUNTRIES,
   PLAN_LIST_PRICES,
@@ -46,27 +46,46 @@ function readSource(relativePath) {
 test("the published pay is what was agreed: per platform, 60 videos a month", () => {
   // Slovenia: €5 on TikTok + €1 more on Instagram, and 20% of code sales.
   assert.deepEqual(CREATOR_TERMS.si, { perTikTok: 5, perInstagram: 1, codeSharePercent: 20, viewRatePer1k: 0, bonusCap: 2000 });
-  // Balkans: €7 on TikTok + €5 more on Instagram (€12), and €1 per 1,000 views up to €2,000.
-  assert.deepEqual(CREATOR_TERMS.balkans, { perTikTok: 7, perInstagram: 5, codeSharePercent: 0, viewRatePer1k: 1, bonusCap: 2000 });
+  // Balkans: €4 on TikTok + €3 more on Instagram (€7), and €0.50 per 1,000 views up to €2,000.
+  assert.deepEqual(CREATOR_TERMS.balkans, { perTikTok: 4, perInstagram: 3, codeSharePercent: 0, viewRatePer1k: 0.5, bonusCap: 2000 });
   assert.equal(perVideoTotal(CREATOR_TERMS.si), 6);
-  assert.equal(perVideoTotal(CREATOR_TERMS.balkans), 12);
+  assert.equal(perVideoTotal(CREATOR_TERMS.balkans), 7);
   assert.equal(PAID_VIDEOS_PER_MONTH, 60);
 });
 
-test("the Balkan view bonus pays €1 per thousand views and stops at the cap", () => {
+test("an applicant who signed earlier terms is shown the campaign pay of that version", () => {
+  // The Balkan pay was €7 + €5 and €1 per 1,000 views up to terms 2026-10-12.1.
+  const before = { perTikTok: 7, perInstagram: 5, codeSharePercent: 0, viewRatePer1k: 1, bonusCap: 2000 };
+  assert.deepEqual(campaignTermsAt("balkans", "2026-10-11.1"), before);
+  assert.deepEqual(campaignTermsAt("balkans", "2026-10-12.1"), before);
+  assert.deepEqual(campaignTermsAt("balkans", "2026-10-12.2"), CREATOR_TERMS.balkans);
+  assert.deepEqual(campaignTermsAt("balkans", "2026-10-12.10"), CREATOR_TERMS.balkans);
+  assert.deepEqual(campaignTermsAt("balkans", CREATOR_TERMS_VERSION), CREATOR_TERMS.balkans);
+  assert.deepEqual(campaignTermsAt("balkans", null), CREATOR_TERMS.balkans);
+  // Slovenian pay has not changed.
+  assert.deepEqual(campaignTermsAt("si", "2026-10-11.1"), CREATOR_TERMS.si);
+
+  // The admin and a signed join link both go through it, and a signed link shows what was signed.
+  assert.match(readSource("src/lib/admin/contracts.ts"), /campaignTermsAt\(row\.market, row\.terms_accepted_at \? row\.terms_version : null\)/);
+  const signing = readSource("src/lib/ugc/creator-signing.server.ts");
+  assert.match(signing, /campaignTermsAt\(application\.market, application\.terms_accepted_at \? application\.terms_version : null\)/);
+  assert.match(signing, /signable\.signedText \?\?/);
+});
+
+test("the Balkan view bonus pays €0.50 per thousand views and stops at the cap", () => {
   assert.deepEqual(estimateEarnings(CREATOR_TERMS.balkans, 60, 500_000), {
-    tiktokPay: 420,
-    instagramPay: 300,
-    videoPay: 720,
-    bonus: 500,
-    total: 1220,
+    tiktokPay: 240,
+    instagramPay: 180,
+    videoPay: 420,
+    bonus: 250,
+    total: 670,
     capped: false,
   });
 
   const capped = estimateEarnings(CREATOR_TERMS.balkans, 60, 5_000_000);
   assert.equal(capped.bonus, 2000);
   assert.equal(capped.capped, true);
-  assert.equal(capped.total, 60 * 12 + 2000);
+  assert.equal(capped.total, 60 * 7 + 2000);
 });
 
 test("the Slovenian code bonus is capped at €2,000 a month too", () => {
@@ -80,7 +99,7 @@ test("the Slovenian code bonus is capped at €2,000 a month too", () => {
 
 test("videos past the monthly cap earn nothing more", () => {
   assert.equal(estimateEarnings(CREATOR_TERMS.si, 90, 0).videoPay, 60 * 6);
-  assert.equal(estimateEarnings(CREATOR_TERMS.balkans, 61, 0).videoPay, 60 * 12);
+  assert.equal(estimateEarnings(CREATOR_TERMS.balkans, 61, 0).videoPay, 60 * 7);
 });
 
 test("a code sale earns 20% of the discounted price: €2 monthly, €13 yearly", () => {
@@ -119,7 +138,7 @@ test("tier ranges come from the calculator's own arithmetic, the top tier open-e
   }
 
   assert.equal(tierRanges(CREATOR_TERMS.balkans)[2].videos, PAID_VIDEOS_PER_MONTH);
-  assert.equal(tierRanges(CREATOR_TERMS.balkans)[2].low, 2700);
+  assert.equal(tierRanges(CREATOR_TERMS.balkans)[2].low, 1400);
 });
 
 test("no campaign's pay figure is written into the shared language files", () => {
@@ -134,9 +153,9 @@ test("no campaign's pay figure is written into the shared language files", () =>
   }
 });
 
-test("the views slider stops at 2M, where the Balkan view bonus hits its cap", () => {
+test("the views slider stops at 4M, where the Balkan view bonus hits its cap", () => {
   const top = VIEW_STEPS[VIEW_STEPS.length - 1];
-  assert.equal(top, 2_000_000);
+  assert.equal(top, 4_000_000);
   assert.equal(CREATOR_TERMS.balkans.viewRatePer1k * (top / 1000), CREATOR_TERMS.balkans.bonusCap);
 });
 
@@ -277,16 +296,18 @@ test("each campaign's terms show its own pay and never the other's", () => {
   assert.match(si, /€1 more/);
   assert.match(si, /20% bonus/);
   assert.match(si, /60 Eligible Videos per calendar month/);
-  assert.doesNotMatch(si, /€7|€12|per 1,000 Views|Balkans|Croatia\b/);
+  assert.doesNotMatch(si, /€4\b|€3\b|€0\.50|per 1,000 Views|Balkans|Croatia\b/);
 
-  assert.match(balkans, /€7 for every Eligible Video published on TikTok/);
-  assert.match(balkans, /€5 more/);
-  assert.match(balkans, /€1 per 1,000 Views/);
+  assert.match(balkans, /€4 for every Eligible Video published on TikTok/);
+  assert.match(balkans, /€3 more/);
+  assert.match(balkans, /up to €7 per Video/);
+  assert.match(balkans, /60 Eligible Videos per calendar month/);
+  assert.match(balkans, /€0\.50 per 1,000 Views/);
   assert.match(balkans, /€2,000 a month/);
   assert.doesNotMatch(balkans, /Slovenia campaign|Slovenia Campaign|20% bonus|Discount Code/);
 
   for (const locale of LOCALES) {
-    assert.doesNotMatch(creatorTermsMarkdown(locale, "si"), /€\s?7|7\s?€|12\s?€|€\s?12/, `${locale} Slovenian terms show Balkan pay`);
+    assert.doesNotMatch(creatorTermsMarkdown(locale, "si"), /€\s?[347]\b|[347]\s?€|0[.,]50\s?€|€\s?0[.,]50/, `${locale} Slovenian terms show Balkan pay`);
   }
 });
 
@@ -547,7 +568,7 @@ test("the terms' wording only changes together with their version", async () => 
     }
   }
 
-  const TERMS_HASHES = { "2026-10-12.1": "9200cee8d9906fd5" };
+  const TERMS_HASHES = { "2026-10-12.2": "5d91ef191253c509" };
   assert.equal(TERMS_HASHES[CREATOR_TERMS_VERSION], hash.digest("hex").slice(0, 16));
 });
 

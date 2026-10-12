@@ -47,7 +47,8 @@ export function ContractForm({
   );
 
   return (
-    <ActionForm action={createCreatorContractAction}>
+    // Without a creator the next contract is for somebody else, so the fields start over.
+    <ActionForm action={createCreatorContractAction} resetOnSuccess={!creatorId}>
       {creatorId ? <input type="hidden" name="creator_id" value={creatorId} /> : null}
 
       <div className="admin-form-grid">

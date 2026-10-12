@@ -532,7 +532,7 @@ test("the terms' wording only changes together with their version", async () => 
     }
   }
 
-  const TERMS_HASHES = { "2026-10-11.2": "bc831bcf88201e2d" };
+  const TERMS_HASHES = { "2026-10-12.1": "9200cee8d9906fd5" };
   assert.equal(TERMS_HASHES[CREATOR_TERMS_VERSION], hash.digest("hex").slice(0, 16));
 });
 

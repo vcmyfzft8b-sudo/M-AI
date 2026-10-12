@@ -135,7 +135,7 @@ Osebne podatke, ki nam jih posreduješ (prijava, kontakt, podatki za izplačilo 
 
 13.1 Sodeluješ kot samostojni izvajalec. Ti pogoji ne ustvarjajo delovnega razmerja, družbeništva ali zastopanja.
 
-13.2 Pogoje lahko spremenimo z obvestilom po e-pošti ali na Discordu vsaj 7 dni vnaprej. Spremembe plačila veljajo le za videe, objavljene po uveljavitvi spremembe. Če se ne strinjaš, lahko sodelovanje končaš; če po uveljavitvi spremembe še naprej objavljaš, sprejemaš nove pogoje.
+13.2 Pogoje lahko kadar koli spremenimo. Sprememba začne veljati takoj, ko te o njej obvestimo po e-pošti ali na Discordu, razen če v obvestilu navedemo poznejši datum. Spremembe plačila veljajo le za videe, objavljene po uveljavitvi spremembe. Če se ne strinjaš, lahko sodelovanje končaš; če po uveljavitvi spremembe še naprej objavljaš, sprejemaš nove pogoje.
 
 13.3 Ti pogoji skupaj z navodili so celoten dogovor med nama o programu.
 
@@ -261,7 +261,7 @@ We process the personal data you give us (application, contact, payout and tax d
 
 13.1 You take part as an independent contractor. These Terms do not create employment, a partnership or agency.
 
-13.2 We may change these Terms by notifying you by email or on Discord at least 7 days in advance. Changes to pay apply only to Videos published after the change takes effect. If you do not agree, you may end your participation; if you keep publishing after the change takes effect, you accept the new Terms.
+13.2 We may change these Terms at any time. A change takes effect as soon as we notify you of it by email or on Discord, unless the notice gives a later date. Changes to pay apply only to Videos published after the change takes effect. If you do not agree, you may end your participation; if you keep publishing after the change takes effect, you accept the new Terms.
 
 13.3 These Terms, together with the Brief, are the entire agreement between us about the Program.
 
@@ -389,7 +389,7 @@ Osobne podatke koje nam daješ (prijava, kontakt, podaci za isplatu i porez, zap
 
 13.1 Sudjeluješ kao samostalni izvođač. Ovi uvjeti ne stvaraju radni odnos, ortakluk ni zastupanje.
 
-13.2 Uvjete možemo promijeniti obavijesti e-poštom ili na Discordu najmanje 7 dana unaprijed. Promjene naknade vrijede samo za videa objavljena nakon stupanja promjene na snagu. Ako se ne slažeš, možeš završiti sudjelovanje; ako nakon stupanja promjene na snagu nastaviš objavljivati, prihvaćaš nove uvjete.
+13.2 Uvjete možemo promijeniti u bilo kojem trenutku. Promjena stupa na snagu čim te o njoj obavijestimo e-poštom ili na Discordu, osim ako u obavijesti navedemo kasniji datum. Promjene naknade vrijede samo za videa objavljena nakon stupanja promjene na snagu. Ako se ne slažeš, možeš završiti sudjelovanje; ako nakon stupanja promjene na snagu nastaviš objavljivati, prihvaćaš nove uvjete.
 
 13.3 Ovi uvjeti zajedno s uputama cjelokupan su dogovor između nas o programu.
 
@@ -517,7 +517,7 @@ Lične podatke koje nam daješ (prijava, kontakt, podaci za isplatu i porez, zap
 
 13.1 Učestvuješ kao samostalni izvođač. Ovi uslovi ne stvaraju radni odnos, ortakluk ni zastupanje.
 
-13.2 Uslove možemo promijeniti obavještenjem e-poštom ili na Discordu najmanje 7 dana unaprijed. Promjene naknade važe samo za videe objavljene nakon stupanja promjene na snagu. Ako se ne slažeš, možeš završiti učešće; ako nakon stupanja promjene na snagu nastaviš objavljivati, prihvataš nove uslove.
+13.2 Uslove možemo promijeniti u bilo kojem trenutku. Promjena stupa na snagu čim te o njoj obavijestimo e-poštom ili na Discordu, osim ako u obavještenju navedemo kasniji datum. Promjene naknade važe samo za videe objavljene nakon stupanja promjene na snagu. Ako se ne slažeš, možeš završiti učešće; ako nakon stupanja promjene na snagu nastaviš objavljivati, prihvataš nove uslove.
 
 13.3 Ovi uslovi zajedno s uputama su cjelokupan dogovor između nas o programu.
 
@@ -645,7 +645,7 @@ Lične podatke koje nam daješ (prijava, kontakt, podaci za isplatu i porez, zap
 
 13.1 Učestvuješ kao samostalni izvođač. Ovi uslovi ne stvaraju radni odnos, ortačko društvo ni zastupanje.
 
-13.2 Uslove možemo da promenimo obaveštenjem imejlom ili na Discordu najmanje 7 dana unapred. Promene naknade važe samo za snimke objavljene posle stupanja promene na snagu. Ako se ne slažeš, možeš da završiš učešće; ako posle stupanja promene na snagu nastaviš da objavljuješ, prihvataš nove uslove.
+13.2 Uslove možemo da promenimo u bilo kom trenutku. Promena stupa na snagu čim te o njoj obavestimo imejlom ili na Discordu, osim ako u obaveštenju navedemo kasniji datum. Promene naknade važe samo za snimke objavljene posle stupanja promene na snagu. Ako se ne slažeš, možeš da završiš učešće; ako posle stupanja promene na snagu nastaviš da objavljuješ, prihvataš nove uslove.
 
 13.3 Ovi uslovi zajedno sa uputstvima su celokupan dogovor između nas o programu.
 

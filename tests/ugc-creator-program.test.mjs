@@ -517,6 +517,21 @@ test("contracts are never emailed from the admin, and every signature keeps its 
   assert.equal(signing.match(/terms_snapshot: signableTerms\(signable\)/g)?.length, 2, "both applicants and contracts store the signed text");
 });
 
+test("a contract can be created for someone who is not in the dashboard", () => {
+  const actions = readSource("src/app/admin/(dashboard)/actions.ts");
+  const create = actions.slice(actions.indexOf("export async function createCreatorContractAction"));
+  const body = create.slice(0, create.indexOf("\nexport async function"));
+  assert.doesNotMatch(body, /Missing creator/, "the creator is optional");
+  assert.match(body, /if \(creatorId\) \{[\s\S]*?That creator no longer exists/, "a named creator must still exist");
+  assert.match(body, /creator_id: creatorId \|\| null/);
+
+  // The signing link must not depend on a creator either.
+  assert.doesNotMatch(readSource("src/lib/ugc/creator-signing.server.ts"), /creator_id/);
+
+  const page = readSource("src/app/admin/(dashboard)/contracts/page.tsx");
+  assert.match(page, /<ContractForm defaultPay=\{campaignPay\(CREATOR_TERMS\.si\)\} \/>/, "the contracts page creates one with no creator");
+});
+
 test("the terms' wording only changes together with their version", async () => {
   // Every signature stores its version; a stored snapshot is only trustworthy if the
   // words cannot change under the same version. If this fails after an intended wording

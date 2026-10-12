@@ -4883,9 +4883,11 @@ export function LectureWorkspace({
                       {isStartingPracticeTest ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : null}
-                      {t(
-                        hasCompletedPracticeTest ? "study.test.startNew" : "study.test.create",
-                      )}
+                      <span>
+                        {t(
+                          hasCompletedPracticeTest ? "study.test.startNew" : "study.test.create",
+                        )}
+                      </span>
                     </button>
                   ) : null}
                 </div>
@@ -4963,7 +4965,7 @@ export function LectureWorkspace({
                           {isLast && isSubmittingPracticeTest ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : null}
-                          {t(isLast ? "test.submit" : "common.next")}
+                          <span>{t(isLast ? "test.submit" : "common.next")}</span>
                         </button>
                       </div>
                     </div>
@@ -5024,7 +5026,7 @@ export function LectureWorkspace({
                             {isStartingPracticeTest ? (
                               <Loader2 className="h-5 w-5 animate-spin" />
                             ) : null}
-                            {t("study.test.startNew")}
+                            <span>{t("study.test.startNew")}</span>
                           </button>
                         ) : null
                       }
@@ -6133,7 +6135,7 @@ export function LectureWorkspace({
                 disabled={isFixWordBusy || fixWordInvalid || fixWordMatches === 0}
               >
                 {isFixWordBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {t("note.fixWord.submit")}
+                <span>{t("note.fixWord.submit")}</span>
               </button>
             </div>
           </div>
@@ -6187,7 +6189,7 @@ export function LectureWorkspace({
                 disabled={isNoteActionBusy}
               >
                 {isNoteActionBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {t("common.save")}
+                <span>{t("common.save")}</span>
               </button>
               <button
                 type="button"
@@ -6231,7 +6233,7 @@ export function LectureWorkspace({
                 disabled={isNoteActionBusy}
               >
                 {isNoteActionBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {t("library.delete.title")}
+                <span>{t("library.delete.title")}</span>
               </button>
               <button
                 type="button"

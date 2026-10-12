@@ -191,6 +191,20 @@ const WRAPPED_LABELS = [
     1,
   ],
   ["src/components/push-prompt.tsx", 't("push.enableAllow")', 1],
+  // Submitting a practice test threw on /app/lectures/:id (MEMOAI-WEB-3A,
+  // 2026-10-12): the label's text node was no longer the button's child when
+  // the submit spinner was placed before it. The note screen's other spinner
+  // buttons have the same shape.
+  ["src/components/lecture-workspace.tsx", 't(isLast ? "test.submit" : "common.next")', 1],
+  ["src/components/lecture-workspace.tsx", 't("study.test.startNew")', 1],
+  ["src/components/lecture-workspace.tsx", 't("note.fixWord.submit")', 1],
+  ["src/components/lecture-workspace.tsx", 't("common.save")', 1],
+  ["src/components/lecture-workspace.tsx", 't("library.delete.title")', 1],
+  [
+    "src/components/lecture-palace.tsx",
+    'isMarking ? t("palace.checking") : t("palace.checkAnswer")',
+    1,
+  ],
 ];
 
 for (const [file, label, count] of WRAPPED_LABELS) {
@@ -207,7 +221,7 @@ for (const [file, label, count] of WRAPPED_LABELS) {
  * The spinner is what makes this crash reachable: a button whose label never
  * gains a sibling has nothing to insert before. So the guard above is only
  * worth as much as the pairing it assumes — assert that every Loader2 in these
- * three files is followed by a wrapped label rather than a bare one.
+ * files is followed by a wrapped label rather than a bare one.
  */
 test("no spinner in these files sits immediately before a bare label", () => {
   for (const file of new Set(WRAPPED_LABELS.map(([path]) => path))) {
@@ -240,11 +254,20 @@ test("no spinner in these files sits immediately before a bare label", () => {
           continue;
         }
 
+        // A spinner written as `{busy ? (<Loader2 />) : null}` closes on the
+        // line after it; the label follows that.
+        if (/^\s*\)\s*:\s*null\s*\}\s*$/.test(lines[next])) {
+          next += 1;
+          continue;
+        }
+
         break;
       }
 
       const sibling = lines[next] ?? "";
-      const isBareExpression = /^\s*\{.*\}\s*$/.test(sibling) && !/<[A-Za-z/]/.test(sibling);
+      const isBareExpression =
+        (/^\s*\{.*\}\s*$/.test(sibling) || /^\s*\{t\($/.test(sibling)) &&
+        !/<[A-Za-z/]/.test(sibling);
 
       assert.ok(
         !isBareExpression,

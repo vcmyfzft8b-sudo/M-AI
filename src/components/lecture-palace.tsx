@@ -1454,7 +1454,7 @@ export function LecturePalace({
               onClick={() => void checkAnswer(question.id)}
             >
               {isMarking ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {isMarking ? t("palace.checking") : t("palace.checkAnswer")}
+              <span>{isMarking ? t("palace.checking") : t("palace.checkAnswer")}</span>
             </button>
           )}
         </div>

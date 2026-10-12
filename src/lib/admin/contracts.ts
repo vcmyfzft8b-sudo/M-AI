@@ -3,7 +3,7 @@ import "server-only";
 import { loadEveryRow } from "@/lib/admin/paged-rows";
 import type { UgcCreatorApplicationRow, UgcCreatorContractRow } from "@/lib/database.types";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { CREATOR_TERMS } from "@/lib/ugc/creator-campaigns";
+import { campaignTermsAt } from "@/lib/ugc/creator-campaigns";
 import { campaignPay, describeContractPay, parseContractPay } from "@/lib/ugc/creator-pay";
 
 /**
@@ -69,7 +69,8 @@ function fromApplication(row: UgcCreatorApplicationRow & { market: "si" | "balka
     email: row.email,
     market: row.market,
     status: row.terms_accepted_at ? "signed" : "sent",
-    pay: `${describeContractPay(campaignPay(CREATOR_TERMS[row.market]))} (campaign)`,
+    // What they signed: the campaign's pay under the terms version they accepted.
+    pay: `${describeContractPay(campaignPay(campaignTermsAt(row.market, row.terms_accepted_at ? row.terms_version : null)))} (campaign)`,
     joinToken: row.join_token,
     createdAt: row.reviewed_at ?? row.created_at,
     signedAt: row.terms_accepted_at,

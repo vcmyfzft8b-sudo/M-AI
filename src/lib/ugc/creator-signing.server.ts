@@ -5,7 +5,7 @@ import { cache } from "react";
 import { updateIn } from "@/lib/admin/db";
 import type { UgcCreatorApplicationRow, UgcCreatorContractRow } from "@/lib/database.types";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { CREATOR_TERMS } from "@/lib/ugc/creator-campaigns";
+import { campaignTermsAt } from "@/lib/ugc/creator-campaigns";
 import { campaignPay, parseContractPay, type ContractPay } from "@/lib/ugc/creator-pay";
 import { campaignLocale, type CampaignLocale, type CreatorMarket } from "@/lib/ugc/creator-program";
 import { CREATOR_TERMS_VERSION, creatorTermsMarkdown } from "@/lib/ugc/creator-terms";
@@ -13,8 +13,8 @@ import { CREATOR_TERMS_VERSION, creatorTermsMarkdown } from "@/lib/ugc/creator-t
 /**
  * What a join link (`/ugc/join/<token>`) can be signed for.
  *
- * - An **application** the admin accepted: the campaign's standard pay, and the
- *   campaign's Discord once signed.
+ * - An **application** the admin accepted: the campaign's standard pay (once signed, the
+ *   pay of the terms version they signed), and the campaign's Discord once signed.
  * - A **contract** the admin sent to a creator already in the program: that creator's
  *   own deal (`ugc_creator_contracts.pay`). Voided contracts open nothing.
  *
@@ -31,6 +31,8 @@ export type Signable = {
   /** Applied with a sample video (the terms compare later videos to it). */
   applied: boolean;
   acceptedAt: string | null;
+  /** The exact text that was signed, once signed (null for signatures from before it was kept). */
+  signedText: string | null;
   /** An applicant opened their campaign's Discord invite after signing (never for contracts). */
   discordOpenedAt: string | null;
 };
@@ -58,9 +60,12 @@ async function readSignable(token: string): Promise<Signable | null> {
       market: application.market,
       locale: campaignLocale(application.market, application.locale),
       minor: application.age !== null && application.age < 18,
-      pay: campaignPay(CREATOR_TERMS[application.market]),
+      pay: campaignPay(
+        campaignTermsAt(application.market, application.terms_accepted_at ? application.terms_version : null),
+      ),
       applied: true,
       acceptedAt: application.terms_accepted_at,
+      signedText: application.terms_accepted_at ? application.terms_snapshot : null,
       discordOpenedAt: application.discord_opened_at,
     };
   }
@@ -78,6 +83,7 @@ async function readSignable(token: string): Promise<Signable | null> {
       pay,
       applied: false,
       acceptedAt: contract.signed_at,
+      signedText: contract.signed_at ? contract.terms_snapshot : null,
       discordOpenedAt: null,
     };
   }
@@ -91,9 +97,15 @@ export const loadSignable = Object.assign(cache(readSignable), {
   uncached: readSignable,
 });
 
-/** The exact terms this link is signed for. */
+/**
+ * The exact terms this link is signed for: once signed, the text that was signed, so a
+ * later change to the campaign's pay or wording never rewrites what a creator agreed to.
+ */
 export function signableTerms(signable: Signable): string {
-  return creatorTermsMarkdown(signable.locale, signable.market, { pay: signable.pay, applied: signable.applied });
+  return (
+    signable.signedText ??
+    creatorTermsMarkdown(signable.locale, signable.market, { pay: signable.pay, applied: signable.applied })
+  );
 }
 
 /**

@@ -24,6 +24,39 @@ export const CREATOR_TERMS: Record<CreatorMarket, CreatorTerms> = {
 };
 
 /**
+ * Campaign pay that has since changed, each with the last terms version that carried it.
+ * An applicant who accepted the campaign terms agreed to the campaign's pay of that
+ * version, and the admin must show them that rather than today's. Add an entry here
+ * whenever `CREATOR_TERMS` changes (and bump `CREATOR_TERMS_VERSION` with it).
+ */
+const EARLIER_CREATOR_TERMS: ReadonlyArray<{ market: CreatorMarket; throughVersion: string; terms: CreatorTerms }> = [
+  {
+    market: "balkans",
+    throughVersion: "2026-10-12.1",
+    terms: { perTikTok: 7, perInstagram: 5, codeSharePercent: 0, viewRatePer1k: 1, bonusCap: 2000 },
+  },
+];
+
+/** Orders terms versions ("2026-10-12.2"): by date, then by the number after the dot. */
+function compareTermsVersions(a: string, b: string): number {
+  const [dateA, countA = "0"] = a.split(".");
+  const [dateB, countB = "0"] = b.split(".");
+
+  return dateA === dateB ? Number(countA) - Number(countB) : dateA.localeCompare(dateB);
+}
+
+/** The campaign pay a creator agreed to by accepting `version` of the terms; today's when unknown. */
+export function campaignTermsAt(market: CreatorMarket, version: string | null): CreatorTerms {
+  const earlier = version
+    ? EARLIER_CREATOR_TERMS.filter(
+        (entry) => entry.market === market && compareTermsVersions(version, entry.throughVersion) <= 0,
+      ).sort((a, b) => compareTermsVersions(a.throughVersion, b.throughVersion))[0]
+    : undefined;
+
+  return earlier?.terms ?? CREATOR_TERMS[market];
+}
+
+/**
  * Where an accepted creator goes next: each campaign has its own Discord, handed over by
  * the join page once the Terms of Participation are accepted.
  * Permanent invites (checked 2026-10-11: no expiry, no use limit).

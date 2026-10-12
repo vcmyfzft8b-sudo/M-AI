@@ -189,6 +189,11 @@ and the view-bonus clause only when it pays for views. It drops the sample-video
 comparison for creators who never applied, and strips the other campaign's clauses.
 **Bump `CREATOR_TERMS_VERSION` whenever a clause's meaning changes**, in every language
 in the same commit; a creator whose page showed an older version is asked to reload.
+**Changing a campaign's pay** (`CREATOR_TERMS`) also bumps the version, and the old pay goes
+into `EARLIER_CREATOR_TERMS` with the last version that carried it: the admin shows every
+signed applicant the pay of the version they signed (`campaignTermsAt`), and a signed join
+link shows the stored text that was signed, never today's. Balkan pay was €7 + €5 and €1 per
+1,000 views through `2026-10-12.1`.
 Adapted from a third-party template for Memo AI, Nace Valenčič s.p., poslovno svetovanje.
 They have not been reviewed by a lawyer.
 

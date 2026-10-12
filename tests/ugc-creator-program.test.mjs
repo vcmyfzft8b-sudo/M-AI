@@ -19,7 +19,7 @@ import {
   normalizeReferrer,
   videoEmbedUrl,
 } from "../src/lib/ugc/creator-application.ts";
-import { CREATOR_DISCORD_INVITES, CREATOR_TERMS } from "../src/lib/ugc/creator-campaigns.ts";
+import { CREATOR_DISCORD_INVITES, CREATOR_TERMS, campaignTermsAt } from "../src/lib/ugc/creator-campaigns.ts";
 import {
   MARKET_COUNTRIES,
   PLAN_LIST_PRICES,
@@ -51,6 +51,25 @@ test("the published pay is what was agreed: per platform, 60 videos a month", ()
   assert.equal(perVideoTotal(CREATOR_TERMS.si), 6);
   assert.equal(perVideoTotal(CREATOR_TERMS.balkans), 7);
   assert.equal(PAID_VIDEOS_PER_MONTH, 60);
+});
+
+test("an applicant who signed earlier terms is shown the campaign pay of that version", () => {
+  // The Balkan pay was €7 + €5 and €1 per 1,000 views up to terms 2026-10-12.1.
+  const before = { perTikTok: 7, perInstagram: 5, codeSharePercent: 0, viewRatePer1k: 1, bonusCap: 2000 };
+  assert.deepEqual(campaignTermsAt("balkans", "2026-10-11.1"), before);
+  assert.deepEqual(campaignTermsAt("balkans", "2026-10-12.1"), before);
+  assert.deepEqual(campaignTermsAt("balkans", "2026-10-12.2"), CREATOR_TERMS.balkans);
+  assert.deepEqual(campaignTermsAt("balkans", "2026-10-12.10"), CREATOR_TERMS.balkans);
+  assert.deepEqual(campaignTermsAt("balkans", CREATOR_TERMS_VERSION), CREATOR_TERMS.balkans);
+  assert.deepEqual(campaignTermsAt("balkans", null), CREATOR_TERMS.balkans);
+  // Slovenian pay has not changed.
+  assert.deepEqual(campaignTermsAt("si", "2026-10-11.1"), CREATOR_TERMS.si);
+
+  // The admin and a signed join link both go through it, and a signed link shows what was signed.
+  assert.match(readSource("src/lib/admin/contracts.ts"), /campaignTermsAt\(row\.market, row\.terms_accepted_at \? row\.terms_version : null\)/);
+  const signing = readSource("src/lib/ugc/creator-signing.server.ts");
+  assert.match(signing, /campaignTermsAt\(application\.market, application\.terms_accepted_at \? application\.terms_version : null\)/);
+  assert.match(signing, /signable\.signedText \?\?/);
 });
 
 test("the Balkan view bonus pays €0.50 per thousand views and stops at the cap", () => {

@@ -67,7 +67,10 @@ const IDENTITY_PROVIDER_HOSTS = [
 // Apps whose content is never readable without a sign-in, however the link is shaped. A
 // Teams message or channel link answers a cookieless fetch with a 200 "Join conversation"
 // launcher page that holds no text, so without this the learner is told the page is thin.
+// Rokus Klett's e-textbook reader is the same: an empty app shell that asks for a Rokus
+// account before it loads a licensed book.
 const SIGN_IN_ONLY_APP_HOSTS = [
+  "folio.rokus-klett.si",
   "teams.cloud.microsoft",
   "teams.live.com",
   "teams.microsoft.com",

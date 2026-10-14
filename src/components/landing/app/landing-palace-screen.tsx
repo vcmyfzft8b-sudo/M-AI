@@ -24,6 +24,14 @@ import {
 } from "@/components/landing/app/landing-study-content";
 import { Msym } from "@/components/msym";
 import { PalaceLoading } from "@/components/palace-loading";
+import {
+  PalaceNextStop,
+  PalaceStick,
+  PalaceToast,
+  usePalaceNextStop,
+  usePalaceStick,
+  usePalaceToast,
+} from "@/components/palace-hud";
 import { StudyCompletionCard } from "@/components/study-completion-card";
 import { StudyFlashcard, type StudyFlashcardExit } from "@/components/study-flashcard";
 import { StudyQuizQuestion } from "@/components/study-question";
@@ -68,8 +76,6 @@ const MASCOT_SRC = "/memo-mascot.png";
 const MAP_RANGE = 95;
 const MAX_MAP_MARKERS = 5;
 const QUIZ_RESULT_PAUSE = 1600;
-const STICK_DEADZONE = 6;
-const STICK_RADIUS = 46;
 /** The walkthrough's pace across the intro map. */
 const WALK_LEG_MS = 1_500;
 /* How often the walking dot on the intro map moves: each move repaints the whole map. */
@@ -100,7 +106,6 @@ export function LandingPalaceScreen({
   const minimapRef = useRef<HTMLCanvasElement | null>(null);
   const gameRef = useRef<PalaceGame | null>(null);
   const snapshotRef = useRef<PalaceSnapshot | null>(null);
-  const stickRef = useRef<{ pointerId: number; originX: number; originY: number } | null>(null);
   const lookRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const mascotRef = useRef<HTMLImageElement | null>(null);
   const mascotTileRef = useRef<HTMLCanvasElement | null>(null);
@@ -160,7 +165,16 @@ export function LandingPalaceScreen({
   const [hasMoved, setHasMoved] = useState(false);
   const movementOriginRef = useRef<{ x: number; z: number } | null>(null);
   const movementStartedRef = useRef(false);
-  const [stickKnob, setStickKnob] = useState<{ x: number; y: number } | null>(null);
+  /* The pointer to the next stop and the line after a card, as the app draws them. */
+  const nextStopPointer = usePalaceNextStop();
+  const updateNextStop = nextStopPointer.update;
+  const { toast, queue: queueToast, flush: flushToast } = usePalaceToast();
+  /* `stagePoint` is declared further down; the stick only asks for it when a thumb lands. */
+  const stick = usePalaceStick({
+    onMove: (forward, right, running) => gameRef.current?.setMove(forward, right, running),
+    toPoint: (event) => stagePoint(event),
+  });
+  const resetStick = stick.reset;
   const [isTouch, setIsTouch] = useState(false);
   const [canvasEpoch, setCanvasEpoch] = useState(0);
   /*
@@ -414,7 +428,8 @@ export function LandingPalaceScreen({
     clearDismiss();
     gameRef.current?.releaseStation();
     openStation(null);
-  }, [clearDismiss, openStation]);
+    flushToast();
+  }, [clearDismiss, flushToast, openStation]);
 
   /** Only a successful recall collects a stop; a miss moves it somewhere else in town. */
   const resolveAnswer = useCallback(
@@ -422,6 +437,7 @@ export function LandingPalaceScreen({
       if (answeredRef.current === id) return;
       answeredRef.current = id;
       setResults((current) => ({ ...current, [id]: known ? "easy" : "again" }));
+      queueToast(known ? "collected" : null);
 
       if (known) {
         setCollected((current) => new Set(current).add(id));
@@ -443,9 +459,10 @@ export function LandingPalaceScreen({
 
       layoutRef.current = next;
       gameRef.current?.relocateStation(moved);
+      queueToast("moved");
       setLayout(next);
     },
-    [spots],
+    [queueToast, spots],
   );
 
   const gradeCard = useCallback(
@@ -531,6 +548,7 @@ export function LandingPalaceScreen({
           onFrame: (snapshot) => {
             snapshotRef.current = snapshot;
             drawMinimap(snapshot, collectedRef.current);
+            updateNextStop(snapshot, layoutRef.current, collectedRef.current);
 
             if (!movementOriginRef.current) movementOriginRef.current = snapshot;
             if (
@@ -554,7 +572,7 @@ export function LandingPalaceScreen({
       gameRef.current?.dispose();
       gameRef.current = null;
     };
-  }, [canvasEpoch, drawMinimap, isOpen, openStation]);
+  }, [canvasEpoch, drawMinimap, isOpen, openStation, updateNextStop]);
 
   const isComplete = Boolean(
     layout?.stations.length && layout.stations.every((entry) => collected.has(entry.id)) && !station,
@@ -609,11 +627,10 @@ export function LandingPalaceScreen({
   const leaveGame = useCallback(() => {
     clearDismiss();
     setStation(null);
-    setStickKnob(null);
-    stickRef.current = null;
+    resetStick();
     lookRef.current = null;
     setIsOpen(false);
-  }, [clearDismiss]);
+  }, [clearDismiss, resetStick]);
 
   const restart = useCallback(() => {
     answeredRef.current = null;
@@ -656,45 +673,6 @@ export function LandingPalaceScreen({
     };
   };
 
-  const onStickPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (stickRef.current) return;
-
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const point = stagePoint(event);
-    stickRef.current = { pointerId: event.pointerId, originX: point.x, originY: point.y };
-    setStickKnob(point);
-  };
-
-  const onStickPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const stick = stickRef.current;
-
-    if (!stick || stick.pointerId !== event.pointerId) return;
-
-    const point = stagePoint(event);
-    const dx = point.x - stick.originX;
-    const dy = point.y - stick.originY;
-    const distance = Math.hypot(dx, dy);
-
-    if (distance < STICK_DEADZONE) {
-      gameRef.current?.setMove(0, 0);
-      return;
-    }
-
-    const clamped = Math.min(1, distance / STICK_RADIUS);
-    const nx = (dx / distance) * clamped;
-    const ny = (dy / distance) * clamped;
-
-    gameRef.current?.setMove(-ny, nx);
-    setStickKnob({ x: stick.originX + nx * STICK_RADIUS, y: stick.originY + ny * STICK_RADIUS });
-  };
-
-  const endStick = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (stickRef.current?.pointerId !== event.pointerId) return;
-
-    stickRef.current = null;
-    gameRef.current?.setMove(0, 0);
-    setStickKnob(null);
-  };
 
   const onLookPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (lookRef.current) return;
@@ -970,21 +948,7 @@ export function LandingPalaceScreen({
               onPointerCancel={endLook}
             />
 
-            {isTouch ? (
-              <div
-                className="memo-palace-stick"
-                onPointerDown={onStickPointerDown}
-                onPointerMove={onStickPointerMove}
-                onPointerUp={endStick}
-                onPointerCancel={endStick}
-                onLostPointerCapture={endStick}
-              >
-                <span className="memo-palace-stick-base" aria-hidden="true" />
-                {stickKnob ? (
-                  <span className="memo-palace-knob" style={{ left: `${stickKnob.x}px`, top: `${stickKnob.y}px` }} />
-                ) : null}
-              </div>
-            ) : null}
+            {isTouch ? <PalaceStick stick={stick} /> : null}
 
             {/* The app's corner map; its full-screen city map is a sheet, and is not drawn here. */}
             <div className="memo-palace-map" aria-hidden="true">
@@ -992,11 +956,17 @@ export function LandingPalaceScreen({
             </div>
 
             <div className="memo-palace-hud-top">
-              <span className="memo-palace-score">
+              <span
+                key={toast?.kind === "collected" ? toast.id : "score"}
+                className={`memo-palace-score${toast?.kind === "collected" ? " is-bumped" : ""}`}
+              >
                 <span className="memo-palace-score-token" aria-hidden="true" />
                 {done} <span className="memo-palace-score-slash">/</span> {total}
               </span>
+              <PalaceNextStop pointer={nextStopPointer} />
             </div>
+
+            <PalaceToast toast={toast} />
 
             <button type="button" className="memo-palace-exit" onClick={leaveGame} aria-label={t("palace.exit")}>
               <Msym name="arrow_back" size="1.1rem" />

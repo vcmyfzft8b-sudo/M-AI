@@ -2171,7 +2171,8 @@
   z-index: 20;
 }
 
-.landing-study-frame[data-note-tab="palace"] .memo-palace-knob {
+.landing-study-frame[data-note-tab="palace"] .memo-palace-knob,
+.landing-study-frame[data-note-tab="palace"] .memo-palace-stick-ring {
   position: absolute;
 }
 

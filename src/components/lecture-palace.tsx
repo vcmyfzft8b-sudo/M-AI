@@ -8,6 +8,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useT } from "@/components/i18n-provider";
 import { StudyQuizQuestion, StudyPracticeQuestion } from "@/components/study-question";
 import { PalaceLoading } from "@/components/palace-loading";
+import {
+  PalaceNextStop,
+  PalaceStick,
+  PalaceToast,
+  usePalaceNextStop,
+  usePalaceStick,
+  usePalaceToast,
+} from "@/components/palace-hud";
 import { MemoPortal } from "@/components/memo-portal";
 import { Emoji, Msym } from "@/components/msym";
 import { StudyCompletionCard } from "@/components/study-completion-card";
@@ -83,14 +91,11 @@ type PracticeMark = {
   strengths?: string;
   missingPoints?: string;
 };
-/** The stick is dead in the middle, so a resting thumb is not a slow walk. */
 /*
  * How long an answered quiz stays up before the walk resumes. A tick needs long
  * enough to register; a wrong answer, or one the note explains, needs reading.
  */
 const QUIZ_RESULT_PAUSE = 1600;
-const STICK_DEADZONE = 6;
-const STICK_RADIUS = 46;
 
 function readCollected(lectureId: string) {
   try {
@@ -144,7 +149,6 @@ export function LecturePalace({
   const introMapRef = useRef<HTMLCanvasElement | null>(null);
   const gameRef = useRef<PalaceGame | null>(null);
   const snapshotRef = useRef<PalaceSnapshot | null>(null);
-  const stickRef = useRef<{ pointerId: number; originX: number; originY: number } | null>(null);
   const lookRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const exitTimerRef = useRef<number | null>(null);
   const exitTokenRef = useRef(0);
@@ -183,7 +187,12 @@ export function LecturePalace({
   const movementOriginRef = useRef<{ x: number; z: number } | null>(null);
   const movementStartedRef = useRef(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
-  const [stickKnob, setStickKnob] = useState<{ x: number; y: number } | null>(null);
+  const stick = usePalaceStick({ onMove: (forward, right, running) => gameRef.current?.setMove(forward, right, running) });
+  /* The pointer to the next stop, written straight from the frame callback. */
+  const nextStopPointer = usePalaceNextStop();
+  const updateNextStop = nextStopPointer.update;
+  /* What the last answer did, announced once its sheet has gone. */
+  const { toast, queue: queueToast, flush: flushToast } = usePalaceToast();
   const [isTouch, setIsTouch] = useState(false);
   /*
    * Bumped when the GPU drops the drawing context: the canvas element itself
@@ -661,6 +670,7 @@ export function LecturePalace({
            * reads as the map stuttering rather than as a saving.
            */
           drawMinimap(snapshot, collectedRef.current);
+          updateNextStop(snapshot, layoutRef.current, collectedRef.current, selectedMapRef.current);
 
           if (!movementOriginRef.current) movementOriginRef.current = snapshot;
           if (!movementStartedRef.current && Math.hypot(snapshot.x - movementOriginRef.current.x, snapshot.z - movementOriginRef.current.z) > 0.08) {
@@ -674,7 +684,7 @@ export function LecturePalace({
       /* A device without WebGL, or a chunk that never arrived. */
       setLoadError(error instanceof Error ? error.message : t("palace.unsupported"));
     }
-  }, [baseLayout, drawMinimap, openStation, sizeMinimap, t]);
+  }, [baseLayout, drawMinimap, openStation, sizeMinimap, t, updateNextStop]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -994,7 +1004,8 @@ export function LecturePalace({
     clearDismiss();
     gameRef.current?.releaseStation();
     openStation(null);
-  }, [clearDismiss, openStation]);
+    flushToast();
+  }, [clearDismiss, flushToast, openStation]);
 
   /*
    * The station panel is a bottom sheet on the phone, so it is one of the app's
@@ -1030,6 +1041,7 @@ export function LecturePalace({
     if (answeredRef.current === id) return;
     answeredRef.current = id;
     recordResult(id, known ? "easy" : "again");
+    queueToast(known ? "collected" : null);
     if (known) { collect(id); return; }
     const currentLayout = layoutRef.current;
     const current = currentLayout?.stations.find(entry => entry.id === id);
@@ -1042,10 +1054,11 @@ export function LecturePalace({
     // Update the engine and maps together without rebuilding the town or moving the player.
     layoutRef.current = {...currentLayout, stations: currentLayout.stations.map(entry => entry.id === id ? moved : entry)};
     gameRef.current?.relocateStation(moved);
+    queueToast("moved");
     setLocations(next);
     setSelectedMapId(id);
     try { window.localStorage.setItem(`${LOCATIONS_STORAGE_PREFIX}${lectureId}`, JSON.stringify(next)); } catch { /* Optional storage. */ }
-  }, [collect, lectureId, recordResult, spots]);
+  }, [collect, lectureId, queueToast, recordResult, spots]);
 
   /**
    * A flashcard graded in the town is a flashcard graded in the app: the same
@@ -1194,46 +1207,6 @@ export function LecturePalace({
     try { window.localStorage.removeItem(`${RESULTS_STORAGE_PREFIX}${lectureId}`); } catch { /* Optional storage. */ }
     setIsOpen(false);
   }, [lectureId]);
-
-  const onStickPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (stickRef.current) return;
-
-    event.currentTarget.setPointerCapture(event.pointerId);
-    stickRef.current = { pointerId: event.pointerId, originX: event.clientX, originY: event.clientY };
-    setStickKnob({ x: event.clientX, y: event.clientY });
-  };
-
-  const onStickPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const stick = stickRef.current;
-
-    if (!stick || stick.pointerId !== event.pointerId) return;
-
-    const dx = event.clientX - stick.originX;
-    const dy = event.clientY - stick.originY;
-    const distance = Math.hypot(dx, dy);
-
-    if (distance < STICK_DEADZONE) {
-      gameRef.current?.setMove(0, 0);
-
-      return;
-    }
-
-    const clamped = Math.min(1, distance / STICK_RADIUS);
-    const nx = (dx / distance) * clamped;
-    const ny = (dy / distance) * clamped;
-
-    /* Up on the stick is forward, so the vertical axis is inverted. */
-    gameRef.current?.setMove(-ny, nx);
-    setStickKnob({ x: stick.originX + nx * STICK_RADIUS, y: stick.originY + ny * STICK_RADIUS });
-  };
-
-  const endStick = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (stickRef.current?.pointerId !== event.pointerId) return;
-
-    stickRef.current = null;
-    gameRef.current?.setMove(0, 0);
-    setStickKnob(null);
-  };
 
   const onLookPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (lookRef.current) return;
@@ -1542,26 +1515,7 @@ export function LecturePalace({
               onPointerCancel={endLook}
             />
 
-            {isTouch ? (
-              <div
-                className="memo-palace-stick"
-                onPointerDown={onStickPointerDown}
-                onPointerMove={onStickPointerMove}
-                onPointerUp={endStick}
-                onPointerCancel={endStick}
-                onLostPointerCapture={endStick}
-              >
-                {/* A base at rest, so the stick is somewhere you can see rather
-                    than somewhere you have to know about. */}
-                <span className="memo-palace-stick-base" aria-hidden="true" />
-                {stickKnob ? (
-                  <span
-                    className="memo-palace-knob"
-                    style={{ left: `${stickKnob.x}px`, top: `${stickKnob.y}px` }}
-                  />
-                ) : null}
-              </div>
-            ) : null}
+            {isTouch ? <PalaceStick stick={stick} /> : null}
 
             <button
               type="button"
@@ -1573,11 +1527,17 @@ export function LecturePalace({
             </button>
 
             <div className="memo-palace-hud-top">
-              <span className="memo-palace-score">
+              <span
+                key={toast?.kind === "collected" ? toast.id : "score"}
+                className={`memo-palace-score${toast?.kind === "collected" ? " is-bumped" : ""}`}
+              >
                 <span className="memo-palace-score-token" aria-hidden="true" />
                 {done} <span className="memo-palace-score-slash">/</span> {total}
               </span>
+              <PalaceNextStop pointer={nextStopPointer} />
             </div>
+
+            <PalaceToast toast={toast} />
 
             <button
               type="button"

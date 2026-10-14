@@ -75,7 +75,7 @@ Background streets use a separate predominantly low-rise building mix: no backgr
 
 The city map shows named destinations and progress, but no longer offers teleport shortcuts. Walk speed is tuned to 7.37 m/s and sprint to 12.21 m/s for controlled exploration. Conservatory roofs now have fitted triangular glass end panels and framing on both ends.
 
-Selecting an uncollected destination prioritizes its marker on the minimap without teleporting. The touch stick only walks, slows for careful doorway movement and stops on release, cancellation or lost pointer capture. Sprinting requires holding Shift; collected ground rings briefly acknowledge completion after the study card closes.
+Selecting an uncollected destination prioritizes its marker on the minimap without teleporting. The touch stick walks, slowly near its middle for careful doorway movement, and stops on release, cancellation or lost pointer capture. Dragged past its rim (`STICK_RUN_DISTANCE`, 1.25 × the knob's travel) it runs, at the same 12.21 m/s as Shift on a keyboard, and the ring and knob turn coral; a phone has no Shift key, and before this a phone could never run. Collected ground rings briefly acknowledge completion after the study card closes.
 
 The needle landmark uses three centered, rounded glass volumes with restrained setbacks instead of an offset step on every floor.
 
@@ -88,3 +88,18 @@ Only successful answers collect a memory. A missed flashcard or incorrect quiz a
 Locations and latest results persist per note in optional local storage. Old collected entries without a successful result are returned to the active route. The menu has Start/Continue and Reset; no separate missed-item round. Reset clears results, collections and relocation overrides, restoring the original seeded route. Completion appears only when every item has been collected successfully.
 
 All glass that is meant to be see-through (the skyscrapers' storeys and lobbies, the penthouse, the lift, the café's shop front, the conservatory and greenhouse roofs, the lighthouse lantern) uses one `clear` material. It is almost colourless, 12% opaque, single-sided and writes no depth, so you see what is behind it, with the sky's reflection on top. Tinted `glass` city parts remain for windows that are meant to read as windows from the street.
+
+## Phone experience
+
+Changes made for phones (2026-10), each measured in a headless Chrome at 390×844 with a real GPU, at `/palace-local-qa?large=1`:
+
+- **Framing.** Outdoors the camera aims above the head (`FRAMING_LIFT`, 1.8 m on a portrait screen and 0.9 m on a landscape one, scaled down as a wall pulls the camera in, none indoors or in a moving lift). Aimed at the head, a portrait phone put the horizon at the top edge and spent half the screen on paving; now the walker stands in the lower third with the street, skyline and beacons above.
+- **Arrival.** The camera opens 58 m over the town, behind the walker, and comes down to the normal follow position over 2.6 s (`ARRIVAL_SECONDS`, smootherstep), three times faster once the player moves. Skipped for reduced motion. The follow camera keeps running underneath (`followPosition`), so the hand-over has no jump.
+- **Camera follow.** Walking with the stick turns the camera behind the walker on its own, by the sideways part of the push only (`FOLLOW_TURN_RATE`, 0.65 rad/s at full sideways), never when pulling back towards the camera, and not for 1.2 s after a drag. Keyboard walking is left alone: a desktop has a mouse to look with. Drag-to-look is eased in over about a frame and a half (`LOOK_EASE`), because uneven touch events turned the view in small jerks.
+- **Shadows.** three's PCF filter turns its five taps by per-pixel screen noise meant for a temporal pass this renderer does not have, so edges crawled through a fixed grain as you walked. `atmosphere.ts` replaces that turn with a constant when it is imported (`tests/palace-hud.test.mjs` fails if a three upgrade changes the chunk). The shadowed square moves in whole texels across the sun's view, so edges no longer shimmer, and it is centred 30 m ahead along the view (`SHADOW_LEAD`), which puts its far edge about where the haze begins instead of across the street. The soft edge is held to the same width on the ground on both map sizes (radius 1.5 on a phone's 1024 map, 3 on 2048).
+- **Resolution.** A phone starts at 1.5× and moves a step (1, 1.25, 1.5, 1.75, never past the device's own ratio) by the median frame time of each second: coarser over 21 ms, finer after three seconds in a row under 13 ms.
+- **Vignette.** Phones have no finishing pass, so the corner darkening is a CSS gradient on the look layer under the 1100px breakpoint.
+- **Next memory.** Under the score, an arrow and a distance to the stop picked on the map, otherwise the nearest (`nextStop` in `navigation.ts`), turned with the camera. Written to the DOM from the frame callback, never through state. Hidden within 4 m and while a card is open.
+- **After a card.** Once the sheet closes, a line says what happened: "Memory collected" (and the score pops), or that a missed stop moved and needs finding again.
+
+The stick, the pointer and the line are shared with the landing page's demo through `src/components/palace-hud.tsx`, so the two cannot drift.

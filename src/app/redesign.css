@@ -19611,11 +19611,16 @@
     right: 4.2rem;
   }
 
-  /*
-   * Phones draw without the finishing pass (see `post.ts`), which is where the
-   * desktop's vignette lives. The same darkening at the corners costs a phone
-   * nothing as a layer over the canvas, and it seats the HUD on the picture.
-   */
+}
+
+/*
+ * Under 900px the engine draws without its finishing pass (`onAPhone` in
+ * `game.ts`; see `post.ts`), which is where the desktop's vignette lives. The
+ * same darkening at the corners costs a phone nothing as a layer over the
+ * canvas, and it seats the HUD on the picture. Not at the 1100px breakpoint:
+ * between the two the finishing pass runs and would darken the corners twice.
+ */
+@media (max-width: 899px) {
   .memo-palace-canvas + .memo-palace-look {
     background: radial-gradient(ellipse 120% 90% at 50% 55%, transparent 58%, var(--photo-chip) 135%);
   }

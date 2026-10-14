@@ -613,6 +613,8 @@ export function LecturePalace({
     gradingRef.current?.abort();
     clearDismiss();
     answeredRef.current = null;
+    /* A line queued by a card the walk was left from is history; never show it under a new card. */
+    if (stationId) queueToast(null);
     setStation(stationId ? layoutRef.current?.stations.find(entry => entry.id === stationId) ?? null : null);
     setNearStationId(stationId);
     setIsFlipped(false);
@@ -622,7 +624,7 @@ export function LecturePalace({
     setIsTestUnknown(false);
     setIsMarking(false);
     setMark(null);
-  }, [clearDismiss]);
+  }, [clearDismiss, queueToast]);
 
   useEffect(() => {
     if (!station || stationItem) return;
@@ -724,10 +726,13 @@ export function LecturePalace({
     onLeaveRef.current = onLeave;
   }, [onLeave]);
 
+  /* Closed under a thumb, the stick never hears it lift; it is let go here, or the next visit's is dead. */
+  const resetStick = stick.reset;
   const leaveGame = useCallback(() => {
+    resetStick();
     setIsOpen(false);
     onLeaveRef.current?.();
-  }, []);
+  }, [resetStick]);
 
   /*
    * Opening clears the built flag in the same update that opens the overlay,
@@ -753,6 +758,7 @@ export function LecturePalace({
 
     const onPopState = () => {
       /* The entry is already gone, so this must not walk history again. */
+      resetStick();
       setIsOpen(false);
       onLeaveRef.current?.();
     };
@@ -767,7 +773,7 @@ export function LecturePalace({
         window.history.back();
       }
     };
-  }, [isOpen]);
+  }, [isOpen, resetStick]);
 
   /* The page behind must not scroll under the town while it is open. */
   useEffect(() => {

@@ -135,6 +135,8 @@ class NextStopPointer {
   mount(parts: NextStopPointer["parts"]) {
     this.parts = parts;
     this.shown = { visible: false, distance: -1 };
+    /* The cache starts hidden, so the element must too, or a remount leaves a stale arrow up. */
+    if (parts) parts.element.dataset.visible = "false";
   }
 
   update = (

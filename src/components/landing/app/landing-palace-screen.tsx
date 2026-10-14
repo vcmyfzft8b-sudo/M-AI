@@ -415,13 +415,15 @@ export function LandingPalaceScreen({
     (stationId: string | null) => {
       clearDismiss();
       answeredRef.current = null;
+      /* A line queued by a card the walk was left from is history; never show it under a new card. */
+      if (stationId) queueToast(null);
       const next = stationId ? layoutRef.current?.stations.find((entry) => entry.id === stationId) ?? null : null;
       setStation(next);
       setIsFlipped(false);
       setQuizChoice(null);
       setQuizOrder(next?.kind === "quiz" ? shuffleIndices(quizById.get(next.id)?.options.length ?? 0) : []);
     },
-    [clearDismiss, quizById],
+    [clearDismiss, queueToast, quizById],
   );
 
   const leaveStation = useCallback(() => {

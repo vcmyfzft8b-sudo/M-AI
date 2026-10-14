@@ -346,6 +346,8 @@ export function createPalaceGame({
    * Skipped for reduced motion; hurried along once the player starts walking.
    */
   let arrival = reducedMotion ? 1 : 0;
+  /* True while the opening shot owns the camera's position. */
+  let arrivalActive = !reducedMotion;
   const arrivalFrom = new THREE.Vector3();
   const arrivalLook = new THREE.Vector3();
   /* Where the following camera really is while the opening shot overrides it. */
@@ -420,6 +422,21 @@ export function createPalaceGame({
 
   camera.position.set(spawnCamera.x, Math.max(spawnCamera.y, 1.2), spawnCamera.z);
   camera.lookAt(character.x, character.y + 1.6, character.z);
+
+  /*
+   * The opening shot starts here, before the first picture, so the first frame
+   * is already the view from above rather than a street-level frame cut away from.
+   */
+  if (arrivalActive) {
+    const eye = { x: character.x, y: character.y + 0.9, z: character.z };
+
+    followPosition.copy(camera.position);
+    /* High behind the walker's back and well out, looking down the way they face. */
+    arrivalFrom.set(eye.x - Math.sin(cameraYaw) * 46, eye.y + 58, eye.z - Math.cos(cameraYaw) * 46);
+    arrivalLook.set(eye.x + Math.sin(cameraYaw) * 30, 0, eye.z + Math.cos(cameraYaw) * 30);
+    camera.position.copy(arrivalFrom);
+    camera.lookAt(arrivalLook);
+  }
   lighting.update(0, camera);
   draw();
 
@@ -530,7 +547,7 @@ export function createPalaceGame({
     lastTime = time;
 
     /* Last frame showed the opening shot; the follow camera carries on from where it really was. */
-    if (arrival > 0 && arrival < 1) camera.position.copy(followPosition);
+    if (arrivalActive) camera.position.copy(followPosition);
 
     const keyboard = readKeyboard();
     const input = interacting
@@ -554,7 +571,8 @@ export function createPalaceGame({
     cameraYaw += pendingLook.yaw * lookShare;
     cameraPitch = clampPitch(cameraPitch + pendingLook.pitch * lookShare);
     pendingLook.yaw *= 1 - lookShare;
-    pendingLook.pitch *= 1 - lookShare;
+    /* Only as much tilt as is left before the limit, so a drag back the other way is not swallowed. */
+    pendingLook.pitch = clampPitch(cameraPitch + pendingLook.pitch * (1 - lookShare)) - cameraPitch;
     sinceLook += delta;
 
     /*
@@ -742,16 +760,7 @@ export function createPalaceGame({
 
     lookPoint.set(eye.x, plainY + (framedY - plainY) * framing, eye.z);
 
-    if (arrival < 1) {
-      if (arrival === 0) {
-        /* High behind the walker's back and well out, looking down the way they face. */
-        arrivalFrom.set(
-          eye.x - Math.sin(cameraYaw) * 46,
-          eye.y + 58,
-          eye.z - Math.cos(cameraYaw) * 46,
-        );
-        arrivalLook.set(eye.x + Math.sin(cameraYaw) * 30, 0, eye.z + Math.cos(cameraYaw) * 30);
-      }
+    if (arrivalActive) {
       const moving = Math.abs(input.forward) + Math.abs(input.right) > 0.05;
 
       arrival = Math.min(1, arrival + (delta / ARRIVAL_SECONDS) * (moving ? 3 : 1));
@@ -762,9 +771,11 @@ export function createPalaceGame({
       followPosition.copy(camera.position);
       camera.position.lerpVectors(arrivalFrom, followPosition, ease);
       lookPoint.lerpVectors(arrivalLook, lookPoint, ease);
+      if (arrival >= 1) arrivalActive = false;
     }
     camera.lookAt(lookPoint);
-    crowd.clearView(delta, camera.position, character);
+    /* From the aerial view nobody is in the way, and fading by its line would be wrong. */
+    if (!arrivalActive) crowd.clearView(delta, camera.position, character);
 
     /* A wider lens indoors, so a room is a room rather than a wall and a back. */
     indoorBlend += ((indoors ? 1 : 0) - indoorBlend) * (1 - Math.exp(-delta * 4));
@@ -895,6 +906,8 @@ export function createPalaceGame({
         cameraYaw = yaw;
         pendingLook.yaw = 0;
         pendingLook.pitch = 0;
+        arrival = 1;
+        arrivalActive = false;
         if (pitch !== undefined) cameraPitch = clampPitch(pitch);
         camera.position.set(x - Math.sin(yaw) * 8, 5, z - Math.cos(yaw) * 8);
       },

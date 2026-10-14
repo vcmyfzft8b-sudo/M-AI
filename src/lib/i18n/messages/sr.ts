@@ -2134,7 +2134,10 @@ export const sr: Messages = {
 
   /* Palata pamćenja: grad u kojem su raspoređene kartice beleške. */
   "note.tab.palace": "Palata",
-  "palace.hintTouch": "Levi palac za hodanje · povuci desno za pogled",
+  "palace.next": "Sledeća uspomena, udaljena {distance} m",
+  "palace.toast.collected": "Uspomena pokupljena",
+  "palace.toast.moved": "Još ne. Premestila se na novo mesto, pronađi je ponovo",
+  "palace.hintTouch": "Levi palac za hodanje, gurni do ivice za trčanje · povuci desno za pogled",
   "palace.reviewMissed": "Ponovi nepoznate ({count})",
   "palace.inside": "Unutra",
   "palace.outside": "Napolju",

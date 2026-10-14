@@ -2154,7 +2154,10 @@ export const sl = {
 
   /* Palača spomina: mesto, po katerem se sprehodiš skozi kartice zapiska. */
   "note.tab.palace": "Palača",
-  "palace.hintTouch": "Levi palec za hojo · povleci desno za pogled",
+  "palace.next": "Naslednji spomin, {distance} m stran",
+  "palace.toast.collected": "Spomin pobran",
+  "palace.toast.moved": "Še ne. Premaknil se je drugam, poišči ga znova",
+  "palace.hintTouch": "Levi palec za hojo, potisni do roba za tek · povleci desno za pogled",
   "palace.reviewMissed": "Ponovi neznane ({count})",
   "palace.inside": "Znotraj",
   "palace.outside": "Zunaj",

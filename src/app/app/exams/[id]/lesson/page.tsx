@@ -48,6 +48,7 @@ export default async function ExamLessonPage({
   return (
     <ExamLesson
       examId={detail.exam.id}
+      examTitle={detail.exam.title}
       kind={query.kind}
       module={{
         lectureId: current.lectureId,

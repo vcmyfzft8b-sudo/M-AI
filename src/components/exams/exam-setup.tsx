@@ -242,7 +242,14 @@ export function ExamSetup({
   );
 
   return (
-    <ExamScreen backHref="/app/exams" backIcon="close" title={t("exam.setup.title")} cta={cta}>
+    <ExamScreen
+      backHref="/app/exams"
+      backIcon="close"
+      backLabel={t("common.back")}
+      historyBack
+      title={t("exam.setup.title")}
+      cta={cta}
+    >
       {offlineToast}
       <div className="memo-progress memo-exam-steps" aria-label={t("exam.setup.stepOf", { step: stepIndex + 1, total: STEPS.length })}>
         <div style={{ width: `${Math.round(((stepIndex + 1) / STEPS.length) * 100)}%` }} />

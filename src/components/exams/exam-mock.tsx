@@ -48,6 +48,7 @@ function clock(seconds: number) {
 
 export function ExamMock({
   examId,
+  examTitle,
   moduleCount,
   passPercentage,
   hasPaidAccess,
@@ -55,6 +56,7 @@ export function ExamMock({
   lastResult,
 }: {
   examId: string;
+  examTitle: string;
   moduleCount: number;
   passPercentage: number;
   hasPaidAccess: boolean;
@@ -203,6 +205,7 @@ export function ExamMock({
     return (
       <ExamScreen
         backHref={examHref}
+        backLabel={examTitle}
         backIcon="close"
         title={t("exam.mock.title")}
         cta={
@@ -276,7 +279,8 @@ export function ExamMock({
 
   if (phase.name === "grading") {
     return (
-      <ExamScreen backHref={examHref} backIcon="close" title={t("exam.mock.title")}>
+      <ExamScreen backHref={examHref}
+        backLabel={examTitle} backIcon="close" title={t("exam.mock.title")}>
         <div className="memo-exam-center memo-exam-grading" role="status" aria-live="polite">
           <MemoBuddy mood="think" size="7rem" thought="📝" />
           <h1 className="memo-exam-step-title">{t("exam.mock.grading.title")}</h1>
@@ -296,6 +300,7 @@ export function ExamMock({
     return (
       <ExamScreen
         backHref={examHref}
+        backLabel={examTitle}
         backIcon="close"
         title={t("exam.mock.result.title")}
         cta={
@@ -446,6 +451,7 @@ export function ExamMock({
   return (
     <ExamScreen
       backHref={examHref}
+        backLabel={examTitle}
       backIcon="close"
       title={clock(secondsLeft)}
       trailing={

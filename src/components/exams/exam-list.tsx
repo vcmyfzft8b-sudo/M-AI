@@ -53,13 +53,19 @@ export function ExamList({ items }: { items: ExamListItem[] }) {
     <ExamScreen
       backHref="/app"
       title={t("exam.list.title")}
+      ctaOnDesktop={false}
       cta={
         <button type="button" className="memo-button-coral" onClick={() => navigateWithFeedback("/app/exams/new")}>
           <Msym name="add" size="1.3rem" fill={false} /> {t("exam.list.new")}
         </button>
       }
     >
-      <h1 className="memo-exam-step-title memo-only-desktop">{t("exam.list.title")}</h1>
+      <header className="memo-exam-head">
+        <h1 className="memo-exam-step-title">{t("exam.list.title")}</h1>
+        <button type="button" className="memo-primary-pill memo-exam-head-action" onClick={() => navigateWithFeedback("/app/exams/new")}>
+          <Msym name="add" size="1.25rem" fill={false} /> {t("exam.list.new")}
+        </button>
+      </header>
 
       {items.length === 0 ? (
         <div className="memo-exam-empty">

@@ -25705,94 +25705,98 @@ button.memo-exam-card:hover {
   font-weight: 700;
 }
 
+/*
+ * Exam prep's row in the "Novo" sheet: the size and shape of the note sources under it
+ * (`.memo-sheet-option`), so it reads as one of the choices. It is the primary by its coral — the
+ * tinted tile Memo sits in, a coral edge and the small "Začni" pill — not by being bigger.
+ */
 .memo-exam-entry {
-  position: relative;
-  overflow: hidden;
-  border-radius: 22px;
-  background: var(--coral);
-  box-shadow: var(--memo-coral-glow);
-  color: #fff;
-}
-
-.memo-exam-entry-main {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.35rem;
+  align-items: center;
+  gap: 1.05rem;
   width: 100%;
-  padding: 1rem 6.4rem 1.1rem 1.25rem;
+  min-height: 4.6rem;
+  padding: 0.55rem 0.9rem 0.55rem 1.2rem;
   border: 0;
-  background: transparent;
-  color: inherit;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--promo) 55%, transparent);
+  color: var(--text);
   cursor: pointer;
   font: inherit;
   text-align: left;
+  transition:
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.16s ease;
 }
 
-.memo-exam-entry-tag {
-  padding: 0.2rem 0.6rem;
+.memo-exam-entry:hover {
+  box-shadow: var(--shadow), inset 0 0 0 1.5px var(--promo);
+}
+
+.memo-exam-entry:active {
+  transform: scale(0.972);
+}
+
+.memo-exam-entry:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow), inset 0 0 0 1.5px var(--promo), 0 0 0 3px var(--focus-ring);
+}
+
+.memo-exam-entry-tile {
+  display: grid;
+  flex: 0 0 auto;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.22);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  background: color-mix(in srgb, var(--promo) 16%, var(--surface));
+}
+
+.memo-exam-entry-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
 }
 
 .memo-exam-entry-title {
-  font-size: 1.3rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
+  overflow: hidden;
+  font-size: 1.12rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.memo-exam-entry-body {
-  font-size: 0.95rem;
-  opacity: 0.92;
+.memo-exam-entry-sub {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .memo-exam-entry-go {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 0.3rem;
-  height: 2.6rem;
-  margin-top: 0.35rem;
-  padding: 0 1.05rem;
+  height: 2.4rem;
+  padding: 0 1rem;
   border-radius: 999px;
-  background: #fff;
-  color: var(--promo);
-  font-weight: 800;
-}
-
-.memo-exam-entry-buddy {
-  position: absolute;
-  right: 0.7rem;
-  bottom: 0.6rem;
-  pointer-events: none;
-}
-
-.memo-exam-entry-buddy .memo-buddy {
-  pointer-events: auto;
-}
-
-.memo-exam-entry-more {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  height: 2.2rem;
-  padding: 0 0.85rem;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--coral);
+  box-shadow: var(--memo-coral-glow);
   color: #fff;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-size: 0.95rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
 }
 
 .memo-exam-entry-desktop {
-  margin: 1.2rem 0 1.6rem;
+  margin: 1.2rem 0 0.85rem;
 }
 
 .memo-exam-sheet-label {
@@ -25802,6 +25806,58 @@ button.memo-exam-card:hover {
 
 .memo-sheet .memo-exam-entry {
   margin-top: 0.4rem;
+}
+
+/* --- navigation ----------------------------------------------------------- */
+
+/* Desktop's labelled way back: where it goes, in words, above the title. */
+.memo-exam-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.7rem;
+  padding: 0 1.05rem 0 0.85rem;
+  border: var(--btn-border-width) solid var(--btn-border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  max-width: 22rem;
+  transition: box-shadow 0.16s ease;
+}
+
+.memo-exam-crumb span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-exam-crumb:hover {
+  box-shadow: var(--shadow), inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-exam-crumb:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-exam-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.4rem;
+}
+
+.memo-exam-head-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 /* --- lesson --------------------------------------------------------------- */
@@ -26218,17 +26274,65 @@ button.memo-exam-card:hover {
     display: none;
   }
 
+  /* The phone has its floating round button; the labelled link is desktop's. */
+  .memo-exam-crumb,
+  .memo-exam-head {
+    display: none;
+  }
+
   .memo-exam-strip-day {
     padding: 0.45rem 0;
   }
 }
 
 @media (min-width: 1100px) {
-  .memo-exam-topbar-title {
+  .memo-exam-topbar-title,
+  .memo-exam-back-round,
+  .memo-exam-cta.phone-only {
     display: none;
+  }
+
+  .memo-exam-topbar {
+    max-width: 46rem;
+    margin-bottom: 1.2rem;
+  }
+
+  /* A screen the rail opens needs no way back, so its bar goes unless it carries actions. */
+  .memo-exam-topbar.no-desktop-back:not(:has(.memo-exam-topbar-trailing > *)) {
+    display: none;
+  }
+
+  .memo-exam-topbar.no-desktop-back {
+    justify-content: flex-end;
   }
 
   .memo-exam-page {
     padding-bottom: 1rem;
+  }
+
+  /* Buttons at their own width, held at the bottom of the window while the page scrolls. */
+  .memo-exam-cta {
+    position: sticky;
+    bottom: 1.5rem;
+    z-index: 5;
+    display: flex;
+  }
+
+  .memo-exam-cta > .memo-button-coral,
+  .memo-exam-cta-row > .memo-button-coral {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 16rem;
+    padding: 0 2rem;
+  }
+
+  .memo-exam-cta-row,
+  .memo-exam-cta > .memo-exam-cta-row {
+    width: auto;
+  }
+
+  .memo-exam-zone .memo-exam-cta-row,
+  .memo-exam-done .memo-exam-cta-col {
+    width: 100%;
   }
 }

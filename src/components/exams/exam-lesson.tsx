@@ -61,11 +61,13 @@ export type ExamLessonModule = {
 
 export function ExamLesson({
   examId,
+  examTitle,
   module,
   kind,
   nextModule,
 }: {
   examId: string;
+  examTitle: string;
   module: ExamLessonModule;
   kind: ExamLessonKind;
   nextModule: { lectureId: string; title: string } | null;
@@ -177,7 +179,7 @@ export function ExamLesson({
   const title = `${t("exam.dash.module", { index: module.position + 1 })} · ${t(LESSON_KIND_KEY[kind])}`;
 
   return (
-    <ExamScreen backHref={examHref} backIcon="close" title={title}>
+    <ExamScreen backHref={examHref} backIcon="close" backLabel={examTitle} title={title}>
       <div className="memo-exam-lesson-head">
         <div className="memo-exam-lesson-steps" aria-label={t("exam.lesson.progress", { index: kindIndex + 1, total: EXAM_LESSON_KINDS.length })}>
           {EXAM_LESSON_KINDS.map((entry, index) => (

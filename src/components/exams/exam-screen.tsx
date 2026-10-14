@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { Msym } from "@/components/msym";
@@ -7,45 +8,75 @@ import { useInstantNavigation } from "@/components/navigation-loading";
 import { useT } from "@/components/i18n-provider";
 
 /**
- * The frame every exam screen shares, built the way the app's other full screens are: on the
- * phone a fixed `.memo-screen` with one scroller and a floating top bar, on desktop a page in the
- * shell's main column. An optional `cta` is pinned to the bottom on the phone and sits under the
- * content on desktop.
+ * The frame every exam screen shares, built the way the app's other full screens are.
+ *
+ * Phone: a fixed `.memo-screen` with one scroller, a floating round back (or close) button and
+ * the screen's name centred in the bar, and the `cta` pinned to the bottom.
+ *
+ * Desktop: the rail is the navigation, so a screen the rail opens (`backLabel` omitted) has no
+ * back control at all, as Settings has none. A screen deeper than that gets a small labelled
+ * link above its title that says where it goes ("← Izpiti"), rather than an unlabelled circle.
+ * The `cta` sits under the content at its natural width, held at the bottom of the window while
+ * the page scrolls; `ctaOnDesktop={false}` leaves it to the screen's own header instead.
  */
 export function ExamScreen({
   backHref,
   backIcon = "arrow_back",
+  backLabel,
+  historyBack = false,
   title,
   trailing,
   cta,
+  ctaOnDesktop = true,
   children,
   className,
 }: {
   backHref: string;
   backIcon?: "arrow_back" | "close";
+  /** The destination's name, shown on desktop. Omit on screens the rail itself opens. */
+  backLabel?: string;
+  /** Go back to wherever the learner came from when there is somewhere to go back to. */
+  historyBack?: boolean;
   title?: string;
   trailing?: ReactNode;
   cta?: ReactNode;
+  ctaOnDesktop?: boolean;
   children: ReactNode;
   className?: string;
 }) {
   const t = useT();
+  const router = useRouter();
   const { navigateWithFeedback, overlay, isNavigating } = useInstantNavigation();
+
+  function goBack() {
+    if (historyBack && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    navigateWithFeedback(backHref);
+  }
 
   return (
     <>
       {overlay}
       <div className={["memo-screen memo-exam-screen", className ?? ""].filter(Boolean).join(" ")}>
-        <div className="memo-exam-topbar">
+        <div className={`memo-exam-topbar ${backLabel ? "" : "no-desktop-back"}`.trim()}>
           <button
             type="button"
-            className="memo-close-button"
+            className="memo-close-button memo-exam-back-round"
             aria-label={backIcon === "close" ? t("common.close") : t("common.back")}
             aria-busy={isNavigating}
-            onClick={() => navigateWithFeedback(backHref)}
+            onClick={goBack}
           >
             <Msym name={backIcon} size="1.45rem" fill={false} weight={500} />
           </button>
+          {backLabel ? (
+            <button type="button" className="memo-exam-crumb" aria-busy={isNavigating} onClick={goBack}>
+              <Msym name="arrow_back" size="1.15rem" fill={false} weight={500} />
+              <span>{backLabel}</span>
+            </button>
+          ) : null}
           {title ? <span className="memo-exam-topbar-title">{title}</span> : <span />}
           <span className="memo-exam-topbar-trailing">{trailing}</span>
         </div>
@@ -54,7 +85,9 @@ export function ExamScreen({
           <div className={`memo-page memo-exam-page ${cta ? "has-cta" : ""}`.trim()}>{children}</div>
         </div>
 
-        {cta ? <div className="memo-exam-cta">{cta}</div> : null}
+        {cta ? (
+          <div className={`memo-exam-cta ${ctaOnDesktop ? "" : "phone-only"}`.trim()}>{cta}</div>
+        ) : null}
       </div>
     </>
   );

@@ -42,6 +42,7 @@ export default async function ExamMockPage({ params }: { params: Promise<{ id: s
   return (
     <ExamMock
       examId={detail.exam.id}
+      examTitle={detail.exam.title}
       moduleCount={detail.modules.length}
       passPercentage={detail.exam.pass_percentage}
       hasPaidAccess={Boolean(appState?.hasPaidAccess)}

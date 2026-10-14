@@ -331,6 +331,36 @@ These are shared PWA changes; no separate native library UI was introduced.
 7. Create and validate a dedicated synthetic review account: list it in `APP_REVIEW_ACCOUNT_EMAILS`, set `APP_REVIEW_LOGIN_CODE`, and give App Store Connect the e-mail as the user name and the code as the password. The reviewer signs in through the ordinary "Continue with email" flow. Do not store the code in this repository.
 8. Select the build and all four subscriptions and submit only when all required fields/checks are complete.
 
+### After a rejection or an "Information Needed" request
+
+**Replying is not resubmitting.** A reply in the App Review thread does not put the app back
+in the queue. The submission stays in *Unresolved Issues*, the version stays *Rejected*, and
+**Resubmit to App Review** stays greyed out until the rejected item is marked resolved. Apple
+does not wait on its own; it waits for us. Memo 1.0 sat there for 16 days (28 September –
+14 October 2026) while we sent follow-ups and a support case to a queue that was never going
+to pick it up.
+
+1. Do what the message asks: the fix, the new build or the information, in the reply **and**
+   in App Review Information → Notes when Apple asks for both. Attach files in the browser;
+   the API cannot add a message attachment.
+2. Resubmit **the same submission** straight after replying, so the thread, the attachments
+   and the in-app purchases stay with it. Run each step with `node scripts/apple/asc-api.mjs`:
+   - `GET /v1/reviewSubmissions?filter[app]=6812409212`: the submission in
+     `UNRESOLVED_ISSUES`.
+   - `GET /v1/reviewSubmissions/{id}/items`: the item in `REJECTED`.
+   - `PATCH /v1/reviewSubmissionItems/{itemId}` with
+     `{"data":{"type":"reviewSubmissionItems","id":"{itemId}","attributes":{"resolved":true}}}`.
+     The item turns `READY_FOR_REVIEW`.
+   - `PATCH /v1/reviewSubmissions/{id}` with
+     `{"data":{"type":"reviewSubmissions","id":"{id}","attributes":{"submitted":true}}}`.
+     The submission and the version turn `WAITING_FOR_REVIEW`.
+3. Confirm with a `GET` that every item (the version, all subscriptions, the tutor hour and the
+   group) is `READY_FOR_REVIEW`, and that the version is `WAITING_FOR_REVIEW`.
+
+Only contact Apple Developer Support (Contact Us → App Review → App Review Status) when a
+submission is already `WAITING_FOR_REVIEW` or `IN_REVIEW` and has had no answer for several
+working days. The `/contact/app-store/` form has no status option.
+
 Apple evaluates the app's utility and overall experience under [review guideline 4.2](https://developer.apple.com/app-store/review/guidelines/#minimum-functionality); native billing and sharing alone do not guarantee approval. Also check [account deletion requirements](https://developer.apple.com/support/offering-account-deletion-in-your-app), [privacy disclosures](https://developer.apple.com/app-store/app-privacy-details/), and [current submission requirements](https://developer.apple.com/app-store/submitting/).
 
 ### Keyboard motion (bridge v4)

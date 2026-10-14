@@ -12,6 +12,7 @@ import { ChatMarkdown } from "@/components/chat-markdown";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { sheetClass, useSheet } from "@/components/use-sheet";
+import { currentPaywallBack, paywallPath, withPaywallBack } from "@/lib/paywall-reasons";
 import { requestChatAnswer } from "@/lib/chat-stream-client";
 import { getRequestErrorMessage } from "@/lib/request-error-message";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -189,7 +190,7 @@ export function LibraryChat({
     }
 
     if (!hasPaidAccess) {
-      navigateWithFeedback("/app/start");
+      navigateWithFeedback(withPaywallBack(paywallPath("library"), currentPaywallBack()));
       return;
     }
 

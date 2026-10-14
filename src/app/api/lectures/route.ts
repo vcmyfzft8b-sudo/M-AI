@@ -70,6 +70,7 @@ export async function POST(request: Request) {
     return createBillingRequiredResponse(
       await tr("api.trialExhausted"),
       "trial_exhausted",
+      "note",
     );
   }
 
@@ -140,6 +141,7 @@ export async function POST(request: Request) {
       return createBillingRequiredResponse(
         await tr("api.trialAlreadyUsed"),
         "trial_exhausted",
+        "note",
       );
     }
 

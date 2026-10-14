@@ -16,6 +16,7 @@ import { useNativeIOS } from "@/lib/mobile/client";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { clearOfferResume } from "@/lib/offer-resume";
 import { formatCurrency } from "@/lib/utils";
+import type { PaywallReason } from "@/lib/paywall-reasons";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -34,6 +35,45 @@ type BillingPlanCard = {
   annualizedAmount: number;
   blurbKey: MessageKey;
 };
+
+type PaywallBenefit = { titleKey: MessageKey; copyKey: MessageKey; icon: string };
+
+const DEFAULT_BENEFITS: readonly PaywallBenefit[] = [
+  { titleKey: "paywall.benefit.notesTitle", copyKey: "paywall.benefit.notesCopy", icon: "📝" },
+  { titleKey: "paywall.benefit.toolsTitle", copyKey: "paywall.benefit.toolsCopy", icon: "💡" },
+  { titleKey: "paywall.benefit.speedTitle", copyKey: "paywall.benefit.speedCopy", icon: "⚡" },
+];
+
+const REASON_ICONS: Record<PaywallReason, string> = {
+  note: "📝",
+  locked: "📚",
+  chat: "💬",
+  listen: "🎧",
+  tutor: "🎓",
+  podcast: "🎙️",
+  regenerate: "🔄",
+  library: "🗂️",
+};
+
+/**
+ * The thing the learner just tried goes first, in place of the default benefit
+ * it is closest to, so the list stays three rows long. The screen is sized to
+ * land on exactly one viewport, and a fourth row would push the button under
+ * the fold.
+ */
+function benefitsFor(reason: PaywallReason | null): readonly PaywallBenefit[] {
+  if (!reason) {
+    return DEFAULT_BENEFITS;
+  }
+
+  const lead: PaywallBenefit = {
+    titleKey: `paywall.reason.${reason}.benefitTitle`,
+    copyKey: `paywall.reason.${reason}.benefitCopy`,
+    icon: REASON_ICONS[reason],
+  };
+  const replaced = reason === "note" || reason === "locked" ? 0 : 2;
+  return [lead, ...DEFAULT_BENEFITS.filter((_, index) => index !== replaced)];
+}
 
 /**
  * Only the one message the buyer cannot work out for themselves.
@@ -68,6 +108,8 @@ export function OnboardingPaywall({
   hasPaidAccess,
   subscriptionTrialEligible = true,
   plans,
+  reason = null,
+  backHref = null,
 }: {
   profile: ProfileRow | null;
   subscription: BillingSubscriptionRow | null;
@@ -75,6 +117,10 @@ export function OnboardingPaywall({
   hasPaidAccess: boolean;
   subscriptionTrialEligible?: boolean;
   plans: BillingPlanCard[];
+  /** What sent the learner here; names it in the headline and first benefit. */
+  reason?: PaywallReason | null;
+  /** Where closing returns to: the screen they were on, or home. */
+  backHref?: string | null;
 }) {
   const { locale, t } = useTranslations();
   const native = useNativeIOS();
@@ -152,7 +198,7 @@ export function OnboardingPaywall({
           <button
             type="button"
             className="memo-close-button app-start-close-button"
-            onClick={() => navigateWithFeedback("/app")}
+            onClick={() => navigateWithFeedback(backHref ?? "/app")}
             aria-label={t("paywall.close")}
           >
             <Msym name="close" size="1.45rem" fill={false} weight={500} />
@@ -186,28 +232,12 @@ export function OnboardingPaywall({
         </div>
       )}
 
-      <h1 className="memo-paywall-title">{t("paywall.title")}</h1>
+      <h1 className="memo-paywall-title">
+        {t(reason ? `paywall.reason.${reason}.title` : "paywall.title")}
+      </h1>
 
       <div className="memo-paywall-benefits">
-        {(
-          [
-            {
-              titleKey: "paywall.benefit.notesTitle",
-              copyKey: "paywall.benefit.notesCopy",
-              icon: "📝",
-            },
-            {
-              titleKey: "paywall.benefit.toolsTitle",
-              copyKey: "paywall.benefit.toolsCopy",
-              icon: "💡",
-            },
-            {
-              titleKey: "paywall.benefit.speedTitle",
-              copyKey: "paywall.benefit.speedCopy",
-              icon: "⚡",
-            },
-          ] as const
-        ).map((benefit) => (
+        {benefitsFor(reason).map((benefit) => (
           <div className="memo-paywall-benefit" key={benefit.titleKey}>
             <span aria-hidden="true">{benefit.icon}</span>
             <div>

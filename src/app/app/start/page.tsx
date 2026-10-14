@@ -7,8 +7,17 @@ import {
   getViewerAppState,
   purchasableBillingPlansFor,
 } from "@/lib/billing";
+import { isPaywallReason, readPaywallBack } from "@/lib/paywall-reasons";
 
-export default async function AppStartPage() {
+export default async function AppStartPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ for?: string | string[]; back?: string | string[] }>;
+}) {
+  const query = await searchParams;
+  const reason = isPaywallReason(query.for) ? query.for : null;
+  const backHref = readPaywallBack(query.back);
+
   // The survey answered before signing in is claimed by the layout, which has
   // to do it there rather than here: `getViewerAppState` is memoised per
   // request and the layout reads it first, so a claim made at this point would
@@ -40,6 +49,8 @@ export default async function AppStartPage() {
         hasPaidAccess={appState.hasPaidAccess}
         subscriptionTrialEligible={subscriptionTrialEligible}
         plans={purchasableBillingPlansFor(await getPricingCountry())}
+        reason={reason}
+        backHref={backHref}
       />
     </main>
   );

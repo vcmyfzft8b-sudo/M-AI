@@ -28,7 +28,11 @@ export async function POST(
   }
 
   if (!(await hasPaidAccessForUserId(user.id))) {
-    return createBillingRequiredResponse(await tr("api.paidRequired.regenTest"));
+    return createBillingRequiredResponse(
+      await tr("api.paidRequired.regenTest"),
+      "subscription_required",
+      "regenerate",
+    );
   }
 
   const limited = await enforceRateLimit({

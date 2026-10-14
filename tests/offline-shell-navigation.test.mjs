@@ -96,11 +96,12 @@ test("an unentitled tap on the home screen goes through the navigation path", ()
 
   assert.doesNotMatch(
     home,
-    /if \(!canCreateNotes\) \{\s*router\.(push|replace)\(startHref\)/,
+    /if \(!canCreateNotes\) \{\s*router\.(push|replace)\(\w+\)/,
     "the upgrade screen must be reached through navigateWithFeedback, which knows about the shell",
   );
   assert.match(
     home,
-    /if \(!canCreateNotes\) \{\s*navigateDashboardWithFeedback\(startHref\);/,
+    // The note-specific paywall (`?for=note`), reached the same way.
+    /if \(!canCreateNotes\) \{\s*navigateDashboardWithFeedback\(newNotePaywallHref\);/,
   );
 });

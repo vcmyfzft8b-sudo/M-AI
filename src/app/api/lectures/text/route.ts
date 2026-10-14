@@ -63,6 +63,7 @@ export async function POST(request: Request) {
     return createBillingRequiredResponse(
       await tr("api.trialOnly.process"),
       "trial_exhausted",
+      "note",
     );
   }
 

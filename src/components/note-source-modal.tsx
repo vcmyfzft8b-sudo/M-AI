@@ -29,6 +29,7 @@ import { useInstantNavigation } from "@/components/navigation-loading";
 import { MemoPortal } from "@/components/memo-portal";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { Emoji, Msym } from "@/components/msym";
+import { currentPaywallBack, paywallPath, withPaywallBack } from "@/lib/paywall-reasons";
 import { createAudioLectureWithProcessingChunks } from "@/lib/audio-lecture-upload";
 import {
   AUDIO_FILE_INPUT_ACCEPT,
@@ -441,7 +442,7 @@ export function NoteSourceModal({
     }
 
     onClose();
-    router.replace("/app/start");
+    router.replace(withPaywallBack(paywallPath("note"), currentPaywallBack()));
   }, [canCreateNotes, onClose, open, router]);
 
   // Creator demo: stage a file for the visible source, so the creator can hit
@@ -587,7 +588,7 @@ export function NoteSourceModal({
 
   function redirectToPaywall() {
     onClose();
-    navigateWithFeedback("/app/start");
+    navigateWithFeedback(withPaywallBack(paywallPath("note"), currentPaywallBack()));
   }
 
   const replaceAudioSource = useCallback(async (nextSource: AudioSource) => {

@@ -8,7 +8,7 @@ import {
   ensureStripeCustomer,
   getBillingCancelUrl,
   getBillingSuccessUrl,
-  getPriceIdForPlan,
+  getCheckoutPriceId,
   getStripeClient,
   getViewerAppState,
   hasStripeSubscriptionHistory,
@@ -19,7 +19,7 @@ import { getDiscountWheelState } from "@/lib/discount-wheel";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { STRIPE_CHECKOUT_LOCALE } from "@/lib/i18n/locales";
-import { getLocale, tr } from "@/lib/i18n/server";
+import { GEO_COUNTRY_HEADER, getLocale, tr } from "@/lib/i18n/server";
 
 const checkoutSchema = z.object({
   plan: z.enum(PURCHASABLE_BILLING_PLAN_IDS),
@@ -109,6 +109,11 @@ export async function POST(request: Request) {
       ...(subscriptionTrialEligible ? { trial_period_days: 3 } : {}),
     };
 
+    // The price the paywall showed this buyer: Vercel's IP country, not
+    // anything in the request body (`billing-regions.ts`).
+    const country = request.headers.get(GEO_COUNTRY_HEADER);
+    const priceId = await getCheckoutPriceId(parsed.data.plan, country);
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       // Stripe's own chrome — field labels, the pay button, card errors — in
@@ -117,7 +122,7 @@ export async function POST(request: Request) {
       customer: customerId,
       line_items: [
         {
-          price: getPriceIdForPlan(parsed.data.plan),
+          price: priceId,
           quantity: 1,
         },
       ],

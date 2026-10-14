@@ -2,7 +2,8 @@ import { headers } from "next/headers";
 
 import { HomeDashboard } from "@/components/home-dashboard";
 import { OfflineHomeCapture } from "@/components/offline/offline-capture";
-import { getViewerAppState } from "@/lib/billing";
+import { getPricingCountry, getViewerAppState } from "@/lib/billing";
+import { planPricesFor } from "@/lib/billing-regions";
 import { getDiscountWheelState } from "@/lib/discount-wheel";
 import { requireUser } from "@/lib/auth";
 import { listLibraryFoldersForUser } from "@/lib/library-folders";
@@ -79,6 +80,7 @@ export default async function AppHomePage({
         canSpinWheel={wheel ? wheel.canSpin && !wheel.spunToday : null}
         installGuideSeen={installGuideSeen}
         showDevDashboard={showDevDashboard}
+        planPrices={planPricesFor(await getPricingCountry())}
       />
     </>
   );

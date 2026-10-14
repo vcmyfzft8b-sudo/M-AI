@@ -5,6 +5,7 @@ import { NextResponse, after } from "next/server";
 import { cache } from "react";
 import Stripe from "stripe";
 import { getAppleEntitlement } from "@/lib/mobile/apple";
+import { isNativeUserAgent } from "@/lib/mobile/runtime";
 import { hasPaidAccess } from "@/lib/billing-access";
 import {
   type BillingSubscriptionsTable,
@@ -13,10 +14,19 @@ import {
 
 import { PREVIEW_AUTH_BYPASS_USER_ID, getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
+import { GEO_COUNTRY_HEADER } from "@/lib/i18n/server";
 import { isPreviewPremiumEnabled } from "@/lib/preview-mode";
 import { applyTestPersona } from "@/lib/test-persona";
 import { readTestPersonaFor } from "@/lib/test-persona-server";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
+import {
+  type RegionalPlan,
+  STANDARD_PLAN_PRICES,
+  monthlyShareOfYearly,
+  planPricesFor,
+  pricingRegion,
+  regionalPriceLookupKey,
+} from "@/lib/billing-regions";
 import { getServerEnv } from "@/lib/server-env";
 import { resolveSiteOrigin } from "@/lib/site-url";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
@@ -59,23 +69,22 @@ const TRIAL_CHAT_MESSAGE_LIMIT = 5;
 export const DEV_BILLING_OVERRIDE_COOKIE = "memo-dev-billing-override";
 
 /*
- * The prices are the same everywhere Memo sells — one euro amount per plan,
- * charged by Stripe in EUR — so only the words around them change per
- * language, and they are carried as catalogue keys rather than as text.
+ * One euro amount per plan, charged by Stripe in EUR, except in the countries
+ * `billing-regions.ts` prices lower (`purchasableBillingPlansFor`). Only the words
+ * around a price change per language, carried as catalogue keys, not text.
  */
-export const BILLING_PLANS: Record<
-  BillingPlan,
-  {
-    id: BillingPlan;
-    labelKey: MessageKey;
-    cadenceKey: MessageKey;
-    amount: number;
-    displayAmount?: number;
-    billingNoteKey?: MessageKey;
-    annualizedAmount: number;
-    blurbKey: MessageKey;
-  }
-> = {
+type BillingPlanDefinition = {
+  id: BillingPlan;
+  labelKey: MessageKey;
+  cadenceKey: MessageKey;
+  amount: number;
+  displayAmount?: number;
+  billingNoteKey?: MessageKey;
+  annualizedAmount: number;
+  blurbKey: MessageKey;
+};
+
+export const BILLING_PLANS: Record<BillingPlan, BillingPlanDefinition> = {
   weekly: {
     id: "weekly",
     labelKey: "billing.plan.weekly",
@@ -88,29 +97,55 @@ export const BILLING_PLANS: Record<
     id: "monthly",
     labelKey: "billing.plan.monthly",
     cadenceKey: "billing.cadence.month",
-    amount: 20,
-    annualizedAmount: 240,
+    amount: STANDARD_PLAN_PRICES.monthly,
+    annualizedAmount: STANDARD_PLAN_PRICES.monthly * 12,
     blurbKey: "billing.blurb.monthly",
   },
   yearly: {
     id: "yearly",
     labelKey: "billing.plan.yearly",
     cadenceKey: "billing.cadence.month",
-    amount: 130,
-    // €130 a year is €10.83 a month, not €11. Rounding the headline up prices
-    // the plan above what is actually charged, which is the one direction a
-    // price must never be wrong in.
-    displayAmount: 10.83,
+    amount: STANDARD_PLAN_PRICES.yearly,
+    displayAmount: monthlyShareOfYearly(STANDARD_PLAN_PRICES.yearly),
     billingNoteKey: "billing.note.yearly",
-    annualizedAmount: 130,
+    annualizedAmount: STANDARD_PLAN_PRICES.yearly,
     blurbKey: "billing.blurb.yearly",
   },
 };
 
 export const PURCHASABLE_BILLING_PLAN_IDS = ["monthly", "yearly"] as const satisfies readonly PurchasableBillingPlan[];
-export const PURCHASABLE_BILLING_PLANS = PURCHASABLE_BILLING_PLAN_IDS.map(
-  (planId) => BILLING_PLANS[planId],
-);
+/** The plans the paywall offers a buyer from `country` (see `billing-regions.ts`). */
+export function purchasableBillingPlansFor(country: string | null | undefined): BillingPlanDefinition[] {
+  const prices = planPricesFor(country);
+
+  return [
+    {
+      ...BILLING_PLANS.monthly,
+      amount: prices.monthly,
+      annualizedAmount: prices.monthly * 12,
+    },
+    {
+      ...BILLING_PLANS.yearly,
+      amount: prices.yearly,
+      displayAmount: monthlyShareOfYearly(prices.yearly),
+      annualizedAmount: prices.yearly,
+    },
+  ];
+}
+
+/**
+ * The country a browser request is priced for: Vercel's edge header, never
+ * anything the client sent. Null in the iOS app, which buys through Apple.
+ */
+export async function getPricingCountry(): Promise<string | null> {
+  const requestHeaders = await headers();
+
+  if (isNativeUserAgent(requestHeaders.get("user-agent"))) {
+    return null;
+  }
+
+  return requestHeaders.get(GEO_COUNTRY_HEADER);
+}
 
 
 export function hasPriorSubscriptionHistory(
@@ -646,6 +681,20 @@ export const getViewerAppState = cache(async function getViewerAppState() {
   };
 });
 
+/*
+ * A regional price has no environment variable to match, so its plan is read
+ * from its billing interval: every Memo price is monthly, yearly or weekly.
+ */
+export function getPlanFromStripePrice(
+  price: Pick<Stripe.Price, "id" | "recurring"> | null | undefined,
+): BillingPlan | null {
+  const interval = price?.recurring?.interval;
+  const fromInterval =
+    interval === "year" ? "yearly" : interval === "month" ? "monthly" : interval === "week" ? "weekly" : null;
+
+  return getPlanFromPriceId(price?.id) ?? fromInterval;
+}
+
 export function getPlanFromPriceId(priceId: string | null | undefined): BillingPlan | null {
   if (!priceId) {
     return null;
@@ -679,6 +728,44 @@ export function getPriceIdForPlan(plan: BillingPlan) {
   }
 
   return priceId;
+}
+
+const regionalPriceIds = new Map<string, Promise<string>>();
+
+/**
+ * The Stripe price a buyer from `country` checks out on. A regional price is
+ * looked up once per server instance and refused if its amount is not the one
+ * the paywall showed: charging more than the screen said is never acceptable,
+ * so a missing or edited Stripe price fails the checkout instead.
+ */
+export async function getCheckoutPriceId(plan: RegionalPlan, country: string | null | undefined) {
+  const region = pricingRegion(country);
+
+  if (!region) {
+    return getPriceIdForPlan(plan);
+  }
+
+  const lookupKey = regionalPriceLookupKey(plan, region);
+  let pending = regionalPriceIds.get(lookupKey);
+
+  if (!pending) {
+    pending = (async () => {
+      const expected = Math.round(planPricesFor(region)[plan] * 100);
+      const { data } = await getStripeClient().prices.list({ lookup_keys: [lookupKey], active: true, limit: 1 });
+      const price = data[0];
+
+      if (!price || price.unit_amount !== expected || price.currency !== "eur") {
+        throw new Error(`Stripe price ${lookupKey} is missing or not €${expected / 100}.`);
+      }
+
+      return price.id;
+    })();
+    regionalPriceIds.set(lookupKey, pending);
+    // A failed lookup is not cached: the next checkout asks Stripe again.
+    pending.catch(() => regionalPriceIds.delete(lookupKey));
+  }
+
+  return pending;
 }
 
 export function getStripeClient() {
@@ -755,7 +842,7 @@ export async function syncStripeSubscriptionRecord(subscription: Stripe.Subscrip
     typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
   const item = subscription.items.data[0];
   const priceId = item?.price?.id ?? null;
-  const plan = getPlanFromPriceId(priceId) ?? "monthly";
+  const plan = getPlanFromStripePrice(item?.price) ?? "monthly";
   const userId = subscription.metadata.userId || null;
 
   let resolvedUserId = userId;

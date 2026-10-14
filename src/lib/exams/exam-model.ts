@@ -28,6 +28,49 @@ export const LESSON_MINUTES = 6;
 
 export const MOCK_DURATIONS = [30, 45, 60, 90] as const;
 
+/* The most notes one exam can hold; the create route rejects more. */
+export const MAX_EXAM_MODULES = 40;
+
+/*
+ * The most new material one setup lets the learner start. It is the smallest burst the note
+ * routes allow (8 documents or links per 10 minutes, see `rateLimitPresets`), so the setup stops
+ * before the server would refuse an upload halfway through.
+ */
+export const MAX_SETUP_UPLOADS = 8;
+
+/* The target mastery a learner can set, and the dial's step. The create route enforces the range. */
+export const TARGET_MIN = 50;
+export const TARGET_MAX = 100;
+export const TARGET_STEP = 5;
+/* The target dial is a gauge open at the bottom: 50 % sits at -135° and 100 % at +135° from 12 o'clock. */
+export const TARGET_DIAL_SWEEP = 135;
+
+/** Where a target sits on the dial, in degrees clockwise from 12 o'clock. */
+export function targetDialAngle(target: number) {
+  const share = (Math.min(TARGET_MAX, Math.max(TARGET_MIN, target)) - TARGET_MIN) / (TARGET_MAX - TARGET_MIN);
+  return -TARGET_DIAL_SWEEP + share * TARGET_DIAL_SWEEP * 2;
+}
+
+/**
+ * The target under a finger at (dx, dy) from the dial's centre (screen axes, y down). In the open
+ * gap at the bottom the dial holds whichever end the finger came from, so dragging past 100 %
+ * never wraps round to 50 % (or the other way).
+ */
+export function targetFromDialPoint(dx: number, dy: number, previous: number) {
+  if (dx === 0 && dy === 0) {
+    return previous;
+  }
+
+  const angle = (Math.atan2(dx, -dy) * 180) / Math.PI;
+
+  if (Math.abs(angle) > TARGET_DIAL_SWEEP) {
+    return previous >= (TARGET_MIN + TARGET_MAX) / 2 ? TARGET_MAX : TARGET_MIN;
+  }
+
+  const raw = TARGET_MIN + ((angle + TARGET_DIAL_SWEEP) / (TARGET_DIAL_SWEEP * 2)) * (TARGET_MAX - TARGET_MIN);
+  return Math.min(TARGET_MAX, Math.max(TARGET_MIN, Math.round(raw / TARGET_STEP) * TARGET_STEP));
+}
+
 export function isExamLessonKind(value: unknown): value is ExamLessonKind {
   return typeof value === "string" && (EXAM_LESSON_KINDS as readonly string[]).includes(value);
 }

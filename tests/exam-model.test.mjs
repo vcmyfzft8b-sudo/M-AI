@@ -3,6 +3,12 @@ import test from "node:test";
 
 import {
   addDays,
+  MAX_EXAM_MODULES,
+  MAX_SETUP_UPLOADS,
+  TARGET_MAX,
+  TARGET_MIN,
+  targetDialAngle,
+  targetFromDialPoint,
   buildTrueFalse,
   dailyPlan,
   dateStrip,
@@ -255,4 +261,30 @@ test("a mock result names its strengths, weak points and weakest note", () => {
   assert.deepEqual(summary.strengths, ["Clear MR = MC."]);
   assert.deepEqual(summary.weakPoints, ["No deadweight loss."]);
   assert.equal(summary.weakestLectureId, "b");
+});
+
+test("the target dial maps a drag to steps of five and never wraps through its gap", () => {
+  assert.equal(targetDialAngle(TARGET_MIN), -135);
+  assert.equal(targetDialAngle(TARGET_MAX), 135);
+  assert.equal(targetDialAngle(75), 0);
+
+  // Straight up is the middle of the gauge; a quarter turn either way is 91.7 % and 58.3 %.
+  assert.equal(targetFromDialPoint(0, -50, 90), 75);
+  assert.equal(targetFromDialPoint(50, 0, 50), 90);
+  assert.equal(targetFromDialPoint(-50, 0, 50), 60);
+
+  // Just inside each end.
+  assert.equal(targetFromDialPoint(Math.sin((134 * Math.PI) / 180) * 50, -Math.cos((134 * Math.PI) / 180) * 50, 50), 100);
+  assert.equal(targetFromDialPoint(-Math.sin((134 * Math.PI) / 180) * 50, -Math.cos((134 * Math.PI) / 180) * 50, 100), 50);
+
+  // Straight down is the gap: the dial holds the end the finger came from.
+  assert.equal(targetFromDialPoint(0, 50, 95), TARGET_MAX);
+  assert.equal(targetFromDialPoint(0, 50, 60), TARGET_MIN);
+  assert.equal(targetFromDialPoint(0, 0, 80), 80);
+});
+
+test("setup limits stay inside what the server accepts", () => {
+  // The setup stops new uploads at the note routes' smallest burst (8 per 10 minutes).
+  assert.equal(MAX_SETUP_UPLOADS, 8);
+  assert.ok(MAX_SETUP_UPLOADS <= MAX_EXAM_MODULES);
 });

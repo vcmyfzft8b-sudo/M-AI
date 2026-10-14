@@ -2,15 +2,16 @@
 
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { ExamScreen } from "@/components/exams/exam-screen";
-import { formatExamDay, formatMonth, formatWeekdayShort } from "@/components/exams/exam-format";
+import { formatExamDay, formatExamDayLong, formatMonth, formatWeekdayShort } from "@/components/exams/exam-format";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
 import { MemoSays } from "@/components/exams/memo-says";
+import { TargetDial } from "@/components/exams/target-dial";
 import type { NoteSourceMode } from "@/components/note-source-modal";
 import { useOfflineGuard } from "@/components/offline/offline-notice";
 import {
@@ -19,6 +20,8 @@ import {
   EXAM_LESSON_KINDS,
   isValidDay,
   LESSON_MINUTES,
+  MAX_EXAM_MODULES,
+  MAX_SETUP_UPLOADS,
   monthGrid,
 } from "@/lib/exams/exam-model";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -65,7 +68,6 @@ const STEPS = [
 ] as const;
 type Step = (typeof STEPS)[number];
 
-const TARGETS = [75, 90, 100] as const;
 const PASS_MARK = 50;
 const BUILDING_MS = 2400;
 
@@ -75,12 +77,6 @@ const MINUTE_OPTIONS: { minutes: number; emoji: string; labelKey: MessageKey }[]
   { minutes: 45, emoji: "🌿", labelKey: "exam.setup.minutes.serious" },
   { minutes: 60, emoji: "🌳", labelKey: "exam.setup.minutes.intense" },
 ];
-
-/** The dial's knob position for a target, as a point on the ring (0 % at the top, clockwise). */
-function dialKnob(percent: number) {
-  const angle = (percent / 100) * Math.PI * 2;
-  return { left: `${50 + 45 * Math.sin(angle)}%`, top: `${50 - 45 * Math.cos(angle)}%` };
-}
 
 function monthOf(day: string) {
   return `${day.slice(0, 7)}-01`;
@@ -206,10 +202,16 @@ export function ExamSetup({
   );
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /* Material added during setup: notes still being made, already part of this exam. */
-  const [added, setAdded] = useState<string[]>([]);
+  /*
+   * Material added during setup, in the order it was added: notes still being made, already part
+   * of this exam. Adding one closes the capture sheet and stays on this step, so the learner can
+   * keep adding until they press "Next".
+   */
+  const [added, setAdded] = useState<{ id: string; mode: NoteSourceMode }[]>([]);
   const [sourceMode, setSourceMode] = useState<NoteSourceMode | null>(null);
   const [showExisting, setShowExisting] = useState(Boolean(initialFolder));
+  /* The review's path is read-only until "Edit" shows the reorder and remove buttons. */
+  const [editingPath, setEditingPath] = useState(false);
   /*
    * "Next" and "Start my plan" sit in the same place, so a quick double tap on the last question
    * would otherwise create the exam before its review has been seen.
@@ -219,6 +221,8 @@ export function ExamSetup({
   const stepIndex = STEPS.indexOf(step);
   const notesById = useMemo(() => new Map(notes.map((note) => [note.id, note])), [notes]);
   const days = daysBetween(today, examDate);
+  const uploadsLeft = MAX_SETUP_UPLOADS - added.length;
+  const examFull = selected.length >= MAX_EXAM_MODULES;
   const lessons = selected.length * EXAM_LESSON_KINDS.length;
 
   /* The building screen is a pause, not a question: it moves on by itself. */
@@ -254,18 +258,31 @@ export function ExamSetup({
       return;
     }
 
+    if (uploadsLeft <= 0 || examFull) {
+      return;
+    }
+
     setSourceMode(mode);
   }
 
   function addCreated(lectureId: string) {
+    const mode = sourceMode ?? "text";
     setSourceMode(null);
-    setAdded((current) => (current.includes(lectureId) ? current : [...current, lectureId]));
-    setSelected((current) => (current.includes(lectureId) ? current : [...current, lectureId]));
+    setAdded((current) => (current.some((entry) => entry.id === lectureId) ? current : [...current, { id: lectureId, mode }]));
+    setSelected((current) =>
+      current.includes(lectureId) || current.length >= MAX_EXAM_MODULES ? current : [...current, lectureId],
+    );
   }
 
   function toggleNote(id: string) {
     setFolderId(null);
-    setSelected((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]));
+    setSelected((current) =>
+      current.includes(id)
+        ? current.filter((entry) => entry !== id)
+        : current.length >= MAX_EXAM_MODULES
+          ? current
+          : [...current, id],
+    );
   }
 
   function chooseFolder(folder: ExamSetupFolder) {
@@ -276,7 +293,7 @@ export function ExamSetup({
     }
 
     setFolderId(folder.id);
-    setSelected(folder.lectureIds.filter((id) => readyIds.has(id)));
+    setSelected(folder.lectureIds.filter((id) => readyIds.has(id)).slice(0, MAX_EXAM_MODULES));
 
     if (!title.trim()) {
       setTitle(folder.name);
@@ -447,14 +464,28 @@ export function ExamSetup({
 
           {/* First: bring the material for this exam — files, photos, a recording, a link. */}
           <div className="memo-exam-upload">
-            <b>{t("exam.setup.material.uploadTitle")}</b>
-            <span>{t("exam.setup.material.uploadBody")}</span>
+            <span className="memo-exam-upload-head">
+              <b>{t(added.length > 0 ? "exam.setup.material.addMore" : "exam.setup.material.uploadTitle")}</b>
+              {added.length > 0 ? (
+                <span className="memo-exam-upload-count">
+                  {added.length}/{MAX_SETUP_UPLOADS}
+                </span>
+              ) : null}
+            </span>
+            <span>
+              {uploadsLeft <= 0
+                ? t("exam.setup.material.uploadLimit", { count: MAX_SETUP_UPLOADS })
+                : examFull
+                  ? t("exam.setup.material.examFull", { count: MAX_EXAM_MODULES })
+                  : t("exam.setup.material.uploadBody")}
+            </span>
             <div className="memo-exam-upload-grid">
               {SOURCE_OPTIONS.map((option) => (
                 <button
                   key={option.mode}
                   type="button"
                   className="memo-exam-upload-option"
+                  disabled={uploadsLeft <= 0 || examFull}
                   onClick={() => openSource(option.mode)}
                 >
                   <span className="memo-exam-pick-emoji">
@@ -468,8 +499,9 @@ export function ExamSetup({
 
           {added.length > 0 ? (
             <div className="memo-exam-list">
-              {added.map((id) => {
+              {added.map(({ id, mode }) => {
                 const isOn = selected.includes(id);
+                const source = SOURCE_OPTIONS.find((option) => option.mode === mode) ?? SOURCE_OPTIONS[0];
 
                 return (
                   <button
@@ -480,10 +512,10 @@ export function ExamSetup({
                     onClick={() => toggleNote(id)}
                   >
                     <span className="memo-exam-pick-emoji">
-                      <Emoji symbol="✨" size="1.2rem" />
+                      <Emoji symbol={source.emoji} size="1.2rem" />
                     </span>
                     <span className="memo-exam-pick-copy">
-                      <b>{t("exam.setup.material.newMaterial")}</b>
+                      <b>{t(source.labelKey)}</b>
                       <span>{t("exam.setup.material.uploading")}</span>
                     </span>
                     <Msym
@@ -605,27 +637,13 @@ export function ExamSetup({
         </section>
       ) : step === "target" ? (
         <section className="memo-exam-step">
-          <MemoSays key="target" mood="idle" thought="🎯" text={t("exam.setup.target.title")} />
-          <div className="memo-exam-dial" style={{ "--memo-exam-dial": `${target}%` } as CSSProperties}>
-            <span className="memo-exam-dial-ring" aria-hidden="true" />
-            <span className="memo-exam-dial-knob" aria-hidden="true" style={dialKnob(target)} />
-            <span className="memo-exam-dial-center">
-              <b>{target} %</b>
-            </span>
-          </div>
-          <div className="memo-segment memo-exam-segment">
-            {TARGETS.map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={target === value ? "active" : ""}
-                aria-pressed={target === value}
-                onClick={() => setTarget(value)}
-              >
-                {value} %
-              </button>
-            ))}
-          </div>
+          <MemoSays
+            key="target"
+            mood={target >= 100 ? "happy" : "idle"}
+            thought="🎯"
+            text={t("exam.setup.target.title")}
+          />
+          <TargetDial value={target} onChange={setTarget} />
         </section>
       ) : step === "minutes" ? (
         <section className="memo-exam-step">
@@ -681,43 +699,87 @@ export function ExamSetup({
       ) : (
         <section className="memo-exam-step">
           <MemoSays key="review" mood="cheer" text={t("exam.setup.review.say")} />
-          <div className="memo-exam-countdown">
-            <b>{t("exam.days", { count: Math.max(0, days) })}</b>
-            <span>
-              {formatExamDay(examDate, locale)}
-              <br />
-              {title.trim()} · {target} %
-            </span>
+          <p className="memo-exam-review-sub">
+            <b>{title.trim()}</b> · {formatExamDayLong(examDate, locale)}
+          </p>
+
+          {/* The plan in three numbers: how long, how well, how much a day. */}
+          <div className="memo-exam-stats">
+            <div>
+              <b>{Math.max(0, days)}</b>
+              <span>{t("exam.setup.motivate.days", { count: Math.max(0, days) })}</span>
+            </div>
+            <div>
+              <b>{target} %</b>
+              <span>{t("exam.setup.review.goal")}</span>
+            </div>
+            <div>
+              <b>{t("exam.minutes", { minutes })}</b>
+              <span>{t("exam.setup.review.perDay")}</span>
+            </div>
           </div>
-          <ol className="memo-exam-review">
+
+          {/* The path: each note is a stop, in the order they are studied, and the mock exam ends it. */}
+          <div className="memo-exam-route-head">
+            <span>
+              <b>{t("exam.setup.review.pathTitle")}</b>
+              <span>{t("exam.setup.review.pathBody")}</span>
+            </span>
+            {selected.length > 1 ? (
+              <button
+                type="button"
+                className="memo-exam-route-edit"
+                aria-pressed={editingPath}
+                onClick={() => setEditingPath((current) => !current)}
+              >
+                {t(editingPath ? "common.done" : "common.edit")}
+              </button>
+            ) : null}
+          </div>
+          <ol className="memo-exam-route">
             {selected.map((id, index) => {
               const note = notesById.get(id);
+              const source = added.find((entry) => entry.id === id);
+              const label = note
+                ? note.title?.trim() || t("note.untitled")
+                : t(SOURCE_OPTIONS.find((option) => option.mode === source?.mode)?.labelKey ?? "exam.setup.material.newMaterial");
 
               return (
                 <li key={id}>
-                  <span className="memo-exam-review-n">{index + 1}</span>
-                  <span className="memo-exam-review-title">
-                    {note ? note.title?.trim() || t("note.untitled") : t("exam.setup.material.newMaterial")}
+                  <span className="memo-exam-route-dot">{index + 1}</span>
+                  <span className="memo-exam-route-copy">
+                    <b>{label}</b>
+                    <span>
+                      {t("exam.setup.review.moduleMeta", {
+                        count: EXAM_LESSON_KINDS.length,
+                        minutes: EXAM_LESSON_KINDS.length * LESSON_MINUTES,
+                      })}
+                    </span>
                   </span>
-                  <span className="memo-exam-review-actions">
-                    <button type="button" className="memo-icon-button" aria-label={t("exam.setup.review.moveUp")} disabled={index === 0} onClick={() => move(index, -1)}>
-                      <Msym name="arrow_upward" size="1.1rem" fill={false} />
-                    </button>
-                    <button type="button" className="memo-icon-button" aria-label={t("exam.setup.review.moveDown")} disabled={index === selected.length - 1} onClick={() => move(index, 1)}>
-                      <Msym name="arrow_downward" size="1.1rem" fill={false} />
-                    </button>
-                    <button type="button" className="memo-icon-button" aria-label={t("exam.setup.review.remove")} disabled={selected.length === 1} onClick={() => setSelected((current) => current.filter((entry) => entry !== id))}>
-                      <Msym name="close" size="1.1rem" fill={false} />
-                    </button>
-                  </span>
+                  {editingPath ? (
+                    <span className="memo-exam-review-actions">
+                      <button type="button" className="memo-icon-button" aria-label={t("exam.setup.review.moveUp")} disabled={index === 0} onClick={() => move(index, -1)}>
+                        <Msym name="arrow_upward" size="1.1rem" fill={false} />
+                      </button>
+                      <button type="button" className="memo-icon-button" aria-label={t("exam.setup.review.moveDown")} disabled={index === selected.length - 1} onClick={() => move(index, 1)}>
+                        <Msym name="arrow_downward" size="1.1rem" fill={false} />
+                      </button>
+                      <button type="button" className="memo-icon-button" aria-label={t("exam.setup.review.remove")} disabled={selected.length === 1} onClick={() => setSelected((current) => current.filter((entry) => entry !== id))}>
+                        <Msym name="close" size="1.1rem" fill={false} />
+                      </button>
+                    </span>
+                  ) : null}
                 </li>
               );
             })}
-            <li className="memo-exam-review-mock">
-              <span className="memo-exam-review-n">
+            <li className="mock">
+              <span className="memo-exam-route-dot">
                 <Emoji symbol="🏆" size="1rem" />
               </span>
-              <span className="memo-exam-review-title">{t("exam.mock.title")}</span>
+              <span className="memo-exam-route-copy">
+                <b>{t("exam.mock.title")}</b>
+                <span>{t("exam.setup.review.mockMeta")}</span>
+              </span>
             </li>
           </ol>
           {error ? <p className="memo-inline-error">{error}</p> : null}

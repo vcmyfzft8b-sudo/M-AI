@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { EXAM_LESSON_KINDS, isValidDay, MOCK_DURATIONS } from "@/lib/exams/exam-model";
+import { EXAM_LESSON_KINDS, isValidDay, MAX_EXAM_MODULES, MOCK_DURATIONS, TARGET_MAX, TARGET_MIN } from "@/lib/exams/exam-model";
 import { createSanitizedStringSchema } from "@/lib/validation";
 
 const daySchema = z.string().refine(isValidDay, { message: "Invalid date." });
@@ -8,13 +8,13 @@ const daySchema = z.string().refine(isValidDay, { message: "Invalid date." });
 export const examCreateSchema = z.object({
   title: createSanitizedStringSchema({ trim: true, collapseWhitespace: true, minLength: 1, maxLength: 120 }),
   examDate: daySchema,
-  targetMastery: z.number().int().min(50).max(100),
+  targetMastery: z.number().int().min(TARGET_MIN).max(TARGET_MAX),
   dailyMinutes: z.number().int().min(5).max(240),
   examFormat: z.enum(["written", "oral", "both"]),
   examKind: z.enum(["midterm", "exam", "matura"]),
   gradingScale: z.enum(["uni_5_10", "school_1_5", "percent"]),
   passPercentage: z.number().int().min(1).max(100),
-  lectureIds: z.array(z.string().uuid()).min(1).max(40),
+  lectureIds: z.array(z.string().uuid()).min(1).max(MAX_EXAM_MODULES),
 });
 
 export const examPatchSchema = z

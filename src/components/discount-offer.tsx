@@ -15,6 +15,7 @@ import {
   BRAND_LOCKUP_WIDTH,
   SEO_BRAND_NAME,
 } from "@/lib/brand";
+import { STANDARD_PLAN_PRICES, type PlanPrices } from "@/lib/billing-regions";
 import { formatCurrency } from "@/lib/utils";
 import { nativeRequest } from "@/lib/mobile/client";
 import { halfOffProducts, type NativeProduct } from "@/lib/mobile/products";
@@ -135,37 +136,43 @@ type OfferPlan = {
  * The coupon is `duration: once`, so it halves the first billing period only.
  * The copy says exactly that rather than implying a permanent price.
  */
-const OFFER_PLANS: OfferPlan[] = [
-  {
-    id: "yearly",
-    labelKey: "offer.plan.oneOff",
-    priceKey: "offer.plan.oneOffPrice",
-    /*
-     * One line of small print, not two. The card used to say the same thing
-     * twice — a "first year / then" line beside a "billed yearly" line — and
-     * Stripe restates the full terms at checkout anyway.
-     *
-     * What stays is the renewal price. That the discount covers one period and
-     * the price goes up afterwards is the one thing a buyer cannot find out
-     * later, so it is not the sort of text to trim.
-     */
-    billingKey: "offer.plan.oneOffBilling",
-    badgeKey: "offer.plan.saveBadge",
-    headlineAmount: 1.25,
-    discountedAmount: 65,
-    renewalAmount: 130,
-  },
-  {
-    id: "monthly",
-    labelKey: "billing.plan.monthly",
-    priceKey: "offer.plan.monthlyPrice",
-    billingKey: "offer.plan.monthlyBilling",
-    badgeKey: null,
-    headlineAmount: 10,
-    discountedAmount: 10,
-    renewalAmount: 20,
-  },
-];
+function offerPlansFor(prices: PlanPrices): OfferPlan[] {
+  const halfYearly = prices.yearly / 2;
+
+  return [
+    {
+      id: "yearly",
+      labelKey: "offer.plan.oneOff",
+      priceKey: "offer.plan.oneOffPrice",
+      /*
+       * One line of small print, not two. The card used to say the same thing
+       * twice — a "first year / then" line beside a "billed yearly" line — and
+       * Stripe restates the full terms at checkout anyway.
+       *
+       * What stays is the renewal price. That the discount covers one period and
+       * the price goes up afterwards is the one thing a buyer cannot find out
+       * later, so it is not the sort of text to trim.
+       */
+      billingKey: "offer.plan.oneOffBilling",
+      badgeKey: "offer.plan.saveBadge",
+      // The discounted year spread over its 52 weeks, rounded down to the cent
+      // (65 euros is 1.25 a week): never advertised above what is charged.
+      headlineAmount: Math.floor((halfYearly / 52) * 100) / 100,
+      discountedAmount: halfYearly,
+      renewalAmount: prices.yearly,
+    },
+    {
+      id: "monthly",
+      labelKey: "billing.plan.monthly",
+      priceKey: "offer.plan.monthlyPrice",
+      billingKey: "offer.plan.monthlyBilling",
+      badgeKey: null,
+      headlineAmount: prices.monthly / 2,
+      discountedAmount: prices.monthly / 2,
+      renewalAmount: prices.monthly,
+    },
+  ];
+}
 
 export function DiscountOffer({
   wheelOpen,
@@ -175,6 +182,7 @@ export function DiscountOffer({
   onOfferOpenChange,
   onClaimed,
   nativeOffer = false,
+  planPrices = STANDARD_PLAN_PRICES,
 }: {
   wheelOpen: boolean;
   offerOpen: boolean;
@@ -185,8 +193,11 @@ export function DiscountOffer({
   /** Fired once the prize is banked, so the home card can stop offering it. */
   onClaimed: () => void;
   nativeOffer?: boolean;
+  /** The buyer's regional prices, as the server priced them (`billing-regions.ts`). */
+  planPrices?: PlanPrices;
 }) {
   const { locale, t } = useTranslations();
+  const offerPlans = offerPlansFor(planPrices);
   const apple = useAppleBilling(nativeOffer && (wheelOpen || offerOpen), true);
   const spinTimerRef = useRef<number | null>(null);
   /** Set once checkout has been started, so leaving does not withdraw a prize
@@ -710,7 +721,7 @@ export function DiscountOffer({
             </p>
 
             <div className="memo-offer-plans">
-              {OFFER_PLANS.filter(offerPlan => !nativeOffer || apple.productForPlan(offerPlan.id)).map((offerPlan) => {
+              {offerPlans.filter(offerPlan => !nativeOffer || apple.productForPlan(offerPlan.id)).map((offerPlan) => {
                 const product = apple.productForPlan(offerPlan.id);
                 const selectedPlan = nativeOffer ? APPLE_PRODUCTS[apple.selected] : plan;
                 return (

@@ -1,6 +1,7 @@
 "use client";
 import { nativeRequest, useNativeIOS } from "@/lib/mobile/client";
 import { halfOffProducts } from "@/lib/mobile/products";
+import type { PlanPrices } from "@/lib/billing-regions";
 
 import Image from "next/image";
 import dynamic from "next/dynamic";
@@ -926,6 +927,7 @@ export function HomeDashboard({
   canSpinWheel: initialCanSpinWheel = null,
   installGuideSeen = false,
   showDevDashboard,
+  planPrices,
 }: {
   lectures: AppLectureListItem[];
   folders: AppLibraryFolder[];
@@ -942,6 +944,8 @@ export function HomeDashboard({
    */
   installGuideSeen?: boolean;
   showDevDashboard: boolean;
+  /** What the wheel's offer is priced at for this buyer's country. */
+  planPrices?: PlanPrices;
 }) {
   const t = useT();
   const native = useNativeIOS();
@@ -1993,6 +1997,7 @@ export function HomeDashboard({
       {isHydrated && (isWheelOpen || (!native && isOfferOpen) || (native && isOfferOpen && nativeHalfOffAvailable)) ? (
         <DeferredDiscountOffer
           nativeOffer={native}
+          planPrices={planPrices}
           wheelOpen={isWheelOpen}
           offerOpen={isOfferOpen}
           onWheelOpenChange={setIsWheelOpen}

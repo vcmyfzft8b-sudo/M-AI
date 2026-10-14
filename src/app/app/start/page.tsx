@@ -2,9 +2,10 @@ import { redirect } from "next/navigation";
 
 import { OnboardingPaywall } from "@/components/onboarding-paywall";
 import {
-  PURCHASABLE_BILLING_PLANS,
+  getPricingCountry,
   getSubscriptionTrialEligibility,
   getViewerAppState,
+  purchasableBillingPlansFor,
 } from "@/lib/billing";
 
 export default async function AppStartPage() {
@@ -38,7 +39,7 @@ export default async function AppStartPage() {
         onboardingComplete={appState.onboardingComplete}
         hasPaidAccess={appState.hasPaidAccess}
         subscriptionTrialEligible={subscriptionTrialEligible}
-        plans={PURCHASABLE_BILLING_PLANS}
+        plans={purchasableBillingPlansFor(await getPricingCountry())}
       />
     </main>
   );

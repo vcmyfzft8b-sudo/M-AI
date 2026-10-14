@@ -47,8 +47,8 @@ export const PAID_VIDEOS_PER_MONTH = 60;
  * What a sale made with a creator's code is worth to them. Every creator code gives 50%
  * off the first period (`memo50-first-cycle`), and the bonus is 20% of what the customer
  * actually pays — so a monthly sale (€20, paid €10) earns €2 and a yearly one (€130, paid
- * €65) earns €13. The list prices are `BILLING_PLANS` in `src/lib/billing.ts`; a test
- * fails if the two drift apart.
+ * €65) earns €13. The list prices are `STANDARD_PLAN_PRICES` in `src/lib/billing-regions.ts`;
+ * a test fails if the two drift apart. Sales at a regional price earn 20% of that lower price.
  */
 export const PLAN_LIST_PRICES = { monthly: 20, yearly: 130 } as const;
 export const CODE_DISCOUNT_PERCENT = 50;

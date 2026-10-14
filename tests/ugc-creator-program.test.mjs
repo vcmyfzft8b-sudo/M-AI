@@ -4,6 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { STANDARD_PLAN_PRICES } from "../src/lib/billing-regions.ts";
 import { createTranslator } from "../src/lib/i18n/translate.ts";
 import { LOCALES } from "../src/lib/i18n/locales.ts";
 import { sl } from "../src/lib/i18n/messages/sl.ts";
@@ -106,10 +107,9 @@ test("a code sale earns 20% of the discounted price: €2 monthly, €13 yearly"
   assert.equal(codeSaleBonus(CREATOR_TERMS.si, "monthly"), 2);
   assert.equal(codeSaleBonus(CREATOR_TERMS.si, "yearly"), 13);
 
-  // The list prices must be the ones the app charges.
-  const billing = readSource("src/lib/billing.ts");
-  assert.match(billing, new RegExp(`monthly: \\{[^}]*amount: ${PLAN_LIST_PRICES.monthly},`, "s"));
-  assert.match(billing, new RegExp(`yearly: \\{[^}]*amount: ${PLAN_LIST_PRICES.yearly},`, "s"));
+  // The list prices must be the ones the app charges outside the regional prices.
+  assert.deepEqual({ ...PLAN_LIST_PRICES }, { ...STANDARD_PLAN_PRICES });
+  assert.match(readSource("src/lib/billing.ts"), /amount: STANDARD_PLAN_PRICES\.yearly,/);
 });
 
 test("the Slovenian code bonus estimate is one sale per 10,000 views, one in three yearly", () => {

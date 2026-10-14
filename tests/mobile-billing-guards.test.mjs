@@ -22,7 +22,7 @@ function loadRoute(path) {
     "@/lib/mobile/apple": { getAppleEntitlement: reached("apple") },
     "@/lib/billing": {
       getViewerAppState: reached("appState"), ensureStripeCustomer: reached("customer"), getStripeClient: reached("stripe"),
-      getBillingCancelUrl: () => "", getBillingSuccessUrl: () => "", getBillingPortalReturnUrl: () => "", getPriceIdForPlan: () => "",
+      getBillingCancelUrl: () => "", getBillingSuccessUrl: () => "", getBillingPortalReturnUrl: () => "", getCheckoutPriceId: async () => "",
       hasStripeSubscriptionHistory: reached("history"), PURCHASABLE_BILLING_PLAN_IDS: ["monthly", "yearly"],
     },
     "@/lib/billing-access": { hasLiveStripeSubscription: () => false },

@@ -40,6 +40,7 @@ function load(component, native, products = []) {
     "@/lib/mobile/products": { halfOffProducts: value => value },
     "@/lib/mobile/runtime": { APPLE_PRODUCTS },
     "@/lib/utils": { formatCurrency: value => `€${value.toFixed(2)}` },
+    "@/lib/billing-regions": { STANDARD_PLAN_PRICES: { monthly: 20, yearly: 130 } },
     "@/lib/brand": { BRAND_LOCKUP_SRC: "/brand.png", BRAND_LOCKUP_WIDTH: 480, BRAND_LOCKUP_HEIGHT: 148, SEO_BRAND_NAME: "Memo" },
   };
   const context = { exports: {}, require: name => { assert.ok(name in modules, name); return modules[name]; }, URLSearchParams };

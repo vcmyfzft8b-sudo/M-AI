@@ -1,5 +1,5 @@
 import { OnboardingPaywall } from "@/components/onboarding-paywall";
-import { PURCHASABLE_BILLING_PLANS } from "@/lib/billing";
+import { getPricingCountry, purchasableBillingPlansFor } from "@/lib/billing";
 
 /**
  * The upgrade screen, on the demo.
@@ -11,9 +11,10 @@ import { PURCHASABLE_BILLING_PLANS } from "@/lib/billing";
  *
  * Checkout still posts to the real endpoint and will fail without an account,
  * which is the honest behaviour for a demo of a payment screen — better a
- * visible error than a fake success.
+ * visible error than a fake success. Prices are the visitor's own, as on the
+ * real screen (`billing-regions.ts`).
  */
-export default function CreatorDemoStartPage() {
+export default async function CreatorDemoStartPage() {
   return (
     <main className="app-start-shell">
       <OnboardingPaywall
@@ -21,7 +22,7 @@ export default function CreatorDemoStartPage() {
         subscription={null}
         onboardingComplete
         hasPaidAccess={false}
-        plans={PURCHASABLE_BILLING_PLANS}
+        plans={purchasableBillingPlansFor(await getPricingCountry())}
       />
     </main>
   );

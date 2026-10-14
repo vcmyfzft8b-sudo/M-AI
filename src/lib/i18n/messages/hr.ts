@@ -1389,14 +1389,16 @@ export const hr: Messages = {
   "preview.help.transcriptTitle": "Transkript je prekratak ili netočan",
 
   /* ---- Landing feature showcase ---- */
-  "showcase.captureTitle": "Snimi ili učitaj",
-  "showcase.captureDesc": "Predavanja, PDF-ove, dokumente, fotografije bilježaka i poveznice.",
   "showcase.notesTitle": "Dobij uredne bilješke",
   "showcase.notesDesc": "Uredne bilješke i transkripti bez ručnog prepisivanja.",
   "showcase.cardsTitle": "Kartice",
   "showcase.cardsDesc": "Ključni pojmovi pretvaraju se u kartice za brzo ponavljanje.",
   "showcase.quizTitle": "Kvizovi",
   "showcase.quizDesc": "Provjeri razumijevanje pitanjima iz vlastitog gradiva.",
+  "showcase.testsTitle": "Testovi",
+  "showcase.testsDesc": "Vježbaj duže odgovore i pripremu za provjeru znanja.",
+  "showcase.mindmapTitle": "Mentalna mapa",
+  "showcase.mindmapDesc": "Pokazuje kako su teme u tvojim bilješkama međusobno povezane.",
   "showcase.chatTitle": "Pitaj svoje bilješke",
   "showcase.chatDesc": "Razgovaraj o jednoj bilješci ili pitaj sve odjednom.",
   "showcase.chat.question": "Koja je razlika između transakcijskog sustava i sustava za odlučivanje?",

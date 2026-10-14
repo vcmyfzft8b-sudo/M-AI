@@ -6,37 +6,40 @@ import { Fragment, useEffect, useRef, useState } from "react";
 
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { useT, useTranslations } from "@/components/i18n-provider";
-import { Emoji, Msym } from "@/components/msym";
+import { Msym } from "@/components/msym";
 import { TypingDots } from "@/components/typing-dots";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 
 import { LandingAppScope } from "./app/landing-app-scope";
-import { landingNoteMeta, landingNoteTitleMeta } from "./app/landing-note-meta";
+import { landingNoteTitleMeta } from "./app/landing-note-meta";
 import { LandingFlashcardsScreen } from "./app/landing-flashcards-screen";
+import { LandingMindmapScreen } from "./app/landing-mindmap-screen";
 import { LandingQuizScreen } from "./app/landing-quiz-screen";
+import { LandingTestScreen } from "./app/landing-test-screen";
 import { LandingSampleNote, SAMPLE_NOTE_BLOCKS } from "./landing-sample-note";
 import { LandingScaledFrame } from "./landing-scaled-frame";
-import type { SourceDetail, SourceKind } from "./memo-app-preview-data";
 
 /*
  * The core of the product, one row per feature, each beside the app doing it:
- * capture, the note it becomes, the two study modes most people open first, and
- * the chat that reaches across every note. The rest of the pill row (the tutor
- * has its own section; podcast, mind map, palace, tests and speed reading) is
- * shown in the hero phone and "How it works", so this list stays short.
+ * the note, the four study modes that matter most before an exam, and the chat
+ * that reaches across every note. Capture is "How it works" step one and the
+ * tutor has its own section; the rest of the pill row (podcast, palace, speed
+ * reading) is shown in the hero phone and "How it works", so this list stays
+ * short.
  *
- * Every illustration is the app's own markup — the New note screen, the
- * rendered note, the library chat and, for the study features, the shared
+ * Every illustration is the app's own markup — the rendered note, the library
+ * chat and, for the study features, the shared
  * screens in `./app/` — drawn at phone width inside a phone-sized screen and
  * scaled to fit, never a drawing of it. What they *contain* is the landing's
  * sample lecture on business information systems, which stands in for the
  * learner's own material.
  */
 const FEATURES = [
-  { id: "capture", titleKey: "showcase.captureTitle", descKey: "showcase.captureDesc" },
   { id: "notes", titleKey: "showcase.notesTitle", descKey: "showcase.notesDesc" },
   { id: "flashcards", titleKey: "showcase.cardsTitle", descKey: "showcase.cardsDesc" },
   { id: "quiz", titleKey: "showcase.quizTitle", descKey: "showcase.quizDesc" },
+  { id: "mindmap", titleKey: "showcase.mindmapTitle", descKey: "showcase.mindmapDesc" },
+  { id: "test", titleKey: "showcase.testsTitle", descKey: "showcase.testsDesc" },
   { id: "chat", titleKey: "showcase.chatTitle", descKey: "showcase.chatDesc" },
 ] as const satisfies ReadonlyArray<{ id: string; titleKey: MessageKey; descKey: MessageKey }>;
 
@@ -77,105 +80,6 @@ function useTicker(running: boolean, ms: number) {
   }, [running, ms]);
 
   return tick;
-}
-
-/* ── Capture: the New note screen ────────────────────────────── */
-
-/* home-dashboard.tsx's QUICK_ACTIONS, and the note each one makes in this demo. */
-const QUICK_ACTIONS = [
-  {
-    id: "record",
-    labelKey: "library.quickAction.record",
-    icon: "radio_button_checked",
-    accent: "record",
-    emoji: "🎙️",
-    titleKey: "flowDemo.noteTitle.audio",
-    note: { source: "audio", detail: { minutes: 48 } },
-  },
-  {
-    id: "link",
-    labelKey: "library.quickAction.link",
-    icon: "link",
-    accent: "",
-    emoji: "🔗",
-    titleKey: "flowDemo.noteTitle.doc",
-    note: { source: "link" },
-  },
-  {
-    id: "text",
-    labelKey: "library.quickAction.document",
-    icon: "description",
-    accent: "",
-    emoji: "📄",
-    titleKey: "flowDemo.noteTitle.pdf",
-    note: { source: "pdf", detail: { pages: 24 } },
-  },
-  {
-    id: "upload",
-    labelKey: "library.quickAction.audio",
-    icon: "cloud_upload",
-    accent: "",
-    emoji: "🎙️",
-    titleKey: "flowDemo.past.lecture3",
-    note: { source: "audio", detail: { minutes: 52 } },
-  },
-] as const satisfies ReadonlyArray<{
-  id: string;
-  labelKey: MessageKey;
-  icon: string;
-  accent: string;
-  emoji: string;
-  titleKey: MessageKey;
-  note: { source: SourceKind; detail?: SourceDetail };
-}>;
-
-function CapturePanel({ active }: PanelProps) {
-  const { t, locale } = useTranslations();
-  const motion = useMotionAllowed();
-  /* Three beats per source: it is picked, it lands as a note being written, the note is ready. */
-  const tick = useTicker(active && motion, 1300);
-  const cycle = Math.floor(tick / 3);
-  const phase = motion ? tick % 3 : 2;
-  const action = QUICK_ACTIONS[cycle % QUICK_ACTIONS.length];
-  /* While the next source is being picked, the list still shows the last one's note. */
-  const rowCycle = phase === 0 ? cycle - 1 : cycle;
-  const row = rowCycle >= 0 ? QUICK_ACTIONS[rowCycle % QUICK_ACTIONS.length] : null;
-
-  return (
-    <div className="landing-v2-flow-pad landing-v2-fx-capture">
-      <h1 className="memo-home-h1">{t("library.newNote")}</h1>
-      <p className="memo-home-sub">{t("library.newNoteSub")}</p>
-      <div className="memo-quick-grid">
-        {QUICK_ACTIONS.map((quick) => (
-          <div
-            key={quick.id}
-            className={`memo-quick-card ${motion && phase === 0 && quick.id === action.id ? "landing-v2-fx-picked" : ""}`.trim()}
-          >
-            <span className={`memo-quick-tile ${quick.accent}`.trim()}>
-              <Msym name={quick.icon} size="1.45rem" />
-            </span>
-            <span className="memo-quick-label">{t(quick.labelKey)}</span>
-          </div>
-        ))}
-      </div>
-      <div className="memo-note-list">
-        {row ? (
-          <div key={rowCycle} className="memo-note-row landing-v2-flow-new-row">
-            <span className="memo-note-emoji">
-              <Emoji symbol={row.emoji} size="1.3rem" />
-            </span>
-            <span className="memo-note-copy">
-              <span className="memo-note-title">{t(row.titleKey)}</span>
-              <span className="memo-note-meta">
-                {landingNoteMeta(t, locale, { ...row.note, writing: phase === 1 })}
-              </span>
-            </span>
-            <Msym name="chevron_right" size="1.55rem" fill={false} weight={400} />
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
 }
 
 /* ── Notes: the note tab ─────────────────────────────────────── */
@@ -318,16 +222,17 @@ function ChatPanel({ active }: PanelProps) {
 }
 
 const PANELS: Record<FeatureId, ComponentType<PanelProps>> = {
-  capture: CapturePanel,
   notes: NotesPanel,
   flashcards: ({ active }) => <LandingFlashcardsScreen autoplay={active} />,
   quiz: ({ active }) => <LandingQuizScreen autoplay={active} />,
+  mindmap: ({ active }) => <LandingMindmapScreen autoplay={active} />,
+  test: ({ active }) => <LandingTestScreen autoplay={active} />,
   chat: ChatPanel,
 };
 
 /* Screens that are a full note tab get the note's side inset; the chat panel and
    the tab bodies that carry their own chrome do not. */
-const PADDED: ReadonlySet<FeatureId> = new Set(["flashcards", "quiz"]);
+const PADDED: ReadonlySet<FeatureId> = new Set(["flashcards", "quiz", "mindmap", "test"]);
 
 /* One phone-sized screen holding the app. */
 function FeatureScreen({ id }: { id: FeatureId }) {

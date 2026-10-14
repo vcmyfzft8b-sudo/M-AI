@@ -78,27 +78,28 @@ query would let one rule serve both a phone viewport and the landing's phone-siz
 | App feature | App source | Landing component | Shown in |
 | --- | --- | --- | --- |
 | Home, note list, folders, settings, help | `home-dashboard.tsx`, `settings-screen.tsx` | `memo-app-preview.tsx` | Hero phone |
-| New note / capture sheet | `note-source-modal.tsx` | `memo-app-preview.tsx`, `landing-flow-demo.tsx`, showcase | Hero, How it works (step 1), Features |
+| New note / capture sheet | `note-source-modal.tsx` | `memo-app-preview.tsx`, `landing-flow-demo.tsx` | Hero, How it works (step 1) |
 | Note (notes tab), read aloud | `lecture-workspace.tsx`, `note-read-aloud.tsx` | `memo-app-preview.tsx`, `landing-flow-demo.tsx`, showcase (note only) | Hero, How it works (step 2), Features (note only) |
 | Note pill row | `NOTE_TABS` in `src/lib/note-tabs.ts` | the same list, imported | Hero, How it works (step 3) |
 | Tutor | `lecture-tutor.tsx` | `landing-tutor-demo.tsx` | Tutor section, hero, How it works |
 | Flashcards | `study-flashcard.tsx` + deck screen in `lecture-workspace.tsx` | `app/landing-flashcards-screen.tsx` | Hero, How it works, Features |
 | Quiz | `study-question.tsx` + quiz screen | `app/landing-quiz-screen.tsx` | Hero, How it works, Features |
-| Practice test | `study-question.tsx` + test screen | `app/landing-test-screen.tsx` | Hero, How it works |
+| Practice test | `study-question.tsx` + test screen | `app/landing-test-screen.tsx` | Hero, How it works, Features |
 | Results screen | `study-completion-card.tsx` | used directly by the three screens above | wherever they are |
 | Podcast | `lecture-podcast.tsx` | `app/landing-podcast-screen.tsx` | Hero, How it works |
-| Mindmap | `lecture-mindmap.tsx`, `mindmap-canvas.tsx` | `app/landing-mindmap-screen.tsx` | Hero, How it works |
+| Mindmap | `lecture-mindmap.tsx`, `mindmap-canvas.tsx` | `app/landing-mindmap-screen.tsx` | Hero, How it works, Features |
 | Memory palace | `lecture-palace.tsx` | `app/landing-palace-screen.tsx` | Hero, How it works |
 | Speed read | `note-speed-reader.tsx` | `app/landing-speed-read-screen.tsx` | Hero, How it works |
 | Chat (note and library) | `library-chat.tsx`, `chat-markdown.tsx` | hero chat, showcase | Hero, Features |
 
 Keep this table current: a new feature adds a row, and a new landing component is listed here.
 
-**The feature list is the core only.** "Capture it, organise it, learn it faster" lists five
-things: record or upload, the note, flashcards, quizzes and the chat. Every other note tab is
-shown in the hero phone and "How it works", which is enough; adding each new mode to the list
+**The feature list is the core only.** "Capture it, organise it, learn it faster" lists six
+things: the note, flashcards, quizzes, the mind map, practice tests and the chat. Capture is
+already "How it works" step one and the tutor has its own section; every other note tab is
+shown in the hero phone and "How it works", which is enough. Adding each new mode to the list
 made it a twelve-row wall nobody read (trimmed in October 2026). Add a row there only when the
-feature is one a new visitor should weigh before signing up, and keep it to about five.
+feature is one a new visitor should weigh before signing up, and keep it to about six.
 
 ## Checklist for an app change
 

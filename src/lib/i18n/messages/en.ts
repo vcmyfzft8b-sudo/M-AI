@@ -1382,14 +1382,16 @@ export const en: Messages = {
   "preview.help.transcriptTitle": "The transcript is too short or inaccurate",
 
   /* ---- Landing feature showcase ---- */
-  "showcase.captureTitle": "Record it or upload it",
-  "showcase.captureDesc": "Lectures, PDFs, documents, photos of notes and links.",
   "showcase.notesTitle": "Get clean notes",
   "showcase.notesDesc": "Tidy notes and transcripts, without typing any of it out.",
   "showcase.cardsTitle": "Flashcards",
   "showcase.cardsDesc": "Key concepts turn into cards for quick revision.",
   "showcase.quizTitle": "Quizzes",
   "showcase.quizDesc": "Check what you understood, with questions from your own material.",
+  "showcase.testsTitle": "Tests",
+  "showcase.testsDesc": "Practise longer answers and get ready for the real thing.",
+  "showcase.mindmapTitle": "Mind map",
+  "showcase.mindmapDesc": "Shows how the topics in your note connect to each other.",
   "showcase.chatTitle": "Ask your notes",
   "showcase.chatDesc": "Chat about one note, or ask across all of them at once.",
   "showcase.chat.question": "What's the difference between a transactional system and a decision support system?",

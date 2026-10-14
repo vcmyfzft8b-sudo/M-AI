@@ -75,7 +75,7 @@ follow-up before merging.
 - A new note tab or study mode goes into the hero phone's tabs and the "How it works" study pills,
   in `NOTE_TABS` order, with copy in all five catalogues; also update the JSON-LD `featureList`
   and the FAQ if they list features. The feature list ("Capture it, organise it…") and the hero
-  lead name the core only — capture, notes, flashcards, quizzes, chat — and a new mode does not
+  lead name the core only — notes, flashcards, quizzes, mind map, tests, chat — and a new mode does not
   join them by default (docs/landing-page-sync.md).
 - Compare side by side at phone width, dark and light: `/creator/lectures/demo-note-mikroekonomija`
   (the real app, no login) against `/`. Run `tests/landing-app-parity.test.mjs`.

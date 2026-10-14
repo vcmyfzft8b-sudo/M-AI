@@ -1405,14 +1405,16 @@ export const sl = {
   "preview.help.transcriptTitle": "Prepis je prekratek ali netočen",
 
   /* ---- Landing feature showcase ---- */
-  "showcase.captureTitle": "Posnemi ali naloži",
-  "showcase.captureDesc": "Predavanja, PDF-je, dokumente, fotografije zapiskov in povezave.",
   "showcase.notesTitle": "Dobi clean zapiske",
   "showcase.notesDesc": "Urejeni zapiski in prepisi brez ročnega prepisovanja.",
   "showcase.cardsTitle": "Flashcardi",
   "showcase.cardsDesc": "Ključni pojmi se spremenijo v kartice za hitro ponavljanje.",
   "showcase.quizTitle": "Kvizi",
   "showcase.quizDesc": "Preveri razumevanje z vprašanji iz svojega gradiva.",
+  "showcase.testsTitle": "Testi",
+  "showcase.testsDesc": "Vadi daljše odgovore in pripravo na preverjanje znanja.",
+  "showcase.mindmapTitle": "Miselni vzorec",
+  "showcase.mindmapDesc": "Pokaže, kako so teme v tvojem zapisku povezane med seboj.",
   "showcase.chatTitle": "Vprašaj svoje zapiske",
   "showcase.chatDesc": "Klepetaj o enem zapisku ali vprašaj kar vse naenkrat.",
   "showcase.chat.question": "Kakšna je razlika med transakcijskim sistemom in sistemom za podporo odločanju?",

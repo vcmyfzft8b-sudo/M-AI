@@ -1,5 +1,22 @@
 # Memo iOS submission checklist
 
+## 2.1 Information Needed: reply, then resubmit (28 September – 14 October 2026)
+
+- **What Apple asked (26 Sep):** a recording from a physical device, starting at launch and
+  showing registration, deletion, the paywall (title, length, price, Terms, Privacy) and the
+  purchases, plus seven answers, in the reply and in the Notes field.
+- **What we sent:** the reply with the recording and eight answers on 28 Sep; the Notes field
+  already had the same answers (3,858 characters) on 27 Sep. Both were checked again on 14 Oct.
+- **The mistake:** a reply does not resubmit. The submission sat in *Unresolved Issues* with
+  Resubmit greyed out for 16 days, through two follow-ups and support case 102990544024,
+  because the rejected version was never marked resolved.
+- **Resubmitted 14 Oct 2026, 17:14 UTC** through the API (resolve the item, then
+  `submitted: true`), in the same submission `767a42e7`. All seven items are
+  `WAITING_FOR_REVIEW`. Release is manual. The procedure is in
+  [docs/ios-app.md](../../docs/ios-app.md#after-a-rejection-or-an-information-needed-request).
+- **Agreements accepted 14 Oct:** the updated Program License Agreement (due 29 Oct) and the
+  new Paid Apps Agreement are both active from 14 Oct 2026.
+
 ## App Review pass on 26 September 2026 (#495, #496, build 21)
 
 - **Restore (#495, build 20):** Restore reconciles even when `AppStore.sync()`

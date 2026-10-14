@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType } from "react";
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import { ChatMarkdown } from "@/components/chat-markdown";
@@ -230,24 +230,20 @@ const PANELS: Record<FeatureId, ComponentType<PanelProps>> = {
   chat: ChatPanel,
 };
 
-/* Screens that are a full note tab get the note's side inset; the chat panel and
-   the tab bodies that carry their own chrome do not. */
-const PADDED: ReadonlySet<FeatureId> = new Set(["flashcards", "quiz", "mindmap", "test"]);
-
-/* One phone-sized screen holding the app. */
+/*
+ * One phone-sized screen holding the app. The study screens carry the note
+ * screen's own gutter and layout (`.landing-study-frame`), so they go in bare: a
+ * second padded wrapper around them pushed each one 5px past the screen, and the
+ * screen scrolled.
+ */
 function FeatureScreen({ id }: { id: FeatureId }) {
   const Panel = PANELS[id];
-  let body: ReactNode = <Panel active />;
-
-  if (PADDED.has(id)) {
-    body = <div className="landing-v2-fx-scroll landing-v2-fx-tab">{body}</div>;
-  }
 
   return (
     <div className="landing-v2-fx-phone">
       <LandingAppScope className="landing-v2-fx-screen">
         <LandingScaledFrame fill width={SCREEN_WIDTH}>
-          {body}
+          <Panel active />
         </LandingScaledFrame>
       </LandingAppScope>
     </div>

@@ -381,6 +381,140 @@ export type Database = {
           updated_at?: string;
         };
       };
+      exams: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          exam_date: string;
+          target_mastery: number;
+          daily_minutes: number;
+          exam_format: "written" | "oral" | "both";
+          exam_kind: "midterm" | "exam" | "matura";
+          grading_scale: "uni_5_10" | "school_1_5" | "percent";
+          pass_percentage: number;
+          actual_grade: string | null;
+          archived_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          exam_date: string;
+          target_mastery?: number;
+          daily_minutes?: number;
+          exam_format?: "written" | "oral" | "both";
+          exam_kind?: "midterm" | "exam" | "matura";
+          grading_scale?: "uni_5_10" | "school_1_5" | "percent";
+          pass_percentage?: number;
+          actual_grade?: string | null;
+          archived_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          title?: string;
+          exam_date?: string;
+          target_mastery?: number;
+          daily_minutes?: number;
+          exam_format?: "written" | "oral" | "both";
+          exam_kind?: "midterm" | "exam" | "matura";
+          grading_scale?: "uni_5_10" | "school_1_5" | "percent";
+          pass_percentage?: number;
+          actual_grade?: string | null;
+          archived_at?: string | null;
+          updated_at?: string;
+        };
+      };
+      exam_modules: {
+        Row: {
+          exam_id: string;
+          lecture_id: string;
+          user_id: string;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          exam_id: string;
+          lecture_id: string;
+          user_id: string;
+          position: number;
+          created_at?: string;
+        };
+        Update: {
+          position?: number;
+        };
+      };
+      exam_lesson_results: {
+        Row: {
+          id: string;
+          exam_id: string;
+          lecture_id: string;
+          user_id: string;
+          lesson_kind: "summary" | "flashcards" | "quiz" | "true_false" | "written";
+          correct: number;
+          total: number;
+          score: number;
+          difficulty: number | null;
+          completed_at: string;
+        };
+        Insert: {
+          id?: string;
+          exam_id: string;
+          lecture_id: string;
+          user_id: string;
+          lesson_kind: "summary" | "flashcards" | "quiz" | "true_false" | "written";
+          correct?: number;
+          total?: number;
+          score?: number;
+          difficulty?: number | null;
+          completed_at?: string;
+        };
+        Update: Record<string, never>;
+      };
+      exam_mock_attempts: {
+        Row: {
+          id: string;
+          exam_id: string;
+          user_id: string;
+          status: "in_progress" | "graded" | "failed";
+          duration_minutes: number;
+          questions: Json;
+          answers: Json;
+          total_score: number | null;
+          max_score: number | null;
+          percentage: number | null;
+          started_at: string;
+          submitted_at: string | null;
+          graded_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          exam_id: string;
+          user_id: string;
+          status?: "in_progress" | "graded" | "failed";
+          duration_minutes: number;
+          questions?: Json;
+          answers?: Json;
+          total_score?: number | null;
+          max_score?: number | null;
+          percentage?: number | null;
+          started_at?: string;
+          submitted_at?: string | null;
+          graded_at?: string | null;
+        };
+        Update: {
+          status?: "in_progress" | "graded" | "failed";
+          answers?: Json;
+          total_score?: number | null;
+          max_score?: number | null;
+          percentage?: number | null;
+          submitted_at?: string | null;
+          graded_at?: string | null;
+        };
+      };
       library_folders: {
         Row: {
           id: string;
@@ -2092,6 +2226,12 @@ export type AiUsageEventRow =
 export type BillingSubscriptionRow =
   Database["public"]["Tables"]["billing_subscriptions"]["Row"];
 export type LectureRow = Database["public"]["Tables"]["lectures"]["Row"];
+export type ExamRow = Database["public"]["Tables"]["exams"]["Row"];
+export type ExamModuleRow = Database["public"]["Tables"]["exam_modules"]["Row"];
+export type ExamLessonResultRow =
+  Database["public"]["Tables"]["exam_lesson_results"]["Row"];
+export type ExamMockAttemptRow =
+  Database["public"]["Tables"]["exam_mock_attempts"]["Row"];
 export type LibraryFolderRow =
   Database["public"]["Tables"]["library_folders"]["Row"];
 export type LibraryFolderLectureRow =

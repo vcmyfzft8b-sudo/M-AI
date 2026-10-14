@@ -156,7 +156,7 @@ function CapturePanel({ active }: PanelProps) {
 
   return (
     <div className="landing-v2-flow-pad landing-v2-fx-capture">
-      <h1 className="memo-home-h1">{t("library.newNote")}</h1>
+      <h1 className="memo-home-h1">{t("library.new")}</h1>
       <p className="memo-home-sub">{t("library.newNoteSub")}</p>
       <div className="memo-quick-grid">
         {QUICK_ACTIONS.map((quick) => (

@@ -1154,3 +1154,63 @@ test("account erasure blocks stale storage tokens and survives auth deletion", o
     await assert.rejects(query("insert into storage.objects(name, owner) values ('after', $1)", [owner]), /row-level security/);
   } finally { await db.close(); }
 });
+
+test("an exam keeps its notes and results, and takes them with it when deleted", options, async () => {
+  const { db, query } = await migratedDatabase();
+  const [user] = await query(`insert into auth.users (email) values ('exam@example.com') returning id`);
+  const [lecture] = await query(
+    `insert into public.lectures (user_id, source_type, status) values ($1,'text','ready') returning id`,
+    [user.id],
+  );
+  const [exam] = await query(
+    `insert into public.exams (user_id, title, exam_date) values ($1,'Mikroekonomija','2026-10-26') returning *`,
+    [user.id],
+  );
+
+  // The defaults are the setup screen's: written, 5–10, 90 % target, half to pass.
+  assert.equal(exam.exam_format, "written");
+  assert.equal(exam.grading_scale, "uni_5_10");
+  assert.equal(exam.target_mastery, 90);
+  assert.equal(exam.pass_percentage, 50);
+
+  await query(
+    `insert into public.exam_modules (exam_id, lecture_id, user_id, position) values ($1,$2,$3,0)`,
+    [exam.id, lecture.id, user.id],
+  );
+  await query(
+    `insert into public.exam_lesson_results (exam_id, lecture_id, user_id, lesson_kind, correct, total, score)
+     values ($1,$2,$3,'quiz',4,5,0.8)`,
+    [exam.id, lecture.id, user.id],
+  );
+
+  // A lesson kind the app does not have, and a score outside 0..1, are refused.
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into public.exam_lesson_results (exam_id, lecture_id, user_id, lesson_kind, score)
+         values ($1,$2,$3,'essay',0.5)`,
+        [exam.id, lecture.id, user.id],
+      ),
+    /check constraint/,
+  );
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into public.exam_lesson_results (exam_id, lecture_id, user_id, lesson_kind, score)
+         values ($1,$2,$3,'quiz',1.5)`,
+        [exam.id, lecture.id, user.id],
+      ),
+    /check constraint/,
+  );
+
+  await query(`delete from public.exams where id = $1`, [exam.id]);
+
+  const [{ modules }] = await query(`select count(*)::int as modules from public.exam_modules`);
+  const [{ results }] = await query(`select count(*)::int as results from public.exam_lesson_results`);
+  const [{ lectures }] = await query(`select count(*)::int as lectures from public.lectures`);
+
+  assert.equal(modules, 0);
+  assert.equal(results, 0);
+  // The note itself is the learner's, not the exam's.
+  assert.equal(lectures, 1);
+});

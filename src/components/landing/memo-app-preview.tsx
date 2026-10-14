@@ -1218,7 +1218,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
             style={coralPill({ flex: "0 0 auto", minWidth: "198.4px", padding: "0 20.8px", gap: "9.6px" })}
           >
             <Msym name="edit_square" size="22.4px" fill={false} weight={500} />
-            <span style={{ fontSize: "17.92px", fontWeight: 650 }}>{t("library.newNote")}</span>
+            <span style={{ fontSize: "17.92px", fontWeight: 650 }}>{t("library.new")}</span>
           </button>
         </div>
       </>,
@@ -2374,7 +2374,7 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
     return (
       <div role="dialog" aria-modal="true" onPointerDown={sheet.onPointerDown} style={sheet.style}>
         {GRAB}
-        {sheetTitle(t("library.newNote"), t("common.close"), this.closeSheet)}
+        {sheetTitle(t("library.new"), t("common.close"), this.closeSheet)}
         <div style={{ display: "grid", gap: "12.8px" }}>
           {CREATE_OPTIONS.map((option) => (
             <button

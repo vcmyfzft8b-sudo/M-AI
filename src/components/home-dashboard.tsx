@@ -29,6 +29,7 @@ import {
   INSTALL_GUIDE_SEEN_EVENT,
   shouldOfferInstallGuide,
 } from "@/lib/install-guide";
+import { ExamEntryCard, type UpcomingExam } from "@/components/exams/exam-entry-card";
 import { LibraryChat } from "@/components/library-chat";
 import type { NoteSourceMode } from "@/components/note-source-modal";
 import { Emoji, Msym } from "@/components/msym";
@@ -928,6 +929,7 @@ export function HomeDashboard({
   installGuideSeen = false,
   showDevDashboard,
   planPrices,
+  upcomingExam = null,
 }: {
   lectures: AppLectureListItem[];
   folders: AppLibraryFolder[];
@@ -946,6 +948,8 @@ export function HomeDashboard({
   showDevDashboard: boolean;
   /** What the wheel's offer is priced at for this buyer's country. */
   planPrices?: PlanPrices;
+  /** The nearest exam being prepared for, which the "Novo" sheet continues. */
+  upcomingExam?: UpcomingExam | null;
 }) {
   const t = useT();
   const native = useNativeIOS();
@@ -1282,6 +1286,16 @@ export function HomeDashboard({
     }
 
     setManualModal(mode);
+  }
+
+  /* Exam prep, from the "Novo" sheet or the desktop heading. */
+  function openExamPrep(href: string) {
+    if (blockedOffline("create")) {
+      return;
+    }
+
+    closeMobileCreateMenu();
+    navigateDashboardWithFeedback(href);
   }
 
   function openRenameModal(lecture: AppLectureListItem) {
@@ -1716,8 +1730,12 @@ export function HomeDashboard({
               two prompts to buy stacked above the library read as nagging. */}
 
           <div className="memo-only-desktop">
-            <h1 className="memo-home-h1">{t("library.newNote")}</h1>
+            <h1 className="memo-home-h1">{t("library.new")}</h1>
             <p className="memo-home-sub">{t("library.newNoteSub")}</p>
+
+            {!isCreatorDemo ? (
+              <ExamEntryCard upcoming={upcomingExam} onOpen={openExamPrep} className="memo-exam-entry-desktop" />
+            ) : null}
 
             <div className="memo-quick-grid">
               {QUICK_ACTIONS.map((action) => (
@@ -1957,7 +1975,11 @@ export function HomeDashboard({
                 return;
               }
 
-              if (!canCreateNotes) {
+              /*
+               * Exam prep lives in this sheet too, and it does not need a new note, so the sheet
+               * opens either way; the note sources in it still go to the paywall on their own.
+               */
+              if (!canCreateNotes && isCreatorDemo) {
                 navigateDashboardWithFeedback(startHref);
                 return;
               }
@@ -1966,7 +1988,7 @@ export function HomeDashboard({
             }}
           >
             <Msym name="edit_square" size="1.4rem" fill={false} weight={500} />
-            <span>{t("library.newNote")}</span>
+            <span>{t("library.new")}</span>
           </button>
         </div>
       </div>
@@ -2140,7 +2162,7 @@ export function HomeDashboard({
         </MemoPortal>
       ) : null}
 
-      {/* Phone: "Nov zapisek" opens the capture picker as a bottom sheet. */}
+      {/* Phone: "Novo" opens exam prep and the capture picker as a bottom sheet. */}
       {isMobileCreateMenuOpen ? (
         <MemoPortal>
           <button
@@ -2158,7 +2180,7 @@ export function HomeDashboard({
           >
             <div className="memo-grab memo-create-drag-handle" data-drag-handle />
             <div className="memo-sheet-title">
-              <span id="mobile-create-menu-title">{t("library.newNote")}</span>
+              <span id="mobile-create-menu-title">{t("library.new")}</span>
               <button
                 type="button"
                 className="memo-sheet-close"
@@ -2168,6 +2190,12 @@ export function HomeDashboard({
                 <Msym name="close" size="1.45rem" fill={false} weight={500} />
               </button>
             </div>
+            {!isCreatorDemo ? (
+              <>
+                <ExamEntryCard upcoming={upcomingExam} onOpen={openExamPrep} />
+                <span className="memo-eyebrow memo-exam-sheet-label">{t("library.newNote")}</span>
+              </>
+            ) : null}
             <div className="memo-sheet-list">
               {CREATE_OPTIONS.map((option) => (
                 <button

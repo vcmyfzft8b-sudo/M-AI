@@ -43,7 +43,23 @@ export default async function ExamLessonPage({
     redirect(getPaywallPath());
   }
 
-  const following = detail.modules[index + 1] ?? null;
+  /*
+   * After this module the path goes to the next module in order that is not mastered yet (the
+   * learner can open it), or, when every other module is mastered, to the mock exam.
+   */
+  const canOpen = (lectureId: string) => Boolean(appState?.hasPaidAccess) || appState?.trialLectureId === lectureId;
+  const others = [...detail.modules.slice(index + 1), ...detail.modules.slice(0, index)];
+  const following = others.find((entry) => entry.ready && !entry.mastered && canOpen(entry.lectureId)) ?? null;
+  const after = following
+    ? {
+        type: "module" as const,
+        lectureId: following.lectureId,
+        title: following.title?.trim() || t("note.untitled"),
+        kind: following.nextKind,
+      }
+    : others.every((entry) => entry.mastered)
+      ? { type: "mock" as const }
+      : null;
 
   return (
     <ExamLesson
@@ -55,12 +71,13 @@ export default async function ExamLessonPage({
         title: current.title?.trim() || t("note.untitled"),
         position: current.position,
         done: current.done,
+        latest: current.latest,
+        review: current.review,
+        learned: current.learned,
+        mastered: current.mastered,
       }}
-      nextModule={
-        following && following.ready
-          ? { lectureId: following.lectureId, title: following.title?.trim() || t("note.untitled") }
-          : null
-      }
+      target={detail.exam.target_mastery}
+      after={after}
     />
   );
 }

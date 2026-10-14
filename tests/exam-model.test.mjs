@@ -15,6 +15,8 @@ import {
   daysBetween,
   examMastery,
   examModuleStates,
+  examNextStep,
+  examStage,
   gradeForPercentage,
   isValidDay,
   mockQuestionCounts,
@@ -57,7 +59,8 @@ test("a module is mastered by its practice lessons, and the summary only counts 
   );
 
   assert.equal(states[0].lessonsDone, 3);
-  assert.equal(states[0].completed, false);
+  assert.equal(states[0].learned, false);
+  assert.equal(states[0].mastered, false);
   assert.equal(states[0].mastery, (1 + 0.6) / 4);
   assert.equal(states[0].nextKind, "true_false");
 });
@@ -84,8 +87,9 @@ test("modules unlock in order, and starting a locked one opens it", () => {
     states.map((state) => state.unlocked),
     [true, true, false, true],
   );
-  assert.equal(states[0].completed, true);
-  // A completed module continues with its weakest practice lesson.
+  assert.equal(states[0].learned, true);
+  assert.equal(states[0].mastered, true);
+  // A mastered module continues with its weakest practice lesson.
   assert.ok(["flashcards", "quiz", "true_false", "written"].includes(states[0].nextKind));
   assert.equal(examMastery(states), (1 + 0 + 0 + 0.9 / 4) / 4);
 });
@@ -95,7 +99,7 @@ test("the daily goal spreads what is left over the days before the exam", () => 
     examDate: "2026-10-26",
     today: "2026-10-14",
     dailyMinutes: 30,
-    states: [{ lessonsDone: 0 }, { lessonsDone: 0 }, { lessonsDone: 0 }, { lessonsDone: 0 }],
+    states: [{ lessonsDone: 0, review: [] }, { lessonsDone: 0, review: [] }, { lessonsDone: 0, review: [] }, { lessonsDone: 0, review: [] }],
     resultsToday: 0,
     untriedDoneToday: 0,
   });
@@ -111,7 +115,7 @@ test("finishing a lesson moves today's count, not today's goal", () => {
     examDate: "2026-10-16",
     today: "2026-10-14",
     dailyMinutes: 15,
-    states: [{ lessonsDone: 0 }, { lessonsDone: 0 }],
+    states: [{ lessonsDone: 0, review: [] }, { lessonsDone: 0, review: [] }],
     resultsToday: 0,
     untriedDoneToday: 0,
   });
@@ -119,7 +123,7 @@ test("finishing a lesson moves today's count, not today's goal", () => {
     examDate: "2026-10-16",
     today: "2026-10-14",
     dailyMinutes: 15,
-    states: [{ lessonsDone: 1 }, { lessonsDone: 0 }],
+    states: [{ lessonsDone: 1, review: [] }, { lessonsDone: 0, review: [] }],
     resultsToday: 1,
     untriedDoneToday: 1,
   });
@@ -276,4 +280,108 @@ test("setup limits stay inside what the server accepts", () => {
   // The setup stops new uploads at the note routes' smallest burst (8 per 10 minutes).
   assert.equal(MAX_SETUP_UPLOADS, 8);
   assert.ok(MAX_SETUP_UPLOADS <= MAX_EXAM_MODULES);
+});
+
+const learnedModule = (lectureId, scores, at = "2026-10-14T10:00:00Z") => [
+  result(lectureId, "summary", 1, at),
+  ...Object.entries(scores).map(([kind, score]) => result(lectureId, kind, score, at)),
+];
+
+test("a learned module repeats every practice lesson under the target until it reaches it", () => {
+  const [state] = examModuleStates(
+    ["a"],
+    learnedModule("a", { flashcards: 1, quiz: 0.6, true_false: 0.95, written: 0.4 }),
+    0.9,
+  );
+
+  assert.equal(state.learned, true);
+  assert.equal(state.mastered, false);
+  // Weakest first: the written answer, then the quiz.
+  assert.deepEqual(state.review, ["written", "quiz"]);
+  assert.equal(state.nextKind, "written");
+
+  const [after] = examModuleStates(
+    ["a"],
+    [
+      ...learnedModule("a", { flashcards: 1, quiz: 0.6, true_false: 0.95, written: 0.4 }),
+      result("a", "written", 0.9, "2026-10-15T10:00:00Z"),
+      result("a", "quiz", 1, "2026-10-15T11:00:00Z"),
+    ],
+    0.9,
+  );
+
+  assert.deepEqual(after.review, []);
+  assert.equal(after.mastered, true);
+});
+
+test("nothing is repeated before the first pass through a module is over", () => {
+  const [state] = examModuleStates(["a"], [result("a", "summary", 1), result("a", "quiz", 0.2)], 0.9);
+
+  assert.deepEqual(state.review, []);
+  assert.equal(state.nextKind, "flashcards");
+});
+
+test("the next module unlocks once the one before it is learned, not only mastered", () => {
+  const states = examModuleStates(["a", "b"], learnedModule("a", { flashcards: 0.5, quiz: 0.5, true_false: 0.5, written: 0.5 }), 0.9);
+
+  assert.equal(states[0].mastered, false);
+  assert.equal(states[1].unlocked, true);
+});
+
+test("the exam moves from learn to practise to prove to ready", () => {
+  const all = { flashcards: 1, quiz: 1, true_false: 1, written: 1 };
+  const weak = { flashcards: 1, quiz: 0.5, true_false: 1, written: 1 };
+  const passed = { at: "2026-10-16T10:00:00Z", percentage: 92, byLecture: { a: 0.95, b: 0.9 } };
+
+  const learning = examModuleStates(["a", "b"], learnedModule("a", all), 0.9);
+  assert.equal(examStage(learning, null, 0.9), "learn");
+  assert.deepEqual(examNextStep(learning, "learn"), { type: "lesson", lectureId: "b", kind: "summary", review: false });
+
+  const practising = examModuleStates(["a", "b"], [...learnedModule("a", all), ...learnedModule("b", weak)], 0.9);
+  assert.equal(examStage(practising, null, 0.9), "practise");
+  assert.deepEqual(examNextStep(practising, "practise"), { type: "lesson", lectureId: "b", kind: "quiz", review: true });
+
+  const proving = examModuleStates(["a", "b"], [...learnedModule("a", all), ...learnedModule("b", all)], 0.9);
+  assert.equal(examStage(proving, null, 0.9), "prove");
+  assert.deepEqual(examNextStep(proving, "prove"), { type: "mock" });
+
+  const ready = examModuleStates(["a", "b"], [...learnedModule("a", all), ...learnedModule("b", all)], 0.9, passed);
+  assert.equal(examStage(ready, passed, 0.9), "ready");
+  // Ready still gets a lesson: the weakest one, to keep it fresh.
+  assert.equal(examNextStep(ready, "ready")?.type, "lesson");
+});
+
+test("a mock under the target sends its weak modules back to prove themselves", () => {
+  const all = { flashcards: 1, quiz: 1, true_false: 1, written: 1 };
+  const failed = { at: "2026-10-16T10:00:00Z", percentage: 70, byLecture: { a: 0.95, b: 0.5 } };
+  const results = [...learnedModule("a", all), ...learnedModule("b", all)];
+  const states = examModuleStates(["a", "b"], results, 0.9, failed);
+
+  // Module a did well in the mock; module b has to pass its quiz and written answer again.
+  assert.equal(states[0].mastered, true);
+  assert.deepEqual([...states[1].review].sort(), ["quiz", "written"]);
+  assert.equal(examStage(states, failed, 0.9), "practise");
+
+  const redone = examModuleStates(
+    ["a", "b"],
+    [...results, result("b", "quiz", 1, "2026-10-17T10:00:00Z"), result("b", "written", 0.9, "2026-10-17T11:00:00Z")],
+    0.9,
+    failed,
+  );
+
+  // Proven again, so the mock is next once more.
+  assert.equal(examStage(redone, failed, 0.9), "prove");
+});
+
+test("the daily goal counts the repeats still owed", () => {
+  const plan = dailyPlan({
+    examDate: "2026-10-26",
+    today: "2026-10-14",
+    dailyMinutes: 30,
+    states: [{ lessonsDone: 5, review: ["quiz", "written"] }],
+    resultsToday: 0,
+    untriedDoneToday: 0,
+  });
+
+  assert.equal(plan.remaining, 2);
 });

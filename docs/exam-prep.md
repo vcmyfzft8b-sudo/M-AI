@@ -16,9 +16,30 @@ study path. It follows Astra AI's exam-prep flow, drawn in Memo's own components
 
 Each note in an exam is a **module**. A module is a fixed chain of five lessons, in Astra's order:
 summary → flashcards → quiz → true/false → one written answer. A module is unlocked when it is the
-first one, when the module before it is complete, or when the learner has already started it (a
-locked module offers a test-out quiz). Mastery is the average of the latest score of the four
+first one, when the module before it has been learned, or when the learner has already started it
+(a locked module offers a test-out quiz). Mastery is the average of the latest score of the four
 practice lessons; the summary counts as done but not as mastery.
+
+### Until the goal is reached and proved
+
+The exam does not end when every lesson has been opened once. Like Astra, it keeps giving work
+until the learner has the knowledge and has shown it (`examStage`, `examNextStep`):
+
+1. **Learn** (`learned`): every lesson of every module done once.
+2. **Practise** (`mastered`): every practice lesson's latest score at or above the exam's target.
+   A lesson under it comes back on the path as a repeat station, weakest first, and each try draws
+   new questions (the lesson seed counts the attempts). Modules are taken in order: the path points
+   at the first one not yet mastered.
+3. **Prove**: with every module mastered, the mock exam is the next step. Passing it at the target
+   makes the learner **ready**. A mock under the target sends the modules it found weak back to
+   practise: their quiz and written answer count only once redone after that mock
+   (`MOCK_PROOF_KINDS`), and then the mock is next again.
+4. **Ready**: the path still offers the weakest lesson each day ("Osveži") until the exam, and a
+   score that slips below the target puts that module back into practice.
+
+The daily goal counts the repeats still owed, not only untried lessons. The lesson's done screen
+applies the same rule to decide what comes next (the next lesson, a repeat, the next module, or the
+mock exam) and says when a score is under the target.
 
 All of that arithmetic, plus the daily goal, the streak, grade mapping and how
 material is picked, is in `src/lib/exams/exam-model.ts`. It is pure and tested

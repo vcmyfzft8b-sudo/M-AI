@@ -13,6 +13,7 @@ import {
   daysBetween,
   examMastery,
   examModuleStates,
+  examStage,
   gradeForPercentage,
   mockQuestionCounts,
   pickFlashcards,
@@ -25,7 +26,9 @@ import {
   summarizeMock,
   type DailyPlan,
   type ExamLessonKind,
+  type ExamStage,
   type MockAnswerResult,
+  type MockOutcome,
   type ModuleState,
   type TrueFalseStatement,
 } from "@/lib/exams/exam-model";
@@ -65,6 +68,8 @@ export type ExamDetail = {
   daysLeft: number;
   mastery: number;
   modules: ExamModuleView[];
+  /** Learn, practise, prove with the mock exam, then ready: see `examStage`. */
+  stage: ExamStage;
   plan: DailyPlan;
   streak: number;
   latestMock: ExamMockSummary | null;
@@ -191,7 +196,7 @@ export async function listExamsForUser(
   return exams.map((exam) => {
     const lectureIds = modules.filter((row) => row.exam_id === exam.id).map((row) => row.lecture_id);
     const examResults = results.filter((row) => row.exam_id === exam.id);
-    const states = examModuleStates(lectureIds, examResults);
+    const states = examModuleStates(lectureIds, examResults, exam.target_mastery / 100);
     const plan = planFor(exam, states, examResults, today);
 
     return {
@@ -289,6 +294,35 @@ async function readModules(supabase: ExamSupabase, userId: string, examId: strin
   return { lectureIds: lectureIds.filter((id) => lectures.has(id)), lectures };
 }
 
+/** A graded mock exam's score per note, from the questions it snapshotted and how they were marked. */
+function mockOutcomeFrom(
+  row: Pick<ExamMockAttemptRow, "percentage" | "graded_at" | "questions" | "answers"> | null,
+): MockOutcome | null {
+  if (!row || row.percentage === null || !row.graded_at) {
+    return null;
+  }
+
+  const answers = new Map(((row.answers ?? []) as MockGradedAnswer[]).map((answer) => [answer.questionId, answer]));
+  const totals = new Map<string, { score: number; max: number }>();
+
+  for (const question of (row.questions ?? []) as MockQuestion[]) {
+    const answer = answers.get(question.id);
+    const max = answer?.maxScore ?? (question.kind === "choice" ? 1 : PRACTICE_QUESTION_MAX_SCORE);
+    const entry = totals.get(question.lectureId) ?? { score: 0, max: 0 };
+    entry.score += answer?.marked ? answer.score : 0;
+    entry.max += max;
+    totals.set(question.lectureId, entry);
+  }
+
+  return {
+    at: row.graded_at,
+    percentage: row.percentage,
+    byLecture: Object.fromEntries(
+      [...totals.entries()].map(([lectureId, entry]) => [lectureId, entry.max > 0 ? entry.score / entry.max : 0]),
+    ),
+  };
+}
+
 export async function getExamDetail(
   supabase: ExamSupabase,
   userId: string,
@@ -308,7 +342,7 @@ export async function getExamDetail(
     readActiveDays(supabase, userId),
     supabase
       .from("exam_mock_attempts")
-      .select("id, percentage, graded_at")
+      .select("id, percentage, graded_at, questions, answers")
       .eq("exam_id", examId)
       .eq("user_id", userId)
       .eq("status", "graded")
@@ -317,7 +351,13 @@ export async function getExamDetail(
       .maybeSingle(),
   ]);
 
-  const states = examModuleStates(lectureIds, results);
+  const mockRow = mock.data as Pick<
+    ExamMockAttemptRow,
+    "id" | "percentage" | "graded_at" | "questions" | "answers"
+  > | null;
+  const mockOutcome = mockOutcomeFrom(mockRow);
+  const target = exam.target_mastery / 100;
+  const states = examModuleStates(lectureIds, results, target, mockOutcome);
   const modules = states.map((state) => {
     const lecture = lectures.get(state.lectureId);
 
@@ -328,14 +368,13 @@ export async function getExamDetail(
       ready: lecture?.status === "ready",
     };
   });
-  const mockRow = mock.data as Pick<ExamMockAttemptRow, "id" | "percentage" | "graded_at"> | null;
-
   return {
     exam,
     today,
     daysLeft: daysBetween(today, exam.exam_date),
     mastery: examMastery(states),
     modules,
+    stage: examStage(states, mockOutcome, target),
     plan: planFor(exam, states, results, today),
     streak: streakDays(activeDays, today),
     latestMock:
@@ -638,8 +677,23 @@ export async function loadLesson(
   userId: string,
   input: { examId: string; lectureId: string; kind: ExamLessonKind; now?: Date },
 ): Promise<LessonLoad> {
-  const today = dayKey(input.now ?? new Date());
-  const seed = `${input.examId}:${input.lectureId}:${today}`;
+  /*
+   * Each try of a lesson draws its own questions, so repeating a lesson until it reaches the
+   * target is new practice, not the same five questions again.
+   */
+  const { count: attempts, error: attemptsError } = await supabase
+    .from("exam_lesson_results")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("exam_id", input.examId)
+    .eq("lecture_id", input.lectureId)
+    .eq("lesson_kind", input.kind);
+
+  if (attemptsError) {
+    throw attemptsError;
+  }
+
+  const seed = `${input.examId}:${input.lectureId}:${input.kind}:${attempts ?? 0}`;
 
   if (input.kind === "summary") {
     const { data, error } = await supabase

@@ -141,14 +141,34 @@ export type ModuleState = {
   mastery: number;
   /** Lessons tried at least once, out of `EXAM_LESSON_KINDS.length`. */
   lessonsDone: number;
-  completed: boolean;
+  /** Every lesson has been done once: the first pass through the module is over. */
+  learned: boolean;
+  /** Learned, and every practice lesson's latest score reaches the exam's target. */
+  mastered: boolean;
   unlocked: boolean;
-  /** The lesson "continue" opens: the first untried one, else the weakest practice lesson. */
+  /** Practice lessons to repeat until they reach the target, weakest first. Empty until learned. */
+  review: ExamLessonKind[];
+  /** The lesson this module wants next: the first untried one, else the weakest to repeat. */
   nextKind: ExamLessonKind;
   /** Whether each lesson has been done, keyed by kind. */
   done: Record<ExamLessonKind, boolean>;
   /** The latest score of each practice lesson, or null when it has not been tried. */
   latest: Record<ExamLessonKind, number | null>;
+};
+
+/*
+ * A failed mock exam asks for proof again: in a module the mock found weak, the lessons that
+ * test the same way (the quiz and the written answer) count only once they are redone after it.
+ */
+export const MOCK_PROOF_KINDS = ["quiz", "written"] as const satisfies readonly ExamLessonKind[];
+
+/** A graded mock exam, as far as the path cares: when, how well, and per note how well. */
+export type MockOutcome = {
+  at: string;
+  /** 0..100. */
+  percentage: number;
+  /** 0..1 per note the mock asked about. */
+  byLecture: Record<string, number>;
 };
 
 function latestByKind(results: LessonResultLike[]) {
@@ -165,7 +185,11 @@ function latestByKind(results: LessonResultLike[]) {
   return latest;
 }
 
-export function moduleProgress(results: LessonResultLike[]) {
+/**
+ * One module's progress against the exam's target (0..1). `proveSince` is set when a failed mock
+ * found this module weak; its quiz and written answer then have to be passed again after it.
+ */
+export function moduleProgress(results: LessonResultLike[], target = 1, proveSince: string | null = null) {
   const latest = latestByKind(results);
   const done = {} as Record<ExamLessonKind, boolean>;
   const scores = {} as Record<ExamLessonKind, number | null>;
@@ -179,7 +203,16 @@ export function moduleProgress(results: LessonResultLike[]) {
     PRACTICE_LESSON_KINDS.reduce((sum, kind) => sum + clamp01(scores[kind] ?? 0), 0) /
     PRACTICE_LESSON_KINDS.length;
   const lessonsDone = EXAM_LESSON_KINDS.filter((kind) => done[kind]).length;
-  const completed = lessonsDone === EXAM_LESSON_KINDS.length;
+  const learned = lessonsDone === EXAM_LESSON_KINDS.length;
+  const needsProof = (kind: ExamLessonKind) =>
+    proveSince !== null &&
+    (MOCK_PROOF_KINDS as readonly ExamLessonKind[]).includes(kind) &&
+    (latest[kind]?.at ?? "") <= proveSince;
+  const review = learned
+    ? [...PRACTICE_LESSON_KINDS]
+        .filter((kind) => (scores[kind] ?? 0) < target - 1e-9 || needsProof(kind))
+        .sort((left, right) => (scores[left] ?? 0) - (scores[right] ?? 0))
+    : [];
   const firstUntried = EXAM_LESSON_KINDS.find((kind) => !done[kind]);
   const weakest = [...PRACTICE_LESSON_KINDS].sort(
     (left, right) => (scores[left] ?? 0) - (scores[right] ?? 0),
@@ -188,8 +221,10 @@ export function moduleProgress(results: LessonResultLike[]) {
   return {
     mastery,
     lessonsDone,
-    completed,
-    nextKind: firstUntried ?? weakest,
+    learned,
+    mastered: learned && review.length === 0,
+    review,
+    nextKind: firstUntried ?? review[0] ?? weakest,
     done,
     latest: scores,
   };
@@ -197,12 +232,14 @@ export function moduleProgress(results: LessonResultLike[]) {
 
 /**
  * Every module's state, in path order. A module is unlocked when it is the first, when the one
- * before it is complete, or when the learner has already started it (Astra's "test out": taking
- * a locked module's quiz opens it).
+ * before it has been learned, or when the learner has already started it (Astra's "test out":
+ * taking a locked module's quiz opens it). `target` is the exam's goal as 0..1.
  */
 export function examModuleStates(
   lectureIdsInOrder: string[],
   results: LessonResultLike[],
+  target = 1,
+  mock: MockOutcome | null = null,
 ): ModuleState[] {
   const byLecture = new Map<string, LessonResultLike[]>();
 
@@ -212,17 +249,89 @@ export function examModuleStates(
     byLecture.set(result.lecture_id, list);
   }
 
+  const failedMock = mock && mock.percentage < target * 100 - 1e-9 ? mock : null;
   const states: ModuleState[] = [];
 
   lectureIdsInOrder.forEach((lectureId, position) => {
-    const progress = moduleProgress(byLecture.get(lectureId) ?? []);
+    const weakInMock =
+      failedMock !== null && lectureId in failedMock.byLecture && failedMock.byLecture[lectureId] < target - 1e-9;
+    const progress = moduleProgress(byLecture.get(lectureId) ?? [], target, weakInMock ? failedMock.at : null);
     const previous = states[position - 1];
-    const unlocked = position === 0 || Boolean(previous?.completed) || progress.lessonsDone > 0;
+    const unlocked = position === 0 || Boolean(previous?.learned) || progress.lessonsDone > 0;
 
     states.push({ lectureId, position, unlocked, ...progress });
   });
 
   return states;
+}
+
+/*
+ * Where the learner is, the way Astra moves a student to the exam: learn every module once,
+ * practise each until its lessons reach the target, prove it with a mock exam at or above the
+ * target, then stay ready. A score that slips, or a mock that falls short, sends them back.
+ */
+export type ExamStage = "learn" | "practise" | "prove" | "ready";
+
+export function examStage(states: Pick<ModuleState, "learned" | "mastered">[], mock: MockOutcome | null, target: number): ExamStage {
+  if (states.some((state) => !state.learned)) {
+    return "learn";
+  }
+
+  if (states.some((state) => !state.mastered)) {
+    return "practise";
+  }
+
+  return mock && mock.percentage >= target * 100 - 1e-9 ? "ready" : "prove";
+}
+
+export type ExamNextStep =
+  | { type: "lesson"; lectureId: string; kind: ExamLessonKind; review: boolean }
+  | { type: "mock" }
+  | null;
+
+/**
+ * What the path points at. Modules are taken in order and each is finished before the next:
+ * its untried lessons, then its lessons still under the target. With every module mastered the
+ * mock exam is next; once it has been passed, the weakest lesson anywhere keeps the knowledge
+ * fresh until the exam. Modules still being made, locked or not paid for are skipped.
+ */
+export function examNextStep(
+  states: Pick<ModuleState, "lectureId" | "learned" | "mastered" | "unlocked" | "review" | "nextKind" | "done" | "latest">[],
+  stage: ExamStage,
+  canOpen: (lectureId: string) => boolean = () => true,
+): ExamNextStep {
+  const open = states.filter((state) => state.unlocked && canOpen(state.lectureId));
+
+  for (const state of open) {
+    if (!state.mastered) {
+      const untried = EXAM_LESSON_KINDS.find((kind) => !state.done[kind]);
+      return untried
+        ? { type: "lesson", lectureId: state.lectureId, kind: untried, review: false }
+        : { type: "lesson", lectureId: state.lectureId, kind: state.review[0] ?? state.nextKind, review: true };
+    }
+  }
+
+  if (stage === "prove") {
+    return { type: "mock" };
+  }
+
+  if (stage === "ready") {
+    let best: { lectureId: string; kind: ExamLessonKind; score: number } | null = null;
+
+    for (const state of open) {
+      for (const kind of PRACTICE_LESSON_KINDS) {
+        const score = state.latest[kind] ?? 0;
+
+        if (!best || score < best.score) {
+          best = { lectureId: state.lectureId, kind, score };
+        }
+      }
+    }
+
+    return best ? { type: "lesson", lectureId: best.lectureId, kind: best.kind, review: true } : null;
+  }
+
+  return null;
 }
 
 export function examMastery(states: Pick<ModuleState, "mastery">[]): number {
@@ -254,7 +363,7 @@ export type DailyPlan = {
   doneToday: number;
   /** Days left before the exam, today included; 0 once the exam day has passed. */
   daysLeft: number;
-  /** Untried lessons across the whole exam. */
+  /** Lessons still owed across the exam: untried ones, plus repeats under the target. */
   remaining: number;
 };
 
@@ -267,13 +376,14 @@ export function dailyPlan(input: {
   examDate: string;
   today: string;
   dailyMinutes: number;
-  states: Pick<ModuleState, "lessonsDone">[];
+  states: Pick<ModuleState, "lessonsDone" | "review">[];
   resultsToday: number;
   untriedDoneToday: number;
 }): DailyPlan {
   const totalLessons = input.states.length * EXAM_LESSON_KINDS.length;
   const tried = input.states.reduce((sum, state) => sum + state.lessonsDone, 0);
-  const remaining = Math.max(0, totalLessons - tried);
+  const repeats = input.states.reduce((sum, state) => sum + state.review.length, 0);
+  const remaining = Math.max(0, totalLessons - tried) + repeats;
   const remainingAtStartOfDay = remaining + input.untriedDoneToday;
   const untilExam = daysBetween(input.today, input.examDate);
   const daysLeft = untilExam < 0 ? 0 : Math.max(1, untilExam);

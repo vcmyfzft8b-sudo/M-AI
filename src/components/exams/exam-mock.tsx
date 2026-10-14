@@ -204,6 +204,7 @@ export function ExamMock({
   if (phase.name === "setup") {
     return (
       <ExamScreen
+        refreshOnBack
         backHref={examHref}
         backLabel={examTitle}
         backIcon="close"
@@ -279,8 +280,13 @@ export function ExamMock({
 
   if (phase.name === "grading") {
     return (
-      <ExamScreen backHref={examHref}
-        backLabel={examTitle} backIcon="close" title={t("exam.mock.title")}>
+      <ExamScreen
+        refreshOnBack
+        backHref={examHref}
+        backLabel={examTitle}
+        backIcon="close"
+        title={t("exam.mock.title")}
+      >
         <div className="memo-exam-center memo-exam-grading" role="status" aria-live="polite">
           <MemoBuddy mood="think" size="7rem" thought="📝" />
           <h1 className="memo-exam-step-title">{t("exam.mock.grading.title")}</h1>
@@ -299,6 +305,7 @@ export function ExamMock({
 
     return (
       <ExamScreen
+        refreshOnBack
         backHref={examHref}
         backLabel={examTitle}
         backIcon="close"
@@ -312,12 +319,12 @@ export function ExamMock({
               <button
                 type="button"
                 className="memo-button-coral"
-                onClick={() => navigateWithFeedback(lessonHref(examId, result.weakestLectureId!, "quiz"))}
+                onClick={() => navigateWithFeedback(lessonHref(examId, result.weakestLectureId!, "quiz"), { refresh: true })}
               >
                 {t("exam.mock.result.practice")}
               </button>
             ) : (
-              <button type="button" className="memo-button-coral" onClick={() => navigateWithFeedback(examHref)}>
+              <button type="button" className="memo-button-coral" onClick={() => navigateWithFeedback(examHref, { refresh: true })}>
                 {t("exam.lesson.done.back")}
               </button>
             )}
@@ -450,6 +457,7 @@ export function ExamMock({
 
   return (
     <ExamScreen
+      refreshOnBack
       backHref={examHref}
         backLabel={examTitle}
       backIcon="close"

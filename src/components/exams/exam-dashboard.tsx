@@ -12,35 +12,29 @@ import { ExamScreen } from "@/components/exams/exam-screen";
 import { formatExamDay } from "@/components/exams/exam-format";
 import { LESSON_KIND_EMOJI, LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
-import { EXAM_LESSON_KINDS, percent, type ExamLessonKind } from "@/lib/exams/exam-model";
+import {
+  EXAM_LESSON_KINDS,
+  examNextStep,
+  percent,
+  type ExamLessonKind,
+  type ExamStage,
+} from "@/lib/exams/exam-model";
 import { pathBuddySide, pathOffset, pathSegment } from "@/lib/exams/exam-path";
 import type { ExamDetail, ExamModuleView } from "@/lib/exams/exams-server";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
 
-/** The lesson the path points at: the first untried one, else the weakest module's weakest lesson. */
-function nextLesson(modules: ExamModuleView[]) {
-  for (const entry of modules) {
-    if (!entry.unlocked || !entry.ready || entry.completed) {
-      continue;
-    }
-
-    const kind = EXAM_LESSON_KINDS.find((candidate) => !entry.done[candidate]);
-
-    if (kind) {
-      return { module: entry, kind };
-    }
-  }
-
-  const review = [...modules]
-    .filter((entry) => entry.unlocked && entry.ready)
-    .sort((left, right) => left.mastery - right.mastery)[0];
-
-  return review ? { module: review, kind: review.nextKind } : null;
-}
+const STAGES: { stage: Exclude<ExamStage, "ready">; key: MessageKey }[] = [
+  { stage: "learn", key: "exam.path.stage.learn" },
+  { stage: "practise", key: "exam.path.stage.practise" },
+  { stage: "prove", key: "exam.path.stage.prove" },
+];
 
 /*
  * The exam, as Astra and Duolingo draw a course: one path down the screen. Each note is a module
- * with a heading, its five lessons are stations joined by a line, the station to do next carries
- * the screen's one coral button, and Memo stands beside it. The mock exam and the exam day end it.
+ * with a heading, its five lessons are stations joined by a line, and a lesson still under the
+ * target comes back as a repeat station until it reaches it. The step to do next carries the
+ * screen's one call to action, with Memo beside it. Once every module is mastered the mock exam
+ * is that step, and passing it at the target is what makes the learner ready.
  */
 export function ExamDashboard({
   detail,
@@ -59,15 +53,27 @@ export function ExamDashboard({
   const [busy, setBusy] = useState(false);
   const [grade, setGrade] = useState(exam.actual_grade ?? "");
   const [gradeSaved, setGradeSaved] = useState(Boolean(exam.actual_grade));
-  const currentRef = useRef<HTMLLIElement | null>(null);
+  const currentRef = useRef<HTMLElement | null>(null);
   const closeMenu = useCallback(() => {
     setMenuOpen(false);
     setConfirmDelete(false);
   }, []);
   const menuSheet = useSheet(closeMenu, { locked: busy });
+  const markCurrent = useCallback((node: HTMLElement | null) => {
+    currentRef.current = node;
+  }, []);
 
   const canOpen = (lectureId: string) => hasPaidAccess || trialLectureId === lectureId;
-  const next = nextLesson(modules);
+  const stage = detail.stage;
+  const next = examNextStep(modules, stage, canOpen);
+  const target = exam.target_mastery;
+  /* Where each module's stations start on the whole path, so the line swings on across modules. */
+  const stationStarts: number[] = [];
+  modules.forEach((module, index) =>
+    stationStarts.push(
+      index === 0 ? 0 : stationStarts[index - 1] + EXAM_LESSON_KINDS.length + modules[index - 1].review.length,
+    ),
+  );
   const examPassed = detail.daysLeft < 0;
   const examToday = detail.daysLeft === 0;
 
@@ -123,8 +129,12 @@ export function ExamDashboard({
       return t("exam.dash.paid");
     }
 
-    if (module.completed) {
+    if (module.mastered) {
       return t("exam.dash.mastered", { percent: percent(module.mastery) });
+    }
+
+    if (module.learned) {
+      return t("exam.path.practise", { percent: percent(module.mastery), target });
     }
 
     return t("exam.dash.lessonsDone", { done: module.lessonsDone, total: EXAM_LESSON_KINDS.length });
@@ -168,13 +178,35 @@ export function ExamDashboard({
             <span>{t("exam.dash.target", { percent: exam.target_mastery })}</span>
           </div>
           <div>
-            <b>
-              {plan.doneToday}/{plan.goal}
-            </b>
+            {/* Past the day's goal the count stands alone; "12/5" reads like an error. */}
+            <b>{plan.doneToday >= plan.goal ? plan.doneToday : `${plan.doneToday}/${plan.goal}`}</b>
             <span>{t("exam.path.today")}</span>
           </div>
         </div>
+        <ol className="memo-exam-stages">
+          {STAGES.map((entry, index) => {
+            const reached = STAGES.findIndex((candidate) => candidate.stage === stage);
+            const state = stage === "ready" || index < reached ? "done" : index === reached ? "now" : "";
+
+            return (
+              <li key={entry.stage} className={state}>
+                <span>{state === "done" ? <Msym name="check" size="0.95rem" weight={700} /> : index + 1}</span>
+                {t(entry.key)}
+              </li>
+            );
+          })}
+        </ol>
       </header>
+
+      {stage === "ready" && !examPassed ? (
+        <div className="memo-exam-card memo-exam-after memo-exam-ready">
+          <MemoBuddy mood="cheer" size="4rem" sparkles />
+          <div>
+            <b>{t("exam.path.ready.title")}</b>
+            <p>{t("exam.path.ready.body")}</p>
+          </div>
+        </div>
+      ) : null}
 
       {examPassed ? (
         <div className="memo-exam-card memo-exam-after">
@@ -214,8 +246,12 @@ export function ExamDashboard({
 
       <div className="memo-exam-trail">
         {modules.map((module, moduleIndex) => {
-          const isCurrentModule = next?.module.lectureId === module.lectureId;
+          const isCurrentModule = next?.type === "lesson" && next.lectureId === module.lectureId;
           const locked = !module.unlocked;
+          const stations = [
+            ...EXAM_LESSON_KINDS.map((kind) => ({ kind, repeat: false })),
+            ...module.review.map((kind) => ({ kind, repeat: true })),
+          ];
 
           return (
             <section key={module.lectureId} className="memo-exam-trail-unit">
@@ -223,7 +259,7 @@ export function ExamDashboard({
                 className={[
                   "memo-exam-trail-banner",
                   isCurrentModule ? "current" : "",
-                  module.completed ? "done" : "",
+                  module.mastered ? "done" : "",
                   locked || !module.ready ? "locked" : "",
                 ]
                   .filter(Boolean)
@@ -242,28 +278,39 @@ export function ExamDashboard({
                   >
                     {t("exam.path.skip")}
                   </button>
-                ) : module.completed ? (
+                ) : module.mastered ? (
                   <Msym name="check_circle" size="1.6rem" className="memo-exam-trail-banner-mark" />
                 ) : null}
               </div>
 
               <ol className="memo-exam-trail-stations">
-                {EXAM_LESSON_KINDS.map((kind, kindIndex) => {
-                  const index = moduleIndex * EXAM_LESSON_KINDS.length + kindIndex;
+                {stations.map(({ kind, repeat }, stationIndex) => {
+                  const index = stationStarts[moduleIndex] + stationIndex;
                   const offset = pathOffset(index);
                   const segment = pathSegment(index);
-                  const isCurrent = isCurrentModule && next?.kind === kind;
-                  const isDone = module.done[kind];
+                  /*
+                   * A repeat station is current when the next step repeats that lesson; the
+                   * first-pass station is current otherwise, including the "keep it fresh"
+                   * lesson once the learner is ready (it has no repeat station).
+                   */
+                  const isCurrent =
+                    isCurrentModule &&
+                    next?.type === "lesson" &&
+                    next.kind === kind &&
+                    (repeat ? next.review : !next.review || !module.review.includes(kind));
+                  const isDone = repeat ? false : module.done[kind];
                   const blocked = !module.ready;
-                  const last = kindIndex === EXAM_LESSON_KINDS.length - 1;
+                  const last = stationIndex === stations.length - 1;
+                  const score = module.latest[kind];
 
                   return (
                     <li
-                      key={kind}
-                      ref={isCurrent ? currentRef : undefined}
+                      key={`${kind}:${repeat ? "repeat" : "first"}`}
+                      ref={isCurrent ? markCurrent : undefined}
                       className={[
                         "memo-exam-station",
                         isDone ? "done" : "",
+                        repeat ? "repeat" : "",
                         isCurrent ? "current" : "",
                         locked || blocked ? "locked" : "",
                       ]
@@ -299,6 +346,10 @@ export function ExamDashboard({
                           <span className="memo-exam-station-check" aria-hidden="true">
                             <Msym name="check" size="0.9rem" weight={700} />
                           </span>
+                        ) : repeat ? (
+                          <span className="memo-exam-station-check repeat" aria-hidden="true">
+                            <Msym name="replay" size="0.9rem" weight={700} />
+                          </span>
                         ) : null}
                       </button>
                       {isCurrent ? (
@@ -308,14 +359,25 @@ export function ExamDashboard({
                             className="memo-exam-station-go"
                             onClick={() => openModule(module, kind)}
                           >
-                            {t("exam.path.start")} · {t(LESSON_KIND_KEY[kind])}
+                            {t(
+                              stage === "ready"
+                                ? "exam.path.keepSharp"
+                                : repeat
+                                  ? "exam.path.repeat"
+                                  : "exam.path.start",
+                            )}{" "}
+                            · {t(LESSON_KIND_KEY[kind])}
                           </button>
                           <span className={`memo-exam-station-buddy ${pathBuddySide(index)}`}>
                             <MemoBuddy mood="wave" size="4.6rem" />
                           </span>
                         </>
                       ) : (
-                        <span className="memo-exam-station-label">{t(LESSON_KIND_KEY[kind])}</span>
+                        <span className="memo-exam-station-label">
+                          {repeat
+                            ? `${t("exam.path.repeat")} · ${t(LESSON_KIND_KEY[kind])} · ${percent(score ?? 0)} %`
+                            : t(LESSON_KIND_KEY[kind])}
+                        </span>
                       )}
                     </li>
                   );
@@ -325,20 +387,43 @@ export function ExamDashboard({
           );
         })}
 
-        <InstantLink href={`/app/exams/${exam.id}/mock`} className="memo-exam-trail-goal">
-          <span className="memo-exam-trail-trophy">
+        {/* The proof: the mock exam, passed at the target. */}
+        <div
+          ref={next?.type === "mock" ? markCurrent : undefined}
+          className={[
+            "memo-exam-trail-goal",
+            next?.type === "mock" ? "current" : "",
+            stage === "ready" ? "done" : "",
+            stage === "learn" || stage === "practise" ? "later" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          <InstantLink href={`/app/exams/${exam.id}/mock`} className="memo-exam-trail-trophy" aria-label={t("exam.mock.title")}>
             <Emoji symbol="🏆" size="2.2rem" />
-          </span>
-          <b>{t("exam.mock.title")}</b>
+          </InstantLink>
+          {next?.type === "mock" ? (
+            <>
+              <InstantLink href={`/app/exams/${exam.id}/mock`} className="memo-exam-station-go">
+                {t("exam.path.start")} · {t("exam.mock.title")}
+              </InstantLink>
+              <span className="memo-exam-station-buddy right">
+                <MemoBuddy mood="wave" size="4.6rem" />
+              </span>
+            </>
+          ) : (
+            <b>{t("exam.mock.title")}</b>
+          )}
           <span>
-            {detail.latestMock
-              ? t("exam.dash.mock.last", {
-                  grade: detail.latestMock.grade,
-                  percent: Math.round(detail.latestMock.percentage),
-                })
-              : t("exam.dash.mock.body")}
+            {stage === "ready" && detail.latestMock
+              ? t("exam.path.mock.passed", { percent: Math.round(detail.latestMock.percentage) })
+              : stage === "prove"
+                ? detail.latestMock
+                  ? t("exam.path.mock.retry", { percent: Math.round(detail.latestMock.percentage), target })
+                  : t("exam.path.mock.prove", { target })
+                : t("exam.path.mock.later")}
           </span>
-        </InstantLink>
+        </div>
 
         <div className="memo-exam-trail-finish">
           <Emoji symbol="🏁" size="1.3rem" />

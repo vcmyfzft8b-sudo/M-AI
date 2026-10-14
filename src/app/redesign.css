@@ -25846,6 +25846,66 @@ button.memo-exam-card:hover {
   -webkit-line-clamp: 2;
 }
 
+/* Where the learner is on the way to the exam: learn, practise, prove. */
+.memo-exam-stages {
+  display: flex;
+  align-self: stretch;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-exam-stages li {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-width: 0;
+  min-height: 2.2rem;
+  padding: 0 0.6rem;
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.memo-exam-stages li > span {
+  display: grid;
+  flex: 0 0 auto;
+  width: 1.3rem;
+  height: 1.3rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--tile);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-stages li.now {
+  background: color-mix(in srgb, var(--promo) 16%, var(--surface));
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--promo) 55%, transparent);
+  color: var(--text);
+}
+
+.memo-exam-stages li.now > span {
+  background: var(--promo);
+  color: var(--on-photo);
+}
+
+.memo-exam-stages li.done {
+  color: var(--text);
+}
+
+.memo-exam-stages li.done > span {
+  background: color-mix(in srgb, var(--promo) 22%, var(--surface));
+  color: var(--promo);
+}
+
 /* The exam in three numbers, small enough to sit in one row above the path. */
 .memo-exam-stats.compact {
   align-self: stretch;
@@ -26080,6 +26140,22 @@ button.memo-exam-card:hover {
   color: var(--on-photo);
 }
 
+/* A lesson still under the target, back on the path until it reaches it. */
+.memo-exam-station.repeat .memo-exam-station-node {
+  background: var(--surface);
+  box-shadow: 0 5px 0 var(--line), inset 0 0 0 2px color-mix(in srgb, var(--promo) 60%, transparent);
+}
+
+.memo-exam-station.repeat.current .memo-exam-station-node {
+  background: var(--coral);
+}
+
+.memo-exam-station-check.repeat {
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--bg), inset 0 0 0 2px var(--promo);
+  color: var(--promo);
+}
+
 .memo-exam-station-label {
   position: relative;
   z-index: 1;
@@ -26144,16 +26220,15 @@ button.memo-exam-card:hover {
   left: calc(50% + 3.6rem);
 }
 
-/* The end of the path: the mock exam, then the exam itself. */
+/* The end of the path: the mock exam that proves it, then the exam itself. */
 .memo-exam-trail-goal {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
   margin-top: 0.4rem;
-  color: inherit;
   text-align: center;
-  text-decoration: none;
 }
 
 .memo-exam-trail-trophy {
@@ -26165,10 +26240,33 @@ button.memo-exam-card:hover {
   border-radius: 999px;
   background: var(--upgrade-tint);
   box-shadow: 0 5px 0 var(--upgrade-line), inset 0 0 0 2px var(--upgrade-line);
+  color: inherit;
+  text-decoration: none;
 }
 
-.memo-exam-trail-goal:hover .memo-exam-trail-trophy {
+.memo-exam-trail-trophy:hover {
   box-shadow: 0 5px 0 var(--upgrade-line), inset 0 0 0 2px var(--upgrade-line), 0 0 0 1px var(--hover-ring);
+}
+
+.memo-exam-trail-trophy:focus-visible {
+  outline: none;
+  box-shadow: 0 5px 0 var(--upgrade-line), 0 0 0 3px var(--focus-ring);
+}
+
+/* Not yet: every module has to be mastered first. It still opens, for anyone who wants a try. */
+.memo-exam-trail-goal.later .memo-exam-trail-trophy {
+  opacity: 0.55;
+}
+
+.memo-exam-trail-goal.current .memo-exam-trail-trophy {
+  background: var(--coral);
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 55%, var(--text)), 0 0 0 6px color-mix(in srgb, var(--promo) 22%, transparent);
+  animation: memo-station-pulse 2.2s ease-in-out infinite;
+}
+
+.memo-exam-trail-goal.done .memo-exam-trail-trophy {
+  background: color-mix(in srgb, var(--promo) 18%, var(--surface));
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 40%, var(--surface)), inset 0 0 0 2px color-mix(in srgb, var(--promo) 45%, transparent);
 }
 
 .memo-exam-trail-goal b {
@@ -26176,10 +26274,20 @@ button.memo-exam-card:hover {
   font-weight: 750;
 }
 
-.memo-exam-trail-goal span {
+.memo-exam-trail-goal > span:not(.memo-exam-station-buddy) {
   color: var(--muted);
   font-size: 0.86rem;
   font-weight: 600;
+}
+
+.memo-exam-trail-goal .memo-exam-station-buddy {
+  top: 0.4rem;
+}
+
+a.memo-exam-station-go {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
 
 .memo-exam-trail-finish {

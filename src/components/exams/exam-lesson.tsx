@@ -13,7 +13,7 @@ import { StudyPracticeQuestion, StudyQuizQuestion } from "@/components/study-que
 import { LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
 import { ExamScreen } from "@/components/exams/exam-screen";
 import { MemoBuddy, type BuddyMood } from "@/components/exams/memo-buddy";
-import { EXAM_LESSON_KINDS, type ExamLessonKind } from "@/lib/exams/exam-model";
+import { EXAM_LESSON_KINDS, PRACTICE_LESSON_KINDS, type ExamLessonKind } from "@/lib/exams/exam-model";
 import type { LessonGenerator, LessonLoad, LessonPayload } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { FLASHCARD_EXIT_ANIMATION_MS, type FlashcardBucket } from "@/lib/study/flashcard-drag";
@@ -41,7 +41,15 @@ type Phase =
   | { name: "playing"; lesson: LessonPayload }
   | { name: "zone"; correct: number; total: number }
   | { name: "saving" }
-  | { name: "done"; correct: number; total: number; moduleCompleted: boolean };
+  | {
+      name: "done";
+      correct: number;
+      total: number;
+      headline: "lesson" | "learned" | "mastered";
+      /** The score, when a practice lesson came in under the target and will come back. */
+      below: number | null;
+      following: { label: string; href: string } | null;
+    };
 
 type WrittenMark = {
   marked: boolean;
@@ -57,20 +65,34 @@ export type ExamLessonModule = {
   title: string;
   position: number;
   done: Record<ExamLessonKind, boolean>;
+  latest: Record<ExamLessonKind, number | null>;
+  /** Practice lessons the path still wants repeated, weakest first. */
+  review: ExamLessonKind[];
+  learned: boolean;
+  mastered: boolean;
 };
+
+/** Where the path goes after this module: the next module still to master, or the mock exam. */
+export type ExamLessonAfter =
+  | { type: "module"; lectureId: string; title: string; kind: ExamLessonKind }
+  | { type: "mock" }
+  | null;
 
 export function ExamLesson({
   examId,
   examTitle,
   module,
   kind,
-  nextModule,
+  target,
+  after,
 }: {
   examId: string;
   examTitle: string;
   module: ExamLessonModule;
   kind: ExamLessonKind;
-  nextModule: { lectureId: string; title: string } | null;
+  /** The exam's goal, 0..100. */
+  target: number;
+  after: ExamLessonAfter;
 }) {
   const { t } = useTranslations();
   const { navigateWithFeedback } = useInstantNavigation();
@@ -159,15 +181,52 @@ export function ExamLesson({
     }
 
     const doneAfter = { ...module.done, [kind]: true };
-    const moduleCompleted = EXAM_LESSON_KINDS.every((entry) => doneAfter[entry]);
 
     if (kind === "summary") {
-      navigateWithFeedback(lessonHref(examId, module.lectureId, nextKindAfter(doneAfter) ?? "flashcards"));
+      navigateWithFeedback(lessonHref(examId, module.lectureId, nextKindAfter(doneAfter) ?? "flashcards"), { refresh: true });
       return;
     }
 
-    react(total === 0 || correct / total >= 0.6 ? "cheer" : "happy");
-    setPhase({ name: "done", correct, total, moduleCompleted: moduleCompleted && !module.done[kind] });
+    /*
+     * The same rule the path uses (`moduleProgress`): once every lesson has been done, a practice
+     * lesson under the target comes back until it reaches it, and the module is mastered when
+     * none is left. Lessons the path already wanted repeated for another reason stay wanted.
+     */
+    const goal = target / 100;
+    const score = total > 0 ? Math.min(1, correct / total) : 1;
+    const isPractice = (PRACTICE_LESSON_KINDS as readonly ExamLessonKind[]).includes(kind);
+    const latestAfter = { ...module.latest, [kind]: isPractice ? score : module.latest[kind] };
+    const learnedAfter = EXAM_LESSON_KINDS.every((entry) => doneAfter[entry]);
+    const reviewAfter = learnedAfter
+      ? [...PRACTICE_LESSON_KINDS]
+          .filter(
+            (entry) =>
+              (latestAfter[entry] ?? 0) < goal - 1e-9 || (entry !== kind && module.review.includes(entry)),
+          )
+          .sort((left, right) => (latestAfter[left] ?? 0) - (latestAfter[right] ?? 0))
+      : [];
+    const masteredAfter = learnedAfter && reviewAfter.length === 0;
+    const untried = nextKindAfter(doneAfter);
+    const following = untried
+      ? { label: t("exam.lesson.done.next", { lesson: t(LESSON_KIND_KEY[untried]) }), href: lessonHref(examId, module.lectureId, untried) }
+      : reviewAfter[0]
+        ? { label: t("exam.lesson.done.repeat", { lesson: t(LESSON_KIND_KEY[reviewAfter[0]]) }), href: lessonHref(examId, module.lectureId, reviewAfter[0]) }
+        : after?.type === "module"
+          ? { label: t("exam.lesson.done.nextModule", { title: after.title }), href: lessonHref(examId, after.lectureId, after.kind) }
+          : after?.type === "mock"
+            ? { label: t("exam.lesson.done.mock"), href: `${examHref}/mock` }
+            : null;
+    const below = isPractice && score < goal - 1e-9 ? Math.round(score * 100) : null;
+
+    react(below === null ? "cheer" : "happy");
+    setPhase({
+      name: "done",
+      correct,
+      total,
+      headline: masteredAfter && !module.mastered ? "mastered" : learnedAfter && !module.learned ? "learned" : "lesson",
+      below,
+      following,
+    });
   }
 
   function nextKindAfter(done: Record<ExamLessonKind, boolean>) {
@@ -179,7 +238,7 @@ export function ExamLesson({
   const title = `${t("exam.dash.module", { index: module.position + 1 })} · ${t(LESSON_KIND_KEY[kind])}`;
 
   return (
-    <ExamScreen backHref={examHref} backIcon="close" backLabel={examTitle} title={title}>
+    <ExamScreen backHref={examHref} backIcon="close" backLabel={examTitle} title={title} refreshOnBack>
       <div className="memo-exam-lesson-head">
         <div className="memo-exam-lesson-steps" aria-label={t("exam.lesson.progress", { index: kindIndex + 1, total: EXAM_LESSON_KINDS.length })}>
           {EXAM_LESSON_KINDS.map((entry, index) => (
@@ -249,42 +308,23 @@ export function ExamLesson({
         ) : (
           <div className="memo-exam-center memo-exam-done">
             <MemoBuddy mood={buddy.mood} moodKey={buddy.key} size="7rem" sparkles />
-            <h2>{phase.moduleCompleted ? t("exam.lesson.done.module") : t("exam.lesson.done.title")}</h2>
-            {phase.total > 0 ? (
+            <h2>
+              {phase.headline === "mastered"
+                ? t("exam.lesson.done.module")
+                : phase.headline === "learned"
+                  ? t("exam.lesson.done.learned", { target })
+                  : t("exam.lesson.done.title")}
+            </h2>
+            {phase.below !== null ? (
+              <p>{t("exam.lesson.done.below", { score: phase.below, target })}</p>
+            ) : phase.total > 0 ? (
               <p>{t("exam.zone.score", { correct: phase.correct, total: phase.total })}</p>
             ) : null}
             <div className="memo-exam-cta-col">
-              {(() => {
-                const doneAfter = { ...module.done, [kind]: true };
-                const following = nextKindAfter(doneAfter);
-
-                if (following) {
-                  return (
-                    <button
-                      type="button"
-                      className="memo-button-coral"
-                      onClick={() => navigateWithFeedback(lessonHref(examId, module.lectureId, following))}
-                    >
-                      {t("exam.lesson.done.next", { lesson: t(LESSON_KIND_KEY[following]) })}
-                    </button>
-                  );
-                }
-
-                if (nextModule) {
-                  return (
-                    <button
-                      type="button"
-                      className="memo-button-coral"
-                      onClick={() => navigateWithFeedback(lessonHref(examId, nextModule.lectureId, "summary"))}
-                    >
-                      {t("exam.lesson.done.nextModule", { title: nextModule.title })}
-                    </button>
-                  );
-                }
-
-                return null;
-              })()}
-              <button type="button" className="memo-button-ghost" onClick={() => navigateWithFeedback(examHref)}>
+              {phase.following ? (
+                <NextStepButton step={phase.following} onGo={(href) => navigateWithFeedback(href, { refresh: true })} />
+              ) : null}
+              <button type="button" className="memo-button-ghost" onClick={() => navigateWithFeedback(examHref, { refresh: true })}>
                 {t("exam.lesson.done.back")}
               </button>
             </div>
@@ -292,6 +332,20 @@ export function ExamLesson({
         )}
       </div>
     </ExamScreen>
+  );
+}
+
+function NextStepButton({
+  step,
+  onGo,
+}: {
+  step: { label: string; href: string };
+  onGo: (href: string) => void;
+}) {
+  return (
+    <button type="button" className="memo-button-coral" onClick={() => onGo(step.href)}>
+      {step.label}
+    </button>
   );
 }
 

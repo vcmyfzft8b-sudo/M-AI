@@ -24,6 +24,7 @@ export function ExamScreen({
   backIcon = "arrow_back",
   backLabel,
   historyBack = false,
+  refreshOnBack = false,
   title,
   trailing,
   cta,
@@ -38,6 +39,11 @@ export function ExamScreen({
   backLabel?: string;
   /** Go back to wherever the learner came from when there is somewhere to go back to. */
   historyBack?: boolean;
+  /**
+   * Reload the screen it goes back to. Set it where the learner may have changed what that
+   * screen shows (a lesson or mock was saved): the router keeps rendered pages for a minute.
+   */
+  refreshOnBack?: boolean;
   title?: string;
   trailing?: ReactNode;
   cta?: ReactNode;
@@ -57,7 +63,7 @@ export function ExamScreen({
       return;
     }
 
-    navigateWithFeedback(backHref);
+    navigateWithFeedback(backHref, refreshOnBack ? { refresh: true } : undefined);
   }
 
   return (

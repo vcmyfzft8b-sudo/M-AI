@@ -683,7 +683,7 @@ export function ExamSetup({
         </section>
       ) : step === "building" ? (
         <section className="memo-exam-step" role="status" aria-live="polite">
-          <MemoSays key="building" hero mood="think" size="7.5rem" thought="🧠" text={t("exam.setup.creating")} />
+          <MemoSays key="building" hero mood="think" size="7.5rem" text={t("exam.setup.creating")} />
           <ul className="memo-exam-checks">
             <li style={{ animationDelay: "300ms" }}>
               <Msym name="check_circle" size="1.3rem" /> {t("exam.setup.building.notes")}

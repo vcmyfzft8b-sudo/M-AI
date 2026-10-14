@@ -68,6 +68,12 @@ test("a Microsoft Teams link is always behind a sign-in", () => {
   assert.equal(isLoginWallUrl("https://learn.microsoft.com/en-us/microsoftteams/"), false);
 });
 
+test("a Rokus Klett e-textbook link is always behind a sign-in", () => {
+  // The reader is an empty app shell that signs in with a Rokus account before loading a book.
+  assert.equal(isLoginWallUrl("https://folio.rokus-klett.si/?credit=EXAMPLE_BOOK&pages=12"), true);
+  assert.equal(isLoginWallUrl("https://www.rokus-klett.si/"), false);
+});
+
 test("matches an identity provider only as the host or its parent domain", () => {
   // A lookalike host must not inherit the provider's meaning.
   assert.equal(isLoginWallUrl("https://notaccounts.google.com.evil.test/x"), false);

@@ -1,23 +1,27 @@
 "use client";
 
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { ExamScreen } from "@/components/exams/exam-screen";
-import { formatExamDay, formatExamDayLong } from "@/components/exams/exam-format";
+import { formatExamDay, formatMonth, formatWeekdayShort } from "@/components/exams/exam-format";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
+import { MemoSays } from "@/components/exams/memo-says";
+import type { NoteSourceMode } from "@/components/note-source-modal";
 import { useOfflineGuard } from "@/components/offline/offline-notice";
 import {
   addDays,
   daysBetween,
+  EXAM_LESSON_KINDS,
   isValidDay,
-  targetGrade,
-  type ExamFormat,
-  type ExamGradingScale,
-  type ExamKind,
+  LESSON_MINUTES,
+  monthGrid,
 } from "@/lib/exams/exam-model";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { noteEmoji } from "@/lib/note-emoji";
 
 export type ExamSetupNote = {
@@ -29,29 +33,135 @@ export type ExamSetupNote = {
 
 export type ExamSetupFolder = { id: string; name: string; lectureIds: string[] };
 
-const STEPS = ["material", "subject", "date", "target", "type", "review"] as const;
+/* The app's own capture sheet, loaded only when material is being added. */
+const NoteSourceModal = dynamic(() =>
+  import("@/components/note-source-modal").then((module) => module.NoteSourceModal),
+);
+
+/* The capture sources, in the "Novo" sheet's order and with its labels. */
+const SOURCE_OPTIONS: { mode: NoteSourceMode; emoji: string; labelKey: MessageKey }[] = [
+  { mode: "text", emoji: "📚", labelKey: "library.create.text" },
+  { mode: "record", emoji: "🎙️", labelKey: "library.create.record" },
+  { mode: "upload", emoji: "🔊", labelKey: "library.quickAction.audio" },
+  { mode: "link", emoji: "🔗", labelKey: "library.create.link" },
+];
+
+/*
+ * The setup is built like the app's onboarding: one question per screen, asked by Memo, with a
+ * few screens between them that only encourage — what the plan will look like, then the plan
+ * being put together. Grading is a percentage; format and exam kind keep their defaults, since
+ * nothing in the product reads them differently yet.
+ */
+const STEPS = [
+  "intro",
+  "material",
+  "subject",
+  "date",
+  "motivate",
+  "target",
+  "minutes",
+  "building",
+  "review",
+] as const;
 type Step = (typeof STEPS)[number];
 
 const TARGETS = [75, 90, 100] as const;
-const MINUTES = [15, 30, 45, 60] as const;
-const PASS_MARKS = [50, 55, 60] as const;
-const KINDS: ExamKind[] = ["midterm", "exam", "matura"];
-const FORMATS: ExamFormat[] = ["written", "oral", "both"];
-const SCALES: ExamGradingScale[] = ["uni_5_10", "school_1_5", "percent"];
+const PASS_MARK = 50;
+const BUILDING_MS = 2400;
 
-const KIND_KEY = { midterm: "exam.kind.midterm", exam: "exam.kind.exam", matura: "exam.kind.matura" } as const;
-const FORMAT_KEY = { written: "exam.format.written", oral: "exam.format.oral", both: "exam.format.both" } as const;
-const FORMAT_BODY_KEY = {
-  written: "exam.format.writtenBody",
-  oral: "exam.format.oralBody",
-  both: "exam.format.bothBody",
-} as const;
-const SCALE_KEY = { uni_5_10: "exam.scale.uni", school_1_5: "exam.scale.school", percent: "exam.scale.percent" } as const;
+const MINUTE_OPTIONS: { minutes: number; emoji: string; labelKey: MessageKey }[] = [
+  { minutes: 15, emoji: "🍃", labelKey: "exam.setup.minutes.light" },
+  { minutes: 30, emoji: "🌱", labelKey: "exam.setup.minutes.regular" },
+  { minutes: 45, emoji: "🌿", labelKey: "exam.setup.minutes.serious" },
+  { minutes: 60, emoji: "🌳", labelKey: "exam.setup.minutes.intense" },
+];
 
 /** The dial's knob position for a target, as a point on the ring (0 % at the top, clockwise). */
 function dialKnob(percent: number) {
   const angle = (percent / 100) * Math.PI * 2;
   return { left: `${50 + 45 * Math.sin(angle)}%`, top: `${50 - 45 * Math.cos(angle)}%` };
+}
+
+function monthOf(day: string) {
+  return `${day.slice(0, 7)}-01`;
+}
+
+function shiftMonth(month: string, delta: number) {
+  const [year, value] = month.split("-").map(Number);
+  return new Date(Date.UTC(year, value - 1 + delta, 1)).toISOString().slice(0, 10);
+}
+
+/** A plain month calendar: past days cannot be picked, today is ringed, the exam day is coral. */
+function ExamCalendar({
+  today,
+  value,
+  onChange,
+}: {
+  today: string;
+  value: string;
+  onChange: (day: string) => void;
+}) {
+  const { t, locale } = useTranslations();
+  const [month, setMonth] = useState(() => monthOf(value || today));
+  const cells = monthGrid(month);
+  const canGoBack = month > monthOf(today);
+
+  return (
+    <div className="memo-exam-cal">
+      <div className="memo-exam-cal-head">
+        <button
+          type="button"
+          className="memo-icon-button"
+          aria-label={t("exam.setup.date.previousMonth")}
+          disabled={!canGoBack}
+          onClick={() => setMonth(shiftMonth(month, -1))}
+        >
+          <Msym name="chevron_left" size="1.3rem" fill={false} />
+        </button>
+        <b>{formatMonth(month, locale)}</b>
+        <button
+          type="button"
+          className="memo-icon-button"
+          aria-label={t("exam.setup.date.nextMonth")}
+          onClick={() => setMonth(shiftMonth(month, 1))}
+        >
+          <Msym name="chevron_right" size="1.3rem" fill={false} />
+        </button>
+      </div>
+      <div className="memo-exam-cal-grid" role="grid">
+        {cells.slice(0, 7).map((cell) => (
+          <span key={`head-${cell.day}`} className="memo-exam-cal-weekday" aria-hidden="true">
+            {formatWeekdayShort(cell.day, locale).slice(0, 3)}
+          </span>
+        ))}
+        {cells.map((cell) => {
+          const selected = cell.day === value;
+
+          return (
+            <button
+              key={cell.day}
+              type="button"
+              role="gridcell"
+              disabled={cell.day < today || !cell.inMonth}
+              aria-selected={selected}
+              aria-label={formatExamDay(cell.day, locale)}
+              className={[
+                "memo-exam-cal-day",
+                cell.inMonth ? "" : "out",
+                cell.day === today ? "today" : "",
+                selected ? "selected" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              onClick={() => onChange(cell.day)}
+            >
+              {Number(cell.day.slice(8))}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export function ExamSetup({
@@ -61,6 +171,7 @@ export function ExamSetup({
   initialFolderId,
   defaultMinutes,
   lockedCount = 0,
+  canCreateNotes = false,
 }: {
   notes: ExamSetupNote[];
   folders: ExamSetupFolder[];
@@ -69,14 +180,17 @@ export function ExamSetup({
   defaultMinutes: number;
   /** Notes the learner has but cannot study without a plan. */
   lockedCount?: number;
+  /** Whether new material can be turned into notes from here. */
+  canCreateNotes?: boolean;
 }) {
   const { t, locale } = useTranslations();
+  const router = useRouter();
   const { navigateWithFeedback } = useInstantNavigation();
   const { blockedOffline, offlineToast } = useOfflineGuard();
   const initialFolder = folders.find((folder) => folder.id === initialFolderId) ?? null;
   const readyIds = useMemo(() => new Set(notes.filter((note) => note.ready).map((note) => note.id)), [notes]);
 
-  const [step, setStep] = useState<Step>("material");
+  const [step, setStep] = useState<Step>("intro");
   const [selected, setSelected] = useState<string[]>(() =>
     initialFolder ? initialFolder.lectureIds.filter((id) => readyIds.has(id)) : [],
   );
@@ -85,23 +199,41 @@ export function ExamSetup({
   const [examDate, setExamDate] = useState(addDays(today, 14));
   const [target, setTarget] = useState<number>(90);
   const [minutes, setMinutes] = useState<number>(
-    MINUTES.reduce((best, value) => (Math.abs(value - defaultMinutes) < Math.abs(best - defaultMinutes) ? value : best), 30),
+    MINUTE_OPTIONS.reduce(
+      (best, option) => (Math.abs(option.minutes - defaultMinutes) < Math.abs(best - defaultMinutes) ? option.minutes : best),
+      30,
+    ),
   );
-  const [kind, setKind] = useState<ExamKind>("exam");
-  const [format, setFormat] = useState<ExamFormat>("written");
-  const [scale, setScale] = useState<ExamGradingScale>("uni_5_10");
-  const [passMark, setPassMark] = useState<number>(50);
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  /* Material added during setup: notes still being made, already part of this exam. */
+  const [added, setAdded] = useState<string[]>([]);
+  const [sourceMode, setSourceMode] = useState<NoteSourceMode | null>(null);
+  const [showExisting, setShowExisting] = useState(Boolean(initialFolder));
   /*
    * "Next" and "Start my plan" sit in the same place, so a quick double tap on the last question
    * would otherwise create the exam before its review has been seen.
    */
   const stepShownAt = useRef(0);
-  const [error, setError] = useState<string | null>(null);
 
   const stepIndex = STEPS.indexOf(step);
   const notesById = useMemo(() => new Map(notes.map((note) => [note.id, note])), [notes]);
   const days = daysBetween(today, examDate);
+  const lessons = selected.length * EXAM_LESSON_KINDS.length;
+
+  /* The building screen is a pause, not a question: it moves on by itself. */
+  useEffect(() => {
+    if (step !== "building") {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      stepShownAt.current = Date.now();
+      setStep("review");
+    }, BUILDING_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [step]);
 
   const canContinue =
     step === "material"
@@ -111,6 +243,25 @@ export function ExamSetup({
         : step === "date"
           ? isValidDay(examDate) && days >= 0
           : true;
+
+  function openSource(mode: NoteSourceMode) {
+    if (blockedOffline("create")) {
+      return;
+    }
+
+    if (!canCreateNotes) {
+      navigateWithFeedback("/app/start");
+      return;
+    }
+
+    setSourceMode(mode);
+  }
+
+  function addCreated(lectureId: string) {
+    setSourceMode(null);
+    setAdded((current) => (current.includes(lectureId) ? current : [...current, lectureId]));
+    setSelected((current) => (current.includes(lectureId) ? current : [...current, lectureId]));
+  }
 
   function toggleNote(id: string) {
     setFolderId(null);
@@ -149,21 +300,35 @@ export function ExamSetup({
   function goBack() {
     setError(null);
 
+    if (step === "review") {
+      // Back from the plan goes to the last question, not into the building pause.
+      setStep("minutes");
+      return;
+    }
+
     if (stepIndex > 0) {
       setStep(STEPS[stepIndex - 1]);
+      return;
+    }
+
+    // The first screen's button leaves setup, back to wherever it was opened from.
+    if (window.history.length > 1) {
+      router.back();
+    } else {
+      navigateWithFeedback("/app/exams");
     }
   }
 
   function move(index: number, delta: number) {
     setSelected((current) => {
       const next = [...current];
-      const target = index + delta;
+      const to = index + delta;
 
-      if (target < 0 || target >= next.length) {
+      if (to < 0 || to >= next.length) {
         return current;
       }
 
-      [next[index], next[target]] = [next[target], next[index]];
+      [next[index], next[to]] = [next[to], next[index]];
       return next;
     });
   }
@@ -185,10 +350,10 @@ export function ExamSetup({
           examDate,
           targetMastery: target,
           dailyMinutes: minutes,
-          examFormat: format,
-          examKind: kind,
-          gradingScale: scale,
-          passPercentage: passMark,
+          examFormat: "written",
+          examKind: "exam",
+          gradingScale: "percent",
+          passPercentage: PASS_MARK,
           lectureIds: selected,
         }),
       });
@@ -209,51 +374,59 @@ export function ExamSetup({
     }
   }
 
-  const quickDates = [
-    { label: t("exam.setup.date.tomorrow"), day: addDays(today, 1) },
-    { label: t("exam.setup.date.inDays", { count: 3 }), day: addDays(today, 3) },
-    { label: t("exam.setup.date.inWeek"), day: addDays(today, 7) },
-    { label: t("exam.setup.date.inTwoWeeks"), day: addDays(today, 14) },
-  ];
-
-  const isLast = step === "review";
-  const cta = notes.length === 0 ? null : (
-    <div className="memo-exam-cta-row">
-      {stepIndex > 0 ? (
-        <button type="button" className="memo-button-ghost" onClick={goBack} disabled={creating}>
-          {t("common.back")}
-        </button>
-      ) : null}
+  /* As the onboarding draws it: the way back on the left of the progress bar, never at the bottom. */
+  const header = (
+    <>
       <button
         type="button"
-        className="memo-button-coral"
-        disabled={!canContinue || creating}
-        onClick={isLast ? () => void create() : goNext}
+        className="memo-close-button memo-exam-step-back"
+        aria-label={stepIndex === 0 ? t("common.close") : t("common.back")}
+        disabled={creating}
+        onClick={goBack}
       >
-        {isLast
-          ? creating
-            ? t("exam.setup.creating")
-            : t("exam.setup.review.start", { count: Math.max(1, days) })
-          : step === "date" && canContinue
-            ? t("exam.setup.nextWithDate", { date: formatExamDay(examDate, locale) })
-            : t("exam.setup.next")}
+        <Msym name={stepIndex === 0 ? "close" : "arrow_back"} size="1.45rem" fill={false} weight={500} />
       </button>
-    </div>
-  );
-
-  return (
-    <ExamScreen
-      backHref="/app/exams"
-      backIcon="close"
-      backLabel={t("common.back")}
-      historyBack
-      title={t("exam.setup.title")}
-      cta={cta}
-    >
-      {offlineToast}
-      <div className="memo-progress memo-exam-steps" aria-label={t("exam.setup.stepOf", { step: stepIndex + 1, total: STEPS.length })}>
+      <div
+        className="memo-progress memo-exam-steps"
+        role="progressbar"
+        aria-valuemin={1}
+        aria-valuemax={STEPS.length}
+        aria-valuenow={stepIndex + 1}
+        aria-label={t("exam.setup.stepOf", { step: stepIndex + 1, total: STEPS.length })}
+      >
         <div style={{ width: `${Math.round(((stepIndex + 1) / STEPS.length) * 100)}%` }} />
       </div>
+    </>
+  );
+
+  const ctaLabel =
+    step === "intro"
+      ? t("exam.setup.intro.start")
+      : step === "review"
+        ? creating
+          ? t("exam.setup.creating")
+          : t("exam.setup.review.start", { count: Math.max(1, days) })
+        : step === "date" && canContinue
+          ? t("exam.setup.nextWithDate", { date: formatExamDay(examDate, locale) })
+          : t("exam.setup.next");
+
+  const cta =
+    step === "building" || (notes.length === 0 && lockedCount > 0) ? null : (
+      <div className="memo-exam-cta-row">
+        <button
+          type="button"
+          className="memo-button-coral"
+          disabled={!canContinue || creating}
+          onClick={step === "review" ? () => void create() : goNext}
+        >
+          {ctaLabel}
+        </button>
+      </div>
+    );
+
+  return (
+    <ExamScreen backHref="/app/exams" backIcon="close" historyBack header={header} cta={cta}>
+      {offlineToast}
 
       {notes.length === 0 && lockedCount > 0 ? (
         <div className="memo-exam-empty">
@@ -264,92 +437,133 @@ export function ExamSetup({
             {t("exam.mock.paid.cta")}
           </button>
         </div>
-      ) : notes.length === 0 ? (
-        <div className="memo-exam-empty">
-          <MemoBuddy mood="wave" size="7rem" />
-          <h1>{t("exam.setup.material.empty.title")}</h1>
-          <p>{t("exam.setup.material.empty.body")}</p>
-          <button type="button" className="memo-button-coral" onClick={() => navigateWithFeedback("/app?mode=text")}>
-            {t("exam.setup.material.empty.cta")}
-          </button>
-        </div>
+      ) : step === "intro" ? (
+        <section className="memo-exam-step">
+          <MemoSays key="intro" hero mood="wave" size="8.5rem" text={t("exam.setup.intro.say")} />
+        </section>
       ) : step === "material" ? (
         <section className="memo-exam-step">
-          <div className="memo-exam-step-head">
-            <MemoBuddy mood="wave" size="4.6rem" thought="📚" />
-            <div>
-              <h1>{t("exam.setup.material.title")}</h1>
-              <p>{t("exam.setup.material.body")}</p>
+          <MemoSays key="material" mood="happy" text={t("exam.setup.material.title")} />
+
+          {/* First: bring the material for this exam — files, photos, a recording, a link. */}
+          <div className="memo-exam-upload">
+            <b>{t("exam.setup.material.uploadTitle")}</b>
+            <span>{t("exam.setup.material.uploadBody")}</span>
+            <div className="memo-exam-upload-grid">
+              {SOURCE_OPTIONS.map((option) => (
+                <button
+                  key={option.mode}
+                  type="button"
+                  className="memo-exam-upload-option"
+                  onClick={() => openSource(option.mode)}
+                >
+                  <span className="memo-exam-pick-emoji">
+                    <Emoji symbol={option.emoji} size="1.2rem" />
+                  </span>
+                  <span>{t(option.labelKey)}</span>
+                </button>
+              ))}
             </div>
           </div>
 
-          {folders.length > 0 ? (
-            <>
-              <span className="memo-eyebrow">{t("exam.setup.material.folders")}</span>
-              <div className="memo-chip-row memo-exam-chips">
-                {folders.map((folder) => (
+          {added.length > 0 ? (
+            <div className="memo-exam-list">
+              {added.map((id) => {
+                const isOn = selected.includes(id);
+
+                return (
                   <button
-                    key={folder.id}
+                    key={id}
                     type="button"
-                    className={`memo-chip ${folderId === folder.id ? "active" : ""}`.trim()}
-                    aria-pressed={folderId === folder.id}
-                    onClick={() => chooseFolder(folder)}
+                    className={`memo-exam-pick ${isOn ? "on" : ""}`.trim()}
+                    aria-pressed={isOn}
+                    onClick={() => toggleNote(id)}
                   >
-                    <Emoji symbol="📁" size="1rem" /> {folder.name}
+                    <span className="memo-exam-pick-emoji">
+                      <Emoji symbol="✨" size="1.2rem" />
+                    </span>
+                    <span className="memo-exam-pick-copy">
+                      <b>{t("exam.setup.material.newMaterial")}</b>
+                      <span>{t("exam.setup.material.uploading")}</span>
+                    </span>
+                    <Msym
+                      name={isOn ? "check_circle" : "radio_button_unchecked"}
+                      size="1.5rem"
+                      fill={isOn}
+                      className="memo-exam-pick-mark"
+                    />
                   </button>
-                ))}
+                );
+              })}
+            </div>
+          ) : null}
+
+          {/* Then, second: notes already in the app. */}
+          {notes.length > 0 ? (
+            <button
+              type="button"
+              className="memo-exam-existing"
+              aria-expanded={showExisting}
+              onClick={() => setShowExisting((current) => !current)}
+            >
+              <span>{t("exam.setup.material.existing", { count: notes.length })}</span>
+              <Msym name={showExisting ? "expand_less" : "expand_more"} size="1.3rem" fill={false} />
+            </button>
+          ) : null}
+
+          {showExisting && notes.length > 0 ? (
+            <>
+              {folders.length > 0 ? (
+                <div className="memo-chip-row memo-exam-chips">
+                  {folders.map((folder) => (
+                    <button
+                      key={folder.id}
+                      type="button"
+                      className={`memo-chip ${folderId === folder.id ? "active" : ""}`.trim()}
+                      aria-pressed={folderId === folder.id}
+                      onClick={() => chooseFolder(folder)}
+                    >
+                      <Emoji symbol="📁" size="1rem" /> {folder.name}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="memo-exam-list">
+                {notes.map((note) => {
+                  const isOn = selected.includes(note.id);
+
+                  return (
+                    <button
+                      key={note.id}
+                      type="button"
+                      className={`memo-exam-pick ${isOn ? "on" : ""}`.trim()}
+                      aria-pressed={isOn}
+                      onClick={() => toggleNote(note.id)}
+                    >
+                      <span className="memo-exam-pick-emoji">
+                        <Emoji symbol={note.emoji || noteEmoji({ id: note.id, title: note.title })} size="1.2rem" />
+                      </span>
+                      <span className="memo-exam-pick-copy">
+                        <b>{note.title?.trim() || t("note.untitled")}</b>
+                        {!note.ready ? <span>{t("exam.setup.material.notReady")}</span> : null}
+                      </span>
+                      <Msym
+                        name={isOn ? "check_circle" : "radio_button_unchecked"}
+                        size="1.5rem"
+                        fill={isOn}
+                        className="memo-exam-pick-mark"
+                      />
+                    </button>
+                  );
+                })}
               </div>
             </>
           ) : null}
-
-          <span className="memo-eyebrow">{t("exam.setup.material.notes")}</span>
-          <div className="memo-exam-list">
-            {notes.map((note) => {
-              const isOn = selected.includes(note.id);
-
-              return (
-                <button
-                  key={note.id}
-                  type="button"
-                  className={`memo-exam-pick ${isOn ? "on" : ""}`.trim()}
-                  aria-pressed={isOn}
-                  disabled={!note.ready}
-                  onClick={() => toggleNote(note.id)}
-                >
-                  <span className="memo-exam-pick-emoji">
-                    <Emoji symbol={note.emoji || noteEmoji({ id: note.id, title: note.title })} size="1.25rem" />
-                  </span>
-                  <span className="memo-exam-pick-copy">
-                    <b>{note.title?.trim() || t("note.untitled")}</b>
-                    {!note.ready ? <span>{t("exam.setup.material.notReady")}</span> : null}
-                  </span>
-                  <Msym
-                    name={isOn ? "check_circle" : "radio_button_unchecked"}
-                    size="1.5rem"
-                    fill={isOn}
-                    className="memo-exam-pick-mark"
-                  />
-                </button>
-              );
-            })}
-          </div>
-
-          <p className="memo-exam-fine">
-            {t("exam.setup.selected", { count: selected.length })}
-          </p>
-          <button type="button" className="memo-exam-link" onClick={() => navigateWithFeedback("/app?mode=text")}>
-            <Msym name="add" size="1.2rem" fill={false} /> {t("exam.setup.material.addMore")}
-          </button>
         </section>
       ) : step === "subject" ? (
         <section className="memo-exam-step">
-          <div className="memo-exam-step-head">
-            <MemoBuddy mood="happy" size="4.6rem" thought="🎓" />
-            <div>
-              <h1>{t("exam.setup.subject.title")}</h1>
-              <p>{t("exam.setup.subject.body")}</p>
-            </div>
-          </div>
+          <MemoSays key="subject" mood="idle" thought="🎓" text={t("exam.setup.subject.title")} />
           <input
             id="exam-title"
             className="memo-field memo-exam-input"
@@ -362,51 +576,41 @@ export function ExamSetup({
         </section>
       ) : step === "date" ? (
         <section className="memo-exam-step">
-          <div className="memo-exam-step-head">
-            <MemoBuddy mood="idle" size="4.6rem" thought="📅" />
+          <MemoSays key="date" mood="idle" thought="📅" text={t("exam.setup.date.title")} />
+          <ExamCalendar today={today} value={examDate} onChange={setExamDate} />
+        </section>
+      ) : step === "motivate" ? (
+        <section className="memo-exam-step">
+          <MemoSays
+            key="motivate"
+            hero
+            mood="cheer"
+            size="7.5rem"
+            text={t(days >= 3 ? "exam.setup.motivate.plenty" : "exam.setup.motivate.tight")}
+          />
+          <div className="memo-exam-stats">
             <div>
-              <h1>{t("exam.setup.date.title")}</h1>
+              <b>{Math.max(0, days)}</b>
+              <span>{t("exam.setup.motivate.days", { count: Math.max(0, days) })}</span>
+            </div>
+            <div>
+              <b>{selected.length}</b>
+              <span>{t("exam.setup.motivate.modules", { count: selected.length })}</span>
+            </div>
+            <div>
+              <b>{lessons}</b>
+              <span>{t("exam.setup.motivate.lessons", { count: lessons })}</span>
             </div>
           </div>
-          <div className="memo-exam-quick">
-            {quickDates.map((entry) => (
-              <button
-                key={entry.day}
-                type="button"
-                className={`memo-exam-quick-card ${examDate === entry.day ? "on" : ""}`.trim()}
-                aria-pressed={examDate === entry.day}
-                onClick={() => setExamDate(entry.day)}
-              >
-                <b>{entry.label}</b>
-                <span>{formatExamDay(entry.day, locale)}</span>
-              </button>
-            ))}
-          </div>
-          <div className="memo-exam-or">{t("exam.setup.date.or")}</div>
-          <label className="memo-exam-date" htmlFor="exam-date">
-            <Msym name="event" size="1.35rem" fill={false} />
-            <input
-              id="exam-date"
-              aria-label={t("exam.setup.date.pick")}
-              type="date"
-              min={today}
-              value={examDate}
-              onChange={(event) => setExamDate(event.target.value)}
-            />
-          </label>
-          {isValidDay(examDate) && days >= 0 ? (
-            <p className="memo-exam-fine">{formatExamDayLong(examDate, locale)} · {t("exam.days", { count: days })}</p>
-          ) : null}
         </section>
       ) : step === "target" ? (
         <section className="memo-exam-step">
-          <h1 className="memo-exam-step-title">{t("exam.setup.target.title")}</h1>
+          <MemoSays key="target" mood="idle" thought="🎯" text={t("exam.setup.target.title")} />
           <div className="memo-exam-dial" style={{ "--memo-exam-dial": `${target}%` } as CSSProperties}>
             <span className="memo-exam-dial-ring" aria-hidden="true" />
             <span className="memo-exam-dial-knob" aria-hidden="true" style={dialKnob(target)} />
             <span className="memo-exam-dial-center">
               <b>{target} %</b>
-              <span>{t("exam.setup.target.grade", { grade: targetGrade(scale, target, passMark) })}</span>
             </span>
           </div>
           <div className="memo-segment memo-exam-segment">
@@ -422,106 +626,69 @@ export function ExamSetup({
               </button>
             ))}
           </div>
-          <span className="memo-exam-label">{t("exam.setup.target.minutes")}</span>
-          <div className="memo-segment memo-exam-segment">
-            {MINUTES.map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={minutes === value ? "active" : ""}
-                aria-pressed={minutes === value}
-                onClick={() => setMinutes(value)}
-              >
-                {t("exam.minutes", { minutes: value })}
-              </button>
-            ))}
+        </section>
+      ) : step === "minutes" ? (
+        <section className="memo-exam-step">
+          <MemoSays key="minutes" mood="idle" thought="⏱️" text={t("exam.setup.target.minutes")} />
+          <div className="memo-exam-list">
+            {MINUTE_OPTIONS.map((option) => {
+              const isOn = minutes === option.minutes;
+              const perDay = Math.max(1, Math.round(option.minutes / LESSON_MINUTES));
+
+              return (
+                <button
+                  key={option.minutes}
+                  type="button"
+                  className={`memo-exam-pick ${isOn ? "on" : ""}`.trim()}
+                  aria-pressed={isOn}
+                  onClick={() => setMinutes(option.minutes)}
+                >
+                  <span className="memo-exam-pick-emoji">
+                    <Emoji symbol={option.emoji} size="1.2rem" />
+                  </span>
+                  <span className="memo-exam-pick-copy">
+                    <b>
+                      {t(option.labelKey)} · {t("exam.minutes", { minutes: option.minutes })}
+                    </b>
+                    <span>{t("exam.setup.minutes.lessons", { count: perDay })}</span>
+                  </span>
+                  <Msym
+                    name={isOn ? "radio_button_checked" : "radio_button_unchecked"}
+                    size="1.5rem"
+                    fill={isOn}
+                    className="memo-exam-pick-mark"
+                  />
+                </button>
+              );
+            })}
           </div>
         </section>
-      ) : step === "type" ? (
-        <section className="memo-exam-step">
-          <h1 className="memo-exam-step-title">{t("exam.setup.type.title")}</h1>
-          <div className="memo-segment memo-exam-segment">
-            {KINDS.map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={kind === value ? "active" : ""}
-                aria-pressed={kind === value}
-                onClick={() => {
-                  setKind(value);
-
-                  if (value === "matura") {
-                    setScale("school_1_5");
-                  }
-                }}
-              >
-                {t(KIND_KEY[value])}
-              </button>
-            ))}
-          </div>
-          <div className="memo-exam-list">
-            {FORMATS.map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={`memo-exam-pick ${format === value ? "on" : ""}`.trim()}
-                aria-pressed={format === value}
-                onClick={() => setFormat(value)}
-              >
-                <span className="memo-exam-pick-copy">
-                  <b>{t(FORMAT_KEY[value])}</b>
-                  <span>{t(FORMAT_BODY_KEY[value])}</span>
-                </span>
-                <Msym
-                  name={format === value ? "radio_button_checked" : "radio_button_unchecked"}
-                  size="1.5rem"
-                  fill={format === value}
-                  className="memo-exam-pick-mark"
-                />
-              </button>
-            ))}
-          </div>
-          <span className="memo-exam-label">{t("exam.setup.type.scale")}</span>
-          <div className="memo-segment memo-exam-segment">
-            {SCALES.map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={scale === value ? "active" : ""}
-                aria-pressed={scale === value}
-                onClick={() => setScale(value)}
-              >
-                {t(SCALE_KEY[value])}
-              </button>
-            ))}
-          </div>
-          <span className="memo-exam-label">{t("exam.setup.type.pass")}</span>
-          <div className="memo-segment memo-exam-segment">
-            {PASS_MARKS.map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={passMark === value ? "active" : ""}
-                aria-pressed={passMark === value}
-                onClick={() => setPassMark(value)}
-              >
-                {value} %
-              </button>
-            ))}
-          </div>
+      ) : step === "building" ? (
+        <section className="memo-exam-step" role="status" aria-live="polite">
+          <MemoSays key="building" hero mood="think" size="7.5rem" thought="🧠" text={t("exam.setup.creating")} />
+          <ul className="memo-exam-checks">
+            <li style={{ animationDelay: "300ms" }}>
+              <Msym name="check_circle" size="1.3rem" /> {t("exam.setup.building.notes")}
+            </li>
+            <li style={{ animationDelay: "1000ms" }}>
+              <Msym name="check_circle" size="1.3rem" /> {t("exam.setup.building.days")}
+            </li>
+            <li style={{ animationDelay: "1700ms" }}>
+              <Msym name="check_circle" size="1.3rem" /> {t("exam.setup.building.mock")}
+            </li>
+          </ul>
         </section>
       ) : (
         <section className="memo-exam-step">
-          <h1 className="memo-exam-step-title">{t("exam.setup.review.title")}</h1>
+          <MemoSays key="review" mood="cheer" text={t("exam.setup.review.say")} />
           <div className="memo-exam-countdown">
             <b>{t("exam.days", { count: Math.max(0, days) })}</b>
             <span>
               {formatExamDay(examDate, locale)}
               <br />
-              {title.trim()} · {t(FORMAT_KEY[format]).toLowerCase()}
+              {title.trim()} · {target} %
             </span>
           </div>
-          <span className="memo-eyebrow">{t("exam.setup.review.modules")}</span>
           <ol className="memo-exam-review">
             {selected.map((id, index) => {
               const note = notesById.get(id);
@@ -529,7 +696,9 @@ export function ExamSetup({
               return (
                 <li key={id}>
                   <span className="memo-exam-review-n">{index + 1}</span>
-                  <span className="memo-exam-review-title">{note?.title?.trim() || t("note.untitled")}</span>
+                  <span className="memo-exam-review-title">
+                    {note ? note.title?.trim() || t("note.untitled") : t("exam.setup.material.newMaterial")}
+                  </span>
                   <span className="memo-exam-review-actions">
                     <button type="button" className="memo-icon-button" aria-label={t("exam.setup.review.moveUp")} disabled={index === 0} onClick={() => move(index, -1)}>
                       <Msym name="arrow_upward" size="1.1rem" fill={false} />
@@ -551,10 +720,19 @@ export function ExamSetup({
               <span className="memo-exam-review-title">{t("exam.mock.title")}</span>
             </li>
           </ol>
-          <p className="memo-exam-fine">{t("exam.setup.review.hint")}</p>
           {error ? <p className="memo-inline-error">{error}</p> : null}
         </section>
       )}
+
+      {sourceMode ? (
+        <NoteSourceModal
+          mode={sourceMode}
+          open
+          canCreateNotes={canCreateNotes}
+          onClose={() => setSourceMode(null)}
+          onCreated={addCreated}
+        />
+      ) : null}
     </ExamScreen>
   );
 }

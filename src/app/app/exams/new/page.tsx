@@ -56,6 +56,7 @@ export default async function NewExamPage({
       initialFolderId={params.folder ?? null}
       defaultMinutes={(goal && GOAL_MINUTES[goal]) || 30}
       lockedCount={lockedCount}
+      canCreateNotes={Boolean(appState?.onboardingComplete && appState?.canCreateNotes)}
     />
   );
 }

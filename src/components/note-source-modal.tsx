@@ -332,11 +332,17 @@ export function NoteSourceModal({
   open,
   onClose,
   canCreateNotes,
+  onCreated,
 }: {
   mode: NoteSourceMode | null;
   open: boolean;
   onClose: () => void;
   canCreateNotes?: boolean;
+  /**
+   * Hands the new note back instead of opening it. Exam setup uses this: material added there
+   * joins the exam being set up, and the learner stays in the setup.
+   */
+  onCreated?: (lectureId: string) => void;
 }) {
   const t = useT();
   const router = useRouter();
@@ -1371,8 +1377,12 @@ export function NoteSourceModal({
       processingStarted = true;
       createdLectureIdRef.current = null;
       onClose();
-      navigateWithFeedback(`/app/lectures/${result.lectureId}`);
-      router.refresh();
+      if (onCreated) {
+        onCreated(result.lectureId);
+      } else {
+        navigateWithFeedback(`/app/lectures/${result.lectureId}`);
+        router.refresh();
+      }
     } catch (submitError) {
       if (redirectToBillingIfNeeded({ error: submitError, router })) {
         onClose();
@@ -1613,8 +1623,12 @@ export function NoteSourceModal({
       // Kept either way: queued now, or finished from storage by the server shortly.
       createdLectureIdRef.current = null;
       onClose();
-      navigateWithFeedback(`/app/lectures/${lectureId}`);
-      router.refresh();
+      if (onCreated) {
+        onCreated(lectureId);
+      } else {
+        navigateWithFeedback(`/app/lectures/${lectureId}`);
+        router.refresh();
+      }
     } catch (submitError) {
       await deleteCreatedLecture();
       if (redirectToBillingIfNeeded({ error: submitError, router })) {
@@ -1688,8 +1702,12 @@ export function NoteSourceModal({
 
       onClose();
       createdLectureIdRef.current = null;
-      navigateWithFeedback(`/app/lectures/${lectureId}`);
-      router.refresh();
+      if (onCreated) {
+        onCreated(lectureId);
+      } else {
+        navigateWithFeedback(`/app/lectures/${lectureId}`);
+        router.refresh();
+      }
     } catch (submitError) {
       await deleteCreatedLecture();
       if (redirectToBillingIfNeeded({ error: submitError, router })) {
@@ -2144,8 +2162,12 @@ export function NoteSourceModal({
 
       onClose();
       createdLectureIdRef.current = null;
-      navigateWithFeedback(`/app/lectures/${lectureId}`);
-      router.refresh();
+      if (onCreated) {
+        onCreated(lectureId);
+      } else {
+        navigateWithFeedback(`/app/lectures/${lectureId}`);
+        router.refresh();
+      }
     } catch (submitError) {
       await deleteCreatedLecture();
       if (redirectToBillingIfNeeded({ error: submitError, router })) {

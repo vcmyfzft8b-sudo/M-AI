@@ -28,6 +28,7 @@ function shell(initialPathname, clientPathname, { hydrated = false, basePath = n
     "next/navigation": { usePathname: () => clientPathname, useRouter: () => router },
     "@/components/viewport-portal": { useIsHydrated: () => hydrated },
     "next/image": { default: () => null },
+    "@/components/animated-lockup": { AnimatedLockup: () => null },
     "@/components/app-layout-context": { AppLayoutProvider: ({ children }) => children({ chatOpen: null, registerChatSlot() {} }) },
     "@/components/creator-demo/creator-demo-context": { useCreatorDemoBasePath: () => basePath },
     "@/components/i18n-provider": { useT: () => key => key },

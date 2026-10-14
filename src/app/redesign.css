@@ -24677,10 +24677,104 @@ select.memo-cp-input {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* A slow float under everything else he does, so he is never quite still. */
+.memo-buddy-bob {
+  position: absolute;
+  inset: 0;
+  animation: memo-buddy-bob 3.4s ease-in-out infinite;
+}
+
+@keyframes memo-buddy-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1.5deg);
+  }
+
+  50% {
+    transform: translateY(-5%) rotate(1.5deg);
+  }
+}
+
 .memo-buddy-body {
   position: absolute;
   inset: 0;
   transform-origin: 50% 92%;
+}
+
+/*
+ * His thought cloud, sized in his own proportions so it sits just above his head at any size:
+ * two bubbles rising from the top of his head to a cloud with the thought in it. White in both
+ * appearances, like the onboarding's.
+ */
+.memo-buddy-thought {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.memo-buddy-bead {
+  position: absolute;
+  left: 71%;
+  top: -3%;
+  width: 8%;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  animation: memo-pop 320ms cubic-bezier(0.22, 1, 0.36, 1) 160ms both;
+}
+
+.memo-buddy-bead.small {
+  left: 65%;
+  top: 9%;
+  width: 5%;
+  animation-delay: 60ms;
+}
+
+.memo-buddy-cloud {
+  position: absolute;
+  left: 70%;
+  top: -40%;
+  width: 54%;
+  aspect-ratio: 1.45;
+  transform-origin: 10% 100%;
+  animation:
+    memo-cloud-in 520ms cubic-bezier(0.22, 1, 0.36, 1) 260ms both,
+    memo-buddy-cloud-float 3.6s ease-in-out 800ms infinite;
+}
+
+/* Three puffs and a flat base, drawn with one radial gradient each. */
+.memo-buddy-cloud::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 30% 58%, #fff 0 27%, transparent 27.5%),
+    radial-gradient(circle at 52% 40%, #fff 0 33%, transparent 33.5%),
+    radial-gradient(circle at 74% 56%, #fff 0 26%, transparent 26.5%),
+    radial-gradient(ellipse 46% 26% at 50% 72%, #fff 0 99%, transparent 100%);
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.2));
+}
+
+.memo-buddy-cloud span {
+  position: absolute;
+  inset: 12% 0 6%;
+  display: grid;
+  place-items: center;
+  font-size: calc(var(--memo-buddy-size, 6rem) * 0.17);
+  line-height: 1;
+}
+
+@keyframes memo-buddy-cloud-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6%);
+  }
 }
 
 .memo-buddy-breathe {
@@ -24849,6 +24943,22 @@ select.memo-cp-input {
   margin-bottom: 0.4rem;
 }
 
+/* Setup's bar, as the onboarding's: the way back, then the progress bar beside it. */
+.memo-exam-topbar.memo-exam-topbar-custom {
+  justify-content: flex-start;
+  gap: 0.85rem;
+}
+
+.memo-exam-topbar-custom .memo-exam-steps {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+
+.memo-exam-topbar[hidden] {
+  display: none;
+}
+
 /* The same bar the study tabs count you through with: progress here is coral, too. */
 .memo-exam-page .memo-progress {
   height: 1rem;
@@ -24921,27 +25031,287 @@ button.memo-exam-card:hover {
 
 /* --- setup ---------------------------------------------------------------- */
 
+/* Every setup step fits one phone screen without scrolling. */
 .memo-exam-step {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.6rem;
 }
 
 .memo-exam-step-head {
   display: flex;
   align-items: center;
-  gap: 1.15rem;
+  gap: 0.85rem;
   /* Room for the thought cloud Memo carries over his head. */
-  margin: 1.6rem 0 0.4rem;
+  margin: 1.3rem 0 0.2rem;
 }
 
-.memo-exam-step-head h1 {
-  font-size: 1.55rem;
+.memo-exam-page .memo-exam-step-head h1 {
+  font-size: 1.3rem;
+  letter-spacing: -0.03em;
 }
 
 .memo-exam-step-head p {
-  margin: 0.35rem 0 0;
+  margin: 0.2rem 0 0;
   color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.memo-exam-step .memo-exam-pick {
+  min-height: 3.6rem;
+  padding: 0.45rem 1rem;
+  gap: 0.85rem;
+}
+
+.memo-exam-step .memo-exam-pick-emoji {
+  width: 2.4rem;
+  height: 2.4rem;
+}
+
+.memo-exam-step .memo-eyebrow {
+  margin-top: 0.3rem;
+}
+
+/*
+ * Memo asking the question, as the onboarding has him: the character beside a speech bubble
+ * (`.hero`: big, under the bubble, for the screens where he is the whole picture).
+ */
+.memo-exam-says {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 1.4rem 0 0.4rem;
+}
+
+.memo-exam-says.hero {
+  flex-direction: column-reverse;
+  gap: 1.1rem;
+  margin: 0 0 0.6rem;
+}
+
+.memo-exam-bubble {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0.85rem 1.1rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow), inset 0 0 0 1.5px var(--line);
+  font-size: 1.3rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+}
+
+/* The tail, pointing at Memo: to the left beside him, down when he stands under the bubble. */
+.memo-exam-bubble::before {
+  content: "";
+  position: absolute;
+  left: -0.45rem;
+  top: 50%;
+  width: 0.9rem;
+  height: 0.9rem;
+  margin-top: -0.45rem;
+  border-radius: 0 0 0 3px;
+  background: var(--surface);
+  box-shadow: inset 1.5px -1.5px 0 var(--line);
+  transform: rotate(45deg);
+}
+
+.memo-exam-says.hero .memo-exam-bubble {
+  flex: 0 0 auto;
+  max-width: 22rem;
+  text-align: center;
+}
+
+.memo-exam-says.hero .memo-exam-bubble::before {
+  left: 50%;
+  top: auto;
+  bottom: -0.45rem;
+  margin: 0 0 0 -0.45rem;
+  border-radius: 0 0 3px 0;
+  box-shadow: inset -1.5px -1.5px 0 var(--line);
+}
+
+.memo-exam-bubble-rest {
+  opacity: 0;
+}
+
+/*
+ * The material step's primary: bring the material for this exam. A coral edge marks it as the
+ * main way in; the four sources are the "Novo" sheet's, two by two.
+ */
+.memo-exam-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem 1rem 1.05rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--promo) 55%, transparent);
+}
+
+.memo-exam-upload > b {
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.memo-exam-upload > span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.memo-exam-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.memo-exam-upload-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 3.4rem;
+  padding: 0.45rem 0.7rem;
+  border: 0;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--promo) 10%, var(--sunken));
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1.2;
+  text-align: left;
+  transition: box-shadow 0.16s ease;
+}
+
+.memo-exam-upload-option:hover {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--promo) 45%, transparent);
+}
+
+.memo-exam-upload-option:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-exam-upload-option .memo-exam-pick-emoji {
+  width: 2.2rem;
+  height: 2.2rem;
+  background: var(--surface);
+}
+
+/* The secondary: notes already in the app, folded until asked for. */
+.memo-exam-existing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.9rem;
+  padding: 0 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
+.memo-exam-existing:hover {
+  color: var(--text);
+}
+
+/* The encouraging screen's real numbers: days, modules, lessons. */
+.memo-exam-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.memo-exam-stats > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.9rem 0.4rem;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-align: center;
+  animation: memo-pop-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.memo-exam-stats > div:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.memo-exam-stats > div:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+.memo-exam-stats b {
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-stats span {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+/* The building screen's checklist, each line ticking in after the one before. */
+.memo-exam-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-exam-checks li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 650;
+  animation: memo-pop-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.memo-exam-checks .msym {
+  color: var(--success);
+}
+
+/* Each step is centred: the question and its few controls sit in the middle of the screen. */
+.memo-exam-step > .memo-exam-step-title {
+  margin-bottom: 0.4rem;
+  text-align: center;
+}
+
+.memo-exam-step > .memo-exam-chips {
+  justify-content: center;
+}
+
+.memo-exam-step > .memo-exam-link {
+  align-self: center;
+}
+
+.memo-exam-step-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.memo-exam-step-foot .memo-exam-link {
+  align-self: auto;
+  padding: 0;
 }
 
 .memo-exam-chips {
@@ -25265,6 +25635,92 @@ button.memo-exam-card:hover {
 
 .memo-exam-review-mock .memo-exam-review-n {
   background: var(--upgrade-tint);
+}
+
+/* The setup's calendar: one month, nothing else on it. */
+.memo-exam-cal {
+  padding: 0.9rem 0.9rem 1rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-exam-cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.memo-exam-cal-head b {
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: capitalize;
+}
+
+.memo-exam-cal-head .memo-icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.memo-exam-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.memo-exam-cal-weekday {
+  padding: 0.2rem 0 0.4rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.memo-exam-cal-day {
+  display: grid;
+  height: 2.6rem;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.16s ease;
+}
+
+.memo-exam-cal-day:hover:not(:disabled) {
+  background: var(--tile);
+}
+
+.memo-exam-cal-day:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-exam-cal-day.out {
+  visibility: hidden;
+}
+
+.memo-exam-cal-day:disabled {
+  color: var(--muted-2);
+  cursor: default;
+}
+
+.memo-exam-cal-day.today {
+  box-shadow: inset 0 0 0 1.5px var(--line);
+}
+
+.memo-exam-cal-day.selected {
+  background: var(--coral);
+  box-shadow: var(--memo-coral-glow);
+  color: #fff;
 }
 
 /* --- dashboard ------------------------------------------------------------ */
@@ -26253,6 +26709,23 @@ button.memo-exam-card:hover {
     padding-bottom: calc(7rem + var(--memo-safe-bottom));
   }
 
+  /* An empty or locked screen sits in the middle of the phone, not under the bar. */
+  .memo-exam-page {
+    min-height: 100%;
+  }
+
+  .memo-exam-page > .memo-exam-empty {
+    flex: 1 0 auto;
+    justify-content: center;
+    padding-bottom: 4rem;
+  }
+
+  .memo-exam-page > .memo-exam-step {
+    flex: 1 0 auto;
+    justify-content: center;
+    padding-bottom: 2rem;
+  }
+
   .memo-exam-page h1,
   .memo-exam-step-title {
     font-size: 1.75rem;
@@ -26334,5 +26807,86 @@ button.memo-exam-card:hover {
   .memo-exam-zone .memo-exam-cta-row,
   .memo-exam-done .memo-exam-cta-col {
     width: 100%;
+  }
+}
+
+/* --- the animated lockup -------------------------------------------------- */
+
+/*
+ * The lockup with Memo standing in for its still brain (src/components/animated-lockup.tsx).
+ * The wordmark is the lockup image cropped to its lettering; the brain is laid over the left
+ * third, where the image's own brain was. Sized by height, like the images it replaces.
+ */
+.memo-lockup-animated {
+  position: relative;
+  display: inline-block;
+  height: 2.9rem;
+  aspect-ratio: 480 / 148;
+  vertical-align: middle;
+}
+
+.memo-lockup-animated img.memo-lockup-wordmark {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  clip-path: inset(0 0 0 35.5%);
+}
+
+.memo-lockup-brain {
+  position: absolute;
+  left: 3.2%;
+  top: 1%;
+  width: 32%;
+}
+
+.memo-lockup-brain .memo-buddy img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.memo-m-topbar .memo-lockup-animated {
+  position: relative;
+  z-index: 1;
+  height: 3.1rem;
+  /* The bar lets taps through to the page; Memo is the one thing in it that answers one. */
+  pointer-events: auto;
+}
+
+/*
+ * A sheen across the lettering every few seconds. It is masked by the lockup itself, so it
+ * lights only the letters and their outline and never paints over the page, and the lettering
+ * underneath is the untouched image, as crisp as before.
+ */
+.memo-lockup-animated::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  clip-path: inset(0 0 0 35.5%);
+  -webkit-mask: url("/memo-lockup.png") center / 100% 100% no-repeat;
+  mask: url("/memo-lockup.png") center / 100% 100% no-repeat;
+  background: linear-gradient(
+    105deg,
+    transparent 0 42%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 58% 100%
+  );
+  background-size: 300% 100%;
+  background-position: 120% 0;
+  animation: memo-lockup-shine 6.5s ease-in-out 1.2s infinite;
+}
+
+@keyframes memo-lockup-shine {
+  0% {
+    background-position: 120% 0;
+  }
+
+  22%,
+  100% {
+    background-position: -20% 0;
   }
 }

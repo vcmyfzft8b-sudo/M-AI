@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 
+import { AnimatedLockup } from "@/components/animated-lockup";
 import { AppLayoutProvider } from "@/components/app-layout-context";
 import { useCreatorDemoBasePath } from "@/components/creator-demo/creator-demo-context";
 import { useT } from "@/components/i18n-provider";
@@ -14,12 +14,7 @@ import { useNavigationFeedback } from "@/components/navigation-loading";
 import { useIsOffline } from "@/components/offline/offline-provider";
 import { useChipRowWheelScroll } from "@/components/use-wheel-to-horizontal";
 import { useShellPathname } from "@/components/use-shell-pathname";
-import {
-  BRAND_LOCKUP_HEIGHT,
-  BRAND_LOCKUP_SRC,
-  BRAND_LOCKUP_WIDTH,
-  SEO_BRAND_NAME,
-} from "@/lib/brand";
+import { SEO_BRAND_NAME } from "@/lib/brand";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { unmapDemoPathname } from "@/lib/creator-demo/paths";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
@@ -169,13 +164,7 @@ export function AppShell({
                 className="memo-header-brand"
                 aria-label={t("nav.homeBrand", { brand: SEO_BRAND_NAME })}
               >
-                <Image
-                  src={BRAND_LOCKUP_SRC}
-                  alt={SEO_BRAND_NAME}
-                  width={BRAND_LOCKUP_WIDTH}
-                  height={BRAND_LOCKUP_HEIGHT}
-                  priority
-                />
+                <AnimatedLockup priority />
               </InstantLink>
 
               <div className="memo-header-actions">

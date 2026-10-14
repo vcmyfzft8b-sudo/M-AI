@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, type CSSProperties } from "react";
 
-import { MascotFigure, MascotSparkles, MascotThought } from "@/components/onboarding-mascot";
+import { MascotFigure, MascotSparkles } from "@/components/onboarding-mascot";
 import {
   MASCOT_MOVES,
   blinkFrames,
@@ -36,6 +36,9 @@ const MOOD_MOVE: Record<BuddyMood, MascotMove | null> = {
   sad: "sad",
   think: "nod",
 };
+
+/* The small things he does on his own while nobody is talking to him, so he never looks like a still. */
+const IDLE_MOVES: MascotMove[] = ["nod", "wave", "jelly", "boing", "nod", "hop"];
 
 function isCalm() {
   return typeof window !== "undefined" && window.matchMedia?.(CALM_QUERY).matches === true;
@@ -136,6 +139,21 @@ export function MemoBuddy({
     return () => clearTimeout(timer);
   }, [blink]);
 
+  /* Now and then, unprompted, a little move: a nod, a wave, a wiggle. */
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      timer = setTimeout(() => {
+        play(IDLE_MOVES[Math.floor(Math.random() * IDLE_MOVES.length)]);
+        schedule();
+      }, 4500 + Math.random() * 4000);
+    };
+
+    schedule();
+
+    return () => clearTimeout(timer);
+  }, [play]);
+
   /* A mood is played once when it arrives. */
   useEffect(() => {
     const move = MOOD_MOVE[mood];
@@ -168,10 +186,20 @@ export function MemoBuddy({
       }}
     >
       {sparkles ? <MascotSparkles /> : null}
-      {thought ? <MascotThought icon={thought} offset="-0.8rem" scale={0.85} /> : null}
-      <div ref={bodyRef} className="memo-buddy-body">
-        <div className="memo-buddy-breathe">
-          <MascotFigure lash={2} />
+      {thought ? (
+        <span className="memo-buddy-thought" aria-hidden="true">
+          <i className="memo-buddy-bead small" />
+          <i className="memo-buddy-bead" />
+          <span className="memo-buddy-cloud">
+            <span>{thought}</span>
+          </span>
+        </span>
+      ) : null}
+      <div className="memo-buddy-bob">
+        <div ref={bodyRef} className="memo-buddy-body">
+          <div className="memo-buddy-breathe">
+            <MascotFigure lash={2} />
+          </div>
         </div>
       </div>
       <div ref={burstRef} className="memo-buddy-burst" aria-hidden="true" />

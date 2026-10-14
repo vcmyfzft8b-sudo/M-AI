@@ -28,6 +28,7 @@ export function ExamScreen({
   trailing,
   cta,
   ctaOnDesktop = true,
+  header,
   children,
   className,
 }: {
@@ -41,6 +42,8 @@ export function ExamScreen({
   trailing?: ReactNode;
   cta?: ReactNode;
   ctaOnDesktop?: boolean;
+  /** Replaces the bar entirely, for a flow that draws its own (setup: back arrow + progress). */
+  header?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
@@ -61,7 +64,11 @@ export function ExamScreen({
     <>
       {overlay}
       <div className={["memo-screen memo-exam-screen", className ?? ""].filter(Boolean).join(" ")}>
-        <div className={`memo-exam-topbar ${backLabel ? "" : "no-desktop-back"}`.trim()}>
+        {header ? <div className="memo-exam-topbar memo-exam-topbar-custom">{header}</div> : null}
+        <div
+          className={`memo-exam-topbar ${backLabel ? "" : "no-desktop-back"}`.trim()}
+          hidden={Boolean(header)}
+        >
           <button
             type="button"
             className="memo-close-button memo-exam-back-round"

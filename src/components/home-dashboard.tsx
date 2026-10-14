@@ -3,7 +3,6 @@ import { nativeRequest, useNativeIOS } from "@/lib/mobile/client";
 import { halfOffProducts } from "@/lib/mobile/products";
 import type { PlanPrices } from "@/lib/billing-regions";
 
-import Image from "next/image";
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 import {
@@ -29,6 +28,7 @@ import {
   INSTALL_GUIDE_SEEN_EVENT,
   shouldOfferInstallGuide,
 } from "@/lib/install-guide";
+import { AnimatedLockup } from "@/components/animated-lockup";
 import { ExamEntryCard, type UpcomingExam } from "@/components/exams/exam-entry-card";
 import { LibraryChat } from "@/components/library-chat";
 import type { NoteSourceMode } from "@/components/note-source-modal";
@@ -44,12 +44,6 @@ import { useOfflineGuard } from "@/components/offline/offline-notice";
 import { useIsHydrated } from "@/components/viewport-portal";
 import { useCollapsingHeader } from "@/components/use-collapsing-header";
 import { sheetClass, useSheet } from "@/components/use-sheet";
-import {
-  BRAND_LOCKUP_HEIGHT,
-  BRAND_LOCKUP_SRC,
-  BRAND_LOCKUP_WIDTH,
-  SEO_BRAND_NAME,
-} from "@/lib/brand";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
 import { rememberHomePromo } from "@/lib/home-promo-hint";
 import { canRetryLectureFailure, lectureFailureMessage } from "@/lib/lecture-failure-codes";
@@ -1692,13 +1686,7 @@ export function HomeDashboard({
       <div className="memo-home-screen" ref={attachScreen}>
         {/* Phone chrome: the lockup and the gear that opens Nastavitve. */}
         <div className="memo-m-topbar memo-only-mobile flex">
-          <Image
-            src={BRAND_LOCKUP_SRC}
-            alt={SEO_BRAND_NAME}
-            width={BRAND_LOCKUP_WIDTH}
-            height={BRAND_LOCKUP_HEIGHT}
-            priority
-          />
+          <AnimatedLockup priority />
           {/* The dot is the only hint that there is something new in there;
               it clears the first time the guide is opened. */}
           <InstantLink

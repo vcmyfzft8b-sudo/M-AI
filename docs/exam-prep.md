@@ -28,8 +28,23 @@ material is picked, is in `src/lib/exams/exam-model.ts`. It is pure and tested
 - **The daily goal** spreads the untried lessons over the days left, but is never less than the
   learner's daily minutes buy (6 minutes a lesson). It is computed against what was left at the
   start of the day, so finishing a lesson moves "done", not the goal.
-- **Grades:** university 5–10 (below the pass mark is 5, the rest split into five bands), school
-  1–5, or a plain percentage.
+- **Grades:** the setup only offers a target percentage (75/90/100 %); the model still maps
+  university 5–10 and school 1–5 scales, which older rows or a future setting may use.
+
+## Setup
+
+`src/components/exams/exam-setup.tsx` is one screen per question, laid out like the app onboarding:
+a back (or close) button beside the progress bar, Memo saying the question in a typed-out bubble,
+one coral button at the bottom, everything centred and fitting one phone screen. The steps are
+intro → material → subject → date (a bare month calendar) → a motivating summary (days, modules,
+lessons) → target % → daily minutes → "building your path" (auto-advances) → review → create.
+
+**Material leads with new uploads.** The primary card opens the normal note-source modal (document
+or photos, recording, audio file, link) on top of the setup; `NoteSourceModal`'s `onCreated` hands
+the new note's id back instead of navigating to it, and the note joins the exam while it is still
+being made (`createExam` accepts any owned note that has not failed). Notes already in the app are
+the secondary choice, behind "Ali izberi iz svojih zapiskov". Without `canCreateNotes` the upload
+card sends the learner to `/app/start`.
 
 ## Nothing is generated for an exam
 
@@ -61,10 +76,14 @@ answer or a passed mock, a droop for a wrong one, a wave hello, a thought cloud 
 Scripted moves are skipped under `prefers-reduced-motion`; the CSS breathing is stopped by the global
 rule.
 
+`src/components/animated-lockup.tsx` puts the same Memo into the "Memo AI" lockup in the app's own
+chrome (phone home bar, desktop header): the lettering is the lockup image cropped by `clip-path`,
+the brain is a live `MemoBuddy` laid exactly over the image's brain, and a sheen masked by the
+lockup crosses it now and then. The landing, paywall and onboarding keep the still image.
+
 ## Not built yet
 
 Astra has these and the design (`claude.ai` artifact "Memo Izpiti", v2) shows them; they are not in
 this version: the oral mock exam, focus mode (iOS Screen Time), classrooms and the invite step,
-badges, daily push reminders, uploading new files from inside the setup (it links to the normal
-note flow instead), and the "AI may add topics" switch. The landing page shows the "Novo" label but
+badges, daily push reminders, and the "AI may add topics" switch. The landing page shows the "Novo" label but
 not yet the exam-prep card or a feature-list entry.

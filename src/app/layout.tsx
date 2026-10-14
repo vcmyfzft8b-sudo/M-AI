@@ -58,6 +58,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "chat_bubble",
   "check",
   "check_circle",
+  "chevron_left",
   "chevron_right",
   "close",
   "close_fullscreen",

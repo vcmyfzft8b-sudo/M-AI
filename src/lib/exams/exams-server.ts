@@ -371,8 +371,11 @@ export type ExamInput = {
   lectureIds: string[];
 };
 
-/** Only the learner's own, finished notes can become modules; anything else is dropped. */
-async function ownedReadyLectureIds(supabase: ExamSupabase, userId: string, lectureIds: string[]) {
+/**
+ * Only the learner's own notes can become modules. A note still being made from material added
+ * during setup is kept (its module opens once it is ready); a note that failed is dropped.
+ */
+async function ownedUsableLectureIds(supabase: ExamSupabase, userId: string, lectureIds: string[]) {
   const unique = [...new Set(lectureIds)];
 
   if (unique.length === 0) {
@@ -389,17 +392,17 @@ async function ownedReadyLectureIds(supabase: ExamSupabase, userId: string, lect
     throw error;
   }
 
-  const ready = new Set(
+  const usable = new Set(
     ((data ?? []) as { id: string; status: string }[])
-      .filter((row) => row.status === "ready")
+      .filter((row) => row.status !== "failed")
       .map((row) => row.id),
   );
 
-  return unique.filter((id) => ready.has(id));
+  return unique.filter((id) => usable.has(id));
 }
 
 export async function createExam(supabase: ExamSupabase, userId: string, input: ExamInput) {
-  const lectureIds = await ownedReadyLectureIds(supabase, userId, input.lectureIds);
+  const lectureIds = await ownedUsableLectureIds(supabase, userId, input.lectureIds);
 
   if (lectureIds.length === 0) {
     return { error: "no_notes" as const };

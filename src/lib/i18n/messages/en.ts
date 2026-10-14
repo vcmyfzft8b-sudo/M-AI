@@ -1335,6 +1335,7 @@ export const en: Messages = {
   "file.binaryText": "The uploaded text file contains unsupported binary data.",
   "file.audioCheckFailed": "The uploaded audio file could not be checked.",
   "file.audioCheckFailedStatus": "The uploaded audio file could not be checked ({status}).",
+  "file.audioEmpty": "The recording reached us empty. Record or upload it again.",
   "file.audioTooLarge": "The audio file is too large. The current limit is 300 MB.",
   "file.audioFormatMismatch": "The uploaded audio file does not match the expected .{extension} format.",
 

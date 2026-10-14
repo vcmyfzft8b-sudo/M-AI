@@ -6,8 +6,9 @@
  * public/ugc/oral-quiz/<locale>/, and the time each of its words is spoken
  * goes into src/lib/ugc/oral-quiz-timings.json, so
  * the page highlights the word the voice is on rather than guessing at a pace. The
- * timings are Soniox's own character timestamps, the same ones a note's read-aloud
- * highlights from (note-tts-synthesis.ts).
+ * voice is Gemini's since 2026-10-14, like the tutor's in the app; Gemini reports no timings, so
+ * they come from a Soniox transcription of the finished clip — the way a note's read-aloud places
+ * its highlight. `TTS_PROVIDER=soniox` records with Soniox and its character timestamps instead.
  *
  * Re-run after changing a tutor line in src/lib/ugc/oral-quiz.ts.
  *
@@ -21,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { SonioxNodeClient } from "@soniox/node";
 
 import { synthesizeTtsChunkWithTimestamps } from "../src/lib/note-tts-synthesis.ts";
+import { geminiMp3 } from "./lib/gemini-speech.mjs";
 import {
   ORAL_QUIZ_SCRIPTS,
   ORAL_QUIZ_VOICE,
@@ -36,6 +38,8 @@ const TIMINGS_FILE = path.join(ROOT, "src", "lib", "ugc", "oral-quiz-timings.jso
 const BITRATE = 64_000;
 const TIMEOUT_MS = 120_000;
 const ATTEMPTS = 4;
+/* Fresh takes of one clip before its words are declared unmatchable. */
+const ALIGN_TAKES = 5;
 
 function loadEnv() {
   for (const file of [".env.local", ".env"]) {
@@ -79,7 +83,7 @@ const normalize = (word) => word.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
  * words of a clip: the timestamps of the stream's opening audio go missing (measured:
  * "You just have to give her…" came back from "have"), although the words are in the
  * recording. A word with no piece is given the stretch between its neighbours, which
- * is where it was said. Anything more missing means the voice said something else,
+ * is where it was said. More than a couple missing means the voice said something else,
  * and that is refused rather than committed with the highlight drifting off the words.
  */
 function alignWords(printed, pieces, durationMs) {
@@ -105,7 +109,15 @@ function alignWords(printed, pieces, durationMs) {
     next = at + 1;
   });
 
-  if (missingHead > 4 || missing > 1 || next < pieces.length) {
+  /*
+   * Two unmatched words mid-clip, not one, since the timings come from a transcription: it spells
+   * the line's English loanwords its own way ("DICK" as "DIK", "Kayexalate" as "kajeksalat") in a
+   * take that says them perfectly well. Each is timed between its matched neighbours.
+   */
+  /* A last word nothing matched leaves its own piece behind, which is that word, not an extra. */
+  const leftover = pieces.length - next - (timed[timed.length - 1] ? 0 : 1);
+
+  if (missingHead > 4 || missing > 2 || leftover > 0) {
     return null;
   }
 
@@ -137,11 +149,55 @@ function alignWords(printed, pieces, durationMs) {
   return timed;
 }
 
+/*
+ * The Gemini voice, with its words timed by transcribing the clip. Soniox's tokens are pieces of
+ * words, a new word starting with a space, so they are joined back into the one-piece-per-word
+ * shape `alignWords` reads.
+ */
+async function renderGemini(client, { text, voice, language }) {
+  const { audio, durationMs } = await geminiMp3({ text, voice, language, bitrate: BITRATE, timeoutMs: TIMEOUT_MS });
+  const transcription = await client.stt.transcribe({
+    model: process.env.SONIOX_MODEL || "stt-async-v4",
+    file: audio,
+    filename: "oral-quiz.mp3",
+    language_hints: [language],
+    language_hints_strict: true,
+    wait: true,
+    cleanup: ["file", "transcription"],
+  });
+
+  if (transcription.status !== "completed") {
+    throw new Error(transcription.error_message || `transcription ${transcription.status}`);
+  }
+
+  const transcript = transcription.transcript ?? (await transcription.getTranscript());
+  const pieces = [];
+
+  for (const token of transcript?.tokens ?? []) {
+    if (token.is_audio_event || typeof token.start_ms !== "number" || typeof token.end_ms !== "number") {
+      continue;
+    }
+
+    if (pieces.length === 0 || /^\s/.test(token.text)) {
+      pieces.push({ text: token.text.trim(), start_ms: token.start_ms, end_ms: token.end_ms });
+    } else {
+      pieces[pieces.length - 1].text += token.text;
+      pieces[pieces.length - 1].end_ms = token.end_ms;
+    }
+  }
+
+  return { audio, durationMs, pieces: pieces.filter((piece) => normalize(piece.text)) };
+}
+
 async function render(client, { text, voice, language, model }) {
   let lastError;
 
   for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
     try {
+      if (process.env.TTS_PROVIDER !== "soniox") {
+        return await renderGemini(client, { text, voice, language });
+      }
+
       return await synthesizeTtsChunkWithTimestamps({
         client,
         text,
@@ -200,15 +256,27 @@ async function main() {
       }
 
       const spoken = oralQuizSpoken(language, turn.text);
-      const { audio, pieces, durationMs } = await render(client, { text: spoken, voice, language, model });
-      const words = alignWords(oralQuizWords(spoken), pieces, durationMs);
+      let rendered;
+      let words = null;
+
+      /*
+       * A take whose words cannot be matched back to the line is made again. Gemini voices each
+       * request afresh, and the transcription that times the words can mishear an odd one (a drug
+       * name, a mnemonic) in one take and not the next.
+       */
+      for (let take = 1; take <= ALIGN_TAKES && !words; take += 1) {
+        rendered = await render(client, { text: spoken, voice, language, model });
+        words = alignWords(oralQuizWords(spoken), rendered.pieces, rendered.durationMs);
+      }
 
       if (!words) {
         throw new Error(
           `${language} clip ${turn.clip}: the voice's words do not match the line — ` +
-            `"${pieces.map((piece) => piece.text).join(" ")}"`,
+            `"${rendered.pieces.map((piece) => piece.text).join(" ")}"`,
         );
       }
+
+      const { audio, durationMs } = rendered;
 
       const file = path.join(OUT_DIR, language, `${voice.toLowerCase()}-${turn.clip}.mp3`);
       fs.writeFileSync(file, audio);

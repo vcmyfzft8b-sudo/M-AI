@@ -45,7 +45,7 @@ export function hasStaticVoiceSamples(language: string) {
 export function podcastVoiceSampleClip(voice: string, language: string) {
   return hasStaticVoiceSamples(language)
     ? clip(language, voice, "podcast")
-    : `/api/tutor/voice-sample?voice=${encodeURIComponent(voice)}&language=${encodeURIComponent(language)}&context=podcast`;
+    : `/api/tutor/voice-sample?voice=${encodeURIComponent(voice)}&language=${encodeURIComponent(language)}&context=podcast&v=gemini`;
 }
 
 /** The audition line, in the language the tutor will actually speak. */
@@ -55,9 +55,13 @@ export function voiceSampleClip(voice: string, language: string) {
    * accent and cadence of a voice are exactly what differ between languages, so hearing Grace in
    * English tells a Polish learner nothing about the Grace that is going to teach them.
    */
+  /*
+   * `v=gemini` because the answer is cached as immutable for a year: the tutor's voice changed
+   * engine on 2026-10-14, and the same URL would keep playing a browser's copy of the old one.
+   */
   return hasStaticVoiceSamples(language)
     ? clip(language, voice, "sample")
-    : `/api/tutor/voice-sample?voice=${encodeURIComponent(voice)}&language=${encodeURIComponent(language)}`;
+    : `/api/tutor/voice-sample?voice=${encodeURIComponent(voice)}&language=${encodeURIComponent(language)}&v=gemini`;
 }
 
 /** The demo's opening: the tutor starting to explain. */

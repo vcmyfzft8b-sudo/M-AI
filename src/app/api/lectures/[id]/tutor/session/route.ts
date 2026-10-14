@@ -118,6 +118,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       voice: parsed.data.voice ?? DEFAULT_NOTE_TTS_VOICE,
       clientReferenceId: `tutor:${id}`,
       ttlSeconds: grant.keyTtlSeconds,
+      userId: user.id,
+      lectureId: id,
     });
 
     return NextResponse.json({

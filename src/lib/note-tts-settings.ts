@@ -1,4 +1,6 @@
-// The voices Soniox ships on tts-rt-v2. Five carried over from v1 unchanged; the other three were
+// The app's voice names. Since 2026-10-14 Gemini speaks them (src/lib/tutor/gemini-voices.ts maps
+// each to a Gemini voice); the names are the ones Soniox ships on tts-rt-v2, which still speaks them
+// when TTS_PROVIDER=soniox. Five carried over from v1 unchanged; the other three were
 // dropped with v1, so the closest v2 voice stands in for each — see LEGACY_NOTE_TTS_VOICE_ALIASES.
 // The last three are new with v2 and picked for study notes: Bennett (the calm authority of an
 // experienced teacher), Evan (makes detailed information easy to follow), Iris (clear and patient).

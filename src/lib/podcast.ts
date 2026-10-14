@@ -36,6 +36,7 @@ import {
   type TutorAllowance,
 } from "@/lib/tutor-usage";
 import { synthesizeTtsChunkWithTimestamps } from "@/lib/note-tts-synthesis";
+import { speechModel, speechProvider, synthesizeGeminiMp3 } from "@/lib/speech-synthesis";
 import type { NoteTtsVoice } from "@/lib/note-tts-settings";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import { keepsSourceTerms, normalizePodcastTurns, parseStoredTurns } from "@/lib/podcast-script";
@@ -806,12 +807,11 @@ export async function listReadyPodcastSegments(params: {
   podcastId: string;
   voices: Record<PodcastSpeaker, NoteTtsVoice>;
 }) {
-  const env = getServerEnv();
   const { data, error } = await createSupabaseServiceRoleClient()
     .from("lecture_podcast_segments")
     .select("segment_index, speaker, voice, duration_ms")
     .eq("podcast_id", params.podcastId)
-    .eq("model", env.SONIOX_TTS_MODEL)
+    .eq("model", speechModel())
     .in("voice", [params.voices.a, params.voices.b]);
 
   if (error) {
@@ -848,7 +848,6 @@ export async function getOrCreatePodcastSegment(params: {
   segmentIndex: number;
   voices: Record<PodcastSpeaker, NoteTtsVoice>;
 }) {
-  const env = getServerEnv();
   const turns = parseStoredTurns(params.podcast.turns);
   const turn = turns[params.segmentIndex];
 
@@ -857,7 +856,7 @@ export async function getOrCreatePodcastSegment(params: {
   }
 
   const voice = params.voices[turn.speaker];
-  const model = env.SONIOX_TTS_MODEL;
+  const model = speechModel();
   const cached = await getCachedSegmentRow({
     podcastId: params.podcast.id,
     segmentIndex: params.segmentIndex,
@@ -1009,6 +1008,19 @@ async function synthesizePodcastTurn(params: {
   voice: NoteTtsVoice;
   model: string;
 }) {
+  /* The Gemini voice since 2026-10-14; its length comes from the samples, so no timing pass. */
+  if (speechProvider() === "gemini") {
+    const { audio, durationMs } = await synthesizeGeminiMp3({
+      text: toSpeechScript(params.text, params.language),
+      voice: params.voice,
+      language: params.language,
+      bitrate: TTS_OUTPUT_BITRATE,
+      timeoutMs: PODCAST_STREAM_TIMEOUT_MS,
+    });
+
+    return { audio, durationMs };
+  }
+
   const client = getSonioxClient();
 
   try {

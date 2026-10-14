@@ -40,11 +40,6 @@ function sampleBlocks(t: Translate<MessageKey>): SampleBlock[] {
 /** How many blocks the note is written out in. */
 export const SAMPLE_NOTE_BLOCKS = 7;
 
-/** How many words read-aloud walks through, headings included, as the app counts them. */
-export function sampleNoteWordCount(t: Translate<MessageKey>): number {
-  return sampleBlocks(t).reduce((total, block) => total + splitWords(block.text).length, 0);
-}
-
 function splitWords(text: string): string[] {
   return text.split(/\s+/).filter(Boolean);
 }
@@ -57,14 +52,12 @@ export function LandingSampleNote({
   title,
   meta,
   written = SAMPLE_NOTE_BLOCKS,
-  readWord = null,
 }: {
   t: Translate<MessageKey>;
   emoji: string;
   title: string;
   meta: string;
   written?: number;
-  readWord?: number | null;
 }) {
   let wordIndex = 0;
 
@@ -78,10 +71,8 @@ export function LandingSampleNote({
   const words = (text: string): ReactNode[] =>
     splitWords(text).flatMap((word, i) => {
       const index = wordIndex++;
-      const state =
-        readWord === null ? "" : index < readWord ? "read" : index === readWord ? "current" : "";
       const span = (
-        <span key={`w${index}`} className={`note-read-word ${state}`.trim()} data-word-index={index}>
+        <span key={`w${index}`} className="note-read-word" data-word-index={index}>
           {word}
         </span>
       );

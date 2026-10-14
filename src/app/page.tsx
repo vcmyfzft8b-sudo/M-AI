@@ -175,7 +175,7 @@ export default async function HomePage() {
       </section>
 
       <section id="features" className="landing-v2-section" aria-labelledby="landing-feature-title">
-        <div className="landing-v2-section-head" data-scroll-reveal="">
+        <div className="landing-v2-section-head landing-v2-section-head-center" data-scroll-reveal="">
           <h2 id="landing-feature-title" className="landing-v2-section-title">
             {t("landing.features.title")}
           </h2>
@@ -184,7 +184,7 @@ export default async function HomePage() {
       </section>
 
       <section id="faq" className="landing-v2-section" aria-labelledby="landing-faq-title">
-        <div className="landing-v2-section-head" data-scroll-reveal="" style={{ marginBottom: "2.75rem" }}>
+        <div className="landing-v2-section-head landing-v2-section-head-center" data-scroll-reveal="">
           <h2 id="landing-faq-title" className="landing-v2-section-title">
             {t("landing.faq.title")}
           </h2>

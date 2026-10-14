@@ -95,17 +95,23 @@ const LOOK_EASE = 24;
 const FOLLOW_TURN_RATE = 0.65;
 const FOLLOW_AFTER_LOOK = 1.2;
 /** How far behind the character the camera rides when nothing is in the way. */
-const CAMERA_DISTANCE = 8.4;
+const CAMERA_DISTANCE = 5.4;
 /** Closer on a phone, where the same distance leaves the character tiny. */
-const CAMERA_DISTANCE_PORTRAIT = 7;
+const CAMERA_DISTANCE_PORTRAIT = 4.4;
 /*
- * How far above the head the camera aims outdoors, at full distance. Aimed at
- * the head, a portrait phone put the horizon at the top edge and spent half
- * the screen on paving; aimed above it, the walker stands in the lower third
- * and the street, the skyline and the beacons fill the rest.
+ * Where the walker stands on screen outdoors: their middle this far below the
+ * centre, as a share of half the screen's height. Aimed at the head, a portrait
+ * phone put the horizon at the top edge and spent half the screen on paving;
+ * framed low, the street, the skyline and the beacons fill the rest. Worked out
+ * from where the camera actually is each frame, so it holds at any distance.
  */
-const FRAMING_LIFT = 0.9;
-const FRAMING_LIFT_PORTRAIT = 1.8;
+const FRAME_LOW = 0.32;
+const FRAME_LOW_PORTRAIT = 0.42;
+/** How much lower than the shared rig (`cameraPosition`) the camera rides outdoors, in metres. */
+const CAMERA_DROP = 0.9;
+/* The lens, vertical degrees; a wider one shrank the walker to a figure in the distance. */
+const FOV = 54;
+const FOV_PORTRAIT = 60;
 /** The opening shot: from over the town down to behind the walker. */
 const ARRIVAL_SECONDS = 2.6;
 /*
@@ -307,7 +313,7 @@ export function createPalaceGame({
   let cameraYaw = layout.spawn.yaw;
   /* A little above the eaves: low enough to feel like a street, high enough
      that the camera does not spend its life inside somebody's roof. */
-  let cameraPitch = 0.3;
+  let cameraPitch = 0.22;
   const cameraTarget = new THREE.Vector3();
   const move = { forward: 0, right: 0, sprint: false };
   /* Drag not yet applied to the camera, and how long since the last one. */
@@ -370,7 +376,7 @@ export function createPalaceGame({
      * closer instead (see `cameraDistance`).
      */
     portrait = camera.aspect < 1;
-    camera.fov = (portrait ? 66 : 58) + indoorBlend * 8;
+    camera.fov = (portrait ? FOV_PORTRAIT : FOV) + indoorBlend * 8;
     camera.updateProjectionMatrix();
     post?.setSize(width, height);
     /*
@@ -670,7 +676,14 @@ export function createPalaceGame({
     /* The camera trails rather than tracks, which is what makes running feel fast. */
     const desired = cameraPosition({ target: eye, yaw: cameraYaw, pitch: activePitch, distance: heldDistance });
 
-    cameraTarget.set(desired.x, Math.min(ceiling, Math.max(desired.y, character.y + 1.2)), desired.z);
+    /*
+     * Outdoors the camera rides lower than the shared rig puts it: from 3.4 m up
+     * it looked down on a small figure, which read as far away however close
+     * it stood. Not indoors, where the rig already keeps under the ceiling.
+     */
+    const drop = indoors ? 0 : CAMERA_DROP;
+
+    cameraTarget.set(desired.x, Math.min(ceiling, Math.max(desired.y - drop, character.y + 1.2)), desired.z);
 
     /*
      * Indoors the camera can sit a hand's breadth from a wall, and a near plane
@@ -709,18 +722,25 @@ export function createPalaceGame({
     }
     camera.position.lerp(
       cameraTarget,
-      reducedMotion || (indoors && !riding) ? 1 : 1 - Math.pow(riding ? 0.03 : 0.0025, delta),
+      /* Close behind, a lazier follow left a running walker metres ahead of the lens. */
+      reducedMotion || (indoors && !riding) ? 1 : 1 - Math.pow(riding ? 0.03 : 0.0006, delta),
     );
     /*
      * Aim above the head outdoors, by less as a wall pulls the camera in (close
      * up, the same lift would put the walker under the bottom edge) and not at
      * all indoors, where the ceiling is already the limit.
      */
-    const maxDistance = portrait ? CAMERA_DISTANCE_PORTRAIT : CAMERA_DISTANCE;
-    const lift = (portrait ? FRAMING_LIFT_PORTRAIT : FRAMING_LIFT) *
-      Math.max(0, Math.min(1, heldDistance / maxDistance)) * (1 - indoorBlend) * (riding ? 0 : 1);
+    const lookUp = indoors ? 0 : Math.max(0, -activePitch) * 8;
+    const plainY = eye.y + 0.7 + lookUp;
+    const across = Math.max(0.5, Math.hypot(eye.x - camera.position.x, eye.z - camera.position.z));
+    const below = Math.atan2(camera.position.y - (character.y + 1), across);
+    /* Tilting the view up slides the walker towards the bottom edge, never past it. */
+    const frameLow = Math.min(0.8, (portrait ? FRAME_LOW_PORTRAIT : FRAME_LOW) + Math.max(0, -activePitch));
+    const lookDown = below - frameLow * ((camera.fov * Math.PI) / 360);
+    const framedY = camera.position.y - Math.tan(lookDown) * across;
+    const framing = (1 - indoorBlend) * (riding ? 0 : 1);
 
-    lookPoint.set(eye.x, eye.y + 0.7 + lift + (indoors ? 0 : Math.max(0, -activePitch) * 8), eye.z);
+    lookPoint.set(eye.x, plainY + (framedY - plainY) * framing, eye.z);
 
     if (arrival < 1) {
       if (arrival === 0) {
@@ -744,10 +764,11 @@ export function createPalaceGame({
       lookPoint.lerpVectors(arrivalLook, lookPoint, ease);
     }
     camera.lookAt(lookPoint);
+    crowd.clearView(delta, camera.position, character);
 
     /* A wider lens indoors, so a room is a room rather than a wall and a back. */
     indoorBlend += ((indoors ? 1 : 0) - indoorBlend) * (1 - Math.exp(-delta * 4));
-    const fov = (portrait ? 66 : 58) + indoorBlend * 8;
+    const fov = (portrait ? FOV_PORTRAIT : FOV) + indoorBlend * 8;
 
     if (Math.abs(camera.fov - fov) > 0.05) {
       camera.fov = fov;
@@ -863,6 +884,7 @@ export function createPalaceGame({
         return true;
       },
       scene,
+      camera,
       player: () => ({ x: character.x, y: character.y, z: character.z }),
       lifts: () => lifts.map(({ x, z, y, stops, house }) => ({ x, z, y, stops, facing: house.facing })),
       people: () => crowd.colliders.map(({ x, z }) => ({ x, z })),

@@ -43,7 +43,7 @@ The fix is structural: **the landing renders the app's own markup.**
   `NOTE_TABS` in `src/lib/note-tabs.ts`, imported by the app's note screen and by every landing
   demo of it. A tab added there appears in the app and on the landing at once, and
   `tests/landing-app-parity.test.mjs` then fails until it has a landing screen and is drawn in
-  the hero phone, "How it works" and the feature list.
+  the hero phone and "How it works".
 - The hero phone (`memo-app-preview.tsx`), "How it works" (`landing-flow-demo.tsx`), the tutor
   section (`landing-tutor-demo.tsx`) and the feature list (`landing-feature-showcase.tsx`) all
   draw those same components, so a screen is updated once and every place that shows it follows.
@@ -79,26 +79,33 @@ query would let one rule serve both a phone viewport and the landing's phone-siz
 | --- | --- | --- | --- |
 | Home, note list, folders, settings, help | `home-dashboard.tsx`, `settings-screen.tsx` | `memo-app-preview.tsx` | Hero phone |
 | New note / capture sheet | `note-source-modal.tsx` | `memo-app-preview.tsx`, `landing-flow-demo.tsx`, showcase | Hero, How it works (step 1), Features |
-| Note (notes tab), read aloud | `lecture-workspace.tsx`, `note-read-aloud.tsx` | `memo-app-preview.tsx`, `landing-flow-demo.tsx`, showcase | Hero, How it works (step 2), Features |
+| Note (notes tab), read aloud | `lecture-workspace.tsx`, `note-read-aloud.tsx` | `memo-app-preview.tsx`, `landing-flow-demo.tsx`, showcase (note only) | Hero, How it works (step 2), Features (note only) |
 | Note pill row | `NOTE_TABS` in `src/lib/note-tabs.ts` | the same list, imported | Hero, How it works (step 3) |
-| Tutor | `lecture-tutor.tsx` | `landing-tutor-demo.tsx` | Tutor section, hero, How it works, Features |
+| Tutor | `lecture-tutor.tsx` | `landing-tutor-demo.tsx` | Tutor section, hero, How it works |
 | Flashcards | `study-flashcard.tsx` + deck screen in `lecture-workspace.tsx` | `app/landing-flashcards-screen.tsx` | Hero, How it works, Features |
 | Quiz | `study-question.tsx` + quiz screen | `app/landing-quiz-screen.tsx` | Hero, How it works, Features |
-| Practice test | `study-question.tsx` + test screen | `app/landing-test-screen.tsx` | Hero, How it works, Features |
+| Practice test | `study-question.tsx` + test screen | `app/landing-test-screen.tsx` | Hero, How it works |
 | Results screen | `study-completion-card.tsx` | used directly by the three screens above | wherever they are |
-| Podcast | `lecture-podcast.tsx` | `app/landing-podcast-screen.tsx` | Hero, How it works, Features |
-| Mindmap | `lecture-mindmap.tsx`, `mindmap-canvas.tsx` | `app/landing-mindmap-screen.tsx` | Hero, How it works, Features |
-| Memory palace | `lecture-palace.tsx` | `app/landing-palace-screen.tsx` | Hero, How it works, Features |
-| Speed read | `note-speed-reader.tsx` | `app/landing-speed-read-screen.tsx` | Hero, How it works, Features |
+| Podcast | `lecture-podcast.tsx` | `app/landing-podcast-screen.tsx` | Hero, How it works |
+| Mindmap | `lecture-mindmap.tsx`, `mindmap-canvas.tsx` | `app/landing-mindmap-screen.tsx` | Hero, How it works |
+| Memory palace | `lecture-palace.tsx` | `app/landing-palace-screen.tsx` | Hero, How it works |
+| Speed read | `note-speed-reader.tsx` | `app/landing-speed-read-screen.tsx` | Hero, How it works |
 | Chat (note and library) | `library-chat.tsx`, `chat-markdown.tsx` | hero chat, showcase | Hero, Features |
 
 Keep this table current: a new feature adds a row, and a new landing component is listed here.
 
+**The feature list is the core only.** "Capture it, organise it, learn it faster" lists five
+things: record or upload, the note, flashcards, quizzes and the chat. Every other note tab is
+shown in the hero phone and "How it works", which is enough; adding each new mode to the list
+made it a twelve-row wall nobody read (trimmed in October 2026). Add a row there only when the
+feature is one a new visitor should weigh before signing up, and keep it to about five.
+
 ## Checklist for an app change
 
 1. Find the feature's row above. If it has none, it is a new feature: add a landing component in
-   `src/components/landing/app/`, add it to the hero phone's tabs (if it is a note tab), to the
-   "How it works" study pills, and to the feature list, with copy in all five catalogues.
+   `src/components/landing/app/`, add it to the hero phone's tabs (if it is a note tab) and to the
+   "How it works" study pills, with copy in all five catalogues. The feature list is the core
+   only (see above); a new mode does not join it by default.
 2. Update the landing component so its markup and classes match the app's JSX. Render the app's
    own component instead wherever it is pure.
 3. A new note tab goes into `NOTE_TABS` (`src/lib/note-tabs.ts`) once; the app and the landing

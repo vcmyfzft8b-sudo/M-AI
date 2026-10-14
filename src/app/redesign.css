@@ -25059,25 +25059,6 @@ button.memo-exam-card:hover {
   gap: 0.6rem;
 }
 
-.memo-exam-step-head {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  /* Room for the thought cloud Memo carries over his head. */
-  margin: 1.3rem 0 0.2rem;
-}
-
-.memo-exam-page .memo-exam-step-head h1 {
-  font-size: 1.3rem;
-  letter-spacing: -0.03em;
-}
-
-.memo-exam-step-head p {
-  margin: 0.2rem 0 0;
-  color: var(--muted);
-  font-size: 0.95rem;
-}
-
 .memo-exam-step .memo-exam-pick {
   min-height: 3.6rem;
   padding: 0.45rem 1rem;
@@ -25351,18 +25332,6 @@ button.memo-exam-card:hover {
   align-self: center;
 }
 
-.memo-exam-step-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-}
-
-.memo-exam-step-foot .memo-exam-link {
-  align-self: auto;
-  padding: 0;
-}
-
 .memo-exam-chips {
   flex-wrap: wrap;
 }
@@ -25384,8 +25353,7 @@ button.memo-exam-card:hover {
   gap: 0.6rem;
 }
 
-.memo-exam-pick,
-.memo-exam-module {
+.memo-exam-pick {
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -25403,19 +25371,16 @@ button.memo-exam-card:hover {
   transition: box-shadow 0.16s ease;
 }
 
-.memo-exam-pick:hover,
-.memo-exam-module:hover {
+.memo-exam-pick:hover {
   box-shadow: var(--shadow), inset 0 0 0 1px var(--hover-ring);
 }
 
-.memo-exam-pick:disabled,
-.memo-exam-module:disabled {
+.memo-exam-pick:disabled {
   cursor: default;
   opacity: 0.5;
 }
 
-.memo-exam-pick.on,
-.memo-exam-module.current {
+.memo-exam-pick.on {
   box-shadow: var(--shadow), inset 0 0 0 1.5px var(--ink);
 }
 
@@ -25467,84 +25432,6 @@ button.memo-exam-card:hover {
 
 .memo-exam-input:focus {
   box-shadow: 0 0 0 3px var(--focus-ring);
-}
-
-.memo-exam-quick {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
-}
-
-.memo-exam-quick-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  padding: 0.85rem 1rem;
-  border: 0;
-  border-radius: 20px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  color: var(--text);
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-}
-
-.memo-exam-quick-card b {
-  font-weight: 750;
-  letter-spacing: -0.02em;
-}
-
-.memo-exam-quick-card span {
-  color: var(--muted);
-  font-size: 0.92rem;
-}
-
-.memo-exam-quick-card.on {
-  box-shadow: var(--shadow), inset 0 0 0 1.5px var(--ink);
-}
-
-.memo-exam-or {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  color: var(--muted);
-  font-size: 0.92rem;
-}
-
-.memo-exam-or::before,
-.memo-exam-or::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--line);
-}
-
-.memo-exam-date {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  height: 3.6rem;
-  padding: 0 1.2rem;
-  border-radius: 16px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  font-weight: 650;
-}
-
-.memo-exam-date:focus-within {
-  box-shadow: var(--shadow), 0 0 0 3px var(--focus-ring);
-}
-
-.memo-exam-date input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 1.05rem;
-  font-weight: 700;
-  outline: none;
 }
 
 .memo-exam-dial-wrap {
@@ -25687,31 +25574,6 @@ button.memo-exam-card:hover {
 
 .memo-exam-dial-hint.gone {
   opacity: 0;
-}
-
-.memo-exam-countdown {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-  border-radius: 22px;
-  background: var(--upgrade-tint);
-  color: var(--upgrade-ink);
-}
-
-.memo-exam-countdown b {
-  font-size: 1.85rem;
-  font-weight: 800;
-  letter-spacing: -0.045em;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.memo-exam-countdown span {
-  font-size: 0.92rem;
-  font-weight: 650;
-  text-align: right;
 }
 
 .memo-exam-review-sub {
@@ -25958,6 +25820,379 @@ button.memo-exam-card:hover {
 
 /* --- dashboard ------------------------------------------------------------ */
 
+/*
+ * The exam's study path, drawn the way Astra and Duolingo draw a course: a heading per module,
+ * then its lessons as round stations on a line that swings left and right down the screen. The
+ * geometry (row height, swing, segment angles) comes from src/lib/exams/exam-path.ts.
+ */
+.memo-exam-trail-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  text-align: center;
+}
+
+.memo-exam-trail-head h1 {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  text-wrap: balance;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* The exam in three numbers, small enough to sit in one row above the path. */
+.memo-exam-stats.compact {
+  align-self: stretch;
+}
+
+.memo-exam-stats.compact > div {
+  padding: 0.6rem 0.3rem;
+  border-radius: 18px;
+  animation: none;
+}
+
+.memo-exam-stats.compact b {
+  font-size: 1.3rem;
+}
+
+.memo-exam-stats.compact span {
+  font-size: 0.8rem;
+}
+
+.memo-exam-trail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+  margin-top: 1.2rem;
+  padding-bottom: 1.5rem;
+  /* The rotated segments and Memo must never make the screen scroll sideways. */
+  overflow-x: clip;
+}
+
+.memo-exam-trail-unit {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+
+/* A module's heading, like a course unit: edged in coral while it is the one being studied. */
+.memo-exam-trail-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem 0.95rem 1.15rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-exam-trail-banner.current {
+  background: color-mix(in srgb, var(--promo) 14%, var(--surface));
+  box-shadow: var(--shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--promo) 55%, transparent);
+}
+
+.memo-exam-trail-banner.current .memo-exam-trail-banner-copy i {
+  color: var(--promo);
+  opacity: 1;
+}
+
+.memo-exam-trail-banner.locked {
+  opacity: 0.75;
+}
+
+.memo-exam-trail-banner-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.memo-exam-trail-banner-copy i {
+  font-size: 0.8rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+  text-transform: uppercase;
+}
+
+.memo-exam-trail-banner-copy b {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 1.08rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.memo-exam-trail-banner-copy span {
+  font-size: 0.86rem;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.memo-exam-trail-banner-mark {
+  flex: 0 0 auto;
+  color: var(--success);
+}
+
+.memo-exam-trail-skip {
+  flex: 0 0 auto;
+  min-height: 2.2rem;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.memo-exam-trail-skip:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-exam-trail-stations {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One row per station; --memo-station-x swings it off the middle. */
+.memo-exam-station {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  /* PATH_ROW_REM in src/lib/exams/exam-path.ts. */
+  height: 8rem;
+  transform: translateX(var(--memo-station-x, 0));
+}
+
+/* The line to the next station, drawn from this station's centre at the segment's angle. */
+.memo-exam-station-line {
+  position: absolute;
+  top: 2.25rem;
+  left: 50%;
+  z-index: 0;
+  width: var(--memo-line-length);
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--line);
+  transform: translateY(-50%) rotate(var(--memo-line-angle));
+  transform-origin: 0 50%;
+  pointer-events: none;
+}
+
+.memo-exam-station-line.done {
+  background: color-mix(in srgb, var(--promo) 70%, var(--surface));
+}
+
+.memo-exam-station-node {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  flex: 0 0 auto;
+  width: 4.5rem;
+  height: 4.5rem;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 5px 0 var(--line), inset 0 0 0 2px var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.memo-exam-station-node:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--line), inset 0 0 0 2px var(--line);
+}
+
+.memo-exam-station-node:focus-visible {
+  outline: none;
+  box-shadow: 0 5px 0 var(--line), 0 0 0 3px var(--focus-ring);
+}
+
+.memo-exam-station.done .memo-exam-station-node {
+  background: color-mix(in srgb, var(--promo) 18%, var(--surface));
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 40%, var(--surface)), inset 0 0 0 2px color-mix(in srgb, var(--promo) 45%, transparent);
+}
+
+.memo-exam-station.current .memo-exam-station-node {
+  width: 5rem;
+  height: 5rem;
+  margin-top: -0.25rem;
+  background: var(--coral);
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 55%, var(--text)), 0 0 0 6px color-mix(in srgb, var(--promo) 22%, transparent);
+  animation: memo-station-pulse 2.2s ease-in-out infinite;
+}
+
+.memo-exam-station.locked .memo-exam-station-node {
+  background: var(--sunken);
+  box-shadow: 0 5px 0 var(--line);
+  cursor: default;
+}
+
+.memo-exam-station.locked .memo-exam-station-node:not(:disabled) {
+  cursor: pointer;
+}
+
+@keyframes memo-station-pulse {
+  0%,
+  100% {
+    box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 55%, var(--text)), 0 0 0 6px color-mix(in srgb, var(--promo) 22%, transparent);
+  }
+
+  50% {
+    box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 55%, var(--text)), 0 0 0 12px color-mix(in srgb, var(--promo) 8%, transparent);
+  }
+}
+
+.memo-exam-station-check {
+  position: absolute;
+  right: -0.15rem;
+  bottom: -0.15rem;
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--promo);
+  box-shadow: 0 0 0 3px var(--bg);
+  color: var(--on-photo);
+}
+
+.memo-exam-station-label {
+  position: relative;
+  z-index: 1;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.memo-exam-station.done .memo-exam-station-label {
+  color: var(--text);
+}
+
+/* The station to do next carries the screen's primary action. */
+.memo-exam-station-go {
+  position: relative;
+  z-index: 2;
+  min-height: 2.2rem;
+  padding: 0 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 800;
+  white-space: nowrap;
+  animation: memo-station-bob 1.8s ease-in-out infinite;
+}
+
+.memo-exam-station-go:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+@keyframes memo-station-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.memo-exam-station-buddy {
+  position: absolute;
+  top: -0.2rem;
+  z-index: 1;
+}
+
+.memo-exam-station-buddy.left {
+  right: calc(50% + 3.6rem);
+}
+
+.memo-exam-station-buddy.right {
+  left: calc(50% + 3.6rem);
+}
+
+/* The end of the path: the mock exam, then the exam itself. */
+.memo-exam-trail-goal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+  color: inherit;
+  text-align: center;
+  text-decoration: none;
+}
+
+.memo-exam-trail-trophy {
+  display: grid;
+  width: 5.5rem;
+  height: 5.5rem;
+  margin-bottom: 0.3rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--upgrade-tint);
+  box-shadow: 0 5px 0 var(--upgrade-line), inset 0 0 0 2px var(--upgrade-line);
+}
+
+.memo-exam-trail-goal:hover .memo-exam-trail-trophy {
+  box-shadow: 0 5px 0 var(--upgrade-line), inset 0 0 0 2px var(--upgrade-line), 0 0 0 1px var(--hover-ring);
+}
+
+.memo-exam-trail-goal b {
+  font-size: 1.08rem;
+  font-weight: 750;
+}
+
+.memo-exam-trail-goal span {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.memo-exam-trail-finish {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 0.8rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
 .memo-exam-flame {
   display: inline-flex;
   align-items: center;
@@ -25969,127 +26204,6 @@ button.memo-exam-card:hover {
   box-shadow: var(--shadow);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-}
-
-.memo-exam-dash-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.memo-exam-dash-title {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  min-width: 0;
-}
-
-.memo-exam-dash-title span {
-  color: var(--muted);
-  font-size: 0.95rem;
-}
-
-.memo-exam-ring {
-  position: relative;
-  display: inline-grid;
-  flex: 0 0 auto;
-  place-items: center;
-}
-
-.memo-exam-ring svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.memo-exam-ring-track,
-.memo-exam-ring-fill {
-  fill: none;
-  stroke-width: 10;
-}
-
-.memo-exam-ring-track {
-  stroke: var(--track);
-}
-
-.memo-exam-ring-fill {
-  stroke: var(--ink);
-  stroke-linecap: round;
-  transition: stroke-dasharray 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.memo-exam-ring b {
-  position: relative;
-  font-size: 1.3rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums;
-}
-
-.memo-exam-module .memo-exam-ring b {
-  font-size: 0.72rem;
-}
-
-.memo-exam-module.done .memo-exam-ring-fill {
-  stroke: var(--success);
-}
-
-.memo-exam-strip {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.35rem;
-}
-
-.memo-exam-strip-day {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.1rem;
-  padding: 0.5rem 0;
-  border-radius: 16px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-
-.memo-exam-strip-day i {
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-style: normal;
-  font-weight: 650;
-}
-
-.memo-exam-strip-day b {
-  font-weight: 750;
-  font-variant-numeric: tabular-nums;
-}
-
-.memo-exam-strip-day.active b {
-  color: var(--success);
-}
-
-.memo-exam-strip-day.missed b {
-  color: var(--muted-2);
-}
-
-.memo-exam-strip-day.today {
-  background: var(--ink);
-}
-
-.memo-exam-strip-day.today i,
-.memo-exam-strip-day.today b {
-  color: var(--bg);
-}
-
-.memo-exam-strip-day.exam {
-  background: var(--coral);
-}
-
-.memo-exam-strip-day.exam i,
-.memo-exam-strip-day.exam b {
-  color: #fff;
 }
 
 .memo-exam-buddy-line {
@@ -26108,221 +26222,6 @@ button.memo-exam-card:hover {
   box-shadow: var(--shadow);
   font-weight: 650;
   letter-spacing: -0.01em;
-}
-
-.memo-exam-quota {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.memo-exam-quota > div:first-child {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-}
-
-.memo-exam-quota b {
-  font-weight: 700;
-}
-
-.memo-exam-quota span {
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.memo-exam-views {
-  margin-top: 0.6rem;
-}
-
-.memo-exam-module-n {
-  display: grid;
-  flex: 0 0 auto;
-  width: 2.6rem;
-  height: 2.6rem;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--tile);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.memo-exam-module.current .memo-exam-module-n {
-  background: var(--ink);
-  color: var(--bg);
-}
-
-.memo-exam-module.done .memo-exam-module-n {
-  background: var(--success-tint);
-  color: var(--success);
-}
-
-.memo-exam-module.locked {
-  opacity: 0.6;
-}
-
-.memo-exam-path {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  margin: 0;
-  padding: 0.4rem 0 0.4rem 0.3rem;
-  list-style: none;
-}
-
-.memo-exam-path::before {
-  content: "";
-  position: absolute;
-  left: calc(0.3rem + 1.6rem - 1.5px);
-  top: 1.8rem;
-  bottom: 1.8rem;
-  width: 3px;
-  border-radius: 999px;
-  background: var(--track);
-}
-
-.memo-exam-path li > button,
-.memo-exam-path li > a,
-.memo-exam-path li.flag {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-  text-decoration: none;
-}
-
-.memo-exam-path li > button:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-
-.memo-exam-path-dot {
-  display: grid;
-  flex: 0 0 auto;
-  width: 3.2rem;
-  height: 3.2rem;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--surface);
-  box-shadow: var(--shadow), inset 0 0 0 2px var(--track);
-  font-weight: 800;
-}
-
-.memo-exam-path li.done .memo-exam-path-dot {
-  background: var(--success);
-  box-shadow: none;
-  color: var(--surface);
-}
-
-.memo-exam-path li.current .memo-exam-path-dot {
-  background: var(--coral);
-  box-shadow: var(--memo-coral-glow);
-  color: #fff;
-}
-
-.memo-exam-path li.locked {
-  opacity: 0.6;
-}
-
-.memo-exam-path li.mock .memo-exam-path-dot {
-  background: var(--upgrade-tint);
-  box-shadow: inset 0 0 0 2px var(--upgrade-line);
-}
-
-.memo-exam-path li.flag .memo-exam-path-dot {
-  background: var(--sunken);
-  box-shadow: none;
-}
-
-.memo-exam-plan {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-.memo-exam-calendar {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.2rem;
-  padding: 0.85rem;
-  border-radius: 22px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  text-align: center;
-}
-
-.memo-exam-calendar-head {
-  grid-column: 1 / -1;
-  padding-bottom: 0.4rem;
-  font-weight: 750;
-  text-transform: capitalize;
-}
-
-.memo-exam-calendar span {
-  position: relative;
-  display: grid;
-  height: 2.3rem;
-  place-items: center;
-  border-radius: 999px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-
-.memo-exam-calendar span.out {
-  color: var(--muted-2);
-}
-
-.memo-exam-calendar span.active::after,
-.memo-exam-calendar span.planned::after {
-  content: "";
-  position: absolute;
-  bottom: 0.2rem;
-  width: 0.3rem;
-  height: 0.3rem;
-  border-radius: 999px;
-  background: var(--muted-2);
-}
-
-.memo-exam-calendar span.active::after {
-  background: var(--success);
-}
-
-.memo-exam-calendar span.today {
-  background: var(--ink);
-  color: var(--bg);
-  font-weight: 800;
-}
-
-.memo-exam-calendar span.exam {
-  background: var(--coral);
-  color: #fff;
-  font-weight: 800;
-}
-
-.memo-exam-mock-card {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-top: 0.4rem;
-}
-
-.memo-exam-mock-emoji {
-  display: grid;
-  flex: 0 0 auto;
-  width: 3rem;
-  height: 3rem;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--upgrade-tint);
 }
 
 .memo-exam-after {
@@ -26984,10 +26883,6 @@ button.memo-exam-card:hover {
   .memo-exam-crumb,
   .memo-exam-head {
     display: none;
-  }
-
-  .memo-exam-strip-day {
-    padding: 0.45rem 0;
   }
 }
 

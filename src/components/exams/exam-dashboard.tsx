@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { InstantLink } from "@/components/instant-link";
 import { useTranslations } from "@/components/i18n-provider";
@@ -9,88 +9,39 @@ import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { ExamScreen } from "@/components/exams/exam-screen";
-import {
-  formatExamDay,
-  formatMonth,
-  formatWeekdayShort,
-} from "@/components/exams/exam-format";
-import { LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
-import { MemoBuddy, type BuddyMood } from "@/components/exams/memo-buddy";
-import {
-  EXAM_LESSON_KINDS,
-  monthGrid,
-  percent,
-  type ExamLessonKind,
-} from "@/lib/exams/exam-model";
+import { formatExamDay } from "@/components/exams/exam-format";
+import { LESSON_KIND_EMOJI, LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
+import { MemoBuddy } from "@/components/exams/memo-buddy";
+import { EXAM_LESSON_KINDS, percent, type ExamLessonKind } from "@/lib/exams/exam-model";
+import { pathBuddySide, pathOffset, pathSegment } from "@/lib/exams/exam-path";
 import type { ExamDetail, ExamModuleView } from "@/lib/exams/exams-server";
-import type { MessageKey } from "@/lib/i18n/messages/keys";
-import { noteEmoji } from "@/lib/note-emoji";
 
-const FORMAT_KEY = { written: "exam.format.written", oral: "exam.format.oral", both: "exam.format.both" } as const;
-const KIND_KEY = { midterm: "exam.kind.midterm", exam: "exam.kind.exam", matura: "exam.kind.matura" } as const;
-
-type View = "modules" | "path" | "plan";
-
-const VIEW_KEY: Record<View, MessageKey> = {
-  modules: "exam.dash.view.modules",
-  path: "exam.dash.view.path",
-  plan: "exam.dash.view.plan",
-};
-
-/** The next lessons in path order, for "continue" and for today's list. */
-function upcomingLessons(modules: ExamModuleView[], count: number) {
-  const out: { module: ExamModuleView; kind: ExamLessonKind }[] = [];
-
+/** The lesson the path points at: the first untried one, else the weakest module's weakest lesson. */
+function nextLesson(modules: ExamModuleView[]) {
   for (const entry of modules) {
     if (!entry.unlocked || !entry.ready || entry.completed) {
       continue;
     }
 
-    for (const kind of EXAM_LESSON_KINDS) {
-      if (!entry.done[kind]) {
-        out.push({ module: entry, kind });
-      }
+    const kind = EXAM_LESSON_KINDS.find((candidate) => !entry.done[candidate]);
 
-      if (out.length >= count) {
-        return out;
-      }
+    if (kind) {
+      return { module: entry, kind };
     }
   }
 
-  if (out.length === 0) {
-    const review = [...modules]
-      .filter((entry) => entry.unlocked && entry.ready)
-      .sort((left, right) => left.mastery - right.mastery);
+  const review = [...modules]
+    .filter((entry) => entry.unlocked && entry.ready)
+    .sort((left, right) => left.mastery - right.mastery)[0];
 
-    for (const entry of review.slice(0, count)) {
-      out.push({ module: entry, kind: entry.nextKind });
-    }
-  }
-
-  return out.slice(0, count);
+  return review ? { module: review, kind: review.nextKind } : null;
 }
 
-function MasteryRing({ value, size = 5.2 }: { value: number; size?: number }) {
-  const circumference = 2 * Math.PI * 44;
-  const filled = circumference * Math.min(1, Math.max(0, value));
-
-  return (
-    <span className="memo-exam-ring" style={{ width: `${size}rem`, height: `${size}rem` }}>
-      <svg viewBox="0 0 100 100" aria-hidden="true">
-        <circle cx="50" cy="50" r="44" className="memo-exam-ring-track" />
-        <circle
-          cx="50"
-          cy="50"
-          r="44"
-          className="memo-exam-ring-fill"
-          strokeDasharray={`${filled} ${circumference}`}
-        />
-      </svg>
-      <b>{percent(value)}</b>
-    </span>
-  );
-}
-
+/*
+ * The exam, as Astra and Duolingo draw a course: one path down the screen. Each note is a module
+ * with a heading, its five lessons are stations joined by a line, the station to do next carries
+ * the screen's one coral button, and Memo stands beside it. The mock exam and the exam day end it.
+ */
 export function ExamDashboard({
   detail,
   hasPaidAccess,
@@ -103,12 +54,12 @@ export function ExamDashboard({
   const { t, locale } = useTranslations();
   const { navigateWithFeedback } = useInstantNavigation();
   const { exam, modules, plan } = detail;
-  const [view, setView] = useState<View>("modules");
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [grade, setGrade] = useState(exam.actual_grade ?? "");
   const [gradeSaved, setGradeSaved] = useState(Boolean(exam.actual_grade));
+  const currentRef = useRef<HTMLLIElement | null>(null);
   const closeMenu = useCallback(() => {
     setMenuOpen(false);
     setConfirmDelete(false);
@@ -116,22 +67,26 @@ export function ExamDashboard({
   const menuSheet = useSheet(closeMenu, { locked: busy });
 
   const canOpen = (lectureId: string) => hasPaidAccess || trialLectureId === lectureId;
-  const next = upcomingLessons(modules, 1)[0] ?? null;
-  const todayList = upcomingLessons(modules, Math.max(1, plan.goal - plan.doneToday));
+  const next = nextLesson(modules);
   const examPassed = detail.daysLeft < 0;
   const examToday = detail.daysLeft === 0;
-  const goalMet = plan.doneToday >= plan.goal;
-  const activeDays = useMemo(() => new Set(detail.activeDays), [detail.activeDays]);
 
-  const buddy: { mood: BuddyMood; line: string } = examPassed
-    ? { mood: "wave", line: t("exam.buddy.examPassed") }
-    : examToday
-      ? { mood: "cheer", line: t("exam.buddy.examToday") }
-      : goalMet
-        ? { mood: "happy", line: t("exam.buddy.doneToday") }
-        : plan.doneToday === 0 && next
-          ? { mood: "wave", line: t("exam.buddy.start", { title: next.module.title?.trim() || t("note.untitled") }) }
-          : { mood: "idle", line: t("exam.buddy.keepGoing", { count: Math.max(0, plan.goal - plan.doneToday) }) };
+  /* Open on the station to do next, wherever it is on a long path (the screen's own scroller). */
+  useEffect(() => {
+    const station = currentRef.current;
+    const scroller = station?.closest<HTMLElement>(".memo-screen-scroll");
+
+    if (!station || !scroller) {
+      return;
+    }
+
+    const box = station.getBoundingClientRect();
+    const frame = scroller.getBoundingClientRect();
+
+    if (box.bottom > frame.bottom - 40) {
+      scroller.scrollTop += box.top - frame.top - frame.height / 2 + box.height / 2;
+    }
+  }, []);
 
   async function mutate(init: RequestInit, after: () => void) {
     setBusy(true);
@@ -168,10 +123,6 @@ export function ExamDashboard({
       return t("exam.dash.paid");
     }
 
-    if (!module.unlocked) {
-      return t("exam.dash.testOut");
-    }
-
     if (module.completed) {
       return t("exam.dash.mastered", { percent: percent(module.mastery) });
     }
@@ -197,83 +148,33 @@ export function ExamDashboard({
     </>
   );
 
-  const cta = examPassed ? null : next ? (
-    <button
-      type="button"
-      className="memo-button-coral"
-      onClick={() => openModule(next.module, next.kind)}
-    >
-      {t(next.module.completed ? "exam.dash.review" : "exam.dash.continue", {
-        title: next.module.title?.trim() || t("note.untitled"),
-        lesson: t(LESSON_KIND_KEY[next.kind]),
-      })}
-    </button>
-  ) : null;
-
   return (
-    <ExamScreen backHref="/app/exams" backLabel={t("exam.list.title")} trailing={trailing} cta={cta}>
-      <header className="memo-exam-dash-head">
-        <div className="memo-exam-dash-title">
-          <h1>{exam.title}</h1>
-          <span>
-            {t(FORMAT_KEY[exam.exam_format])} · {t("exam.dash.target", { percent: exam.target_mastery })}
-          </span>
+    <ExamScreen backHref="/app/exams" backLabel={t("exam.list.title")} trailing={trailing}>
+      <header className="memo-exam-trail-head">
+        <h1>{exam.title}</h1>
+        <div className="memo-exam-stats compact">
+          <div>
+            <b>{examPassed ? "✓" : Math.max(0, detail.daysLeft)}</b>
+            <span>
+              {examPassed
+                ? t("exam.list.past")
+                : examToday
+                  ? t("exam.dash.countdownToday")
+                  : t("exam.setup.motivate.days", { count: detail.daysLeft })}
+            </span>
+          </div>
+          <div>
+            <b>{percent(detail.mastery)} %</b>
+            <span>{t("exam.dash.target", { percent: exam.target_mastery })}</span>
+          </div>
+          <div>
+            <b>
+              {plan.doneToday}/{plan.goal}
+            </b>
+            <span>{t("exam.path.today")}</span>
+          </div>
         </div>
-        <MasteryRing value={detail.mastery} />
       </header>
-
-      <div className="memo-exam-countdown">
-        <b>
-          {examPassed
-            ? t("exam.list.past")
-            : examToday
-              ? t("exam.dash.countdownToday")
-              : t("exam.days", { count: detail.daysLeft })}
-        </b>
-        <span>
-          {formatExamDay(exam.exam_date, locale)}
-          <br />
-          {t(KIND_KEY[exam.exam_kind])}
-        </span>
-      </div>
-
-      <div className="memo-exam-strip" role="list">
-        {detail.strip.map((day) => (
-          <span
-            key={day.day}
-            role="listitem"
-            className={[
-              "memo-exam-strip-day",
-              day.isToday ? "today" : "",
-              day.isExam ? "exam" : "",
-              day.active ? "active" : "",
-              day.isPast && !day.active ? "missed" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          >
-            <i>{formatWeekdayShort(day.day, locale)}</i>
-            <b>{Number(day.day.slice(8))}</b>
-          </span>
-        ))}
-      </div>
-
-      <div className="memo-exam-buddy-line">
-        <MemoBuddy mood={buddy.mood} moodKey={buddy.line} size="4.2rem" />
-        <p>{buddy.line}</p>
-      </div>
-
-      <div className="memo-exam-quota">
-        <div>
-          <b>{t("exam.dash.todayGoal")}</b>
-          <span>
-            {plan.doneToday} / {plan.goal}
-          </span>
-        </div>
-        <div className="memo-progress">
-          <div style={{ width: `${Math.min(100, Math.round((plan.doneToday / Math.max(1, plan.goal)) * 100))}%` }} />
-        </div>
-      </div>
 
       {examPassed ? (
         <div className="memo-exam-card memo-exam-after">
@@ -311,160 +212,123 @@ export function ExamDashboard({
         </div>
       ) : null}
 
-      <div className="memo-segment memo-exam-segment memo-exam-views">
-        {(["modules", "path", "plan"] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            className={view === value ? "active" : ""}
-            aria-pressed={view === value}
-            onClick={() => setView(value)}
-          >
-            {t(VIEW_KEY[value])}
-          </button>
-        ))}
-      </div>
+      <div className="memo-exam-trail">
+        {modules.map((module, moduleIndex) => {
+          const isCurrentModule = next?.module.lectureId === module.lectureId;
+          const locked = !module.unlocked;
 
-      {view === "modules" ? (
-        <div className="memo-exam-list">
-          {modules.map((module) => {
-            const locked = !module.unlocked;
-            const blocked = !module.ready;
-
-            return (
-              <button
-                key={module.lectureId}
-                type="button"
+          return (
+            <section key={module.lectureId} className="memo-exam-trail-unit">
+              <div
                 className={[
-                  "memo-exam-module",
+                  "memo-exam-trail-banner",
+                  isCurrentModule ? "current" : "",
                   module.completed ? "done" : "",
-                  next?.module.lectureId === module.lectureId ? "current" : "",
-                  locked ? "locked" : "",
+                  locked || !module.ready ? "locked" : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
-                disabled={blocked}
-                onClick={() => openModule(module, locked ? "quiz" : module.nextKind)}
               >
-                <span className="memo-exam-module-n">
-                  {module.completed ? (
-                    <Msym name="check" size="1.2rem" />
-                  ) : locked ? (
-                    <Msym name="lock" size="1.1rem" fill={false} />
-                  ) : (
-                    module.position + 1
-                  )}
-                </span>
-                <span className="memo-exam-pick-copy">
-                  <b>{`${module.emoji || noteEmoji({ id: module.lectureId, title: module.title })} ${module.title?.trim() || t("note.untitled")}`}</b>
-                  <span>{moduleSubtitle(module)}</span>
-                </span>
-                <MasteryRing value={module.mastery} size={2.2} />
-              </button>
-            );
-          })}
-        </div>
-      ) : view === "path" ? (
-        <ol className="memo-exam-path">
-          {modules.map((module) => (
-            <li
-              key={module.lectureId}
-              className={[
-                module.completed ? "done" : "",
-                next?.module.lectureId === module.lectureId ? "current" : "",
-                !module.unlocked ? "locked" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              <button
-                type="button"
-                disabled={!module.ready}
-                onClick={() => openModule(module, module.unlocked ? module.nextKind : "quiz")}
-              >
-                <span className="memo-exam-path-dot">
-                  {module.completed ? (
-                    <Msym name="check" size="1.2rem" />
-                  ) : !module.unlocked ? (
-                    <Msym name="lock" size="1.1rem" fill={false} />
-                  ) : (
-                    module.position + 1
-                  )}
-                </span>
-                <span className="memo-exam-pick-copy">
+                <span className="memo-exam-trail-banner-copy">
+                  <i>{t("exam.dash.module", { index: module.position + 1 })}</i>
                   <b>{module.title?.trim() || t("note.untitled")}</b>
-                  <span>{moduleSubtitle(module)}</span>
+                  {locked && module.ready ? null : <span>{moduleSubtitle(module)}</span>}
                 </span>
-              </button>
-            </li>
-          ))}
-          <li className="mock">
-            <InstantLink href={`/app/exams/${exam.id}/mock`}>
-              <span className="memo-exam-path-dot">
-                <Emoji symbol="🏆" size="1.1rem" />
-              </span>
-              <span className="memo-exam-pick-copy">
-                <b>{t("exam.mock.title")}</b>
-                <span>{t("exam.dash.mock.body")}</span>
-              </span>
-            </InstantLink>
-          </li>
-          <li className="flag">
-            <span className="memo-exam-path-dot">
-              <Emoji symbol="🏁" size="1.1rem" />
-            </span>
-            <span className="memo-exam-pick-copy">
-              <b>{formatExamDay(exam.exam_date, locale)}</b>
-            </span>
-          </li>
-        </ol>
-      ) : (
-        <div className="memo-exam-plan">
-          <div className="memo-exam-calendar">
-            <div className="memo-exam-calendar-head">{formatMonth(detail.today, locale)}</div>
-            {monthGrid(detail.today).map((cell) => (
-              <span
-                key={cell.day}
-                className={[
-                  cell.inMonth ? "" : "out",
-                  cell.day === detail.today ? "today" : "",
-                  cell.day === exam.exam_date ? "exam" : "",
-                  activeDays.has(cell.day) ? "active" : "",
-                  cell.day > detail.today && cell.day < exam.exam_date ? "planned" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
-                {Number(cell.day.slice(8))}
-              </span>
-            ))}
-          </div>
-          <span className="memo-eyebrow">{t("exam.dash.todayList")}</span>
-          <div className="memo-exam-list">
-            {todayList.map(({ module, kind }) => (
-              <button
-                key={`${module.lectureId}:${kind}`}
-                type="button"
-                className="memo-exam-module"
-                onClick={() => openModule(module, kind)}
-              >
-                <span className="memo-exam-module-n">{module.position + 1}</span>
-                <span className="memo-exam-pick-copy">
-                  <b>{t(LESSON_KIND_KEY[kind])}</b>
-                  <span>{module.title?.trim() || t("note.untitled")}</span>
-                </span>
-                <Msym name="chevron_right" size="1.3rem" fill={false} />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+                {locked && module.ready ? (
+                  <button
+                    type="button"
+                    className="memo-exam-trail-skip"
+                    onClick={() => openModule(module, "quiz")}
+                  >
+                    {t("exam.path.skip")}
+                  </button>
+                ) : module.completed ? (
+                  <Msym name="check_circle" size="1.6rem" className="memo-exam-trail-banner-mark" />
+                ) : null}
+              </div>
 
-      <InstantLink href={`/app/exams/${exam.id}/mock`} className="memo-exam-card memo-exam-mock-card">
-        <span className="memo-exam-mock-emoji">
-          <Emoji symbol="🏆" size="1.6rem" />
-        </span>
-        <span className="memo-exam-pick-copy">
+              <ol className="memo-exam-trail-stations">
+                {EXAM_LESSON_KINDS.map((kind, kindIndex) => {
+                  const index = moduleIndex * EXAM_LESSON_KINDS.length + kindIndex;
+                  const offset = pathOffset(index);
+                  const segment = pathSegment(index);
+                  const isCurrent = isCurrentModule && next?.kind === kind;
+                  const isDone = module.done[kind];
+                  const blocked = !module.ready;
+                  const last = kindIndex === EXAM_LESSON_KINDS.length - 1;
+
+                  return (
+                    <li
+                      key={kind}
+                      ref={isCurrent ? currentRef : undefined}
+                      className={[
+                        "memo-exam-station",
+                        isDone ? "done" : "",
+                        isCurrent ? "current" : "",
+                        locked || blocked ? "locked" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      style={{ "--memo-station-x": `${offset}rem` } as CSSProperties}
+                    >
+                      {!last ? (
+                        <span
+                          aria-hidden="true"
+                          className={`memo-exam-station-line ${isDone ? "done" : ""}`.trim()}
+                          style={
+                            {
+                              "--memo-line-length": `${segment.length}rem`,
+                              "--memo-line-angle": `${segment.angle}deg`,
+                            } as CSSProperties
+                          }
+                        />
+                      ) : null}
+                      <button
+                        type="button"
+                        className="memo-exam-station-node"
+                        disabled={blocked}
+                        aria-label={`${t(LESSON_KIND_KEY[kind])} · ${module.title?.trim() || t("note.untitled")}`}
+                        onClick={() => openModule(module, locked ? "quiz" : kind)}
+                      >
+                        {locked || blocked ? (
+                          <Msym name="lock" size="1.5rem" fill={false} />
+                        ) : (
+                          <Emoji symbol={LESSON_KIND_EMOJI[kind]} size="1.75rem" />
+                        )}
+                        {isDone ? (
+                          <span className="memo-exam-station-check" aria-hidden="true">
+                            <Msym name="check" size="0.9rem" weight={700} />
+                          </span>
+                        ) : null}
+                      </button>
+                      {isCurrent ? (
+                        <>
+                          <button
+                            type="button"
+                            className="memo-exam-station-go"
+                            onClick={() => openModule(module, kind)}
+                          >
+                            {t("exam.path.start")} · {t(LESSON_KIND_KEY[kind])}
+                          </button>
+                          <span className={`memo-exam-station-buddy ${pathBuddySide(index)}`}>
+                            <MemoBuddy mood="wave" size="4.6rem" />
+                          </span>
+                        </>
+                      ) : (
+                        <span className="memo-exam-station-label">{t(LESSON_KIND_KEY[kind])}</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+          );
+        })}
+
+        <InstantLink href={`/app/exams/${exam.id}/mock`} className="memo-exam-trail-goal">
+          <span className="memo-exam-trail-trophy">
+            <Emoji symbol="🏆" size="2.2rem" />
+          </span>
           <b>{t("exam.mock.title")}</b>
           <span>
             {detail.latestMock
@@ -474,9 +338,13 @@ export function ExamDashboard({
                 })
               : t("exam.dash.mock.body")}
           </span>
-        </span>
-        <Msym name="chevron_right" size="1.3rem" fill={false} />
-      </InstantLink>
+        </InstantLink>
+
+        <div className="memo-exam-trail-finish">
+          <Emoji symbol="🏁" size="1.3rem" />
+          <span>{t("exam.path.examDay", { date: formatExamDay(exam.exam_date, locale) })}</span>
+        </div>
+      </div>
 
       {menuOpen ? (
         <MemoPortal>

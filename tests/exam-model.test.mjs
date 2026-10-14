@@ -11,7 +11,6 @@ import {
   targetFromDialPoint,
   buildTrueFalse,
   dailyPlan,
-  dateStrip,
   dayKey,
   daysBetween,
   examMastery,
@@ -137,16 +136,6 @@ test("the streak counts back from today, or from yesterday until today is done",
   assert.equal(streakDays(days, "2026-10-14"), 3);
   assert.equal(streakDays(days, "2026-10-15"), 0);
   assert.equal(streakDays([], "2026-10-15"), 0);
-});
-
-test("the date strip starts two days back and marks the exam", () => {
-  const strip = dateStrip("2026-10-24", "2026-10-26", new Set(["2026-10-22"]));
-
-  assert.equal(strip[0].day, "2026-10-22");
-  assert.equal(strip[0].active, true);
-  assert.equal(strip[2].isToday, true);
-  assert.equal(strip[4].isExam, true);
-  assert.equal(strip[4].weekday, 0);
 });
 
 test("the month grid is whole weeks, Monday first", () => {

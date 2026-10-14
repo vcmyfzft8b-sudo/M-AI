@@ -20,7 +20,7 @@ first one, when the module before it is complete, or when the learner has alread
 locked module offers a test-out quiz). Mastery is the average of the latest score of the four
 practice lessons; the summary counts as done but not as mastery.
 
-All of that arithmetic, plus the daily goal, the streak, the date strip, grade mapping and how
+All of that arithmetic, plus the daily goal, the streak, grade mapping and how
 material is picked, is in `src/lib/exams/exam-model.ts`. It is pure and tested
 (`tests/exam-model.test.mjs`). Put new rules there, not in a component.
 
@@ -45,6 +45,17 @@ the new note's id back instead of navigating to it, and the note joins the exam 
 being made (`createExam` accepts any owned note that has not failed). Notes already in the app are
 the secondary choice, behind "Ali izberi iz svojih zapiskov". Without `canCreateNotes` the upload
 card sends the learner to `/app/start`.
+
+## The exam screen
+
+`/app/exams/[id]` is one path down the screen, as Astra and Duolingo draw a course: the exam's
+title and three numbers (days left, mastery against the goal, lessons today), then each module as
+a heading with its five lessons as round stations on a line that swings left and right. The
+station to do next carries the only call to action ("Začni · Povzetek") and Memo stands beside it;
+the screen opens scrolled to it. Done stations turn coral, a locked module's stations show a lock
+and its heading offers "Preskoči" (the test-out quiz). The mock exam (🏆) and the exam day (🏁)
+end the path. The geometry is `src/lib/exams/exam-path.ts` (tested in `tests/exam-path.test.mjs`);
+keep its row height in step with `.memo-exam-station` in `redesign.css`.
 
 ## Nothing is generated for an exam
 

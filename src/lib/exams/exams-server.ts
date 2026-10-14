@@ -9,7 +9,6 @@ import type {
 import {
   buildTrueFalse,
   dailyPlan,
-  dateStrip,
   dayKey,
   daysBetween,
   examMastery,
@@ -28,7 +27,6 @@ import {
   type ExamLessonKind,
   type MockAnswerResult,
   type ModuleState,
-  type StripDay,
   type TrueFalseStatement,
 } from "@/lib/exams/exam-model";
 import { markAnswerWithRetry } from "@/lib/practice-test";
@@ -69,9 +67,6 @@ export type ExamDetail = {
   modules: ExamModuleView[];
   plan: DailyPlan;
   streak: number;
-  strip: StripDay[];
-  /** Ljubljana days with at least one lesson, across every exam. */
-  activeDays: string[];
   latestMock: ExamMockSummary | null;
 };
 
@@ -343,8 +338,6 @@ export async function getExamDetail(
     modules,
     plan: planFor(exam, states, results, today),
     streak: streakDays(activeDays, today),
-    strip: dateStrip(today, exam.exam_date, activeDays),
-    activeDays: [...activeDays],
     latestMock:
       mockRow && mockRow.percentage !== null && mockRow.graded_at
         ? {

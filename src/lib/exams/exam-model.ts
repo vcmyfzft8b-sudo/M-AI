@@ -298,37 +298,7 @@ export function streakDays(activeDays: Iterable<string>, today: string): number 
   return streak;
 }
 
-export type StripDay = {
-  day: string;
-  weekday: number;
-  isToday: boolean;
-  isExam: boolean;
-  isPast: boolean;
-  active: boolean;
-};
-
-/** The dashboard's date strip: two days back, today, and forward, stopping at the exam. */
-export function dateStrip(today: string, examDate: string, activeDays: Set<string>, length = 7): StripDay[] {
-  const start = addDays(today, -2);
-  const days: StripDay[] = [];
-
-  for (let index = 0; index < length; index += 1) {
-    const day = addDays(start, index);
-
-    days.push({
-      day,
-      weekday: weekdayIndex(day),
-      isToday: day === today,
-      isExam: day === examDate,
-      isPast: day < today,
-      active: activeDays.has(day),
-    });
-  }
-
-  return days;
-}
-
-/** The month grid for the daily-plan calendar, Monday first, padded to whole weeks. */
+/** The month grid for the setup calendar, Monday first, padded to whole weeks. */
 export function monthGrid(month: string): { day: string; inMonth: boolean }[] {
   const monthKey = month.slice(0, 7);
   const first = `${monthKey}-01`;

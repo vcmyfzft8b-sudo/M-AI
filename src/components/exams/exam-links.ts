@@ -9,6 +9,15 @@ export const LESSON_KIND_KEY: Record<ExamLessonKind, MessageKey> = {
   written: "exam.lesson.kind.written",
 };
 
+/** Each lesson's picture on the study path. */
+export const LESSON_KIND_EMOJI: Record<ExamLessonKind, string> = {
+  summary: "📖",
+  flashcards: "🃏",
+  quiz: "❓",
+  true_false: "⚖️",
+  written: "✍️",
+};
+
 export function lessonHref(examId: string, lectureId: string, kind: ExamLessonKind) {
   return `/app/exams/${examId}/lesson?lecture=${lectureId}&kind=${kind}`;
 }

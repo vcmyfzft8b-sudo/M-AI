@@ -53,7 +53,7 @@ landing usually follows on its own. **Check it anyway** — the landing componen
 screen's JSX, and a changed structure (a new element, a moved button, a new class) still has to be
 copied across.
 
-Three places still copy rather than share, and have to be kept in step by hand:
+Four places still copy rather than share, and have to be kept in step by hand:
 
 - **The hero phone's chrome.** Inside a note tab the hero draws the shared screens, but the phone
   around them — the nav bar, library rows, create sheet, settings, help, chat sheets — is still an
@@ -69,6 +69,9 @@ Three places still copy rather than share, and have to be kept in step by hand:
   podcast, mindmap, palace and speed-read block) restate those phone rules for the
   `.landing-study-frame` stand-in. **When you change a note tab's phone layout in `redesign.css`,
   change the matching block in `landing.css` too.**
+- **The capture drop zone in "How it works" step 1.** `.memo-dropzone`'s phone look (the
+  `@media (max-width: 1099px)` block in `redesign.css`) is restated under `.landing-v2-flow-card`
+  in `landing.css`, for the same reason. Keep the two in step.
 
 The hero chrome and the phone layout are the next things to move onto shared markup (a container
 query would let one rule serve both a phone viewport and the landing's phone-sized frame).
@@ -111,8 +114,9 @@ feature is one a new visitor should weigh before signing up, and keep it to abou
    own component instead wherever it is pure.
 3. A new note tab goes into `NOTE_TABS` (`src/lib/note-tabs.ts`) once; the app and the landing
    both read it. Add its landing screen to `LANDING_SCREEN_FOR_TAB` in the parity test.
-4. Update copy that lists features: the hero lead (`landing.hero.lead`), the JSON-LD
-   `featureList` in `page.tsx`, and the FAQ where it describes what the app does.
+4. Update copy that lists features: the JSON-LD `featureList` in `page.tsx` and the FAQ where
+   it describes what the app does. The hero lead (`landing.hero.lead`) names only the core
+   (notes, flashcards, quizzes); change it only when the core changes.
 5. Look at both side by side at phone width, in dark and light:
    - the app with demo data and no login: `/creator/lectures/demo-note-mikroekonomija`
      (the creator demo hides the Tutor tab — compare the tutor against `lecture-tutor.tsx`);

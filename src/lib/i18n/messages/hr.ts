@@ -116,7 +116,7 @@ export const hr: Messages = {
 
   /* ---- Landing page ---- */
   "landing.hero.title": "Nikad više ne piši bilješke!",
-  "landing.hero.lead": "Memo AI je tvoj AI notetaker za predavanja. Snimi ili učitaj predavanje, PDF ili poveznicu i za nekoliko minuta dobij uredne bilješke, kartice i kvizove.",
+  "landing.hero.lead": "Memo AI je tvoj AI notetaker za predavanja. Snimi ili učitaj predavanje, PDF ili poveznicu i za nekoliko minuta dobit ćeš uredne bilješke, kartice i kvizove.",
   "landing.cta.tryFree": "Probaj za 0 €",
   "landing.cta.signIn": "Prijavi se",
   "landing.hero.previewLabel": "Pregled aplikacije {brand}",

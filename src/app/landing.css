@@ -1246,13 +1246,13 @@
  * phone rules in redesign.css sit behind max-width: 1099px, which a desktop
  * window never matches, so a desktop visitor got the desktop artboard's short
  * box and monospaced hint inside a phone-sized card. Restated here so the card
- * looks the same at every width, and held clear of the note list under it (the
+ * shows the phone's drop zone at every width, and held clear of the note list under it (the
  * phone layout drops the list's top margin, which left the two touching).
  */
 .landing-v2-flow-card .memo-dropzone {
   height: auto;
   gap: 0.6rem;
-  padding: 2.4rem 1.5rem;
+  padding: 3rem 1.5rem;
   border: 2px dashed var(--line);
   border-radius: 24px;
   background: var(--surface);

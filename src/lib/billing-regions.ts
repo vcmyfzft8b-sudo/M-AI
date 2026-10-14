@@ -28,7 +28,7 @@ export const REGIONAL_PLAN_PRICES: Readonly<Record<string, PlanPrices>> = {
   BA: { monthly: 12, yearly: 60 },
   ME: { monthly: 15, yearly: 80 },
   MK: { monthly: 15, yearly: 80 },
-  HR: { monthly: 18, yearly: 110 },
+  HR: { monthly: 18, yearly: 100 },
 };
 
 /** The country whose regional prices apply, or `null` for the standard price. */

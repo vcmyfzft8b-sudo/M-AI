@@ -6,27 +6,29 @@ import { getOptionalUserOrPreviewBypass } from "@/lib/auth";
 import { tr } from "@/lib/i18n/server";
 import { isNativeUserAgent } from "@/lib/mobile/runtime";
 import {
-  PAYWALL_STEP_COOKIE,
-  PAYWALL_STEP_COOKIE_MAX_AGE,
-  advancePaywallStep,
-  readPaywallStep,
+  PAYWALL_SEEN_COOKIE,
+  PAYWALL_SEEN_COOKIE_MAX_AGE,
+  readSeenReasons,
+  recordSeenReason,
+  writeSeenReasons,
 } from "@/lib/paywall-ladder";
+import { PAYWALL_REASONS } from "@/lib/paywall-reasons";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
 
 const viewSchema = z.object({
-  step: z.number().int().min(1).max(10),
+  reason: z.enum(PAYWALL_REASONS),
 });
 
 /**
- * The paywall reports the step it showed, and the next one will offer more
- * (`paywall-ladder.ts`). The cookie only ever moves one step per call, so this
- * cannot be used to jump to the bottom of the ladder.
+ * A feature's paywall reports that its limit was met, so the next feature to
+ * run out offers more (`paywall-ladder.ts`). A feature is recorded once, in the
+ * order the limits were met; reporting it again changes nothing.
  */
 export async function POST(request: Request) {
   // The app's prices are Apple's; it never moves down the ladder.
   if (isNativeUserAgent(request.headers.get("user-agent"))) {
-    return NextResponse.json({ step: 1 });
+    return NextResponse.json({ seen: [] });
   }
 
   const user = await getOptionalUserOrPreviewBypass();
@@ -53,15 +55,15 @@ export async function POST(request: Request) {
   }
 
   const jar = await cookies();
-  const step = advancePaywallStep(readPaywallStep(jar.get(PAYWALL_STEP_COOKIE)?.value), parsed.data.step);
-  const response = NextResponse.json({ step });
+  const seen = recordSeenReason(readSeenReasons(jar.get(PAYWALL_SEEN_COOKIE)?.value), parsed.data.reason);
+  const response = NextResponse.json({ seen });
 
-  response.cookies.set(PAYWALL_STEP_COOKIE, String(step), {
+  response.cookies.set(PAYWALL_SEEN_COOKIE, writeSeenReasons(seen), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: PAYWALL_STEP_COOKIE_MAX_AGE,
+    maxAge: PAYWALL_SEEN_COOKIE_MAX_AGE,
   });
 
   return response;

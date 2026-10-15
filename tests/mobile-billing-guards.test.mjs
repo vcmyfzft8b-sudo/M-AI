@@ -6,6 +6,7 @@ import ts from "typescript";
 import { z } from "zod";
 import { isNativeUserAgent } from "../src/lib/mobile/runtime.ts";
 import * as paywallLadder from "../src/lib/paywall-ladder.ts";
+import * as paywallReasons from "../src/lib/paywall-reasons.ts";
 
 const NATIVE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MemoAI-iOS/1.0";
 const SAFARI_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1";
@@ -30,6 +31,7 @@ function loadRoute(path) {
     "@/lib/discount-wheel": { getDiscountWheelState: reached("wheel") },
     "next/headers": { cookies: async () => ({ get: () => undefined }) },
     "@/lib/paywall-ladder": paywallLadder,
+    "@/lib/paywall-reasons": paywallReasons,
     "@/lib/rate-limit": { rateLimitPresets: { mutate: [] }, enforceRateLimit: reached("rateLimit") },
     "@/lib/request-validation": { parseJsonRequest: reached("parse") },
     "@/lib/i18n/locales": { STRIPE_CHECKOUT_LOCALE: {} },

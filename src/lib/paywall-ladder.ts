@@ -1,25 +1,30 @@
+import { PAYWALL_REASONS, type PaywallReason } from "./paywall-reasons.ts";
+
 /**
- * The offer gets better each time a learner meets the paywall without buying.
+ * The offer gets better with each feature limit a learner runs into.
  *
- * The first paywall is the plain price with the free trial. Every later one is
- * a step down the ladder: 20 %, then 30 %, then 40 % off the first billing
- * period. The daily wheel's 50 % stays the best price there is, so nothing here
- * may go past it.
+ * Before any limit, the paywall is the plain price with the free trial. The
+ * first feature that runs out — whichever it is: the chat, the read-aloud, a
+ * second note — offers 20 % off the first payment; the second feature to run
+ * out offers 30 %; the third and every one after, 40 %. The daily wheel's 50 %
+ * stays the best price there is, so nothing here may go past it.
  *
- * Where the learner is on the ladder lives in a cookie the server sets. It can
- * only move one step per paywall shown, and checkout never applies more than
- * the cookie allows, so a link cannot ask for a better price than the learner
- * has been shown. Reaching the last step needs nothing but opening the paywall
- * a few times, which is why the last step stays under the wheel.
+ * The discount belongs to the feature. Each one keeps the rung it was given
+ * the first time, so coming back to the chat paywall later shows the chat's
+ * 20 % again, not whatever the latest limit earned. Paywalls opened without a
+ * feature (the Upgrade button, Settings) show the best rung reached so far.
+ *
+ * The order the limits were met in lives in a cookie the server writes
+ * (`POST /api/billing/paywall-view`), and checkout reads the price from that
+ * cookie, never from the request alone. Reaching the last rung needs nothing
+ * but hitting three limits, which is why the last rung stays under the wheel.
  *
  * Web only for now: the app sells through Apple, whose prices come from App
- * Store Connect, so it always shows step 1.
- *
- * Pure: the page, the checkout route and the tests all use it.
+ * Store Connect, so it always shows the first step.
  */
 export type PaywallOffer = {
+  /** 1 is the plain price with the trial; 2, 3 and 4 are the discounts. */
   step: number;
-  /** 0 for the first step, which sells the trial instead. */
   percentOff: number;
   /** Stripe coupon, `duration: once`; null on the first step. */
   coupon: string | null;
@@ -32,47 +37,66 @@ export const PAYWALL_LADDER: readonly PaywallOffer[] = [
   { step: 4, percentOff: 40, coupon: "memo40-first-cycle" },
 ];
 
-export const PAYWALL_STEP_COOKIE = "memo-paywall-step";
-export const PAYWALL_STEP_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+export const PAYWALL_SEEN_COOKIE = "memo-paywall-seen";
+export const PAYWALL_SEEN_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 const LAST_STEP = PAYWALL_LADDER.length;
 
-/** The step stored in the cookie: 0 before any paywall has been shown. */
-export function readPaywallStep(value: unknown): number {
-  const parsed = typeof value === "string" ? Number.parseInt(value, 10) : typeof value === "number" ? value : 0;
-  return Number.isFinite(parsed) ? Math.min(Math.max(Math.trunc(parsed), 0), LAST_STEP) : 0;
+/** The features whose limits the learner has met, in the order they met them. */
+export function readSeenReasons(value: unknown): PaywallReason[] {
+  if (typeof value !== "string" || value.length === 0 || value.length > 200) {
+    return [];
+  }
+
+  const seen: PaywallReason[] = [];
+
+  for (const part of value.split(".")) {
+    if ((PAYWALL_REASONS as readonly string[]).includes(part) && !seen.includes(part as PaywallReason)) {
+      seen.push(part as PaywallReason);
+    }
+  }
+
+  return seen;
 }
 
-/** The step the next paywall shows, given the step already reached. */
-export function nextPaywallStep(reached: number) {
-  return Math.min(readPaywallStep(reached) + 1, LAST_STEP);
+export function writeSeenReasons(seen: readonly PaywallReason[]) {
+  return seen.join(".");
 }
 
-/**
- * What to store after a paywall reports it was shown at `shown`: never more
- * than one step past what was already reached, never backwards.
- */
-export function advancePaywallStep(reached: number, shown: number) {
-  const current = readPaywallStep(reached);
-  return Math.max(current, Math.min(readPaywallStep(shown), current + 1));
+/** Adds a feature the first time its limit is met; never reorders. */
+export function recordSeenReason(seen: readonly PaywallReason[], reason: PaywallReason): PaywallReason[] {
+  return seen.includes(reason) ? [...seen] : [...seen, reason];
 }
 
-/** The offer for a step; anything out of range is clamped onto the ladder. */
+/** The offer on a step; anything out of range is clamped onto the ladder. */
 export function paywallOffer(step: number): PaywallOffer {
   const index = Math.min(Math.max(Math.trunc(step) || 1, 1), LAST_STEP) - 1;
   return PAYWALL_LADDER[index];
 }
 
 /**
- * The offer checkout may apply: the one the client says it showed, but never
- * past the step the cookie has reached.
+ * The offer a paywall shows. A feature's own rung is its place in the order
+ * the limits were met — or the next place, the first time. No feature: the
+ * best rung reached, or the plain price before any limit.
  */
-export function checkoutPaywallOffer(claimedStep: unknown, reached: number): PaywallOffer {
-  const claimed = typeof claimedStep === "number" ? claimedStep : 1;
-  return paywallOffer(Math.min(claimed, Math.max(readPaywallStep(reached), 1)));
+export function paywallOfferFor(reason: PaywallReason | null, seen: readonly PaywallReason[]): PaywallOffer {
+  if (!reason) {
+    return paywallOffer(seen.length === 0 ? 1 : seen.length + 1);
+  }
+
+  const place = seen.indexOf(reason);
+  return paywallOffer((place >= 0 ? place : seen.length) + 2);
 }
 
 /** A price with the step's discount taken off, rounded to the cent. */
 export function discountedAmount(amount: number, percentOff: number) {
   return Math.round(amount * (100 - percentOff)) / 100;
+}
+
+/**
+ * A year's price as a weekly one, rounded down to the cent so it is never
+ * advertised above what is charged (the wheel's sheet does the same).
+ */
+export function weeklyAmount(yearlyAmount: number) {
+  return Math.floor((yearlyAmount / 52) * 100) / 100;
 }

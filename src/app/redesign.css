@@ -8831,6 +8831,100 @@
   object-fit: contain;
 }
 
+/*
+ * The show round the wheel. Rays turn slowly behind it while it waits and
+ * quickly while it spins; the bulbs on the rim chase each other, faster while
+ * it spins, and all flash together once it lands; Memo in the hub wiggles as
+ * it goes round and jumps when it stops; the win lands with a burst of light.
+ */
+.memo-wheel-rays {
+  position: absolute;
+  inset: -4.5rem;
+  border-radius: 999px;
+  background: repeating-conic-gradient(color-mix(in oklch, var(--promo) 20%, transparent) 0deg 10deg, transparent 10deg 20deg);
+  -webkit-mask-image: radial-gradient(circle, #000 35%, transparent 70%);
+  mask-image: radial-gradient(circle, #000 35%, transparent 70%);
+  animation: memo-wheel-rays 18s linear infinite;
+}
+
+.memo-wheel.spinning .memo-wheel-rays {
+  animation-duration: 3s;
+}
+
+.memo-wheel-lights {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Lit bulbs set into the wheel's white rim, glowing in the brand coral. */
+.memo-wheel-lights span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.46rem;
+  height: 0.46rem;
+  margin: -0.23rem 0 0 -0.23rem;
+  border-radius: 999px;
+  background: var(--promo);
+  box-shadow: 0 0 6px 2px color-mix(in oklch, var(--promo) 70%, transparent);
+  animation: memo-wheel-bulb 1.2s calc(var(--i) * 0.0667s) steps(1) infinite;
+}
+
+.memo-wheel.spinning .memo-wheel-lights span {
+  animation-duration: 0.36s;
+  animation-delay: calc(var(--i) * 0.02s);
+}
+
+.memo-wheel.won .memo-wheel-lights span {
+  animation: memo-wheel-bulb-all 0.4s steps(1) infinite;
+}
+
+.memo-wheel.spinning .memo-wheel-hub img {
+  animation: memo-wheel-wiggle 0.5s ease-in-out infinite;
+}
+
+.memo-wheel.won .memo-wheel-hub {
+  animation: memo-wheel-jump 0.9s cubic-bezier(0.33, 0.9, 0.6, 1) 2;
+}
+
+.memo-wheel.won .memo-wheel-hub img {
+  animation: none;
+}
+
+.memo-wheel.won::after {
+  content: "";
+  position: absolute;
+  inset: -3rem;
+  z-index: 3;
+  border-radius: 999px;
+  background: radial-gradient(circle, color-mix(in oklch, var(--on-promo) 90%, transparent), color-mix(in oklch, var(--promo) 40%, transparent) 40%, transparent 70%);
+  pointer-events: none;
+  animation: memo-wheel-burst 0.9s ease-out both;
+}
+
+.memo-wheel-cta:not(.waiting):not(:disabled) {
+  animation: memo-wheel-cta-pulse 1.6s ease-in-out infinite;
+}
+
+.memo-wheel.won ~ .memo-wheel-prize p:first-child {
+  animation: memo-wheel-slam 0.6s cubic-bezier(0.22, 1.6, 0.4, 1) both;
+}
+
+@keyframes memo-wheel-rays { to { rotate: 360deg; } }
+@keyframes memo-wheel-bulb { 0% { opacity: 1; } 50% { opacity: 0.2; box-shadow: none; } }
+@keyframes memo-wheel-bulb-all { 0% { opacity: 1; scale: 1.4; } 50% { opacity: 0.3; scale: 1; box-shadow: none; } }
+@keyframes memo-wheel-wiggle { 0%, 100% { rotate: -8deg; } 50% { rotate: 8deg; } }
+@keyframes memo-wheel-jump {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  30% { transform: translate(-50%, -62%) scale(1.18); }
+  60% { transform: translate(-50%, -50%) scale(0.94, 1.06); }
+}
+@keyframes memo-wheel-burst { 0% { opacity: 0; scale: 0.4; } 25% { opacity: 1; } 100% { opacity: 0; scale: 1.5; } }
+@keyframes memo-wheel-cta-pulse { 0%, 100% { scale: 1; } 50% { scale: 1.04; } }
+@keyframes memo-wheel-slam { 0% { opacity: 0; scale: 2.6; rotate: -8deg; } 70% { scale: 0.92; rotate: 2deg; } 100% { opacity: 1; scale: 1; rotate: 0deg; } }
+
 .memo-wheel-prize {
   z-index: 4;
   margin-top: 1.3rem;
@@ -10194,18 +10288,52 @@
  * A later rung adds a pill under the hero, a red badge on each plan and the
  * regular price struck through beside the first-payment price.
  */
+/*
+ * The discount, said once and plainly: the percentage large, then what it is
+ * worth in money on the plan that is selected.
+ */
 .memo-paywall-offer {
-  width: max-content;
-  max-width: 100%;
-  margin: 0.5rem auto 0;
-  padding: 0.3rem 0.85rem;
-  border-radius: 999px;
-  background: color-mix(in oklch, var(--promo) 14%, transparent);
-  color: var(--promo);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0 0 0.7rem;
+  padding: 0.6rem 1rem 0.6rem 0.7rem;
+  border-radius: 20px;
+  background: color-mix(in oklch, var(--promo) 12%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--promo) 30%, transparent);
+  text-align: left;
+}
+
+.memo-paywall-offer-percent {
+  flex: none;
+  padding: 0.25rem 0.6rem;
+  border-radius: 14px;
+  background: var(--promo);
+  color: var(--on-promo);
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+
+.memo-paywall-offer-copy {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.memo-paywall-offer-copy strong {
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.memo-paywall-offer-copy span {
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 
 .memo-paywall-plan-badge.offer {
@@ -10651,6 +10779,15 @@
   color: var(--on-photo);
 }
 
+.memo-paywall-shell[data-reason="listen"] .memo-paywall-offer {
+  background: var(--on-photo-chip);
+  box-shadow: none;
+}
+
+.memo-paywall-shell[data-reason="listen"] .memo-paywall-offer-copy :is(strong, span) {
+  color: var(--on-photo);
+}
+
 .memo-paywall-shell[data-reason="listen"] .memo-pw-hero {
   margin-top: 1.2rem;
 }
@@ -10671,6 +10808,7 @@
 
 .memo-paywall-shell[data-reason="tutor"] .memo-paywall-offer {
   background: var(--surface);
+  box-shadow: none;
 }
 
 

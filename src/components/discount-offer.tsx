@@ -46,6 +46,9 @@ import { APPLE_PRODUCTS } from "@/lib/mobile/runtime";
  * stop on, so it is the worst prize on the board rather than a middling one.
  */
 const WHEEL_SLICES = ["10 %", "15 %", "20 %", "50 %", "5 %", "30 %"];
+/** Bulbs in the ring of lights round the rim. */
+const WHEEL_BULBS = 18;
+
 /** How long the offer stands, matching WHEEL_PRIZE_TTL_MS on the server. */
 const OFFER_SECONDS = 10 * 60;
 
@@ -609,10 +612,22 @@ export function DiscountOffer({
             {/* One class drives both the disc and the pointer that knocks
                 against its sticks, so the two cannot drift apart. */}
             <div
-              className={`memo-wheel ${isSpinning || hasWon ? "spinning" : ""}`.trim()}
+              className={`memo-wheel ${isSpinning || hasWon ? "spinning" : ""} ${hasWon ? "won" : ""}`.trim()}
               style={{ "--memo-wheel-spin-duration": `${SPIN_MS}ms` } as React.CSSProperties}
             >
+              {/* The show around it: sunrays turning behind the disc and a ring
+                  of bulbs chasing round the rim — faster while it spins, all
+                  flashing together once it lands. Decoration only. */}
+              <div className="memo-wheel-rays" aria-hidden="true" />
               <div className="memo-wheel-glow" aria-hidden="true" />
+              <div className="memo-wheel-lights" aria-hidden="true">
+                {Array.from({ length: WHEEL_BULBS }, (_, index) => (
+                  <span
+                    key={index}
+                    style={{ "--i": index, transform: `rotate(${(index * 360) / WHEEL_BULBS}deg) translateY(-7.22rem)` } as React.CSSProperties}
+                  />
+                ))}
+              </div>
               <div className="memo-wheel-pointer" aria-hidden="true" />
               <div className="memo-wheel-disc">
                 {WHEEL_SLICES.map((label, index) => (

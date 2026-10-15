@@ -17,7 +17,8 @@ import {
 } from "@/lib/billing";
 import { hasLiveStripeSubscription } from "@/lib/billing-access";
 import { getDiscountWheelState } from "@/lib/discount-wheel";
-import { PAYWALL_STEP_COOKIE, checkoutPaywallOffer, readPaywallStep } from "@/lib/paywall-ladder";
+import { PAYWALL_SEEN_COOKIE, paywallOfferFor, readSeenReasons } from "@/lib/paywall-ladder";
+import { PAYWALL_REASONS } from "@/lib/paywall-reasons";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { STRIPE_CHECKOUT_LOCALE } from "@/lib/i18n/locales";
@@ -25,8 +26,8 @@ import { GEO_COUNTRY_HEADER, getLocale, tr } from "@/lib/i18n/server";
 
 const checkoutSchema = z.object({
   plan: z.enum(PURCHASABLE_BILLING_PLAN_IDS),
-  /** The paywall's step on the offer ladder; checkout caps it at the cookie's. */
-  step: z.number().int().min(1).max(10).optional(),
+  /** The feature whose paywall this is; its discount is read from the cookie. */
+  reason: z.enum(PAYWALL_REASONS).nullish(),
 });
 
 export async function POST(request: Request) {
@@ -92,11 +93,11 @@ export async function POST(request: Request) {
     // has their discount and does not need to type one.
     const wheel = await getDiscountWheelState(appState.user.id);
     const wheelCoupon = wheel.hasUnredeemedPrize ? wheel.coupon : null;
-    // Otherwise the paywall's own step on the ladder, never past the step the
-    // cookie has reached (`paywall-ladder.ts`). The wheel's 50 % beats every step.
-    const ladderOffer = checkoutPaywallOffer(
-      parsed.data.step,
-      readPaywallStep((await cookies()).get(PAYWALL_STEP_COOKIE)?.value),
+    // Otherwise the discount this feature's limit earned, as the cookie
+    // records it (`paywall-ladder.ts`). The wheel's 50 % beats every rung.
+    const ladderOffer = paywallOfferFor(
+      parsed.data.reason ?? null,
+      readSeenReasons((await cookies()).get(PAYWALL_SEEN_COOKIE)?.value),
     );
     const coupon = wheelCoupon ?? ladderOffer.coupon;
 

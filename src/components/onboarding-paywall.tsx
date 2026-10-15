@@ -17,7 +17,7 @@ import { useInstantNavigation } from "@/components/navigation-loading";
 import { clearOfferResume } from "@/lib/offer-resume";
 import { formatCurrency } from "@/lib/utils";
 import type { PaywallReason } from "@/lib/paywall-reasons";
-import { discountedAmount, paywallOffer } from "@/lib/paywall-ladder";
+import { discountedAmount, paywallOffer, weeklyAmount } from "@/lib/paywall-ladder";
 import { PaywallCompare, PaywallHero, paywallAccentStyle, paywallLayout } from "@/components/paywall-hero";
 import {
   BRAND_LOCKUP_HEIGHT,
@@ -110,20 +110,21 @@ export function OnboardingPaywall({
   const discounted = offer.percentOff > 0;
 
   /*
-   * Reported once per paywall shown, so the next one offers more. Not in the
-   * app, and not while the survey is still showing instead of the prices.
+   * A feature's paywall records that its limit was met, so the next feature to
+   * run out offers more. Not in the app, not for the paywalls no feature opened,
+   * and not while the survey is still showing instead of the prices.
    */
   useEffect(() => {
-    if (native || !onboardingComplete || hasPaidAccess) {
+    if (native || !reason || !onboardingComplete || hasPaidAccess) {
       return;
     }
 
     void fetch("/api/billing/paywall-view", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ step: offer.step }),
+      body: JSON.stringify({ reason }),
     }).catch(() => null);
-  }, [native, onboardingComplete, hasPaidAccess, offer.step]);
+  }, [native, reason, onboardingComplete, hasPaidAccess]);
 
   async function startCheckout(plan: BillingPlanCard["id"]) {
     if (native) { await apple.purchase(); return; }
@@ -136,7 +137,7 @@ export function OnboardingPaywall({
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ plan, step: offer.step }),
+        body: JSON.stringify({ plan, reason }),
       });
 
       const payload = (await response.json()) as { url?: string; error?: string };
@@ -181,6 +182,13 @@ export function OnboardingPaywall({
   const paywallPlans = [yearlyPlan, monthlyPlan].filter(
     (plan): plan is BillingPlanCard => Boolean(plan),
   );
+  // What the discount is worth on the plan that is selected, in money.
+  const savingPlan = paywallPlans.find((plan) => plan.id === selectedPaywallPlan) ?? paywallPlans[0];
+  const savingLine = discounted && savingPlan
+    ? t(savingPlan.id === "yearly" ? "paywall.offer.saveYear" : "paywall.offer.saveMonth", {
+        amount: formatCurrency(savingPlan.amount - discountedAmount(savingPlan.amount, offer.percentOff), locale),
+      })
+    : null;
 
   if (!effectiveOnboardingComplete) {
     return <OnboardingFlow profile={profile} />;
@@ -239,7 +247,13 @@ export function OnboardingPaywall({
       ) : null}
 
       {discounted ? (
-        <p className="memo-paywall-offer">{t("paywall.offer.pill", { percent: offer.percentOff })}</p>
+        <div className="memo-paywall-offer">
+          <span className="memo-paywall-offer-percent">−{offer.percentOff}%</span>
+          <span className="memo-paywall-offer-copy">
+            <strong>{t("paywall.offer.pill", { percent: offer.percentOff })}</strong>
+            <span>{savingLine}</span>
+          </span>
+        </div>
       ) : null}
 
       <h1 className="memo-paywall-title">
@@ -282,12 +296,24 @@ export function OnboardingPaywall({
           const yearlySavings = native ? (appleProduct?.yearlySavings ?? 0) : annualizedMonthly > plan.annualizedAmount
             ? Math.round((1 - plan.annualizedAmount / annualizedMonthly) * 100)
             : 0;
-          const regularShown = plan.displayAmount ?? plan.amount;
+          /*
+           * On the web the year is priced by the week, as on the wheel's sheet:
+           * the first year's charge spread over 52 weeks, rounded down. The
+           * month stays a month. The app shows Apple's own figures.
+           */
+          const weekly = plan.id === "yearly";
+          const regularShown = weekly ? weeklyAmount(plan.amount) : plan.amount;
           const displayPrice = native
             ? appleProduct?.monthlyPrice ?? appleProduct?.price ?? "—"
-            : formatCurrency(discounted ? discountedAmount(regularShown, offer.percentOff) : regularShown, locale);
-          const suffix = native && plan.id === "yearly" && !appleProduct?.monthlyPrice
-            ? `/${t("native.year")}` : t("paywall.perMonth");
+            : formatCurrency(
+                weekly
+                  ? weeklyAmount(discounted ? discountedAmount(plan.amount, offer.percentOff) : plan.amount)
+                  : discounted ? discountedAmount(plan.amount, offer.percentOff) : plan.amount,
+                locale,
+              );
+          const suffix = native
+            ? plan.id === "yearly" && !appleProduct?.monthlyPrice ? `/${t("native.year")}` : t("paywall.perMonth")
+            : weekly ? t("paywall.perWeek") : t("paywall.perMonth");
           const detail = native
             ? !appleProduct ? t("native.working")
               : appleProduct.trialDays === 3

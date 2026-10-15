@@ -5,6 +5,7 @@ import { WindowFileDropGuard } from "@/components/window-file-drop-guard";
 import { AppShell } from "@/components/app-shell";
 import { ImpersonationBannerSlot } from "@/components/impersonation-banner-slot";
 import { NavigationFeedbackProvider } from "@/components/navigation-loading";
+import { PaywallNudge } from "@/components/paywall-nudge";
 import { OfflineProvider } from "@/components/offline/offline-provider";
 import { getViewerAppState } from "@/lib/billing";
 import { PREVIEW_AUTH_BYPASS_USER_ID, requireUser } from "@/lib/auth";
@@ -95,6 +96,8 @@ export default async function AppLayout({
           {children}
         </AppShell>
         <ImpersonationBannerSlot />
+        {/* Browsing offers for a free learner on the web (`paywall-nudge.tsx`). */}
+        {!native && appState?.onboardingComplete && !appState.hasPaidAccess ? <PaywallNudge /> : null}
       </OfflineProvider>
     </NavigationFeedbackProvider>
   );

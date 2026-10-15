@@ -9,6 +9,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { en } from "../src/lib/i18n/messages/en.ts";
 import { createTranslator } from "../src/lib/i18n/translate.ts";
 import { APPLE_PRODUCTS } from "../src/lib/mobile/runtime.ts";
+import * as paywallLadder from "../src/lib/paywall-ladder.ts";
 
 const t = createTranslator("en", [en]);
 const plans = [
@@ -26,13 +27,14 @@ function load(component, native, products = []) {
     react: React, "react/jsx-runtime": jsx,
     "lucide-react": { Check: () => null, CircleCheck: () => null, Loader2: () => null },
     "next/image": { default: ({ priority, ...props }) => React.createElement("img", props) },
-    "next/navigation": { useSearchParams: () => new URLSearchParams() },
+    "next/navigation": { useSearchParams: () => new URLSearchParams(), useRouter: () => ({ back() {}, push() {} }) },
+    "@/lib/app-history": { cameFromAppPath: () => false, quietNextEntrance() {} },
+    "@/lib/safe-router-prefetch": { safeRouterPrefetch() {} },
     "@/components/i18n-provider": { useT: () => t, useTranslations: () => ({ locale: "en", t }) },
     "@/components/msym": { Msym: () => null },
     "@/components/onboarding-flow": { OnboardingFlow: () => React.createElement("div", null, "onboarding") },
     "@/components/use-apple-billing": { useAppleBilling: () => apple },
     "@/components/apple-billing-terms": { AppleBillingTerms: () => React.createElement("div", null, "Apple renewal terms") },
-    "@/components/navigation-loading": { useInstantNavigation: () => ({ navigateWithFeedback() {}, overlay: null }) },
     "@/components/memo-portal": { MemoPortal: ({ children }) => children },
     "@/components/use-sheet": { useSheet: () => ({ closing: false, dismiss() {}, dragProps: {} }), sheetClass: s => s },
     "@/lib/offer-resume": { clearOfferResume() {}, markOfferResume() {}, readOfferResume: () => ({ expiresAt: null }) },
@@ -41,6 +43,13 @@ function load(component, native, products = []) {
     "@/lib/mobile/runtime": { APPLE_PRODUCTS },
     "@/lib/utils": { formatCurrency: value => `€${value.toFixed(2)}` },
     "@/lib/billing-regions": { STANDARD_PLAN_PRICES: { monthly: 20, yearly: 130 } },
+    "@/lib/paywall-ladder": paywallLadder,
+    "@/lib/paywall-offer-timing": { notePaywallShown() {}, paywallVisitCounted: () => false },
+    "@/components/paywall-hero": {
+      PaywallHero: ({ reason }) => React.createElement("div", { className: "memo-pw-hero", "data-reason": reason }),
+      paywallLayout: reason => (reason ? "rows" : "cards"),
+      paywallAccentStyle: () => undefined,
+    },
     "@/lib/brand": { BRAND_LOCKUP_SRC: "/brand.png", BRAND_LOCKUP_WIDTH: 480, BRAND_LOCKUP_HEIGHT: 148, SEO_BRAND_NAME: "Memo" },
   };
   const context = { exports: {}, require: name => { assert.ok(name in modules, name); return modules[name]; }, URLSearchParams };
@@ -49,10 +58,10 @@ function load(component, native, products = []) {
   }).outputText, context);
   return context.exports;
 }
-function paywall(native, products) {
+function paywall(native, products, extra = {}) {
   const { OnboardingPaywall } = load("onboarding-paywall", native, products);
   return renderToStaticMarkup(React.createElement(OnboardingPaywall, {
-    profile: null, subscription: null, onboardingComplete: true, hasPaidAccess: false, plans,
+    profile: null, subscription: null, onboardingComplete: true, hasPaidAccess: false, plans, ...extra,
   }));
 }
 const trial = [
@@ -121,4 +130,33 @@ test("the code form's yearly card leads with the weekly price and says what is b
   assert.match(form, /yearly && product\.introWeeklyPrice \?/);
   assert.match(form, /t\("offer\.plan\.oneOffPrice", \{ amount: product\.introWeeklyPrice \}\)/);
   assert.match(form, /t\("offer\.plan\.oneOffBilling", \{ discounted: product\.introPrice!, renewal: product\.price \}\)/);
+});
+
+test("the paywall after onboarding shows the year as a month, the discounted ones as a week", () => {
+  const first = paywall(false, []);
+  assert.match(first, /€10\.83<small>\/ month<\/small>/);
+  assert.match(first, /Billed yearly: €130\.00/);
+  assert.doesNotMatch(first, /\/ week/);
+
+  const later = paywall(false, [], { reason: "chat", offerStep: 3 });
+  assert.match(later, /€1\.75<small>\/ week<\/small>/);
+});
+
+test("a later paywall on the web offers the ladder's discount, and the app never does", () => {
+  const web = paywall(false, [], { reason: "chat", offerStep: 3 });
+  // The discount is the headline; first-payment-only is the small print.
+  assert.match(web, /−30%<small>OFF<\/small>/);
+  assert.match(web, /You save €39\.00/);
+  assert.match(web, /class="memo-paywall-fine">The discount applies to your first payment only\./);
+  assert.match(web, /€91\.00 for the first year, then €130\.00/);
+  assert.match(web, /€14\.00 for the first month, then €20\.00/);
+  assert.match(web, /<s class="memo-paywall-plan-was">€20\.00<\/s>/);
+  assert.match(web, /Get 30% off/);
+  assert.doesNotMatch(web, /free trial|Nothing to pay today/);
+  assert.match(web, /memo-pw-hero" data-reason="chat"/);
+  assert.doesNotMatch(web, /memo-paywall-benefits/);
+
+  const ios = paywall(true, trial, { reason: "chat", offerStep: 3 });
+  assert.doesNotMatch(ios, /% off|memo-paywall-plan-was|€/);
+  assert.match(ios, /memo-pw-hero" data-reason="chat"/);
 });

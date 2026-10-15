@@ -1,9 +1,9 @@
 "use client";
 
 import { Check, CircleCheck, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { useT, useTranslations } from "@/components/i18n-provider";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -13,9 +13,14 @@ import { useAppleBilling } from "@/components/use-apple-billing";
 import { AppleBillingTerms } from "@/components/apple-billing-terms";
 import { APPLE_PRODUCTS } from "@/lib/mobile/runtime";
 import { useNativeIOS } from "@/lib/mobile/client";
-import { useInstantNavigation } from "@/components/navigation-loading";
 import { clearOfferResume } from "@/lib/offer-resume";
 import { formatCurrency } from "@/lib/utils";
+import type { PaywallReason } from "@/lib/paywall-reasons";
+import { cameFromAppPath, quietNextEntrance } from "@/lib/app-history";
+import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
+import { notePaywallShown, paywallVisitCounted } from "@/lib/paywall-offer-timing";
+import { discountedAmount, paywallOffer, weeklyAmount } from "@/lib/paywall-ladder";
+import { PaywallCompare, PaywallHero, paywallAccentStyle, paywallLayout } from "@/components/paywall-hero";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -34,6 +39,15 @@ type BillingPlanCard = {
   annualizedAmount: number;
   blurbKey: MessageKey;
 };
+
+type PaywallBenefit = { titleKey: MessageKey; copyKey: MessageKey; icon: string };
+
+const DEFAULT_BENEFITS: readonly PaywallBenefit[] = [
+  { titleKey: "paywall.benefit.notesTitle", copyKey: "paywall.benefit.notesCopy", icon: "📝" },
+  { titleKey: "paywall.benefit.toolsTitle", copyKey: "paywall.benefit.toolsCopy", icon: "💡" },
+  { titleKey: "paywall.benefit.speedTitle", copyKey: "paywall.benefit.speedCopy", icon: "⚡" },
+];
+
 
 /**
  * Only the one message the buyer cannot work out for themselves.
@@ -68,6 +82,10 @@ export function OnboardingPaywall({
   hasPaidAccess,
   subscriptionTrialEligible = true,
   plans,
+  reason = null,
+  backHref = null,
+  offerStep = 1,
+  offerImproved = false,
 }: {
   profile: ProfileRow | null;
   subscription: BillingSubscriptionRow | null;
@@ -75,15 +93,97 @@ export function OnboardingPaywall({
   hasPaidAccess: boolean;
   subscriptionTrialEligible?: boolean;
   plans: BillingPlanCard[];
+  /** What sent the learner here; names it in the headline and first benefit. */
+  reason?: PaywallReason | null;
+  /** Where closing returns to: the screen they were on, or home. */
+  backHref?: string | null;
+  /** This paywall's step on the offer ladder (`paywall-ladder.ts`); web only. */
+  offerStep?: number;
+  /**
+   * A browsing offer that just lifted the price may say so; one shown on the
+   * top rung, where nothing is left to lift, says the best price still stands.
+   */
+  offerImproved?: boolean;
 }) {
   const { locale, t } = useTranslations();
   const native = useNativeIOS();
   const apple = useAppleBilling(native && onboardingComplete);
-  const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [selectedPaywallPlan, setSelectedPaywallPlan] = useState<BillingPlanCard["id"]>("yearly");
   const [checkoutPlan, setCheckoutPlan] = useState<BillingPlanCard["id"] | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
+  /*
+   * The rung the server recorded for this paywall's moment, once it answers.
+   * Until then, the rung the page predicted; the two agree unless a cached
+   * copy of this page was shown, which the answer then corrects.
+   */
+  /*
+   * A paywall opened by a limit or a browsing offer records its moment, so the
+   * offer climbs a rung (`paywall-ladder.ts`). Not in the app, not for the
+   * paywall nothing opened, and not while the survey is still showing instead
+   * of the prices. Once per paywall: the ref outlives the effect running twice.
+   */
+  const viewKey = `${reason ?? ""}?${searchParams.toString()}`;
+  const [recorded, setRecorded] = useState<{ key: string; step: number; advanced: boolean } | null>(null);
+  const viewRequest = useRef<{ key: string; done: Promise<unknown> } | null>(null);
+  // Only this paywall's own answer; another one's may still be on screen.
+  const answer = recorded?.key === viewKey ? recorded : null;
+  // The app sells at Apple's prices, so it never shows a step past the first.
+  const offer = paywallOffer(native ? 1 : answer?.step ?? offerStep);
+  const discounted = offer.percentOff > 0;
+  const improved = answer ? answer.advanced : offerImproved;
+
+  // Where closing goes. A close that has to navigate rather than step back
+  // (the paywall after onboarding) gets it loaded ahead, so it opens at once
+  // rather than on a skeleton. Checked a moment after mounting, once the shell
+  // has noted this page.
+  const closeTo = backHref ?? "/app";
+  useEffect(() => {
+    if (!onboardingComplete) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      if (!cameFromAppPath(closeTo)) {
+        safeRouterPrefetch(router, closeTo, { full: true });
+      }
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [router, closeTo, onboardingComplete]);
+
+  useEffect(() => {
+    if (native || !onboardingComplete || hasPaidAccess) {
+      return;
+    }
+
+    // Any paywall restarts the count to the next browsing offer (`paywall-nudge.tsx`).
+    notePaywallShown();
+
+    if (!reason || viewRequest.current?.key === viewKey) {
+      return;
+    }
+
+    // A reload, or coming back to it through history, is the same moment
+    // again: the server answers with the rung it reached and records nothing.
+    const counted = paywallVisitCounted();
+
+    const done = fetch("/api/billing/paywall-view", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason, counted }),
+    })
+      .then((response) => (response.ok ? (response.json() as Promise<{ step?: unknown; advanced?: unknown }>) : null))
+      .then((body) => {
+        if (body && typeof body.step === "number") {
+          setRecorded({ key: viewKey, step: body.step, advanced: body.advanced === true });
+        }
+      })
+      .catch(() => null);
+
+    viewRequest.current = { key: viewKey, done };
+  }, [native, reason, viewKey, onboardingComplete, hasPaidAccess]);
 
   async function startCheckout(plan: BillingPlanCard["id"]) {
     if (native) { await apple.purchase(); return; }
@@ -91,12 +191,14 @@ export function OnboardingPaywall({
     setCheckoutPlan(plan);
 
     try {
+      // Checkout reads the rung from the cookie, so the moment goes first.
+      await viewRequest.current?.done;
       const response = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({ plan, reason, step: offer.step }),
       });
 
       const payload = (await response.json()) as { url?: string; error?: string };
@@ -119,7 +221,10 @@ export function OnboardingPaywall({
   const checkoutState = searchParams.get("checkout");
   const hasNotice = checkoutState === "success" || Boolean(billingError) || (native && Boolean(apple.notice));
   const selectedPlan = native ? APPLE_PRODUCTS[apple.selected] : selectedPaywallPlan;
-  const trialEligible = native ? apple.selectedProduct?.trialDays === 3 : subscriptionTrialEligible;
+  // A discounted first payment is charged straight away, not after a trial.
+  const trialEligible = native
+    ? apple.selectedProduct?.trialDays === 3
+    : subscriptionTrialEligible && !discounted;
   const checkingOut = native ? apple.busy : checkoutPlan !== null;
 
   /*
@@ -138,6 +243,13 @@ export function OnboardingPaywall({
   const paywallPlans = [yearlyPlan, monthlyPlan].filter(
     (plan): plan is BillingPlanCard => Boolean(plan),
   );
+  // What the discount is worth on the plan that is selected, in money.
+  const savingPlan = paywallPlans.find((plan) => plan.id === selectedPaywallPlan) ?? paywallPlans[0];
+  const savingLine = discounted && savingPlan
+    ? t("paywall.offer.save", {
+        amount: formatCurrency(savingPlan.amount - discountedAmount(savingPlan.amount, offer.percentOff), locale),
+      })
+    : null;
 
   if (!effectiveOnboardingComplete) {
     return <OnboardingFlow profile={profile} />;
@@ -145,14 +257,28 @@ export function OnboardingPaywall({
 
 
   return (
-    <section className={`app-start-panel app-start-panel-paywall memo-paywall-shell${native ? " memo-paywall-apple" : ""}`}>
-      {navigationOverlay}
+    <section
+      className={`app-start-panel app-start-panel-paywall memo-paywall-shell${native ? " memo-paywall-apple" : ""}`}
+      data-reason={reason ?? undefined}
+      style={paywallAccentStyle(reason)}
+    >
       {effectiveOnboardingComplete ? (
         <div className="app-start-dismiss-row">
           <button
             type="button"
             className="memo-close-button app-start-close-button"
-            onClick={() => navigateWithFeedback("/app")}
+            onClick={() => {
+              // Opened from that page: step back to it, so it shows at once as
+              // it was. Otherwise go there, loaded ahead above. Either way
+              // without the page's entrance fades (`app-history.ts`).
+              quietNextEntrance();
+
+              if (cameFromAppPath(closeTo)) {
+                router.back();
+              } else {
+                router.push(closeTo);
+              }
+            }}
             aria-label={t("paywall.close")}
           >
             <Msym name="close" size="1.45rem" fill={false} weight={500} />
@@ -172,7 +298,7 @@ export function OnboardingPaywall({
           {billingError ? <div className="app-start-banner">{billingError}</div> : null}
           {native && apple.notice ? <div className="app-start-banner">{apple.notice}</div> : null}
         </div>
-      ) : (
+      ) : reason ? null : (
         <div className="memo-paywall-brand">
           <span className="memo-paywall-logo">
             <Image
@@ -186,39 +312,58 @@ export function OnboardingPaywall({
         </div>
       )}
 
-      <h1 className="memo-paywall-title">{t("paywall.title")}</h1>
+      {/* A feature's paywall shows the feature, moving, in place of the list. */}
+      {reason && !hasNotice ? (
+        <PaywallHero reason={reason} step={offer.step} />
+      ) : null}
 
-      <div className="memo-paywall-benefits">
-        {(
-          [
-            {
-              titleKey: "paywall.benefit.notesTitle",
-              copyKey: "paywall.benefit.notesCopy",
-              icon: "📝",
-            },
-            {
-              titleKey: "paywall.benefit.toolsTitle",
-              copyKey: "paywall.benefit.toolsCopy",
-              icon: "💡",
-            },
-            {
-              titleKey: "paywall.benefit.speedTitle",
-              copyKey: "paywall.benefit.speedCopy",
-              icon: "⚡",
-            },
-          ] as const
-        ).map((benefit) => (
-          <div className="memo-paywall-benefit" key={benefit.titleKey}>
-            <span aria-hidden="true">{benefit.icon}</span>
-            <div>
-              <strong>{t(benefit.titleKey)}</strong>
-              <p>{t(benefit.copyKey)}</p>
+      {/* The discount is the headline; that it covers only the first payment is
+          the small print at the foot, with the renewal price on each plan. */}
+      {discounted ? (
+        <div className="memo-paywall-offer">
+          <span className="memo-paywall-offer-percent">
+            −{offer.percentOff}%<small>{t("paywall.offer.off")}</small>
+          </span>
+          {savingLine ? <span className="memo-paywall-offer-save">{savingLine}</span> : null}
+        </div>
+      ) : null}
+
+      <h1 className="memo-paywall-title">
+        {t(
+          reason === "offer" && !improved
+            ? "paywall.reason.offer.titleBest"
+            : reason ? `paywall.reason.${reason}.title` : "paywall.title",
+        )}
+      </h1>
+      {reason ? (
+        <p className="memo-paywall-sub">
+          <strong>{t(`paywall.reason.${reason}.benefitTitle`)}</strong>
+          {" · "}
+          {t(`paywall.reason.${reason}.benefitCopy`)}
+        </p>
+      ) : null}
+
+      {reason === "library" ? <PaywallCompare /> : null}
+
+      {reason ? null : (
+        <div className="memo-paywall-benefits">
+          {DEFAULT_BENEFITS.map((benefit) => (
+            <div className="memo-paywall-benefit" key={benefit.titleKey}>
+              <span aria-hidden="true">{benefit.icon}</span>
+              <div>
+                <strong>{t(benefit.titleKey)}</strong>
+                <p>{t(benefit.copyKey)}</p>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
-      <div className="memo-paywall-plan-grid" role="radiogroup" aria-label={t("paywall.choosePlan")}>
+      <div
+        className={`memo-paywall-plan-grid ${paywallLayout(reason)}`}
+        role="radiogroup"
+        aria-label={t("paywall.choosePlan")}
+      >
         {paywallPlans.map((plan) => {
           const selected = selectedPlan === plan.id;
           const appleProduct = apple.productForPlan(plan.id);
@@ -227,11 +372,28 @@ export function OnboardingPaywall({
           const yearlySavings = native ? (appleProduct?.yearlySavings ?? 0) : annualizedMonthly > plan.annualizedAmount
             ? Math.round((1 - plan.annualizedAmount / annualizedMonthly) * 100)
             : 0;
+          /*
+           * At full price (the paywall after onboarding) the year reads as a
+           * month, as it always has. A discounted year is priced by the week, as
+           * on the wheel's sheet: the first year's charge spread over 52 weeks,
+           * rounded down. The month stays a month. The app shows Apple's own
+           * figures.
+           */
+          const weekly = discounted && plan.id === "yearly";
+          const regularShown = weekly ? weeklyAmount(plan.amount) : plan.amount;
           const displayPrice = native
             ? appleProduct?.monthlyPrice ?? appleProduct?.price ?? "—"
-            : formatCurrency(plan.displayAmount ?? plan.amount, locale);
-          const suffix = native && plan.id === "yearly" && !appleProduct?.monthlyPrice
-            ? `/${t("native.year")}` : t("paywall.perMonth");
+            : formatCurrency(
+                !discounted
+                  ? plan.displayAmount ?? plan.amount
+                  : weekly
+                    ? weeklyAmount(discountedAmount(plan.amount, offer.percentOff))
+                    : discountedAmount(plan.amount, offer.percentOff),
+                locale,
+              );
+          const suffix = native
+            ? plan.id === "yearly" && !appleProduct?.monthlyPrice ? `/${t("native.year")}` : t("paywall.perMonth")
+            : weekly ? t("paywall.perWeek") : t("paywall.perMonth");
           const detail = native
             ? !appleProduct ? t("native.working")
               : appleProduct.trialDays === 3
@@ -239,9 +401,14 @@ export function OnboardingPaywall({
                 : appleProduct.introPrice
                   ? t(plan.id === "yearly" ? "native.firstYearPrice" : "native.firstMonthPrice", { initial: appleProduct.introPrice, renewal: appleProduct.price })
                   : plan.id === "yearly" ? t("paywall.billedYearly", { amount: appleProduct.price }) : t("paywall.billedMonthly")
-            : plan.id === "yearly"
-              ? t("paywall.billedYearly", { amount: formatCurrency(plan.annualizedAmount, locale) })
-              : t("paywall.billedMonthly");
+            : discounted
+              ? t(plan.id === "yearly" ? "paywall.offer.firstYear" : "paywall.offer.firstMonth", {
+                  amount: formatCurrency(discountedAmount(plan.amount, offer.percentOff), locale),
+                  renewal: formatCurrency(plan.amount, locale),
+                })
+              : plan.id === "yearly"
+                ? t("paywall.billedYearly", { amount: formatCurrency(plan.annualizedAmount, locale) })
+                : t("paywall.billedMonthly");
 
           return (
             <button
@@ -253,6 +420,7 @@ export function OnboardingPaywall({
               role="radio"
               aria-checked={selected}
             >
+              {/* The discount is said once, above the plans; the cards only strike the old price. */}
               {plan.id === "yearly" ? (
                 <span className="memo-paywall-plan-badge">{t("paywall.mostPopular")}</span>
               ) : null}
@@ -263,11 +431,15 @@ export function OnboardingPaywall({
                 </span>
               </span>
               <span className="memo-paywall-plan-price">
+                {discounted ? (
+                  <s className="memo-paywall-plan-was">{formatCurrency(regularShown, locale)}</s>
+                ) : null}
                 {displayPrice}
                 <small>{suffix}</small>
               </span>
               <span className="memo-paywall-plan-detail">{detail}</span>
-              {plan.id === "yearly" && yearlySavings > 0 ? (
+              {/* Not beside a discount: two percentages on one card contradict each other. */}
+              {plan.id === "yearly" && yearlySavings > 0 && !discounted ? (
                 <span className="memo-paywall-save">
                   {t("paywall.save", { percent: yearlySavings })}
                 </span>
@@ -297,11 +469,13 @@ export function OnboardingPaywall({
           <span className="memo-paywall-cta-label">
             {subscription?.plan === selectedPlan && hasPaidAccess
               ? t("paywall.currentPlan")
-              : t(
-                  trialEligible
-                    ? "paywall.startTrial"
-                    : "paywall.continueToPayment",
-                )}
+              : discounted
+                ? t("paywall.offer.cta", { percent: offer.percentOff })
+                : t(
+                    trialEligible
+                      ? "paywall.startTrial"
+                      : "paywall.continueToPayment",
+                  )}
           </span>
         )}
       </button>
@@ -312,6 +486,7 @@ export function OnboardingPaywall({
           {t("paywall.cancelAnytime")}
         </span>
       </div>
+      {discounted ? <p className="memo-paywall-fine">{t("paywall.offer.firstOnly")}</p> : null}
       {native ? <AppleBillingTerms busy={apple.busy} onRestore={() => void apple.restore()} /> : null}
     </section>
   );

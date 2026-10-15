@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
+import { currentPaywallBack, withPaywallBack } from "@/lib/paywall-reasons";
 
 export class BillingRequiredError extends Error {
   redirectTo: string;
@@ -117,7 +118,8 @@ export function redirectToBillingIfNeeded(params: {
   router: ReturnType<typeof useRouter>;
 }) {
   if (params.error instanceof BillingRequiredError) {
-    params.router.push(params.error.redirectTo);
+    // The server names the reason; only the browser knows which page to return to.
+    params.router.push(withPaywallBack(params.error.redirectTo, currentPaywallBack()));
     return true;
   }
 

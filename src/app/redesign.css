@@ -435,6 +435,8 @@
   --upgrade-line: rgba(130, 148, 218, 0.34);
   --upgrade-ink: #4a4f8f;
   --promo: #f45f5a;
+  /* Text on a `--promo` fill. White in both appearances, so only declared here. */
+  --on-promo: #ffffff;
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   --shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.18);
   --scrim: rgba(0, 0, 0, 0.32);
@@ -3887,6 +3889,7 @@
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  flex-wrap: wrap;
   margin-top: 1rem;
 }
 
@@ -9293,6 +9296,101 @@
   object-fit: contain;
 }
 
+/*
+ * The show round the wheel. Rays turn slowly behind it while it waits and
+ * quickly while it spins; the bulbs on the rim chase each other, faster while
+ * it spins, and all flash together once it lands; Memo in the hub wiggles as
+ * it goes round and jumps when it stops; the win lands with a burst of light.
+ */
+.memo-wheel-rays {
+  position: absolute;
+  inset: -4.5rem;
+  border-radius: 999px;
+  background: repeating-conic-gradient(color-mix(in oklch, var(--promo) 20%, transparent) 0deg 10deg, transparent 10deg 20deg);
+  -webkit-mask-image: radial-gradient(circle, #000 35%, transparent 70%);
+  mask-image: radial-gradient(circle, #000 35%, transparent 70%);
+  animation: memo-wheel-rays 18s linear infinite;
+}
+
+.memo-wheel.spinning .memo-wheel-rays {
+  animation-duration: 3s;
+}
+
+.memo-wheel-lights {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Lit bulbs set into the wheel's white rim, glowing in the brand coral. */
+.memo-wheel-lights span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.46rem;
+  height: 0.46rem;
+  margin: -0.23rem 0 0 -0.23rem;
+  border-radius: 999px;
+  background: var(--promo);
+  box-shadow: 0 0 6px 2px color-mix(in oklch, var(--promo) 70%, transparent);
+  animation: memo-wheel-bulb 1.2s calc(var(--i) * 0.0667s) steps(1) infinite;
+}
+
+.memo-wheel.spinning .memo-wheel-lights span {
+  animation-duration: 0.36s;
+  animation-delay: calc(var(--i) * 0.02s);
+}
+
+.memo-wheel.won .memo-wheel-lights span {
+  animation: memo-wheel-bulb-all 0.4s steps(1) infinite;
+}
+
+.memo-wheel.spinning .memo-wheel-hub img {
+  animation: memo-wheel-wiggle 0.5s ease-in-out infinite;
+}
+
+.memo-wheel.won .memo-wheel-hub {
+  animation: memo-wheel-jump 0.9s cubic-bezier(0.33, 0.9, 0.6, 1) 2;
+}
+
+.memo-wheel.won .memo-wheel-hub img {
+  animation: none;
+}
+
+.memo-wheel.won::after {
+  content: "";
+  position: absolute;
+  inset: -3rem;
+  z-index: 3;
+  border-radius: 999px;
+  background: radial-gradient(circle, color-mix(in oklch, var(--on-promo) 90%, transparent), color-mix(in oklch, var(--promo) 40%, transparent) 40%, transparent 70%);
+  pointer-events: none;
+  animation: memo-wheel-burst 0.9s ease-out both;
+}
+
+.memo-wheel-cta:not(.waiting):not(:disabled) {
+  animation: memo-wheel-cta-pulse 1.6s ease-in-out infinite;
+}
+
+.memo-wheel.won ~ .memo-wheel-prize p:first-child {
+  animation: memo-wheel-slam 0.6s cubic-bezier(0.22, 1.6, 0.4, 1) both;
+}
+
+@keyframes memo-wheel-rays { to { rotate: 360deg; } }
+@keyframes memo-wheel-bulb { 0% { opacity: 1; } 50% { opacity: 0.2; box-shadow: none; } }
+/* Brighter, not bigger: a scale would multiply the rim offset and throw the bulbs off the wheel. */
+@keyframes memo-wheel-bulb-all { 0% { opacity: 1; box-shadow: 0 0 10px 4px color-mix(in oklch, var(--promo) 85%, transparent); } 50% { opacity: 0.3; box-shadow: none; } }
+@keyframes memo-wheel-wiggle { 0%, 100% { rotate: -8deg; } 50% { rotate: 8deg; } }
+@keyframes memo-wheel-jump {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  30% { transform: translate(-50%, -62%) scale(1.18); }
+  60% { transform: translate(-50%, -50%) scale(0.94, 1.06); }
+}
+@keyframes memo-wheel-burst { 0% { opacity: 0; scale: 0.4; } 25% { opacity: 1; } 100% { opacity: 0; scale: 1.5; } }
+@keyframes memo-wheel-cta-pulse { 0%, 100% { scale: 1; } 50% { scale: 1.04; } }
+@keyframes memo-wheel-slam { 0% { opacity: 0; scale: 2.6; rotate: -8deg; } 70% { scale: 0.92; rotate: 2deg; } 100% { opacity: 1; scale: 1; rotate: 0deg; } }
+
 .memo-wheel-prize {
   z-index: 4;
   margin-top: 1.3rem;
@@ -9486,7 +9584,7 @@
 }
 
 .memo-offer-plan.selected .memo-offer-radio {
-  border: 0.42rem solid #ffffff;
+  border: 0.42rem solid var(--text);
 }
 
 .memo-offer-plan-copy {
@@ -10647,6 +10745,690 @@
   font-weight: 900;
   letter-spacing: -0.01em;
 }
+
+/*
+ * The offer ladder and the per-feature look (onboarding-paywall.tsx).
+ *
+ * A paywall opened by a feature wears that feature's tab colour in place of the
+ * wordmark, at the wordmark's height so the screen still lands on one viewport.
+ * A later rung adds a pill under the hero, a red badge on each plan and the
+ * regular price struck through beside the first-payment price.
+ */
+/*
+ * The discount is the headline of a discounted paywall: the percentage huge in
+ * the brand coral, what it saves on the selected plan beneath it. That it is
+ * for the first payment only is the small print at the foot.
+ */
+.memo-paywall-offer {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.6rem;
+  text-align: center;
+}
+
+.memo-paywall-offer-percent {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  color: var(--promo);
+  font-size: 4rem;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+}
+
+.memo-paywall-offer-percent small {
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.memo-paywall-offer-save {
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
+  background: var(--promo);
+  color: var(--on-promo);
+  font-size: 0.95rem;
+  font-weight: 750;
+}
+
+/* For the first payment only: said, but small and last. */
+.memo-paywall-fine {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.memo-paywall-plan-badge.offer {
+  border-color: var(--promo);
+  background: var(--promo);
+  color: var(--on-promo);
+}
+
+/* On a line of its own above the price, so the price and its "/ month" stay
+   together on the narrowest card. */
+.memo-paywall-plan-was {
+  display: block;
+  margin-bottom: 0.15rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-decoration-thickness: 2px;
+}
+
+/* The general paywall's benefits as a plain list, not three boxes. */
+.memo-paywall-benefit {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Under the headline of a feature's paywall: what the plan adds, in one line. */
+.memo-paywall-sub {
+  max-width: 22rem;
+  margin: 0 auto 0.9rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.35;
+  text-align: center;
+  text-wrap: pretty;
+}
+
+.memo-paywall-sub strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+/*
+ * A feature's paywall is washed in that feature's colour from the top, so
+ * each one is a different room rather than the same sheet with a new picture.
+ */
+.memo-paywall-shell[data-reason] {
+  background:
+    radial-gradient(140% 55% at 50% 0%, color-mix(in oklch, var(--paywall-accent, var(--promo)) 22%, transparent), transparent 75%),
+    var(--memo-paywall-bg);
+}
+
+/*
+ * The scene at the top of a feature's paywall (paywall-hero.tsx): Memo doing
+ * the feature, in its colour. Drawn from tokens and that colour only.
+ */
+.memo-pw-hero {
+  --paywall-accent: var(--promo);
+  /* Memo's own drop shadow, as the onboarding defines it. */
+  --memo-shadow: var(--hover-ring);
+  position: relative;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  align-self: stretch;
+  height: 10.5rem;
+  margin: 0.4rem 0 0.6rem;
+}
+
+.memo-pw-scene {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  width: 100%;
+  height: 100%;
+  padding: 0 1rem;
+  box-sizing: border-box;
+}
+
+/* Memo himself. The body moves; the prop rides with him. */
+.memo-pw-memo {
+  position: relative;
+  flex: none;
+  width: 6.4rem;
+  height: 5.76rem;
+}
+
+.memo-pw-memo-body {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transform-origin: 50% 90%;
+}
+
+.memo-pw-memo.wave .memo-pw-memo-body { animation: memo-pw-wave 2.2s ease-in-out infinite; }
+.memo-pw-memo.groove .memo-pw-memo-body { animation: memo-pw-groove 0.9s ease-in-out infinite; }
+.memo-pw-memo.nod .memo-pw-memo-body { animation: memo-pw-nod 1.6s ease-in-out infinite; }
+.memo-pw-memo.sway .memo-pw-memo-body { animation: memo-pw-sway 2.4s ease-in-out infinite; }
+.memo-pw-memo.write .memo-pw-memo-body { animation: memo-pw-write 0.5s ease-in-out infinite; }
+.memo-pw-memo.peek .memo-pw-memo-body { animation: memo-pw-peek 3s ease-in-out infinite; }
+.memo-pw-memo.hop .memo-pw-memo-body { animation: memo-pw-hop 1.2s cubic-bezier(0.33, 0.9, 0.6, 1) infinite; }
+.memo-pw-memo.float .memo-pw-memo-body { animation: memo-pw-float 3s ease-in-out infinite; }
+
+/* The feature's icon, pinned to Memo's shoulder in the feature's colour. */
+.memo-pw-tag {
+  position: absolute;
+  z-index: 3;
+  right: -0.3rem;
+  top: 0.1rem;
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  background: var(--paywall-accent);
+  color: var(--on-promo);
+  box-shadow: 0 4px 10px color-mix(in oklch, var(--paywall-accent) 40%, transparent);
+}
+
+/* Chat: Memo answering, the conversation beside him. */
+.memo-pw-chat {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.memo-pw-bubble {
+  max-width: 100%;
+  padding: 0.4rem 0.7rem;
+  border-radius: 16px;
+  font-size: 0.92rem;
+  line-height: 1.25;
+  animation: memo-pw-rise 0.5s both;
+}
+
+.memo-pw-bubble.mine {
+  align-self: flex-end;
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.memo-pw-bubble.theirs {
+  align-self: flex-start;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  animation-delay: 0.6s;
+}
+
+.memo-pw-bubble.typing {
+  display: flex;
+  gap: 0.25rem;
+  animation-delay: 1.2s;
+}
+
+.memo-pw-bubble.typing span {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--paywall-accent);
+  animation: memo-pw-dot 1.2s infinite;
+}
+
+.memo-pw-bubble.typing span:nth-child(2) { animation-delay: 0.2s; }
+.memo-pw-bubble.typing span:nth-child(3) { animation-delay: 0.4s; }
+
+/* Read-aloud: Memo grooving, the sentence lighting up word by word. */
+.memo-pw-listen {
+  display: grid;
+  flex: 1;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.memo-pw-listen-line {
+  color: var(--on-promo);
+  font-size: 1.05rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.memo-pw-listen-line span {
+  border-radius: 12px;
+  animation: memo-pw-word calc(var(--n) * 0.35s) calc(var(--i) * 0.35s) infinite;
+}
+
+.memo-pw-wave {
+  display: flex;
+  align-items: center;
+  gap: 0.22rem;
+  height: 1.8rem;
+}
+
+.memo-pw-wave span {
+  width: 0.24rem;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--paywall-accent);
+  transform-origin: center;
+  animation: memo-pw-bar 1.1s calc(var(--i) * -0.13s) ease-in-out infinite;
+}
+
+.memo-pw-hero.listen .memo-pw-wave span {
+  background: var(--on-promo);
+}
+
+/* Tutor and podcast: Memo speaking — a bubble with the voice moving in it. */
+.memo-pw-voice {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1rem;
+  border-radius: 22px 22px 22px 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: memo-pw-rise 0.5s 0.3s both;
+}
+
+.memo-pw-voice .memo-pw-wave {
+  height: 2.2rem;
+}
+
+.memo-pw-play {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 999px;
+  background: var(--paywall-accent);
+  color: var(--on-promo);
+}
+
+/* New note: Memo writing, a bright idea, notes flying out of the pad. */
+.memo-pw-fly {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.memo-pw-note {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 8.6rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-pw-fly .memo-pw-note {
+  position: absolute;
+  right: 1rem;
+}
+
+.memo-pw-fly .memo-pw-note.one { top: 1.4rem; animation: memo-pw-fly-in 3.2s ease-in-out infinite; }
+.memo-pw-fly .memo-pw-note.two { bottom: 1.4rem; animation: memo-pw-fly-in 3.2s 1.6s ease-in-out infinite; }
+.memo-pw-scene.note { justify-content: flex-start; padding-left: 2.6rem; }
+
+.memo-pw-note-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--paywall-accent) 16%, transparent);
+  color: var(--paywall-accent);
+}
+
+.memo-pw-note-lines {
+  display: grid;
+  flex: 1;
+  gap: 0.25rem;
+}
+
+.memo-pw-note-lines span {
+  height: 0.38rem;
+  border-radius: 999px;
+  background: var(--track);
+}
+
+.memo-pw-note-lines span:first-child {
+  width: 80%;
+  background: color-mix(in oklch, var(--paywall-accent) 55%, var(--track));
+}
+
+.memo-pw-note-lines span:last-child {
+  width: 55%;
+}
+
+/* Older note: the note is there, out of focus; Memo peeks round it with the key. */
+.memo-pw-scene.locked .memo-pw-note.big {
+  position: absolute;
+  width: 13rem;
+  padding: 1rem;
+  transform: rotate(-3deg);
+}
+
+.memo-pw-note.blurred .memo-pw-note-lines,
+.memo-pw-note.blurred .memo-pw-note-icon {
+  filter: blur(3px);
+}
+
+.memo-pw-scene.locked .memo-pw-memo {
+  margin-left: 8.5rem;
+  margin-top: 2.5rem;
+}
+
+/* New practice: Memo hopping inside a ring of cards. Library: inside his notes. */
+.memo-pw-orbit {
+  position: absolute;
+  width: 8.6rem;
+  height: 8.6rem;
+  animation: memo-pw-spin 12s linear infinite;
+}
+
+.memo-pw-orbit > span {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: memo-pw-spin 12s linear infinite reverse;
+}
+
+.memo-pw-card {
+  width: 2.6rem;
+  height: 3.3rem;
+}
+
+.memo-pw-orbit > span {
+  color: var(--paywall-accent);
+}
+
+.memo-pw-orbit > span:nth-child(1) { left: calc(50% - 1.3rem); top: -0.4rem; }
+.memo-pw-orbit > span:nth-child(2) { left: -0.6rem; bottom: 0.2rem; }
+.memo-pw-orbit > span:nth-child(3) { right: -0.6rem; bottom: 0.2rem; }
+
+.memo-pw-orbit.planets { width: 8.6rem; }
+
+.memo-pw-orbit.planets > span {
+  width: 2.3rem;
+  height: 2.3rem;
+  font-size: 1.05rem;
+}
+
+.memo-pw-orbit.planets > span:nth-child(1) { left: -0.4rem; top: 0.2rem; }
+.memo-pw-orbit.planets > span:nth-child(2) { right: -0.4rem; top: 0.2rem; }
+.memo-pw-orbit.planets > span:nth-child(3) { left: -0.4rem; bottom: 0.2rem; }
+.memo-pw-orbit.planets > span:nth-child(4) { right: -0.4rem; bottom: 0.2rem; }
+
+
+/*
+ * Closing a paywall steps back to the screen under it, which should simply be
+ * there: its entrance fades run at no length while it reappears. A zero
+ * duration rather than `animation: none`, so the fade has already finished
+ * when the attribute goes and does not start then instead.
+ */
+html[data-paywall-closing] .memo-shell * {
+  animation-duration: 0s;
+}
+
+/*
+ * The plans, laid out per feature (`paywallLayout`). "cards" is the default
+ * pair; "rows" stacks them as two wide rows with the price on the right;
+ * "spotlight" makes the selected plan the hero and shrinks the other to one line.
+ */
+.memo-paywall-plan-grid.rows,
+.memo-paywall-plan-grid.spotlight {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.9rem;
+}
+
+.memo-paywall-plan-grid.rows .memo-paywall-plan,
+.memo-paywall-plan-grid.spotlight .memo-paywall-plan {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "head price"
+    "detail price"
+    "save price";
+  align-items: center;
+  column-gap: 0.8rem;
+  min-height: 0;
+  padding: 1rem 1.1rem 0.9rem;
+  border-radius: 20px;
+}
+
+.memo-paywall-plan-grid.rows .memo-paywall-plan-header,
+.memo-paywall-plan-grid.spotlight .memo-paywall-plan-header { grid-area: head; justify-content: flex-start; }
+.memo-paywall-plan-grid.rows .memo-paywall-radio,
+.memo-paywall-plan-grid.spotlight .memo-paywall-radio { order: -1; }
+.memo-paywall-plan-grid.rows .memo-paywall-plan-price,
+.memo-paywall-plan-grid.spotlight .memo-paywall-plan-price { grid-area: price; margin: 0; text-align: right; }
+.memo-paywall-plan-grid.rows .memo-paywall-plan-detail,
+.memo-paywall-plan-grid.spotlight .memo-paywall-plan-detail { grid-area: detail; font-size: 0.92rem; }
+.memo-paywall-plan-grid.rows .memo-paywall-save,
+.memo-paywall-plan-grid.spotlight .memo-paywall-save { grid-area: save; margin-top: 0.1rem; }
+
+.memo-paywall-plan-grid.spotlight .memo-paywall-plan.selected {
+  padding: 1.3rem 1.2rem 1.1rem;
+  box-shadow: 0 10px 28px color-mix(in oklch, var(--paywall-accent, var(--promo)) 28%, transparent);
+}
+
+.memo-paywall-plan-grid.spotlight .memo-paywall-plan:not(.selected) {
+  grid-template-areas: "head price";
+  padding: 0.7rem 1.1rem;
+  border-radius: 16px;
+}
+
+.memo-paywall-plan-grid.spotlight .memo-paywall-plan:not(.selected) :is(.memo-paywall-plan-detail, .memo-paywall-save, .memo-paywall-plan-badge, .memo-paywall-plan-was) {
+  display: none;
+}
+
+.memo-paywall-plan-grid.spotlight .memo-paywall-plan:not(.selected) .memo-paywall-plan-price {
+  font-size: 1.3rem;
+}
+
+/*
+ * Each feature's paywall is its own room, not the same page with a new
+ * picture: the scene, the type, the surface and the plans all change with
+ * `data-reason`. One rule for all of them — the coral button stays the one
+ * primary action, and the page still lands on one phone screen.
+ */
+
+/* Read-aloud: the lights go down — a dark "now playing" screen in either appearance. */
+.memo-paywall-shell[data-reason="listen"] {
+  --memo-paywall-title-text: var(--on-photo);
+  --memo-paywall-plan-bg: var(--on-photo-chip);
+  --memo-paywall-plan-text: var(--on-photo);
+  --memo-paywall-plan-border: var(--on-photo-chip);
+  --memo-paywall-plan-selected-bg: color-mix(in oklch, var(--paywall-accent) 38%, transparent);
+  --memo-paywall-plan-selected-text: var(--on-photo);
+  --memo-paywall-price-muted: var(--on-photo);
+  --memo-paywall-purple: var(--paywall-accent);
+  background:
+    radial-gradient(120% 60% at 50% 0%, color-mix(in oklch, var(--paywall-accent) 55%, transparent), transparent 70%),
+    var(--photo-stage);
+  color: var(--on-photo);
+}
+
+.memo-paywall-shell[data-reason="listen"] :is(.memo-paywall-sub, .memo-paywall-sub strong, .memo-paywall-due, .memo-paywall-foot, .memo-paywall-plan-detail, .memo-paywall-plan-was) {
+  color: var(--on-photo);
+}
+
+
+
+.memo-paywall-shell[data-reason="listen"] :is(.memo-paywall-offer-percent, .memo-paywall-fine) {
+  color: var(--on-promo);
+}
+
+.memo-paywall-shell[data-reason="listen"] .memo-pw-hero {
+  margin-top: 1.2rem;
+}
+
+/*
+ * Tutor: a warm glow of the tutor's orange rising behind Memo and fading into
+ * the page well before the plans, in either appearance. It glows over the plain
+ * surface, not the paywall's blue night sky, which turned the orange grey. (A solid orange page
+ * put the coral button on a colour it could not stand out from; a solid band
+ * cut the screen in two.)
+ */
+.memo-paywall-shell[data-reason="tutor"] {
+  /* The chosen plan takes the tutor's orange instead of the paywall's blue. */
+  --memo-paywall-purple: var(--paywall-accent);
+  background:
+    radial-gradient(70% 26% at 50% 14%, color-mix(in oklch, var(--paywall-accent) 55%, transparent), transparent 100%),
+    radial-gradient(140% 48% at 50% 0%, color-mix(in oklch, var(--paywall-accent) 30%, transparent), transparent 100%),
+    var(--surface);
+}
+
+/* Set on the plans rather than the shell, where the dark theme's own rule outranks it. */
+.memo-paywall-shell[data-reason="tutor"] .memo-paywall-plan-grid {
+  --memo-paywall-plan-selected-bg: color-mix(in oklch, var(--paywall-accent) 14%, var(--surface));
+}
+
+/* New note: a page of lined paper with a margin; the plans are sticky notes. */
+.memo-paywall-shell[data-reason="note"] {
+  background:
+    linear-gradient(to right, transparent 2.1rem, color-mix(in oklch, var(--promo) 45%, transparent) 2.1rem 2.2rem, transparent 2.2rem),
+    repeating-linear-gradient(to bottom, transparent 0 1.85rem, color-mix(in oklch, var(--blue) 14%, transparent) 1.85rem 1.92rem),
+    var(--surface);
+}
+
+.memo-paywall-shell[data-reason="note"] .memo-paywall-title {
+  width: fit-content;
+  padding: 0 0.3rem;
+  background: linear-gradient(to top, color-mix(in oklch, var(--paywall-accent) 35%, transparent) 0 40%, transparent 40%);
+}
+
+/* Library: free and the plan side by side, with the real limits. */
+.memo-paywall-shell[data-reason]:has(.memo-paywall-offer) .memo-pw-hero {
+  height: 8.6rem;
+}
+
+.memo-paywall-shell[data-reason="library"]:has(.memo-paywall-offer) .memo-pw-hero {
+  height: 5.4rem;
+}
+
+.memo-paywall-shell[data-reason="library"]:has(.memo-paywall-offer) .memo-pw-scene {
+  scale: 0.62;
+}
+
+.memo-paywall-shell[data-reason="library"] .memo-paywall-offer-percent {
+  font-size: 3.2rem;
+}
+
+.memo-paywall-shell[data-reason="library"] .memo-pw-hero {
+  height: 7.6rem;
+}
+
+.memo-paywall-shell[data-reason="library"] .memo-paywall-sub {
+  display: none;
+}
+
+.memo-pw-compare {
+  width: 100%;
+  margin: 0 0 0.6rem;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.92rem;
+}
+
+.memo-pw-compare th,
+.memo-pw-compare td {
+  padding: 0.3rem 0.6rem;
+  text-align: left;
+}
+
+.memo-pw-compare thead th {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.memo-pw-compare tbody th {
+  font-weight: 650;
+}
+
+.memo-pw-compare td {
+  color: var(--muted);
+}
+
+.memo-pw-compare .plan {
+  background: color-mix(in oklch, var(--paywall-accent) 14%, transparent);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.memo-pw-compare thead .plan { border-radius: 14px 14px 0 0; color: var(--paywall-accent); }
+.memo-pw-compare tbody tr:last-child .plan { border-radius: 0 0 14px 14px; }
+
+/*
+ * Browsing offer: Memo hops with a gift beside the prices offered before, each
+ * crossed out and each lower than the last, so the headline under them reads
+ * as the better one. The newest of them sits nearest Memo.
+ */
+.memo-pw-scene.offer {
+  gap: 1.1rem;
+}
+
+.memo-pw-tags {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+
+.memo-pw-tag-old {
+  position: relative;
+  padding: 0.35rem 0.8rem;
+  border: 1.5px dashed var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 800;
+  white-space: nowrap;
+  rotate: calc(-4deg + var(--i) * 5deg);
+  animation: memo-pw-rise 0.45s calc(var(--i) * 0.15s) both;
+}
+
+.memo-pw-tag-old::after {
+  content: "";
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  top: 50%;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--promo);
+  transform-origin: left;
+  animation: memo-pw-strike 0.35s calc(0.3s + var(--i) * 0.15s) both;
+}
+
+@keyframes memo-pw-strike { from { scale: 0 1; } to { scale: 1 1; } }
+
+@keyframes memo-pw-rise { from { opacity: 0; translate: 0 0.5rem; } to { opacity: 1; translate: 0 0; } }
+@keyframes memo-pw-dot { 0%, 60%, 100% { opacity: 0.3; } 30% { opacity: 1; } }
+@keyframes memo-pw-word {
+  0%, 100% { background: transparent; }
+  2%, 12% { background: color-mix(in oklch, var(--paywall-accent) 45%, transparent); }
+  16% { background: transparent; }
+}
+@keyframes memo-pw-bar { 0%, 100% { transform: scaleY(0.25); } 50% { transform: scaleY(1); } }
+@keyframes memo-pw-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+@keyframes memo-pw-wave { 0%, 100% { rotate: 0deg; } 20% { rotate: -8deg; } 40% { rotate: 7deg; } 60% { rotate: -5deg; } 80% { rotate: 3deg; } }
+@keyframes memo-pw-groove { 0%, 100% { transform: translateY(0) rotate(0deg); } 25% { transform: translateY(-5%) rotate(-5deg); } 75% { transform: translateY(-5%) rotate(5deg); } }
+@keyframes memo-pw-nod { 0%, 100% { rotate: 0deg; translate: 0 0; } 30% { rotate: 7deg; translate: 0 4%; } 60% { rotate: -2deg; translate: 0 0; } }
+@keyframes memo-pw-sway { 0%, 100% { rotate: -4deg; } 50% { rotate: 4deg; } }
+@keyframes memo-pw-write { 0%, 100% { rotate: 0deg; } 50% { rotate: -3deg; translate: 0 1%; } }
+@keyframes memo-pw-peek { 0%, 100% { translate: 0 0; } 40%, 60% { translate: -10% -8%; rotate: -6deg; } }
+@keyframes memo-pw-hop { 0%, 100% { transform: translateY(0) scale(1, 1); } 15% { transform: translateY(3%) scale(1.1, 0.9); } 45% { transform: translateY(-22%) scale(0.95, 1.06); } 75% { transform: translateY(0) scale(1.08, 0.92); } }
+@keyframes memo-pw-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -8%; } }
+@keyframes memo-pw-swing { 0%, 100% { rotate: -15deg; } 50% { rotate: 15deg; } }
+@keyframes memo-pw-spin { to { rotate: 360deg; } }
+@keyframes memo-pw-note-up { 0% { opacity: 0; translate: 0 0; } 20% { opacity: 1; } 100% { opacity: 0; translate: 0.6rem -3rem; rotate: 15deg; } }
+@keyframes memo-pw-fly-in { 0%, 100% { opacity: 0; translate: -3rem 0.5rem; scale: 0.6; } 25%, 75% { opacity: 1; translate: 0 0; scale: 1; } }
 
 /* The prize from the home-screen wheel, confirmed above the plan grid. */
 .memo-discount-note {

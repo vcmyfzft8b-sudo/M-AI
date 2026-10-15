@@ -27,6 +27,7 @@ import {
   pricingRegion,
   regionalPriceLookupKey,
 } from "@/lib/billing-regions";
+import { paywallPath, type PaywallReason } from "@/lib/paywall-reasons";
 import { getServerEnv } from "@/lib/server-env";
 import { resolveSiteOrigin } from "@/lib/site-url";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
@@ -932,6 +933,18 @@ export function getPaywallPath() {
 }
 
 /**
+ * What the paywall should name when a route does not say. A refused chat
+ * question is always the chat; `trial_exhausted` from a note's own routes means
+ * the note is not the free one. The routes that make notes, and the paid-only
+ * regenerate routes, pass their reason explicitly.
+ */
+function defaultPaywallReason(code: BillingRequiredCode): PaywallReason | null {
+  if (code === "trial_chat_limit_reached") return "chat";
+  if (code === "trial_exhausted") return "locked";
+  return null;
+}
+
+/**
  * `message` is written by the caller, which is inside a request and so knows
  * the reader's language; there is no sensible default sentence to fall back on
  * here, which is why it has none.
@@ -939,12 +952,13 @@ export function getPaywallPath() {
 export function createBillingRequiredResponse(
   message: string,
   code: BillingRequiredCode = "subscription_required",
+  reason: PaywallReason | null = defaultPaywallReason(code),
 ) {
   return NextResponse.json(
     {
       error: message,
       code,
-      redirectTo: getPaywallPath(),
+      redirectTo: paywallPath(reason),
     },
     { status: 402 },
   );

@@ -10,6 +10,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 
 import { useAppLayout } from "@/components/app-layout-context";
 import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
+import { currentPaywallBack, paywallPath, withPaywallBack } from "@/lib/paywall-reasons";
 import { EmojiIcon } from "@/components/emoji-icon";
 import { useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
@@ -1142,7 +1143,7 @@ export function LectureWorkspace({
   // reopened; on the phone the same conversation is a sheet.
   const { setChatOpen, chatSlot } = useAppLayout();
   const homeHref = useAppHref("/app");
-  const startHref = useAppHref("/app/start");
+  const chatPaywallHref = useAppHref(paywallPath("chat"));
   const [isChatDismissed, setIsChatDismissed] = useState(false);
   const [isChatExpanded, setIsChatExpanded] = useState(false);
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
@@ -4011,7 +4012,7 @@ export function LectureWorkspace({
               <button
                 type="button"
                 className="memo-button-outline small"
-                onClick={() => navigateWithFeedback(startHref)}
+                onClick={() => navigateWithFeedback(withPaywallBack(chatPaywallHref, currentPaywallBack()))}
               >
                 {t("chat.upgrade")}
               </button>

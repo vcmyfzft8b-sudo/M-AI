@@ -2,10 +2,12 @@
 import { nativeRequest, useNativeIOS } from "@/lib/mobile/client";
 import { nativeBillingFailureKey } from "@/lib/mobile/billing-notice";
 
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { useAppHref } from "@/components/creator-demo/creator-demo-context";
+import { paywallPath } from "@/lib/paywall-reasons";
 import { InstantLink } from "@/components/instant-link";
 import { useT } from "@/components/i18n-provider";
 import { MemoPortal } from "@/components/memo-portal";
@@ -104,8 +106,12 @@ export function VoiceUsageSheet({
 }) {
   const t = useT();
   const native = useNativeIOS();
-  /* Without a subscription the way on is the paywall itself, not Settings. */
-  const paywallHref = useAppHref("/app/start");
+  /*
+   * Without a subscription the way on is the paywall itself, not Settings —
+   * the version of it that names this feature, closing back to this note.
+   */
+  const pathname = usePathname();
+  const paywallHref = useAppHref(paywallPath(usage?.feature ?? null, pathname));
   const [isOpen, setOpen] = useState(false);
   /*
    * The app sells the same hour through Apple (a consumable), never Stripe.

@@ -9395,6 +9395,14 @@
   z-index: 4;
   margin-top: 1.3rem;
   text-align: center;
+}
+
+/* Its room is kept from the start; it appears, and pops in, on the win. */
+.memo-wheel-prize:not(.shown) {
+  visibility: hidden;
+}
+
+.memo-wheel-prize.shown {
   animation: memo-prize-in 0.5s cubic-bezier(0.32, 1.4, 0.5, 1) both;
 }
 
@@ -11161,6 +11169,97 @@
 .memo-pw-orbit.planets > span:nth-child(3) { left: -0.4rem; bottom: 0.2rem; }
 .memo-pw-orbit.planets > span:nth-child(4) { right: -0.4rem; bottom: 0.2rem; }
 
+
+/* After onboarding: Memo waving between the things the subscription opens. */
+.memo-pw-chip {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--paywall-accent);
+  animation:
+    memo-pw-rise 0.45s calc(var(--i) * 0.12s) both,
+    memo-pw-bob 3.2s ease-in-out calc(var(--i) * -0.8s) infinite;
+}
+
+.memo-pw-chip.left.one { left: calc(50% - 7.4rem); top: 1.4rem; }
+.memo-pw-chip.left.two { left: calc(50% - 6.2rem); bottom: 1.1rem; }
+.memo-pw-chip.right.one { right: calc(50% - 7.4rem); top: 1.4rem; }
+.memo-pw-chip.right.two { right: calc(50% - 6.2rem); bottom: 1.1rem; }
+
+@keyframes memo-pw-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -0.45rem; } }
+
+/* The plan's benefits, in the app's own icons and the brand coral. */
+.memo-paywall-shell .memo-paywall-benefit > span {
+  color: var(--promo);
+}
+
+/* The wheel's offer: Memo hopping with the prize where the logo was. */
+.memo-offer-mascot {
+  --paywall-accent: var(--promo);
+  --memo-shadow: var(--hover-ring);
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 6.2rem;
+  margin: 0 auto 0.2rem;
+  width: 10rem;
+}
+
+/*
+ * The wheel and its offer are one screen too (`use-fit-screen.ts`): the wheel
+ * and Memo shrink first, then the headings, never the button or the plans.
+ * The wheel's decoration never takes a tap meant for what is under it.
+ */
+.memo-wheel :is(.memo-wheel-rays, .memo-wheel-glow, .memo-wheel-lights) { pointer-events: none; }
+
+.memo-wheel-body:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-wheel { zoom: 0.86; }
+.memo-wheel-body:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-wheel { zoom: 0.74; }
+.memo-wheel-body:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-wheel-title, .memo-wheel-sub, .memo-wheel-prize) { zoom: 0.88; }
+.memo-wheel-body:is([data-fit="3"], [data-fit="4"]) .memo-wheel { zoom: 0.62; }
+.memo-wheel-body:is([data-fit="3"], [data-fit="4"]) .memo-wheel-sub { display: none; }
+.memo-wheel-body[data-fit="4"] .memo-wheel { zoom: 0.5; }
+.memo-wheel-body:is([data-fit="3"], [data-fit="4"]),
+.memo-offer-body:is([data-fit="3"], [data-fit="4"]) { padding-block: 0.6rem; }
+
+.memo-offer-body:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-offer-mascot { zoom: 0.8; }
+.memo-offer-body:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-offer-mascot { zoom: 0.62; }
+.memo-offer-body:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-offer-headline, .memo-offer-timer) { zoom: 0.82; }
+.memo-offer-body:is([data-fit="3"], [data-fit="4"]) .memo-offer-mascot { display: none; }
+.memo-offer-body:is([data-fit="3"], [data-fit="4"]) .memo-offer-sub { display: none; }
+.memo-offer-body[data-fit="4"] :is(.memo-offer-headline, .memo-offer-timer) { zoom: 0.68; }
+
+/*
+ * One screen, never a page to scroll. The paywall measures itself after each
+ * render and steps down to the first of these levels at which it fits
+ * (`fitPaywall` in onboarding-paywall.tsx): the scene and the discount shrink
+ * first, then the plans tighten, then the secondary lines go. Zoom rather than
+ * transform, so what shrinks also gives back its room.
+ */
+.memo-paywall-shell:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-pw-hero { zoom: 0.82; }
+.memo-paywall-shell:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-paywall-offer { zoom: 0.86; }
+.memo-paywall-shell:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-paywall-benefit p { display: none; }
+.memo-paywall-shell:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-paywall-benefit { min-height: 0; }
+.memo-paywall-shell:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-paywall-plan-grid { margin-top: 0.7rem; }
+
+.memo-paywall-shell:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) { row-gap: 0.4rem; }
+.memo-paywall-shell:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-pw-hero { zoom: 0.66; }
+.memo-paywall-shell:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-paywall-offer { zoom: 0.74; }
+.memo-paywall-shell:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-paywall-title, .memo-paywall-sub, .memo-paywall-benefits) { zoom: 0.9; }
+.memo-paywall-shell:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-pw-compare, .memo-paywall-plan-grid) { zoom: 0.92; }
+
+.memo-paywall-shell:is([data-fit="3"], [data-fit="4"]) .memo-pw-hero { zoom: 0.46; }
+.memo-paywall-shell:is([data-fit="3"], [data-fit="4"]) .memo-paywall-offer { zoom: 0.6; }
+.memo-paywall-shell:is([data-fit="3"], [data-fit="4"]) :is(.memo-paywall-sub, .memo-paywall-foot) { display: none; }
+.memo-paywall-shell:is([data-fit="3"], [data-fit="4"]) .memo-pw-compare { zoom: 0.84; }
+
+.memo-paywall-shell[data-fit="4"] .memo-pw-hero { display: none; }
+.memo-paywall-shell[data-fit="4"] .memo-paywall-due { display: none; }
+.memo-paywall-shell[data-fit="4"] .memo-paywall-benefits { display: none; }
 
 /*
  * Closing a paywall steps back to the screen under it, which should simply be

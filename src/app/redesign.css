@@ -27345,22 +27345,112 @@ button.memo-exam-card:hover {
 }
 
 /* The exam in three numbers, small enough to sit in one row above the path. */
-.memo-exam-stats.compact {
+/*
+ * The prep's headline: how much the learner knows against the goal. A bar with the target
+ * marked on it (a notch that stands out of the track), the number big, and how far is left;
+ * the days and today's lessons sit under it as two quiet facts.
+ */
+.memo-exam-goal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
   align-self: stretch;
+  padding: 1.1rem 1.2rem 1rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
-.memo-exam-stats.compact > div {
-  padding: 0.6rem 0.3rem;
-  border-radius: 18px;
-  animation: none;
+.memo-exam-goal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
 }
 
-.memo-exam-stats.compact b {
-  font-size: 1.3rem;
+.memo-exam-goal-label {
+  color: var(--muted);
+  font-size: 0.98rem;
+  font-weight: 700;
 }
 
-.memo-exam-stats.compact span {
-  font-size: 0.8rem;
+.memo-exam-goal-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.memo-exam-goal-value b {
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-goal-value span {
+  color: var(--muted);
+  font-size: 0.98rem;
+  font-weight: 650;
+}
+
+.memo-exam-goal-bar {
+  position: relative;
+  padding: 0.3rem 0;
+}
+
+.memo-exam-goal .memo-progress.goal {
+  height: 1rem;
+}
+
+.memo-exam-goal .memo-progress.goal > div {
+  background: var(--coral);
+}
+
+/* The goal on the bar: a notch taller than the track, so it reads as the line to cross. */
+.memo-exam-goal-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0.25rem;
+  margin-left: -0.125rem;
+  border-radius: 999px;
+  background: var(--text);
+}
+
+.memo-exam-goal-left {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.98rem;
+  font-weight: 650;
+}
+
+.memo-exam-goal-left.reached {
+  color: var(--success);
+}
+
+.memo-exam-facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.memo-exam-facts > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 2.4rem;
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.memo-exam-facts b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 
 .memo-exam-trail {

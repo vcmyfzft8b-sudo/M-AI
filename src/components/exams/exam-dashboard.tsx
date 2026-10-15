@@ -227,30 +227,64 @@ export function ExamDashboard({
     </>
   );
 
+  /* What the learner knows, floored (89.6 % is not the 90 % goal), and how far is left to the goal. */
+  const known = percent(detail.mastery);
+  const goalLeft = Math.max(0, exam.target_mastery - known);
+
   return (
     <ExamScreen backHref={EXAM_PREPS_HREF} trailing={trailing}>
       <header className="memo-exam-trail-head">
         <h1>{exam.title}</h1>
-        <div className="memo-exam-stats compact">
-          <div>
-            <b>{examPassed ? "✓" : Math.max(0, detail.daysLeft)}</b>
-            <span>
-              {examPassed
-                ? t("exam.list.past")
-                : examToday
-                  ? t("exam.dash.countdownToday")
-                  : t("exam.setup.motivate.days", { count: detail.daysLeft })}
+        {/*
+         * The goal is the headline: how much of the material the learner knows, on a bar with the
+         * target marked, and how far is left. The days and today's lessons are the facts under it.
+         */}
+        <section className="memo-exam-goal" aria-label={t("exam.dash.goal.label")}>
+          <div className="memo-exam-goal-head">
+            <span className="memo-exam-goal-label">{t("exam.dash.goal.label")}</span>
+            <span className="memo-exam-goal-value">
+              <b>{t("exam.percent", { percent: known })}</b>
+              <span>{t("exam.dash.target", { percent: exam.target_mastery })}</span>
             </span>
           </div>
-          <div>
-            <b>{t("exam.percent", { percent: percent(detail.mastery) })}</b>
-            <span>{t("exam.dash.target", { percent: exam.target_mastery })}</span>
+          <div
+            className="memo-exam-goal-bar"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={known}
+            aria-valuetext={t("exam.dash.goal.valueText", { percent: known, target: exam.target_mastery })}
+          >
+            <div className="memo-progress goal">
+              <div style={{ width: `${known}%` }} />
+            </div>
+            <span className="memo-exam-goal-mark" style={{ left: `${exam.target_mastery}%` }} aria-hidden="true" />
           </div>
-          <div>
-            {/* Past the day's goal the count stands alone; "12/5" reads like an error. */}
-            <b>{plan.doneToday >= plan.goal ? plan.doneToday : `${plan.doneToday}/${plan.goal}`}</b>
-            <span>{t("exam.path.today")}</span>
-          </div>
+          <p className={`memo-exam-goal-left ${goalLeft === 0 ? "reached" : ""}`.trim()}>
+            {goalLeft === 0 ? t("exam.dash.goal.reached") : t("exam.dash.goal.left", { percent: goalLeft })}
+          </p>
+        </section>
+        <div className="memo-exam-facts">
+          <span>
+            <Emoji symbol="📅" size="1rem" />
+            {examPassed ? (
+              <span>{t("exam.list.past")}</span>
+            ) : examToday ? (
+              <span>{t("exam.dash.countdownToday")}</span>
+            ) : (
+              <span>
+                <b>{detail.daysLeft}</b> {t("exam.setup.motivate.days", { count: detail.daysLeft })}
+              </span>
+            )}
+          </span>
+          <span>
+            <Emoji symbol="✅" size="1rem" />
+            <span>
+              {/* Past the day's goal the count stands alone; "12/5" reads like an error. */}
+              <b>{plan.doneToday >= plan.goal ? plan.doneToday : `${plan.doneToday}/${plan.goal}`}</b>{" "}
+              {t("exam.path.today")}
+            </span>
+          </span>
         </div>
         <ol className="memo-exam-stages">
           {STAGES.map((entry, index) => {

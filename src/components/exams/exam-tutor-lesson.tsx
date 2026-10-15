@@ -337,13 +337,27 @@ export function ExamTutorLesson({
         </>
       ) : null}
 
-      {/* Spoken answers end on their own when the learner goes quiet; these end one at once. */}
-      {stage === "running" && !textMode && phase === "listening" ? (
-        <div className="memo-exam-oral-actions">
-          <button type="button" className="memo-button-ghost" onClick={() => void endAnswer("")}>
+      {/*
+       * Spoken answers end on their own when the learner goes quiet; these end one at once. Their
+       * row keeps its place while the tutor speaks (hidden, not removed), so the controls under it
+       * never jump between speaking and listening. Both are quiet: pause is the screen's button.
+       */}
+      {stage === "running" && !textMode ? (
+        <div className="memo-exam-oral-actions memo-exam-tutor-answer" data-hidden={phase !== "listening" || undefined}>
+          <button
+            type="button"
+            className="memo-button-ghost"
+            tabIndex={phase === "listening" ? undefined : -1}
+            onClick={() => void endAnswer("")}
+          >
             {t("test.dontKnow")}
           </button>
-          <button type="button" className="memo-primary-pill" onClick={() => void endAnswer()}>
+          <button
+            type="button"
+            className="memo-button-ghost"
+            tabIndex={phase === "listening" ? undefined : -1}
+            onClick={() => void endAnswer()}
+          >
             {t("exam.oral.done")}
           </button>
         </div>

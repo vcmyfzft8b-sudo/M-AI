@@ -28433,6 +28433,22 @@ a.memo-exam-station-go {
   padding-bottom: 0.6rem;
 }
 
+/* The tutor's answer buttons sit in a row that is always there, only hidden while he speaks. */
+.memo-exam-tutor-answer {
+  flex-wrap: nowrap;
+  margin-top: 0;
+  padding-bottom: 0;
+}
+
+.memo-exam-tutor-answer[data-hidden] {
+  visibility: hidden;
+}
+
+.memo-exam-tutor-answer .memo-button-ghost {
+  flex: 1 1 0;
+  max-width: 11rem;
+}
+
 .memo-exam-oral-end {
   display: inline-flex;
   align-items: center;

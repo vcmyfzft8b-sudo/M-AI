@@ -264,7 +264,7 @@ export function ExamDashboard({
               style={{ "--goal": `${exam.target_mastery}%` } as CSSProperties}
               aria-hidden="true"
             >
-              <Emoji symbol="🎯" size="1.05rem" />
+              <Emoji symbol="🎯" size="1.45rem" />
             </span>
           </div>
           <p className={`memo-exam-goal-left ${goalLeft === 0 ? "reached" : ""}`.trim()}>

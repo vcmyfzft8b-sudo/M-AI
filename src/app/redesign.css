@@ -27496,7 +27496,7 @@ button.memo-exam-card:hover {
 
 .memo-exam-goal-bar {
   position: relative;
-  padding: 0.5rem 0;
+  padding: 0.75rem 0;
 }
 
 .memo-exam-goal .memo-progress.goal {
@@ -27514,10 +27514,10 @@ button.memo-exam-card:hover {
 .memo-exam-goal-mark {
   position: absolute;
   top: 50%;
-  left: clamp(1rem, var(--goal), calc(100% - 1rem));
+  left: clamp(1.25rem, var(--goal), calc(100% - 1.25rem));
   display: grid;
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   place-items: center;
   border-radius: 999px;
   background: var(--surface);

@@ -11848,7 +11848,8 @@ html[data-paywall-closing] .memo-shell * {
     pointer-events: none;
   }
 
-  .memo-m-topbar img {
+  /* The still lockup, where one is a direct child; never the images inside the animated one. */
+  .memo-m-topbar > img {
     position: relative;
     z-index: 1;
     height: 3.1rem;
@@ -29076,6 +29077,16 @@ a.memo-exam-station-go {
 .memo-lockup-brain [data-memo-lash] {
   width: 10.6% !important;
   margin: 1.9% 0 0 -0.9%;
+}
+
+/*
+ * Memo's eyelids and lashes always paint over his picture, wherever he is drawn: a rule that
+ * lifts images (position + z-index, like a header's for its still logo) would otherwise put his
+ * picture over them, and he would blink unseen.
+ */
+.memo-buddy [data-memo-lid],
+.memo-buddy [data-memo-lash] {
+  z-index: 2;
 }
 
 .memo-lockup-brain .memo-buddy img {

@@ -32,7 +32,7 @@ const STAGES: { stage: Exclude<ExamStage, "ready">; key: MessageKey }[] = [
 
 /*
  * The exam, as Astra and Duolingo draw a course: one path down the screen. Each note is a module
- * with a heading, its five lessons are stations joined by a line, and a lesson still under the
+ * with a heading, its six lessons are stations joined by a line, and a lesson still under the
  * target comes back as a repeat station until it reaches it. The step to do next carries the
  * screen's one call to action, with Memo beside it. Once every module is mastered the mock exam
  * is that step, and passing it at the target is what makes the learner ready.
@@ -69,7 +69,7 @@ export function ExamDashboard({
   const stage = detail.stage;
   const next = examNextStep(modules, stage, canOpen);
   const target = exam.target_mastery;
-  /* A module's stations: its five lessons, then a repeat for each lesson still under the target. */
+  /* A module's stations: its six lessons, then a repeat for each lesson still under the target. */
   const stationCount = (module: ExamModuleView) =>
     module.pending ? 0 : EXAM_LESSON_KINDS.length + module.review.length;
   /* Where each module's stations start on the whole path, so the line swings on across modules. */
@@ -418,7 +418,9 @@ export function ExamDashboard({
                               stage === "ready"
                                 ? "exam.path.keepSharp"
                                 : repeat
-                                  ? "exam.path.repeat"
+                                  ? module.refresh.includes(kind)
+                                    ? "exam.path.refresh"
+                                    : "exam.path.repeat"
                                   : "exam.path.start",
                             )}{" "}
                             · {t(LESSON_KIND_KEY[kind])}
@@ -430,7 +432,7 @@ export function ExamDashboard({
                       ) : (
                         <span className="memo-exam-station-label">
                           {repeat
-                            ? `${t("exam.path.repeat")} · ${t(LESSON_KIND_KEY[kind])} · ${percent(score ?? 0)} %`
+                            ? `${t(module.refresh.includes(kind) ? "exam.path.refresh" : "exam.path.repeat")} · ${t(LESSON_KIND_KEY[kind])} · ${percent(score ?? 0)} %`
                             : t(LESSON_KIND_KEY[kind])}
                         </span>
                       )}

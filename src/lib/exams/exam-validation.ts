@@ -52,7 +52,7 @@ export const examPlanSchema = z.object({
 
 export const topicWrittenCheckSchema = z.object({
   topicId: z.string().uuid(),
-  questionId: z.string().regex(/^gen-\d{1,2}$/),
+  questionId: z.string().regex(/^(gen|x):[0-9a-f-]{36}:w\d{1,3}$/),
   typedAnswer: createSanitizedStringSchema({ multiline: true, trim: true, maxLength: 12000 }),
   declaredUnknown: z.boolean(),
 });
@@ -77,6 +77,8 @@ export const lessonResultSchema = z.object({
   correct: z.number().int().min(0).max(100),
   total: z.number().int().min(0).max(100),
   difficulty: z.number().int().min(1).max(5).nullable(),
+  /** The questions the lesson showed, so the next try of it draws others. */
+  itemIds: z.array(z.string().regex(/^[A-Za-z0-9:_-]{1,100}$/)).max(40).optional(),
 });
 
 export const mockStartSchema = z.object({
@@ -95,8 +97,8 @@ export const mockSubmitSchema = z.object({
   answers: z
     .array(
       z.object({
-        // A note's own question (its id), or one written for a topic or for this mock ("gen:…").
-        questionId: z.string().uuid().or(z.string().regex(/^gen:[A-Za-z0-9:-]{1,100}$/)),
+        // A note's own question (its id), or one written for a topic, fresh for a topic, or for this mock ("gen:…", "x:…").
+        questionId: z.string().uuid().or(z.string().regex(/^(gen|x):[A-Za-z0-9:-]{1,100}$/)),
         selected: z.number().int().min(0).max(20).nullable().optional(),
         text: createSanitizedStringSchema({ multiline: true, trim: true, maxLength: 12000 })
           .or(z.literal(""))

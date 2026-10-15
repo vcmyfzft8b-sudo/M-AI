@@ -37,12 +37,19 @@ mastery or decides a student is ready, so the learn/practise/prove loop below is
 
 As in Astra, the path is made of **topics**: when the exam is set up, each note is split into two to
 six topics (`planNoteTopics`, one model call per note), the learner keeps, drops, renames or adds
-topics on the review, and each kept topic is a **module**. A module is a fixed chain of five lessons,
-in Astra's order:
-summary → flashcards → quiz → true/false → one written answer. A module is unlocked when it is the
-first one, when the module before it has been learned, or when the learner has already started it
-(a locked module offers a test-out quiz). Mastery is the average of the latest score of the four
-practice lessons; the summary counts as done but not as mastery.
+topics on the review, and each kept topic is a **module**. A module is a fixed chain of six lessons:
+summary → **tutor** → flashcards → quiz → true/false → one written answer. A module is unlocked when
+it is the first one, when the module before it has been learned, or when the learner has already
+started it (a locked module offers a test-out quiz).
+
+**Mastery** is the weighted average of the five practice lessons' latest scores (`LESSON_WEIGHT`):
+flashcards count half, because the learner grades them ("knew it" or not); the tutor, quiz,
+true/false and written answer count in full. The summary counts as done but not as mastery.
+
+**Scores fade** (`fadedScore`, spaced review): a lesson keeps its score for three days, then loses
+4 % of it a day, never below 60 %. A perfect lesson against an 85 % target is due again about a
+week later, a bare pass sooner, so a topic learned weeks before the exam comes back for review
+before it. Lessons due only because they faded show as "Osveži" on the path (`refresh`).
 
 ### Until the goal is reached and proved
 
@@ -52,14 +59,38 @@ until the learner has the knowledge and has shown it (`examStage`, `examNextStep
 1. **Learn** (`learned`): every lesson of every module done once.
 2. **Practise** (`mastered`): every practice lesson's latest score at or above the exam's target.
    A lesson under it comes back on the path as a repeat station, weakest first, and each try draws
-   new questions (the lesson seed counts the attempts). Modules are taken in order: the path points
-   at the first one not yet mastered.
+   questions the learner has not been shown (see below). Modules are taken in order: the path
+   points at the first one not yet mastered.
 3. **Prove**: with every module mastered, the mock exam is the next step. Passing it at the target
    makes the learner **ready**. A mock under the target sends the modules it found weak back to
    practise: their quiz and written answer count only once redone after that mock
    (`MOCK_PROOF_KINDS`), and then the mock is next again.
 4. **Ready**: the path still offers the weakest lesson each day ("Osveži") until the exam, and a
    score that slips below the target puts that module back into practice.
+
+### The tutor lesson
+
+Right after the summary, the voice tutor teaches the topic (`exam-tutor-server.ts`,
+`ExamTutorLesson`): it plans three steps from the topic and its note (`planTutorLesson`, the fast
+`tutor_turn` model, a few seconds), and in each it explains one point out loud and asks an open
+question about it. The answer is spoken or typed. `tutorTurn` marks it against the step's answer
+guide: right at the first ask is a full point; otherwise the tutor says what was missing, explains
+it and asks again (right then: half; partly right at best: a quarter), then gives the answer and
+moves on (`tutorStepPoints`). Results are stored in quarters and shown as a percentage. It runs on
+the voice tutor's own session and talking time (`useExamVoice`, shared with the oral mock); with no
+microphone, no talking time or no Web Audio it runs in writing, Memo in place of the sphere.
+
+### Practice that does not repeat itself
+
+A lesson's result records the questions it showed (`exam_lesson_results.item_ids`). The next try of
+a quiz, true/false or written lesson draws questions this learner has not seen in the topic
+(`preferUnseen`; quiz and true/false share a pool); when the topic has fewer unseen than a lesson
+needs, fresh questions are written for it (`writeFreshQuestions`, `needsFreshItems`) and kept on the
+topic (`exam_topics.extra`). Flashcards are memorised, so they come back by the note's own spaced
+repetition instead. The mock exam holds back every question the learner practised and fills the
+time with unseen ones, written for the mock where the banks run short; practised questions come back
+only if that writing fails. AI-written questions carry ids that say where they live
+(`gen:<topic>:q3`, `x:<topic>:w0`), so practised ones are recognised everywhere.
 
 The daily goal counts the repeats still owed, not only untried lessons. The lesson's done screen
 applies the same rule to decide what comes next (the next lesson, a repeat, the next module, or the
@@ -156,12 +187,14 @@ the answers; "Ponovi generalko" retries and "Nadaljuj" returns to the path. The 
 one paid-only part: setup, path, lessons and readiness follow the notes' own access (a free account
 can prep from its free note).
 
-## Tables (`supabase/migrations/0062_exam_prep.sql`)
+## Tables (`supabase/migrations/0062_exam_prep.sql`, `0063_exam_tutor_and_fresh_questions.sql`)
 
 `exams`, `exam_modules`, `exam_topics`, `exam_lesson_results`, `exam_mock_attempts`. All are
 owner-only by RLS and every route uses the client that verified the learner (`getRouteUser`). The
 migration was first written as 0061 and applied to staging only; PR #579 claimed 0061 too, so it
-moved to 0062 (staging's 0061 record was reverted and its tables dropped first).
+moved to 0062 (staging's 0061 record was reverted and its tables dropped first). `0063` adds the `tutor`
+lesson kind, `exam_lesson_results.item_ids` and `exam_topics.extra`; it was applied to staging
+(with the owner's go-ahead) from this branch, never to production.
 
 ## Memo, animated
 

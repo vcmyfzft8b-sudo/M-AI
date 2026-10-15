@@ -472,6 +472,7 @@ export type Database = {
           written_ids: string[];
           assigned_kinds: string[];
           generated: Json | null;
+          extra: Json | null;
           created_at: string;
         };
         Insert: {
@@ -489,6 +490,7 @@ export type Database = {
           written_ids?: string[];
           assigned_kinds?: string[];
           generated?: Json | null;
+          extra?: Json | null;
           created_at?: string;
         };
         Update: {
@@ -501,6 +503,7 @@ export type Database = {
           written_ids?: string[];
           assigned_kinds?: string[];
           generated?: Json | null;
+          extra?: Json | null;
         };
       };
       exam_lesson_results: {
@@ -510,11 +513,12 @@ export type Database = {
           lecture_id: string;
           topic_id: string | null;
           user_id: string;
-          lesson_kind: "summary" | "flashcards" | "quiz" | "true_false" | "written";
+          lesson_kind: "summary" | "tutor" | "flashcards" | "quiz" | "true_false" | "written";
           correct: number;
           total: number;
           score: number;
           difficulty: number | null;
+          item_ids: string[];
           completed_at: string;
         };
         Insert: {
@@ -523,11 +527,12 @@ export type Database = {
           lecture_id: string;
           topic_id?: string | null;
           user_id: string;
-          lesson_kind: "summary" | "flashcards" | "quiz" | "true_false" | "written";
+          lesson_kind: "summary" | "tutor" | "flashcards" | "quiz" | "true_false" | "written";
           correct?: number;
           total?: number;
           score?: number;
           difficulty?: number | null;
+          item_ids?: string[];
           completed_at?: string;
         };
         Update: Record<string, never>;

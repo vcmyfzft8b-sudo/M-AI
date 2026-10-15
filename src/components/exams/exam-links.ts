@@ -3,6 +3,7 @@ import type { MessageKey } from "@/lib/i18n/messages/keys";
 
 export const LESSON_KIND_KEY: Record<ExamLessonKind, MessageKey> = {
   summary: "exam.lesson.kind.summary",
+  tutor: "exam.lesson.kind.tutor",
   flashcards: "exam.lesson.kind.flashcards",
   quiz: "exam.lesson.kind.quiz",
   true_false: "exam.lesson.kind.trueFalse",
@@ -12,6 +13,7 @@ export const LESSON_KIND_KEY: Record<ExamLessonKind, MessageKey> = {
 /** Each lesson's picture on the study path. */
 export const LESSON_KIND_EMOJI: Record<ExamLessonKind, string> = {
   summary: "📖",
+  tutor: "🎙️",
   flashcards: "🃏",
   quiz: "❓",
   true_false: "⚖️",

@@ -8,6 +8,7 @@ import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { ExamOral } from "@/components/exams/exam-oral";
+import { storedTutorVoice } from "@/components/exams/use-exam-voice";
 import { ExamScreen } from "@/components/exams/exam-screen";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
 import { GaugeDial } from "@/components/exams/target-dial";
@@ -25,7 +26,6 @@ import { voiceSampleClip } from "@/lib/tutor/voice-clips";
 import { voiceHue } from "@/lib/tutor/voice-colors";
 import {
   DEFAULT_NOTE_TTS_VOICE,
-  normalizeNoteTtsVoice,
   NOTE_TTS_VOICE_STORAGE_KEY,
   NOTE_TTS_VOICES,
   type NoteTtsVoice,
@@ -49,14 +49,6 @@ const VIBES: { value: Vibe; labelKey: MessageKey; bodyKey: MessageKey }[] = [
   { value: "friendly", labelKey: "exam.oral.vibe.friendly", bodyKey: "exam.oral.vibe.friendlyBody" },
   { value: "encouraging", labelKey: "exam.oral.vibe.encouraging", bodyKey: "exam.oral.vibe.encouragingBody" },
 ];
-
-function storedVoice(): NoteTtsVoice {
-  try {
-    return normalizeNoteTtsVoice(window.localStorage.getItem(NOTE_TTS_VOICE_STORAGE_KEY));
-  } catch {
-    return DEFAULT_NOTE_TTS_VOICE;
-  }
-}
 
 type Answer = { selected?: number | null; text?: string; unknown?: boolean };
 
@@ -353,7 +345,7 @@ export function ExamMock({
 
                   // The tutor's voice is remembered on the device; the examiner starts from it.
                   if (value === "oral") {
-                    setVoice(storedVoice());
+                    setVoice(storedTutorVoice());
                   }
                 }}
               >

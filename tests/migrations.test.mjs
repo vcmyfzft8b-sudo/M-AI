@@ -1215,6 +1215,21 @@ test("an exam keeps its notes, topics and results, and takes them with it when d
     /check constraint/,
   );
 
+  // The tutor is a lesson like the others, and a lesson keeps which questions it showed.
+  const [tutorResult] = await query(
+    `insert into public.exam_lesson_results (exam_id, lecture_id, topic_id, user_id, lesson_kind, correct, total, score, item_ids)
+     values ($1,$2,$3,$4,'tutor',2,3,0.67,'{q1,q2}') returning *`,
+    [exam.id, lecture.id, topic.id, user.id],
+  );
+  assert.deepEqual(tutorResult.item_ids, ["q1", "q2"]);
+  const [plain] = await query(
+    `insert into public.exam_lesson_results (exam_id, lecture_id, topic_id, user_id, lesson_kind) values ($1,$2,$3,$4,'summary') returning *`,
+    [exam.id, lecture.id, topic.id, user.id],
+  );
+  assert.deepEqual(plain.item_ids, []);
+  const [withExtra] = await query(`update public.exam_topics set extra = '{"quiz":[]}' where id = $1 returning extra`, [topic.id]);
+  assert.deepEqual(withExtra.extra, { quiz: [] });
+
   // A lesson kind the app does not have, and a score outside 0..1, are refused.
   await assert.rejects(
     () =>

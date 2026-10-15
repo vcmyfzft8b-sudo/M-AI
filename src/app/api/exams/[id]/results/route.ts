@@ -48,6 +48,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       correct: Math.min(parsed.data.correct, parsed.data.total),
       total: parsed.data.total,
       difficulty: parsed.data.difficulty,
+      itemIds: parsed.data.itemIds,
     });
 
     if (!recorded) {

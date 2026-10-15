@@ -502,3 +502,74 @@ Write in the language of the notes. Student level: ${params.school}.`,
     return [];
   }
 }
+
+/* ---------------------------------------------------------------- fresh questions */
+
+const freshSchema = z.object({
+  quiz: z.array(
+    z.object({ prompt: z.string(), options: z.array(z.string()), correctIndex: z.number().int(), explanation: z.string() }),
+  ),
+  written: z.array(z.object({ prompt: z.string(), answerGuide: z.string() })),
+});
+
+/** Questions written for a topic whose own have all been seen: kept on the topic as `extra`. */
+export type FreshTopicQuestions = Pick<GeneratedTopicContent, "quiz" | "written">;
+
+/**
+ * New questions for one topic, for when a learner repeating its lessons has seen every question it
+ * had: the same material, asked differently, never one of the questions under "avoid".
+ */
+export async function writeFreshQuestions(params: {
+  userId: string;
+  lectureId: string;
+  topicTitle: string;
+  summary: string;
+  keyPoints: string[];
+  notesMarkdown: string;
+  school: string;
+  quiz: number;
+  written: number;
+  avoid: string[];
+}): Promise<FreshTopicQuestions> {
+  if (params.quiz <= 0 && params.written <= 0) {
+    return { quiz: [], written: [] };
+  }
+
+  const result = await generateStructuredObject({
+    schema: freshSchema,
+    stage: "study_items",
+    maxOutputTokens: Math.min(8000, 600 + params.quiz * 260 + params.written * 320),
+    instructions: `Write new practice questions on one exam topic, "${params.topicTitle}", for a student who has already answered every question listed under "avoid" and needs fresh ones to practise on.
+
+Write exactly ${params.quiz} multiple-choice questions (4 options, exactly one correct, correctIndex 0-based, a one-sentence explanation of the right answer) and exactly ${params.written} open questions (each with an answerGuide: a bullet list, "- ", of the 2 to 4 points a full answer must contain).
+
+Ask about what the topic's material teaches (the input), from new angles: applying it, comparing, explaining why, a small example to work through. Test understanding, not wording. Never repeat or rephrase a question under "avoid". Never invent specifics you are not sure of. Write in the language of the material. Student level: ${params.school}.`,
+    input: JSON.stringify({
+      topic: params.topicTitle,
+      summary: params.summary,
+      keyPoints: params.keyPoints,
+      note: params.notesMarkdown.slice(0, 12_000),
+      avoid: params.avoid.slice(0, 80).map((prompt) => prompt.slice(0, 200)),
+    }),
+    usageContext: { stage: "exam_fresh_questions", userId: params.userId, lectureId: params.lectureId },
+  });
+
+  return {
+    quiz: result.quiz
+      .map((question) => ({
+        prompt: clean(question.prompt, 600),
+        options: question.options.map((option) => clean(option, 300)).filter(Boolean).slice(0, 5),
+        correctIndex: question.correctIndex,
+        explanation: clean(question.explanation, 800),
+      }))
+      .filter(
+        (question) =>
+          question.prompt && question.options.length >= 2 && question.correctIndex >= 0 && question.correctIndex < question.options.length,
+      )
+      .slice(0, params.quiz),
+    written: result.written
+      .map((question) => ({ prompt: clean(question.prompt, 600), answerGuide: question.answerGuide.trim().slice(0, 1500) }))
+      .filter((question) => question.prompt && question.answerGuide)
+      .slice(0, params.written),
+  };
+}

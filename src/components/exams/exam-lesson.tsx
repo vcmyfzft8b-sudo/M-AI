@@ -13,6 +13,7 @@ import { StudyPracticeQuestion, StudyQuizQuestion } from "@/components/study-que
 import { LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
 import { ExamScreen } from "@/components/exams/exam-screen";
 import { MemoBuddy, type BuddyMood } from "@/components/exams/memo-buddy";
+import { ExamTutorLesson } from "@/components/exams/exam-tutor-lesson";
 import { EXAM_LESSON_KINDS, PRACTICE_LESSON_KINDS, type ExamLessonKind } from "@/lib/exams/exam-model";
 import type { LessonGenerator, LessonLoad, LessonPayload } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -51,6 +52,27 @@ type Phase =
       below: number | null;
       following: { label: string; href: string } | null;
     };
+
+/*
+ * The tutor scores each step 0, ¼, ½ or 1; results are whole counts, so its points are kept in
+ * quarters (a three-step lesson is out of 12) and shown as a percentage.
+ */
+const TUTOR_QUARTERS = 4;
+
+/** The questions a lesson showed, recorded with its result so the next try draws others. */
+function shownItemIds(lesson: LessonPayload | null): string[] {
+  switch (lesson?.kind) {
+    case "flashcards":
+      return lesson.cards.map((card) => card.id);
+    case "quiz":
+    case "written":
+      return lesson.questions.map((question) => question.id);
+    case "true_false":
+      return lesson.statements.map((statement) => statement.id);
+    default:
+      return [];
+  }
+}
 
 type WrittenMark = {
   marked: boolean;
@@ -102,6 +124,7 @@ export function ExamLesson({
   const [buddy, setBuddy] = useState<{ mood: BuddyMood; key: number }>({ mood: "wave", key: 0 });
   const [saveError, setSaveError] = useState(false);
   const startedGeneration = useRef(false);
+  const lessonRef = useRef<LessonPayload | null>(null);
   /* `navigateWithFeedback` is a new function every render; a load keyed on it would restart forever. */
   const navigateRef = useRef(navigateWithFeedback);
   const examHref = `/app/exams/${examId}`;
@@ -133,6 +156,7 @@ export function ExamLesson({
     const load = (await response.json()) as LessonLoad;
 
     if (load.status === "ready") {
+      lessonRef.current = load.lesson;
       setPhase({ name: "playing", lesson: load.lesson });
       return;
     }
@@ -173,7 +197,14 @@ export function ExamLesson({
     const response = await fetch(`/api/exams/${examId}/results`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topicId: module.topicId, kind, correct, total, difficulty }),
+      body: JSON.stringify({
+        topicId: module.topicId,
+        kind,
+        correct,
+        total,
+        difficulty,
+        itemIds: shownItemIds(lessonRef.current),
+      }),
     }).catch(() => null);
 
     if (!response?.ok) {
@@ -237,6 +268,10 @@ export function ExamLesson({
   }
 
   const kindIndex = EXAM_LESSON_KINDS.indexOf(kind);
+  const scoreLine = (correct: number, total: number) =>
+    kind === "tutor"
+      ? t("exam.tutor.score", { percent: Math.round((correct / Math.max(1, total)) * 100) })
+      : t("exam.zone.score", { correct, total });
   const title = `${t("exam.dash.module", { index: module.position + 1 })} · ${t(LESSON_KIND_KEY[kind])}`;
 
   return (
@@ -302,6 +337,7 @@ export function ExamLesson({
           <LearningZone
             correct={phase.correct}
             total={phase.total}
+            scoreLine={scoreLine(phase.correct, phase.total)}
             error={saveError}
             onRetry={() => {
               setPhase({ name: "loading" });
@@ -322,7 +358,7 @@ export function ExamLesson({
             {phase.below !== null ? (
               <p>{t("exam.lesson.done.below", { score: phase.below, target })}</p>
             ) : phase.total > 0 ? (
-              <p>{t("exam.zone.score", { correct: phase.correct, total: phase.total })}</p>
+              <p>{scoreLine(phase.correct, phase.total)}</p>
             ) : null}
             <div className="memo-exam-cta-col">
               {phase.following ? (
@@ -356,12 +392,14 @@ function NextStepButton({
 function LearningZone({
   correct,
   total,
+  scoreLine,
   error,
   onRetry,
   onContinue,
 }: {
   correct: number;
   total: number;
+  scoreLine: string;
   error: boolean;
   onRetry: () => void;
   onContinue: (difficulty: number) => void;
@@ -375,7 +413,7 @@ function LearningZone({
   return (
     <div className="memo-exam-center memo-exam-zone">
       <MemoBuddy mood={ratio >= 0.6 ? "happy" : "sad"} size="6rem" />
-      <h2>{total > 0 ? t("exam.zone.score", { correct, total }) : t("exam.lesson.done.title")}</h2>
+      <h2>{total > 0 ? scoreLine : t("exam.lesson.done.title")}</h2>
       <p>{t("exam.zone.question")}</p>
       <div className="memo-exam-zone-card">
         <div className="memo-exam-zone-faces" aria-hidden="true">
@@ -561,7 +599,7 @@ function LessonBody({
         </div>
         <div className="memo-exam-cta-row">
           <button type="button" className="memo-button-coral" onClick={() => onFinish(1, 1)}>
-            {t("exam.lesson.finishWithQuiz")}
+            {t("exam.lesson.summary.next")}
           </button>
         </div>
       </div>
@@ -701,6 +739,20 @@ function LessonBody({
           ) : null}
         </div>
       </div>
+    );
+  }
+
+  if (lesson.kind === "tutor") {
+    return (
+      <ExamTutorLesson
+        examId={examId}
+        topicId={topicId}
+        lectureId={lesson.lectureId}
+        topicTitle={lesson.topicTitle}
+        steps={lesson.steps}
+        onReact={onReact}
+        onFinish={(points, total) => onFinish(Math.round(points * TUTOR_QUARTERS), total * TUTOR_QUARTERS)}
+      />
     );
   }
 

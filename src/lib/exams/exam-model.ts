@@ -1,20 +1,59 @@
 /**
  * Exam prep, everything that is arithmetic rather than I/O.
  *
- * An exam is a date and a list of notes. Each note is a module on the learner's path, and a
- * module is a fixed chain of five short lessons, in Astra's order: read the summary, then
- * flashcards, a quiz, true/false and one written answer. Mastery, the daily plan, the streak and
- * which modules are unlocked are all derived here from the lesson results, so the server, the
- * screens and the tests agree on one definition of each.
+ * An exam is a date and a list of notes, split into topics. Each topic is a module on the
+ * learner's path, and a module is a fixed chain of six short lessons: read the summary, have the
+ * voice tutor explain it and ask about it, then flashcards, a quiz, true/false and one written
+ * answer. Mastery, the daily plan, the streak and which modules are unlocked are all derived here
+ * from the lesson results, so the server, the screens and the tests agree on one definition of each.
  *
  * Kept free of imports so `node --test` can load it without the app's path aliases.
  */
 
-export const EXAM_LESSON_KINDS = ["summary", "flashcards", "quiz", "true_false", "written"] as const;
+export const EXAM_LESSON_KINDS = ["summary", "tutor", "flashcards", "quiz", "true_false", "written"] as const;
 export type ExamLessonKind = (typeof EXAM_LESSON_KINDS)[number];
 
 /** The lessons that test something. The summary is read, so it counts as done but not as mastery. */
-export const PRACTICE_LESSON_KINDS = ["flashcards", "quiz", "true_false", "written"] as const;
+export const PRACTICE_LESSON_KINDS = ["tutor", "flashcards", "quiz", "true_false", "written"] as const;
+
+/*
+ * How much each lesson counts towards a topic's mastery. Flashcards are graded by the learner
+ * ("knew it" or not), so they count half: what the learner thinks they know should not weigh as
+ * much as what a question proved.
+ */
+export const LESSON_WEIGHT: Record<(typeof PRACTICE_LESSON_KINDS)[number], number> = {
+  tutor: 1,
+  flashcards: 0.5,
+  quiz: 1,
+  true_false: 1,
+  written: 1,
+};
+
+/*
+ * Spaced review: a passed lesson keeps its score for a few days, then fades a little each day
+ * until it is done again, so a topic learned weeks before the exam comes back for review before
+ * it, instead of counting as known on the day. A perfect lesson against an 85 % target is due
+ * again about a week later; a bare pass sooner. It never fades below 60 % of what was scored.
+ */
+export const REVIEW_GRACE_DAYS = 3;
+export const REVIEW_FADE_PER_DAY = 0.04;
+export const REVIEW_FLOOR = 0.6;
+
+export function fadedScore(score: number, completedAt: string, now: Date | null): number {
+  const value = clamp01(score);
+
+  if (!now) {
+    return value;
+  }
+
+  const days = (now.getTime() - new Date(completedAt).getTime()) / 86_400_000;
+
+  if (!Number.isFinite(days) || days <= REVIEW_GRACE_DAYS) {
+    return value;
+  }
+
+  return value * Math.max(REVIEW_FLOOR, 1 - REVIEW_FADE_PER_DAY * (days - REVIEW_GRACE_DAYS));
+}
 
 export type ExamGradingScale = "uni_5_10" | "school_1_5" | "percent";
 export type ExamFormat = "written" | "oral" | "both";
@@ -164,7 +203,7 @@ export type ModuleState = {
   lectureId: string;
   /** 0-based place on the path. */
   position: number;
-  /** 0..1, the average of the latest score of each practice lesson; untried lessons count 0. */
+  /** 0..1, the weighted average of each practice lesson's latest (faded) score; untried ones count 0. */
   mastery: number;
   /** Lessons tried at least once, out of `EXAM_LESSON_KINDS.length`. */
   lessonsDone: number;
@@ -175,11 +214,13 @@ export type ModuleState = {
   unlocked: boolean;
   /** Practice lessons to repeat until they reach the target, weakest first. Empty until learned. */
   review: ExamLessonKind[];
+  /** Of those, the ones that had passed and have only faded below it since (due for review). */
+  refresh: ExamLessonKind[];
   /** The lesson this module wants next: the first untried one, else the weakest to repeat. */
   nextKind: ExamLessonKind;
   /** Whether each lesson has been done, keyed by kind. */
   done: Record<ExamLessonKind, boolean>;
-  /** The latest score of each practice lesson, or null when it has not been tried. */
+  /** The latest score of each practice lesson as it stands today (faded), or null when untried. */
   latest: Record<ExamLessonKind, number | null>;
 };
 
@@ -215,20 +256,29 @@ function latestByKind(results: LessonResultLike[]) {
 /**
  * One module's progress against the exam's target (0..1). `proveSince` is set when a failed mock
  * found this module weak; its quiz and written answer then have to be passed again after it.
+ * `now` turns on spaced review: scores fade with the days since the lesson (see `fadedScore`).
  */
-export function moduleProgress(results: LessonResultLike[], target = 1, proveSince: string | null = null) {
+export function moduleProgress(
+  results: LessonResultLike[],
+  target = 1,
+  proveSince: string | null = null,
+  now: Date | null = null,
+) {
   const latest = latestByKind(results);
   const done = {} as Record<ExamLessonKind, boolean>;
   const scores = {} as Record<ExamLessonKind, number | null>;
+  const raw = {} as Record<ExamLessonKind, number | null>;
 
   for (const kind of EXAM_LESSON_KINDS) {
-    done[kind] = latest[kind] !== undefined;
-    scores[kind] = latest[kind]?.score ?? null;
+    const entry = latest[kind];
+    done[kind] = entry !== undefined;
+    raw[kind] = entry ? clamp01(entry.score) : null;
+    scores[kind] = entry ? fadedScore(entry.score, entry.at, now) : null;
   }
 
+  const totalWeight = PRACTICE_LESSON_KINDS.reduce((sum, kind) => sum + LESSON_WEIGHT[kind], 0);
   const mastery =
-    PRACTICE_LESSON_KINDS.reduce((sum, kind) => sum + clamp01(scores[kind] ?? 0), 0) /
-    PRACTICE_LESSON_KINDS.length;
+    PRACTICE_LESSON_KINDS.reduce((sum, kind) => sum + LESSON_WEIGHT[kind] * (scores[kind] ?? 0), 0) / totalWeight;
   const lessonsDone = EXAM_LESSON_KINDS.filter((kind) => done[kind]).length;
   const learned = lessonsDone === EXAM_LESSON_KINDS.length;
   const needsProof = (kind: ExamLessonKind) =>
@@ -240,6 +290,9 @@ export function moduleProgress(results: LessonResultLike[], target = 1, proveSin
         .filter((kind) => (scores[kind] ?? 0) < target - 1e-9 || needsProof(kind))
         .sort((left, right) => (scores[left] ?? 0) - (scores[right] ?? 0))
     : [];
+  const refresh = review.filter(
+    (kind) => !needsProof(kind) && (raw[kind] ?? 0) >= target - 1e-9 && (scores[kind] ?? 0) < target - 1e-9,
+  );
   const firstUntried = EXAM_LESSON_KINDS.find((kind) => !done[kind]);
   const weakest = [...PRACTICE_LESSON_KINDS].sort(
     (left, right) => (scores[left] ?? 0) - (scores[right] ?? 0),
@@ -251,6 +304,7 @@ export function moduleProgress(results: LessonResultLike[], target = 1, proveSin
     learned,
     mastered: learned && review.length === 0,
     review,
+    refresh,
     nextKind: firstUntried ?? review[0] ?? weakest,
     done,
     latest: scores,
@@ -267,6 +321,7 @@ export function examModuleStates(
   results: LessonResultLike[],
   target = 1,
   mock: MockOutcome | null = null,
+  now: Date | null = null,
 ): ModuleState[] {
   const byTopic = new Map<string, LessonResultLike[]>();
 
@@ -286,7 +341,7 @@ export function examModuleStates(
   modulesInOrder.forEach(({ topicId, lectureId }, position) => {
     const weakInMock =
       failedMock !== null && lectureId in failedMock.byLecture && failedMock.byLecture[lectureId] < target - 1e-9;
-    const progress = moduleProgress(byTopic.get(topicId) ?? [], target, weakInMock ? failedMock.at : null);
+    const progress = moduleProgress(byTopic.get(topicId) ?? [], target, weakInMock ? failedMock.at : null, now);
     const previous = states[position - 1];
     const unlocked = position === 0 || Boolean(previous?.learned) || progress.lessonsDone > 0;
 
@@ -674,6 +729,44 @@ export function pickWritten<T extends WrittenQuestionLike>(questions: readonly T
     })
     .slice(0, count)
     .map((entry) => entry.question);
+}
+
+/**
+ * The pool a repeat draws from: questions the learner has not been shown yet, and only as many
+ * seen ones as it takes to make up `count`, so each try of a lesson is new questions as far as the
+ * topic has them. When even that falls short the caller writes fresh ones (see `needsFreshItems`).
+ */
+export function preferUnseen<T extends { id: string }>(pool: readonly T[], seen: ReadonlySet<string>, count: number, seed: string): T[] {
+  const unseen = pool.filter((item) => !seen.has(item.id));
+
+  if (unseen.length >= count) {
+    return unseen;
+  }
+
+  return [...unseen, ...seededShuffle(pool.filter((item) => seen.has(item.id)), `${seed}:seen`).slice(0, count - unseen.length)];
+}
+
+/** Whether a repeat has run out of new questions and should have some written for it. */
+export function needsFreshItems(pool: readonly { id: string }[], seen: ReadonlySet<string>, count: number): boolean {
+  return seen.size > 0 && pool.filter((item) => !seen.has(item.id)).length < count;
+}
+
+/*
+ * The tutor lesson's marking: a step answered right at the first ask is worth a full point, right
+ * after the tutor explained what was missing half, partly right at best a quarter, wrong nothing.
+ */
+export type TutorVerdict = "correct" | "partial" | "wrong";
+
+export function tutorStepPoints(attempts: readonly TutorVerdict[]): number {
+  if (attempts[0] === "correct") {
+    return 1;
+  }
+
+  if (attempts.slice(1).includes("correct")) {
+    return 0.5;
+  }
+
+  return attempts.includes("partial") ? 0.25 : 0;
 }
 
 /* ---------------------------------------------------------------- mock exam */

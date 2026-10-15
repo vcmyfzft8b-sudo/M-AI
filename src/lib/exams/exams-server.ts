@@ -17,7 +17,9 @@ import {
   examStage,
   gradeForPercentage,
   mockQuestionCounts,
+  needsFreshItems,
   pickFlashcards,
+  preferUnseen,
   pickQuiz,
   pickWritten,
   seededShuffle,
@@ -39,12 +41,15 @@ import {
   planExpansionTopics,
   planNoteTopics,
   schoolLine,
+  writeFreshQuestions,
   writeTopicContent,
   writeMockQuestions,
+  type FreshTopicQuestions,
   type GeneratedTopicContent,
   type PlannedTopic,
   type TopicItemGroup,
 } from "@/lib/exams/exam-topics-server";
+import { planTutorLesson, type TutorStep } from "@/lib/exams/exam-tutor-server";
 import { markAnswerWithRetry } from "@/lib/practice-test";
 import {
   isBlankAnswer,
@@ -222,7 +227,7 @@ export async function listExamsForUser(
       lectureIds,
       topics.filter((topic) => topic.exam_id === exam.id),
     );
-    const states = examModuleStates(ordered, examResults, exam.target_mastery / 100);
+    const states = examModuleStates(ordered, examResults, exam.target_mastery / 100, null, now);
     const plan = planFor(exam, states, examResults, today);
 
     return {
@@ -428,7 +433,7 @@ export async function getExamDetail(
   const mockOutcome = mockOutcomeFrom(mockRow);
   const target = exam.target_mastery / 100;
   const ordered = orderModules(lectureIds, topics);
-  const states = examModuleStates(ordered, results, target, mockOutcome);
+  const states = examModuleStates(ordered, results, target, mockOutcome, now);
   const modules = states.map((state, index) => {
     const lecture = lectures.get(state.lectureId);
     const topic = ordered[index].topic;
@@ -882,6 +887,7 @@ export async function recordLessonResult(
     correct: number;
     total: number;
     difficulty: number | null;
+    itemIds?: string[];
   },
 ) {
   const topic = await readOwnedTopic(supabase, userId, input.examId, input.topicId);
@@ -901,6 +907,7 @@ export async function recordLessonResult(
     total: input.total,
     score,
     difficulty: input.difficulty,
+    item_ids: [...new Set(input.itemIds ?? [])].slice(0, 40),
   } as never);
 
   if (error) {
@@ -942,15 +949,22 @@ export type LessonPayload =
   | {
       kind: "written";
       questions: { id: string; prompt: string }[];
-      /** Written for a topic outside the material: graded through the exam, not the note's test. */
+      /** Written by the AI (for the topic, or fresh for a repeat): graded through the exam, not the note's test. */
       generated: boolean;
+    }
+  | {
+      kind: "tutor";
+      /** The note whose tutor session the lesson speaks through (talking time is counted there). */
+      lectureId: string;
+      topicTitle: string;
+      steps: TutorStep[];
     };
 
 export type LessonLoad =
   | { status: "ready"; lesson: LessonPayload }
   | { status: "generating" | "missing" | "failed"; generator: LessonGenerator };
 
-const GENERATOR_FOR: Record<Exclude<ExamLessonKind, "summary">, LessonGenerator> = {
+const GENERATOR_FOR: Record<Exclude<ExamLessonKind, "summary" | "tutor">, LessonGenerator> = {
   flashcards: "study",
   quiz: "quiz",
   true_false: "quiz",
@@ -1004,7 +1018,7 @@ function quizRows(rows: QuizRow[]) {
   }));
 }
 
-const ITEM_GROUP: Record<Exclude<ExamLessonKind, "summary">, TopicItemGroup> = {
+const ITEM_GROUP: Record<Exclude<ExamLessonKind, "summary" | "tutor">, TopicItemGroup> = {
   flashcards: "flashcards",
   quiz: "quiz",
   true_false: "quiz",
@@ -1068,11 +1082,123 @@ async function ensureWrittenTopic(supabase: ExamSupabase, userId: string, topic:
   return updated;
 }
 
+/*
+ * Questions the AI wrote, for a topic outside the material (`gen`) or fresh for a repeat (`x`),
+ * carry ids that say where to find them again: `gen:<topic>:q3`, `x:<topic>:w0`. The lessons, the
+ * written-answer grader and the mock exam all use these, so a question practised in a lesson is
+ * recognised as practised when the mock is drawn.
+ */
+type ContentKind = "q" | "w" | "f";
+
+function contentId(origin: "gen" | "x", topicId: string, kind: ContentKind, index: number) {
+  return `${origin}:${topicId}:${kind}${index}`;
+}
+
+const CONTENT_ID = /^(gen|x):([0-9a-f-]{36}):([qwf])(\d{1,3})$/;
+
+function parseContentId(id: string) {
+  const match = CONTENT_ID.exec(id);
+  return match ? { origin: match[1] as "gen" | "x", topicId: match[2], kind: match[3] as ContentKind, index: Number(match[4]) } : null;
+}
+
+type PoolQuestion = {
+  id: string;
+  prompt: string;
+  options: string[];
+  correct_option_idx: number;
+  explanation: string;
+};
+
+function contentQuiz(origin: "gen" | "x", topicId: string, quiz: GeneratedTopicContent["quiz"] | undefined): PoolQuestion[] {
+  return (quiz ?? []).map((question, index) => ({
+    id: contentId(origin, topicId, "q", index),
+    prompt: question.prompt,
+    options: question.options,
+    correct_option_idx: question.correctIndex,
+    explanation: question.explanation,
+  }));
+}
+
+function contentWritten(origin: "gen" | "x", topicId: string, written: GeneratedTopicContent["written"] | undefined) {
+  return (written ?? []).map((question, index) => ({
+    id: contentId(origin, topicId, "w", index),
+    prompt: question.prompt,
+    importance: null as number | null,
+  }));
+}
+
+/* The lessons that share a pool: a quiz question seen in true/false counts as seen for the quiz. */
+const SEEN_GROUP: Record<ExamLessonKind, ExamLessonKind[]> = {
+  summary: ["summary"],
+  tutor: ["tutor"],
+  flashcards: ["flashcards"],
+  quiz: ["quiz", "true_false"],
+  true_false: ["quiz", "true_false"],
+  written: ["written"],
+};
+
+/* How many fresh questions a topic gets when it runs out, and how many it keeps in all. */
+const FRESH_BATCH = { quiz: 8, written: 2 } as const;
+const FRESH_KEEP = { quiz: 64, written: 16 } as const;
+
+async function readNotesMarkdown(supabase: ExamSupabase, lectureId: string) {
+  const { data } = await supabase.from("lecture_artifacts").select("structured_notes_md").eq("lecture_id", lectureId).maybeSingle();
+  return (data as { structured_notes_md: string | null } | null)?.structured_notes_md ?? "";
+}
+
+/**
+ * Writes fresh questions for a topic whose pool the learner has seen through, keeps them on the
+ * topic and returns the topic's fresh questions so far. A failure leaves the pool as it was: the
+ * repeat then reuses seen questions, which beats no lesson.
+ */
+async function topUpFresh(
+  supabase: ExamSupabase,
+  userId: string,
+  exam: ExamRow,
+  topic: ExamTopicRow,
+  kind: "quiz" | "written",
+  avoid: string[],
+): Promise<FreshTopicQuestions> {
+  const current = (topic.extra as unknown as FreshTopicQuestions | null) ?? { quiz: [], written: [] };
+
+  try {
+    const fresh = await writeFreshQuestions({
+      userId,
+      lectureId: topic.lecture_id,
+      topicTitle: topic.title,
+      summary: topic.summary,
+      keyPoints: keyPointsOf(topic),
+      notesMarkdown: await readNotesMarkdown(supabase, topic.lecture_id),
+      school: schoolLine(exam.school_level, exam.school_year),
+      quiz: kind === "quiz" ? FRESH_BATCH.quiz : 0,
+      written: kind === "written" ? FRESH_BATCH.written : 0,
+      avoid,
+    });
+    const next = {
+      quiz: [...(current.quiz ?? []), ...fresh.quiz].slice(-FRESH_KEEP.quiz),
+      written: [...(current.written ?? []), ...fresh.written].slice(-FRESH_KEEP.written),
+    };
+    const { error } = await supabase
+      .from("exam_topics")
+      .update({ extra: next } as never)
+      .eq("id", topic.id)
+      .eq("user_id", userId);
+
+    return error ? current : next;
+  } catch {
+    return current;
+  }
+}
+
 /**
  * One lesson of one topic. A topic from the material draws on the note's own flashcards, quiz and
  * practice questions sorted into it (topped up from the rest of the note when it has too few); a
  * topic outside the material uses the lessons written for it. When the note has not had that kind
  * of material generated yet, the answer says which generator to start.
+ *
+ * Each try draws questions the learner has not been shown in this topic yet; once the topic has
+ * none left, fresh ones are written for it, so a repeat is new practice rather than the same
+ * questions recognised. The tutor lesson is planned anew each time from the topic and its note.
  */
 export async function loadLesson(
   supabase: ExamSupabase,
@@ -1088,23 +1214,22 @@ export async function loadLesson(
     return null;
   }
 
-  /*
-   * Each try of a lesson draws its own questions, so repeating a lesson until it reaches the
-   * target is new practice, not the same five questions again.
-   */
-  const { count: attempts, error: attemptsError } = await supabase
+  const { data: priorRows, error: priorError } = await supabase
     .from("exam_lesson_results")
-    .select("id", { count: "exact", head: true })
+    .select("lesson_kind, item_ids")
     .eq("user_id", userId)
     .eq("exam_id", input.examId)
     .eq("topic_id", input.topicId)
-    .eq("lesson_kind", input.kind);
+    .in("lesson_kind", SEEN_GROUP[input.kind]);
 
-  if (attemptsError) {
-    throw attemptsError;
+  if (priorError) {
+    throw priorError;
   }
 
-  const seed = `${input.examId}:${input.topicId}:${input.kind}:${attempts ?? 0}`;
+  const prior = (priorRows ?? []) as Pick<ExamLessonResultRow, "lesson_kind" | "item_ids">[];
+  const attempts = prior.filter((row) => row.lesson_kind === input.kind).length;
+  const seen = new Set(prior.flatMap((row) => row.item_ids ?? []));
+  const seed = `${input.examId}:${input.topicId}:${input.kind}:${attempts}`;
   const topic = await ensureWrittenTopic(supabase, userId, found, exam);
   const generated = topic.source === "material" ? null : (topic.generated as unknown as GeneratedTopicContent | null);
   const lectureId = topic.lecture_id;
@@ -1129,55 +1254,42 @@ export async function loadLesson(
     };
   }
 
-  if (generated) {
-    if (input.kind === "flashcards") {
-      const cards = generated.flashcards.map((card, index) => ({ id: `gen-${index}`, ...card }));
-      return {
-        status: "ready",
-        lesson: {
-          kind: "flashcards",
-          cards: seededShuffle(cards, seed).slice(0, LESSON_SIZE.flashcards),
-          generated: true,
-        },
-      };
-    }
+  if (input.kind === "tutor") {
+    const steps = await planTutorLesson({
+      userId,
+      lectureId,
+      topicTitle: topic.title,
+      summary: topic.summary,
+      keyPoints: keyPointsOf(topic),
+      notesMarkdown: await readNotesMarkdown(supabase, lectureId),
+      school: schoolLine(exam.school_level, exam.school_year),
+      avoid: [],
+    }).catch(() => []);
 
-    if (input.kind === "quiz" || input.kind === "true_false") {
-      const questions = generated.quiz.map((question, index) => ({
-        id: `gen-${index}`,
-        prompt: question.prompt,
-        options: question.options,
-        correct_option_idx: question.correctIndex,
-        explanation: question.explanation,
-      }));
-      const quiz = pickQuiz(questions, LESSON_SIZE.quiz, seed);
+    return steps.length > 0
+      ? { status: "ready", lesson: { kind: "tutor", lectureId, topicTitle: topic.title, steps } }
+      : { status: "failed", generator: "study" };
+  }
 
-      return input.kind === "quiz"
-        ? { status: "ready", lesson: { kind: "quiz", questions: quiz } }
-        : {
-            status: "ready",
-            lesson: {
-              kind: "true_false",
-              statements: buildTrueFalse(questions, LESSON_SIZE.true_false, seed, new Set(quiz.map((question) => question.id))),
-            },
-          };
-    }
+  if (input.kind === "flashcards" && generated) {
+    const cards = generated.flashcards.map((card, index) => ({ id: contentId("gen", topic.id, "f", index), ...card }));
 
     return {
       status: "ready",
       lesson: {
-        kind: "written",
-        questions: seededShuffle(
-          generated.written.map((question, index) => ({ id: `gen-${index}`, prompt: question.prompt })),
-          seed,
-        ).slice(0, LESSON_SIZE.written),
+        kind: "flashcards",
+        cards: seededShuffle(preferUnseen(cards, seen, LESSON_SIZE.flashcards, seed), seed).slice(0, LESSON_SIZE.flashcards),
         generated: true,
       },
     };
   }
 
-  await ensureTopicItems(supabase, userId, { examId: input.examId, lectureId, group: ITEM_GROUP[input.kind] });
-  const assigned = (await readOwnedTopic(supabase, userId, input.examId, input.topicId)) ?? topic;
+  if (!generated) {
+    await ensureTopicItems(supabase, userId, { examId: input.examId, lectureId, group: ITEM_GROUP[input.kind] });
+  }
+
+  const assigned = generated ? topic : ((await readOwnedTopic(supabase, userId, input.examId, input.topicId)) ?? topic);
+  const extra = (assigned.extra as unknown as FreshTopicQuestions | null) ?? null;
 
   if (input.kind === "flashcards") {
     const { data, error } = await supabase
@@ -1197,6 +1309,7 @@ export async function loadLesson(
       return assetState(supabase, lectureId, GENERATOR_FOR.flashcards);
     }
 
+    // Flashcards are memorised, so they come back by the note's own spaced repetition, not by novelty.
     const cards = topUp(all, assigned.flashcard_ids, TOPIC_POOL_MIN.flashcards, seed);
     const { data: progressRows } = await supabase
       .from("flashcard_progress")
@@ -1230,68 +1343,85 @@ export async function loadLesson(
   }
 
   if (input.kind === "quiz" || input.kind === "true_false") {
+    let base: PoolQuestion[];
+
+    if (generated) {
+      base = contentQuiz("gen", topic.id, generated.quiz);
+    } else {
+      const { data, error } = await supabase
+        .from("quiz_questions")
+        .select("id, prompt, options_json, correct_option_idx, explanation")
+        .eq("lecture_id", lectureId)
+        .order("idx", { ascending: true })
+        .limit(200);
+
+      if (error) {
+        throw error;
+      }
+
+      const all = quizRows((data ?? []) as QuizRow[]);
+
+      if (all.length === 0) {
+        return assetState(supabase, lectureId, GENERATOR_FOR[input.kind]);
+      }
+
+      base = topUp(all, assigned.quiz_ids, TOPIC_POOL_MIN.quiz, seed);
+    }
+
+    const size = LESSON_SIZE[input.kind];
+    let pool = [...base, ...contentQuiz("x", topic.id, extra?.quiz)];
+
+    if (needsFreshItems(pool, seen, size)) {
+      const fresh = await topUpFresh(supabase, userId, exam, assigned, "quiz", pool.map((question) => question.prompt));
+      pool = [...base, ...contentQuiz("x", topic.id, fresh.quiz)];
+    }
+
+    const questions = preferUnseen(pool, seen, size, seed);
+
+    return input.kind === "quiz"
+      ? { status: "ready", lesson: { kind: "quiz", questions: pickQuiz(questions, size, seed) } }
+      : { status: "ready", lesson: { kind: "true_false", statements: buildTrueFalse(questions, size, seed) } };
+  }
+
+  let base: { id: string; prompt: string; importance: number | null }[];
+
+  if (generated) {
+    base = contentWritten("gen", topic.id, generated.written);
+  } else {
     const { data, error } = await supabase
-      .from("quiz_questions")
-      .select("id, prompt, options_json, correct_option_idx, explanation")
+      .from("practice_test_questions")
+      .select("id, prompt, importance")
       .eq("lecture_id", lectureId)
-      .order("idx", { ascending: true })
-      .limit(200);
+      .limit(400);
 
     if (error) {
       throw error;
     }
 
-    const all = quizRows((data ?? []) as QuizRow[]);
+    const all = (data ?? []) as { id: string; prompt: string; importance: number | null }[];
 
     if (all.length === 0) {
-      return assetState(supabase, lectureId, GENERATOR_FOR[input.kind]);
+      return assetState(supabase, lectureId, GENERATOR_FOR.written);
     }
 
-    const questions = topUp(all, assigned.quiz_ids, TOPIC_POOL_MIN.quiz, seed);
-    const quiz = pickQuiz(questions, LESSON_SIZE.quiz, seed);
-
-    if (input.kind === "quiz") {
-      return { status: "ready", lesson: { kind: "quiz", questions: quiz } };
-    }
-
-    return {
-      status: "ready",
-      lesson: {
-        kind: "true_false",
-        statements: buildTrueFalse(
-          questions,
-          LESSON_SIZE.true_false,
-          seed,
-          new Set(quiz.map((question) => question.id)),
-        ),
-      },
-    };
+    base = topUp(all, assigned.written_ids, TOPIC_POOL_MIN.written, seed);
   }
 
-  const { data, error } = await supabase
-    .from("practice_test_questions")
-    .select("id, prompt, importance")
-    .eq("lecture_id", lectureId)
-    .limit(400);
+  let pool = [...base, ...contentWritten("x", topic.id, extra?.written)];
 
-  if (error) {
-    throw error;
+  if (needsFreshItems(pool, seen, LESSON_SIZE.written)) {
+    const fresh = await topUpFresh(supabase, userId, exam, assigned, "written", pool.map((question) => question.prompt));
+    pool = [...base, ...contentWritten("x", topic.id, fresh.written)];
   }
 
-  const all = (data ?? []) as { id: string; prompt: string; importance: number | null }[];
-
-  if (all.length === 0) {
-    return assetState(supabase, lectureId, GENERATOR_FOR.written);
-  }
+  const [question] = pickWritten(preferUnseen(pool, seen, LESSON_SIZE.written, seed), LESSON_SIZE.written, seed);
 
   return {
     status: "ready",
     lesson: {
       kind: "written",
-      questions: pickWritten(topUp(all, assigned.written_ids, TOPIC_POOL_MIN.written, seed), LESSON_SIZE.written, seed).map(
-        (question) => ({ id: question.id, prompt: question.prompt }),
-      ),
-      generated: false,
+      questions: question ? [{ id: question.id, prompt: question.prompt }] : [],
+      generated: Boolean(question && parseContentId(question.id)),
     },
   };
 }
@@ -1303,9 +1433,12 @@ export async function gradeTopicWritten(
   input: { examId: string; topicId: string; questionId: string; typedAnswer: string; declaredUnknown: boolean },
 ) {
   const topic = await readOwnedTopic(supabase, userId, input.examId, input.topicId);
-  const generated = topic?.generated as unknown as GeneratedTopicContent | null;
-  const index = Number(input.questionId.replace(/^gen-/, ""));
-  const question = generated?.written[index];
+  const ref = parseContentId(input.questionId);
+  const content =
+    ref && topic && ref.topicId === topic.id && ref.kind === "w"
+      ? ((ref.origin === "gen" ? topic.generated : topic.extra) as unknown as FreshTopicQuestions | null)
+      : null;
+  const question = ref ? content?.written?.[ref.index] : undefined;
 
   if (!question) {
     return null;
@@ -1403,7 +1536,7 @@ export async function startMockExam(
     readResults(supabase, userId, [input.examId]),
     readTopicLines(supabase, userId, [input.examId]),
   ]);
-  const states = examModuleStates(orderModules(lectureIds, topics), results);
+  const states = examModuleStates(orderModules(lectureIds, topics), results, 1, null, now);
   // A note's mastery is the average of its topics'; the mock leans on the weakest notes.
   const noteMastery = (lectureId: string) => {
     const own = states.filter((state) => state.lectureId === lectureId);
@@ -1482,53 +1615,68 @@ export async function startMockExam(
    * only if the time the learner set is still not filled, questions written for this mock from
    * the notes, so a 45-minute mock really is 45 minutes of questions.
    */
-  const { data: generatedRows, error: generatedError } = await supabase
+  const { data: topicRows, error: topicError } = await supabase
     .from("exam_topics")
-    .select("id, lecture_id, generated")
+    .select("id, lecture_id, generated, extra")
     .eq("exam_id", input.examId)
-    .eq("user_id", userId)
-    .not("generated", "is", null);
+    .eq("user_id", userId);
 
-  if (generatedError) {
-    throw generatedError;
+  if (topicError) {
+    throw topicError;
   }
 
-  for (const topic of (generatedRows ?? []) as Pick<ExamTopicRow, "id" | "lecture_id" | "generated">[]) {
-    const content = topic.generated as unknown as GeneratedTopicContent;
+  for (const topic of (topicRows ?? []) as Pick<ExamTopicRow, "id" | "lecture_id" | "generated" | "extra">[]) {
+    for (const origin of ["gen", "x"] as const) {
+      const content = (origin === "gen" ? topic.generated : topic.extra) as unknown as FreshTopicQuestions | null;
 
-    choicePools.get(topic.lecture_id)?.push(
-      ...(content.quiz ?? []).map((question, index) => {
-        const shuffled = shuffleQuestion(
-          {
-            id: `gen:${topic.id}:q${index}`,
-            prompt: question.prompt,
-            options: question.options,
-            correct_option_idx: question.correctIndex,
-            explanation: question.explanation,
-          },
-          seed,
-        );
+      if (!content) {
+        continue;
+      }
 
-        return {
-          id: shuffled.id,
+      choicePools.get(topic.lecture_id)?.push(
+        ...contentQuiz(origin, topic.id, content.quiz).map((question) => {
+          const shuffled = shuffleQuestion(question, seed);
+
+          return {
+            id: shuffled.id,
+            lectureId: topic.lecture_id,
+            kind: "choice" as const,
+            prompt: shuffled.prompt,
+            options: shuffled.options,
+            correctIndex: shuffled.correctIndex,
+            explanation: shuffled.explanation,
+          };
+        }),
+      );
+      writtenPools.get(topic.lecture_id)?.push(
+        ...(content.written ?? []).map((question, index) => ({
+          id: contentId(origin, topic.id, "w", index),
           lectureId: topic.lecture_id,
-          kind: "choice" as const,
-          prompt: shuffled.prompt,
-          options: shuffled.options,
-          correctIndex: shuffled.correctIndex,
-          explanation: shuffled.explanation,
-        };
-      }),
-    );
-    writtenPools.get(topic.lecture_id)?.push(
-      ...(content.written ?? []).map((question, index) => ({
-        id: `gen:${topic.id}:w${index}`,
-        lectureId: topic.lecture_id,
-        kind: "written" as const,
-        prompt: question.prompt,
-        answerGuide: question.answerGuide,
-      })),
-    );
+          kind: "written" as const,
+          prompt: question.prompt,
+          answerGuide: question.answerGuide,
+        })),
+      );
+    }
+  }
+
+  /*
+   * A mock tests what the learner can do with questions they have not practised: whatever they
+   * were shown in a lesson is held back, and the time is filled with unseen questions, written for
+   * this mock where the banks run short. The practised ones come back only if that writing fails.
+   */
+  const practised = new Set(results.flatMap((row) => row.item_ids ?? []));
+  const heldBack = new Map<Map<string, MockQuestion[]>, Map<string, MockQuestion[]>>();
+
+  for (const pools of [choicePools, writtenPools]) {
+    const held = new Map<string, MockQuestion[]>();
+
+    for (const [lectureId, pool] of pools) {
+      held.set(lectureId, pool.filter((question) => practised.has(question.id)));
+      pools.set(lectureId, pool.filter((question) => !practised.has(question.id)));
+    }
+
+    heldBack.set(pools, held);
   }
 
   const poolSize = (pools: Map<string, MockQuestion[]>) =>
@@ -1585,6 +1733,12 @@ export async function startMockExam(
         });
       }
     });
+  }
+
+  for (const [pools, held] of heldBack) {
+    for (const [lectureId, questions] of held) {
+      pools.get(lectureId)?.push(...questions);
+    }
   }
 
   /*

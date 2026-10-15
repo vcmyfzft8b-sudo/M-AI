@@ -90,6 +90,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "info",
   "ink_highlighter",
   "ios_share",
+  "keyboard",
   "language",
   "lightbulb",
   "link",

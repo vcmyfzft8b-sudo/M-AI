@@ -27259,7 +27259,8 @@ a.memo-exam-station-go {
 
 .memo-exam-lesson-steps {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
   gap: 0.3rem;
 }
 
@@ -27684,6 +27685,56 @@ a.memo-exam-station-go {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+/*
+ * The tutor lesson, on the oral exam's stage: what the tutor says is written out under the sphere,
+ * quieter once it has been said; in writing (no voice) it stays the thing being read, under Memo.
+ * An answer can always be typed.
+ */
+.memo-exam-tutor-line {
+  max-width: 32rem;
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.memo-exam-tutor:not(.in-writing).phase-listening .memo-exam-tutor-line,
+.memo-exam-tutor:not(.in-writing).phase-thinking .memo-exam-tutor-line {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.memo-exam-tutor-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.memo-exam-tutor-type {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: 0.5rem;
+  max-width: 32rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.memo-exam-tutor-type .memo-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.memo-exam-tutor-type .memo-close-button {
+  flex: 0 0 auto;
+}
+
+.memo-exam-tutor-type .memo-close-button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 /*

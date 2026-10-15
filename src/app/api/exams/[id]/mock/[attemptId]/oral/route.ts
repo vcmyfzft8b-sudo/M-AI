@@ -15,6 +15,7 @@ const turnSchema = z.object({
   questionIndex: z.number().int().min(0).max(40),
   answer: createSanitizedStringSchema({ multiline: true, trim: true, maxLength: 8000 }),
   alreadyFollowedUp: z.boolean(),
+  language: z.string().regex(/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/),
 });
 
 /** One examiner reply in an oral mock: a follow-up question, or a line that moves on. */
@@ -65,6 +66,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       answer: parsed.data.answer,
       alreadyFollowedUp: parsed.data.alreadyFollowedUp,
       isLast: parsed.data.questionIndex >= questions.length - 1,
+      language: parsed.data.language,
     });
 
     return NextResponse.json(turn);

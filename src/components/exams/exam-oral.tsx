@@ -74,6 +74,8 @@ export function ExamOral({
   const startedAtRef = useRef(0);
   const closedRef = useRef(false);
   const renewingRef = useRef(false);
+  /* The session's speech language: the examiner speaks it, and the recogniser listens for it. */
+  const languageRef = useRef("sl");
 
   const setPhaseNow = useCallback((next: Phase) => {
     phaseRef.current = next;
@@ -217,6 +219,7 @@ export function ExamOral({
           questionIndex: current.index,
           answer: answersRef.current[question.id] ?? "",
           alreadyFollowedUp: current.followedUp || unknown,
+          language: languageRef.current,
         }),
       }).catch(() => null);
       const turn = response?.ok ? ((await response.json()) as { speech: string; followUp: boolean }) : null;
@@ -252,6 +255,8 @@ export function ExamOral({
   /* Starting: the microphone first, then the talking time and keys, then the first question. */
   useEffect(() => {
     let cancelled = false;
+    // A remount (React's development double mount, or a fast remount) starts a fresh session.
+    closedRef.current = false;
 
     async function start() {
       if (!hasWebAudio()) {
@@ -270,6 +275,7 @@ export function ExamOral({
 
       try {
         const session = await openSession();
+        languageRef.current = session.language;
 
         if (cancelled) {
           microphone.getTracks().forEach((track) => track.stop());
@@ -337,6 +343,16 @@ export function ExamOral({
     // Started once for the life of the exam.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /*
+   * Closing the tab or locking the phone does not unmount anything, so the talking time used is
+   * reported on pagehide as well, as the tutor does. Unreported time is charged in full later.
+   */
+  useEffect(() => {
+    const report = () => settle(true);
+    window.addEventListener("pagehide", report);
+    return () => window.removeEventListener("pagehide", report);
+  }, [settle]);
 
   /* The clock, and renewing the keys before the slice of talking time they were minted for runs out. */
   useEffect(() => {

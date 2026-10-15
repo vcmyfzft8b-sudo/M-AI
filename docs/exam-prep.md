@@ -10,11 +10,19 @@ study path. It follows Astra AI's exam-prep flow, drawn in Memo's own components
   the card continues the nearest one. The four note sources follow it, unchanged.
 - **Desktop rail:** "Izpiti" → `/app/exams`.
 - Routes: `/app/exams` (list), `/app/exams/new` (setup), `/app/exams/[id]` (dashboard),
-  `/app/exams/[id]/lesson?lecture=&kind=` (one lesson), `/app/exams/[id]/mock` (mock exam).
+  `/app/exams/[id]/lesson?topic=&kind=` (one lesson), `/app/exams/[id]/mock` (mock exam).
+
+What Astra has and how it is known: the research behind this feature read Astra's App Store pages,
+astra-ai.co and a paid screen teardown (screensdesign.com); nobody here has used the Croatian or
+Slovenian app itself. The screens and the flow follow that. Astra does not publish how it scores
+mastery or decides a student is ready, so the learn/practise/prove loop below is ours.
 
 ## The model
 
-Each note in an exam is a **module**. A module is a fixed chain of five lessons, in Astra's order:
+As in Astra, the path is made of **topics**: when the exam is set up, each note is split into two to
+six topics (`planNoteTopics`, one model call per note), the learner keeps, drops, renames or adds
+topics on the review, and each kept topic is a **module**. A module is a fixed chain of five lessons,
+in Astra's order:
 summary → flashcards → quiz → true/false → one written answer. A module is unlocked when it is the
 first one, when the module before it has been learned, or when the learner has already started it
 (a locked module offers a test-out quiz). Mastery is the average of the latest score of the four
@@ -45,6 +53,8 @@ All of that arithmetic, plus the daily goal, the streak, grade mapping and how
 material is picked, is in `src/lib/exams/exam-model.ts`. It is pure and tested
 (`tests/exam-model.test.mjs`). Put new rules there, not in a component.
 
+- **Modules are topics** (`examModuleStates` takes `{ topicId, lectureId }` pairs and lesson results
+  carry `topic_id`); access, grading and the mock exam still go by the topic's note.
 - **Days are Ljubljana days**, as everywhere else in the product.
 - **The daily goal** spreads the untried lessons over the days left, but is never less than the
   learner's daily minutes buy (6 minutes a lesson). It is computed against what was left at the
@@ -57,8 +67,18 @@ material is picked, is in `src/lib/exams/exam-model.ts`. It is pure and tested
 `src/components/exams/exam-setup.tsx` is one screen per question, laid out like the app onboarding:
 a back (or close) button beside the progress bar, Memo saying the question in a typed-out bubble,
 one coral button at the bottom, everything centred and fitting one phone screen. The steps are
-intro → material → subject → date (a bare month calendar) → a motivating summary (days, modules,
-lessons) → target % → daily minutes → "building your path" (auto-advances) → review → create.
+intro → material → **AI may add topics** (Astra's switch; off and recommended, with Astra's "not
+recommended" warning when on) → subject → date (a bare month calendar) → a motivating summary →
+target % (a gauge dragged by hand) → **school and year** (onboarding's options, starting from the
+learner's onboarding answer) → daily minutes → "Creating your study path" → review → create.
+
+**The study path is planned in the background** (`POST /api/exams/plan`) as soon as the material and
+the switch are settled, the way Astra reviews the uploads while the learner answers the rest; the
+building screen only waits for it. The **review** is Astra's topic checklist, one group per note:
+untick to leave a topic out, the pencil to rename it, "Dodaj temo" to add one's own. Nothing is
+stored until "Start"; `createExam` stores the topics as the learner left them. A note that was still
+being made at setup has no topics yet; the exam screen plans them (`POST /api/exams/[id]/topics`)
+once it is ready.
 
 **Material leads with new uploads.** The primary card opens the normal note-source modal (document
 or photos, recording, audio file, link) on top of the setup; `NoteSourceModal`'s `onCreated` hands
@@ -78,26 +98,54 @@ and its heading offers "Preskoči" (the test-out quiz). The mock exam (🏆) and
 end the path. The geometry is `src/lib/exams/exam-path.ts` (tested in `tests/exam-path.test.mjs`);
 keep its row height in step with `.memo-exam-station` in `redesign.css`.
 
-## Nothing is generated for an exam
+## Where a topic's lessons come from
 
-Lessons are assembled when opened from the material the note already has: `flashcards`,
-`quiz_questions` and `practice_test_questions`. True/false statements are made from quiz questions
-the quiz lesson did not use. If a note has not had that material generated yet, the lesson route
+A **material topic** (`source = 'material'`) teaches from what the note already has: `flashcards`,
+`quiz_questions` and `practice_test_questions`, sorted into the note's topics the first time a
+lesson of that kind is opened (`ensureTopicItems`, one cheap model call per note and kind; the ids
+land on `exam_topics`, and a regenerated note is sorted again). A topic with too few items is topped
+up from the rest of its note. Its summary lesson is the topic's own summary and key points, and
+"Poslušaj" plays it (`POST /api/exams/[id]/topics/[topicId]/speech`: spoken once per voice into
+storage, then a signed link). True/false statements are made from quiz questions the quiz lesson
+did not use.
+
+A topic the learner **added**, or one the **AI added** (only with the switch on, at most two, things
+an exam on the subject usually asks that the material leaves out), has nothing to draw on: its
+summary, cards, quiz and two written questions are written for it the first time one of its lessons
+opens (`writeTopicContent`), grounded on the note where it says anything. Its written answers are
+marked through `POST /api/exams/[id]/written`. If a note has not had that material generated yet, the lesson route
 says which generator to start, and the client starts it through the note's own route
 (`POST /api/lectures/[id]/study|quiz|practice-test`) and polls. Written answers are marked by the
 practice-test grader through `/api/lectures/[id]/practice-test/check`, so they cost exactly what
 the palace's written questions cost.
 
-The **mock exam** draws multiple-choice and written questions across the exam's notes, weakest
-module first, snapshots them in `exam_mock_attempts` (so a rebuilt question bank cannot rewrite a
-past result) and grades the written answers in parallel with `markAnswerWithRetry`. It is the one
-paid-only part: setup, path, lessons and readiness follow the notes' own access (a free account can
-prep from its free note).
+The **mock exam** ("Generalka") is written or oral, as in Astra. Its length is set on the same gauge
+(written 10–120 min, oral 5–30 min, in fives). The written one draws multiple-choice and written
+questions across the exam's notes, weakest note first, snapshots them in `exam_mock_attempts` (so a
+rebuilt question bank cannot rewrite a past result) and grades the written answers in parallel with
+`markAnswerWithRetry`.
+
+The **oral** one (`src/components/exams/exam-oral.tsx`) is a voice examiner built on the tutor's
+speech: the same session route, Soniox keys, recogniser, speech output, sphere and talking-time
+allowance (counted on one of the exam's notes). The learner picks the examiner's manner (strict,
+recommended; friendly; encouraging) and a voice, reads Astra's instructions and presses "Pripravljen
+sem". The examiner asks each question (the microphone is muted while it speaks), listens, and after
+each answer either asks one follow-up about what was missing or moves on
+(`POST /mock/[attemptId]/oral`, `examinerTurn`); it never says whether an answer was right. Oral
+questions are all open: the notes' written questions, then quiz questions asked openly and marked
+against their right answer. The transcribed answers are graded like a written mock.
+
+Results show the grade, the time spent, the review (strengths, weak points, a recommendation) and
+the answers; "Ponovi generalko" retries and "Nadaljuj" returns to the path. The mock exam is the
+one paid-only part: setup, path, lessons and readiness follow the notes' own access (a free account
+can prep from its free note).
 
 ## Tables (`supabase/migrations/0062_exam_prep.sql`)
 
-`exams`, `exam_modules`, `exam_lesson_results`, `exam_mock_attempts`. All four are owner-only by RLS
-and every route uses the client that verified the learner (`getRouteUser`).
+`exams`, `exam_modules`, `exam_topics`, `exam_lesson_results`, `exam_mock_attempts`. All are
+owner-only by RLS and every route uses the client that verified the learner (`getRouteUser`). The
+migration was first written as 0061 and applied to staging only; PR #579 claimed 0061 too, so it
+moved to 0062 (staging's 0061 record was reverted and its tables dropped first).
 
 ## Memo, animated
 
@@ -115,7 +163,8 @@ lockup crosses it now and then. The landing, paywall and onboarding keep the sti
 
 ## Not built yet
 
-Astra has these and the design (`claude.ai` artifact "Memo Izpiti", v2) shows them; they are not in
-this version: the oral mock exam, focus mode (iOS Screen Time), classrooms and the invite step,
-badges, daily push reminders, and the "AI may add topics" switch. The landing page shows the "Novo" label but
-not yet the exam-prep card or a feature-list entry.
+Astra has these and they are deliberately not built (owner's decision, 2026-10-15): focus mode (iOS
+Screen Time), classrooms and shared or public exam preps, the "+2 grades or refund" guarantee, and
+real past matura papers. Nor are Astra's date strip, quick date buttons and Modules/Path/Plan tabs:
+the owner asked for the simpler screens. The landing page shows the "Novo" label but not yet the
+exam-prep card or a feature-list entry.

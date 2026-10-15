@@ -43,11 +43,12 @@ export default async function ExamMockPage({ params }: { params: Promise<{ id: s
     <ExamMock
       examId={detail.exam.id}
       examTitle={detail.exam.title}
-      moduleCount={detail.modules.length}
+      // The mock draws from the exam's notes, so it counts and names notes, not topics.
+      moduleCount={new Set(detail.modules.map((module) => module.lectureId)).size}
       passPercentage={detail.exam.pass_percentage}
       hasPaidAccess={Boolean(appState?.hasPaidAccess)}
       moduleTitles={Object.fromEntries(
-        detail.modules.map((module) => [module.lectureId, module.title?.trim() || t("note.untitled")]),
+        detail.modules.map((module) => [module.lectureId, module.noteTitle?.trim() || t("note.untitled")]),
       )}
       lastResult={
         lastAttempt ? mockResultFromAttempt(detail.exam, lastAttempt as ExamMockAttemptRow) : null

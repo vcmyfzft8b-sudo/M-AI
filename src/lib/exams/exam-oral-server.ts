@@ -30,6 +30,8 @@ export async function examinerTurn(params: {
   answer: string;
   alreadyFollowedUp: boolean;
   isLast: boolean;
+  /** The language the examiner speaks (the session's speech language, e.g. "sl"). */
+  language: string;
 }) {
   const result = await generateStructuredObject({
     schema: turnSchema,
@@ -40,9 +42,11 @@ export async function examinerTurn(params: {
 The student has just answered the question in the input (their answer is a speech transcript, so ignore filler words and small recognition errors). Compare it with the marking guide.
 
 - If the answer misses or muddles an important point of the guide and followUpAllowed is true, ask ONE short follow-up question that makes the student address that point, without revealing it. Set followUp to true.
-- Otherwise say one short neutral sentence that closes this question${params.isLast ? " and the exam" : " and moves on to the next one"}, without saying whether the answer was right and without revealing anything from the guide. Set followUp to false.
+- Otherwise say one short neutral sentence that closes this question${params.isLast ? " and the exam" : " and moves on to the next one"}. Set followUp to false.
 
-Speak naturally, at most two short sentences, no lists or formatting. Speak in the same language as the question.`,
+Never judge the answer out loud: no "correct", "right", "good", "fine", "that is enough" or the like in any language (the grade comes at the end), and never reveal anything from the marking guide.
+
+Speak naturally, at most two short sentences, no lists or formatting. Always speak in this language (ISO code): ${params.language}, even when the student said nothing.`,
     input: JSON.stringify({
       question: params.question,
       markingGuide: params.answerGuide,

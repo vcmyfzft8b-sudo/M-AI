@@ -9395,6 +9395,14 @@
   z-index: 4;
   margin-top: 1.3rem;
   text-align: center;
+}
+
+/* Its room is kept from the start; it appears, and pops in, on the win. */
+.memo-wheel-prize:not(.shown) {
+  visibility: hidden;
+}
+
+.memo-wheel-prize.shown {
   animation: memo-prize-in 0.5s cubic-bezier(0.32, 1.4, 0.5, 1) both;
 }
 

@@ -661,16 +661,16 @@ export function DiscountOffer({
               </div>
             </div>
 
-            {hasWon ? (
-              <div className="memo-wheel-prize">
-                <p>{t("offer.prizeAmount")}</p>
-                <p>{t(nativeOffer ? "native.introCaption" : "offer.prizeCaption")}</p>
-                {nativeOffer ? appleOffers.map(product => <p key={product.id}>{t(
-                  product.id === "eu.memoai.premium.yearly" ? "native.firstYearPrice" : "native.firstMonthPrice",
-                  { initial: product.introPrice!, renewal: product.price },
-                )}</p>) : null}
-              </div>
-            ) : null}
+            {/* There from the start, unseen until the win, so the sheet is
+                already the size it will be and nothing jumps as it lands. */}
+            <div className={`memo-wheel-prize ${hasWon ? "shown" : ""}`.trim()} aria-hidden={!hasWon}>
+              <p>{t("offer.prizeAmount")}</p>
+              <p>{t(nativeOffer ? "native.introCaption" : "offer.prizeCaption")}</p>
+              {nativeOffer ? appleOffers.map(product => <p key={product.id}>{t(
+                product.id === "eu.memoai.premium.yearly" ? "native.firstYearPrice" : "native.firstMonthPrice",
+                { initial: product.introPrice!, renewal: product.price },
+              )}</p>) : null}
+            </div>
 
             {error ? <p className="memo-inline-error">{error}</p> : null}
 

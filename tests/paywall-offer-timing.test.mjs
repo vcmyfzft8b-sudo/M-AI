@@ -89,3 +89,9 @@ test("another account on the same tab starts its own count", async () => {
   assert.equal(countOfferScreen(), false);
   delete globalThis.window;
 });
+
+test("one tap opens one offer, however slowly it arrives", () => {
+  const nudge = readFileSync(new URL("../src/components/paywall-nudge.tsx", import.meta.url), "utf8");
+  assert.match(nudge, /if \(\s*opening \|\|/);
+  assert.match(nudge, /opening = true;\s*router\.push\(/);
+});

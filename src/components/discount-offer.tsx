@@ -3,9 +3,11 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AnimatedLockup } from "@/components/animated-lockup";
 import { useTranslations } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
+import { MascotSparkles } from "@/components/onboarding-mascot";
+import { PaywallMascot } from "@/components/paywall-hero";
+import { useFitScreen } from "@/components/use-fit-screen";
 import { MemoPortal } from "@/components/memo-portal";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -43,6 +45,9 @@ import { APPLE_PRODUCTS } from "@/lib/mobile/runtime";
 const WHEEL_SLICES = ["10 %", "15 %", "20 %", "50 %", "5 %", "30 %"];
 /** Bulbs in the ring of lights round the rim. */
 const WHEEL_BULBS = 18;
+
+/** Compact levels the wheel and offer sheets may step down to (`redesign.css`). */
+const SHEET_FIT_LEVELS = 4;
 
 /** How long the offer stands, matching WHEEL_PRIZE_TTL_MS on the server. */
 const OFFER_SECONDS = 10 * 60;
@@ -485,6 +490,12 @@ export function DiscountOffer({
    * happened as far as this screen is concerned; a failed request should not
    * hold the sheet open or put an error in front of somebody leaving.
    */
+  // Each sheet is one screen on any phone (`use-fit-screen.ts`, `redesign.css`).
+  const wheelBodyRef = useRef<HTMLDivElement | null>(null);
+  const offerBodyRef = useRef<HTMLDivElement | null>(null);
+  useFitScreen(wheelBodyRef, SHEET_FIT_LEVELS);
+  useFitScreen(offerBodyRef, SHEET_FIT_LEVELS);
+
   const offerSheet = useSheet(
     useCallback(() => {
       if (!boughtRef.current) {
@@ -557,7 +568,7 @@ export function DiscountOffer({
             </button>
           </div>
 
-          <div className="memo-wheel-body">
+          <div className="memo-wheel-body" ref={wheelBodyRef}>
             {hasWon ? (
               <div className="memo-confetti" aria-hidden="true">
                 {Array.from({ length: CONFETTI_COUNT }, (_, index) => {
@@ -590,9 +601,6 @@ export function DiscountOffer({
               </div>
             ) : null}
 
-            <span className="memo-emoji" style={{ fontSize: "2rem" }}>
-              🎁
-            </span>
             <h1 className="memo-wheel-title">{t("offer.wheelTitle")}</h1>
             <p className="memo-wheel-sub">
               {t(
@@ -653,16 +661,16 @@ export function DiscountOffer({
               </div>
             </div>
 
-            {hasWon ? (
-              <div className="memo-wheel-prize">
-                <p>{t("offer.prizeAmount")}</p>
-                <p>{t(nativeOffer ? "native.introCaption" : "offer.prizeCaption")}</p>
-                {nativeOffer ? appleOffers.map(product => <p key={product.id}>{t(
-                  product.id === "eu.memoai.premium.yearly" ? "native.firstYearPrice" : "native.firstMonthPrice",
-                  { initial: product.introPrice!, renewal: product.price },
-                )}</p>) : null}
-              </div>
-            ) : null}
+            {/* There from the start, unseen until the win, so the sheet is
+                already the size it will be and nothing jumps as it lands. */}
+            <div className={`memo-wheel-prize ${hasWon ? "shown" : ""}`.trim()} aria-hidden={!hasWon}>
+              <p>{t("offer.prizeAmount")}</p>
+              <p>{t(nativeOffer ? "native.introCaption" : "offer.prizeCaption")}</p>
+              {nativeOffer ? appleOffers.map(product => <p key={product.id}>{t(
+                product.id === "eu.memoai.premium.yearly" ? "native.firstYearPrice" : "native.firstMonthPrice",
+                { initial: product.introPrice!, renewal: product.price },
+              )}</p>) : null}
+            </div>
 
             {error ? <p className="memo-inline-error">{error}</p> : null}
 
@@ -707,8 +715,12 @@ export function DiscountOffer({
             </button>
           </div>
 
-          <div className="memo-offer-body">
-            <AnimatedLockup className="memo-offer-logo" priority />
+          <div className="memo-offer-body" ref={offerBodyRef}>
+            {/* Memo with the prize, hopping, where the logo was. */}
+            <span className="memo-offer-mascot" aria-hidden="true">
+              <PaywallMascot move="hop" badge="redeem" />
+              <MascotSparkles />
+            </span>
             <p className="memo-offer-kicker">{t("offer.kicker")}</p>
             <p className="memo-offer-headline">{t("offer.headline")}</p>
             <p className="memo-offer-sub">{t("offer.sub")}</p>

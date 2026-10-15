@@ -78,6 +78,10 @@ function NoteCard({ icon, className = "" }: { icon: string; className?: string }
 }
 
 /** Memo, blinking, with the feature's icon pinned to his shoulder. */
+export function PaywallMascot({ move, badge }: { move: string; badge?: string }) {
+  return <Memo move={move} badge={badge} />;
+}
+
 function Memo({ move, badge }: { move: string; badge?: string }) {
   const root = useRef<HTMLSpanElement | null>(null);
   // Read once; it only decides whether he blinks, never what is drawn.
@@ -91,7 +95,8 @@ function Memo({ move, badge }: { move: string; badge?: string }) {
   return (
     <span ref={root} className={`memo-pw-memo ${move}`}>
       <span className="memo-pw-memo-body">
-        <MascotFigure />
+        {/* The largest thing on the screen as it opens: loaded first. */}
+        <MascotFigure priority />
       </span>
       {badge ? (
         <span className="memo-pw-tag">
@@ -169,6 +174,33 @@ function EarlierOffers({ step }: { step: number }) {
         </span>
       ))}
     </span>
+  );
+}
+
+/**
+ * The paywall nothing opened (after onboarding, the Upgrade button): Memo
+ * waving between the things the subscription opens, each one bobbing.
+ */
+export function PaywallWelcome() {
+  const chips = [
+    ["description", "left one"],
+    ["style", "left two"],
+    ["school", "right one"],
+    ["headphones", "right two"],
+  ] as const;
+
+  return (
+    <div className="memo-pw-hero welcome" aria-hidden="true">
+      <span className="memo-pw-scene welcome">
+        {chips.map(([icon, place], index) => (
+          <span key={icon} className={`memo-pw-chip ${place}`} style={{ "--i": index } as CSSProperties}>
+            <Msym name={icon} size="1.15rem" fill={false} weight={500} />
+          </span>
+        ))}
+        <Memo move="wave" badge="auto_awesome" />
+        <MascotSparkles />
+      </span>
+    </div>
   );
 }
 

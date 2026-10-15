@@ -2,7 +2,7 @@ import { formatCurrency } from "../utils.ts";
 import type { Locale } from "../i18n/locales.ts";
 import { CREATOR_TERMS } from "./creator-campaigns.ts";
 import { campaignPay, hasBonus, hasVideoPay, type ContractPay } from "./creator-pay.ts";
-import type { CreatorMarket } from "./creator-program.ts";
+import { VIEW_BONUS_VIEWS_PER_VIDEO, type CreatorMarket } from "./creator-program.ts";
 import { CREATOR_TERMS_TEXT } from "./creator-terms-text.ts";
 
 /**
@@ -12,7 +12,7 @@ import { CREATOR_TERMS_TEXT } from "./creator-terms-text.ts";
  * `creator-terms-text.ts`): each acceptance stores the version it was given, and
  * that is the only way to tell later which words a creator agreed to.
  */
-export const CREATOR_TERMS_VERSION = "2026-10-12.2";
+export const CREATOR_TERMS_VERSION = "2026-10-12.3";
 
 type PayWords = {
   tiktokAndInstagram: string;
@@ -20,6 +20,7 @@ type PayWords = {
   instagram: string;
   monthly: string;
   views: string;
+  viewsPerVideo: string;
   code: string;
   capOne: string;
   capTotal: string;
@@ -42,6 +43,8 @@ const PAY_WORDS: Record<Locale, PayWords> = {
     instagram: "**{instagram} za vsak upravičen video, objavljen v Instagram Reels**.",
     monthly: "**{monthly} na mesec** fiksnega plačila za vsak koledarski mesec sodelovanja.",
     views: "**Bonus za oglede {rate} na 1000 ogledov**, ki jih tvoji upravičeni videi zberejo v koledarskem mesecu",
+    viewsPerVideo:
+      "Bonus za oglede se za vsak upravičen video izplača za največ **{viewCap} ogledov**.",
     code: "**Bonus {share}** zneska, ki so ga v koledarskem mesecu dejansko plačali kupci, ki so naročnino Memo AI kupili s tvojo kodo za popust, brez DDV, vračil in povratnih bremenitev",
     capOne: ", do največ **{cap} na mesec**.",
     capTotal: "Bonusi skupaj znašajo največ **{cap} na mesec**.",
@@ -57,6 +60,8 @@ const PAY_WORDS: Record<Locale, PayWords> = {
     instagram: "**{instagram} for every Eligible Video published on Instagram Reels**.",
     monthly: "**{monthly} a month** as a fixed fee for every calendar month you take part.",
     views: "**A view bonus of {rate} per 1,000 Views** your Eligible Videos gain in the calendar month",
+    viewsPerVideo:
+      "The view bonus is paid on at most **{viewCap} Views per Eligible Video**.",
     code: "**A {share} bonus** on the amount actually paid in the calendar month by customers who bought a Memo AI subscription with your Discount Code, excluding VAT, refunds and chargebacks",
     capOne: ", up to **{cap} a month**.",
     capTotal: "The bonuses come to at most **{cap} a month** in total.",
@@ -72,6 +77,8 @@ const PAY_WORDS: Record<Locale, PayWords> = {
     instagram: "**{instagram} za svaki prihvatljiv video objavljen u Instagram Reelsima**.",
     monthly: "**{monthly} mjesečno** kao fiksna naknada za svaki kalendarski mjesec sudjelovanja.",
     views: "**Bonus za preglede od {rate} na 1000 pregleda** koje tvoji prihvatljivi videi skupe u kalendarskom mjesecu",
+    viewsPerVideo:
+      "Bonus za preglede isplaćuje se za najviše **{viewCap} pregleda po prihvatljivom videu**.",
     code: "**Bonus od {share}** iznosa koji su u kalendarskom mjesecu stvarno platili kupci koji su pretplatu na Memo AI kupili s tvojim kodom za popust, bez PDV-a, povrata i storniranih plaćanja",
     capOne: ", do najviše **{cap} mjesečno**.",
     capTotal: "Bonusi ukupno iznose najviše **{cap} mjesečno**.",
@@ -87,6 +94,8 @@ const PAY_WORDS: Record<Locale, PayWords> = {
     instagram: "**{instagram} za svaki prihvatljiv video objavljen u Instagram Reelsima**.",
     monthly: "**{monthly} mjesečno** kao fiksna naknada za svaki kalendarski mjesec učešća.",
     views: "**Bonus za preglede od {rate} na 1000 pregleda** koje tvoji prihvatljivi videi skupe u kalendarskom mjesecu",
+    viewsPerVideo:
+      "Bonus za preglede isplaćuje se za najviše **{viewCap} pregleda po prihvatljivom videu**.",
     code: "**Bonus od {share}** iznosa koji su u kalendarskom mjesecu stvarno platili kupci koji su pretplatu na Memo AI kupili s tvojim kodom za popust, bez PDV-a, povrata i storniranih plaćanja",
     capOne: ", do najviše **{cap} mjesečno**.",
     capTotal: "Bonusi ukupno iznose najviše **{cap} mjesečno**.",
@@ -102,6 +111,8 @@ const PAY_WORDS: Record<Locale, PayWords> = {
     instagram: "**{instagram} za svaki prihvatljiv snimak objavljen u Instagram Reels-u**.",
     monthly: "**{monthly} mesečno** kao fiksna naknada za svaki kalendarski mesec učešća.",
     views: "**Bonus za preglede od {rate} na 1000 pregleda** koje tvoji prihvatljivi snimci sakupe u kalendarskom mesecu",
+    viewsPerVideo:
+      "Bonus za preglede isplaćuje se za najviše **{viewCap} pregleda po prihvatljivom snimku**.",
     code: "**Bonus od {share}** iznosa koji su u kalendarskom mesecu zaista platili kupci koji su pretplatu na Memo AI kupili sa tvojim kodom za popust, bez PDV-a, povraćaja i storniranih plaćanja",
     capOne: ", do najviše **{cap} mesečno**.",
     capTotal: "Bonusi ukupno iznose najviše **{cap} mesečno**.",
@@ -128,6 +139,7 @@ function payList(locale: Locale, pay: ContractPay): string {
     rate: euros(pay.viewRatePer1k),
     share: fill(words.percent, { value: number.format(pay.codeSharePercent) }),
     cap: pay.bonusCap === null ? "" : euros(pay.bonusCap),
+    viewCap: number.format(VIEW_BONUS_VIEWS_PER_VIDEO),
   };
   const lines: string[] = [];
 
@@ -156,6 +168,10 @@ function payList(locale: Locale, pay: ContractPay): string {
 
   if (bonuses.length > 1 && pay.bonusCap !== null) {
     lines.push(fill(words.capTotal, values));
+  }
+
+  if (pay.viewRatePer1k > 0) {
+    lines.push(fill(words.viewsPerVideo, values));
   }
 
   return lines.map((line) => `- ${line}`).join("\n");

@@ -4,7 +4,6 @@ import { Check, CircleCheck, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { AnimatedLockup } from "@/components/animated-lockup";
 import { useT, useTranslations } from "@/components/i18n-provider";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { Msym } from "@/components/msym";
@@ -20,7 +19,8 @@ import { cameFromAppPath, quietNextEntrance } from "@/lib/app-history";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import { notePaywallShown, paywallVisitCounted } from "@/lib/paywall-offer-timing";
 import { discountedAmount, paywallOffer, weeklyAmount } from "@/lib/paywall-ladder";
-import { PaywallCompare, PaywallHero, paywallAccentStyle, paywallLayout } from "@/components/paywall-hero";
+import { fitScreenScript, useFitScreen } from "@/components/use-fit-screen";
+import { PaywallCompare, PaywallHero, PaywallWelcome, paywallAccentStyle, paywallLayout } from "@/components/paywall-hero";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 
 type BillingPlanCard = {
@@ -37,9 +37,9 @@ type BillingPlanCard = {
 type PaywallBenefit = { titleKey: MessageKey; copyKey: MessageKey; icon: string };
 
 const DEFAULT_BENEFITS: readonly PaywallBenefit[] = [
-  { titleKey: "paywall.benefit.notesTitle", copyKey: "paywall.benefit.notesCopy", icon: "📝" },
-  { titleKey: "paywall.benefit.toolsTitle", copyKey: "paywall.benefit.toolsCopy", icon: "💡" },
-  { titleKey: "paywall.benefit.speedTitle", copyKey: "paywall.benefit.speedCopy", icon: "⚡" },
+  { titleKey: "paywall.benefit.notesTitle", copyKey: "paywall.benefit.notesCopy", icon: "description" },
+  { titleKey: "paywall.benefit.toolsTitle", copyKey: "paywall.benefit.toolsCopy", icon: "quiz" },
+  { titleKey: "paywall.benefit.speedTitle", copyKey: "paywall.benefit.speedCopy", icon: "bolt" },
 ];
 
 
@@ -68,6 +68,9 @@ function CheckoutBanner({ state }: { state: string | null }) {
 
   return null;
 }
+
+/** Compact levels the paywall may step down to (`redesign.css`). */
+const PAYWALL_FIT_LEVELS = 4;
 
 export function OnboardingPaywall({
   profile,
@@ -179,6 +182,10 @@ export function OnboardingPaywall({
     viewRequest.current = { key: viewKey, done };
   }, [native, reason, viewKey, onboardingComplete, hasPaidAccess]);
 
+  // One screen, never a page to scroll (`use-fit-screen.ts`, `redesign.css`).
+  const shellRef = useRef<HTMLElement | null>(null);
+  useFitScreen(shellRef, PAYWALL_FIT_LEVELS);
+
   async function startCheckout(plan: BillingPlanCard["id"]) {
     if (native) { await apple.purchase(); return; }
     setBillingError(null);
@@ -251,7 +258,11 @@ export function OnboardingPaywall({
 
 
   return (
+    <>
     <section
+      ref={shellRef}
+      // `data-fit` is set before the app starts (`fitScreenScript`), on purpose.
+      suppressHydrationWarning
       className={`app-start-panel app-start-panel-paywall memo-paywall-shell${native ? " memo-paywall-apple" : ""}`}
       data-reason={reason ?? undefined}
       style={paywallAccentStyle(reason)}
@@ -293,11 +304,7 @@ export function OnboardingPaywall({
           {native && apple.notice ? <div className="app-start-banner">{apple.notice}</div> : null}
         </div>
       ) : reason ? null : (
-        <div className="memo-paywall-brand">
-          <span className="memo-paywall-logo">
-            <AnimatedLockup fill priority />
-          </span>
-        </div>
+        <PaywallWelcome />
       )}
 
       {/* A feature's paywall shows the feature, moving, in place of the list. */}
@@ -337,7 +344,9 @@ export function OnboardingPaywall({
         <div className="memo-paywall-benefits">
           {DEFAULT_BENEFITS.map((benefit) => (
             <div className="memo-paywall-benefit" key={benefit.titleKey}>
-              <span aria-hidden="true">{benefit.icon}</span>
+              <span aria-hidden="true">
+                <Msym name={benefit.icon} size="1.35rem" fill={false} weight={500} />
+              </span>
               <div>
                 <strong>{t(benefit.titleKey)}</strong>
                 <p>{t(benefit.copyKey)}</p>
@@ -477,5 +486,8 @@ export function OnboardingPaywall({
       {discounted ? <p className="memo-paywall-fine">{t("paywall.offer.firstOnly")}</p> : null}
       {native ? <AppleBillingTerms busy={apple.busy} onRestore={() => void apple.restore()} /> : null}
     </section>
+    {/* Fits a freshly loaded page as it is first drawn (`use-fit-screen.ts`). */}
+    <script dangerouslySetInnerHTML={{ __html: fitScreenScript(PAYWALL_FIT_LEVELS) }} />
+    </>
   );
 }

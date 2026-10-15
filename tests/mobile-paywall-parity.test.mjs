@@ -48,9 +48,13 @@ function load(component, native, products = []) {
     "@/lib/paywall-offer-timing": { notePaywallShown() {}, paywallVisitCounted: () => false },
     "@/components/paywall-hero": {
       PaywallHero: ({ reason }) => React.createElement("div", { className: "memo-pw-hero", "data-reason": reason }),
+      PaywallWelcome: () => React.createElement("div", { className: "memo-pw-hero welcome" }),
+      PaywallMascot: () => React.createElement("span", { className: "memo-pw-memo" }),
       paywallLayout: reason => (reason ? "rows" : "cards"),
       paywallAccentStyle: () => undefined,
     },
+    "@/components/onboarding-mascot": { MascotSparkles: () => null },
+    "@/components/use-fit-screen": { useFitScreen() {}, fitScreenScript: () => "" },
     "@/lib/brand": { BRAND_LOCKUP_SRC: "/brand.png", BRAND_LOCKUP_WIDTH: 480, BRAND_LOCKUP_HEIGHT: 148, SEO_BRAND_NAME: "Memo" },
   };
   const context = { exports: {}, require: name => { assert.ok(name in modules, name); return modules[name]; }, URLSearchParams };
@@ -72,7 +76,7 @@ const trial = [
 test("iOS and PWA render the same paywall structure, benefits, cards and CTA", () => {
   const web = paywall(false, []);
   const ios = paywall(true, trial);
-  for (const className of ["memo-paywall-brand", "memo-paywall-title", "memo-paywall-benefits", "memo-paywall-plan-grid", "memo-paywall-plan-header", "memo-paywall-plan-price", "memo-paywall-cta", "memo-paywall-foot"]) {
+  for (const className of ["memo-pw-hero welcome", "memo-paywall-title", "memo-paywall-benefits", "memo-paywall-plan-grid", "memo-paywall-plan-header", "memo-paywall-plan-price", "memo-paywall-cta", "memo-paywall-foot"]) {
     assert.ok(web.includes(className), className);
     assert.ok(ios.includes(className), className);
   }
@@ -109,7 +113,7 @@ test("Apple wheel offer keeps the PWA sheet and uses actual first-period prices"
     }));
   };
   const ios = render(true); const web = render(false);
-  for (const className of ["memo-offer-sheet", "memo-offer-logo", "memo-offer-headline", "memo-offer-plan-copy", "memo-offer-price", "memo-offer-cta"]) {
+  for (const className of ["memo-offer-sheet", "memo-offer-mascot", "memo-offer-headline", "memo-offer-plan-copy", "memo-offer-price", "memo-offer-cta"]) {
     assert.ok(ios.includes(className), className); assert.ok(web.includes(className), className);
   }
   assert.match(ios, /€64.99, then €129.99/);

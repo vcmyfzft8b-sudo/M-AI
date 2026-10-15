@@ -1,42 +1,39 @@
 /**
- * When the browsing offer (`paywall-nudge.tsx`) may open. Pure, so the rules
- * can be tested and tuned in one place.
+ * When the browsing offer (`paywall-nudge.tsx`) opens: after every few screens
+ * a free learner looks at without meeting a paywall. A screen is a new page or
+ * a new tab on a note. Any paywall, the offer included, starts the count again.
+ *
+ * The count is this tab's own (sessionStorage), a convenience rather than a
+ * record: losing it only means the next offer comes a few screens later. What
+ * the offer is worth lives in the server's cookie, never here.
  */
 
-/** Screens looked at in this visit before an offer may open. */
-export const OFFER_AFTER_SCREENS = 3;
-/** Quiet time after any paywall, this one included. */
-export const OFFER_QUIET_MS = 15 * 60 * 1000;
-/** Time between two browsing offers. */
-export const OFFER_GAP_MS = 12 * 60 * 60 * 1000;
+/** Screens between two paywalls before a browsing offer opens. */
+export const OFFER_EVERY_SCREENS = 4;
 
-/** Whether an offer may open now; pure, so the rules can be tested. */
-export function offerIsDue({
-  now,
-  screens,
-  lastPaywall,
-  lastOffer,
-}: {
-  now: number;
-  screens: number;
-  lastPaywall: number;
-  lastOffer: number;
-}) {
-  return (
-    screens >= OFFER_AFTER_SCREENS &&
-    now - lastPaywall >= OFFER_QUIET_MS &&
-    now - lastOffer >= OFFER_GAP_MS
-  );
+/** Screens looked at since the last paywall, in this tab. */
+export const OFFER_SCREENS_KEY = "memo-offer-screens";
+
+export function offerIsDue(screens: number) {
+  return screens >= OFFER_EVERY_SCREENS;
 }
 
-/** When any paywall last opened, in this browser (localStorage). */
-export const LAST_PAYWALL_KEY = "memo-paywall-last-shown";
-
-/** Any paywall that opens restarts the quiet time. */
-export function notePaywallShown(now = Date.now()) {
+/** Any paywall that opens starts the count to the next offer again. */
+export function notePaywallShown() {
   try {
-    window.localStorage.setItem(LAST_PAYWALL_KEY, String(now));
+    window.sessionStorage.setItem(OFFER_SCREENS_KEY, "0");
   } catch {
-    // Storage blocked: the offer just comes on the old schedule.
+    // Storage blocked: the count simply carries on.
+  }
+}
+
+/** Counts one more screen; says whether the offer is due now. */
+export function countOfferScreen() {
+  try {
+    const screens = (Number(window.sessionStorage.getItem(OFFER_SCREENS_KEY)) || 0) + 1;
+    window.sessionStorage.setItem(OFFER_SCREENS_KEY, String(screens));
+    return offerIsDue(screens);
+  } catch {
+    return false;
   }
 }

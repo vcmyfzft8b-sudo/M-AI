@@ -9,13 +9,13 @@ import {
   purchasableBillingPlansFor,
 } from "@/lib/billing";
 import { isPaywallReason, readPaywallBack } from "@/lib/paywall-reasons";
-import { PAYWALL_SEEN_COOKIE, paywallOfferFor, readSeenReasons } from "@/lib/paywall-ladder";
+import { PAYWALL_SEEN_COOKIE, paywallOfferFor, readSeenReasons, recordSeenReason } from "@/lib/paywall-ladder";
 import { isNativeUserAgent } from "@/lib/mobile/runtime";
 
 export default async function AppStartPage({
   searchParams,
 }: {
-  searchParams: Promise<{ for?: string | string[]; back?: string | string[]; better?: string | string[] }>;
+  searchParams: Promise<{ for?: string | string[]; back?: string | string[] }>;
 }) {
   const query = await searchParams;
   const reason = isPaywallReason(query.for) ? query.for : null;
@@ -43,13 +43,14 @@ export default async function AppStartPage({
     ? await getSubscriptionTrialEligibility(appState.user.id)
     : false;
 
-  // Each feature limit the learner meets offers more than the last, and each
-  // feature keeps the discount it was given; the app keeps Apple's prices, so
-  // it always shows the first step (`paywall-ladder.ts`).
+  // Every paywall moment offers a rung more than the last, and never less; the
+  // app keeps Apple's prices, so it always shows the first step
+  // (`paywall-ladder.ts`).
   const native = isNativeUserAgent((await headers()).get("user-agent"));
-  const offerStep = native
-    ? 1
-    : paywallOfferFor(reason, readSeenReasons((await cookies()).get(PAYWALL_SEEN_COOKIE)?.value)).step;
+  const seen = readSeenReasons((await cookies()).get(PAYWALL_SEEN_COOKIE)?.value);
+  const offerStep = native ? 1 : paywallOfferFor(reason, seen).step;
+  // A browsing offer may say it got better only when its moment lifts the price.
+  const offerImproved = reason !== null && recordSeenReason(seen, reason).length > seen.length;
 
   return (
     <main className="app-start-shell">
@@ -63,8 +64,7 @@ export default async function AppStartPage({
         reason={reason}
         backHref={backHref}
         offerStep={offerStep}
-        // Set by the browsing offer when it lifted the price; only the headline reads it.
-        offerImproved={query.better === "1"}
+        offerImproved={offerImproved}
       />
     </main>
   );

@@ -4,16 +4,26 @@ import test from "node:test";
 
 import {
   PAYWALL_LADDER,
+  checkoutOffer,
   discountedAmount,
   paywallOffer,
   paywallOfferFor,
+  reachedOffer,
   readSeenReasons,
   recordSeenReason,
   weeklyAmount,
   writeSeenReasons,
 } from "../src/lib/paywall-ladder.ts";
 
-test("each feature limit offers more than the last, and never beats the wheel's 50%", () => {
+/** Opens a paywall the way the app does: shown, then its moment recorded. */
+function meet(seen, reason) {
+  const shown = paywallOfferFor(reason, seen).percentOff;
+  const after = reason ? recordSeenReason(seen, reason) : seen;
+  assert.equal(reachedOffer(after).percentOff, shown, "the server's answer matches what was shown");
+  return { shown, seen: after };
+}
+
+test("each rung offers more than the last, and never beats the wheel's 50%", () => {
   assert.deepEqual(PAYWALL_LADDER.map((offer) => offer.percentOff), [0, 20, 30, 40]);
   for (const offer of PAYWALL_LADDER) {
     assert.ok(offer.percentOff < 50);
@@ -21,42 +31,53 @@ test("each feature limit offers more than the last, and never beats the wheel's 
   }
 });
 
-test("the first limit met gives 20%, the second 30%, the third and later 40%, in any order", () => {
+test("every paywall moment climbs a rung, limits and browsing offers alike, in any order", () => {
   for (const order of [
     ["chat", "listen", "tutor", "podcast"],
-    ["note", "library", "chat", "locked"],
-    ["podcast", "regenerate", "listen", "note"],
+    ["offer", "offer", "offer", "offer"],
+    ["offer", "chat", "offer", "note"],
+    ["chat", "chat", "chat", "chat"],
   ]) {
     let seen = [];
     const percents = [];
     for (const reason of order) {
-      percents.push(paywallOfferFor(reason, seen).percentOff);
-      seen = recordSeenReason(seen, reason);
+      const met = meet(seen, reason);
+      percents.push(met.shown);
+      seen = met.seen;
     }
     assert.deepEqual(percents, [20, 30, 40, 40], order.join(" → "));
   }
 });
 
-test("a feature keeps the discount it was first given", () => {
-  const seen = ["chat", "listen", "tutor"];
-  assert.equal(paywallOfferFor("chat", seen).percentOff, 20);
-  assert.equal(paywallOfferFor("listen", seen).percentOff, 30);
-  assert.equal(paywallOfferFor("tutor", seen).percentOff, 40);
-  assert.deepEqual(recordSeenReason(seen, "chat"), seen, "meeting it again changes nothing");
+test("once at 40% nothing ever shows less, the chat paywall included", () => {
+  let seen = [];
+  for (const reason of ["offer", "chat", "listen"]) seen = meet(seen, reason).seen;
+  for (const reason of ["chat", "offer", "note", null]) {
+    assert.equal(meet(seen, reason).shown, 40, String(reason));
+  }
 });
 
-test("a paywall no feature opened shows the plain price, then the best rung reached", () => {
+test("the paywall nothing opened shows the rung reached, the plain price before any", () => {
   assert.equal(paywallOfferFor(null, []).percentOff, 0);
   assert.equal(paywallOfferFor(null, ["chat"]).percentOff, 20);
-  assert.equal(paywallOfferFor(null, ["chat", "listen"]).percentOff, 30);
-  assert.equal(paywallOfferFor(null, ["chat", "listen", "tutor", "note"]).percentOff, 40);
+  assert.equal(paywallOfferFor(null, ["chat", "offer"]).percentOff, 30);
+  assert.equal(paywallOfferFor(null, ["chat", "offer", "tutor"]).percentOff, 40);
 });
 
-test("the cookie only keeps known features, once each, in order", () => {
-  assert.deepEqual(readSeenReasons("chat.listen.chat.bogus.tutor"), ["chat", "listen", "tutor"]);
+test("checkout charges the rung shown, and never more than the cookie allows", () => {
+  assert.equal(checkoutOffer(3, ["chat", "offer"]).percentOff, 30);
+  assert.equal(checkoutOffer(4, ["chat"]).percentOff, 20, "a forged step is capped");
+  assert.equal(checkoutOffer(2, ["chat", "offer", "tutor"]).percentOff, 20, "never more than was shown");
+  assert.equal(checkoutOffer(null, ["chat", "offer"]).percentOff, 30);
+  assert.equal(checkoutOffer(4, []).percentOff, 0, "no moment, no discount");
+});
+
+test("the cookie keeps known moments, only as many as still lift the price", () => {
+  assert.deepEqual(readSeenReasons("chat.bogus.chat.offer.tutor.note"), ["chat", "chat", "offer"]);
   assert.deepEqual(readSeenReasons(""), []);
   assert.deepEqual(readSeenReasons(undefined), []);
   assert.equal(writeSeenReasons(["chat", "listen"]), "chat.listen");
+  assert.deepEqual(recordSeenReason(["chat", "offer", "tutor"], "note"), ["chat", "offer", "tutor"]);
   assert.equal(paywallOffer(99).percentOff, 40);
 });
 
@@ -70,38 +91,17 @@ test("prices: the discount to the cent, the year by the week rounded down", () =
   assert.equal(weeklyAmount(65), 1.25, "the wheel's own figure");
 });
 
-test("checkout reads the discount from the cookie, lets the wheel win, and drops the trial", () => {
+test("a discounted checkout has no trial and no promo-code field; the wheel wins", () => {
   const route = readFileSync(new URL("../src/app/api/billing/checkout/route.ts", import.meta.url), "utf8");
-  assert.match(route, /paywallOfferFor\(\s*parsed\.data\.reason \?\? null,\s*readSeenReasons\(\(await cookies\(\)\)\.get\(PAYWALL_SEEN_COOKIE\)\?\.value\),/);
+  assert.match(route, /checkoutOffer\(\s*parsed\.data\.step \?\? null,\s*readSeenReasons\(\(await cookies\(\)\)\.get\(PAYWALL_SEEN_COOKIE\)\?\.value\),/);
   assert.match(route, /const coupon = wheelCoupon \?\? ladderOffer\.coupon;/);
   assert.match(route, /!hasPriorStripeSubscription && !coupon;/);
-  assert.match(route, /\{ discounts: \[\{ coupon \}\] \}/);
+  assert.match(route, /\.\.\.\(coupon\s*\? \{ discounts: \[\{ coupon \}\] \}\s*: \{ allow_promotion_codes: true \}\)/);
 });
 
-test("the app never moves down the ladder", () => {
+test("the app never moves up the ladder", () => {
   const view = readFileSync(new URL("../src/app/api/billing/paywall-view/route.ts", import.meta.url), "utf8");
-  assert.match(view, /if \(isNativeUserAgent\(request\.headers\.get\("user-agent"\)\)\) \{\s*return NextResponse\.json\(\{ seen: \[\], advanced: false \}\);/);
+  assert.match(view, /if \(isNativeUserAgent\(request\.headers\.get\("user-agent"\)\)\) \{\s*return NextResponse\.json\(\{ seen: \[\], advanced: false, step: 1 \}\);/);
   const page = readFileSync(new URL("../src/app/app/start/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /const offerStep = native\s*\? 1/);
-});
-
-test("browsing offers climb a rung each, then hold the top one", () => {
-  let seen = [];
-  const percents = [];
-  for (let shown = 0; shown < 5; shown += 1) {
-    seen = recordSeenReason(seen, "offer");
-    percents.push(paywallOfferFor("offer", seen).percentOff);
-  }
-  assert.deepEqual(percents, [20, 30, 40, 40, 40]);
-  assert.deepEqual(seen, ["offer", "offer", "offer"], "an offer on the top rung is not recorded");
-  assert.deepEqual(readSeenReasons("offer.offer.offer.offer.chat"), ["offer", "offer", "offer", "chat"]);
-});
-
-test("a feature limit met after browsing offers starts from the better rung", () => {
-  assert.equal(paywallOfferFor("chat", ["offer"]).percentOff, 30);
-  assert.equal(paywallOfferFor("chat", ["offer", "offer"]).percentOff, 40);
-  // Before any offer or limit, the browsing offer is the plain price.
-  assert.equal(paywallOfferFor("offer", []).percentOff, 0);
-  // After a limit, an offer records the next rung.
-  assert.equal(paywallOfferFor("offer", recordSeenReason(["chat"], "offer")).percentOff, 30);
+  assert.match(page, /const offerStep = native \? 1 :/);
 });

@@ -8,6 +8,7 @@ import { isNativeUserAgent } from "@/lib/mobile/runtime";
 import {
   PAYWALL_SEEN_COOKIE,
   PAYWALL_SEEN_COOKIE_MAX_AGE,
+  reachedOffer,
   readSeenReasons,
   recordSeenReason,
   writeSeenReasons,
@@ -21,16 +22,15 @@ const viewSchema = z.object({
 });
 
 /**
- * A feature's paywall reports that its limit was met, so the next feature to
- * run out offers more (`paywall-ladder.ts`). A feature is recorded once, in the
- * order the limits were met; reporting it again changes nothing. A browsing
- * offer (`offer`) is reported before it opens, and `advanced` says whether it
- * lifted the price, which decides what its headline may claim.
+ * A paywall reports its moment — a limit met or a browsing offer — so the
+ * offer climbs a rung (`paywall-ladder.ts`). It answers with the rung reached,
+ * which the paywall then shows, and whether this moment lifted the price,
+ * which decides what the browsing offer's headline may claim.
  */
 export async function POST(request: Request) {
   // The app's prices are Apple's; it never moves down the ladder.
   if (isNativeUserAgent(request.headers.get("user-agent"))) {
-    return NextResponse.json({ seen: [], advanced: false });
+    return NextResponse.json({ seen: [], advanced: false, step: 1 });
   }
 
   const user = await getOptionalUserOrPreviewBypass();
@@ -59,7 +59,11 @@ export async function POST(request: Request) {
   const jar = await cookies();
   const before = readSeenReasons(jar.get(PAYWALL_SEEN_COOKIE)?.value);
   const seen = recordSeenReason(before, parsed.data.reason);
-  const response = NextResponse.json({ seen, advanced: seen.length > before.length });
+  const response = NextResponse.json({
+    seen,
+    advanced: seen.length > before.length,
+    step: reachedOffer(seen).step,
+  });
 
   response.cookies.set(PAYWALL_SEEN_COOKIE, writeSeenReasons(seen), {
     httpOnly: true,

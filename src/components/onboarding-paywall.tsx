@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, CircleCheck, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 
@@ -112,34 +112,53 @@ export function OnboardingPaywall({
   const [selectedPaywallPlan, setSelectedPaywallPlan] = useState<BillingPlanCard["id"]>("yearly");
   const [checkoutPlan, setCheckoutPlan] = useState<BillingPlanCard["id"] | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
+  /*
+   * The rung the server recorded for this paywall's moment, once it answers.
+   * Until then, the rung the page predicted; the two agree unless a cached
+   * copy of this page was shown, which the answer then corrects.
+   */
+  const [recorded, setRecorded] = useState<{ step: number; advanced: boolean } | null>(null);
+  const viewRequest = useRef<{ key: string; done: Promise<unknown> } | null>(null);
   // The app sells at Apple's prices, so it never shows a step past the first.
-  const offer = paywallOffer(native ? 1 : offerStep);
+  const offer = paywallOffer(native ? 1 : recorded?.step ?? offerStep);
   const discounted = offer.percentOff > 0;
+  const improved = recorded ? recorded.advanced : offerImproved;
 
   /*
-   * A feature's paywall records that its limit was met, so the next feature to
-   * run out offers more. Not in the app, not for the paywalls no feature opened,
-   * and not while the survey is still showing instead of the prices. A browsing
-   * offer was recorded before it opened (`paywall-nudge.tsx`), so not that one.
+   * A paywall opened by a limit or a browsing offer records its moment, so the
+   * offer climbs a rung (`paywall-ladder.ts`). Not in the app, not for the
+   * paywall nothing opened, and not while the survey is still showing instead
+   * of the prices. Once per paywall: the ref outlives the effect running twice.
    */
+  const viewKey = `${reason ?? ""}?${searchParams.toString()}`;
+
   useEffect(() => {
     if (native || !onboardingComplete || hasPaidAccess) {
       return;
     }
 
-    // Any paywall keeps the browsing offer away for a while (`paywall-nudge.tsx`).
+    // Any paywall restarts the count to the next browsing offer (`paywall-nudge.tsx`).
     notePaywallShown();
 
-    if (!reason || reason === "offer") {
+    if (!reason || viewRequest.current?.key === viewKey) {
       return;
     }
 
-    void fetch("/api/billing/paywall-view", {
+    const done = fetch("/api/billing/paywall-view", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ reason }),
-    }).catch(() => null);
-  }, [native, reason, onboardingComplete, hasPaidAccess]);
+    })
+      .then((response) => (response.ok ? (response.json() as Promise<{ step?: unknown; advanced?: unknown }>) : null))
+      .then((body) => {
+        if (body && typeof body.step === "number") {
+          setRecorded({ step: body.step, advanced: body.advanced === true });
+        }
+      })
+      .catch(() => null);
+
+    viewRequest.current = { key: viewKey, done };
+  }, [native, reason, viewKey, onboardingComplete, hasPaidAccess]);
 
   async function startCheckout(plan: BillingPlanCard["id"]) {
     if (native) { await apple.purchase(); return; }
@@ -147,12 +166,14 @@ export function OnboardingPaywall({
     setCheckoutPlan(plan);
 
     try {
+      // Checkout reads the rung from the cookie, so the moment goes first.
+      await viewRequest.current?.done;
       const response = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ plan, reason }),
+        body: JSON.stringify({ plan, reason, step: offer.step }),
       });
 
       const payload = (await response.json()) as { url?: string; error?: string };
@@ -274,7 +295,7 @@ export function OnboardingPaywall({
 
       <h1 className="memo-paywall-title">
         {t(
-          reason === "offer" && !offerImproved
+          reason === "offer" && !improved
             ? "paywall.reason.offer.titleBest"
             : reason ? `paywall.reason.${reason}.title` : "paywall.title",
         )}

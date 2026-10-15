@@ -1,29 +1,23 @@
 import { PAYWALL_REASONS, type PaywallReason } from "./paywall-reasons.ts";
 
 /**
- * The offer gets better with each feature limit a learner runs into.
+ * The offer gets better every time a paywall finds the learner, and never
+ * worse.
  *
- * Before any limit, the paywall is the plain price with the free trial. The
- * first feature that runs out — whichever it is: the chat, the read-aloud, a
- * second note — offers 20 % off the first payment; the second feature to run
- * out offers 30 %; the third and every one after, 40 %. The daily wheel's 50 %
+ * Before anything, the paywall is the plain price with the free trial. Each
+ * paywall moment after that moves the learner one rung up: a feature limit
+ * (the chat, the read-aloud, a second note, the same limit again later) or a
+ * browsing offer (`paywall-nudge.tsx`). The first moment offers 20 % off the
+ * first payment, the second 30 %, the third and every one after 40 %. Nothing
+ * ever shows a lower rung than one already reached, and the daily wheel's 50 %
  * stays the best price there is, so nothing here may go past it.
  *
- * The discount belongs to the feature. Each one keeps the rung it was given
- * the first time, so coming back to the chat paywall later shows the chat's
- * 20 % again, not whatever the latest limit earned. Paywalls opened without a
- * feature (the Upgrade button, Settings) show the best rung reached so far.
- *
- * The order the limits were met in lives in a cookie the server writes
- * (`POST /api/billing/paywall-view`), and checkout reads the price from that
- * cookie, never from the request alone. Reaching the last rung needs nothing
- * but hitting three limits, which is why the last rung stays under the wheel.
- *
- * A learner who has not run into anything yet still climbs: while they browse,
- * an offer finds them now and then (`paywall-nudge.tsx`), and each one moves
- * them up a rung, exactly as a feature limit would. It is recorded as `offer`,
- * the one entry that may appear more than once, and only while it still lifts
- * the price; at the top rung the offer keeps showing the 40 % it reached.
+ * The moments live in a cookie the server writes (`POST
+ * /api/billing/paywall-view`), kept only while they still lift the price.
+ * A paywall shows the rung its own moment will reach before it is recorded,
+ * then the server's answer. Checkout gives the rung the paywall showed, but
+ * never more than the cookie allows. Every discount covers the first payment
+ * only and comes without a trial or a promo code.
  *
  * Web only for now: the app sells through Apple, whose prices come from App
  * Store Connect, so it always shows the first step.
@@ -48,44 +42,25 @@ export const PAYWALL_SEEN_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 const LAST_STEP = PAYWALL_LADDER.length;
 
-/** The features whose limits the learner has met, in the order they met them. */
+/** The paywall moments recorded so far, oldest first; only as many as still lift the price. */
 export function readSeenReasons(value: unknown): PaywallReason[] {
   if (typeof value !== "string" || value.length === 0 || value.length > 200) {
     return [];
   }
 
-  const seen: PaywallReason[] = [];
-
-  for (const part of value.split(".")) {
-    if (!(PAYWALL_REASONS as readonly string[]).includes(part)) {
-      continue;
-    }
-
-    const reason = part as PaywallReason;
-
-    if (reason === "offer" ? seen.length < LAST_STEP - 1 : !seen.includes(reason)) {
-      seen.push(reason);
-    }
-  }
-
-  return seen;
+  return value
+    .split(".")
+    .filter((part): part is PaywallReason => (PAYWALL_REASONS as readonly string[]).includes(part))
+    .slice(0, LAST_STEP - 1);
 }
 
 export function writeSeenReasons(seen: readonly PaywallReason[]) {
   return seen.join(".");
 }
 
-/**
- * Adds a feature the first time its limit is met; never reorders. An offer is
- * added every time it is shown, but only while it still lifts the price — once
- * the learner is on the top rung it changes nothing.
- */
+/** Adds a paywall moment, while there is still a rung above to climb to. */
 export function recordSeenReason(seen: readonly PaywallReason[], reason: PaywallReason): PaywallReason[] {
-  if (reason === "offer") {
-    return seen.length < LAST_STEP - 1 ? [...seen, reason] : [...seen];
-  }
-
-  return seen.includes(reason) ? [...seen] : [...seen, reason];
+  return seen.length < LAST_STEP - 1 ? [...seen, reason] : [...seen];
 }
 
 /** The offer on a step; anything out of range is clamped onto the ladder. */
@@ -94,19 +69,29 @@ export function paywallOffer(step: number): PaywallOffer {
   return PAYWALL_LADDER[index];
 }
 
+/** The best rung the recorded moments have reached: the plain price before any. */
+export function reachedOffer(seen: readonly PaywallReason[]): PaywallOffer {
+  return paywallOffer(seen.length + 1);
+}
+
 /**
- * The offer a paywall shows. A feature's own rung is its place in the order
- * the limits were met — or the next place, the first time. No feature, or an
- * offer (recorded before it is shown): the best rung reached, or the plain
- * price before any.
+ * The offer a paywall shows before its moment is recorded. A paywall opened by
+ * a limit or a browsing offer is a new moment, so it shows the rung above the
+ * one reached; one opened by nothing (the Upgrade button) shows the rung
+ * reached, the plain price included.
  */
 export function paywallOfferFor(reason: PaywallReason | null, seen: readonly PaywallReason[]): PaywallOffer {
-  if (!reason || reason === "offer") {
-    return paywallOffer(seen.length === 0 ? 1 : seen.length + 1);
-  }
+  return reason ? reachedOffer(recordSeenReason(seen, reason)) : reachedOffer(seen);
+}
 
-  const place = seen.indexOf(reason);
-  return paywallOffer((place >= 0 ? place : seen.length) + 2);
+/**
+ * What checkout charges: the rung the paywall showed, never above the rung
+ * the recorded moments allow. The paywall records its moment before it lets
+ * the buyer through, so the two agree.
+ */
+export function checkoutOffer(requestedStep: number | null | undefined, seen: readonly PaywallReason[]): PaywallOffer {
+  const allowed = reachedOffer(seen);
+  return requestedStep ? paywallOffer(Math.min(requestedStep, allowed.step)) : allowed;
 }
 
 /** A price with the step's discount taken off, rounded to the cent. */

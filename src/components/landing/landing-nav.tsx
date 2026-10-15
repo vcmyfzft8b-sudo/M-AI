@@ -1,15 +1,15 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { AnimatedLockup } from "@/components/animated-lockup";
 import { useT } from "@/components/i18n-provider";
 import { LandingLoadingLink } from "@/components/landing-loading-link";
 import { InstantLink } from "@/components/instant-link";
 import { LandingLanguagePicker } from "@/components/language-picker";
 import { Msym } from "@/components/msym";
-import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, BRAND_SUPPORT_EMAIL, SEO_BRAND_NAME } from "@/lib/brand";
+import { BRAND_SUPPORT_EMAIL, SEO_BRAND_NAME } from "@/lib/brand";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 
 /* The page's own sections, in the order a visitor meets them. */
@@ -76,13 +76,7 @@ export function LandingNav() {
 
   const lockup = (
     <span className="landing-v2-lockup">
-      <Image
-        src={BRAND_LOCKUP_SRC}
-        alt={SEO_BRAND_NAME}
-        width={BRAND_LOCKUP_WIDTH}
-        height={BRAND_LOCKUP_HEIGHT}
-        priority
-      />
+      <AnimatedLockup fill priority />
     </span>
   );
 

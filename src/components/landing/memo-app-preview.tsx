@@ -22,6 +22,7 @@
 
 import Image from "next/image";
 
+import { AnimatedLockup } from "@/components/animated-lockup";
 import { useTranslations } from "@/components/i18n-provider";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { LOCALE_LABELS, type Locale } from "@/lib/i18n/locales";
@@ -32,7 +33,6 @@ import { Component } from "react";
 
 import { ExamEntryCard } from "@/components/exams/exam-entry-card";
 import { Emoji, Msym } from "@/components/msym";
-import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, SEO_BRAND_NAME } from "@/lib/brand";
 
 import { LandingAppScope, type LandingAppTheme } from "./app/landing-app-scope";
 import { LandingFlashcardsScreen } from "./app/landing-flashcards-screen";
@@ -1060,14 +1060,8 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
           <>
             {/* Above the fold and inside a transformed, masked box, where a lazy image is
                 not reliably triggered — so it is fetched eagerly. */}
-            <Image
-              src={BRAND_LOCKUP_SRC}
-              alt={SEO_BRAND_NAME}
-              width={BRAND_LOCKUP_WIDTH}
-              height={BRAND_LOCKUP_HEIGHT}
-              priority
-              style={{ position: "relative", zIndex: 1, height: "49.6px", width: "auto", objectFit: "contain" }}
-            />
+            {/* The app's own home-bar lockup, Memo alive in it as he is in the app. */}
+            <AnimatedLockup priority style={{ zIndex: 1, height: "49.6px" }} />
             <button
               type="button"
               aria-label={t("nav.settings")}

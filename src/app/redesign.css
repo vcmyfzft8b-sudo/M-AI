@@ -28886,9 +28886,20 @@ a.memo-exam-station-go {
 .memo-lockup-animated {
   position: relative;
   display: inline-block;
-  height: 2.9rem;
   aspect-ratio: 480 / 148;
   vertical-align: middle;
+}
+
+/* The header's size, at no specificity, so a caller's own sizing class (offer, creator pages) wins. */
+:where(.memo-lockup-animated) {
+  height: 2.9rem;
+}
+
+/* In a box the caller sizes, as the still image filled it. */
+.memo-lockup-animated.fill {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .memo-lockup-animated img.memo-lockup-wordmark {

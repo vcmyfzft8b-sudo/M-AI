@@ -3,18 +3,13 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AnimatedLockup } from "@/components/animated-lockup";
 import { useTranslations } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { clearOfferResume, markOfferResume, readOfferResume } from "@/lib/offer-resume";
-import {
-  BRAND_LOCKUP_HEIGHT,
-  BRAND_LOCKUP_SRC,
-  BRAND_LOCKUP_WIDTH,
-  SEO_BRAND_NAME,
-} from "@/lib/brand";
 import { STANDARD_PLAN_PRICES, type PlanPrices } from "@/lib/billing-regions";
 import { formatCurrency } from "@/lib/utils";
 import { nativeRequest } from "@/lib/mobile/client";
@@ -713,14 +708,7 @@ export function DiscountOffer({
           </div>
 
           <div className="memo-offer-body">
-            <Image
-              src={BRAND_LOCKUP_SRC}
-              alt={SEO_BRAND_NAME}
-              width={BRAND_LOCKUP_WIDTH}
-              height={BRAND_LOCKUP_HEIGHT}
-              className="memo-offer-logo"
-              priority
-            />
+            <AnimatedLockup className="memo-offer-logo" priority />
             <p className="memo-offer-kicker">{t("offer.kicker")}</p>
             <p className="memo-offer-headline">{t("offer.headline")}</p>
             <p className="memo-offer-sub">{t("offer.sub")}</p>

@@ -36,6 +36,7 @@ function load(component, native, products = []) {
     "@/components/use-apple-billing": { useAppleBilling: () => apple },
     "@/components/apple-billing-terms": { AppleBillingTerms: () => React.createElement("div", null, "Apple renewal terms") },
     "@/components/memo-portal": { MemoPortal: ({ children }) => children },
+    "@/components/animated-lockup": { AnimatedLockup: ({ className }) => React.createElement("span", { className: `memo-lockup-animated ${className ?? ""}`.trim() }) },
     "@/components/use-sheet": { useSheet: () => ({ closing: false, dismiss() {}, dragProps: {} }), sheetClass: s => s },
     "@/lib/offer-resume": { clearOfferResume() {}, markOfferResume() {}, readOfferResume: () => ({ expiresAt: null }) },
     "@/lib/mobile/client": { useNativeIOS: () => native, nativeRequest() { throw new Error("No Apple calls during render"); } },

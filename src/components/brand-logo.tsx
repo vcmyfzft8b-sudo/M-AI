@@ -1,11 +1,5 @@
-import Image from "next/image";
 
-import {
-  BRAND_LOCKUP_HEIGHT,
-  BRAND_LOCKUP_SRC,
-  BRAND_LOCKUP_WIDTH,
-  SEO_BRAND_NAME,
-} from "@/lib/brand";
+import { AnimatedLockup } from "@/components/animated-lockup";
 
 /**
  * `subtitle` defaults to nothing rather than to the tagline. Every caller
@@ -30,14 +24,7 @@ export function BrandLogo({
   return (
     <span className={className}>
       <span className="brand-logo-mark">
-        <Image
-          src={BRAND_LOCKUP_SRC}
-          alt={SEO_BRAND_NAME}
-          width={BRAND_LOCKUP_WIDTH}
-          height={BRAND_LOCKUP_HEIGHT}
-          className="brand-logo-image"
-          priority={priority}
-        />
+        <AnimatedLockup fill priority={priority} />
       </span>
       {showSubtitle ? (
         <span className="brand-logo-copy">

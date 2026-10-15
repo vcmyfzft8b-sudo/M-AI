@@ -2,9 +2,9 @@
 
 import { Check, CircleCheck, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { AnimatedLockup } from "@/components/animated-lockup";
 import { useT, useTranslations } from "@/components/i18n-provider";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { Msym } from "@/components/msym";
@@ -21,12 +21,6 @@ import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import { notePaywallShown, paywallVisitCounted } from "@/lib/paywall-offer-timing";
 import { discountedAmount, paywallOffer, weeklyAmount } from "@/lib/paywall-ladder";
 import { PaywallCompare, PaywallHero, paywallAccentStyle, paywallLayout } from "@/components/paywall-hero";
-import {
-  BRAND_LOCKUP_HEIGHT,
-  BRAND_LOCKUP_SRC,
-  BRAND_LOCKUP_WIDTH,
-  SEO_BRAND_NAME,
-} from "@/lib/brand";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 
 type BillingPlanCard = {
@@ -301,13 +295,7 @@ export function OnboardingPaywall({
       ) : reason ? null : (
         <div className="memo-paywall-brand">
           <span className="memo-paywall-logo">
-            <Image
-              src={BRAND_LOCKUP_SRC}
-              alt={SEO_BRAND_NAME}
-              width={BRAND_LOCKUP_WIDTH}
-              height={BRAND_LOCKUP_HEIGHT}
-              priority
-            />
+            <AnimatedLockup fill priority />
           </span>
         </div>
       )}

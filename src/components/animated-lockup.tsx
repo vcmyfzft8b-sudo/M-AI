@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 
 import { MemoBuddy, type BuddyIdle } from "@/components/exams/memo-buddy";
 import {
@@ -34,10 +34,24 @@ const TAP_SHINE_MS = 1400;
  * the shine across the letters. At rest it is the lockup, pixel for pixel in the places that
  * matter, so nothing about the header's size or alignment changes.
  *
- * Used in the app's own chrome only (the phone home bar and the desktop header). The landing,
- * paywall and onboarding keep the still image.
+ * Used wherever the lockup appears: the app's chrome (phone home bar, desktop header), the
+ * landing (nav, hero phone, footer), sign-in and other `BrandLogo` places, the paywalls, the
+ * onboarding, the error screen and the creator pages. Only the root error boundary
+ * (`global-error.tsx`), which must render with nothing else working, keeps the still image.
  */
-export function AnimatedLockup({ priority = false }: { priority?: boolean }) {
+export function AnimatedLockup({
+  priority = false,
+  fill = false,
+  className,
+  style,
+}: {
+  priority?: boolean;
+  /** Fill a box the caller sizes (the lockup's 480:148), as the still image did in it. */
+  fill?: boolean;
+  /** A caller's own sizing class, for places that sized the still image itself. */
+  className?: string;
+  style?: CSSProperties;
+}) {
   const [taps, setTaps] = useState(0);
   const [shining, setShining] = useState(false);
 
@@ -52,7 +66,10 @@ export function AnimatedLockup({ priority = false }: { priority?: boolean }) {
 
   return (
     <span
-      className={`memo-lockup-animated${shining ? " is-shining" : ""}`}
+      className={["memo-lockup-animated", fill ? "fill" : "", shining ? "is-shining" : "", className ?? ""]
+        .filter(Boolean)
+        .join(" ")}
+      style={style}
       role="img"
       aria-label={SEO_BRAND_NAME}
       onClick={() => {

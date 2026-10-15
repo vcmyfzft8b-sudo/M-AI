@@ -18,7 +18,7 @@ import { clearOfferResume } from "@/lib/offer-resume";
 import { formatCurrency } from "@/lib/utils";
 import type { PaywallReason } from "@/lib/paywall-reasons";
 import { discountedAmount, paywallOffer } from "@/lib/paywall-ladder";
-import { PaywallHero, paywallAccentStyle, paywallLayout } from "@/components/paywall-hero";
+import { PaywallCompare, PaywallHero, paywallAccentStyle, paywallLayout } from "@/components/paywall-hero";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -234,7 +234,12 @@ export function OnboardingPaywall({
       )}
 
       {/* A feature's paywall shows the feature, moving, in place of the list. */}
-      {reason && !hasNotice ? <PaywallHero reason={reason} /> : null}
+      {reason && !hasNotice ? (
+        <PaywallHero
+          reason={reason}
+          sticker={discounted ? t("paywall.offer.badge", { percent: offer.percentOff }) : null}
+        />
+      ) : null}
 
       {discounted ? (
         <p className="memo-paywall-offer">{t("paywall.offer.pill", { percent: offer.percentOff })}</p>
@@ -250,6 +255,8 @@ export function OnboardingPaywall({
           {t(`paywall.reason.${reason}.benefitCopy`)}
         </p>
       ) : null}
+
+      {reason === "library" ? <PaywallCompare /> : null}
 
       {reason ? null : (
         <div className="memo-paywall-benefits">

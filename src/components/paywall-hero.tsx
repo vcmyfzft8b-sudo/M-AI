@@ -30,9 +30,9 @@ const SCENES: Record<PaywallReason, { accent?: string; layout: PaywallLayout }> 
   listen: { accent: tint("speed"), layout: "rows" },
   tutor: { accent: tint("tutor"), layout: "spotlight" },
   podcast: { accent: tint("podcast"), layout: "rows" },
-  note: { accent: tint("notes"), layout: "spotlight" },
+  note: { accent: tint("notes"), layout: "cards" },
   locked: { accent: tint("palace"), layout: "cards" },
-  regenerate: { accent: tint("flashcards"), layout: "rows" },
+  regenerate: { accent: tint("flashcards"), layout: "cards" },
   library: { accent: tint("mindmap"), layout: "spotlight" },
 };
 
@@ -94,7 +94,43 @@ function Memo({ move, prop, propClass = "", thought }: { move: string; prop?: st
   );
 }
 
-export function PaywallHero({ reason }: { reason: PaywallReason }) {
+/**
+ * Free next to the subscription, line by line, with the real limits — the
+ * library paywall's whole argument, since asking across notes only means
+ * something once there is more than the one free note.
+ */
+export function PaywallCompare() {
+  const t = useT();
+  const rows = [
+    ["paywall.compare.notes", "paywall.compare.notesFree", "paywall.compare.notesPlan"],
+    ["paywall.compare.chat", "paywall.compare.chatFree", "paywall.compare.chatPlan"],
+    ["paywall.compare.listen", "paywall.compare.listenFree", "paywall.compare.listenPlan"],
+    ["paywall.compare.tutor", "paywall.compare.tutorFree", "paywall.compare.tutorPlan"],
+  ] as const;
+
+  return (
+    <table className="memo-pw-compare">
+      <thead>
+        <tr>
+          <th />
+          <th scope="col">{t("paywall.compare.free")}</th>
+          <th scope="col" className="plan">{t("paywall.compare.plan")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(([label, free, plan]) => (
+          <tr key={label}>
+            <th scope="row">{t(label)}</th>
+            <td>{t(free)}</td>
+            <td className="plan">{t(plan)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+export function PaywallHero({ reason, sticker }: { reason: PaywallReason; sticker?: string | null }) {
   const t = useT();
   let scene: ReactNode;
 
@@ -214,6 +250,10 @@ export function PaywallHero({ reason }: { reason: PaywallReason }) {
   return (
     <div className={`memo-pw-hero ${reason}`} style={paywallAccentStyle(reason)} aria-hidden="true">
       {scene}
+      {/* The discount, slapped on the scene like a sticker (the podcast and practice rooms). */}
+      {sticker && (reason === "podcast" || reason === "regenerate") ? (
+        <span className="memo-pw-sticker">{sticker}</span>
+      ) : null}
     </div>
   );
 }

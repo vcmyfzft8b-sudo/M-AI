@@ -43,8 +43,9 @@ import {
 } from "@/lib/ugc/sync";
 import type { Json, UgcCreatorApplicationRow } from "@/lib/database.types";
 import { campaignLocale, type CreatorMarket } from "@/lib/ugc/creator-program";
-import { contractPaySchema, type ContractPay } from "@/lib/ugc/creator-pay";
-import { editedContractText } from "@/lib/ugc/contract-edit";
+import { contractPaySchema, sameContractPay, type ContractPay } from "@/lib/ugc/creator-pay";
+import { editedContractText, normalizeContractText } from "@/lib/ugc/contract-edit";
+import { applicationCampaignPay } from "@/lib/ugc/contract-rows";
 import { CREATOR_TERMS_VERSION } from "@/lib/ugc/creator-terms";
 import { contractSourceTerms, loadContractSource } from "@/lib/admin/contracts";
 import { sendAcceptanceEmail } from "@/lib/ugc/send-acceptance-email";
@@ -1371,7 +1372,7 @@ export async function updateCreatorContractAction(
   const locale = campaignLocale(fields.market, fields.requestedLocale);
   const edited = editedContractText({
     submitted: readString(formData, "terms_text"),
-    current: readString(formData, "terms_shown"),
+    current: before.text,
     handWritten: before.override !== null,
     before,
     after: { locale, market: fields.market, pay: fields.pay, applied: before.applied },
@@ -1392,10 +1393,15 @@ export async function updateCreatorContractAction(
   const serviceRole = createSupabaseServiceRoleClient();
 
   // A signed contract's stored text is what the creator now has; regenerated text is
-  // written at the current terms version.
-  const signedText = before.signed
-    ? { terms_snapshot: edited.text, ...(edited.regenerated ? { terms_version: CREATOR_TERMS_VERSION } : {}) }
-    : {};
+  // written at the current terms version. A signature from before the text was kept gets
+  // one only when the text actually changes: fixing an email must not invent the words
+  // they signed.
+  const textChanged = edited.text !== normalizeContractText(before.text);
+  const storedVersion = before.signed && edited.regenerated ? CREATOR_TERMS_VERSION : null;
+  const signedText =
+    before.signed && (before.signedText !== null || textChanged)
+      ? { terms_snapshot: edited.text, ...(storedVersion ? { terms_version: storedVersion } : {}) }
+      : {};
 
   const { data, error } =
     source.kind === "contract"
@@ -1421,7 +1427,13 @@ export async function updateCreatorContractAction(
           ...(locale !== before.locale ? { locale } : {}),
           // Their age decides unless the admin says otherwise.
           contract_minor: fields.minor === (source.row.age !== null && source.row.age < 18) ? null : fields.minor,
-          contract_pay: fields.pay as unknown as Json,
+          // Campaign pay stays implicit, so a campaign pay change still reaches them.
+          contract_pay: sameContractPay(
+            fields.pay,
+            applicationCampaignPay(fields.market, before.signed ? (storedVersion ?? source.row.terms_version) : null),
+          )
+            ? null
+            : (fields.pay as unknown as Json),
           terms_override: override,
           terms_edited_at: editedAt,
           terms_edited_by: editor,

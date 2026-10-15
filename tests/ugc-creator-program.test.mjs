@@ -70,7 +70,8 @@ test("an applicant who signed earlier terms is shown the campaign pay of that ve
   // The admin and a signed join link both read an applicant's terms through one place
   // (unless the admin gave them their own deal), and a signed link shows what was signed.
   const rows = readSource("src/lib/ugc/contract-rows.ts");
-  assert.match(rows, /parseContractPay\(row\.contract_pay\) \?\? campaignPay\(campaignTermsAt\(row\.market, signed \? row\.terms_version : null\)\)/);
+  assert.match(rows, /ownPay \?\? applicationCampaignPay\(row\.market, signed \? row\.terms_version : null\)/);
+  assert.match(rows, /return campaignPay\(campaignTermsAt\(market, signedVersion\)\)/);
   assert.match(rows, /const signed = row\.terms_accepted_at !== null/);
   assert.match(readSource("src/lib/admin/contracts.ts"), /applicationRowTerms\(row\)/);
   const signing = readSource("src/lib/ugc/creator-signing.server.ts");
@@ -610,6 +611,13 @@ test("every contract can be edited in place, and the signature record is never r
   assert.match(body, /"ugc_creator_contracts"/);
   assert.match(body, /"ugc_creator_applications"/);
   assert.match(body, /terms_snapshot: edited\.text/);
+  // A signature from before the text was kept is never given invented "signed" words by an
+  // edit that leaves the text alone.
+  assert.match(body, /before\.signed && \(before\.signedText !== null \|\| textChanged\)/);
+  // An applicant left on the campaign's pay keeps no deal of their own.
+  assert.match(body, /contract_pay: sameContractPay\(/);
+  // The text is compared with the server's own copy, not one the browser sends back.
+  assert.match(body, /current: before\.text/);
 
   // The signing link shows the hand-written text until signed, and the signed text after.
   const signing = readSource("src/lib/ugc/creator-signing.server.ts");

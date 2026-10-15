@@ -19,6 +19,8 @@ export type ContractTerms = {
   /** A parent or guardian signs too. */
   minor: boolean;
   pay: ContractPay;
+  /** An applicant on their campaign's standard pay (no deal of their own). */
+  standardPay: boolean;
   /** False when a contract's stored pay is not a valid deal; its link opens nothing until fixed. */
   payValid: boolean;
   applied: boolean;
@@ -42,16 +44,19 @@ export function contractRowTerms(row: UgcCreatorContractRow): ContractTerms {
     locale: campaignLocale(row.market, row.locale),
     minor: row.minor,
     pay: pay ?? campaignPay(CREATOR_TERMS[row.market]),
+    standardPay: false,
     payValid: pay !== null,
     applied: false,
     signed: row.signed_at !== null,
     signedText: row.signed_at ? row.terms_snapshot : null,
-    override: row.terms_override,
+    // `?? null`: the column is missing until migration 0065 has run.
+    override: row.terms_override ?? null,
   });
 }
 
 export function applicationRowTerms(row: UgcCreatorApplicationRow & { market: CreatorMarket }): ContractTerms {
   const signed = row.terms_accepted_at !== null;
+  const ownPay = parseContractPay(row.contract_pay);
 
   return withText({
     market: row.market,
@@ -59,11 +64,21 @@ export function applicationRowTerms(row: UgcCreatorApplicationRow & { market: Cr
     minor: row.contract_minor ?? (row.age !== null && row.age < 18),
     // Their own deal when the admin set one; otherwise the campaign's pay under the terms
     // version they signed (the current one until they sign).
-    pay: parseContractPay(row.contract_pay) ?? campaignPay(campaignTermsAt(row.market, signed ? row.terms_version : null)),
+    pay: ownPay ?? applicationCampaignPay(row.market, signed ? row.terms_version : null),
+    standardPay: ownPay === null,
     payValid: true,
     applied: true,
     signed,
     signedText: signed ? row.terms_snapshot : null,
-    override: row.terms_override,
+    override: row.terms_override ?? null,
   });
+}
+
+/**
+ * An applicant's campaign pay: under the terms version they signed, or the current one
+ * until they sign. An applicant whose deal equals it keeps no `contract_pay`, so a later
+ * change to the campaign's pay still reaches their unsigned link.
+ */
+export function applicationCampaignPay(market: CreatorMarket, signedVersion: string | null): ContractPay {
+  return campaignPay(campaignTermsAt(market, signedVersion));
 }

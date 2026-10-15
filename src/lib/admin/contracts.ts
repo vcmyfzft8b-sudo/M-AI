@@ -77,7 +77,7 @@ function fromApplication(row: UgcCreatorApplicationRow & { market: "si" | "balka
     market: row.market,
     status: row.terms_accepted_at ? "signed" : "sent",
     // The campaign's pay under the terms version they accepted, unless the admin gave them their own.
-    pay: `${describeContractPay(terms.pay)}${row.contract_pay ? "" : " (campaign)"}`,
+    pay: `${describeContractPay(terms.pay)}${terms.standardPay ? " (campaign)" : ""}`,
     joinToken: row.join_token,
     createdAt: row.reviewed_at ?? row.created_at,
     signedAt: row.terms_accepted_at,
@@ -181,6 +181,8 @@ export type EditableContract = {
   email: string | null;
   status: ContractRecord["status"];
   terms: ContractTerms;
+  editedAt: string | null;
+  editedBy: string | null;
 };
 
 export async function getEditableContract(id: string): Promise<EditableContract | null> {
@@ -199,5 +201,7 @@ export async function getEditableContract(id: string): Promise<EditableContract 
     email: record.email,
     status: record.status,
     terms: contractSourceTerms(source),
+    editedAt: record.editedAt,
+    editedBy: record.editedBy,
   };
 }

@@ -4,7 +4,7 @@ import { ContractForm } from "@/components/admin/contract-form";
 import { PendingLink } from "@/components/admin/pending-link";
 import { Badge, formatDateTime, Section } from "@/components/admin/ui";
 import { requireAdmin } from "@/lib/admin/auth";
-import { getContractRecord, getEditableContract } from "@/lib/admin/contracts";
+import { getEditableContract } from "@/lib/admin/contracts";
 
 export const dynamic = "force-dynamic";
 
@@ -17,9 +17,9 @@ export default async function EditContractPage({ params }: { params: Promise<{ i
   await requireAdmin();
 
   const { id } = await params;
-  const [contract, record] = await Promise.all([getEditableContract(id), getContractRecord(id)]);
+  const contract = await getEditableContract(id);
 
-  if (!contract || !record) {
+  if (!contract) {
     notFound();
   }
 
@@ -36,7 +36,9 @@ export default async function EditContractPage({ params }: { params: Promise<{ i
           <p className="admin-subtitle">
             {contract.kind === "application" ? "Accepted applicant" : "Creator contract"} · same signing link · nothing is
             sent to them
-            {record.editedAt ? ` · last edited ${formatDateTime(record.editedAt)}${record.editedBy ? ` by ${record.editedBy}` : ""}` : ""}
+            {contract.editedAt
+              ? ` · last edited ${formatDateTime(contract.editedAt)}${contract.editedBy ? ` by ${contract.editedBy}` : ""}`
+              : ""}
           </p>
         </div>
         {contract.status === "signed" ? (
@@ -56,6 +58,12 @@ export default async function EditContractPage({ params }: { params: Promise<{ i
             : "Not signed yet. The signing link shows the new version as soon as you save."
         }
       >
+        {terms.payValid ? null : (
+          <p className="admin-help">
+            Its stored pay could not be read, so the pay fields below start from the campaign&apos;s standard pay. Check
+            them before saving.
+          </p>
+        )}
         <ContractForm
           defaultName={contract.name}
           defaultEmail={contract.email ?? ""}

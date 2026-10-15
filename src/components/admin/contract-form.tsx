@@ -185,7 +185,6 @@ export function ContractForm({
       {contract ? (
         <>
           <p className="admin-subheading">Contract text</p>
-          <input type="hidden" name="terms_shown" value={contract.text} />
           <div className="admin-field">
             <label className="admin-label" htmlFor="contract-terms_text">
               {contract.signed ? "The text they signed, as it will now read" : "The text they will sign"}

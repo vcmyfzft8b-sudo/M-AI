@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, type CSSProperties } from "react";
 
-import { MascotFigure, MascotSparkles } from "@/components/onboarding-mascot";
+import { MascotFigure, MascotSparkles, MascotThought } from "@/components/onboarding-mascot";
 import {
   MASCOT_MOVES,
   blinkFrames,
@@ -39,6 +39,12 @@ const MOOD_MOVE: Record<BuddyMood, MascotMove | null> = {
 
 /* The small things he does on his own while nobody is talking to him, so he never looks like a still. */
 const IDLE_MOVES: MascotMove[] = ["nod", "wave", "jelly", "boing", "nod", "hop"];
+
+/** The onboarding's cloud fits a Memo about 6rem wide; a smaller or larger Memo gets it scaled to match. */
+function thoughtScale(size: string) {
+  const rem = size.endsWith("rem") ? Number.parseFloat(size) : 6;
+  return Math.min(1.3, Math.max(0.6, rem / 6));
+}
 
 function isCalm() {
   return typeof window !== "undefined" && window.matchMedia?.(CALM_QUERY).matches === true;
@@ -186,15 +192,8 @@ export function MemoBuddy({
       }}
     >
       {sparkles ? <MascotSparkles /> : null}
-      {thought ? (
-        <span className="memo-buddy-thought" aria-hidden="true">
-          <i className="memo-buddy-bead small" />
-          <i className="memo-buddy-bead" />
-          <span className="memo-buddy-cloud">
-            <span>{thought}</span>
-          </span>
-        </span>
-      ) : null}
+      {/* The onboarding's own thought cloud, sized to him (it is drawn for a Memo about 6rem wide). */}
+      {thought ? <MascotThought icon={thought} offset="0.5rem" scale={thoughtScale(size)} /> : null}
       <div className="memo-buddy-bob">
         <div ref={bodyRef} className="memo-buddy-body">
           <div className="memo-buddy-breathe">

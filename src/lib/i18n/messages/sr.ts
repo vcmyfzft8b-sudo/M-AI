@@ -2375,8 +2375,6 @@ export const sr: Messages = {
   "exam.entry.title": "Priprema za ispit",
   "exam.entry.body": "Plan učenja, kvizovi i probni ispit",
   "exam.library.title": "Pripreme za ispit",
-  "exam.library.all": "Sve",
-  "exam.library.notes": "Beleške",
   "exam.library.new": "Nova priprema za ispit",
   "exam.minutes": "{minutes} min",
   "exam.path.planning": "Pripremam teme …",

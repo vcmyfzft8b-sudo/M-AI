@@ -148,7 +148,14 @@ export function LibraryFolderMenu({
    * The exam-prep folder, pinned under "Vsi zapiski": not a folder of notes but the library's
    * place for preps. The library decides what it shows; the picker only offers and marks it.
    */
-  examPreps?: { count: number; selected: boolean; onSelect: () => void; onSelectAll: () => void } | null;
+  examPreps?: {
+    count: number;
+    selected: boolean;
+    /** The library was opened on the folder (leaving a prep): the chip pulses once to show it. */
+    announce: boolean;
+    onSelect: () => void;
+    onSelectAll: () => void;
+  } | null;
 }) {
   const { locale, t } = useTranslations();
   const isCreatorDemo = useIsCreatorDemo();
@@ -698,7 +705,7 @@ export function LibraryFolderMenu({
       {/* Desktop chip: 📁 · name · caret, as the redesign draws it. */}
       <button
         type="button"
-        className="memo-folder-chip memo-only-desktop"
+        className={`memo-folder-chip memo-only-desktop ${showingExamPreps && examPreps?.announce ? "announce" : ""}`.trim()}
         onClick={handleToggleMenu}
         aria-expanded={isOpen}
       >
@@ -710,7 +717,7 @@ export function LibraryFolderMenu({
       {/* Phone chip: shorter, with the expand caret the sheet opens from. */}
       <button
         type="button"
-        className="memo-m-folder-chip memo-only-mobile"
+        className={`memo-m-folder-chip memo-only-mobile ${showingExamPreps && examPreps?.announce ? "announce" : ""}`.trim()}
         onClick={handleToggleMenu}
         aria-expanded={isOpen}
       >

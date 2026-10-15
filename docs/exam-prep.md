@@ -8,20 +8,20 @@ study path. It follows Astra AI's exam-prep flow, drawn in Memo's own components
 - **"Novo"** (the phone dock button, formerly "Nov zapisek", and the desktop heading above the
   quick actions) opens a sheet whose first item is the coral exam-prep card. Like every option
   there, it always starts something new (`/app/exams/new`). The four note sources follow it.
-- **The library:** a learner may have any number of preps, and they live in "Moji zapiski".
-  - **The folder.** The folder picker pins "🎓 Priprave na test" (with a count) under "Vsi
-    zapiski", in the desktop menu and the phone sheet. Choosing it shows every prep, the ones
-    ahead first and past or archived ones under "Pretekli izpiti", and a row that starts a new
-    one. Its address is `/app?view=preps` (`EXAM_PREPS_HREF`); leaving a prep (the exam's back
-    button, archiving, deleting, closing setup) goes there, so a new prep is seen to land in it.
-    `/app/exams` redirects to it.
-  - **The group.** In "Vsi zapiski" the preps still ahead of their exam stand above the notes as
-    a group of their own, whose "Vse" opens the folder. Its heading folds it away; the choice is
-    kept in the `memo-preps-collapsed` cookie, which the server reads so the page paints folded.
-  - The rows are note rows; Memo in a ring of mastery marks them as preps. Preps are not filed in
-    note folders, so a note folder shows none; a search matches their titles
-    (`listLibraryExamPreps`, `ExamLibraryList`). Storage stays separate: preps are `exams` rows
-    that reference their notes through `exam_modules`, never `lectures` rows.
+- **The library:** a learner may have any number of preps, and they live in "Moji zapiski", in
+  a folder of their own.
+  - Mape, the folder picker, holds "Vsi zapiski" (the notes), then "🎓 Priprave na test" (with
+    its count) once there is a prep, then the learner's own folders, in the desktop menu and the
+    phone sheet alike. The chip names the open folder. There is no prep list on the notes view.
+  - The folder shows every prep, the ones ahead first and past or archived ones under "Pretekli
+    izpiti", and a row that starts a new one. Its address is `/app?view=preps`
+    (`EXAM_PREPS_HREF`); leaving a prep (the exam's back button, archiving, deleting, closing
+    setup) goes there, and arriving that way the chip pulses twice in coral, so a new prep is seen
+    to land in it. `/app/exams` redirects there.
+  - The rows are note rows; Memo in a ring of mastery marks them as preps. A search in the folder
+    matches their titles (`listLibraryExamPreps`, `ExamLibraryList`). Storage stays separate:
+    preps are `exams` rows that reference their notes through `exam_modules`, never `lectures`
+    rows.
 - **Desktop rail:** no entry of its own; "Domov" stays lit on every exam page, and an exam page
   has no "← Domov" link either, since the rail already is one. Lessons and the Generalka keep
   their link back to the exam.

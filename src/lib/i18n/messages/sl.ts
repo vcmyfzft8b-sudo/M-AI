@@ -2398,8 +2398,6 @@ export const sl = {
   "exam.entry.title": "Priprava na test",
   "exam.entry.body": "Učna pot, kvizi in generalka",
   "exam.library.title": "Priprave na test",
-  "exam.library.all": "Vse",
-  "exam.library.notes": "Zapiski",
   "exam.library.new": "Nova priprava na test",
   "exam.minutes": "{minutes} min",
   "exam.path.planning": "Pripravljam teme …",

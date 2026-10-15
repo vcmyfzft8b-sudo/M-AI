@@ -2361,8 +2361,6 @@ export const en: Messages = {
   "exam.entry.title": "Exam prep",
   "exam.entry.body": "Study path, quizzes and a mock exam",
   "exam.library.title": "Exam prep",
-  "exam.library.all": "See all",
-  "exam.library.notes": "Notes",
   "exam.library.new": "New exam prep",
   "exam.minutes": "{minutes} min",
   "exam.path.planning": "Preparing topics…",

@@ -1,4 +1,4 @@
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 
 import { HomeDashboard } from "@/components/home-dashboard";
 import { OfflineHomeCapture } from "@/components/offline/offline-capture";
@@ -6,7 +6,6 @@ import { getPricingCountry, getViewerAppState } from "@/lib/billing";
 import { planPricesFor } from "@/lib/billing-regions";
 import { getDiscountWheelState } from "@/lib/discount-wheel";
 import { requireUser } from "@/lib/auth";
-import { EXAM_PREPS_COLLAPSED_COOKIE } from "@/lib/exams/exam-model";
 import { listLibraryExamPreps } from "@/lib/exams/exams-server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { listLibraryFoldersForUser } from "@/lib/library-folders";
@@ -46,7 +45,7 @@ export default async function AppHomePage({
           console.error("[app] discount wheel state failed", error);
           return null;
         }),
-    // The exam preps the library lists above the notes. Like the wheel, never worth the home screen.
+    // The library's exam-prep folder. Like the wheel, never worth the home screen.
     createSupabaseServerClient()
       .then((supabase) => listLibraryExamPreps(supabase, user.id))
       .catch((error) => {
@@ -58,7 +57,6 @@ export default async function AppHomePage({
   // profile the entitlement state already loaded — null means this account has
   // never opened the guide, on any device, which is exactly who the dot is for.
   const installGuideSeen = Boolean(appState?.profile?.install_guide_seen_at);
-  const examPrepsCollapsed = (await cookies()).get(EXAM_PREPS_COLLAPSED_COOKIE)?.value === "1";
   const host =
     process.env.NODE_ENV === "production"
       ? ""
@@ -94,7 +92,6 @@ export default async function AppHomePage({
         showDevDashboard={showDevDashboard}
         planPrices={planPricesFor(await getPricingCountry())}
         examPreps={examPreps}
-        examPrepsCollapsed={examPrepsCollapsed}
         initialLibraryView={params?.view === "preps" ? "preps" : "all"}
       />
     </>

@@ -927,7 +927,6 @@ export function HomeDashboard({
   showDevDashboard,
   planPrices,
   examPreps = [],
-  examPrepsCollapsed = false,
   initialLibraryView = "all",
 }: {
   lectures: AppLectureListItem[];
@@ -947,10 +946,8 @@ export function HomeDashboard({
   showDevDashboard: boolean;
   /** What the wheel's offer is priced at for this buyer's country. */
   planPrices?: PlanPrices;
-  /** The exam preps still ahead of their exam, listed in the library above the notes. */
+  /** Every exam prep, for the library's exam-prep folder (upcoming first, then past). */
   examPreps?: LibraryExamPrep[];
-  /** Whether the learner folded that group away, from its cookie. */
-  examPrepsCollapsed?: boolean;
   /** "preps" opens the library on its exam-prep folder (`/app?view=preps`), where leaving a prep goes. */
   initialLibraryView?: "all" | "preps";
 }) {
@@ -1057,6 +1054,8 @@ export function HomeDashboard({
   const [busyLectureId, setBusyLectureId] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [libraryView, setLibraryView] = useState<"all" | "preps">(initialLibraryView);
+  // The folder chip's pulse is for arriving on the folder from a prep, once, not for every visit.
+  const [announcePreps, setAnnouncePreps] = useState(initialLibraryView === "preps");
   const [selectedFolderLectureIds, setSelectedFolderLectureIds] = useState<string[] | null>(null);
   const [openMenuLectureId, setOpenMenuLectureId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<AppLectureListItem | null>(null);
@@ -1638,6 +1637,7 @@ export function HomeDashboard({
   const showingPreps = libraryView === "preps" && !isCreatorDemo;
   const selectLibraryView = useCallback((view: "all" | "preps") => {
     setLibraryView(view);
+    setAnnouncePreps(false);
     window.history.replaceState(window.history.state, "", view === "preps" ? EXAM_PREPS_HREF : "/app");
   }, []);
   const handleSelectFolder = useCallback(
@@ -1651,24 +1651,25 @@ export function HomeDashboard({
     },
     [selectLibraryView],
   );
-  const folderMenuPreps = isCreatorDemo
-    ? null
-    : {
-        count: examPreps.filter((prep) => !prep.past).length,
-        selected: showingPreps,
-        onSelect: () => selectLibraryView("preps"),
-        onSelectAll: () => selectLibraryView("all"),
-      };
+  /*
+   * The folder is in Mape once there is a prep to put in it (or while it is open). Arriving on it
+   * from a prep, a new one above all, the folder chip says so with a short pulse, so the learner
+   * sees where preps went.
+   */
+  const folderMenuPreps =
+    isCreatorDemo || (examPreps.length === 0 && !showingPreps)
+      ? null
+      : {
+          count: examPreps.filter((prep) => !prep.past).length,
+          selected: showingPreps,
+          announce: announcePreps,
+          onSelect: () => selectLibraryView("preps"),
+          onSelectAll: () => selectLibraryView("all"),
+        };
 
   const inLibraryView = !selectedFolderId && !deferredQuery.trim() && !showingPreps;
-  /*
-   * Preps are not filed in folders, so a folder shows none; a search matches their titles the way
-   * it matches the notes'.
-   */
-  const visibleExamPreps =
-    isCreatorDemo || selectedFolderId
-      ? []
-      : examPreps.filter((prep) => !search || prep.title.toLowerCase().includes(search));
+  // In their folder a search matches the preps' titles, as it matches the notes' elsewhere.
+  const visibleExamPreps = examPreps.filter((prep) => !search || prep.title.toLowerCase().includes(search));
   /*
    * The wheel is on offer while the server says there is a spin left and this
    * session has not already used it. `hasClaimedDiscount` is what covers the
@@ -1892,18 +1893,9 @@ export function HomeDashboard({
             ) : null}
 
             {showingPreps ? (
-              <ExamLibraryList view="folder" preps={visibleExamPreps} />
+              <ExamLibraryList preps={visibleExamPreps} />
             ) : (
               <>
-              {/* Exam preps sit in the library with the notes, as a group of their own above them. */}
-              <ExamLibraryList
-                view="group"
-                preps={visibleExamPreps}
-                notesFollow={filteredLectures.length > 0}
-                initialCollapsed={examPrepsCollapsed}
-                onOpenFolder={() => selectLibraryView("preps")}
-              />
-
               {failedLectures.length > 0 ? (
                 <div className="memo-note-list memo-failed-list">
                   {failedLectures.map((lecture) => (
@@ -1977,7 +1969,7 @@ export function HomeDashboard({
                 </div>
               ) : null}
 
-              {filteredLectures.length === 0 && !(search && visibleExamPreps.some((prep) => !prep.past)) ? (
+              {filteredLectures.length === 0 ? (
                 <div className="memo-empty">
                   <Emoji symbol="📝" size="2rem" />
                   <p>

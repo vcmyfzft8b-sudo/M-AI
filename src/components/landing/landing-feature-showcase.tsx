@@ -109,6 +109,7 @@ function NotesPanel({ active }: PanelProps) {
 const CHAT_SUGGESTIONS: MessageKey[] = [
   "libraryChat.suggestion.review",
   "libraryChat.suggestion.links",
+  "libraryChat.suggestion.quiz",
   "libraryChat.suggestion.plan",
 ];
 

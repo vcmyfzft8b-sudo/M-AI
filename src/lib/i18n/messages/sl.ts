@@ -153,7 +153,7 @@ export const sl = {
   "landing.seo.featureFlashcards": "Flashcardi iz zapiskov",
   "landing.seo.featureQuizzes": "Kvizi in testi za učenje",
   "landing.seo.featureTutor": "Inštruktor, ki zapiske razloži na glas",
-  "landing.seo.featureChat": "AI klepet z gradivom",
+  "landing.seo.featureChat": "AI klepet z gradivom, ki na prošnjo naredi kartice, kvize in miselne vzorce",
   "landing.seo.featureReadAloud": "Branje zapiskov na glas",
   "landing.seo.featurePodcast": "Podkast epizode o tvojih zapiskih",
   "landing.seo.featureMindmap": "Miselni vzorci zapiskov",
@@ -334,6 +334,7 @@ export const sl = {
   "chat.suggestion.summarize": "Povzemi predavanje",
   "chat.suggestion.explain": "Razloži ključni pojem",
   "chat.suggestion.questions": "Naredi 5 vprašanj",
+  "chat.suggestion.flashcards": "Naredi mi kartice",
   "chat.suggestion.extend": "Podaljšaj zapiske",
   "chat.intro": "Živjo, jaz sem Memo AI. Vprašaj me karkoli o tem predavanju — povzetek, razlago pojma ali primer za izpit.",
   "chat.introTranscript": " Kot kontekst uporabim zapiske in prepis.",
@@ -355,6 +356,34 @@ export const sl = {
   "chat.expand": "Razširi",
   "chat.label": "Klepet",
   "chat.error.answerFailed": "Odgovora ni bilo mogoče ustvariti.",
+
+  /* ---- Chat — study sets made on request ---- */
+  "chat.set.making.flashcards": "Pripravljam kartice …",
+  "chat.set.making.quiz": "Sestavljam kviz …",
+  "chat.set.making.test": "Pišem vprašanja za test …",
+  "chat.set.making.mindmap": "Rišem miselni vzorec …",
+  "chat.set.count.cards": {
+    one: "{count} kartica",
+    two: "{count} kartici",
+    few: "{count} kartice",
+    other: "{count} kartic",
+  },
+  "chat.set.count.questions": {
+    one: "{count} vprašanje",
+    two: "{count} vprašanji",
+    few: "{count} vprašanja",
+    other: "{count} vprašanj",
+  },
+  "chat.set.count.topics": {
+    one: "{count} tema",
+    two: "{count} temi",
+    few: "{count} teme",
+    other: "{count} tem",
+  },
+  "chat.set.failed": "Tega sklopa ni bilo mogoče pripraviti. Čez trenutek vprašaj znova.",
+  "chat.set.testFinished": "Test je končan",
+  "chat.set.skip": "Pokaži odgovor",
+  "chat.set.openMindmap": "Odpri miselni vzorec",
 
   /* ---- Study tools — flashcards ---- */
   "study.edit": "Uredi",
@@ -1174,6 +1203,7 @@ export const sl = {
   "libraryChat.suggestion.review": "Kaj naj ponovim?",
   "libraryChat.suggestion.links": "Poišči povezave",
   "libraryChat.suggestion.plan": "Naredi načrt učenja",
+  "libraryChat.suggestion.quiz": "Preveri me s kvizom",
   "libraryChat.error.answerFailed": "Odgovora ni bilo mogoče pripraviti.",
   "libraryChat.scopeCaption": "Zapiski za iskanje",
   "libraryChat.scope.recent": "Nedavni zapiski",
@@ -1416,7 +1446,7 @@ export const sl = {
   "showcase.mindmapTitle": "Miselni vzorec",
   "showcase.mindmapDesc": "Pokaže, kako so teme v tvojem zapisku povezane med seboj.",
   "showcase.chatTitle": "Vprašaj svoje zapiske",
-  "showcase.chatDesc": "Klepetaj o enem zapisku ali vprašaj kar vse naenkrat.",
+  "showcase.chatDesc": "Klepetaj o enem zapisku ali o vseh in kar v klepetu prosi za kartice, kviz ali miselni vzorec.",
   "showcase.chat.question": "Kakšna je razlika med transakcijskim sistemom in sistemom za podporo odločanju?",
   "showcase.chat.answer": "**Transakcijski sistem** beleži vsakodnevne poslovne dogodke, **sistem za podporo odločanju** pa te podatke analizira za vodstvo.\n\n- Transakcijski: veliko majhnih, rutinskih vnosov\n- Podpora odločanju: scenariji in poročila za odločitve",
 

@@ -5,11 +5,14 @@ import { z } from "zod";
 import { stripDashPunctuation } from "@/lib/ai/answer-punctuation";
 import { createEmbeddings } from "@/lib/ai/embeddings";
 import { generateStructuredObject, streamStructuredObject } from "@/lib/ai/json";
+import { chatStudyRequestSchema } from "@/lib/ai/schemas";
 import {
   buildTutorHistory,
   buildTutorInstructions,
   type TutorHistoryTurn,
 } from "@/lib/ai/tutor-prompt";
+import { generateChatStudySet } from "@/lib/chat-study-generation";
+import type { ChatStudyAttachment, ChatStudyKind } from "@/lib/chat-study-set";
 import { fetchLearnerProfile } from "@/lib/learner-profile.server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { serializeVector } from "@/lib/utils";
@@ -54,10 +57,11 @@ const libraryAnswerSchema = z.object({
         + "line between paragraphs, \"- \" for a genuine list, **bold** for the one term that "
         + "matters. It opens with the answer itself — no preamble — and is around 60 words and "
         + "never more than 120. It ends with exactly one short question unless they were only "
-        + "saying thanks or goodbye.",
+        + "saying thanks or goodbye, or filled studyRequest.",
     ),
   /** Titles of the notes the answer leaned on, so the UI can show its sources. */
   usedNotes: z.array(z.string()).max(6),
+  studyRequest: chatStudyRequestSchema,
 });
 
 type LectureRow = {
@@ -86,6 +90,8 @@ export type LibraryChatResult = {
   /** How many notes actually went into the prompt, for the UI's footnote. */
   noteCount: number;
   usedTranscripts: boolean;
+  /** Flashcards, a quiz, a test or a mind map, when that is what they asked for. */
+  attachment: ChatStudyAttachment | null;
 };
 
 async function resolveLectureIds(params: {
@@ -264,6 +270,8 @@ export async function answerLibraryChat(params: {
   history?: TutorHistoryTurn[];
   /** Supplied when the answer is being streamed to a watching learner. */
   onDelta?: (text: string) => void;
+  /** The answer asked for a study set of this kind, and it is being written now. */
+  onStudy?: (kind: ChatStudyKind) => void;
 }): Promise<LibraryChatResult> {
   const supabase = createSupabaseServiceRoleClient();
   const [lectures, learner] = await Promise.all([
@@ -354,12 +362,37 @@ export async function answerLibraryChat(params: {
 
   const result = (await streamLibraryAnswer(call, params.onDelta)) ??
     (await generateStructuredObject(call));
+  // The em dash is out by instruction and, here, by construction. See answer-punctuation.ts.
+  const answer = stripDashPunctuation(result.answer);
+
+  /*
+   * Made from what the answer was made from: the notes in scope, as summaries, key topics and
+   * the excerpts nearest the question. A set across the library is a revision set, and the
+   * summaries are what one is revised from.
+   */
+  let attachment: ChatStudyAttachment | null = null;
+
+  if (result.studyRequest) {
+    params.onStudy?.(result.studyRequest.kind);
+    attachment = await generateChatStudySet({
+      request: result.studyRequest,
+      question: params.question,
+      reply: answer,
+      material: {
+        conversation: buildTutorHistory(params.history ?? []),
+        ...(notes.length === 0 ? { libraryIsEmpty: true } : {}),
+        notes,
+      },
+      userId: params.userId,
+      lectureId: null,
+    });
+  }
 
   return {
-    // The em dash is out by instruction and, here, by construction. See answer-punctuation.ts.
-    answer: stripDashPunctuation(result.answer),
+    answer,
     usedNotes: result.usedNotes,
     noteCount: notes.length,
     usedTranscripts: useTranscripts,
+    attachment,
   };
 }

@@ -18,6 +18,8 @@ interface StudyCompletionCardProps {
   primaryMetric: StudyCompletionMetric;
   secondaryMetrics?: StudyCompletionMetric[];
   actions: ReactNode;
+  /** Drawn inside a chat message rather than across a study screen. */
+  compact?: boolean;
 }
 
 /**
@@ -39,6 +41,7 @@ export function StudyCompletionCard({
   primaryMetric,
   secondaryMetrics = [],
   actions,
+  compact = false,
 }: StudyCompletionCardProps) {
   const clampedPercentage = Math.max(0, Math.min(100, Math.round(percentage)));
   const isGood = clampedPercentage >= PASS_THRESHOLD;
@@ -49,7 +52,7 @@ export function StudyCompletionCard({
     <div className="memo-result" style={tintStyle}>
       <div className="memo-result-orb-wrap">
         <div className="memo-result-orb">
-          <Emoji symbol={isGood ? "🎉" : "💪"} size="4.4rem" />
+          <Emoji symbol={isGood ? "🎉" : "💪"} size={compact ? "2.6rem" : "4.4rem"} />
         </div>
         <span className="memo-result-badge">{clampedPercentage} %</span>
       </div>

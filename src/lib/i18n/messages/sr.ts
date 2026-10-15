@@ -143,7 +143,7 @@ export const sr: Messages = {
   "landing.seo.featureFlashcards": "Kartice iz beleški",
   "landing.seo.featureQuizzes": "Kvizovi i testovi za učenje",
   "landing.seo.featureTutor": "Objašnjenje beležaka naglas",
-  "landing.seo.featureChat": "AI chat sa tvojim gradivom",
+  "landing.seo.featureChat": "AI chat sa tvojim gradivom koji na zahtev pravi kartice, kvizove i mentalne mape",
   "landing.seo.featureReadAloud": "Čitanje beležaka naglas",
   "landing.seo.featurePodcast": "Podkast epizode o tvojim beleškama",
   "landing.seo.featureMindmap": "Mentalne mape beležaka",
@@ -321,6 +321,7 @@ export const sr: Messages = {
   "chat.suggestion.summarize": "Sažmi predavanje",
   "chat.suggestion.explain": "Objasni ključni pojam",
   "chat.suggestion.questions": "Napravi 5 pitanja",
+  "chat.suggestion.flashcards": "Napravi mi kartice",
   "chat.suggestion.extend": "Proširi beleške",
   "chat.intro": "Zdravo, ja sam Memo AI. Pitaj me bilo šta o ovom predavanju — sažetak, objašnjenje pojma ili primer za ispit.",
   "chat.introTranscript": " Kao kontekst koristim beleške i transkript.",
@@ -342,6 +343,31 @@ export const sr: Messages = {
   "chat.expand": "Proširi",
   "chat.label": "Chat",
   "chat.error.answerFailed": "Odgovor nije bilo moguće napraviti.",
+
+  /* ---- Chat — study sets made on request ---- */
+  "chat.set.making.flashcards": "Pravim kartice …",
+  "chat.set.making.quiz": "Sastavljam kviz …",
+  "chat.set.making.test": "Pišem pitanja za test …",
+  "chat.set.making.mindmap": "Crtam mentalnu mapu …",
+  "chat.set.count.cards": {
+    one: "{count} kartica",
+    few: "{count} kartice",
+    other: "{count} kartica",
+  },
+  "chat.set.count.questions": {
+    one: "{count} pitanje",
+    few: "{count} pitanja",
+    other: "{count} pitanja",
+  },
+  "chat.set.count.topics": {
+    one: "{count} tema",
+    few: "{count} teme",
+    other: "{count} tema",
+  },
+  "chat.set.failed": "Ovaj set nije bilo moguće napraviti. Pitaj ponovo za trenutak.",
+  "chat.set.testFinished": "Test je završen",
+  "chat.set.skip": "Prikaži odgovor",
+  "chat.set.openMindmap": "Otvori mentalnu mapu",
 
   /* ---- Study tools — flashcards ---- */
   "study.edit": "Uredi",
@@ -1158,6 +1184,7 @@ export const sr: Messages = {
   "libraryChat.suggestion.review": "Šta da ponovim?",
   "libraryChat.suggestion.links": "Pronađi veze",
   "libraryChat.suggestion.plan": "Napravi plan učenja",
+  "libraryChat.suggestion.quiz": "Ispitaj me kvizom",
   "libraryChat.error.answerFailed": "Odgovor nije bilo moguće pripremiti.",
   "libraryChat.scopeCaption": "Beleške za pretragu",
   "libraryChat.scope.recent": "Nedavne beleške",
@@ -1412,7 +1439,7 @@ export const sr: Messages = {
   "showcase.speedTitle": "Brzo čitanje",
   "showcase.speedDesc": "Beleške reč po reč, brzinom koja ti odgovara.",
   "showcase.chatTitle": "Pitaj svoje beleške",
-  "showcase.chatDesc": "Razgovaraj o jednoj belešci ili pitaj sve odjednom.",
+  "showcase.chatDesc": "Razgovaraj o jednoj belešci ili o svima i odmah u chatu zatraži kartice, kviz ili mentalnu mapu.",
   "showcase.chat.question": "Koja je razlika između transakcionog sistema i sistema za odlučivanje?",
   "showcase.chat.answer": "**Transakcioni sistem** beleži svakodnevne poslovne događaje, a **sistem za odlučivanje** te podatke analizira za upravu.\n\n- Transakcioni: mnogo malih, rutinskih unosa\n- Odlučivanje: scenariji i izveštaji za odluke",
 

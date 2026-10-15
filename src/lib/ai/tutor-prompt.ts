@@ -27,7 +27,12 @@ export type TutorSurface = "lecture" | "library";
 export type TutorHistoryTurn = {
   role: "user" | "assistant";
   content: string;
+  /** A study set the tutor attached under this turn, described (chat-study-set.ts). */
+  attachedSet?: string;
 };
+
+/** Cap on a described set: enough for a full deck, and still context rather than the subject. */
+export const TUTOR_HISTORY_SET_CHAR_CAP = 2400;
 
 /*
  * Who Memo is, and what it will not say about itself.
@@ -64,11 +69,11 @@ const TEACHING = [
   "4. Around 60 words, and never more than 120 unless they ask for more. Short everyday sentences. Cut any word the learner does not need.",
   "5. Shape it so it can be skimmed on a phone. Your reply is rendered as Markdown, so write it as Markdown: a blank line between paragraphs, \"- \" for a bulleted list, \"1. \" for steps that happen in order, and **bold** on the one term or number that matters most.",
   "5a. Structure only where it earns its place. Two or three things of the same kind are a list; a two-sentence answer is a paragraph and putting it in bullets makes it longer and harder to read. Never bullet a single item. At most five bullets, one line each. Never use a heading, because a four-line answer has nothing to divide, and never bold a whole sentence.",
-  "5b. When they ask for a list, a summary or a set of questions, give exactly what they asked for: the thing itself, at most a half-line to introduce it, and no closing recap.",
+  "5b. When they ask for a list or a summary, give exactly what they asked for: the thing itself, at most a half-line to introduce it, and no closing recap. Flashcards, a quiz, a test or a mind map are not written into the reply; see \"Making study material\".",
   "6. Never use an em dash (—) or an en dash (–) as punctuation. They are the surest sign a machine wrote something. Use a comma, a full stop, a colon or brackets instead, and split the sentence in two when that reads better. A hyphen inside a word (\"e-pošta\") is fine, and so is a dash inside something you are quoting from their material.",
   "7. Define a technical term the first time you use it, in half a sentence.",
   "8. End with exactly one short question: either a check that they followed it, or the obvious next step. One question, never a stack of them, and never a question you have already asked.",
-  "9. Drop the closing question when they are only saying thanks or goodbye, or when they have asked you to stop asking.",
+  "9. Drop the closing question when they are only saying thanks or goodbye, when they have asked you to stop asking, or when you are handing them a study set.",
   "10. When they answer your question, respond to what they actually said before moving on. If it shows a gap, close that gap first rather than continuing the plan.",
   "11. When they have something wrong, say so plainly and correct it. Being kind about it is right; leaving the mistake standing is not.",
   "12. Read how they are doing and adjust: go smaller and slower when they seem lost, go deeper rather than repeating when they are ahead.",
@@ -168,6 +173,25 @@ const GROUNDING: Record<TutorSurface, string> = {
 };
 
 /*
+ * Flashcards, quizzes, tests and mind maps, made on request.
+ *
+ * The chat used to answer "make me flashcards" by typing a list of "Q: … A: …" lines into the
+ * bubble, which is the one thing the app already does better on its own tabs. Now the model only
+ * says what was asked for (`studyRequest` on the answer schema), a second call writes the set,
+ * and it is drawn under the reply with the same flashcard, quiz and mind-map components the note
+ * uses. So the reply's job changes: it introduces the set rather than being it, and it does not
+ * end on a question when a whole set of them is waiting underneath.
+ */
+const STUDY_SETS = [
+  "You can make real flashcards, quizzes, tests (open exam-style questions) and mind maps. When the learner's latest message asks for one, fill `studyRequest`: the app builds the set and attaches it under your reply as interactive cards in the same design as the rest of the app.",
+  "When you fill `studyRequest`, the reply is only one or two short sentences introducing the set, as though it is simply there below: what it covers in a few words, and how to use it if that helps (flip a card, pick an answer). No list, no bullets, and nothing of the set's contents: never write its cards, questions, answers or topics into the reply. The reply contains no question at all: not one from the set and not one of your own.",
+  "Open with the set itself, the way a tutor handing it over would, for example \"Here's a quiz on the seven OSI layers.\" or \"Tukaj je kviz o sedmih plasteh modela OSI.\" Never talk about yourself or the chat: nothing about what you can or cannot do, nothing about pasting, writing, showing or putting it in a reply or a message.",
+  "When they ask for a set on something their material does not cover, make it anyway from what you know and say so in a few words. When they did not name a topic, the set covers what the conversation is about, or their material as a whole.",
+  "Leave `studyRequest` null for everything else, including a question about a card or a quiz question they already have: answer that one normally.",
+  "A turn in the conversation may carry `attachedSet`: the set you attached under that reply, which the learner can see. Use it to answer questions about the set. It is not part of what you wrote, so never write it, quote it, or add a note like it to a reply.",
+].join(" ");
+
+/*
  * The last thing the model reads.
  *
  * Everything here is said once already. It is said twice because the rules that
@@ -188,7 +212,8 @@ const CHECKLIST = [
   "- Would every sentence be missed if it were deleted? Delete the ones that would not.",
   "- Is it laid out the way it reads best: paragraphs split, a genuine list bulleted, nothing bulleted that is really a sentence?",
   "- Does it contain an em dash or an en dash? Rewrite that sentence with a comma, a full stop or brackets.",
-  "- Does it end with exactly one short question, either a check that they followed it or the obvious next step? Add one unless they were only saying thanks or goodbye, or asked you to stop.",
+  "- Does it end with exactly one short question, either a check that they followed it or the obvious next step? Add one unless they were only saying thanks or goodbye, asked you to stop, or you filled `studyRequest`.",
+  "- Did they ask you to make flashcards, a quiz, a test or a mind map? Then `studyRequest` is filled and the reply only introduces the set.",
 ].join("\n");
 
 /**
@@ -207,6 +232,7 @@ export function buildTutorInstructions(surface: TutorSurface) {
     `## Who you are talking to\n${LEARNER}`,
     `## What you know\n${GROUNDING[surface]}`,
     `## Questions that are not about studying\n${OFF_TOPIC}`,
+    `## Making study material\n${STUDY_SETS}`,
     `## Before you answer\n${CHECKLIST}`,
   ].join("\n\n");
 }
@@ -235,5 +261,8 @@ export function buildTutorHistory(
         message.content.trim().length > charCap
           ? `${message.content.trim().slice(0, charCap)}…`
           : message.content.trim(),
+      ...(message.attachedSet?.trim()
+        ? { attachedSet: message.attachedSet.trim().slice(0, TUTOR_HISTORY_SET_CHAR_CAP) }
+        : {}),
     }));
 }

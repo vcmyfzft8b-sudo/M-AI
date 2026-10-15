@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { CHAT_STUDY_KINDS } from "../chat-study-set.ts";
+
 const OPTIONAL_EXAMPLE_MIN_LENGTH = 12;
 
 function cleanOptionalExamples(value: unknown) {
@@ -43,6 +45,46 @@ export const noteArtifactSchema = z.object({
   structuredNotesMd: z.string().min(300),
 });
 
+/**
+ * What the chat model fills when the learner asks it to make a study set, and leaves null
+ * otherwise. Shared by both chats; the set itself is written by a second call
+ * (chat-study-generation.ts) and attached under the reply.
+ *
+ * The descriptions are the instruction. They travel to the model with the schema, which is where
+ * a model looks when deciding whether to fill a field at all, and they name the words learners
+ * actually use, in the languages they use them, because "kartice" is not obviously "flashcards".
+ */
+export const chatStudyRequestSchema = z
+  .object({
+    kind: z
+      .enum(CHAT_STUDY_KINDS)
+      .describe(
+        "flashcards: cards to flip (kartice, flashcards). quiz: multiple-choice questions (kviz). "
+          + "test: open questions to answer in their own words (a test, exam or practice "
+          + "questions, vprašanja za izpit, pitanja). mindmap: a mind map or concept map "
+          + "(miselni vzorec, mentalna mapa, umna mapa).",
+      ),
+    count: z
+      .number()
+      .int()
+      .nullable()
+      .describe("How many cards or questions they asked for, or null when they did not say."),
+    focus: z
+      .string()
+      .describe(
+        "What the set should cover, in a few words: the topic they named, or the subject of the "
+          + "conversation when they said \"this\" or \"it\".",
+      ),
+  })
+  .nullable()
+  .describe(
+    "Fill this ONLY when the learner's latest message asks you to make, give or quiz them with "
+      + "flashcards, a quiz, a test or practice questions, or a mind map. The app then builds "
+      + "that set and shows it under your reply as real interactive cards. Null for everything "
+      + "else, including a question about one of these, a request to explain something, or a "
+      + "summary.",
+  );
+
 /*
  * The description on `answer` is not documentation: it is sent to the model as
  * part of the response schema, which is the last thing it reads before it
@@ -66,9 +108,10 @@ export const chatAnswerSchema = z.object({
         + "line between paragraphs, \"- \" for a genuine list, **bold** for the one term that "
         + "matters. It opens with the answer itself — no preamble — and is around 60 words and "
         + "never more than 120. It ends with exactly one short question unless they were only "
-        + "saying thanks or goodbye.",
+        + "saying thanks or goodbye, or filled studyRequest.",
     ),
   citations: z.array(citationSchema).max(4),
+  studyRequest: chatStudyRequestSchema,
 });
 
 export const flashcardSchema = z.object({

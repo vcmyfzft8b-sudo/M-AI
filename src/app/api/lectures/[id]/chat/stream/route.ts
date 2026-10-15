@@ -123,6 +123,7 @@ export async function POST(
             question: parsed.data.question,
             sourceLanguageAction: parsed.data.sourceLanguageAction,
             onDelta: send.delta,
+            onStudy: send.study,
           }),
         budgetMs: getInvocationBudgetMs({
           maxDurationSeconds: maxDuration,

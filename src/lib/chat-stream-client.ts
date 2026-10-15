@@ -5,6 +5,7 @@
  * because they answer over the same frames and a second reader would only be a
  * second thing to get subtly wrong.
  */
+import { isChatStudyKind, type ChatStudyKind } from "./chat-study-set.ts";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { Translate } from "@/lib/i18n/translate";
 
@@ -48,6 +49,8 @@ export async function readChatStream<TResult>(
    * the caller hands its translator down.
    */
   t: Translate<MessageKey>,
+  /** The prose is done and a study set of this kind is being written under it. */
+  onStudy?: (kind: ChatStudyKind) => void,
 ): Promise<TResult | null> {
   if (!response.body) {
     return null;
@@ -86,6 +89,14 @@ export async function readChatStream<TResult>(
       const text = (parsed as { text?: string }).text ?? "";
       if (text) {
         onDelta(text);
+      }
+      return;
+    }
+
+    if (event === "study") {
+      const kind = (parsed as { kind?: unknown }).kind;
+      if (isChatStudyKind(kind)) {
+        onStudy?.(kind);
       }
       return;
     }
@@ -154,6 +165,8 @@ export async function requestChatAnswer<TResult>(params: {
   onDelta: (text: string) => void;
   /** Clears whatever a previous attempt painted, before the next one starts. */
   onAttemptStart: () => void;
+  /** A study set of this kind is being written under the answer. */
+  onStudy?: (kind: ChatStudyKind) => void;
   t: Translate<MessageKey>;
 }): Promise<{ response: Response; payload: TResult | null }> {
   let lastError: unknown;
@@ -190,6 +203,7 @@ export async function requestChatAnswer<TResult>(params: {
               params.onDelta(text);
             },
             params.t,
+            params.onStudy,
           )
         : ((await response.json().catch(() => null)) as TResult | null);
 

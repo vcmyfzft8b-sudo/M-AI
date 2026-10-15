@@ -142,7 +142,7 @@ export const en: Messages = {
   "landing.seo.featureFlashcards": "Flashcards from your notes",
   "landing.seo.featureQuizzes": "Quizzes and practice tests",
   "landing.seo.featureTutor": "A tutor that explains your notes out loud",
-  "landing.seo.featureChat": "AI chat with your material",
+  "landing.seo.featureChat": "AI chat with your material that makes flashcards, quizzes and mind maps on request",
   "landing.seo.featureReadAloud": "Notes read aloud",
   "landing.seo.featurePodcast": "Podcast episodes about your notes",
   "landing.seo.featureMindmap": "Mind maps of your notes",
@@ -317,6 +317,7 @@ export const en: Messages = {
   "chat.suggestion.summarize": "Summarise the lecture",
   "chat.suggestion.explain": "Explain a key concept",
   "chat.suggestion.questions": "Write me 5 questions",
+  "chat.suggestion.flashcards": "Make me flashcards",
   "chat.suggestion.extend": "Extend the notes",
   "chat.intro": "Hi, I'm Memo AI. Ask me anything about this lecture — a summary, an explanation of a concept, or an exam-style example.",
   "chat.introTranscript": " I use the notes and the transcript as context.",
@@ -338,6 +339,28 @@ export const en: Messages = {
   "chat.expand": "Expand",
   "chat.label": "Chat",
   "chat.error.answerFailed": "The answer could not be generated.",
+
+  /* ---- Chat — study sets made on request ---- */
+  "chat.set.making.flashcards": "Making your flashcards …",
+  "chat.set.making.quiz": "Putting your quiz together …",
+  "chat.set.making.test": "Writing your test questions …",
+  "chat.set.making.mindmap": "Drawing your mindmap …",
+  "chat.set.count.cards": {
+    one: "{count} card",
+    other: "{count} cards",
+  },
+  "chat.set.count.questions": {
+    one: "{count} question",
+    other: "{count} questions",
+  },
+  "chat.set.count.topics": {
+    one: "{count} topic",
+    other: "{count} topics",
+  },
+  "chat.set.failed": "This set could not be made. Ask again in a moment.",
+  "chat.set.testFinished": "The test is finished",
+  "chat.set.skip": "Show the answer",
+  "chat.set.openMindmap": "Open the mindmap",
 
   /* ---- Study tools — flashcards ---- */
   "study.edit": "Edit",
@@ -1151,6 +1174,7 @@ export const en: Messages = {
   "libraryChat.suggestion.review": "What should I revise?",
   "libraryChat.suggestion.links": "Find the connections",
   "libraryChat.suggestion.plan": "Make me a study plan",
+  "libraryChat.suggestion.quiz": "Quiz me on my notes",
   "libraryChat.error.answerFailed": "The answer could not be prepared.",
   "libraryChat.scopeCaption": "Notes to search",
   "libraryChat.scope.recent": "Recent notes",
@@ -1405,7 +1429,7 @@ export const en: Messages = {
   "showcase.speedTitle": "Speed reading",
   "showcase.speedDesc": "Your note one word at a time, at the pace that suits you.",
   "showcase.chatTitle": "Ask your notes",
-  "showcase.chatDesc": "Chat about one note, or ask across all of them at once.",
+  "showcase.chatDesc": "Chat about one note or all of them, and ask for flashcards, a quiz or a mind map right in the chat.",
   "showcase.chat.question": "What's the difference between a transactional system and a decision support system?",
   "showcase.chat.answer": "A **transactional system** records the day-to-day business events, while a **decision support system** analyses that data for management.\n\n- Transactional: many small, routine entries\n- Decision support: scenarios and reports for decisions",
 

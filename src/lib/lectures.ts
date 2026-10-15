@@ -37,6 +37,7 @@ import type {
   StudySectionWithProgress,
   StudySession,
 } from "@/lib/types";
+import { parseChatStudyAttachment } from "@/lib/chat-study-set";
 import { TRANSCRIPT_SEGMENT_CONTENT_SELECT } from "@/lib/database-selects";
 import { PREVIEW_AUTH_BYPASS_USER_ID } from "@/lib/auth";
 import { lectureRowMatchesOwner } from "@/lib/lecture-ownership";
@@ -361,9 +362,12 @@ function parseCitations(value: ChatMessageRow["citations_json"]): Citation[] {
 }
 
 function mapChatMessage(message: ChatMessageRow): ChatMessageWithCitations {
+  const { attachment_json: attachment, ...rest } = message;
+
   return {
-    ...message,
+    ...rest,
     citations: parseCitations(message.citations_json),
+    attachment: parseChatStudyAttachment(attachment),
   };
 }
 

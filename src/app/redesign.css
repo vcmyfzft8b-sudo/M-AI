@@ -417,6 +417,8 @@
    */
   --sunken: #f1f1f5;
   --surface: #ffffff;
+  /* A card that sits on a --sunken bubble: white here, lifted above the bubble in the dark. */
+  --raised: #ffffff;
   --text: #000000;
   --muted: #8e8e95;
   --muted-2: #c4c4cc;
@@ -489,6 +491,7 @@
   --bg: #121214;
   --surface: #1f1f22;
   --sunken: #2a2a2f;
+  --raised: #36363c;
   --text: #ffffff;
   --muted: #9a9aa2;
   --muted-2: #6a6a72;
@@ -521,6 +524,7 @@
     --bg: #121214;
     --surface: #1f1f22;
     --sunken: #2a2a2f;
+    --raised: #36363c;
     --text: #ffffff;
     --muted: #9a9aa2;
     --muted-2: #6a6a72;
@@ -3234,6 +3238,465 @@
   color: var(--text);
   font-size: 1rem;
   line-height: 1.55;
+}
+
+/*
+ * A study set the tutor made in the chat (chat-study-set.tsx).
+ *
+ * It is a message: the tutor's bubble, the same width, colour and corner, and the set is played
+ * inside it. Everything in it is the note screen's own markup under `.memo-panel`; the rules
+ * below only scale that to a bubble, and lift what the study screens draw in `--sunken` (quiz
+ * options, the answer box) to `--raised`, since here the ground they sit on is the bubble's own
+ * `--sunken`.
+ */
+.memo-chat-set {
+  align-self: flex-start;
+  display: grid;
+  gap: 0.75rem;
+  width: min(92%, 22rem);
+  min-width: 0;
+  padding: 0.85rem 0.9rem 0.9rem;
+  border-radius: 18px 18px 18px 6px;
+  background: var(--sunken);
+}
+
+/*
+ * How a set arrives. The placeholder is what enters (the chat's bubbles do not animate, but a
+ * tile this size appearing at once reads as a jump), and the finished set then takes its place
+ * without entering a second time: its frame is drawn where the placeholder's was, and only what
+ * is inside fades in, as the placeholder being filled.
+ */
+.memo-chat-set.pending {
+  animation: memo-pop-in 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.memo-chat-set:not(.pending) > :not(.memo-chat-set-head) {
+  animation: memo-fade-in 0.22s ease-out both;
+}
+
+/* Tucked under the reply that introduced it, so the two read as one turn: one tail, on the last. */
+.memo-chat-log .memo-bubble-bot + .memo-chat-set {
+  margin-top: -0.45rem;
+}
+
+.memo-chat-log .memo-bubble-bot:has(+ .memo-chat-set) {
+  border-bottom-left-radius: 18px;
+}
+
+/* In the library chat the set sits in the answer's column, under the text. */
+/* In the library chat the answer is not a bubble, so the set carries no tail either. */
+.memo-homechat-answer .memo-chat-set {
+  width: min(100%, 22rem);
+  margin-top: 0.85rem;
+  border-radius: 18px;
+}
+
+.memo-chat-set-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.memo-chat-set-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--tab-tint) 16%, var(--surface));
+  color: var(--tab-tint);
+}
+
+.memo-chat-set-heading {
+  display: grid;
+  flex: 1;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.memo-chat-set-kind {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.memo-chat-set-title {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A set that could not be made says so where its title would be. */
+.memo-chat-set.failed .memo-chat-set-title {
+  overflow: visible;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: normal;
+}
+
+/* In the title's place, at the title's height, so the header does not move when the set lands. */
+.memo-chat-set-making {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 1.08rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+/* Where the set will be, while it is written: a card's footprint, breathing. */
+/* Roughly the height of what is coming, per kind, so the swap is a fill rather than a jump. */
+.memo-chat-set-ghost {
+  height: 14.4rem;
+  border-radius: 14px;
+  background: var(--raised);
+  box-shadow: var(--shadow);
+  animation: memo-chat-set-breathe 1.6s ease-in-out infinite;
+}
+
+.memo-chat-set[data-kind="quiz"] .memo-chat-set-ghost {
+  height: 17rem;
+}
+
+.memo-chat-set[data-kind="test"] .memo-chat-set-ghost {
+  height: 14rem;
+}
+
+.memo-chat-set[data-kind="mindmap"] .memo-chat-set-ghost {
+  height: 11rem;
+}
+
+@keyframes memo-chat-set-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.memo-chat-set-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+/* One class deeper than the `.memo-panel` rules they scale, which come later in the file. */
+.memo-chat-set .memo-panel .memo-study-head-title {
+  font-size: 0.95rem;
+}
+
+.memo-chat-set .memo-panel .memo-study-head-count {
+  font-size: 0.92rem;
+}
+
+/* The flashcard: the deck's card at a bubble's size, on --raised so it stands off the bubble. */
+.memo-chat-set .memo-panel .lecture-flashcard,
+.memo-chat-set .memo-panel .lecture-flashcard-rotator,
+.memo-chat-set .memo-panel .lecture-flashcard-face {
+  min-height: 9.5rem;
+}
+
+/* Vertical drags scroll the chat; sideways ones are the throw. */
+.memo-chat-set .memo-panel .lecture-flashcard {
+  touch-action: pan-y;
+}
+
+/* The throw's coloured overlay has the deck card's corners; this card's are smaller. */
+.memo-chat-set .memo-panel :is(.lecture-flashcard-exit-overlay, .lecture-flashcard-drag-overlay) {
+  border-radius: 14px;
+}
+
+.memo-chat-set .memo-panel .lecture-flashcard-face {
+  gap: 0.4rem;
+  padding: 1.6rem 1rem 1rem;
+  border-radius: 14px;
+  background: var(--raised);
+}
+
+.memo-chat-set .memo-panel .lecture-flashcard-content {
+  font-size: 1.02rem;
+  letter-spacing: -0.02em;
+}
+
+.memo-chat-set .memo-panel .lecture-flashcard-face-answer .lecture-flashcard-content {
+  font-size: 0.98rem;
+}
+
+.memo-chat-set .memo-panel .lecture-flashcard-side-label {
+  font-size: 0.85rem;
+}
+
+.memo-chat-set .memo-panel .lecture-flashcard-face-header {
+  top: 0.6rem;
+}
+
+/* The deck screen leaves room above the card for a throw; a message has none to spare. */
+.memo-chat-set .memo-panel .lecture-flashcard-stage {
+  margin-top: 0;
+}
+
+.memo-chat-set .memo-panel .lecture-flashcard-toolbar {
+  margin-top: 0.6rem;
+}
+
+.memo-chat-set .memo-panel .lecture-flashcard-review {
+  gap: 0.45rem;
+}
+
+.memo-chat-set .memo-panel .lecture-flashcard-review-button,
+.memo-chat-set .memo-panel .lecture-flashcard-review-score {
+  min-width: 4.4rem;
+  height: 2.6rem;
+  padding: 0 0.85rem;
+  font-size: 0.95rem;
+}
+
+.memo-chat-set .memo-panel .lecture-flashcard-nav-button {
+  width: 2.6rem;
+  height: 2.6rem;
+}
+
+.memo-chat-set .memo-panel :is(.lecture-flashcard-review-button, .lecture-flashcard-review-score, .lecture-flashcard-nav-button) svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+/* The quiz: flat, as the quiz tab draws it, with options sized for a bubble. */
+.memo-chat-set .memo-panel .lecture-quiz-stage {
+  max-width: none;
+}
+
+.memo-chat-set .memo-panel .lecture-quiz-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.memo-chat-set .memo-panel .memo-quiz-eyebrow {
+  display: none;
+}
+
+.memo-chat-set .memo-panel :is(.lecture-quiz-stage, .lecture-practice-stage) :is(.lecture-quiz-prompt, .lecture-practice-prompt) {
+  margin: 0.2rem 0 0.7rem;
+  font-size: 1.02rem;
+  line-height: 1.32;
+}
+
+.memo-chat-set .memo-panel .lecture-quiz-options {
+  gap: 0.45rem;
+}
+
+.memo-chat-set .memo-panel .lecture-quiz-option {
+  gap: 0.6rem;
+  min-height: 2.9rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 14px;
+  background: var(--raised);
+  font-size: 0.95rem;
+}
+
+.memo-chat-set .memo-panel .lecture-quiz-option-label {
+  display: none;
+}
+
+/* The tab draws a right answer on --sunken, which here is the bubble itself. */
+.memo-chat-set .memo-panel .lecture-quiz-option.correct {
+  background: var(--raised);
+}
+
+.memo-chat-set .memo-panel .memo-quiz-result {
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+}
+
+.memo-chat-set .memo-panel .memo-quiz-result-badge {
+  width: 2rem;
+  height: 2rem;
+}
+
+.memo-chat-set .memo-panel .memo-quiz-result-copy {
+  font-size: 0.92rem;
+}
+
+.memo-chat-set .memo-panel .memo-quiz-result-title {
+  font-size: 1.02rem;
+}
+
+.memo-chat-set .memo-panel .memo-quiz-result-primary {
+  height: 2.7rem;
+  padding: 0 1.1rem;
+  font-size: 0.95rem;
+}
+
+/* The test: a shorter answer box, lifted off the bubble, and the deck's two grades. */
+.memo-chat-set .memo-panel .lecture-practice-stage .lecture-practice-textarea {
+  height: 5.5rem;
+  min-height: 5.5rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 14px;
+  background: var(--raised);
+  font-size: 0.95rem;
+}
+
+.memo-chat-set .memo-panel .lecture-practice-textarea:disabled {
+  opacity: 1;
+}
+
+.memo-chat-set .memo-panel .lecture-practice-controls {
+  margin-top: 0.5rem;
+}
+
+.memo-chat-set .memo-panel .memo-palace-mark {
+  margin-top: 0.6rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 14px;
+}
+
+.memo-chat-set .memo-panel .memo-test-actions {
+  margin-top: 0.6rem;
+}
+
+.memo-chat-set .memo-panel .memo-test-next {
+  height: 2.7rem;
+  font-size: 0.95rem;
+}
+
+.memo-chat-set-grade {
+  flex: 1;
+  gap: 0.45rem;
+}
+
+.memo-chat-set .memo-panel .memo-chat-set-grade .lecture-flashcard-review-button {
+  flex: 1;
+  min-width: 0;
+  padding: 0 0.5rem;
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+
+/* Red and green already say which is which; a bubble has no room for the glyph as well. */
+.memo-chat-set .memo-panel .memo-chat-set-grade .lecture-flashcard-review-button .msym {
+  display: none;
+}
+
+/* The results screen at a bubble's size: the same orb, badge and lines, smaller. */
+.memo-chat-set .memo-panel .memo-result {
+  padding-top: 0.2rem;
+}
+
+.memo-chat-set .memo-panel .memo-result-orb-wrap {
+  width: 6.4rem;
+  height: 6.4rem;
+}
+
+.memo-chat-set .memo-panel .memo-result-orb {
+  width: 4.9rem;
+  height: 4.9rem;
+}
+
+.memo-chat-set .memo-panel .memo-result-badge {
+  padding: 0.3rem 0.55rem;
+  border-radius: 12px;
+  font-size: 0.95rem;
+}
+
+.memo-chat-set .memo-panel .memo-result-eyebrow {
+  margin-top: 0.4rem;
+}
+
+.memo-chat-set .memo-panel .memo-result-title {
+  margin-top: 0.25rem;
+  font-size: 1.08rem;
+  letter-spacing: -0.02em;
+}
+
+.memo-chat-set .memo-panel .memo-result-line {
+  font-size: 0.92rem;
+}
+
+.memo-chat-set .memo-panel .memo-result-actions {
+  width: 100%;
+  margin-top: 0.8rem;
+}
+
+.memo-chat-set .memo-panel .lecture-study-restart {
+  width: 100%;
+  height: 2.7rem;
+  font-size: 0.95rem;
+}
+
+/* The map in the log is a picture of the map; the button over it opens the real one. */
+.memo-mm-stage.memo-chat-set-map {
+  height: 11rem;
+  margin: 0;
+  border-radius: 14px;
+}
+
+.memo-chat-set-map .memo-mm-frame {
+  pointer-events: none;
+}
+
+.memo-chat-set-map-open {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 0.6rem;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.memo-chat-set-map-open:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-chat-set-map-open:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.memo-chat-set-map-open-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.6rem;
+  padding: 0 0.95rem;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 750;
+}
+
+/* Opened from a chat, the map has to clear the chat itself: the phone's chat sheet sits at 106 and
+   the expanded desktop panel at 115, so it takes the modal layer above both. */
+.memo-mm-overlay.memo-chat-set-map-overlay {
+  z-index: 125;
+  animation: memo-fade-in 0.2s ease-out both;
 }
 
 /*

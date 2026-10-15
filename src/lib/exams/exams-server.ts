@@ -1088,7 +1088,9 @@ export type LessonPayload =
 
 export type LessonLoad =
   | { status: "ready"; lesson: LessonPayload }
-  | { status: "generating" | "missing" | "failed"; generator: LessonGenerator };
+  | { status: "generating" | "missing"; generator: LessonGenerator }
+  /** `generator` names the note material to make again; null when only the lesson itself failed. */
+  | { status: "failed"; generator: LessonGenerator | null };
 
 const GENERATOR_FOR: Record<Exclude<ExamLessonKind, "summary" | "tutor">, LessonGenerator> = {
   flashcards: "study",
@@ -1482,7 +1484,8 @@ export async function loadLesson(
 
     return steps.length > 0
       ? { status: "ready", lesson: { kind: "tutor", lectureId, topicTitle: topic.title, steps } }
-      : { status: "failed", generator: "study" };
+      : // The plan's model call failed: a retry asks for the plan again, it remakes no note material.
+        { status: "failed", generator: null };
   }
 
   if (input.kind === "flashcards" && generated) {

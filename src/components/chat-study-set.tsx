@@ -117,7 +117,8 @@ function SetFrame({
  * Answering in a set adds to it (a verdict, an explanation, the model answer, the results), and in
  * a chat that is near the foot of the log it lands below the composer, so the button that carries
  * on is out of sight. When the set grows and its new foot is hidden, the log scrolls just far
- * enough to show it, and never so far that the set's own top leaves the view. The chat's logs
+ * enough to show it, even if that takes the top of the set out of view: the learner has just read
+ * the question up there, and what they need next is the button underneath. The chat's logs
  * already follow new messages; this is only for a message that changes size in place.
  */
 function useKeepGrowthInView() {
@@ -145,7 +146,7 @@ function useKeepGrowthInView() {
       const hidden = box.bottom - view.bottom;
 
       if (hidden > 0) {
-        log.scrollTop += Math.min(hidden + 12, Math.max(0, box.top - view.top - 12));
+        log.scrollTop += hidden + 12;
       }
     });
 
@@ -674,6 +675,8 @@ function ChatMindmap({ doc, title }: { doc: MindmapDoc; title: string }) {
   const [userCollapsedIds, setUserCollapsedIds] = useState<ReadonlySet<string> | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const previewRef = useRef<MindmapCanvasHandle | null>(null);
+  const openerRef = useRef<HTMLButtonElement | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
   const fullRef = useRef<MindmapCanvasHandle | null>(null);
 
   const suggestedFold = useMemo(() => {
@@ -702,10 +705,17 @@ function ChatMindmap({ doc, title }: { doc: MindmapDoc; title: string }) {
     [suggestedFold],
   );
 
+  /*
+   * A dialog while it is open: focus goes to its close control, Escape closes it, and focus
+   * goes back to the button that opened it, without scrolling the chat to get there.
+   */
   useEffect(() => {
     if (!open) {
       return;
     }
+
+    const opener = openerRef.current;
+    closeRef.current?.focus({ preventScroll: true });
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -714,7 +724,10 @@ function ChatMindmap({ doc, title }: { doc: MindmapDoc; title: string }) {
     };
 
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      opener?.focus({ preventScroll: true });
+    };
   }, [open]);
 
   const selected: MindmapNode | null = useMemo(
@@ -740,7 +753,12 @@ function ChatMindmap({ doc, title }: { doc: MindmapDoc; title: string }) {
             ariaLabel={t("mindmap.canvasLabel")}
           />
         ) : null}
-        <button type="button" className="memo-chat-set-map-open" onClick={() => setOpen(true)}>
+        <button
+          ref={openerRef}
+          type="button"
+          className="memo-chat-set-map-open"
+          onClick={() => setOpen(true)}
+        >
           <span className="memo-chat-set-map-open-label">
             <Msym name="open_in_full" size="1.05rem" fill={false} weight={500} />
             {t("chat.set.openMindmap")}
@@ -750,7 +768,12 @@ function ChatMindmap({ doc, title }: { doc: MindmapDoc; title: string }) {
 
       {open ? (
         <MemoPortal>
-          <div className="memo-mm-overlay memo-chat-set-map-overlay">
+          <div
+            className="memo-mm-overlay memo-chat-set-map-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label={mapTitle}
+          >
             <div
               className="memo-mm-stage fullscreen"
               role="application"
@@ -770,6 +793,7 @@ function ChatMindmap({ doc, title }: { doc: MindmapDoc; title: string }) {
               <div className="memo-mm-toolbar">
                 <div className="memo-mm-tools">
                   <button
+                    ref={closeRef}
                     type="button"
                     className="memo-mm-tool"
                     onClick={() => setOpen(false)}

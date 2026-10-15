@@ -203,7 +203,15 @@ export async function requestChatAnswer<TResult>(params: {
               params.onDelta(text);
             },
             params.t,
-            params.onStudy,
+            (kind) => {
+              /*
+               * A study frame means the answer exists and its turn is about to be saved, even
+               * when no prose was streamed (the plain-call fallback sends none). Asking again
+               * after this would save the turn twice and pay for a second set.
+               */
+              painted = true;
+              params.onStudy?.(kind);
+            },
           )
         : ((await response.json().catch(() => null)) as TResult | null);
 

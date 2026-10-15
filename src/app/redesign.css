@@ -3432,16 +3432,16 @@
 }
 
 .memo-chat-set .memo-panel .lecture-flashcard-content {
-  font-size: 1.02rem;
+  font-size: 1.05rem;
   letter-spacing: -0.02em;
 }
 
 .memo-chat-set .memo-panel .lecture-flashcard-face-answer .lecture-flashcard-content {
-  font-size: 0.98rem;
+  font-size: 0.95rem;
 }
 
 .memo-chat-set .memo-panel .lecture-flashcard-side-label {
-  font-size: 0.85rem;
+  font-size: 0.92rem;
 }
 
 .memo-chat-set .memo-panel .lecture-flashcard-face-header {
@@ -3498,7 +3498,7 @@
 
 .memo-chat-set .memo-panel :is(.lecture-quiz-stage, .lecture-practice-stage) :is(.lecture-quiz-prompt, .lecture-practice-prompt) {
   margin: 0.2rem 0 0.7rem;
-  font-size: 1.02rem;
+  font-size: 1.05rem;
   line-height: 1.32;
 }
 
@@ -3540,7 +3540,7 @@
 }
 
 .memo-chat-set .memo-panel .memo-quiz-result-title {
-  font-size: 1.02rem;
+  font-size: 1.05rem;
 }
 
 .memo-chat-set .memo-panel .memo-quiz-result-primary {

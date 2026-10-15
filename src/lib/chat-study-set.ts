@@ -253,11 +253,14 @@ export function describeChatStudyAttachment(attachment: ChatStudyAttachment | nu
       lines = attachment.cards.map((card, index) => `${index + 1}. ${card.front} = ${card.back}`);
       break;
     case "quiz":
+      /*
+       * The question and its right answer, with the letter it was shown under. The wrong
+       * options are left out: they are what made a long quiz overrun the history's cap, and
+       * "why is B right?" needs only the right one.
+       */
       lines = attachment.questions.map(
         (question, index) =>
-          `${index + 1}. ${question.prompt} (${question.options
-            .map((option, optionIndex) => `${String.fromCharCode(65 + optionIndex)}) ${option}`)
-            .join("; ")}; correct: ${String.fromCharCode(65 + question.correctIndex)})`,
+          `${index + 1}. ${question.prompt} = ${String.fromCharCode(65 + question.correctIndex)}) ${question.options[question.correctIndex]}`,
       );
       break;
     case "test":
@@ -280,7 +283,7 @@ export function describeChatStudyAttachment(attachment: ChatStudyAttachment | nu
  * How much of a described set goes back with the history. The library chat sends its history from
  * the browser and its route refuses a longer field; the tutor trims to the same length anyway.
  */
-export const CHAT_STUDY_HISTORY_CHAR_CAP = 2400;
+export const CHAT_STUDY_HISTORY_CHAR_CAP = 4000;
 
 /** Where the set's description goes on a turn of history: its own field, and only when there is one. */
 export function withAttachedSet<TTurn extends { role: "user" | "assistant"; content: string }>(

@@ -124,7 +124,7 @@ test("the tutor remembers the set it made, beside the turn rather than inside it
 
   const described = describeChatStudyAttachment(parseChatStudyAttachment(attachment));
   assert.match(described, /^quiz "Računanje"/);
-  assert.match(described, /correct: B/);
+  assert.match(described, /^1\. 2 \+ 2\? = B\) 4$/m);
   assert.doesNotMatch(described, /[—–]/);
 
   const turn = { role: "assistant", content: "Tukaj je kviz." };
@@ -140,7 +140,7 @@ test("a long deck is trimmed before it travels as history", () => {
   const cards = Array.from({ length: 20 }, (_, index) => ({ front: `Vprašanje ${index} `.repeat(12), back: "Odgovor ".repeat(50) }));
   const turn = withAttachedSet({ role: "assistant", content: "x" }, { version: 1, kind: "flashcards", title: "T", cards });
 
-  assert.ok(turn.attachedSet.length <= 2400);
+  assert.ok(turn.attachedSet.length <= 4000);
 });
 
 test("the history keeps the set apart from the text, and the tutor is told not to write it", () => {
@@ -213,4 +213,14 @@ test("the note chat stores the set and reads history without naming the new colu
     readSource("supabase/migrations/0061_chat_message_attachments.sql"),
     /add column if not exists attachment_json jsonb/,
   );
+});
+
+test("a learner who stops watching does not cost the turn its save", () => {
+  // Frames to a cancelled stream are dropped rather than thrown into the run, which would
+  // abandon it before the insert (a set takes the better part of a minute to write).
+  const stream = readSource("src/lib/chat-stream.ts");
+
+  assert.match(stream, /cancel\(\) \{\s*closed = true;/);
+  assert.match(stream, /if \(closed\) \{\s*return;/);
+  assert.match(readSource("src/components/library-chat.tsx"), /messages\.slice\(-TUTOR_HISTORY_TURN_LIMIT\)/);
 });

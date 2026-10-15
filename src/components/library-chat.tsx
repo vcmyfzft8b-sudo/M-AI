@@ -13,6 +13,7 @@ import { ChatStudySetCard, ChatStudySetPending } from "@/components/chat-study-s
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { sheetClass, useSheet } from "@/components/use-sheet";
+import { TUTOR_HISTORY_TURN_LIMIT } from "@/lib/ai/tutor-prompt";
 import { requestChatAnswer } from "@/lib/chat-stream-client";
 import {
   withAttachedSet,
@@ -224,7 +225,11 @@ export function LibraryChat({
      * back with the question is the only memory the tutor has of it. Sent
      * before the new question is added, since that travels separately.
      */
-    const history = messages.map((message) =>
+    /*
+     * Only the turns the tutor reads (`buildTutorHistory` keeps the last ten), so a long
+     * session full of sets stays well inside the route's body and turn limits.
+     */
+    const history = messages.slice(-TUTOR_HISTORY_TURN_LIMIT).map((message) =>
       // A set it made travels beside the turn: "explain the third card" needs the cards.
       withAttachedSet({ role: message.role, content: message.text }, message.attachment),
     );

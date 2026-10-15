@@ -32,7 +32,7 @@ export type TutorHistoryTurn = {
 };
 
 /** Cap on a described set: enough for a full deck, and still context rather than the subject. */
-export const TUTOR_HISTORY_SET_CHAR_CAP = 2400;
+export const TUTOR_HISTORY_SET_CHAR_CAP = 4000;
 
 /*
  * Who Memo is, and what it will not say about itself.

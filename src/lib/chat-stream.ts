@@ -30,11 +30,30 @@ export function createChatEventStream<TResult>(params: {
   }) => Promise<TResult>;
 }) {
   const encoder = new TextEncoder();
+  /*
+   * Set once the learner's connection is gone: a locked phone, a closed tab. From then on
+   * frames go nowhere, quietly. Enqueueing on a cancelled stream throws, and a throw from a
+   * frame would abandon the run itself, so a turn the learner stopped watching (a study set
+   * takes the better part of a minute to write) would never reach the database. The answer
+   * is paid for either way; this keeps it saved for when they come back.
+   */
+  let closed = false;
 
   const stream = new ReadableStream<Uint8Array>({
+    cancel() {
+      closed = true;
+    },
     async start(controller) {
       const send = (event: string, data: unknown) => {
-        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        if (closed) {
+          return;
+        }
+
+        try {
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        } catch {
+          closed = true;
+        }
       };
 
       try {
@@ -54,7 +73,13 @@ export function createChatEventStream<TResult>(params: {
         console.error(`${params.label} stream failed`, error);
         send("error", { error: params.errorMessage });
       } finally {
-        controller.close();
+        if (!closed) {
+          try {
+            controller.close();
+          } catch {
+            // Already closed from the other side; nothing left to tell anyone.
+          }
+        }
       }
     },
   });

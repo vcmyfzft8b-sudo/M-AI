@@ -1721,6 +1721,11 @@ export type Database = {
           terms_accepted_user_agent: string | null;
           terms_snapshot: string | null;
           discord_opened_at: string | null;
+          contract_pay: Json | null;
+          contract_minor: boolean | null;
+          terms_override: string | null;
+          terms_edited_at: string | null;
+          terms_edited_by: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1762,6 +1767,14 @@ export type Database = {
           terms_accepted_user_agent?: string | null;
           terms_snapshot?: string | null;
           discord_opened_at?: string | null;
+          full_name?: string;
+          email?: string;
+          locale?: string;
+          contract_pay?: Json | null;
+          contract_minor?: boolean | null;
+          terms_override?: string | null;
+          terms_edited_at?: string | null;
+          terms_edited_by?: string | null;
         };
       };
       ugc_creator_contracts: {
@@ -1783,6 +1796,9 @@ export type Database = {
           signed_ip: string | null;
           signed_user_agent: string | null;
           terms_snapshot: string | null;
+          terms_override: string | null;
+          edited_at: string | null;
+          edited_by: string | null;
           created_at: string;
           updated_at: string;
           created_by: string | null;
@@ -1800,6 +1816,15 @@ export type Database = {
           created_by?: string | null;
         };
         Update: {
+          email?: string | null;
+          full_name?: string;
+          market?: "si" | "balkans";
+          locale?: string;
+          minor?: boolean;
+          pay?: Json;
+          terms_override?: string | null;
+          edited_at?: string | null;
+          edited_by?: string | null;
           status?: UgcContractStatus;
           terms_version?: string | null;
           signed_at?: string | null;

@@ -2166,6 +2166,20 @@
   color: var(--label);
 }
 
+.admin-contract-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.admin-contract-editor {
+  min-height: 28rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
 .admin-contract-text .markdown,
 .admin-contract-text .markdown * {
   color: inherit;

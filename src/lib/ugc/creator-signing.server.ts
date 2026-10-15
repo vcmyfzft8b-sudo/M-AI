@@ -5,9 +5,9 @@ import { cache } from "react";
 import { updateIn } from "@/lib/admin/db";
 import type { UgcCreatorApplicationRow, UgcCreatorContractRow } from "@/lib/database.types";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { campaignTermsAt } from "@/lib/ugc/creator-campaigns";
-import { campaignPay, parseContractPay, type ContractPay } from "@/lib/ugc/creator-pay";
-import { campaignLocale, type CampaignLocale, type CreatorMarket } from "@/lib/ugc/creator-program";
+import { applicationRowTerms, contractRowTerms } from "@/lib/ugc/contract-rows";
+import type { ContractPay } from "@/lib/ugc/creator-pay";
+import type { CampaignLocale, CreatorMarket } from "@/lib/ugc/creator-program";
 import { CREATOR_TERMS_VERSION, creatorTermsMarkdown } from "@/lib/ugc/creator-terms";
 
 /**
@@ -17,6 +17,9 @@ import { CREATOR_TERMS_VERSION, creatorTermsMarkdown } from "@/lib/ugc/creator-t
  *   pay of the terms version they signed), and the campaign's Discord once signed.
  * - A **contract** the admin sent to a creator already in the program: that creator's
  *   own deal (`ugc_creator_contracts.pay`). Voided contracts open nothing.
+ *
+ * Either can be edited by the admin at any time, on the same link (`contract-rows.ts`
+ * reads what it says now).
  *
  * Both are signed the same way, in one tap, and both keep the same record.
  */
@@ -33,6 +36,8 @@ export type Signable = {
   acceptedAt: string | null;
   /** The exact text that was signed, once signed (null for signatures from before it was kept). */
   signedText: string | null;
+  /** Text the admin wrote by hand for this contract, shown instead of the generated text. */
+  override: string | null;
   /** An applicant opened their campaign's Discord invite after signing (never for contracts). */
   discordOpenedAt: string | null;
 };
@@ -53,37 +58,39 @@ async function readSignable(token: string): Promise<Signable | null> {
   const contract = contractData as UgcCreatorContractRow | null;
 
   if (application && application.status === "approved" && (application.market === "si" || application.market === "balkans")) {
+    const terms = applicationRowTerms(application as UgcCreatorApplicationRow & { market: CreatorMarket });
+
     return {
       kind: "application",
       id: application.id,
       fullName: application.full_name,
-      market: application.market,
-      locale: campaignLocale(application.market, application.locale),
-      minor: application.age !== null && application.age < 18,
-      pay: campaignPay(
-        campaignTermsAt(application.market, application.terms_accepted_at ? application.terms_version : null),
-      ),
+      market: terms.market,
+      locale: terms.locale,
+      minor: terms.minor,
+      pay: terms.pay,
       applied: true,
       acceptedAt: application.terms_accepted_at,
-      signedText: application.terms_accepted_at ? application.terms_snapshot : null,
+      signedText: terms.signedText,
+      override: terms.override,
       discordOpenedAt: application.discord_opened_at,
     };
   }
 
-  const pay = contract ? parseContractPay(contract.pay) : null;
+  const terms = contract ? contractRowTerms(contract) : null;
 
-  if (contract && pay && contract.status !== "void") {
+  if (contract && terms?.payValid && contract.status !== "void") {
     return {
       kind: "contract",
       id: contract.id,
       fullName: contract.full_name,
-      market: contract.market,
-      locale: campaignLocale(contract.market, contract.locale),
-      minor: contract.minor,
-      pay,
+      market: terms.market,
+      locale: terms.locale,
+      minor: terms.minor,
+      pay: terms.pay,
       applied: false,
       acceptedAt: contract.signed_at,
-      signedText: contract.signed_at ? contract.terms_snapshot : null,
+      signedText: terms.signedText,
+      override: terms.override,
       discordOpenedAt: null,
     };
   }
@@ -99,11 +106,14 @@ export const loadSignable = Object.assign(cache(readSignable), {
 
 /**
  * The exact terms this link is signed for: once signed, the text that was signed, so a
- * later change to the campaign's pay or wording never rewrites what a creator agreed to.
+ * later change to the campaign's pay or wording never rewrites what a creator agreed to
+ * (only an admin's edit does, `/admin/contracts/<id>/edit`); before that, the admin's
+ * hand-written text when there is one.
  */
 export function signableTerms(signable: Signable): string {
   return (
     signable.signedText ??
+    signable.override ??
     creatorTermsMarkdown(signable.locale, signable.market, { pay: signable.pay, applied: signable.applied })
   );
 }

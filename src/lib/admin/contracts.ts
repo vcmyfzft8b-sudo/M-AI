@@ -3,8 +3,8 @@ import "server-only";
 import { loadEveryRow } from "@/lib/admin/paged-rows";
 import type { UgcCreatorApplicationRow, UgcCreatorContractRow } from "@/lib/database.types";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { campaignTermsAt } from "@/lib/ugc/creator-campaigns";
-import { campaignPay, describeContractPay, parseContractPay } from "@/lib/ugc/creator-pay";
+import { applicationRowTerms, contractRowTerms, type ContractTerms } from "@/lib/ugc/contract-rows";
+import { describeContractPay } from "@/lib/ugc/creator-pay";
 
 /**
  * Every creator contract, for `/admin/contracts` and each creator's page: the contracts
@@ -33,10 +33,13 @@ export type ContractRecord = {
   /** The exact text that was signed; null until signed (and for signatures from before it was kept). */
   snapshot: string | null;
   createdBy: string | null;
+  /** When and by whom an admin last edited it (`/admin/contracts/<id>/edit`). */
+  editedAt: string | null;
+  editedBy: string | null;
 };
 
 function fromContract(row: UgcCreatorContractRow): ContractRecord {
-  const pay = parseContractPay(row.pay);
+  const terms = contractRowTerms(row);
 
   return {
     kind: "contract",
@@ -46,7 +49,7 @@ function fromContract(row: UgcCreatorContractRow): ContractRecord {
     email: row.email,
     market: row.market,
     status: row.status,
-    pay: pay ? describeContractPay(pay) : "—",
+    pay: terms.payValid ? describeContractPay(terms.pay) : "—",
     joinToken: row.join_token,
     createdAt: row.created_at,
     signedAt: row.signed_at,
@@ -57,10 +60,14 @@ function fromContract(row: UgcCreatorContractRow): ContractRecord {
     termsVersion: row.terms_version,
     snapshot: row.terms_snapshot,
     createdBy: row.created_by,
+    editedAt: row.edited_at,
+    editedBy: row.edited_by,
   };
 }
 
 function fromApplication(row: UgcCreatorApplicationRow & { market: "si" | "balkans" }): ContractRecord {
+  const terms = applicationRowTerms(row);
+
   return {
     kind: "application",
     id: row.id,
@@ -69,8 +76,8 @@ function fromApplication(row: UgcCreatorApplicationRow & { market: "si" | "balka
     email: row.email,
     market: row.market,
     status: row.terms_accepted_at ? "signed" : "sent",
-    // What they signed: the campaign's pay under the terms version they accepted.
-    pay: `${describeContractPay(campaignPay(campaignTermsAt(row.market, row.terms_accepted_at ? row.terms_version : null)))} (campaign)`,
+    // The campaign's pay under the terms version they accepted, unless the admin gave them their own.
+    pay: `${describeContractPay(terms.pay)}${terms.standardPay ? " (campaign)" : ""}`,
     joinToken: row.join_token,
     createdAt: row.reviewed_at ?? row.created_at,
     signedAt: row.terms_accepted_at,
@@ -81,6 +88,8 @@ function fromApplication(row: UgcCreatorApplicationRow & { market: "si" | "balka
     termsVersion: row.terms_version,
     snapshot: row.terms_snapshot,
     createdBy: row.reviewed_by,
+    editedAt: row.terms_edited_at,
+    editedBy: row.terms_edited_by,
   };
 }
 
@@ -130,8 +139,12 @@ export async function listAllContracts(): Promise<ContractRecord[]> {
   ].sort((a, b) => (b.signedAt ?? b.createdAt).localeCompare(a.signedAt ?? a.createdAt));
 }
 
-/** One contract or accepted application by id, for its own page. */
-export async function getContractRecord(id: string): Promise<ContractRecord | null> {
+/** A contract row or an accepted applicant's row, by id: the two never share one. */
+export type ContractSource =
+  | { kind: "contract"; row: UgcCreatorContractRow }
+  | { kind: "application"; row: UgcCreatorApplicationRow & { market: "si" | "balkans" } };
+
+export async function loadContractSource(id: string): Promise<ContractSource | null> {
   const supabase = createSupabaseServiceRoleClient();
   const [{ data: contract }, { data: application }] = await Promise.all([
     supabase.from("ugc_creator_contracts").select("*").eq("id", id).maybeSingle(),
@@ -139,12 +152,56 @@ export async function getContractRecord(id: string): Promise<ContractRecord | nu
   ]);
 
   if (contract) {
-    return fromContract(contract as UgcCreatorContractRow);
+    return { kind: "contract", row: contract as UgcCreatorContractRow };
   }
 
   const row = application as UgcCreatorApplicationRow | null;
 
   return row && (row.status === "approved" || row.terms_accepted_at) && (row.market === "si" || row.market === "balkans")
-    ? fromApplication(row as UgcCreatorApplicationRow & { market: "si" | "balkans" })
+    ? { kind: "application", row: row as UgcCreatorApplicationRow & { market: "si" | "balkans" } }
     : null;
+}
+
+export function contractSourceTerms(source: ContractSource): ContractTerms {
+  return source.kind === "contract" ? contractRowTerms(source.row) : applicationRowTerms(source.row);
+}
+
+/** One contract or accepted application by id, for its own page. */
+export async function getContractRecord(id: string): Promise<ContractRecord | null> {
+  const source = await loadContractSource(id);
+
+  return source ? (source.kind === "contract" ? fromContract(source.row) : fromApplication(source.row)) : null;
+}
+
+/** Everything the edit form shows and can change. */
+export type EditableContract = {
+  kind: ContractSource["kind"];
+  id: string;
+  name: string;
+  email: string | null;
+  status: ContractRecord["status"];
+  terms: ContractTerms;
+  editedAt: string | null;
+  editedBy: string | null;
+};
+
+export async function getEditableContract(id: string): Promise<EditableContract | null> {
+  const source = await loadContractSource(id);
+
+  if (!source) {
+    return null;
+  }
+
+  const record = source.kind === "contract" ? fromContract(source.row) : fromApplication(source.row);
+
+  return {
+    kind: source.kind,
+    id: record.id,
+    name: record.name,
+    email: record.email,
+    status: record.status,
+    terms: contractSourceTerms(source),
+    editedAt: record.editedAt,
+    editedBy: record.editedBy,
+  };
 }

@@ -84,13 +84,21 @@ export function PaywallNudge() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ reason: "offer" }),
     })
-      .then((response) => (response.ok ? (response.json() as Promise<{ advanced?: boolean }>) : null))
+      .then((response) =>
+        response.ok ? (response.json() as Promise<{ advanced?: boolean; seen?: unknown[] }>) : null,
+      )
       .then((body) => {
         if (!body || window.location.pathname !== "/app") {
           return;
         }
 
-        const href = paywallPath("offer", "/app");
+        /*
+         * Each rung gets its own address. The client router keeps a rendered
+         * page for a while, and the second offer at the first one's address
+         * came back with the first one's price; the server still reads the
+         * price from the cookie, never from this.
+         */
+        const href = `${paywallPath("offer", "/app")}&rung=${body.seen?.length ?? 0}`;
         router.push(body.advanced ? `${href}&better=1` : href);
       })
       .catch(() => null);

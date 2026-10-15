@@ -444,6 +444,8 @@
   --on-photo: #ffffff;
   --on-photo-chip: rgba(255, 255, 255, 0.16);
   --photo-chip: rgba(0, 0, 0, 0.5);
+  /* A success on the same black: the palace's "collected", over the 3D town. */
+  --on-photo-good: #4cd98a;
   --coral: linear-gradient(135deg, #ff6d68, #f45f5a);
   --blue: #0066cc;
   /* Destructive. Until now every delete, every error note and every danger
@@ -19427,6 +19429,104 @@
   pointer-events: none;
 }
 
+/* While a thumb is down the resting base gives way to a ring under the thumb. */
+.memo-palace-stick-base[data-active] {
+  opacity: 0;
+}
+
+.memo-palace-stick-ring {
+  position: fixed;
+  width: 6.4rem;
+  height: 6.4rem;
+  margin: -3.2rem 0 0 -3.2rem;
+  border-radius: 999px;
+  border: 2px solid var(--on-photo-chip);
+  background: var(--on-photo-chip);
+  pointer-events: none;
+  transition: border-color 0.15s ease, scale 0.15s ease;
+}
+
+/* Pushed past the rim: running, and the stick says so. */
+.memo-palace-stick-ring[data-running] {
+  border-color: var(--promo);
+  scale: 1.08;
+}
+
+.memo-palace-knob[data-running] {
+  background: var(--promo);
+  border-color: var(--on-photo);
+}
+
+/* Which way the next stop is, under the count it would raise. */
+.memo-palace-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem 0.3rem 0.45rem;
+  border-radius: 999px;
+  background: var(--photo-chip);
+  color: var(--on-photo);
+  font-size: 0.85rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.2s ease;
+}
+
+.memo-palace-next[data-visible="false"] {
+  opacity: 0;
+}
+
+.memo-palace-next-arrow {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: var(--on-photo);
+}
+
+.memo-palace-score.is-bumped {
+  animation: memo-palace-bump 0.5s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+@keyframes memo-palace-bump {
+  35% { scale: 1.16; }
+}
+
+/* A line after a card, under the HUD and clear of the walker. */
+.memo-palace-toast {
+  position: absolute;
+  top: calc(9.4rem + var(--memo-safe-top, 0px));
+  left: 50%;
+  translate: -50% 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  /* Its own width, not what is left right of centre, which wrapped it in three. */
+  width: max-content;
+  max-width: calc(100% - 2rem);
+  margin: 0;
+  padding: 0.55rem 1rem 0.55rem 0.75rem;
+  border-radius: 999px;
+  background: var(--photo-chip);
+  color: var(--on-photo);
+  font-size: 0.95rem;
+  font-weight: 700;
+  pointer-events: none;
+  animation: memo-palace-toast 2.2s ease both;
+}
+
+.memo-palace-toast.collected .msym {
+  color: var(--on-photo-good);
+}
+
+.memo-palace-toast.moved .msym {
+  color: var(--promo);
+}
+
+@keyframes memo-palace-toast {
+  0% { opacity: 0; transform: translateY(-0.5rem); }
+  12%, 82% { opacity: 1; transform: none; }
+  100% { opacity: 0; }
+}
+
 /*
  * The wait, on the app's own terms: the same notice every other screen shows
  * while something is being made, laid over the stage on the app's surface
@@ -19972,6 +20072,20 @@
   .memo-palace-hud-top {
     top: calc(0.9rem + var(--memo-safe-top, 0px));
     right: 4.2rem;
+  }
+
+}
+
+/*
+ * Under 900px the engine draws without its finishing pass (`onAPhone` in
+ * `game.ts`; see `post.ts`), which is where the desktop's vignette lives. The
+ * same darkening at the corners costs a phone nothing as a layer over the
+ * canvas, and it seats the HUD on the picture. Not at the 1100px breakpoint:
+ * between the two the finishing pass runs and would darken the corners twice.
+ */
+@media (max-width: 899px) {
+  .memo-palace-canvas + .memo-palace-look {
+    background: radial-gradient(ellipse 120% 90% at 50% 55%, transparent 58%, var(--photo-chip) 135%);
   }
 }
 /* ---------------------------------------------------------------------------

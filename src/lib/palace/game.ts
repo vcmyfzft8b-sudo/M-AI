@@ -53,8 +53,8 @@ export type PalaceSnapshot = {
 };
 
 export type PalaceGame = {
-  /** Stick or WASD, each axis in [-1, 1]. */
-  setMove: (forward: number, right: number) => void;
+  /** Stick or WASD, each axis in [-1, 1]; a stick pushed to its rim runs. */
+  setMove: (forward: number, right: number, sprint?: boolean) => void;
   /** Drag or mouse look, in pixels. */
   look: (deltaX: number, deltaY: number) => void;
   markCollected: (stationId: string) => void;
@@ -80,10 +80,47 @@ export type PalaceGame = {
  */
 export const STATION_REACH = 2;
 const LOOK_SENSITIVITY = 0.0042;
+/*
+ * How quickly a drag reaches the camera. Touch moves arrive unevenly, and fed
+ * straight in they turned the view in small jerks; this is about a frame and a
+ * half of easing, too short to feel like lag.
+ */
+const LOOK_EASE = 24;
+/*
+ * Walking with the stick, the camera comes round behind the walker on its own,
+ * at up to this many radians a second when the stick points straight sideways.
+ * Without it every turn on a phone took both thumbs. It waits this long after a
+ * drag, so it never fights the player's own look.
+ */
+const FOLLOW_TURN_RATE = 0.65;
+const FOLLOW_AFTER_LOOK = 1.2;
 /** How far behind the character the camera rides when nothing is in the way. */
-const CAMERA_DISTANCE = 8.4;
+const CAMERA_DISTANCE = 5.4;
 /** Closer on a phone, where the same distance leaves the character tiny. */
-const CAMERA_DISTANCE_PORTRAIT = 7;
+const CAMERA_DISTANCE_PORTRAIT = 4.4;
+/*
+ * Where the walker stands on screen outdoors: their middle this far below the
+ * centre, as a share of half the screen's height. Aimed at the head, a portrait
+ * phone put the horizon at the top edge and spent half the screen on paving;
+ * framed low, the street, the skyline and the beacons fill the rest. Worked out
+ * from where the camera actually is each frame, so it holds at any distance.
+ */
+const FRAME_LOW = 0.32;
+const FRAME_LOW_PORTRAIT = 0.42;
+/** How much lower than the shared rig (`cameraPosition`) the camera rides outdoors, in metres. */
+const CAMERA_DROP = 0.9;
+/* The lens, vertical degrees; a wider one shrank the walker to a figure in the distance. */
+const FOV = 54;
+const FOV_PORTRAIT = 60;
+/** The opening shot: from over the town down to behind the walker. */
+const ARRIVAL_SECONDS = 2.6;
+/*
+ * A phone's frame budget. Over it, the canvas drops a step of resolution; well
+ * under it for a while, it takes one back. Two steps either way of the start.
+ */
+const PHONE_PIXEL_RATIOS = [1, 1.25, 1.5, 1.75];
+const SLOW_FRAME_MS = 21;
+const FAST_FRAME_MS = 13;
 
 export function createPalaceGame({
   canvas,
@@ -118,7 +155,12 @@ export function createPalaceGame({
   const onAPhone = window.innerWidth < 900;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, onAPhone ? 1.5 : 2));
+  const deviceRatio = window.devicePixelRatio || 1;
+  /* Phones start at 1.5 and are then held to whatever their GPU keeps up with. */
+  const phoneRatios = PHONE_PIXEL_RATIOS.filter((ratio) => ratio <= deviceRatio);
+  let phoneRatioStep = Math.max(0, phoneRatios.lastIndexOf(Math.min(1.5, phoneRatios[phoneRatios.length - 1] ?? 1)));
+
+  renderer.setPixelRatio(onAPhone ? phoneRatios[phoneRatioStep] ?? 1 : Math.min(deviceRatio, 2));
   /*
    * Shadows are most of what makes the town read as solid rather than as
    * coloured paper, so they are on everywhere — but the map is sized to the
@@ -193,7 +235,43 @@ export function createPalaceGame({
    */
   const frameTimes: number[] = [];
   let watchingFrameRate = true;
+  /*
+   * A phone has no finishing pass to drop, so its resolution is what gives:
+   * averaged over a second of frames, a slow phone renders a step coarser and
+   * a fast one a step finer, up to 1.75 — past that a phone screen shows no
+   * difference and pays for every pixel.
+   */
+  const phoneFrames: number[] = [];
+  let phoneFastStreak = 0;
+  const watchPhoneFrameRate = (milliseconds: number) => {
+    if (!onAPhone || phoneRatios.length < 2 || milliseconds <= 0 || milliseconds > 250) return;
+    phoneFrames.push(milliseconds);
+    if (phoneFrames.length < 60) return;
+    const sorted = [...phoneFrames].sort((left, right) => left - right);
+    /* The median, so one hitch from a shader compiling does not cost resolution. */
+    const typical = sorted[Math.floor(sorted.length / 2)];
+    phoneFrames.length = 0;
+    let step = phoneRatioStep;
+    if (typical > SLOW_FRAME_MS && step > 0) {
+      step -= 1;
+      phoneFastStreak = 0;
+    } else if (typical < FAST_FRAME_MS && step < phoneRatios.length - 1) {
+      /* Three good seconds in a row before going finer, so it does not see-saw. */
+      phoneFastStreak += 1;
+      if (phoneFastStreak >= 3) {
+        step += 1;
+        phoneFastStreak = 0;
+      }
+    } else {
+      phoneFastStreak = 0;
+    }
+    if (step === phoneRatioStep) return;
+    phoneRatioStep = step;
+    renderer.setPixelRatio(phoneRatios[step]);
+    resize();
+  };
   const watchFrameRate = (milliseconds: number) => {
+    watchPhoneFrameRate(milliseconds);
     if (!post || !watchingFrameRate || milliseconds <= 0 || milliseconds > 250) return;
     frameTimes.push(milliseconds);
     if (frameTimes.length < 90) return;
@@ -235,9 +313,12 @@ export function createPalaceGame({
   let cameraYaw = layout.spawn.yaw;
   /* A little above the eaves: low enough to feel like a street, high enough
      that the camera does not spend its life inside somebody's roof. */
-  let cameraPitch = 0.3;
+  let cameraPitch = 0.22;
   const cameraTarget = new THREE.Vector3();
-  const move = { forward: 0, right: 0 };
+  const move = { forward: 0, right: 0, sprint: false };
+  /* Drag not yet applied to the camera, and how long since the last one. */
+  const pendingLook = { yaw: 0, pitch: 0 };
+  let sinceLook = Number.POSITIVE_INFINITY;
   let paused = false;
   let nearStationId: string | null = null;
   /*
@@ -259,6 +340,19 @@ export function createPalaceGame({
   let shownPitch = cameraPitch;
   /* 0 outdoors, 1 indoors, eased: the wider lens and the fill light fade in as you enter. */
   let indoorBlend = 0;
+  /*
+   * The opening shot, 0 to 1: the camera starts high over the town, where the
+   * beacons say how much there is to find, and comes down behind the walker.
+   * Skipped for reduced motion; hurried along once the player starts walking.
+   */
+  let arrival = reducedMotion ? 1 : 0;
+  /* True while the opening shot owns the camera's position. */
+  let arrivalActive = !reducedMotion;
+  const arrivalFrom = new THREE.Vector3();
+  const arrivalLook = new THREE.Vector3();
+  /* Where the following camera really is while the opening shot overrides it. */
+  const followPosition = new THREE.Vector3();
+  const lookPoint = new THREE.Vector3();
   /*
    * A warm fill that follows you inside. Rooms stand in their building's
    * shadow and were lit only by the sky, so they read as gloomy. Always in the
@@ -284,7 +378,7 @@ export function createPalaceGame({
      * closer instead (see `cameraDistance`).
      */
     portrait = camera.aspect < 1;
-    camera.fov = (portrait ? 66 : 58) + indoorBlend * 8;
+    camera.fov = (portrait ? FOV_PORTRAIT : FOV) + indoorBlend * 8;
     camera.updateProjectionMatrix();
     post?.setSize(width, height);
     /*
@@ -328,6 +422,21 @@ export function createPalaceGame({
 
   camera.position.set(spawnCamera.x, Math.max(spawnCamera.y, 1.2), spawnCamera.z);
   camera.lookAt(character.x, character.y + 1.6, character.z);
+
+  /*
+   * The opening shot starts here, before the first picture, so the first frame
+   * is already the view from above rather than a street-level frame cut away from.
+   */
+  if (arrivalActive) {
+    const eye = { x: character.x, y: character.y + 0.9, z: character.z };
+
+    followPosition.copy(camera.position);
+    /* High behind the walker's back and well out, looking down the way they face. */
+    arrivalFrom.set(eye.x - Math.sin(cameraYaw) * 46, eye.y + 58, eye.z - Math.cos(cameraYaw) * 46);
+    arrivalLook.set(eye.x + Math.sin(cameraYaw) * 30, 0, eye.z + Math.cos(cameraYaw) * 30);
+    camera.position.copy(arrivalFrom);
+    camera.lookAt(arrivalLook);
+  }
   lighting.update(0, camera);
   draw();
 
@@ -390,7 +499,7 @@ export function createPalaceGame({
     keysDown.delete(event.code);
   };
 
-  const clearInput = () => { keysDown.clear(); move.forward = 0; move.right = 0; };
+  const clearInput = () => { keysDown.clear(); move.forward = 0; move.right = 0; move.sprint = false; };
   /*
    * A context menu swallows the key-up of whatever was held, so the keys are
    * dropped — but not the touch stick: Android fires one on a long press, and
@@ -437,6 +546,9 @@ export function createPalaceGame({
 
     lastTime = time;
 
+    /* Last frame showed the opening shot; the follow camera carries on from where it really was. */
+    if (arrivalActive) camera.position.copy(followPosition);
+
     const keyboard = readKeyboard();
     const input = interacting
       ? { forward: 0, right: 0, jump: false, sprint: false }
@@ -450,8 +562,31 @@ export function createPalaceGame({
            * ground over the kerbs.
            */
           jump: false,
-          sprint: keysDown.has("ShiftLeft") || keysDown.has("ShiftRight"),
+          sprint: move.sprint || keysDown.has("ShiftLeft") || keysDown.has("ShiftRight"),
         };
+
+    /* The drag, eased in. */
+    const lookShare = reducedMotion ? 1 : 1 - Math.exp(-delta * LOOK_EASE);
+
+    cameraYaw += pendingLook.yaw * lookShare;
+    cameraPitch = clampPitch(cameraPitch + pendingLook.pitch * lookShare);
+    pendingLook.yaw *= 1 - lookShare;
+    /* Only as much tilt as is left before the limit, so a drag back the other way is not swallowed. */
+    pendingLook.pitch = clampPitch(cameraPitch + pendingLook.pitch * (1 - lookShare)) - cameraPitch;
+    sinceLook += delta;
+
+    /*
+     * Stick only: a keyboard comes with a mouse to look with. Turned by the
+     * sideways part of the push, so walking ahead leaves the camera alone and
+     * pulling back towards the camera never spins it round.
+     */
+    const stickPush = Math.hypot(move.forward, move.right);
+
+    if (!interacting && !reducedMotion && stickPush > 0.2 && sinceLook > FOLLOW_AFTER_LOOK && move.forward > -0.35) {
+      const pushAngle = Math.atan2(-move.right, move.forward);
+
+      cameraYaw += Math.sin(pushAngle) * Math.min(1, stickPush) * FOLLOW_TURN_RATE * delta;
+    }
 
     character = stepCharacter({
       state: character,
@@ -511,7 +646,7 @@ export function createPalaceGame({
     avatar.root.position.set(character.x, character.y, character.z);
     avatar.root.rotation.y = character.facing;
     avatar.update(character.speed, !character.grounded, delta);
-    lighting.follow(character.x, character.z);
+    lighting.follow(character.x, character.z, Math.sin(cameraYaw), Math.cos(cameraYaw));
 
     const eye = { x: character.x, y: character.y + 0.9, z: character.z };
     const house = layout.houses.find((candidate) => insideHouse(character, candidate));
@@ -559,7 +694,14 @@ export function createPalaceGame({
     /* The camera trails rather than tracks, which is what makes running feel fast. */
     const desired = cameraPosition({ target: eye, yaw: cameraYaw, pitch: activePitch, distance: heldDistance });
 
-    cameraTarget.set(desired.x, Math.min(ceiling, Math.max(desired.y, character.y + 1.2)), desired.z);
+    /*
+     * Outdoors the camera rides lower than the shared rig puts it: from 3.4 m up
+     * it looked down on a small figure, which read as far away however close
+     * it stood. Not indoors, where the rig already keeps under the ceiling.
+     */
+    const drop = indoors ? 0 : CAMERA_DROP;
+
+    cameraTarget.set(desired.x, Math.min(ceiling, Math.max(desired.y - drop, character.y + 1.2)), desired.z);
 
     /*
      * Indoors the camera can sit a hand's breadth from a wall, and a near plane
@@ -598,13 +740,46 @@ export function createPalaceGame({
     }
     camera.position.lerp(
       cameraTarget,
-      reducedMotion || (indoors && !riding) ? 1 : 1 - Math.pow(riding ? 0.03 : 0.0025, delta),
+      /* Close behind, a lazier follow left a running walker metres ahead of the lens. */
+      reducedMotion || (indoors && !riding) ? 1 : 1 - Math.pow(riding ? 0.03 : 0.0006, delta),
     );
-    camera.lookAt(eye.x, eye.y + 0.7 + (indoors ? 0 : Math.max(0, -activePitch) * 8), eye.z);
+    /*
+     * Aim above the head outdoors, by less as a wall pulls the camera in (close
+     * up, the same lift would put the walker under the bottom edge) and not at
+     * all indoors, where the ceiling is already the limit.
+     */
+    const lookUp = indoors ? 0 : Math.max(0, -activePitch) * 8;
+    const plainY = eye.y + 0.7 + lookUp;
+    const across = Math.max(0.5, Math.hypot(eye.x - camera.position.x, eye.z - camera.position.z));
+    const below = Math.atan2(camera.position.y - (character.y + 1), across);
+    /* Tilting the view up slides the walker towards the bottom edge, never past it. */
+    const frameLow = Math.min(0.8, (portrait ? FRAME_LOW_PORTRAIT : FRAME_LOW) + Math.max(0, -activePitch));
+    const lookDown = below - frameLow * ((camera.fov * Math.PI) / 360);
+    const framedY = camera.position.y - Math.tan(lookDown) * across;
+    const framing = (1 - indoorBlend) * (riding ? 0 : 1);
+
+    lookPoint.set(eye.x, plainY + (framedY - plainY) * framing, eye.z);
+
+    if (arrivalActive) {
+      const moving = Math.abs(input.forward) + Math.abs(input.right) > 0.05;
+
+      arrival = Math.min(1, arrival + (delta / ARRIVAL_SECONDS) * (moving ? 3 : 1));
+
+      /* Smootherstep: leaves the aerial view gently and settles without a bump. */
+      const ease = arrival * arrival * arrival * (arrival * (arrival * 6 - 15) + 10);
+
+      followPosition.copy(camera.position);
+      camera.position.lerpVectors(arrivalFrom, followPosition, ease);
+      lookPoint.lerpVectors(arrivalLook, lookPoint, ease);
+      if (arrival >= 1) arrivalActive = false;
+    }
+    camera.lookAt(lookPoint);
+    /* From the aerial view nobody is in the way, and fading by its line would be wrong. */
+    if (!arrivalActive) crowd.clearView(delta, camera.position, character);
 
     /* A wider lens indoors, so a room is a room rather than a wall and a back. */
     indoorBlend += ((indoors ? 1 : 0) - indoorBlend) * (1 - Math.exp(-delta * 4));
-    const fov = (portrait ? 66 : 58) + indoorBlend * 8;
+    const fov = (portrait ? FOV_PORTRAIT : FOV) + indoorBlend * 8;
 
     if (Math.abs(camera.fov - fov) > 0.05) {
       camera.fov = fov;
@@ -720,6 +895,7 @@ export function createPalaceGame({
         return true;
       },
       scene,
+      camera,
       player: () => ({ x: character.x, y: character.y, z: character.z }),
       lifts: () => lifts.map(({ x, z, y, stops, house }) => ({ x, z, y, stops, facing: house.facing })),
       people: () => crowd.colliders.map(({ x, z }) => ({ x, z })),
@@ -728,6 +904,10 @@ export function createPalaceGame({
       teleport: (x: number, z: number, yaw: number, pitch?: number, y = 0) => {
         character = { ...createCharacter(x, z, yaw), y };
         cameraYaw = yaw;
+        pendingLook.yaw = 0;
+        pendingLook.pitch = 0;
+        arrival = 1;
+        arrivalActive = false;
         if (pitch !== undefined) cameraPitch = clampPitch(pitch);
         camera.position.set(x - Math.sin(yaw) * 8, 5, z - Math.cos(yaw) * 8);
       },
@@ -739,13 +919,15 @@ export function createPalaceGame({
 
 
   return {
-    setMove: (forward, right) => {
+    setMove: (forward, right, sprint = false) => {
       move.forward = forward;
       move.right = right;
+      move.sprint = sprint;
     },
     look: (deltaX, deltaY) => {
-      cameraYaw -= deltaX * LOOK_SENSITIVITY;
-      cameraPitch = clampPitch(cameraPitch + deltaY * LOOK_SENSITIVITY);
+      pendingLook.yaw -= deltaX * LOOK_SENSITIVITY;
+      pendingLook.pitch += deltaY * LOOK_SENSITIVITY;
+      sinceLook = 0;
     },
     markCollected: (stationId) => {
       const visual = findVisual(stationId);

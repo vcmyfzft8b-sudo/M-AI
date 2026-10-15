@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, CircleCheck, Loader2 } from "lucide-react";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 
@@ -18,7 +18,7 @@ import { clearOfferResume } from "@/lib/offer-resume";
 import { formatCurrency } from "@/lib/utils";
 import type { PaywallReason } from "@/lib/paywall-reasons";
 import { discountedAmount, paywallOffer } from "@/lib/paywall-ladder";
-import { NOTE_TABS } from "@/lib/note-tabs";
+import { PaywallHero, paywallAccentStyle, paywallLayout } from "@/components/paywall-hero";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -46,53 +46,6 @@ const DEFAULT_BENEFITS: readonly PaywallBenefit[] = [
   { titleKey: "paywall.benefit.speedTitle", copyKey: "paywall.benefit.speedCopy", icon: "⚡" },
 ];
 
-const REASON_ICONS: Record<PaywallReason, string> = {
-  note: "📝",
-  locked: "📚",
-  chat: "💬",
-  listen: "🎧",
-  tutor: "🎓",
-  podcast: "🎙️",
-  regenerate: "🔄",
-  library: "🗂️",
-};
-
-/**
- * Each feature's paywall wears that feature's colour and icon, taken from its
- * tab where it has one, so the screen reads as the thing that was just tried
- * rather than as the same sheet again.
- */
-const tabTint = (id: string) => NOTE_TABS.find((tab) => tab.id === id)?.tint ?? null;
-const REASON_HERO: Record<PaywallReason, { icon: string; tint: string | null }> = {
-  note: { icon: "edit_square", tint: tabTint("notes") },
-  locked: { icon: "folder", tint: tabTint("palace") },
-  chat: { icon: "forum", tint: tabTint("quiz") },
-  listen: { icon: "headphones", tint: tabTint("speed") },
-  tutor: { icon: "graphic_eq", tint: tabTint("tutor") },
-  podcast: { icon: "podcasts", tint: tabTint("podcast") },
-  regenerate: { icon: "refresh", tint: tabTint("flashcards") },
-  library: { icon: "forum", tint: tabTint("mindmap") },
-};
-
-/**
- * The thing the learner just tried goes first, in place of the default benefit
- * it is closest to, so the list stays three rows long. The screen is sized to
- * land on exactly one viewport, and a fourth row would push the button under
- * the fold.
- */
-function benefitsFor(reason: PaywallReason | null): readonly PaywallBenefit[] {
-  if (!reason) {
-    return DEFAULT_BENEFITS;
-  }
-
-  const lead: PaywallBenefit = {
-    titleKey: `paywall.reason.${reason}.benefitTitle`,
-    copyKey: `paywall.reason.${reason}.benefitCopy`,
-    icon: REASON_ICONS[reason],
-  };
-  const replaced = reason === "note" || reason === "locked" ? 0 : 2;
-  return [lead, ...DEFAULT_BENEFITS.filter((_, index) => index !== replaced)];
-}
 
 /**
  * Only the one message the buyer cannot work out for themselves.
@@ -235,7 +188,11 @@ export function OnboardingPaywall({
 
 
   return (
-    <section className={`app-start-panel app-start-panel-paywall memo-paywall-shell${native ? " memo-paywall-apple" : ""}`}>
+    <section
+      className={`app-start-panel app-start-panel-paywall memo-paywall-shell${native ? " memo-paywall-apple" : ""}`}
+      data-reason={reason ?? undefined}
+      style={paywallAccentStyle(reason)}
+    >
       {navigationOverlay}
       {effectiveOnboardingComplete ? (
         <div className="app-start-dismiss-row">
@@ -262,17 +219,7 @@ export function OnboardingPaywall({
           {billingError ? <div className="app-start-banner">{billingError}</div> : null}
           {native && apple.notice ? <div className="app-start-banner">{apple.notice}</div> : null}
         </div>
-      ) : reason ? (
-        <div
-          className="memo-paywall-hero"
-          style={REASON_HERO[reason].tint ? ({ "--paywall-accent": REASON_HERO[reason].tint } as CSSProperties) : undefined}
-          aria-hidden="true"
-        >
-          <span className="memo-paywall-hero-icon">
-            <Msym name={REASON_HERO[reason].icon} size="2.1rem" fill={false} weight={500} />
-          </span>
-        </div>
-      ) : (
+      ) : reason ? null : (
         <div className="memo-paywall-brand">
           <span className="memo-paywall-logo">
             <Image
@@ -286,6 +233,9 @@ export function OnboardingPaywall({
         </div>
       )}
 
+      {/* A feature's paywall shows the feature, moving, in place of the list. */}
+      {reason && !hasNotice ? <PaywallHero reason={reason} /> : null}
+
       {discounted ? (
         <p className="memo-paywall-offer">{t("paywall.offer.pill", { percent: offer.percentOff })}</p>
       ) : null}
@@ -293,20 +243,33 @@ export function OnboardingPaywall({
       <h1 className="memo-paywall-title">
         {t(reason ? `paywall.reason.${reason}.title` : "paywall.title")}
       </h1>
+      {reason ? (
+        <p className="memo-paywall-sub">
+          <strong>{t(`paywall.reason.${reason}.benefitTitle`)}</strong>
+          {" · "}
+          {t(`paywall.reason.${reason}.benefitCopy`)}
+        </p>
+      ) : null}
 
-      <div className="memo-paywall-benefits">
-        {benefitsFor(reason).map((benefit) => (
-          <div className="memo-paywall-benefit" key={benefit.titleKey}>
-            <span aria-hidden="true">{benefit.icon}</span>
-            <div>
-              <strong>{t(benefit.titleKey)}</strong>
-              <p>{t(benefit.copyKey)}</p>
+      {reason ? null : (
+        <div className="memo-paywall-benefits">
+          {DEFAULT_BENEFITS.map((benefit) => (
+            <div className="memo-paywall-benefit" key={benefit.titleKey}>
+              <span aria-hidden="true">{benefit.icon}</span>
+              <div>
+                <strong>{t(benefit.titleKey)}</strong>
+                <p>{t(benefit.copyKey)}</p>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
-      <div className="memo-paywall-plan-grid" role="radiogroup" aria-label={t("paywall.choosePlan")}>
+      <div
+        className={`memo-paywall-plan-grid ${paywallLayout(reason)}`}
+        role="radiogroup"
+        aria-label={t("paywall.choosePlan")}
+      >
         {paywallPlans.map((plan) => {
           const selected = selectedPlan === plan.id;
           const appleProduct = apple.productForPlan(plan.id);

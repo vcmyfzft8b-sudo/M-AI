@@ -86,6 +86,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "ios_share",
   "language",
   "link",
+  "lock",
   "mail",
   "menu",
   "mic",

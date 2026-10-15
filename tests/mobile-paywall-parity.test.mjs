@@ -10,7 +10,6 @@ import { en } from "../src/lib/i18n/messages/en.ts";
 import { createTranslator } from "../src/lib/i18n/translate.ts";
 import { APPLE_PRODUCTS } from "../src/lib/mobile/runtime.ts";
 import * as paywallLadder from "../src/lib/paywall-ladder.ts";
-import { NOTE_TABS } from "../src/lib/note-tabs.ts";
 
 const t = createTranslator("en", [en]);
 const plans = [
@@ -44,7 +43,11 @@ function load(component, native, products = []) {
     "@/lib/utils": { formatCurrency: value => `€${value.toFixed(2)}` },
     "@/lib/billing-regions": { STANDARD_PLAN_PRICES: { monthly: 20, yearly: 130 } },
     "@/lib/paywall-ladder": paywallLadder,
-    "@/lib/note-tabs": { NOTE_TABS },
+    "@/components/paywall-hero": {
+      PaywallHero: ({ reason }) => React.createElement("div", { className: "memo-pw-hero", "data-reason": reason }),
+      paywallLayout: reason => (reason ? "rows" : "cards"),
+      paywallAccentStyle: () => undefined,
+    },
     "@/lib/brand": { BRAND_LOCKUP_SRC: "/brand.png", BRAND_LOCKUP_WIDTH: 480, BRAND_LOCKUP_HEIGHT: 148, SEO_BRAND_NAME: "Memo" },
   };
   const context = { exports: {}, require: name => { assert.ok(name in modules, name); return modules[name]; }, URLSearchParams };
@@ -135,9 +138,10 @@ test("a later paywall on the web offers the ladder's discount, and the app never
   assert.match(web, /<s class="memo-paywall-plan-was">€20\.00<\/s>/);
   assert.match(web, /Get 30% off/);
   assert.doesNotMatch(web, /free trial|Nothing to pay today/);
-  assert.match(web, /memo-paywall-hero/);
+  assert.match(web, /memo-pw-hero" data-reason="chat"/);
+  assert.doesNotMatch(web, /memo-paywall-benefits/);
 
   const ios = paywall(true, trial, { reason: "chat", offerStep: 3 });
   assert.doesNotMatch(ios, /% off|memo-paywall-plan-was|€/);
-  assert.match(ios, /memo-paywall-hero/);
+  assert.match(ios, /memo-pw-hero" data-reason="chat"/);
 });

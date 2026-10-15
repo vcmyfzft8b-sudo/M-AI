@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, CircleCheck, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 
@@ -17,6 +17,8 @@ import { useInstantNavigation } from "@/components/navigation-loading";
 import { clearOfferResume } from "@/lib/offer-resume";
 import { formatCurrency } from "@/lib/utils";
 import type { PaywallReason } from "@/lib/paywall-reasons";
+import { discountedAmount, paywallOffer } from "@/lib/paywall-ladder";
+import { NOTE_TABS } from "@/lib/note-tabs";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -53,6 +55,23 @@ const REASON_ICONS: Record<PaywallReason, string> = {
   podcast: "🎙️",
   regenerate: "🔄",
   library: "🗂️",
+};
+
+/**
+ * Each feature's paywall wears that feature's colour and icon, taken from its
+ * tab where it has one, so the screen reads as the thing that was just tried
+ * rather than as the same sheet again.
+ */
+const tabTint = (id: string) => NOTE_TABS.find((tab) => tab.id === id)?.tint ?? null;
+const REASON_HERO: Record<PaywallReason, { icon: string; tint: string | null }> = {
+  note: { icon: "edit_square", tint: tabTint("notes") },
+  locked: { icon: "folder", tint: tabTint("palace") },
+  chat: { icon: "forum", tint: tabTint("quiz") },
+  listen: { icon: "headphones", tint: tabTint("speed") },
+  tutor: { icon: "graphic_eq", tint: tabTint("tutor") },
+  podcast: { icon: "podcasts", tint: tabTint("podcast") },
+  regenerate: { icon: "refresh", tint: tabTint("flashcards") },
+  library: { icon: "forum", tint: tabTint("mindmap") },
 };
 
 /**
@@ -110,6 +129,7 @@ export function OnboardingPaywall({
   plans,
   reason = null,
   backHref = null,
+  offerStep = 1,
 }: {
   profile: ProfileRow | null;
   subscription: BillingSubscriptionRow | null;
@@ -121,6 +141,8 @@ export function OnboardingPaywall({
   reason?: PaywallReason | null;
   /** Where closing returns to: the screen they were on, or home. */
   backHref?: string | null;
+  /** This paywall's step on the offer ladder (`paywall-ladder.ts`); web only. */
+  offerStep?: number;
 }) {
   const { locale, t } = useTranslations();
   const native = useNativeIOS();
@@ -130,6 +152,25 @@ export function OnboardingPaywall({
   const [selectedPaywallPlan, setSelectedPaywallPlan] = useState<BillingPlanCard["id"]>("yearly");
   const [checkoutPlan, setCheckoutPlan] = useState<BillingPlanCard["id"] | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
+  // The app sells at Apple's prices, so it never shows a step past the first.
+  const offer = paywallOffer(native ? 1 : offerStep);
+  const discounted = offer.percentOff > 0;
+
+  /*
+   * Reported once per paywall shown, so the next one offers more. Not in the
+   * app, and not while the survey is still showing instead of the prices.
+   */
+  useEffect(() => {
+    if (native || !onboardingComplete || hasPaidAccess) {
+      return;
+    }
+
+    void fetch("/api/billing/paywall-view", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ step: offer.step }),
+    }).catch(() => null);
+  }, [native, onboardingComplete, hasPaidAccess, offer.step]);
 
   async function startCheckout(plan: BillingPlanCard["id"]) {
     if (native) { await apple.purchase(); return; }
@@ -142,7 +183,7 @@ export function OnboardingPaywall({
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({ plan, step: offer.step }),
       });
 
       const payload = (await response.json()) as { url?: string; error?: string };
@@ -165,7 +206,10 @@ export function OnboardingPaywall({
   const checkoutState = searchParams.get("checkout");
   const hasNotice = checkoutState === "success" || Boolean(billingError) || (native && Boolean(apple.notice));
   const selectedPlan = native ? APPLE_PRODUCTS[apple.selected] : selectedPaywallPlan;
-  const trialEligible = native ? apple.selectedProduct?.trialDays === 3 : subscriptionTrialEligible;
+  // A discounted first payment is charged straight away, not after a trial.
+  const trialEligible = native
+    ? apple.selectedProduct?.trialDays === 3
+    : subscriptionTrialEligible && !discounted;
   const checkingOut = native ? apple.busy : checkoutPlan !== null;
 
   /*
@@ -218,6 +262,16 @@ export function OnboardingPaywall({
           {billingError ? <div className="app-start-banner">{billingError}</div> : null}
           {native && apple.notice ? <div className="app-start-banner">{apple.notice}</div> : null}
         </div>
+      ) : reason ? (
+        <div
+          className="memo-paywall-hero"
+          style={REASON_HERO[reason].tint ? ({ "--paywall-accent": REASON_HERO[reason].tint } as CSSProperties) : undefined}
+          aria-hidden="true"
+        >
+          <span className="memo-paywall-hero-icon">
+            <Msym name={REASON_HERO[reason].icon} size="2.1rem" fill={false} weight={500} />
+          </span>
+        </div>
       ) : (
         <div className="memo-paywall-brand">
           <span className="memo-paywall-logo">
@@ -231,6 +285,10 @@ export function OnboardingPaywall({
           </span>
         </div>
       )}
+
+      {discounted ? (
+        <p className="memo-paywall-offer">{t("paywall.offer.pill", { percent: offer.percentOff })}</p>
+      ) : null}
 
       <h1 className="memo-paywall-title">
         {t(reason ? `paywall.reason.${reason}.title` : "paywall.title")}
@@ -257,9 +315,10 @@ export function OnboardingPaywall({
           const yearlySavings = native ? (appleProduct?.yearlySavings ?? 0) : annualizedMonthly > plan.annualizedAmount
             ? Math.round((1 - plan.annualizedAmount / annualizedMonthly) * 100)
             : 0;
+          const regularShown = plan.displayAmount ?? plan.amount;
           const displayPrice = native
             ? appleProduct?.monthlyPrice ?? appleProduct?.price ?? "—"
-            : formatCurrency(plan.displayAmount ?? plan.amount, locale);
+            : formatCurrency(discounted ? discountedAmount(regularShown, offer.percentOff) : regularShown, locale);
           const suffix = native && plan.id === "yearly" && !appleProduct?.monthlyPrice
             ? `/${t("native.year")}` : t("paywall.perMonth");
           const detail = native
@@ -269,9 +328,14 @@ export function OnboardingPaywall({
                 : appleProduct.introPrice
                   ? t(plan.id === "yearly" ? "native.firstYearPrice" : "native.firstMonthPrice", { initial: appleProduct.introPrice, renewal: appleProduct.price })
                   : plan.id === "yearly" ? t("paywall.billedYearly", { amount: appleProduct.price }) : t("paywall.billedMonthly")
-            : plan.id === "yearly"
-              ? t("paywall.billedYearly", { amount: formatCurrency(plan.annualizedAmount, locale) })
-              : t("paywall.billedMonthly");
+            : discounted
+              ? t(plan.id === "yearly" ? "paywall.offer.firstYear" : "paywall.offer.firstMonth", {
+                  amount: formatCurrency(discountedAmount(plan.amount, offer.percentOff), locale),
+                  renewal: formatCurrency(plan.amount, locale),
+                })
+              : plan.id === "yearly"
+                ? t("paywall.billedYearly", { amount: formatCurrency(plan.annualizedAmount, locale) })
+                : t("paywall.billedMonthly");
 
           return (
             <button
@@ -283,7 +347,11 @@ export function OnboardingPaywall({
               role="radio"
               aria-checked={selected}
             >
-              {plan.id === "yearly" ? (
+              {discounted ? (
+                <span className="memo-paywall-plan-badge offer">
+                  {t("paywall.offer.badge", { percent: offer.percentOff })}
+                </span>
+              ) : plan.id === "yearly" ? (
                 <span className="memo-paywall-plan-badge">{t("paywall.mostPopular")}</span>
               ) : null}
               <span className="memo-paywall-plan-header">
@@ -293,6 +361,9 @@ export function OnboardingPaywall({
                 </span>
               </span>
               <span className="memo-paywall-plan-price">
+                {discounted ? (
+                  <s className="memo-paywall-plan-was">{formatCurrency(regularShown, locale)}</s>
+                ) : null}
                 {displayPrice}
                 <small>{suffix}</small>
               </span>
@@ -311,7 +382,9 @@ export function OnboardingPaywall({
           never name Stripe there — not even while the products are loading. */}
       <p className="memo-paywall-due">
         <CircleCheck className="h-5 w-5" />
-        {t(trialEligible ? "paywall.nothingToday" : native ? "native.securePayment" : "paywall.securePayment")}
+        {discounted
+          ? t("paywall.offer.due", { percent: offer.percentOff })
+          : t(trialEligible ? "paywall.nothingToday" : native ? "native.securePayment" : "paywall.securePayment")}
       </p>
 
       <button
@@ -327,11 +400,13 @@ export function OnboardingPaywall({
           <span className="memo-paywall-cta-label">
             {subscription?.plan === selectedPlan && hasPaidAccess
               ? t("paywall.currentPlan")
-              : t(
-                  trialEligible
-                    ? "paywall.startTrial"
-                    : "paywall.continueToPayment",
-                )}
+              : discounted
+                ? t("paywall.offer.cta", { percent: offer.percentOff })
+                : t(
+                    trialEligible
+                      ? "paywall.startTrial"
+                      : "paywall.continueToPayment",
+                  )}
           </span>
         )}
       </button>

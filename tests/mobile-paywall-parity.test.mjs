@@ -9,6 +9,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { en } from "../src/lib/i18n/messages/en.ts";
 import { createTranslator } from "../src/lib/i18n/translate.ts";
 import { APPLE_PRODUCTS } from "../src/lib/mobile/runtime.ts";
+import * as paywallLadder from "../src/lib/paywall-ladder.ts";
+import { NOTE_TABS } from "../src/lib/note-tabs.ts";
 
 const t = createTranslator("en", [en]);
 const plans = [
@@ -41,6 +43,8 @@ function load(component, native, products = []) {
     "@/lib/mobile/runtime": { APPLE_PRODUCTS },
     "@/lib/utils": { formatCurrency: value => `€${value.toFixed(2)}` },
     "@/lib/billing-regions": { STANDARD_PLAN_PRICES: { monthly: 20, yearly: 130 } },
+    "@/lib/paywall-ladder": paywallLadder,
+    "@/lib/note-tabs": { NOTE_TABS },
     "@/lib/brand": { BRAND_LOCKUP_SRC: "/brand.png", BRAND_LOCKUP_WIDTH: 480, BRAND_LOCKUP_HEIGHT: 148, SEO_BRAND_NAME: "Memo" },
   };
   const context = { exports: {}, require: name => { assert.ok(name in modules, name); return modules[name]; }, URLSearchParams };
@@ -49,10 +53,10 @@ function load(component, native, products = []) {
   }).outputText, context);
   return context.exports;
 }
-function paywall(native, products) {
+function paywall(native, products, extra = {}) {
   const { OnboardingPaywall } = load("onboarding-paywall", native, products);
   return renderToStaticMarkup(React.createElement(OnboardingPaywall, {
-    profile: null, subscription: null, onboardingComplete: true, hasPaidAccess: false, plans,
+    profile: null, subscription: null, onboardingComplete: true, hasPaidAccess: false, plans, ...extra,
   }));
 }
 const trial = [
@@ -121,4 +125,19 @@ test("the code form's yearly card leads with the weekly price and says what is b
   assert.match(form, /yearly && product\.introWeeklyPrice \?/);
   assert.match(form, /t\("offer\.plan\.oneOffPrice", \{ amount: product\.introWeeklyPrice \}\)/);
   assert.match(form, /t\("offer\.plan\.oneOffBilling", \{ discounted: product\.introPrice!, renewal: product\.price \}\)/);
+});
+
+test("a later paywall on the web offers the ladder's discount, and the app never does", () => {
+  const web = paywall(false, [], { reason: "chat", offerStep: 3 });
+  assert.match(web, /30% off your first payment/);
+  assert.match(web, /€91\.00 for the first year, then €130\.00/);
+  assert.match(web, /€14\.00 for the first month, then €20\.00/);
+  assert.match(web, /<s class="memo-paywall-plan-was">€20\.00<\/s>/);
+  assert.match(web, /Get 30% off/);
+  assert.doesNotMatch(web, /free trial|Nothing to pay today/);
+  assert.match(web, /memo-paywall-hero/);
+
+  const ios = paywall(true, trial, { reason: "chat", offerStep: 3 });
+  assert.doesNotMatch(ios, /% off|memo-paywall-plan-was|€/);
+  assert.match(ios, /memo-paywall-hero/);
 });

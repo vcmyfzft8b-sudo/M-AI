@@ -1,3 +1,4 @@
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { OnboardingPaywall } from "@/components/onboarding-paywall";
@@ -8,6 +9,8 @@ import {
   purchasableBillingPlansFor,
 } from "@/lib/billing";
 import { isPaywallReason, readPaywallBack } from "@/lib/paywall-reasons";
+import { PAYWALL_STEP_COOKIE, nextPaywallStep, readPaywallStep } from "@/lib/paywall-ladder";
+import { isNativeUserAgent } from "@/lib/mobile/runtime";
 
 export default async function AppStartPage({
   searchParams,
@@ -40,6 +43,13 @@ export default async function AppStartPage({
     ? await getSubscriptionTrialEligibility(appState.user.id)
     : false;
 
+  // Each paywall the learner meets offers more than the last; the app keeps
+  // Apple's prices, so it always shows the first step (`paywall-ladder.ts`).
+  const native = isNativeUserAgent((await headers()).get("user-agent"));
+  const offerStep = native
+    ? 1
+    : nextPaywallStep(readPaywallStep((await cookies()).get(PAYWALL_STEP_COOKIE)?.value));
+
   return (
     <main className="app-start-shell">
       <OnboardingPaywall
@@ -51,6 +61,7 @@ export default async function AppStartPage({
         plans={purchasableBillingPlansFor(await getPricingCountry())}
         reason={reason}
         backHref={backHref}
+        offerStep={offerStep}
       />
     </main>
   );

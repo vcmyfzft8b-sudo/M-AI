@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { isNativeUserAgent } from "@/lib/mobile/runtime";
 import { getAppleEntitlement } from "@/lib/mobile/apple";
 import { NextResponse } from "next/server";
@@ -16,6 +17,7 @@ import {
 } from "@/lib/billing";
 import { hasLiveStripeSubscription } from "@/lib/billing-access";
 import { getDiscountWheelState } from "@/lib/discount-wheel";
+import { PAYWALL_STEP_COOKIE, checkoutPaywallOffer, readPaywallStep } from "@/lib/paywall-ladder";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { STRIPE_CHECKOUT_LOCALE } from "@/lib/i18n/locales";
@@ -23,6 +25,8 @@ import { GEO_COUNTRY_HEADER, getLocale, tr } from "@/lib/i18n/server";
 
 const checkoutSchema = z.object({
   plan: z.enum(PURCHASABLE_BILLING_PLAN_IDS),
+  /** The paywall's step on the offer ladder; checkout caps it at the cookie's. */
+  step: z.number().int().min(1).max(10).optional(),
 });
 
 export async function POST(request: Request) {
@@ -88,6 +92,13 @@ export async function POST(request: Request) {
     // has their discount and does not need to type one.
     const wheel = await getDiscountWheelState(appState.user.id);
     const wheelCoupon = wheel.hasUnredeemedPrize ? wheel.coupon : null;
+    // Otherwise the paywall's own step on the ladder, never past the step the
+    // cookie has reached (`paywall-ladder.ts`). The wheel's 50 % beats every step.
+    const ladderOffer = checkoutPaywallOffer(
+      parsed.data.step,
+      readPaywallStep((await cookies()).get(PAYWALL_STEP_COOKIE)?.value),
+    );
+    const coupon = wheelCoupon ?? ladderOffer.coupon;
 
     /*
      * A discounted purchase is not also a trial.
@@ -100,11 +111,12 @@ export async function POST(request: Request) {
      * straight away is what the offer actually says.
      */
     const subscriptionTrialEligible =
-      appState.subscriptionTrialEligible && !hasPriorStripeSubscription && !wheelCoupon;
+      appState.subscriptionTrialEligible && !hasPriorStripeSubscription && !coupon;
     const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
       metadata: {
         userId: appState.user.id,
         plan: parsed.data.plan,
+        paywall_step: String(wheelCoupon ? 0 : ladderOffer.step),
       },
       ...(subscriptionTrialEligible ? { trial_period_days: 3 } : {}),
     };
@@ -128,8 +140,8 @@ export async function POST(request: Request) {
       ],
       success_url: getBillingSuccessUrl(request),
       cancel_url: getBillingCancelUrl(request, Boolean(wheelCoupon)),
-      ...(wheelCoupon
-        ? { discounts: [{ coupon: wheelCoupon }] }
+      ...(coupon
+        ? { discounts: [{ coupon }] }
         : { allow_promotion_codes: true }),
       billing_address_collection: "auto",
       // The refund policy leans on the buyer expressly asking for the service to

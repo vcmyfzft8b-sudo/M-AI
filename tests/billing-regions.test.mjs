@@ -14,6 +14,7 @@ import {
   regionalPriceLookupKey,
 } from "../src/lib/billing-regions.ts";
 import { PLAN_LIST_PRICES } from "../src/lib/ugc/creator-program.ts";
+import * as paywallLadder from "../src/lib/paywall-ladder.ts";
 
 const SAFARI_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1";
 
@@ -85,6 +86,8 @@ function loadCheckout({ country, body }) {
     },
     "@/lib/billing-access": { hasLiveStripeSubscription: () => false },
     "@/lib/discount-wheel": { getDiscountWheelState: async () => ({ hasUnredeemedPrize: false }) },
+    "next/headers": { cookies: async () => ({ get: () => undefined }) },
+    "@/lib/paywall-ladder": paywallLadder,
     "@/lib/rate-limit": { rateLimitPresets: { mutate: [] }, enforceRateLimit: async () => null },
     "@/lib/request-validation": {
       parseJsonRequest: async (request, schema) => {

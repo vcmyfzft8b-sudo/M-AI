@@ -433,6 +433,8 @@
   --upgrade-line: rgba(130, 148, 218, 0.34);
   --upgrade-ink: #4a4f8f;
   --promo: #f45f5a;
+  /* Text on a `--promo` fill. White in both appearances, so only declared here. */
+  --on-promo: #ffffff;
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   --shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.18);
   --scrim: rgba(0, 0, 0, 0.32);
@@ -10182,6 +10184,64 @@
   font-size: 1.15rem;
   font-weight: 900;
   letter-spacing: -0.01em;
+}
+
+/*
+ * The offer ladder and the per-feature look (onboarding-paywall.tsx).
+ *
+ * A paywall opened by a feature wears that feature's tab colour in place of the
+ * wordmark, at the wordmark's height so the screen still lands on one viewport.
+ * A later rung adds a pill under the hero, a red badge on each plan and the
+ * regular price struck through beside the first-payment price.
+ */
+.memo-paywall-hero {
+  --paywall-accent: var(--promo);
+  display: flex;
+  justify-content: center;
+  margin-top: 0.45rem;
+}
+
+.memo-paywall-hero-icon {
+  display: grid;
+  place-items: center;
+  width: 4.45rem;
+  height: 4.45rem;
+  border-radius: 22px;
+  background: color-mix(in oklch, var(--paywall-accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--paywall-accent) 34%, transparent);
+  color: var(--paywall-accent);
+}
+
+.memo-paywall-offer {
+  width: max-content;
+  max-width: 100%;
+  margin: 0.5rem auto 0;
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--promo) 14%, transparent);
+  color: var(--promo);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.memo-paywall-plan-badge.offer {
+  border-color: var(--promo);
+  background: var(--promo);
+  color: var(--on-promo);
+}
+
+/* On a line of its own above the price, so the price and its "/ month" stay
+   together on the narrowest card. */
+.memo-paywall-plan-was {
+  display: block;
+  margin-bottom: 0.15rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-decoration-thickness: 2px;
 }
 
 /* The prize from the home-screen wheel, confirmed above the plan grid. */

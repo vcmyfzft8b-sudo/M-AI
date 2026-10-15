@@ -43,6 +43,9 @@ export function perVideoTotal(terms: CreatorTerms): number {
 /** How many videos a month earn the per-video fees (Terms 3.4). The calculator stops at it. */
 export const PAID_VIDEOS_PER_MONTH = 60;
 
+/** The most views one video earns the view bonus on (Terms 4), in every deal that pays one. */
+export const VIEW_BONUS_VIEWS_PER_VIDEO = 100_000;
+
 /**
  * What a sale made with a creator's code is worth to them. Every creator code gives 50%
  * off the first period (`memo50-first-cycle`), and the bonus is 20% of what the customer

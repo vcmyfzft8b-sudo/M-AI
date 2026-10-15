@@ -15,7 +15,7 @@ Add `?ref=<tag>` to see in the admin which post brought each applicant. The shor
 | --- | --- | --- |
 | TikTok, per video | €5 | €4 |
 | Same video on Instagram Reels | +€1 | +€3 |
-| Bonus | 20% of cash collected through the creator's code | €0.50 per 1,000 views, max €2,000 / month |
+| Bonus | 20% of cash collected through the creator's code | €0.50 per 1,000 views, at most 100,000 views per video, max €2,000 / month |
 | Paid videos per month | 60 | 60 |
 | Discord | discord.gg/4mae76zNhj ("UGC Memo AI +") | discord.gg/Dur6dfF2qD ("UGC Memo AI - Balkan") |
 
@@ -158,7 +158,7 @@ contract** takes:
 - the pay, prefilled from the creator's dashboard rates:
   - per TikTok video;
   - the extra for the same video on Instagram;
-  - per 1,000 views;
+  - per 1,000 views (every view bonus counts at most 100,000 views per video, `VIEW_BONUS_VIEWS_PER_VIDEO`);
   - % of code sales;
   - a fixed monthly fee;
   - an optional bonus cap and video limit;

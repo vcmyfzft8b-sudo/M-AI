@@ -1,9 +1,9 @@
 import "server-only";
 
-import { Mp3Encoder } from "@breezystack/lamejs";
-
+import { logGeminiUsageEvent } from "@/lib/ai/usage-logging";
 import { GEMINI_TTS_SAMPLE_RATE, GeminiSpeechError, startGeminiSpeech } from "@/lib/gemini-tts";
 import type { NoteTtsVoice } from "@/lib/note-tts-settings";
+import { encodeMp3 } from "@/lib/mp3-encode";
 import { getServerEnv } from "@/lib/server-env";
 import { geminiVoiceFor } from "@/lib/tutor/gemini-voices";
 
@@ -32,41 +32,15 @@ export function speechModel() {
 }
 
 /**
- * Bare 16-bit mono PCM as constant-bitrate MP3, which is what read-aloud and the podcast store.
- *
- * Encoded here because Gemini answers only in PCM and a Vercel function has no ffmpeg. A minute of
- * speech is about 2.9 MB raw and 480 KB at 64 kbps, and every player in the app already plays this
- * format — Safari included, which is why it is MP3 rather than Opus.
- */
-export function encodeMp3(pcm: Uint8Array, sampleRate: number, bitrate: number) {
-  const samples = new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.byteLength / 2));
-  const encoder = new Mp3Encoder(1, sampleRate, Math.round(bitrate / 1000));
-  const frames: Uint8Array[] = [];
-  const block = 1152 * 16;
-
-  for (let offset = 0; offset < samples.length; offset += block) {
-    const frame = encoder.encodeBuffer(samples.subarray(offset, offset + block));
-
-    if (frame.length > 0) {
-      frames.push(frame);
-    }
-  }
-
-  const tail = encoder.flush();
-
-  if (tail.length > 0) {
-    frames.push(tail);
-  }
-
-  return new Uint8Array(Buffer.concat(frames));
-}
-
-/**
  * One piece of text spoken by Gemini in one of the app's voices, as MP3, with its exact length.
  *
  * The length comes from the samples, not from a transcription or the byte count, so it is what the
  * listener is charged and what the player seeks against. A stream that ends without a sample is
  * asked for once more — Gemini occasionally returns nothing for a short line — and then reported.
+ *
+ * Every call is logged to `ai_usage_events` under `usage.stage`, which is what the daily cost alert
+ * and /admin/costs read: Soniox was never in that table, so without this the new voice's spend on
+ * read-aloud and the podcast would be invisible there.
  */
 export async function synthesizeGeminiMp3(params: {
   text: string;
@@ -74,8 +48,20 @@ export async function synthesizeGeminiMp3(params: {
   language: string;
   bitrate: number;
   timeoutMs: number;
+  usage: { stage: "read_aloud_speech" | "podcast_speech"; userId: string; lectureId: string };
 }) {
   const env = getServerEnv();
+  const log = (success: boolean, extra: { usageMetadata?: unknown; error?: unknown }) =>
+    logGeminiUsageEvent({
+      model: env.GEMINI_TTS_MODEL,
+      stage: params.usage.stage,
+      attemptIndex: 0,
+      success,
+      usageMetadata: (extra.usageMetadata ?? null) as Parameters<typeof logGeminiUsageEvent>[0]["usageMetadata"],
+      error: extra.error,
+      context: { userId: params.usage.userId, lectureId: params.usage.lectureId },
+      metadata: { voice: params.voice, chars: params.text.length },
+    });
 
   if (!env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not configured.");
@@ -104,6 +90,8 @@ export async function synthesizeGeminiMp3(params: {
 
       const pcm = new Uint8Array(Buffer.concat(chunks));
 
+      await log(true, { usageMetadata: next.value });
+
       return {
         audio: encodeMp3(pcm, GEMINI_TTS_SAMPLE_RATE, params.bitrate),
         durationMs: Math.round((pcm.byteLength / 2 / GEMINI_TTS_SAMPLE_RATE) * 1000),
@@ -118,6 +106,8 @@ export async function synthesizeGeminiMp3(params: {
       }
     }
   }
+
+  await log(false, { error: lastError });
 
   if (lastError instanceof GeminiSpeechError && lastError.status === 429) {
     /* The shape isTtsProviderRateLimitError recognises, so callers back off exactly as for Soniox. */

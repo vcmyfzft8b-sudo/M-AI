@@ -899,6 +899,8 @@ export async function getOrCreatePodcastSegment(params: {
       language: params.podcast.language,
       voice,
       model,
+      userId: params.userId,
+      lectureId: params.lectureId,
     });
     const audioStoragePath = buildPodcastStoragePath({
       userId: params.userId,
@@ -1007,6 +1009,8 @@ async function synthesizePodcastTurn(params: {
   language: string;
   voice: NoteTtsVoice;
   model: string;
+  userId: string;
+  lectureId: string;
 }) {
   /* The Gemini voice since 2026-10-14; its length comes from the samples, so no timing pass. */
   if (speechProvider() === "gemini") {
@@ -1016,6 +1020,7 @@ async function synthesizePodcastTurn(params: {
       language: params.language,
       bitrate: TTS_OUTPUT_BITRATE,
       timeoutMs: PODCAST_STREAM_TIMEOUT_MS,
+      usage: { stage: "podcast_speech", userId: params.userId, lectureId: params.lectureId },
     });
 
     return { audio, durationMs };

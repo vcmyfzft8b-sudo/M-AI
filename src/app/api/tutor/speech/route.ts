@@ -123,6 +123,8 @@ export async function POST(request: Request) {
     );
   }
 
+  /* Cancelled means the learner cut the tutor off mid-sentence: expected, and not a failure. */
+  let cancelled = false;
   let finishUsage: (usage: unknown) => void = () => {};
   const finished = new Promise<unknown>((resolve) => {
     finishUsage = resolve;
@@ -138,7 +140,7 @@ export async function POST(request: Request) {
       success: usage !== undefined,
       usageMetadata: (usage ?? null) as Parameters<typeof logGeminiUsageEvent>[0]["usageMetadata"],
       context: { userId: claims.userId, lectureId: claims.lectureId },
-      metadata: { voice, chars: text.length },
+      metadata: { voice, chars: text.length, ...(cancelled ? { cancelled: true } : {}) },
     });
   });
 
@@ -174,6 +176,7 @@ export async function POST(request: Request) {
       }
     },
     cancel() {
+      cancelled = true;
       upstream.abort();
       finishUsage(undefined);
     },

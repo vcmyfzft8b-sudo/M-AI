@@ -947,6 +947,8 @@ async function synthesizeGeminiAlignedChunk(params: {
   language: string;
   voice: NoteTtsVoice;
   clientReferenceId: string;
+  userId: string;
+  lectureId: string;
 }) {
   const startedAt = Date.now();
   const { audio, durationMs } = await synthesizeGeminiMp3({
@@ -955,6 +957,7 @@ async function synthesizeGeminiAlignedChunk(params: {
     language: params.language,
     bitrate: TTS_OUTPUT_BITRATE,
     timeoutMs: TTS_STREAM_TIMEOUT_MS,
+    usage: { stage: "read_aloud_speech", userId: params.userId, lectureId: params.lectureId },
   });
   let tokens: TtsAlignmentToken[] = [];
 
@@ -1008,6 +1011,8 @@ async function synthesizeAlignedTtsChunk(params: {
   language: string;
   voice: NoteTtsVoice;
   clientReferenceId: string;
+  userId: string;
+  lectureId: string;
 }) {
   if (speechProvider() === "gemini") {
     return synthesizeGeminiAlignedChunk(params);
@@ -1125,6 +1130,8 @@ async function generateTtsChunk(params: {
     language: params.language,
     voice: params.voice,
     clientReferenceId: `${params.lectureId}:${params.contentHash}:${params.chunk.chunkIndex}`,
+    userId: params.userId,
+    lectureId: params.lectureId,
   });
   // A translation has no truthful word-for-word timing against the written source.
   // Empty alignment keeps playback and seeking, while suppressing misleading word highlights.

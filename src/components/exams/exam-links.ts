@@ -18,6 +18,7 @@ export const LESSON_KIND_EMOJI: Record<ExamLessonKind, string> = {
   written: "✍️",
 };
 
-export function lessonHref(examId: string, lectureId: string, kind: ExamLessonKind) {
-  return `/app/exams/${examId}/lesson?lecture=${lectureId}&kind=${kind}`;
+/** A lesson of one topic (a module on the path). */
+export function lessonHref(examId: string, topicId: string, kind: ExamLessonKind) {
+  return `/app/exams/${examId}/lesson?topic=${topicId}&kind=${kind}`;
 }

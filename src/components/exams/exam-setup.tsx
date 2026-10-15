@@ -26,6 +26,7 @@ import {
 } from "@/lib/exams/exam-model";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { noteEmoji } from "@/lib/note-emoji";
+import { getOnboardingYearOptions, SCHOOL_OPTIONS } from "@/lib/onboarding-options";
 
 export type ExamSetupNote = {
   id: string;
@@ -35,6 +36,34 @@ export type ExamSetupNote = {
 };
 
 export type ExamSetupFolder = { id: string; name: string; lectureIds: string[] };
+
+export type ExamSetupSchool = { level: string | null; year: string | null };
+
+/** A topic on the plan review, as the learner leaves it: kept or not, renamed, or added. */
+type PlanTopic = {
+  key: string;
+  lectureId: string;
+  title: string;
+  summary: string;
+  keyPoints: string[];
+  source: "material" | "added" | "ai";
+  kept: boolean;
+};
+
+type PlanNote = { lectureId: string; status: "planned" | "pending" };
+
+type PlanState =
+  | { status: "idle" }
+  | { status: "loading"; key: string }
+  | { status: "done"; key: string; notes: PlanNote[] }
+  | { status: "failed"; key: string };
+
+/* Onboarding's school levels map onto its year lists through the learner's role. */
+const ROLE_FOR_LEVEL: Record<string, string> = {
+  elementary_school: "elementary_student",
+  high_school: "high_school_student",
+  university: "university_student",
+};
 
 /* The app's own capture sheet, loaded only when material is being added. */
 const NoteSourceModal = dynamic(() =>
@@ -58,10 +87,12 @@ const SOURCE_OPTIONS: { mode: NoteSourceMode; emoji: string; labelKey: MessageKe
 const STEPS = [
   "intro",
   "material",
+  "ai",
   "subject",
   "date",
   "motivate",
   "target",
+  "school",
   "minutes",
   "building",
   "review",
@@ -69,6 +100,7 @@ const STEPS = [
 type Step = (typeof STEPS)[number];
 
 const PASS_MARK = 50;
+/* The "Creating your study path" screen stays at least this long, even when the plan is ready. */
 const BUILDING_MS = 2400;
 
 const MINUTE_OPTIONS: { minutes: number; emoji: string; labelKey: MessageKey }[] = [
@@ -168,6 +200,7 @@ export function ExamSetup({
   defaultMinutes,
   lockedCount = 0,
   canCreateNotes = false,
+  school = { level: null, year: null },
 }: {
   notes: ExamSetupNote[];
   folders: ExamSetupFolder[];
@@ -178,6 +211,8 @@ export function ExamSetup({
   lockedCount?: number;
   /** Whether new material can be turned into notes from here. */
   canCreateNotes?: boolean;
+  /** The learner's school and year from onboarding, the school step's starting point. */
+  school?: ExamSetupSchool;
 }) {
   const { t, locale } = useTranslations();
   const router = useRouter();
@@ -210,31 +245,114 @@ export function ExamSetup({
   const [added, setAdded] = useState<{ id: string; mode: NoteSourceMode }[]>([]);
   const [sourceMode, setSourceMode] = useState<NoteSourceMode | null>(null);
   const [showExisting, setShowExisting] = useState(Boolean(initialFolder));
-  /* The review's path is read-only until "Edit" shows the reorder and remove buttons. */
-  const [editingPath, setEditingPath] = useState(false);
+  /* Astra's switch: may the AI add topics the material leaves out? Off, as Astra recommends. */
+  const [aiExpand, setAiExpand] = useState(false);
+  const [schoolLevel, setSchoolLevel] = useState<string | null>(school.level);
+  const [schoolYear, setSchoolYear] = useState<string | null>(school.year);
+  /*
+   * The study path is planned in the background as soon as the material is chosen, the way Astra
+   * reviews the uploads while the learner answers the rest; "building" only waits for it.
+   */
+  const [plan, setPlan] = useState<PlanState>({ status: "idle" });
+  const [planTopics, setPlanTopics] = useState<PlanTopic[]>([]);
+  const [editingTopic, setEditingTopic] = useState<string | null>(null);
+  const [addingTo, setAddingTo] = useState<string | null>(null);
+  const [newTopic, setNewTopic] = useState("");
   /*
    * "Next" and "Start my plan" sit in the same place, so a quick double tap on the last question
-   * would otherwise create the exam before its review has been seen.
+   * would otherwise create the exam before its review has been seen: the review arms its button
+   * a moment after it appears.
    */
-  const stepShownAt = useRef(0);
+  const reviewArmed = useRef(false);
+  const addedTopics = useRef(0);
 
   const stepIndex = STEPS.indexOf(step);
   const notesById = useMemo(() => new Map(notes.map((note) => [note.id, note])), [notes]);
   const days = daysBetween(today, examDate);
   const uploadsLeft = MAX_SETUP_UPLOADS - added.length;
   const examFull = selected.length >= MAX_EXAM_MODULES;
-  const lessons = selected.length * EXAM_LESSON_KINDS.length;
+  const planKey = `${selected.join(",")}|${aiExpand ? 1 : 0}`;
+  const keptTopics = planTopics.filter((topic) => topic.kept);
+  const moduleCount = plan.status === "done" ? Math.max(1, keptTopics.length) : selected.length;
+  const lessons = moduleCount * EXAM_LESSON_KINDS.length;
+  const yearOptions =
+    schoolLevel && ROLE_FOR_LEVEL[schoolLevel]
+      ? getOnboardingYearOptions(locale, ROLE_FOR_LEVEL[schoolLevel], schoolLevel)
+      : [];
 
-  /* The building screen is a pause, not a question: it moves on by itself. */
+  async function startPlan() {
+    if ((plan.status === "loading" || plan.status === "done") && plan.key === planKey) {
+      return;
+    }
+
+    const key = planKey;
+    setPlan({ status: "loading", key });
+
+    try {
+      const response = await fetch("/api/exams/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lectureIds: selected, aiExpand, schoolLevel, schoolYear }),
+      });
+
+      if (response.status === 402) {
+        navigateWithFeedback("/app/start");
+        return;
+      }
+
+      const payload = (await response.json().catch(() => null)) as {
+        notes?: (PlanNote & { topics: Omit<PlanTopic, "key" | "lectureId" | "kept">[] })[];
+      } | null;
+
+      if (!response.ok || !payload?.notes) {
+        setPlan((current) => (current.status === "loading" && current.key === key ? { status: "failed", key } : current));
+        return;
+      }
+
+      const notesPlan = payload.notes;
+      setPlan((current) =>
+        current.status === "loading" && current.key === key
+          ? { status: "done", key, notes: notesPlan.map(({ lectureId, status }) => ({ lectureId, status })) }
+          : current,
+      );
+      setPlanTopics(
+        notesPlan.flatMap((note) =>
+          note.topics.map((topic, index) => ({
+            ...topic,
+            key: `${note.lectureId}:${index}`,
+            lectureId: note.lectureId,
+            kept: true,
+          })),
+        ),
+      );
+    } catch {
+      setPlan((current) => (current.status === "loading" && current.key === key ? { status: "failed", key } : current));
+    }
+  }
+
+  /* The building screen waits for the plan (and at least a moment), then shows it. */
+  const planReady = plan.status === "done" && plan.key === planKey;
+
   useEffect(() => {
-    if (step !== "building") {
+    if (step !== "building" || !planReady) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setStep("review"), BUILDING_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [planReady, step]);
+
+  useEffect(() => {
+    reviewArmed.current = false;
+
+    if (step !== "review") {
       return;
     }
 
     const timer = window.setTimeout(() => {
-      stepShownAt.current = Date.now();
-      setStep("review");
-    }, BUILDING_MS);
+      reviewArmed.current = true;
+    }, 600);
 
     return () => window.clearTimeout(timer);
   }, [step]);
@@ -246,7 +364,9 @@ export function ExamSetup({
         ? title.trim().length > 0
         : step === "date"
           ? isValidDay(examDate) && days >= 0
-          : true;
+          : step === "review"
+            ? keptTopics.length > 0 || (plan.status === "done" && plan.notes.some((note) => note.status === "pending"))
+            : true;
 
   function openSource(mode: NoteSourceMode) {
     if (blockedOffline("create")) {
@@ -308,8 +428,17 @@ export function ExamSetup({
       setTitle(folderId ? (folders.find((folder) => folder.id === folderId)?.name ?? "") : (first?.title ?? ""));
     }
 
+    // Planning starts as soon as the material and the AI switch are settled.
+    if (step === "ai") {
+      void startPlan();
+    }
+
+    // A plan that failed, or one for an earlier choice of material, is made again before building.
+    if (step === "minutes") {
+      void startPlan();
+    }
+
     if (stepIndex < STEPS.length - 1) {
-      stepShownAt.current = Date.now();
       setStep(STEPS[stepIndex + 1]);
     }
   }
@@ -336,22 +465,36 @@ export function ExamSetup({
     }
   }
 
-  function move(index: number, delta: number) {
-    setSelected((current) => {
-      const next = [...current];
-      const to = index + delta;
+  function updateTopic(key: string, patch: Partial<PlanTopic>) {
+    setPlanTopics((current) => current.map((topic) => (topic.key === key ? { ...topic, ...patch } : topic)));
+  }
 
-      if (to < 0 || to >= next.length) {
-        return current;
-      }
+  function addTopic(lectureId: string) {
+    const title = newTopic.trim();
 
-      [next[index], next[to]] = [next[to], next[index]];
-      return next;
-    });
+    if (!title) {
+      setAddingTo(null);
+      return;
+    }
+
+    setPlanTopics((current) => [
+      ...current,
+      {
+        key: `${lectureId}:added:${(addedTopics.current += 1)}`,
+        lectureId,
+        title: title.slice(0, 160),
+        summary: "",
+        keyPoints: [],
+        source: "added",
+        kept: true,
+      },
+    ]);
+    setNewTopic("");
+    setAddingTo(null);
   }
 
   async function create() {
-    if (creating || Date.now() - stepShownAt.current < 600 || blockedOffline("create")) {
+    if (creating || !reviewArmed.current || blockedOffline("create")) {
       return;
     }
 
@@ -372,6 +515,16 @@ export function ExamSetup({
           gradingScale: "percent",
           passPercentage: PASS_MARK,
           lectureIds: selected,
+          schoolLevel,
+          schoolYear,
+          aiExpand,
+          topics: keptTopics.map(({ lectureId, title: topicTitle, summary, keyPoints, source }) => ({
+            lectureId,
+            title: topicTitle.trim() || t("note.untitled"),
+            summary,
+            keyPoints,
+            source,
+          })),
         }),
       });
       const payload = (await response.json().catch(() => null)) as
@@ -593,6 +746,45 @@ export function ExamSetup({
             </>
           ) : null}
         </section>
+      ) : step === "ai" ? (
+        <section className="memo-exam-step">
+          <MemoSays key="ai" mood="idle" thought="✨" text={t("exam.setup.ai.title")} />
+          <div className="memo-exam-list">
+            {[false, true].map((value) => {
+              const isOn = aiExpand === value;
+
+              return (
+                <button
+                  key={String(value)}
+                  type="button"
+                  className={`memo-exam-pick ${isOn ? "on" : ""}`.trim()}
+                  aria-pressed={isOn}
+                  onClick={() => setAiExpand(value)}
+                >
+                  <span className="memo-exam-pick-emoji">
+                    <Emoji symbol={value ? "✨" : "📚"} size="1.2rem" />
+                  </span>
+                  <span className="memo-exam-pick-copy">
+                    <b>{t(value ? "exam.setup.ai.on" : "exam.setup.ai.off")}</b>
+                    <span>{t(value ? "exam.setup.ai.onBody" : "exam.setup.ai.offBody")}</span>
+                  </span>
+                  <Msym
+                    name={isOn ? "radio_button_checked" : "radio_button_unchecked"}
+                    size="1.5rem"
+                    fill={isOn}
+                    className="memo-exam-pick-mark"
+                  />
+                </button>
+              );
+            })}
+          </div>
+          {aiExpand ? (
+            <p className="memo-exam-warning" role="note">
+              <Msym name="error" size="1.15rem" fill={false} />
+              {t("exam.setup.ai.warning")}
+            </p>
+          ) : null}
+        </section>
       ) : step === "subject" ? (
         <section className="memo-exam-step">
           <MemoSays key="subject" mood="idle" thought="🎓" text={t("exam.setup.subject.title")} />
@@ -645,6 +837,41 @@ export function ExamSetup({
           />
           <TargetDial value={target} onChange={setTarget} />
         </section>
+      ) : step === "school" ? (
+        <section className="memo-exam-step">
+          <MemoSays key="school" mood="idle" thought="🏫" text={t("exam.setup.school.title")} />
+          <div className="memo-chip-row memo-exam-chips" role="group" aria-label={t("exam.setup.school.level")}>
+            {SCHOOL_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`memo-chip ${schoolLevel === option.value ? "active" : ""}`.trim()}
+                aria-pressed={schoolLevel === option.value}
+                onClick={() => {
+                  setSchoolLevel(option.value);
+                  setSchoolYear(null);
+                }}
+              >
+                <Emoji symbol={option.icon} size="1rem" /> {t(option.labelKey)}
+              </button>
+            ))}
+          </div>
+          {yearOptions.length > 0 ? (
+            <div className="memo-chip-row memo-exam-chips" role="group" aria-label={t("exam.setup.school.year")}>
+              {yearOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`memo-chip ${schoolYear === option.value ? "active" : ""}`.trim()}
+                  aria-pressed={schoolYear === option.value}
+                  onClick={() => setSchoolYear(option.value)}
+                >
+                  {t(option.labelKey)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </section>
       ) : step === "minutes" ? (
         <section className="memo-exam-step">
           <MemoSays key="minutes" mood="idle" thought="⏱️" text={t("exam.setup.target.minutes")} />
@@ -683,18 +910,31 @@ export function ExamSetup({
         </section>
       ) : step === "building" ? (
         <section className="memo-exam-step" role="status" aria-live="polite">
-          <MemoSays key="building" hero mood="think" size="7.5rem" text={t("exam.setup.creating")} />
-          <ul className="memo-exam-checks">
-            <li style={{ animationDelay: "300ms" }}>
-              <Msym name="check_circle" size="1.3rem" /> {t("exam.setup.building.notes")}
-            </li>
-            <li style={{ animationDelay: "1000ms" }}>
-              <Msym name="check_circle" size="1.3rem" /> {t("exam.setup.building.days")}
-            </li>
-            <li style={{ animationDelay: "1700ms" }}>
-              <Msym name="check_circle" size="1.3rem" /> {t("exam.setup.building.mock")}
-            </li>
-          </ul>
+          {plan.status === "failed" ? (
+            <>
+              <MemoSays key="building-failed" hero mood="sad" size="7.5rem" text={t("exam.setup.building.failed")} />
+              <button type="button" className="memo-button-ghost memo-exam-retry" onClick={() => void startPlan()}>
+                {t("common.retry")}
+              </button>
+            </>
+          ) : (
+            <>
+              <MemoSays key="building" hero mood="think" size="7.5rem" text={t("exam.setup.creating")} />
+              <ul className="memo-exam-checks">
+                <li style={{ animationDelay: "300ms" }}>
+                  <Msym name="check_circle" size="1.3rem" /> {t("exam.setup.building.notes")}
+                </li>
+                <li style={{ animationDelay: "1000ms" }} className={planReady ? "" : "waiting"}>
+                  <Msym name={planReady ? "check_circle" : "progress_activity"} size="1.3rem" />{" "}
+                  {t("exam.setup.building.topics")}
+                </li>
+                <li style={{ animationDelay: "1700ms" }} className={planReady ? "" : "waiting"}>
+                  <Msym name={planReady ? "check_circle" : "progress_activity"} size="1.3rem" />{" "}
+                  {t("exam.setup.building.days")}
+                </li>
+              </ul>
+            </>
+          )}
         </section>
       ) : (
         <section className="memo-exam-step">
@@ -719,69 +959,127 @@ export function ExamSetup({
             </div>
           </div>
 
-          {/* The path: each note is a stop, in the order they are studied, and the mock exam ends it. */}
+          {/*
+            Astra's plan review: the topics the material was split into, per note, to keep, rename
+            or drop, and a topic of one's own to add. Each kept topic is a module on the path.
+          */}
           <div className="memo-exam-route-head">
             <span>
-              <b>{t("exam.setup.review.pathTitle")}</b>
-              <span>{t("exam.setup.review.pathBody")}</span>
+              <b>{t("exam.setup.review.topicsTitle", { count: keptTopics.length })}</b>
+              <span>{t("exam.setup.review.topicsBody")}</span>
             </span>
-            {selected.length > 1 ? (
-              <button
-                type="button"
-                className="memo-exam-route-edit"
-                aria-pressed={editingPath}
-                onClick={() => setEditingPath((current) => !current)}
-              >
-                {t(editingPath ? "common.done" : "common.edit")}
-              </button>
-            ) : null}
           </div>
-          <ol className="memo-exam-route">
-            {selected.map((id, index) => {
-              const note = notesById.get(id);
-              const source = added.find((entry) => entry.id === id);
-              const label = note
-                ? note.title?.trim() || t("note.untitled")
-                : t(SOURCE_OPTIONS.find((option) => option.mode === source?.mode)?.labelKey ?? "exam.setup.material.newMaterial");
+          {selected.map((lectureId) => {
+            const note = notesById.get(lectureId);
+            const source = added.find((entry) => entry.id === lectureId);
+            const noteLabel = note
+              ? note.title?.trim() || t("note.untitled")
+              : t(SOURCE_OPTIONS.find((option) => option.mode === source?.mode)?.labelKey ?? "exam.setup.material.newMaterial");
+            const pending = plan.status === "done" && plan.notes.find((entry) => entry.lectureId === lectureId)?.status === "pending";
+            const topics = planTopics.filter((topic) => topic.lectureId === lectureId);
 
-              return (
-                <li key={id}>
-                  <span className="memo-exam-route-dot">{index + 1}</span>
-                  <span className="memo-exam-route-copy">
-                    <b>{label}</b>
-                    <span>
-                      {t("exam.setup.review.moduleMeta", {
-                        count: EXAM_LESSON_KINDS.length,
-                        minutes: EXAM_LESSON_KINDS.length * LESSON_MINUTES,
-                      })}
-                    </span>
-                  </span>
-                  {editingPath ? (
-                    <span className="memo-exam-review-actions">
-                      <button type="button" className="memo-icon-button" aria-label={t("exam.setup.review.moveUp")} disabled={index === 0} onClick={() => move(index, -1)}>
-                        <Msym name="arrow_upward" size="1.1rem" fill={false} />
-                      </button>
-                      <button type="button" className="memo-icon-button" aria-label={t("exam.setup.review.moveDown")} disabled={index === selected.length - 1} onClick={() => move(index, 1)}>
-                        <Msym name="arrow_downward" size="1.1rem" fill={false} />
-                      </button>
-                      <button type="button" className="memo-icon-button" aria-label={t("exam.setup.review.remove")} disabled={selected.length === 1} onClick={() => setSelected((current) => current.filter((entry) => entry !== id))}>
-                        <Msym name="close" size="1.1rem" fill={false} />
-                      </button>
-                    </span>
-                  ) : null}
-                </li>
-              );
-            })}
-            <li className="mock">
-              <span className="memo-exam-route-dot">
-                <Emoji symbol="🏆" size="1rem" />
-              </span>
-              <span className="memo-exam-route-copy">
-                <b>{t("exam.mock.title")}</b>
-                <span>{t("exam.setup.review.mockMeta")}</span>
-              </span>
-            </li>
-          </ol>
+            return (
+              <div key={lectureId} className="memo-exam-topics">
+                <span className="memo-exam-topics-note">
+                  <Emoji symbol={note?.emoji || noteEmoji({ id: lectureId, title: note?.title ?? null })} size="1rem" />
+                  {noteLabel}
+                </span>
+                {pending ? (
+                  <p className="memo-exam-topics-pending">{t("exam.setup.review.pending")}</p>
+                ) : (
+                  <ul>
+                    {topics.map((topic) => (
+                      <li key={topic.key} className={topic.kept ? "" : "dropped"}>
+                        <button
+                          type="button"
+                          className="memo-exam-topic-check"
+                          aria-pressed={topic.kept}
+                          aria-label={topic.kept ? t("exam.setup.review.dropTopic") : t("exam.setup.review.keepTopic")}
+                          onClick={() => updateTopic(topic.key, { kept: !topic.kept })}
+                        >
+                          <Msym name={topic.kept ? "check_circle" : "radio_button_unchecked"} size="1.4rem" fill={topic.kept} />
+                        </button>
+                        {editingTopic === topic.key ? (
+                          <input
+                            id={`exam-topic-${topic.key}`}
+                            className="memo-field memo-exam-topic-input"
+                            value={topic.title}
+                            maxLength={160}
+                            autoFocus
+                            onChange={(event) => updateTopic(topic.key, { title: event.target.value })}
+                            onBlur={() => setEditingTopic(null)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                setEditingTopic(null);
+                              }
+                            }}
+                          />
+                        ) : (
+                          <span className="memo-exam-topic-title">
+                            {topic.title}
+                            {topic.source !== "material" ? (
+                              <span className="memo-exam-trail-source">
+                                {t(topic.source === "ai" ? "exam.path.source.ai" : "exam.path.source.added")}
+                              </span>
+                            ) : null}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          className="memo-icon-button"
+                          aria-label={t("exam.setup.review.renameTopic")}
+                          onClick={() => setEditingTopic(editingTopic === topic.key ? null : topic.key)}
+                        >
+                          <Msym name="edit" size="1.1rem" fill={false} />
+                        </button>
+                      </li>
+                    ))}
+                    <li className="add">
+                      {addingTo === lectureId ? (
+                        <form
+                          className="memo-exam-topic-add"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            addTopic(lectureId);
+                          }}
+                        >
+                          <input
+                            id={`exam-topic-add-${lectureId}`}
+                            className="memo-field memo-exam-topic-input"
+                            value={newTopic}
+                            maxLength={160}
+                            autoFocus
+                            placeholder={t("exam.setup.review.addPlaceholder")}
+                            onChange={(event) => setNewTopic(event.target.value)}
+                          />
+                          <button type="submit" className="memo-primary-pill" disabled={!newTopic.trim()}>
+                            {t("exam.setup.review.add")}
+                          </button>
+                        </form>
+                      ) : (
+                        <button
+                          type="button"
+                          className="memo-exam-topic-addlink"
+                          onClick={() => {
+                            setNewTopic("");
+                            setAddingTo(lectureId);
+                          }}
+                        >
+                          <Msym name="add" size="1.2rem" fill={false} /> {t("exam.setup.review.addTopic")}
+                        </button>
+                      )}
+                    </li>
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+          <div className="memo-exam-topics-mock">
+            <Emoji symbol="🏆" size="1rem" />
+            <span>
+              <b>{t("exam.mock.title")}</b> · {t("exam.setup.review.mockMeta")}
+            </span>
+          </div>
           {error ? <p className="memo-inline-error">{error}</p> : null}
         </section>
       )}

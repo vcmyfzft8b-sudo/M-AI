@@ -7,24 +7,57 @@ import { MemoPortal } from "@/components/memo-portal";
 import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { sheetClass, useSheet } from "@/components/use-sheet";
-import { lessonHref } from "@/components/exams/exam-links";
+import { ExamOral } from "@/components/exams/exam-oral";
 import { ExamScreen } from "@/components/exams/exam-screen";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
-import { mockQuestionCounts, MOCK_DURATIONS } from "@/lib/exams/exam-model";
+import { GaugeDial } from "@/components/exams/target-dial";
+import { MOCK_MINUTES, mockQuestionCounts, ORAL_MINUTES, oralQuestionCount } from "@/lib/exams/exam-model";
 import type { MockQuestionForLearner, MockResult } from "@/lib/exams/exams-server";
+import type { MessageKey } from "@/lib/i18n/messages/keys";
+import {
+  DEFAULT_NOTE_TTS_VOICE,
+  normalizeNoteTtsVoice,
+  NOTE_TTS_VOICE_STORAGE_KEY,
+  NOTE_TTS_VOICES,
+  type NoteTtsVoice,
+} from "@/lib/note-tts-settings";
 
 type Attempt = {
   id: string;
   startedAt: string;
   durationMinutes: number;
+  mode: "written" | "oral";
   questions: MockQuestionForLearner[];
+  /** The note the oral examiner's talking time is counted on. */
+  lectureId: string;
 };
+
+type Vibe = "strict" | "friendly" | "encouraging";
+
+/* Astra's examiner manners, the strict one recommended. */
+const VIBES: { value: Vibe; labelKey: MessageKey; bodyKey: MessageKey }[] = [
+  { value: "strict", labelKey: "exam.oral.vibe.strict", bodyKey: "exam.oral.vibe.strictBody" },
+  { value: "friendly", labelKey: "exam.oral.vibe.friendly", bodyKey: "exam.oral.vibe.friendlyBody" },
+  { value: "encouraging", labelKey: "exam.oral.vibe.encouraging", bodyKey: "exam.oral.vibe.encouragingBody" },
+];
+
+/* The voices offered for the examiner: the tutor's, first few (plus the one the learner uses). */
+const EXAMINER_VOICES: readonly NoteTtsVoice[] = NOTE_TTS_VOICES.slice(0, 6);
+
+function storedVoice(): NoteTtsVoice {
+  try {
+    return normalizeNoteTtsVoice(window.localStorage.getItem(NOTE_TTS_VOICE_STORAGE_KEY));
+  } catch {
+    return DEFAULT_NOTE_TTS_VOICE;
+  }
+}
 
 type Answer = { selected?: number | null; text?: string; unknown?: boolean };
 
 type Phase =
   | { name: "setup" }
   | { name: "sitting"; attempt: Attempt }
+  | { name: "oral"; attempt: Attempt }
   | { name: "grading"; attempt: Attempt }
   | { name: "result"; result: MockResult };
 
@@ -66,7 +99,12 @@ export function ExamMock({
   const { t } = useTranslations();
   const { navigateWithFeedback } = useInstantNavigation();
   const [phase, setPhase] = useState<Phase>({ name: "setup" });
-  const [duration, setDuration] = useState<number>(45);
+  const [mode, setMode] = useState<"written" | "oral">("written");
+  const [duration, setDuration] = useState<number>(MOCK_MINUTES.initial);
+  const [oralMinutes, setOralMinutes] = useState<number>(ORAL_MINUTES.initial);
+  const [voice, setVoice] = useState<NoteTtsVoice>(DEFAULT_NOTE_TTS_VOICE);
+  const [vibe, setVibe] = useState<Vibe>("strict");
+  const [briefingOpen, setBriefingOpen] = useState(false);
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [index, setIndex] = useState(0);
@@ -80,7 +118,10 @@ export function ExamMock({
   const examHref = `/app/exams/${examId}`;
   const closeConfirm = useCallback(() => setConfirmOpen(false), []);
   const confirmSheet = useSheet(closeConfirm);
+  const closeBriefing = useCallback(() => setBriefingOpen(false), []);
+  const briefingSheet = useSheet(closeBriefing);
   const counts = mockQuestionCounts(duration);
+  const minutes = mode === "oral" ? oralMinutes : duration;
 
   const storageKey = phase.name === "sitting" ? `memo-exam-mock:${phase.attempt.id}` : null;
 
@@ -109,11 +150,14 @@ export function ExamMock({
 
     setStarting(true);
     setError(null);
+    setBriefingOpen(false);
 
     const response = await fetch(`/api/exams/${examId}/mock`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ durationMinutes: duration }),
+      body: JSON.stringify(
+        mode === "oral" ? { durationMinutes: oralMinutes, mode, voice, vibe } : { durationMinutes: duration, mode },
+      ),
     }).catch(() => null);
 
     if (response?.status === 402) {
@@ -134,7 +178,11 @@ export function ExamMock({
     setFlags({});
     setIndex(0);
     setNow(Date.now());
-    setPhase({ name: "sitting", attempt: payload.attempt });
+    setPhase(
+      payload.attempt.mode === "oral"
+        ? { name: "oral", attempt: payload.attempt }
+        : { name: "sitting", attempt: payload.attempt },
+    );
   }
 
   const submit = useCallback(
@@ -210,15 +258,42 @@ export function ExamMock({
         backIcon="close"
         title={t("exam.mock.title")}
         cta={
-          <button type="button" className="memo-button-coral" disabled={starting} onClick={() => void start()}>
+          <button
+            type="button"
+            className="memo-button-coral"
+            disabled={starting}
+            onClick={() => (hasPaidAccess && mode === "oral" ? setBriefingOpen(true) : void start())}
+          >
             {starting ? t("exam.mock.starting") : hasPaidAccess ? t("exam.mock.start") : t("exam.mock.paid.cta")}
           </button>
         }
       >
         <div className="memo-exam-center">
-          <MemoBuddy mood="wave" size="6.5rem" thought="🎓" sparkles />
+          <MemoBuddy mood="wave" size="5.5rem" thought={mode === "oral" ? "🎙️" : "🎓"} sparkles />
           <h1 className="memo-exam-step-title">{t("exam.mock.setup.title")}</h1>
           <p className="memo-exam-fine">{t("exam.mock.setup.body", { count: moduleCount })}</p>
+        </div>
+
+        {/* Astra's two kinds of mock exam. */}
+        <div className="memo-segment memo-exam-segment" role="group" aria-label={t("exam.mock.mode.label")}>
+          {(["written", "oral"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={mode === value ? "active" : ""}
+              aria-pressed={mode === value}
+              onClick={() => {
+                setMode(value);
+
+                // The tutor's voice is remembered on the device; the examiner starts from it.
+                if (value === "oral") {
+                  setVoice(storedVoice());
+                }
+              }}
+            >
+              {t(value === "oral" ? "exam.mock.mode.oral" : "exam.mock.mode.written")}
+            </button>
+          ))}
         </div>
 
         {!hasPaidAccess ? (
@@ -228,43 +303,94 @@ export function ExamMock({
           </div>
         ) : null}
 
-        <span className="memo-exam-label">{t("exam.mock.duration")}</span>
-        <div className="memo-segment memo-exam-segment">
-          {MOCK_DURATIONS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={duration === value ? "active" : ""}
-              aria-pressed={duration === value}
-              onClick={() => setDuration(value)}
-            >
-              {t("exam.minutes", { minutes: value })}
-            </button>
-          ))}
-        </div>
+        {/* The length, on a circular timer. */}
+        <GaugeDial
+          value={minutes}
+          onChange={mode === "oral" ? setOralMinutes : setDuration}
+          range={mode === "oral" ? ORAL_MINUTES : MOCK_MINUTES}
+          label={t("exam.mock.duration")}
+          valueText={t("exam.minutes", { minutes })}
+          unit="min"
+          caption={
+            mode === "oral"
+              ? t("exam.oral.questions", { count: oralQuestionCount(oralMinutes) })
+              : t("exam.mock.questions", { count: counts.choice + counts.written })
+          }
+          ends={
+            mode === "oral"
+              ? [`${ORAL_MINUTES.min} min`, `${ORAL_MINUTES.max} min`]
+              : [`${MOCK_MINUTES.min} min`, `${MOCK_MINUTES.max} min`]
+          }
+        />
 
-        <div className="memo-exam-card memo-exam-facts">
-          <div>
-            <Msym name="quiz" size="1.3rem" fill={false} />
-            <span>{t("exam.mock.choice")}</span>
-            <b>{counts.choice}</b>
+        {mode === "oral" ? (
+          <>
+            <span className="memo-exam-label">{t("exam.oral.vibe.label")}</span>
+            <div className="memo-exam-list">
+              {VIBES.map((option) => {
+                const isOn = vibe === option.value;
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`memo-exam-pick ${isOn ? "on" : ""}`.trim()}
+                    aria-pressed={isOn}
+                    onClick={() => setVibe(option.value)}
+                  >
+                    <span className="memo-exam-pick-copy">
+                      <b>
+                        {t(option.labelKey)}
+                        {option.value === "strict" ? (
+                          <span className="memo-exam-trail-source">{t("exam.oral.recommended")}</span>
+                        ) : null}
+                      </b>
+                      <span>{t(option.bodyKey)}</span>
+                    </span>
+                    <Msym
+                      name={isOn ? "radio_button_checked" : "radio_button_unchecked"}
+                      size="1.5rem"
+                      fill={isOn}
+                      className="memo-exam-pick-mark"
+                    />
+                  </button>
+                );
+              })}
+            </div>
+            <span className="memo-exam-label">{t("exam.oral.voice")}</span>
+            <div className="memo-chip-row memo-exam-chips">
+              {[...new Set([voice, ...EXAMINER_VOICES])].map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className={`memo-chip ${voice === option ? "active" : ""}`.trim()}
+                  aria-pressed={voice === option}
+                  onClick={() => setVoice(option)}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="memo-exam-card memo-exam-facts">
+            <div>
+              <Msym name="quiz" size="1.3rem" fill={false} />
+              <span>{t("exam.mock.choice")}</span>
+              <b>{counts.choice}</b>
+            </div>
+            <div>
+              <Msym name="edit" size="1.3rem" fill={false} />
+              <span>{t("exam.mock.written")}</span>
+              <b>{counts.written}</b>
+            </div>
+            <div>
+              <Msym name="flag" size="1.3rem" fill={false} />
+              <span>{t("exam.mock.pass")}</span>
+              <b>{passPercentage} %</b>
+            </div>
           </div>
-          <div>
-            <Msym name="edit" size="1.3rem" fill={false} />
-            <span>{t("exam.mock.written")}</span>
-            <b>{counts.written}</b>
-          </div>
-          <div>
-            <Msym name="timer" size="1.3rem" fill={false} />
-            <span>{t("exam.mock.duration")}</span>
-            <b>{t("exam.minutes", { minutes: duration })}</b>
-          </div>
-          <div>
-            <Msym name="flag" size="1.3rem" fill={false} />
-            <span>{t("exam.mock.pass")}</span>
-            <b>{passPercentage} %</b>
-          </div>
-        </div>
+        )}
 
         {error ? <p className="memo-inline-error">{error}</p> : null}
 
@@ -274,6 +400,81 @@ export function ExamMock({
             {t("exam.mock.lastResult", { grade: lastResult.grade, percent: Math.round(lastResult.percentage) })}
           </button>
         ) : null}
+
+        {/* Astra's instructions before an oral exam, ending in "I'm ready". */}
+        {briefingOpen ? (
+          <MemoPortal>
+            <button
+              type="button"
+              aria-label={t("common.close")}
+              className={sheetClass("memo-scrim", briefingSheet.closing)}
+              onClick={() => briefingSheet.dismiss()}
+            />
+            <div
+              className={sheetClass("memo-sheet", briefingSheet.closing)}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="exam-oral-briefing"
+              {...briefingSheet.dragProps}
+            >
+              <div className="memo-grab" data-drag-handle />
+              <div className="memo-sheet-title">
+                <span id="exam-oral-briefing">{t("exam.oral.briefing.title")}</span>
+                <button type="button" className="memo-sheet-close" aria-label={t("common.close")} onClick={() => briefingSheet.dismiss()}>
+                  <Msym name="close" size="1.45rem" fill={false} weight={500} />
+                </button>
+              </div>
+              <ul className="memo-exam-briefing">
+                <li>
+                  <Msym name="mic" size="1.3rem" fill={false} /> {t("exam.oral.briefing.mic")}
+                </li>
+                <li>
+                  <Msym name="record_voice_over" size="1.3rem" fill={false} /> {t("exam.oral.briefing.turns")}
+                </li>
+                <li>
+                  <Msym name="timer" size="1.3rem" fill={false} /> {t("exam.oral.briefing.time", { minutes: oralMinutes })}
+                </li>
+                <li>
+                  <Msym name="school" size="1.3rem" fill={false} /> {t("exam.oral.briefing.grade")}
+                </li>
+              </ul>
+              <div className="memo-sheet-actions">
+                <button type="button" className="memo-sheet-coral" disabled={starting} onClick={() => void start()}>
+                  {starting ? t("exam.mock.starting") : t("exam.oral.ready")}
+                </button>
+              </div>
+            </div>
+          </MemoPortal>
+        ) : null}
+      </ExamScreen>
+    );
+  }
+
+  if (phase.name === "oral") {
+    const { attempt } = phase;
+
+    return (
+      <ExamScreen refreshOnBack backHref={examHref} backLabel={examTitle} backIcon="close" title={t("exam.mock.mode.oral")}>
+        <ExamOral
+          examId={examId}
+          attemptId={attempt.id}
+          lectureId={attempt.lectureId}
+          questions={attempt.questions.map((question) => ({ id: question.id, prompt: question.prompt }))}
+          durationMinutes={attempt.durationMinutes}
+          voice={voice}
+          onDone={(spoken) =>
+            void submit(
+              attempt,
+              Object.fromEntries(
+                attempt.questions.map((question) => [
+                  question.id,
+                  spoken[question.id]?.trim() ? { text: spoken[question.id] } : { unknown: true },
+                ]),
+              ),
+            )
+          }
+          onQuit={() => setPhase({ name: "setup" })}
+        />
       </ExamScreen>
     );
   }
@@ -315,19 +516,10 @@ export function ExamMock({
             <button type="button" className="memo-button-ghost" onClick={() => setPhase({ name: "setup" })}>
               {t("exam.mock.result.retry")}
             </button>
-            {result.weakestLectureId ? (
-              <button
-                type="button"
-                className="memo-button-coral"
-                onClick={() => navigateWithFeedback(lessonHref(examId, result.weakestLectureId!, "quiz"), { refresh: true })}
-              >
-                {t("exam.mock.result.practice")}
-              </button>
-            ) : (
-              <button type="button" className="memo-button-coral" onClick={() => navigateWithFeedback(examHref, { refresh: true })}>
-                {t("exam.lesson.done.back")}
-              </button>
-            )}
+            {/* Astra's "Continue": back to the path, which now shows what the mock found weak. */}
+            <button type="button" className="memo-button-coral" onClick={() => navigateWithFeedback(examHref, { refresh: true })}>
+              {t("exam.mock.result.continue")}
+            </button>
           </div>
         }
       >
@@ -459,7 +651,7 @@ export function ExamMock({
     <ExamScreen
       refreshOnBack
       backHref={examHref}
-        backLabel={examTitle}
+      backLabel={examTitle}
       backIcon="close"
       title={clock(secondsLeft)}
       trailing={

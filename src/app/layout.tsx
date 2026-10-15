@@ -142,6 +142,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "unfold_more",
   "videocam",
   "visibility",
+  "volume_up",
   "warning",
   "wifi",
   "wifi_off",

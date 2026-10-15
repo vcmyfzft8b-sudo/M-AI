@@ -14,26 +14,26 @@ export default async function ExamLessonPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ lecture?: string; kind?: string }>;
+  searchParams?: Promise<{ topic?: string; kind?: string }>;
 }) {
   const [user, appState, resolved, query, { t }] = await Promise.all([
     requireUser(),
     getViewerAppState(),
     params,
-    searchParams ?? Promise.resolve({ lecture: undefined, kind: undefined }),
+    searchParams ?? Promise.resolve({ topic: undefined, kind: undefined }),
     getTranslations(),
   ]);
   const parsed = routeIdParamSchema.safeParse(resolved);
 
-  if (!parsed.success || !isExamLessonKind(query.kind) || !query.lecture) {
+  if (!parsed.success || !isExamLessonKind(query.kind) || !query.topic) {
     notFound();
   }
 
   const supabase = await createSupabaseServerClient();
   const detail = await getExamDetail(supabase, user.id, parsed.data.id);
-  const index = detail?.modules.findIndex((entry) => entry.lectureId === query.lecture) ?? -1;
+  const index = detail?.modules.findIndex((entry) => entry.topicId === query.topic) ?? -1;
 
-  if (!detail || index < 0) {
+  if (!detail || index < 0 || detail.modules[index].pending) {
     notFound();
   }
 
@@ -53,7 +53,7 @@ export default async function ExamLessonPage({
   const after = following
     ? {
         type: "module" as const,
-        lectureId: following.lectureId,
+        topicId: following.topicId,
         title: following.title?.trim() || t("note.untitled"),
         kind: following.nextKind,
       }
@@ -67,6 +67,7 @@ export default async function ExamLessonPage({
       examTitle={detail.exam.title}
       kind={query.kind}
       module={{
+        topicId: current.topicId,
         lectureId: current.lectureId,
         title: current.title?.trim() || t("note.untitled"),
         position: current.position,

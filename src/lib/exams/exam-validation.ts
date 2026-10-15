@@ -1,6 +1,15 @@
 import { z } from "zod";
 
-import { EXAM_LESSON_KINDS, isValidDay, MAX_EXAM_MODULES, MOCK_DURATIONS, TARGET_MAX, TARGET_MIN } from "@/lib/exams/exam-model";
+import {
+  EXAM_LESSON_KINDS,
+  isValidDay,
+  MAX_EXAM_MODULES,
+  MAX_EXAM_TOPICS,
+  MOCK_MINUTES,
+  ORAL_MINUTES,
+  TARGET_MAX,
+  TARGET_MIN,
+} from "@/lib/exams/exam-model";
 import { createSanitizedStringSchema } from "@/lib/validation";
 
 const daySchema = z.string().refine(isValidDay, { message: "Invalid date." });
@@ -15,6 +24,37 @@ export const examCreateSchema = z.object({
   gradingScale: z.enum(["uni_5_10", "school_1_5", "percent"]),
   passPercentage: z.number().int().min(1).max(100),
   lectureIds: z.array(z.string().uuid()).min(1).max(MAX_EXAM_MODULES),
+  schoolLevel: createSanitizedStringSchema({ trim: true, maxLength: 40 }).nullable().optional(),
+  schoolYear: createSanitizedStringSchema({ trim: true, maxLength: 40 }).nullable().optional(),
+  aiExpand: z.boolean().optional(),
+  /** The plan as the learner left it on the review: the topics they kept, renamed or added. */
+  topics: z
+    .array(
+      z.object({
+        lectureId: z.string().uuid(),
+        title: createSanitizedStringSchema({ trim: true, collapseWhitespace: true, minLength: 1, maxLength: 160 }),
+        summary: createSanitizedStringSchema({ multiline: true, trim: true, maxLength: 2400 }),
+        keyPoints: z.array(createSanitizedStringSchema({ trim: true, maxLength: 400 })).max(8),
+        source: z.enum(["material", "added", "ai"]),
+      }),
+    )
+    .max(MAX_EXAM_TOPICS)
+    .optional(),
+});
+
+/** The setup's "Creating your study path": which notes, whether the AI may add topics, the level. */
+export const examPlanSchema = z.object({
+  lectureIds: z.array(z.string().uuid()).min(1).max(MAX_EXAM_MODULES),
+  aiExpand: z.boolean(),
+  schoolLevel: createSanitizedStringSchema({ trim: true, maxLength: 40 }).nullable(),
+  schoolYear: createSanitizedStringSchema({ trim: true, maxLength: 40 }).nullable(),
+});
+
+export const topicWrittenCheckSchema = z.object({
+  topicId: z.string().uuid(),
+  questionId: z.string().regex(/^gen-\d{1,2}$/),
+  typedAnswer: createSanitizedStringSchema({ multiline: true, trim: true, maxLength: 12000 }),
+  declaredUnknown: z.boolean(),
 });
 
 export const examPatchSchema = z
@@ -27,12 +67,12 @@ export const examPatchSchema = z
   .refine((value) => Object.keys(value).length > 0, { message: "Nothing to change." });
 
 export const lessonQuerySchema = z.object({
-  lectureId: z.string().uuid(),
+  topicId: z.string().uuid(),
   kind: z.enum(EXAM_LESSON_KINDS),
 });
 
 export const lessonResultSchema = z.object({
-  lectureId: z.string().uuid(),
+  topicId: z.string().uuid(),
   kind: z.enum(EXAM_LESSON_KINDS),
   correct: z.number().int().min(0).max(100),
   total: z.number().int().min(0).max(100),
@@ -43,7 +83,12 @@ export const mockStartSchema = z.object({
   durationMinutes: z
     .number()
     .int()
-    .refine((value) => (MOCK_DURATIONS as readonly number[]).includes(value)),
+    .min(ORAL_MINUTES.min)
+    .max(MOCK_MINUTES.max)
+    .refine((value) => value % 5 === 0),
+  mode: z.enum(["written", "oral"]).default("written"),
+  voice: createSanitizedStringSchema({ trim: true, maxLength: 40 }).nullable().optional(),
+  vibe: z.enum(["strict", "friendly", "encouraging"]).nullable().optional(),
 });
 
 export const mockSubmitSchema = z.object({

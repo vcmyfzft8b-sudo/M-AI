@@ -5,6 +5,17 @@ import { dayKey } from "@/lib/exams/exam-model";
 import { listLibraryFoldersForUser } from "@/lib/library-folders";
 import { listLecturesForUser } from "@/lib/lectures";
 
+/*
+ * The onboarding's school answer, as the setup's school step starts from it. Onboarding stores a
+ * kind of secondary school (gymnasium, technical, ...) where the step only asks primary, secondary
+ * or university, so the role decides the level.
+ */
+const LEVEL_FOR_ROLE: Record<string, string> = {
+  elementary_student: "elementary_school",
+  high_school_student: "high_school",
+  university_student: "university",
+};
+
 /** The onboarding's daily goal, in the minutes its label promises. */
 const GOAL_MINUTES: Record<string, number> = {
   casual: 10,
@@ -41,6 +52,8 @@ export default async function NewExamPage({
   const noteIds = new Set(notes.map((note) => note.id));
   const lockedCount = lectures.length - notes.length;
   const goal = appState?.profile?.onboarding_daily_goal ?? null;
+  const role = appState?.profile?.onboarding_role ?? null;
+  const schoolLevel = role ? (LEVEL_FOR_ROLE[role] ?? null) : null;
 
   return (
     <ExamSetup
@@ -57,6 +70,10 @@ export default async function NewExamPage({
       defaultMinutes={(goal && GOAL_MINUTES[goal]) || 30}
       lockedCount={lockedCount}
       canCreateNotes={Boolean(appState?.onboardingComplete && appState?.canCreateNotes)}
+      school={{
+        level: schoolLevel,
+        year: schoolLevel ? (appState?.profile?.onboarding_school_year ?? null) : null,
+      }}
     />
   );
 }

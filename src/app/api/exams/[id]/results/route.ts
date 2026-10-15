@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { examHasModule, recordLessonResult } from "@/lib/exams/exams-server";
+import { recordLessonResult } from "@/lib/exams/exams-server";
 import { examIdParamsSchema, lessonResultSchema } from "@/lib/exams/exam-validation";
 import { captureRouteError } from "@/lib/monitoring";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -41,25 +41,18 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
 
   try {
-    const inExam = await examHasModule(
-      auth.supabase,
-      auth.user.id,
-      params.data.id,
-      parsed.data.lectureId,
-    );
-
-    if (!inExam) {
-      return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
-    }
-
-    await recordLessonResult(auth.supabase, auth.user.id, {
+    const recorded = await recordLessonResult(auth.supabase, auth.user.id, {
       examId: params.data.id,
-      lectureId: parsed.data.lectureId,
+      topicId: parsed.data.topicId,
       kind: parsed.data.kind,
       correct: Math.min(parsed.data.correct, parsed.data.total),
       total: parsed.data.total,
       difficulty: parsed.data.difficulty,
     });
+
+    if (!recorded) {
+      return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
@@ -68,7 +61,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       operation: "record",
       request,
       userId: auth.user.id,
-      lectureId: parsed.data.lectureId,
     });
     return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
   }

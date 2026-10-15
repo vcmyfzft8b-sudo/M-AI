@@ -8,7 +8,8 @@ import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { getRouteUser } from "@/lib/supabase/server";
 import { tr } from "@/lib/i18n/server";
 
-const EXAM_CREATE_MAX_BYTES = 16 * 1024;
+/* The reviewed plan travels with it: a few kilobytes of summary and key points per topic. */
+const EXAM_CREATE_MAX_BYTES = 256 * 1024;
 
 export async function GET(request: Request) {
   const auth = await getRouteUser({ route: "api:exams:get", request });

@@ -26,10 +26,14 @@ export const EXAM_TIME_ZONE = "Europe/Ljubljana";
 /** A lesson is sized to take about this long; the daily goal is the learner's minutes over it. */
 export const LESSON_MINUTES = 6;
 
-export const MOCK_DURATIONS = [30, 45, 60, 90] as const;
+/* The mock exam's length, set on Astra's circular timer: 10 minutes to two hours, in fives. */
+export const MOCK_MINUTES: DialRange & { initial: number } = { min: 10, max: 120, step: 5, initial: 45 };
 
 /* The most notes one exam can hold; the create route rejects more. */
 export const MAX_EXAM_MODULES = 40;
+
+/* The most topics one exam's plan may hold: up to eight per note across a full exam is plenty. */
+export const MAX_EXAM_TOPICS = 200;
 
 /*
  * The most new material one setup lets the learner start. It is the smallest burst the note
@@ -42,33 +46,51 @@ export const MAX_SETUP_UPLOADS = 8;
 export const TARGET_MIN = 50;
 export const TARGET_MAX = 100;
 export const TARGET_STEP = 5;
-/* The target dial is a gauge open at the bottom: 50 % sits at -135° and 100 % at +135° from 12 o'clock. */
-export const TARGET_DIAL_SWEEP = 135;
+/*
+ * The setup's dials (the target, the mock exam's length) are gauges open at the bottom: the
+ * lowest value sits at -135° and the highest at +135° from 12 o'clock.
+ */
+export const DIAL_SWEEP = 135;
 
-/** Where a target sits on the dial, in degrees clockwise from 12 o'clock. */
-export function targetDialAngle(target: number) {
-  const share = (Math.min(TARGET_MAX, Math.max(TARGET_MIN, target)) - TARGET_MIN) / (TARGET_MAX - TARGET_MIN);
-  return -TARGET_DIAL_SWEEP + share * TARGET_DIAL_SWEEP * 2;
+export type DialRange = { min: number; max: number; step: number };
+
+export const TARGET_RANGE: DialRange = { min: TARGET_MIN, max: TARGET_MAX, step: TARGET_STEP };
+
+/** Where a value sits on a dial, in degrees clockwise from 12 o'clock. */
+export function dialAngle(value: number, range: DialRange) {
+  const share = (Math.min(range.max, Math.max(range.min, value)) - range.min) / (range.max - range.min);
+  return -DIAL_SWEEP + share * DIAL_SWEEP * 2;
 }
 
 /**
- * The target under a finger at (dx, dy) from the dial's centre (screen axes, y down). In the open
- * gap at the bottom the dial holds whichever end the finger came from, so dragging past 100 %
- * never wraps round to 50 % (or the other way).
+ * The value under a finger at (dx, dy) from a dial's centre (screen axes, y down), in the dial's
+ * steps. In the open gap at the bottom the dial holds whichever end the finger came from, so
+ * dragging past the top never wraps round to the bottom (or the other way).
  */
-export function targetFromDialPoint(dx: number, dy: number, previous: number) {
+export function dialValueFromPoint(dx: number, dy: number, previous: number, range: DialRange) {
   if (dx === 0 && dy === 0) {
     return previous;
   }
 
   const angle = (Math.atan2(dx, -dy) * 180) / Math.PI;
 
-  if (Math.abs(angle) > TARGET_DIAL_SWEEP) {
-    return previous >= (TARGET_MIN + TARGET_MAX) / 2 ? TARGET_MAX : TARGET_MIN;
+  if (Math.abs(angle) > DIAL_SWEEP) {
+    return previous >= (range.min + range.max) / 2 ? range.max : range.min;
   }
 
-  const raw = TARGET_MIN + ((angle + TARGET_DIAL_SWEEP) / (TARGET_DIAL_SWEEP * 2)) * (TARGET_MAX - TARGET_MIN);
-  return Math.min(TARGET_MAX, Math.max(TARGET_MIN, Math.round(raw / TARGET_STEP) * TARGET_STEP));
+  const raw = range.min + ((angle + DIAL_SWEEP) / (DIAL_SWEEP * 2)) * (range.max - range.min);
+  const stepped = range.min + Math.round((raw - range.min) / range.step) * range.step;
+  return Math.min(range.max, Math.max(range.min, stepped));
+}
+
+/** Where a target sits on the target dial. */
+export function targetDialAngle(target: number) {
+  return dialAngle(target, TARGET_RANGE);
+}
+
+/** The target under a finger on the target dial. */
+export function targetFromDialPoint(dx: number, dy: number, previous: number) {
+  return dialValueFromPoint(dx, dy, previous, TARGET_RANGE);
 }
 
 export function isExamLessonKind(value: unknown): value is ExamLessonKind {
@@ -128,12 +150,17 @@ export function isValidDay(value: string): boolean {
 
 export type LessonResultLike = {
   lecture_id: string;
+  /** The topic the lesson was for; null for results from before exams were split into topics. */
+  topic_id?: string | null;
   lesson_kind: ExamLessonKind;
   score: number;
   completed_at: string;
 };
 
 export type ModuleState = {
+  /** The module: one topic of the exam (Astra's numbered modules are topics). */
+  topicId: string;
+  /** The note the topic belongs to, which access, grading and the mock exam go by. */
   lectureId: string;
   /** 0-based place on the path. */
   position: number;
@@ -231,35 +258,39 @@ export function moduleProgress(results: LessonResultLike[], target = 1, proveSin
 }
 
 /**
- * Every module's state, in path order. A module is unlocked when it is the first, when the one
- * before it has been learned, or when the learner has already started it (Astra's "test out":
- * taking a locked module's quiz opens it). `target` is the exam's goal as 0..1.
+ * Every module's state, in path order. A module is one topic; it is unlocked when it is the first,
+ * when the one before it has been learned, or when the learner has already started it (Astra's
+ * "test out": taking a locked module's quiz opens it). `target` is the exam's goal as 0..1.
  */
 export function examModuleStates(
-  lectureIdsInOrder: string[],
+  modulesInOrder: { topicId: string; lectureId: string }[],
   results: LessonResultLike[],
   target = 1,
   mock: MockOutcome | null = null,
 ): ModuleState[] {
-  const byLecture = new Map<string, LessonResultLike[]>();
+  const byTopic = new Map<string, LessonResultLike[]>();
 
   for (const result of results) {
-    const list = byLecture.get(result.lecture_id) ?? [];
+    if (!result.topic_id) {
+      continue;
+    }
+
+    const list = byTopic.get(result.topic_id) ?? [];
     list.push(result);
-    byLecture.set(result.lecture_id, list);
+    byTopic.set(result.topic_id, list);
   }
 
   const failedMock = mock && mock.percentage < target * 100 - 1e-9 ? mock : null;
   const states: ModuleState[] = [];
 
-  lectureIdsInOrder.forEach((lectureId, position) => {
+  modulesInOrder.forEach(({ topicId, lectureId }, position) => {
     const weakInMock =
       failedMock !== null && lectureId in failedMock.byLecture && failedMock.byLecture[lectureId] < target - 1e-9;
-    const progress = moduleProgress(byLecture.get(lectureId) ?? [], target, weakInMock ? failedMock.at : null);
+    const progress = moduleProgress(byTopic.get(topicId) ?? [], target, weakInMock ? failedMock.at : null);
     const previous = states[position - 1];
     const unlocked = position === 0 || Boolean(previous?.learned) || progress.lessonsDone > 0;
 
-    states.push({ lectureId, position, unlocked, ...progress });
+    states.push({ topicId, lectureId, position, unlocked, ...progress });
   });
 
   return states;
@@ -285,7 +316,7 @@ export function examStage(states: Pick<ModuleState, "learned" | "mastered">[], m
 }
 
 export type ExamNextStep =
-  | { type: "lesson"; lectureId: string; kind: ExamLessonKind; review: boolean }
+  | { type: "lesson"; topicId: string; lectureId: string; kind: ExamLessonKind; review: boolean }
   | { type: "mock" }
   | null;
 
@@ -296,7 +327,10 @@ export type ExamNextStep =
  * fresh until the exam. Modules still being made, locked or not paid for are skipped.
  */
 export function examNextStep(
-  states: Pick<ModuleState, "lectureId" | "learned" | "mastered" | "unlocked" | "review" | "nextKind" | "done" | "latest">[],
+  states: Pick<
+    ModuleState,
+    "topicId" | "lectureId" | "learned" | "mastered" | "unlocked" | "review" | "nextKind" | "done" | "latest"
+  >[],
   stage: ExamStage,
   canOpen: (lectureId: string) => boolean = () => true,
 ): ExamNextStep {
@@ -306,8 +340,14 @@ export function examNextStep(
     if (!state.mastered) {
       const untried = EXAM_LESSON_KINDS.find((kind) => !state.done[kind]);
       return untried
-        ? { type: "lesson", lectureId: state.lectureId, kind: untried, review: false }
-        : { type: "lesson", lectureId: state.lectureId, kind: state.review[0] ?? state.nextKind, review: true };
+        ? { type: "lesson", topicId: state.topicId, lectureId: state.lectureId, kind: untried, review: false }
+        : {
+            type: "lesson",
+            topicId: state.topicId,
+            lectureId: state.lectureId,
+            kind: state.review[0] ?? state.nextKind,
+            review: true,
+          };
     }
   }
 
@@ -316,19 +356,21 @@ export function examNextStep(
   }
 
   if (stage === "ready") {
-    let best: { lectureId: string; kind: ExamLessonKind; score: number } | null = null;
+    let best: { topicId: string; lectureId: string; kind: ExamLessonKind; score: number } | null = null;
 
     for (const state of open) {
       for (const kind of PRACTICE_LESSON_KINDS) {
         const score = state.latest[kind] ?? 0;
 
         if (!best || score < best.score) {
-          best = { lectureId: state.lectureId, kind, score };
+          best = { topicId: state.topicId, lectureId: state.lectureId, kind, score };
         }
       }
     }
 
-    return best ? { type: "lesson", lectureId: best.lectureId, kind: best.kind, review: true } : null;
+    return best
+      ? { type: "lesson", topicId: best.topicId, lectureId: best.lectureId, kind: best.kind, review: true }
+      : null;
   }
 
   return null;
@@ -635,6 +677,14 @@ export function pickWritten<T extends WrittenQuestionLike>(questions: readonly T
 }
 
 /* ---------------------------------------------------------------- mock exam */
+
+/* The oral mock's length: five minutes to half an hour of talking, in fives. */
+export const ORAL_MINUTES: DialRange & { initial: number } = { min: 5, max: 30, step: 5, initial: 15 };
+
+/** An oral mock asks about one question every four minutes: an answer and a follow-up each. */
+export function oralQuestionCount(durationMinutes: number) {
+  return Math.min(8, Math.max(2, Math.round(durationMinutes / 4)));
+}
 
 export function mockQuestionCounts(durationMinutes: number) {
   return {

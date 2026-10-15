@@ -56,6 +56,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const started = await startMockExam(auth.supabase, auth.user.id, {
       examId: exam.id,
       durationMinutes: parsed.data.durationMinutes,
+      mode: parsed.data.mode,
+      voice: parsed.data.voice ?? null,
+      vibe: parsed.data.vibe ?? null,
     });
 
     if ("error" in started) {

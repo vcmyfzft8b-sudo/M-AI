@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { InstantLink } from "@/components/instant-link";
@@ -47,6 +48,7 @@ export function ExamDashboard({
 }) {
   const { t, locale } = useTranslations();
   const { navigateWithFeedback } = useInstantNavigation();
+  const router = useRouter();
   const { exam, modules, plan } = detail;
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -67,15 +69,48 @@ export function ExamDashboard({
   const stage = detail.stage;
   const next = examNextStep(modules, stage, canOpen);
   const target = exam.target_mastery;
+  /* A module's stations: its five lessons, then a repeat for each lesson still under the target. */
+  const stationCount = (module: ExamModuleView) =>
+    module.pending ? 0 : EXAM_LESSON_KINDS.length + module.review.length;
   /* Where each module's stations start on the whole path, so the line swings on across modules. */
   const stationStarts: number[] = [];
   modules.forEach((module, index) =>
-    stationStarts.push(
-      index === 0 ? 0 : stationStarts[index - 1] + EXAM_LESSON_KINDS.length + modules[index - 1].review.length,
-    ),
+    stationStarts.push(index === 0 ? 0 : stationStarts[index - 1] + stationCount(modules[index - 1])),
   );
+  /* With more than one note, each module says which note it is from. */
+  const manyNotes = new Set(modules.map((module) => module.lectureId)).size > 1;
+  const planning = modules.some((module) => module.pending);
+  const planningReady = modules.some((module) => module.pending && module.noteReady);
   const examPassed = detail.daysLeft < 0;
   const examToday = detail.daysLeft === 0;
+
+  /*
+   * A note that was still being made at setup has no topics yet. Once it is ready its topics are
+   * planned here; until then the screen checks back now and then.
+   */
+  useEffect(() => {
+    if (!planning) {
+      return;
+    }
+
+    if (!planningReady) {
+      const timer = window.setTimeout(() => router.refresh(), 15_000);
+      return () => window.clearTimeout(timer);
+    }
+
+    let cancelled = false;
+    void fetch(`/api/exams/${exam.id}/topics`, { method: "POST" })
+      .then((response) => {
+        if (!cancelled && response.ok) {
+          router.refresh();
+        }
+      })
+      .catch(() => null);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [exam.id, planning, planningReady, router]);
 
   /* Open on the station to do next, wherever it is on a long path (the screen's own scroller). */
   useEffect(() => {
@@ -117,10 +152,14 @@ export function ExamDashboard({
       return;
     }
 
-    navigateWithFeedback(lessonHref(exam.id, module.lectureId, kind));
+    navigateWithFeedback(lessonHref(exam.id, module.topicId, kind));
   }
 
   function moduleSubtitle(module: ExamModuleView) {
+    if (module.pending) {
+      return t(module.noteReady ? "exam.path.planning" : "exam.dash.notReady");
+    }
+
     if (!module.ready) {
       return t("exam.dash.notReady");
     }
@@ -246,15 +285,17 @@ export function ExamDashboard({
 
       <div className="memo-exam-trail">
         {modules.map((module, moduleIndex) => {
-          const isCurrentModule = next?.type === "lesson" && next.lectureId === module.lectureId;
-          const locked = !module.unlocked;
-          const stations = [
-            ...EXAM_LESSON_KINDS.map((kind) => ({ kind, repeat: false })),
-            ...module.review.map((kind) => ({ kind, repeat: true })),
-          ];
+          const isCurrentModule = next?.type === "lesson" && next.topicId === module.topicId;
+          const locked = !module.unlocked && !module.pending;
+          const stations = module.pending
+            ? []
+            : [
+                ...EXAM_LESSON_KINDS.map((kind) => ({ kind, repeat: false })),
+                ...module.review.map((kind) => ({ kind, repeat: true })),
+              ];
 
           return (
-            <section key={module.lectureId} className="memo-exam-trail-unit">
+            <section key={module.topicId} className="memo-exam-trail-unit">
               <div
                 className={[
                   "memo-exam-trail-banner",
@@ -266,8 +307,18 @@ export function ExamDashboard({
                   .join(" ")}
               >
                 <span className="memo-exam-trail-banner-copy">
-                  <i>{t("exam.dash.module", { index: module.position + 1 })}</i>
-                  <b>{module.title?.trim() || t("note.untitled")}</b>
+                  <i>
+                    {t("exam.dash.module", { index: module.position + 1 })}
+                    {manyNotes && module.noteTitle ? ` · ${module.noteTitle}` : ""}
+                  </i>
+                  <b>
+                    {module.title?.trim() || t("note.untitled")}
+                    {module.source !== "material" ? (
+                      <span className="memo-exam-trail-source">
+                        {t(module.source === "ai" ? "exam.path.source.ai" : "exam.path.source.added")}
+                      </span>
+                    ) : null}
+                  </b>
                   {locked && module.ready ? null : <span>{moduleSubtitle(module)}</span>}
                 </span>
                 {locked && module.ready ? (
@@ -280,6 +331,10 @@ export function ExamDashboard({
                   </button>
                 ) : module.mastered ? (
                   <Msym name="check_circle" size="1.6rem" className="memo-exam-trail-banner-mark" />
+                ) : module.pending ? (
+                  <span className="memo-gen-track memo-exam-trail-planning" aria-hidden="true">
+                    <span />
+                  </span>
                 ) : null}
               </div>
 

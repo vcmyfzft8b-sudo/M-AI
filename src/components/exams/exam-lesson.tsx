@@ -16,6 +16,7 @@ import { MemoBuddy, type BuddyMood } from "@/components/exams/memo-buddy";
 import { EXAM_LESSON_KINDS, PRACTICE_LESSON_KINDS, type ExamLessonKind } from "@/lib/exams/exam-model";
 import type { LessonGenerator, LessonLoad, LessonPayload } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
+import { NOTE_TTS_VOICE_STORAGE_KEY } from "@/lib/note-tts-settings";
 import { FLASHCARD_EXIT_ANIMATION_MS, type FlashcardBucket } from "@/lib/study/flashcard-drag";
 
 const POLL_MS = 4000;
@@ -61,6 +62,7 @@ type WrittenMark = {
 };
 
 export type ExamLessonModule = {
+  topicId: string;
   lectureId: string;
   title: string;
   position: number;
@@ -74,7 +76,7 @@ export type ExamLessonModule = {
 
 /** Where the path goes after this module: the next module still to master, or the mock exam. */
 export type ExamLessonAfter =
-  | { type: "module"; lectureId: string; title: string; kind: ExamLessonKind }
+  | { type: "module"; topicId: string; title: string; kind: ExamLessonKind }
   | { type: "mock" }
   | null;
 
@@ -114,7 +116,7 @@ export function ExamLesson({
 
   const load = useCallback(async () => {
     const response = await fetch(
-      `/api/exams/${examId}/lesson?lectureId=${module.lectureId}&kind=${kind}`,
+      `/api/exams/${examId}/lesson?topicId=${module.topicId}&kind=${kind}`,
       { cache: "no-store" },
     );
 
@@ -148,7 +150,7 @@ export function ExamLesson({
     }
 
     setPhase({ name: "generating", generator: load.generator });
-  }, [examId, kind, module.lectureId]);
+  }, [examId, kind, module.lectureId, module.topicId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -171,7 +173,7 @@ export function ExamLesson({
     const response = await fetch(`/api/exams/${examId}/results`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lectureId: module.lectureId, kind, correct, total, difficulty }),
+      body: JSON.stringify({ topicId: module.topicId, kind, correct, total, difficulty }),
     }).catch(() => null);
 
     if (!response?.ok) {
@@ -183,7 +185,7 @@ export function ExamLesson({
     const doneAfter = { ...module.done, [kind]: true };
 
     if (kind === "summary") {
-      navigateWithFeedback(lessonHref(examId, module.lectureId, nextKindAfter(doneAfter) ?? "flashcards"), { refresh: true });
+      navigateWithFeedback(lessonHref(examId, module.topicId, nextKindAfter(doneAfter) ?? "flashcards"), { refresh: true });
       return;
     }
 
@@ -208,11 +210,11 @@ export function ExamLesson({
     const masteredAfter = learnedAfter && reviewAfter.length === 0;
     const untried = nextKindAfter(doneAfter);
     const following = untried
-      ? { label: t("exam.lesson.done.next", { lesson: t(LESSON_KIND_KEY[untried]) }), href: lessonHref(examId, module.lectureId, untried) }
+      ? { label: t("exam.lesson.done.next", { lesson: t(LESSON_KIND_KEY[untried]) }), href: lessonHref(examId, module.topicId, untried) }
       : reviewAfter[0]
-        ? { label: t("exam.lesson.done.repeat", { lesson: t(LESSON_KIND_KEY[reviewAfter[0]]) }), href: lessonHref(examId, module.lectureId, reviewAfter[0]) }
+        ? { label: t("exam.lesson.done.repeat", { lesson: t(LESSON_KIND_KEY[reviewAfter[0]]) }), href: lessonHref(examId, module.topicId, reviewAfter[0]) }
         : after?.type === "module"
-          ? { label: t("exam.lesson.done.nextModule", { title: after.title }), href: lessonHref(examId, after.lectureId, after.kind) }
+          ? { label: t("exam.lesson.done.nextModule", { title: after.title }), href: lessonHref(examId, after.topicId, after.kind) }
           : after?.type === "mock"
             ? { label: t("exam.lesson.done.mock"), href: `${examHref}/mock` }
             : null;
@@ -287,6 +289,8 @@ export function ExamLesson({
         ) : phase.name === "playing" ? (
           <LessonBody
             lesson={phase.lesson}
+            examId={examId}
+            topicId={module.topicId}
             lectureId={module.lectureId}
             onReact={react}
             buddy={buddy}
@@ -413,12 +417,16 @@ function LearningZone({
 
 function LessonBody({
   lesson,
+  examId,
+  topicId,
   lectureId,
   onFinish,
   onReact,
   buddy,
 }: {
   lesson: LessonPayload;
+  examId: string;
+  topicId: string;
   lectureId: string;
   onFinish: (correct: number, total: number) => void;
   onReact: (mood: BuddyMood) => void;
@@ -432,6 +440,51 @@ function LessonBody({
   const [exit, setExit] = useState<StudyFlashcardExit | null>(null);
   const [missed, setMissed] = useState(0);
   const [speedReading, setSpeedReading] = useState(false);
+  /* Astra's summary audio: the topic summary, spoken in the learner's read-aloud voice. */
+  const [listening, setListening] = useState<"idle" | "loading" | "playing">("idle");
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => () => audioRef.current?.pause(), []);
+
+  async function toggleListening() {
+    if (listening === "playing") {
+      audioRef.current?.pause();
+      setListening("idle");
+      return;
+    }
+
+    if (audioRef.current) {
+      void audioRef.current.play();
+      setListening("playing");
+      return;
+    }
+
+    setListening("loading");
+    let voice: string | null = null;
+
+    try {
+      voice = window.localStorage.getItem(NOTE_TTS_VOICE_STORAGE_KEY);
+    } catch {
+      /* The default voice, then. */
+    }
+
+    const response = await fetch(
+      `/api/exams/${examId}/topics/${topicId}/speech${voice ? `?voice=${encodeURIComponent(voice)}` : ""}`,
+      { method: "POST" },
+    ).catch(() => null);
+    const payload = response?.ok ? ((await response.json()) as { url?: string }) : null;
+
+    if (!payload?.url) {
+      setListening("idle");
+      return;
+    }
+
+    const audio = new Audio(payload.url);
+    audio.onended = () => setListening("idle");
+    audioRef.current = audio;
+    await audio.play().catch(() => setListening("idle"));
+    setListening("playing");
+  }
   const [answer, setAnswer] = useState("");
   const [unknown, setUnknown] = useState(false);
   const [marking, setMarking] = useState(false);
@@ -479,20 +532,29 @@ function LessonBody({
         </div>
         <div className="memo-exam-card memo-exam-summary-card">
           <p>{lesson.summary}</p>
+          {/* The topic's key points: whole sentences, so a list rather than chips. */}
           {lesson.keyTopics.length > 0 ? (
             <>
-              <span className="memo-eyebrow">{t("exam.lesson.keyTopics")}</span>
-              <div className="memo-chip-row">
-                {lesson.keyTopics.slice(0, 8).map((topic) => (
-                  <span key={topic} className="memo-chip">
-                    {topic}
-                  </span>
+              <span className="memo-eyebrow">{t("exam.lesson.keyPoints")}</span>
+              <ul className="memo-exam-points">
+                {lesson.keyTopics.slice(0, 8).map((point) => (
+                  <li key={point}>{point}</li>
                 ))}
-              </div>
+              </ul>
             </>
           ) : null}
         </div>
         <div className="memo-chip-row">
+          <button
+            type="button"
+            className={`memo-chip ${listening === "playing" ? "active" : ""}`.trim()}
+            aria-pressed={listening === "playing"}
+            disabled={listening === "loading"}
+            onClick={() => void toggleListening()}
+          >
+            <Msym name={listening === "playing" ? "pause" : "volume_up"} size="1.1rem" />{" "}
+            {listening === "loading" ? t("exam.lesson.listenLoading") : t("exam.lesson.listen")}
+          </button>
           <button type="button" className="memo-chip" onClick={() => setSpeedReading(true)}>
             <Msym name="bolt" size="1.1rem" /> {t("exam.lesson.speedRead")}
           </button>
@@ -516,11 +578,14 @@ function LessonBody({
     const grade = (bucket: FlashcardBucket) => {
       exitToken.current += 1;
       setExit({ bucket, flipped, token: exitToken.current, startXPercent: 0, startYPercent: 0, startRotationDeg: 0 });
-      void fetch(`/api/flashcards/${card.id}/progress`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confidenceBucket: bucket }),
-      }).catch(() => null);
+      // Cards written for a topic outside the material are not in the note's deck.
+      if (!lesson.generated) {
+        void fetch(`/api/flashcards/${card.id}/progress`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confidenceBucket: bucket }),
+        }).catch(() => null);
+      }
 
       if (bucket === "again") {
         setMissed((current) => current + 1);
@@ -654,11 +719,18 @@ function LessonBody({
 
     setMarking(true);
 
-    const response = await fetch(`/api/lectures/${lectureId}/practice-test/check`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ questionId: question.id, typedAnswer: unknown ? "" : answer, declaredUnknown: unknown }),
-    }).catch(() => null);
+    const body = { questionId: question.id, typedAnswer: unknown ? "" : answer, declaredUnknown: unknown };
+    // A question written for a topic outside the material is marked by the exam, not the note's test.
+    const response = await fetch(
+      lesson.kind === "written" && lesson.generated
+        ? `/api/exams/${examId}/written`
+        : `/api/lectures/${lectureId}/practice-test/check`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(lesson.kind === "written" && lesson.generated ? { ...body, topicId } : body),
+      },
+    ).catch(() => null);
     const payload = response?.ok ? ((await response.json()) as WrittenMark) : null;
 
     setMarking(false);

@@ -1,5 +1,14 @@
 // Character-level timestamps from the Soniox TTS WebSocket, turned into the word-sized pieces the
-// alignment in note-tts.ts matches against. Kept free of "@/" imports so the unit tests can load it.
+// alignment below matches against, and the alignment itself: which note word was said when. Kept
+// free of "@/" imports so the unit tests and the clip scripts can load it.
+
+import type { NoteTtsWord } from "./note-tts-text.ts";
+
+export type TtsAlignmentWord = {
+  wordIndex: number;
+  startMs: number;
+  endMs: number;
+};
 
 export type TtsCharacterTimestamps = {
   characters: string[];
@@ -64,4 +73,156 @@ export function getCharacterTimestampsEndMs(frames: TtsCharacterTimestamps[]) {
   }
 
   return endMs;
+}
+
+function normalizeAlignmentText(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/\p{Mark}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+/** A transcript token, or a piece built from character timestamps; audio events are skipped. */
+export type TtsAlignmentToken = TtsAlignmentPiece & { is_audio_event?: boolean | null };
+
+function collectTranscriptPieces(tokens: TtsAlignmentToken[]) {
+  return tokens
+    .map((token, index) => ({
+      index,
+      text: normalizeAlignmentText(token.text),
+      startMs: token.start_ms,
+      endMs: token.end_ms,
+    }))
+    .filter((token) => token.text.length > 0 && !tokens[token.index]?.is_audio_event);
+}
+
+function interpolateMissingTimings(params: {
+  timings: Array<TtsAlignmentWord | null>;
+  wordStartIndex: number;
+  durationMs: number;
+}) {
+  const timings = [...params.timings];
+  const durationMs = Math.max(params.durationMs, timings.length * 250, 1);
+
+  for (let index = 0; index < timings.length; index += 1) {
+    if (timings[index]) {
+      continue;
+    }
+
+    const previousIndex = (() => {
+      for (let candidate = index - 1; candidate >= 0; candidate -= 1) {
+        if (timings[candidate]) {
+          return candidate;
+        }
+      }
+
+      return -1;
+    })();
+    const nextIndex = (() => {
+      for (let candidate = index + 1; candidate < timings.length; candidate += 1) {
+        if (timings[candidate]) {
+          return candidate;
+        }
+      }
+
+      return timings.length;
+    })();
+    const previousEnd = previousIndex >= 0 ? timings[previousIndex]?.endMs ?? 0 : 0;
+    const nextStart =
+      nextIndex < timings.length ? timings[nextIndex]?.startMs ?? durationMs : durationMs;
+    const missingCount = nextIndex - previousIndex - 1;
+    const sliceMs = Math.max(80, (nextStart - previousEnd) / Math.max(missingCount, 1));
+    const offset = index - previousIndex - 1;
+    const startMs = Math.max(0, Math.round(previousEnd + sliceMs * offset));
+    const endMs = Math.min(durationMs, Math.max(startMs + 80, Math.round(startMs + sliceMs)));
+
+    timings[index] = {
+      wordIndex: params.wordStartIndex + index,
+      startMs,
+      endMs,
+    };
+  }
+
+  return timings.filter((timing): timing is TtsAlignmentWord => Boolean(timing));
+}
+
+export function alignTtsTokensToWords(params: {
+  words: NoteTtsWord[];
+  tokens: TtsAlignmentToken[];
+  wordStartIndex: number;
+  durationMs: number;
+}) {
+  const transcriptPieces = collectTranscriptPieces(params.tokens);
+  const timings: Array<TtsAlignmentWord | null> = Array.from({ length: params.words.length }, () => null);
+  let tokenIndex = 0;
+
+  for (const [wordOffset, word] of params.words.entries()) {
+    const target = normalizeAlignmentText(word.text);
+
+    if (!target) {
+      continue;
+    }
+
+    let bestMatch:
+      | {
+          startPieceIndex: number;
+          endPieceIndex: number;
+        }
+      | null = null;
+
+    for (
+      let candidateStart = tokenIndex;
+      candidateStart < Math.min(transcriptPieces.length, tokenIndex + 8);
+      candidateStart += 1
+    ) {
+      let accumulated = "";
+
+      for (
+        let candidateEnd = candidateStart;
+        candidateEnd < Math.min(transcriptPieces.length, candidateStart + 8);
+        candidateEnd += 1
+      ) {
+        accumulated += transcriptPieces[candidateEnd].text;
+
+        if (accumulated === target || accumulated.includes(target) || target.includes(accumulated)) {
+          bestMatch = {
+            startPieceIndex: candidateStart,
+            endPieceIndex: candidateEnd,
+          };
+
+          if (accumulated === target) {
+            break;
+          }
+        }
+
+        if (accumulated.length > target.length + 8) {
+          break;
+        }
+      }
+
+      if (bestMatch) {
+        break;
+      }
+    }
+
+    if (!bestMatch) {
+      continue;
+    }
+
+    const startPiece = transcriptPieces[bestMatch.startPieceIndex];
+    const endPiece = transcriptPieces[bestMatch.endPieceIndex];
+    timings[wordOffset] = {
+      wordIndex: word.index,
+      startMs: Math.max(0, Math.round(startPiece.startMs)),
+      endMs: Math.max(startPiece.startMs + 80, Math.round(endPiece.endMs)),
+    };
+    tokenIndex = bestMatch.endPieceIndex + 1;
+  }
+
+  return interpolateMissingTimings({
+    timings,
+    wordStartIndex: params.wordStartIndex,
+    durationMs: params.durationMs,
+  });
 }

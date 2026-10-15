@@ -11,6 +11,11 @@
  */
 import { buildNoteTtsChunks, parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import { CLIP_VERSION } from "@/lib/tutor/voice-clips";
+import {
+  demoReadAloudChunkCount,
+  demoReadAloudClipPath,
+  findDemoReadAloudClip,
+} from "@/lib/creator-demo/read-aloud-clips";
 import { getDemoContent } from "@/lib/creator-demo/content";
 import { buildDemoMindmap } from "@/lib/creator-demo/mindmap";
 import { demoT } from "@/lib/creator-demo/demo-translator";
@@ -136,7 +141,8 @@ function getUrl(input: RequestInfo | URL) {
 
 /**
  * A silent WAV of the requested length. Playback still drives the read-along
- * highlighting, without shipping or generating any audio.
+ * highlighting, without shipping or generating any audio. Used for a demo note the
+ * visitor has edited, whose recorded opening no longer matches its words.
  */
 function createSilentWavDataUrl(durationSeconds: number) {
   const sampleRate = 8000;
@@ -187,7 +193,18 @@ function buildTtsPlan(lectureId: string) {
     stripLeadingRedundantHeading(notes, detail?.lecture.title),
   );
 
-  return { document, chunks: buildNoteTtsChunks(document) };
+  const chunks = buildNoteTtsChunks(document);
+  /*
+   * The recorded opening, when there is one: the demo reads the first minute in the real voice and
+   * stops there, rather than going on in silence (read-aloud-clips.ts).
+   */
+  const chunkCount = demoReadAloudChunkCount({
+    locale: getCreatorDemoState().locale,
+    lectureId,
+    chunkTexts: chunks.map((chunk) => chunk.text),
+  });
+
+  return { document, chunks, chunkCount };
 }
 
 const TTS_LIMIT_SECONDS = 3600;
@@ -203,17 +220,41 @@ function ttsStatus(lectureId: string) {
     secondsUsed: 0,
     remainingSeconds: TTS_LIMIT_SECONDS,
     hasUnlimitedUsage: true,
-    chunkCount: plan?.chunks.length ?? 0,
+    chunkCount: plan?.chunkCount ?? 0,
     totalWords: plan?.document.words.length ?? 0,
   };
 }
 
 function ttsChunk(lectureId: string, chunkIndex: number) {
   const plan = buildTtsPlan(lectureId);
-  const chunk = plan?.chunks[chunkIndex];
+  const chunk = chunkIndex < (plan?.chunkCount ?? 0) ? plan?.chunks[chunkIndex] : undefined;
 
   if (!plan || !chunk) {
     return json({ error: demoT("readAloud.unavailable") }, 404);
+  }
+
+  const clip = findDemoReadAloudClip({
+    locale: getCreatorDemoState().locale,
+    lectureId,
+    chunkIndex: chunk.chunkIndex,
+    chunkText: chunk.text,
+  });
+
+  if (clip) {
+    return json({
+      audioUrl: demoReadAloudClipPath(getCreatorDemoState().locale, lectureId, chunk.chunkIndex),
+      chunkIndex: chunk.chunkIndex,
+      chunkCount: plan.chunkCount,
+      wordStartIndex: chunk.wordStartIndex,
+      wordEndIndex: chunk.wordEndIndex,
+      durationMs: clip.durationMs,
+      alignment: clip.alignment,
+      limitSeconds: TTS_LIMIT_SECONDS,
+      secondsUsed: 0,
+      remainingSeconds: TTS_LIMIT_SECONDS,
+      hasUnlimitedUsage: true,
+      tier: "paid",
+    });
   }
 
   const wordCount = Math.max(1, chunk.wordEndIndex - chunk.wordStartIndex);
@@ -228,7 +269,7 @@ function ttsChunk(lectureId: string, chunkIndex: number) {
   return json({
     audioUrl: createSilentWavDataUrl(durationMs / 1000),
     chunkIndex: chunk.chunkIndex,
-    chunkCount: plan.chunks.length,
+    chunkCount: plan.chunkCount,
     wordStartIndex: chunk.wordStartIndex,
     wordEndIndex: chunk.wordEndIndex,
     durationMs,

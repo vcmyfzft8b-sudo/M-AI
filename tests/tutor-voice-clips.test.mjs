@@ -6,7 +6,7 @@ import { hasStaticVoiceSamples, voiceSampleClip } from "../src/lib/tutor/voice-c
 test("a language with pre-rendered clips plays the file", () => {
   for (const language of ["sl", "en", "hr", "sr", "bs", "de", "it"]) {
     assert.equal(hasStaticVoiceSamples(language), true, language);
-    assert.equal(voiceSampleClip("Grace", language), `/tutor-demo/${language}/grace-sample.mp3`);
+    assert.equal(voiceSampleClip("Grace", language), `/tutor-demo/${language}/grace-sample.mp3?v=gemini`);
   }
 });
 

@@ -14,7 +14,7 @@ import { getServerEnv } from "@/lib/server-env";
 import { speechProvider } from "@/lib/speech-synthesis";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { geminiVoiceFor } from "@/lib/tutor/gemini-voices";
-import { hasStaticVoiceSamples } from "@/lib/tutor/voice-clips";
+import { CLIP_VERSION, hasStaticVoiceSamples } from "@/lib/tutor/voice-clips";
 
 export const maxDuration = 60;
 
@@ -182,7 +182,7 @@ export async function GET(request: Request) {
     const kind = parsed.data.context === "podcast" ? "podcast" : "sample";
 
     return NextResponse.redirect(
-      new URL(`/tutor-demo/${language}/${parsed.data.voice.toLowerCase()}-${kind}.mp3`, url),
+      new URL(`/tutor-demo/${language}/${parsed.data.voice.toLowerCase()}-${kind}.mp3?v=${CLIP_VERSION}`, url),
       308,
     );
   }

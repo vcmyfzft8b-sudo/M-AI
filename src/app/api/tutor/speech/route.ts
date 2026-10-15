@@ -4,6 +4,7 @@ import { z } from "zod";
 import { logGeminiUsageEvent } from "@/lib/ai/usage-logging";
 import { GeminiSpeechError, GEMINI_TTS_SAMPLE_RATE, startGeminiSpeech } from "@/lib/gemini-tts";
 import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
+import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { getServerEnv } from "@/lib/server-env";
 import { geminiVoiceFor } from "@/lib/tutor/gemini-voices";
 import { tutorSpeechTokenSecret, verifyTutorSpeechToken } from "@/lib/tutor/speech-token";
@@ -60,6 +61,17 @@ export async function POST(request: Request) {
 
   if (!env.GEMINI_API_KEY) {
     return NextResponse.json({ error: "speech_unavailable" }, { status: 503 });
+  }
+
+  const limited = await enforceRateLimit({
+    request,
+    route: "api:tutor:speech",
+    rules: rateLimitPresets.tutorSpeech,
+    userId: claims.userId,
+  });
+
+  if (limited) {
+    return limited;
   }
 
   const body = await request.json().catch(() => null);

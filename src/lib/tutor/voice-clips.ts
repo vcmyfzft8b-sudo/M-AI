@@ -17,8 +17,15 @@ const SAMPLE_LANGUAGES = new Set<string>(NOTE_LANGUAGE_OPTIONS.map((option) => o
 /* The landing page's own locales. German and Italian are note languages, not page ones. */
 const BED_LANGUAGES = new Set(["sl", "en", "hr", "bs", "sr"]);
 
+/*
+ * Bumped whenever the clips are re-rendered in a new voice. /tutor-demo is cached in the browser for
+ * a week (next.config.ts), so without it a returning learner auditions last week's voice — the
+ * clips moved from Soniox to Gemini on 2026-10-14 under the same file names.
+ */
+export const CLIP_VERSION = "gemini";
+
 function clip(language: string, voice: string, kind: "sample" | "podcast" | "tutor" | "answer") {
-  return `/tutor-demo/${language}/${voice.toLowerCase()}-${kind}.mp3`;
+  return `/tutor-demo/${language}/${voice.toLowerCase()}-${kind}.mp3?v=${CLIP_VERSION}`;
 }
 
 /**

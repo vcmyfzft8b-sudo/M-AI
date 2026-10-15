@@ -34,7 +34,8 @@ export function hasSpeakableText(text: string) {
  * A full stop only ends a sentence when what follows it starts a new one: a capital, a digit, a
  * quote, a tag, or the end of a final buffer. "npr. kisik" and "2. svetovna vojna" carry on, and
  * a stop with nothing after it yet is not trusted until the next word shows which it was — one
- * token of waiting, against reading an abbreviation as the end of a thought.
+ * token of waiting, against reading an abbreviation as the end of a thought. A number can end a
+ * sentence ("leta 1990. Nato…"), and the capital that follows is what tells it from an ordinal.
  */
 function sentenceEnds(text: string, final: boolean) {
   const ends: number[] = [];
@@ -49,12 +50,7 @@ function sentenceEnds(text: string, final: boolean) {
       continue;
     }
 
-    const before = text[match.index - 1] ?? "";
     const after = text.slice(end).trimStart();
-
-    if (/\d/u.test(before) && match[0] === ".") {
-      continue;
-    }
 
     if (!after) {
       if (final) {

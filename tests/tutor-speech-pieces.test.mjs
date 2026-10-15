@@ -57,6 +57,11 @@ test("a full stop is not trusted until the next word shows a new sentence starts
   // Abbreviation and ordinal: the sentence carries on.
   assert.equal(nextSpeechPiece("Na primer npr. kisik ali dušik in", { first: true, flush: false }), null);
   assert.equal(nextSpeechPiece("Med 2. svetovno vojno so", { first: true, flush: false }), null);
+  // A number can end a sentence; the capital after it is what says so.
+  assert.equal(
+    nextSpeechPiece("Model OSI ima plasti do leta 1984. Vsaka plast", { first: true, flush: false }).piece,
+    "Model OSI ima plasti do leta 1984.",
+  );
   // A question mark is unambiguous once something follows it.
   assert.equal(
     nextSpeechPiece("Kaj misliš, zakaj je tako? Pomisli", { first: true, flush: false }).piece,

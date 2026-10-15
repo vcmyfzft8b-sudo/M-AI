@@ -34,7 +34,16 @@ async function loadOutput() {
   );
   compile("speech-output", link);
   compile("speech-pieces", link);
-  compile("gemini-speech-output", link);
+  // A stalled stream is the one behaviour defined by a timer; eight seconds is right live and slow here.
+  compile("gemini-speech-output", (code) => {
+    const shortened = link(code).replace(/const STREAM_IDLE_TIMEOUT_MS = [\d_]+;/, "const STREAM_IDLE_TIMEOUT_MS = 60;");
+
+    if (!shortened.includes("STREAM_IDLE_TIMEOUT_MS = 60;")) {
+      throw new Error("STREAM_IDLE_TIMEOUT_MS is no longer where the test expects it");
+    }
+
+    return shortened;
+  });
 
   return import(pathToFileURL(path.join(dir, "gemini-speech-output.mjs")).href);
 }
@@ -132,6 +141,10 @@ function installRoute() {
         headers: init.headers,
         signal: init.signal,
         aborted: false,
+        /** Headers arrive, then nothing: the stream neither sends audio nor closes. */
+        stall() {
+          resolve(new Response(new ReadableStream({ start() {} }), { status: 200, headers: { "X-Speech-Sample-Rate": "24000" } }));
+        },
         respond(status, chunks = [], { failAfter = false } = {}) {
           if (status !== 200) {
             resolve(new Response(JSON.stringify({ error: "x" }), { status }));
@@ -414,4 +427,24 @@ test("an odd byte split across two chunks is not lost or turned into noise", asy
   }
 
   output.stop();
+});
+
+test("a stream that stalls before any audio is given up on and asked for again", async () => {
+  const { output, requests, context } = await setup();
+  const turn = output.speak();
+
+  turn.push("Dobro, poglejva ravnovesno ceno. ");
+  turn.end();
+  await settle();
+
+  requests[0].stall();
+  await new Promise((resolve) => setTimeout(resolve, 600));
+
+  assert.equal(requests.length, 2, "the stalled piece is requested again");
+  assert.equal(requests[1].body.text, requests[0].body.text);
+
+  requests[1].respond(200, [pcm(1, 6)]);
+  await settle();
+  context.playAll();
+  await assert.doesNotReject(turn.finished);
 });

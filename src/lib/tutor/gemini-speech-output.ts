@@ -38,7 +38,7 @@ const MAX_PIECES_IN_FLIGHT = 2;
  * writer that stalls mid-sentence for longer than this is a silence the learner is already hearing,
  * and saying the half-sentence is the lesser seam.
  */
-const WRITER_QUIET_FLUSH_MS = 1_200;
+const WRITER_QUIET_FLUSH_MS = 2_500;
 
 /** Tries per piece: a dropped request is retried as long as none of its audio has played. */
 const PIECE_ATTEMPTS = 3;
@@ -46,6 +46,11 @@ const RETRY_DELAY_MS = 250;
 
 /** The route answers in under two seconds; waiting longer than this is waiting on nothing. */
 const FIRST_BYTE_TIMEOUT_MS = 12_000;
+/*
+ * Once audio is flowing it arrives several times faster than it plays, so a gap this long is a
+ * stalled stream. Without it the piece would wait for the function's 60-second limit, in silence.
+ */
+const STREAM_IDLE_TIMEOUT_MS = 8_000;
 
 /* The same values, for the same reasons, as speech-output.ts. */
 const ROOM_TAIL_MS = 1_200;
@@ -428,9 +433,18 @@ export class GeminiTutorSpeechOutput {
 
       const reader = response.body.getReader();
       let carry: number | null = null;
+      let idle: ReturnType<typeof setTimeout> | null = null;
+      const armIdle = () => {
+        if (idle) clearTimeout(idle);
+        idle = setTimeout(() => {
+          timedOut = true;
+          void reader.cancel().catch(() => {});
+        }, STREAM_IDLE_TIMEOUT_MS);
+      };
 
       try {
         while (true) {
+          armIdle();
           const { value, done } = await reader.read();
 
           if (done) {
@@ -470,6 +484,18 @@ export class GeminiTutorSpeechOutput {
 
           return new SpeechOutputError("The speech connection closed.", null);
         }
+      } finally {
+        if (idle) clearTimeout(idle);
+      }
+
+      /*
+       * A stalled stream is cancelled rather than errored, so it ends here as if it had finished.
+       * One that never played a sample is worth asking for again, exactly like a dropped one.
+       */
+      if (timedOut && this.turn === turn && piece.scheduledSeconds === 0 && piece.waiting.length === 0) {
+        piece.controller = new AbortController();
+
+        return new SpeechOutputError("The speech stream stalled.", null);
       }
 
       return "done";

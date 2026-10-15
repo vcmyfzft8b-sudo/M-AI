@@ -107,7 +107,13 @@ export async function startGeminiSpeech(params: {
   let response = await openStream({ ...params, languageCode: params.language });
 
   if (response.status === 400 && params.language) {
-    await response.body?.cancel().catch(() => {});
+    const detail = await response.text().catch(() => "");
+
+    /* Only a refusal of the language itself is worth the second request. */
+    if (!/language/i.test(detail)) {
+      throw new GeminiSpeechError(`Gemini speech refused (400): ${detail.slice(0, 300)}`, 400);
+    }
+
     response = await openStream({ ...params, languageCode: null });
   }
 

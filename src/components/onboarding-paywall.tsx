@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, CircleCheck, Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useT, useTranslations } from "@/components/i18n-provider";
@@ -20,7 +20,8 @@ import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import { notePaywallShown, paywallVisitCounted } from "@/lib/paywall-offer-timing";
 import { discountedAmount, paywallOffer, weeklyAmount } from "@/lib/paywall-ladder";
 import { fitScreenScript, useFitScreen } from "@/components/use-fit-screen";
-import { PaywallCompare, PaywallHero, PaywallWelcome, paywallAccentStyle, paywallLayout } from "@/components/paywall-hero";
+import { PaywallBrand, PaywallCompare, PaywallHero, paywallAccentStyle, paywallLayout } from "@/components/paywall-hero";
+import { SEO_BRAND_NAME } from "@/lib/brand";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 
 type BillingPlanCard = {
@@ -304,7 +305,7 @@ export function OnboardingPaywall({
           {native && apple.notice ? <div className="app-start-banner">{apple.notice}</div> : null}
         </div>
       ) : reason ? null : (
-        <PaywallWelcome />
+        <PaywallBrand label={SEO_BRAND_NAME} />
       )}
 
       {/* A feature's paywall shows the feature, moving, in place of the list. */}
@@ -342,8 +343,8 @@ export function OnboardingPaywall({
 
       {reason ? null : (
         <div className="memo-paywall-benefits">
-          {DEFAULT_BENEFITS.map((benefit) => (
-            <div className="memo-paywall-benefit" key={benefit.titleKey}>
+          {DEFAULT_BENEFITS.map((benefit, index) => (
+            <div className="memo-paywall-benefit" key={benefit.titleKey} style={{ "--i": index } as CSSProperties}>
               <span aria-hidden="true">
                 <Msym name={benefit.icon} size="1.35rem" fill={false} weight={500} />
               </span>

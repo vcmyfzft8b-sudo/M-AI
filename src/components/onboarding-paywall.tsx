@@ -19,7 +19,7 @@ import { cameFromAppPath, quietNextEntrance } from "@/lib/app-history";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import { notePaywallShown, paywallVisitCounted } from "@/lib/paywall-offer-timing";
 import { discountedAmount, paywallOffer, weeklyAmount } from "@/lib/paywall-ladder";
-import { useFitScreen } from "@/components/use-fit-screen";
+import { fitScreenScript, useFitScreen } from "@/components/use-fit-screen";
 import { PaywallCompare, PaywallHero, PaywallWelcome, paywallAccentStyle, paywallLayout } from "@/components/paywall-hero";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 
@@ -258,8 +258,11 @@ export function OnboardingPaywall({
 
 
   return (
+    <>
     <section
       ref={shellRef}
+      // `data-fit` is set before the app starts (`fitScreenScript`), on purpose.
+      suppressHydrationWarning
       className={`app-start-panel app-start-panel-paywall memo-paywall-shell${native ? " memo-paywall-apple" : ""}`}
       data-reason={reason ?? undefined}
       style={paywallAccentStyle(reason)}
@@ -483,5 +486,8 @@ export function OnboardingPaywall({
       {discounted ? <p className="memo-paywall-fine">{t("paywall.offer.firstOnly")}</p> : null}
       {native ? <AppleBillingTerms busy={apple.busy} onRestore={() => void apple.restore()} /> : null}
     </section>
+    {/* Fits a freshly loaded page as it is first drawn (`use-fit-screen.ts`). */}
+    <script dangerouslySetInnerHTML={{ __html: fitScreenScript(PAYWALL_FIT_LEVELS) }} />
+    </>
   );
 }

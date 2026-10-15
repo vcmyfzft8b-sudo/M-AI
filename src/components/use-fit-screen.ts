@@ -44,12 +44,27 @@ export function useFitScreen(ref: RefObject<HTMLElement | null>, levels: number)
 
     if (element) {
       const refit = () => fitToScreen(element, levels);
+      // The screen and what is on it: a stylesheet or an image arriving late
+      // grows the content without resizing the screen.
       const observer = new ResizeObserver(refit);
       observer.observe(element);
+      for (const child of Array.from(element.children)) {
+        observer.observe(child);
+      }
       void document.fonts?.ready.then(refit);
       watched.current = { element, observer };
     }
   });
 
   useEffect(() => () => watched.current?.observer.disconnect(), []);
+}
+
+/**
+ * The same steps as `fitToScreen`, as a script the server puts right after the
+ * element, so a page loaded fresh is fitted as it is first drawn rather than
+ * once the app has started. It runs after the stylesheets, as scripts in the
+ * page do; the app's own fitting takes over from there.
+ */
+export function fitScreenScript(levels: number) {
+  return `(function(){var e=document.currentScript&&document.currentScript.previousElementSibling;if(!e)return;for(var l=0;l<=${levels};l++){e.setAttribute("data-fit",String(l));if(e.scrollHeight<=e.clientHeight)break}})()`;
 }

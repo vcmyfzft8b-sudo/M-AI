@@ -198,7 +198,7 @@ export function ExamDashboard({
   );
 
   return (
-    <ExamScreen backHref="/app/exams" backLabel={t("exam.list.title")} trailing={trailing}>
+    <ExamScreen backHref="/app" backLabel={t("nav.home")} trailing={trailing}>
       <header className="memo-exam-trail-head">
         <h1>{exam.title}</h1>
         <div className="memo-exam-stats compact">

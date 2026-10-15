@@ -51,8 +51,8 @@ export function ExamList({ items }: { items: ExamListItem[] }) {
 
   return (
     <ExamScreen
-      className="memo-exam-rail"
       backHref="/app"
+      backLabel={t("nav.home")}
       title={t("exam.list.title")}
       ctaOnDesktop={false}
       cta={

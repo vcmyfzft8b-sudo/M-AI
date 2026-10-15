@@ -17,7 +17,8 @@ study path. It follows Astra AI's exam-prep flow, drawn in Memo's own components
   folded. Past and archived preps
   appear only on `/app/exams`. Storage stays separate: preps are `exams` rows that reference
   their notes through `exam_modules`, never `lectures` rows.
-- **Desktop rail:** "Izpiti" → `/app/exams`.
+- **Desktop rail:** no entry of its own; preps live in the library, so "Domov" stays lit on every
+  exam page, and `/app/exams` (every prep, past ones too) opens from the library group's "Vse".
 - Routes: `/app/exams` (list), `/app/exams/new` (setup), `/app/exams/[id]` (dashboard),
   `/app/exams/[id]/lesson?topic=&kind=` (one lesson), `/app/exams/[id]/mock` (mock exam).
 

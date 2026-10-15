@@ -26,7 +26,6 @@ import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
  */
 const RAIL_ITEMS: Array<{ href: string; labelKey: MessageKey; icon: string }> = [
   { href: "/app", labelKey: "nav.home", icon: "home" },
-  { href: "/app/exams", labelKey: "nav.exams", icon: "school" },
   { href: "/app/support", labelKey: "nav.help", icon: "help" },
   { href: "/app/settings", labelKey: "nav.settings", icon: "settings" },
 ];
@@ -64,6 +63,8 @@ export function AppShell({
   // unmaps to, the demo mount of the survey. Both own the whole viewport.
   const isOnboarding = pathname === "/app/start" || pathname === "/app/onboarding";
   const isNote = pathname.startsWith("/app/lectures/");
+  // Exam preps live in the library, so Home is where the learner is while in one.
+  const isExam = pathname === "/app/exams" || pathname.startsWith("/app/exams/");
   const isHome = pathname === "/app";
 
   // Where a click is headed while its skeleton is on screen. The overlay paints the
@@ -113,10 +114,10 @@ export function AppShell({
         label: t(item.labelKey),
         active:
           item.href === "/app"
-            ? pathname === "/app" || isNote
+            ? pathname === "/app" || isNote || isExam
             : pathname === item.href || pathname.startsWith(`${item.href}/`),
       })),
-    [isNote, pathname, t],
+    [isExam, isNote, pathname, t],
   );
 
   // Onboarding and checkout own the whole viewport; the app chrome would only

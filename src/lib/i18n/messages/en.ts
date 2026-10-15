@@ -2355,7 +2355,6 @@ export const en: Messages = {
 
   /* ---- Exam prep ---- */
   "library.new": "New",
-  "nav.exams": "Exams",
   "api.exam.noNotes": "Pick at least one finished note.",
   "api.exam.noQuestions": "These notes have no questions for a mock exam yet. Do a few lessons first.",
   "api.exam.mockPaid": "The mock exam comes with a plan.",

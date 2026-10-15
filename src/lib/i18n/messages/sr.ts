@@ -2369,7 +2369,6 @@ export const sr: Messages = {
 
   /* ---- Priprema za ispit ---- */
   "library.new": "Novo",
-  "nav.exams": "Ispiti",
   "api.exam.noNotes": "Izaberi barem jednu gotovu belešku.",
   "api.exam.noQuestions": "Beleške još nemaju pitanja za probni ispit. Prvo prođi nekoliko lekcija.",
   "api.exam.mockPaid": "Probni ispit je dostupan uz paket.",

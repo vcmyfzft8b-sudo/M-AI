@@ -2392,7 +2392,6 @@ export const sl = {
 
   /* ---- Priprava na test ---- */
   "library.new": "Novo",
-  "nav.exams": "Izpiti",
   "api.exam.noNotes": "Izberi vsaj en dokončan zapisek.",
   "api.exam.noQuestions": "Zapiski še nimajo vprašanj za generalko. Najprej opravi nekaj lekcij.",
   "api.exam.mockPaid": "Generalka je na voljo s paketom.",

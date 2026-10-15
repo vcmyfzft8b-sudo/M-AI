@@ -27915,11 +27915,9 @@ a.memo-exam-station-go {
   }
 
   /*
-   * Desktop width. An exam flow (setup, a lesson, the Generalka, the exam's path) is one column,
-   * centred in the main column as the onboarding and the app's dialogs are, at the width of the
-   * note screen's study panels the lessons reuse (40rem), so its bar, its content and its button
-   * share one pair of edges. "Izpiti", which the rail opens, is a page like Settings instead:
-   * left-aligned at the app's page measure.
+   * Desktop width. Every exam screen is one column, centred in the main column as the onboarding
+   * and the app's dialogs are, at the width of the note screen's study panels the lessons reuse
+   * (40rem), so its bar, its content and its button share one pair of edges.
    */
   .memo-exam-screen :is(.memo-exam-topbar, .memo-exam-page, .memo-exam-cta) {
     width: 100%;
@@ -27927,9 +27925,18 @@ a.memo-exam-station-go {
     margin-inline: auto;
   }
 
-  .memo-exam-screen.memo-exam-rail :is(.memo-exam-topbar, .memo-exam-page) {
-    max-width: 60rem;
-    margin-inline: 0;
+  /*
+   * A setup step stands in the middle of the window, with its button at the bottom, as on the
+   * phone: the step takes the height between the bar and the button (the window less the app's
+   * header, the bar, the button's band and the page's foot) and centres in it.
+   */
+  .memo-exam-screen:has(.memo-exam-topbar-custom) .memo-exam-page {
+    min-height: calc(100dvh - 23rem);
+  }
+
+  .memo-exam-page > .memo-exam-step {
+    flex: 1 0 auto;
+    justify-content: center;
   }
 
   /* A screen the rail opens needs no way back, so its bar goes unless it carries actions. */

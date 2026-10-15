@@ -1,3 +1,4 @@
+import type { ChatStudyAttachment } from "@/lib/chat-study-set";
 import type {
   ChatMessageRow,
   Citation,
@@ -58,8 +59,11 @@ export interface LectureDetail {
   };
 }
 
-export interface ChatMessageWithCitations extends Omit<ChatMessageRow, "citations_json"> {
+export interface ChatMessageWithCitations
+  extends Omit<ChatMessageRow, "citations_json" | "attachment_json"> {
   citations: Citation[];
+  /** A study set the tutor made in this turn, already parsed. Absent on every other message. */
+  attachment?: ChatStudyAttachment | null;
 }
 
 export interface FlashcardWithCitations extends Omit<FlashcardRow, "citations_json"> {

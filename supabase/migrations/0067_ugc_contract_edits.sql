@@ -1,3 +1,7 @@
+-- Claimed as 0067 after checking main (at 0064) and the open PRs on 2026-10-16: PR #590
+-- (exam prep) holds 0065 and 0066 and has applied them to staging. First written as 0065,
+-- which no database ever recorded.
+--
 -- Every creator contract can be edited from the admin (`/admin/contracts/<id>/edit`):
 -- the contracts created for creators already in the program (`ugc_creator_contracts`)
 -- and the terms accepted applicants signed (`ugc_creator_applications`).

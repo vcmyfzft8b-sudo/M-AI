@@ -49,7 +49,7 @@ export function contractRowTerms(row: UgcCreatorContractRow): ContractTerms {
     applied: false,
     signed: row.signed_at !== null,
     signedText: row.signed_at ? row.terms_snapshot : null,
-    // `?? null`: the column is missing until migration 0065 has run.
+    // `?? null`: the column is missing until migration 0067 has run.
     override: row.terms_override ?? null,
   });
 }

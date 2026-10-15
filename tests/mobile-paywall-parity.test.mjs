@@ -130,6 +130,16 @@ test("the code form's yearly card leads with the weekly price and says what is b
   assert.match(form, /t\("offer\.plan\.oneOffBilling", \{ discounted: product\.introPrice!, renewal: product\.price \}\)/);
 });
 
+test("the paywall after onboarding shows the year as a month, the discounted ones as a week", () => {
+  const first = paywall(false, []);
+  assert.match(first, /€10\.83<small>\/ month<\/small>/);
+  assert.match(first, /Billed yearly: €130\.00/);
+  assert.doesNotMatch(first, /\/ week/);
+
+  const later = paywall(false, [], { reason: "chat", offerStep: 3 });
+  assert.match(later, /€1\.75<small>\/ week<\/small>/);
+});
+
 test("a later paywall on the web offers the ladder's discount, and the app never does", () => {
   const web = paywall(false, [], { reason: "chat", offerStep: 3 });
   // The discount is the headline; first-payment-only is the small print.

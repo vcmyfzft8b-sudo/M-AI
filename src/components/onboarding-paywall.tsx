@@ -298,18 +298,22 @@ export function OnboardingPaywall({
             ? Math.round((1 - plan.annualizedAmount / annualizedMonthly) * 100)
             : 0;
           /*
-           * On the web the year is priced by the week, as on the wheel's sheet:
-           * the first year's charge spread over 52 weeks, rounded down. The
-           * month stays a month. The app shows Apple's own figures.
+           * At full price (the paywall after onboarding) the year reads as a
+           * month, as it always has. A discounted year is priced by the week, as
+           * on the wheel's sheet: the first year's charge spread over 52 weeks,
+           * rounded down. The month stays a month. The app shows Apple's own
+           * figures.
            */
-          const weekly = plan.id === "yearly";
+          const weekly = discounted && plan.id === "yearly";
           const regularShown = weekly ? weeklyAmount(plan.amount) : plan.amount;
           const displayPrice = native
             ? appleProduct?.monthlyPrice ?? appleProduct?.price ?? "—"
             : formatCurrency(
-                weekly
-                  ? weeklyAmount(discounted ? discountedAmount(plan.amount, offer.percentOff) : plan.amount)
-                  : discounted ? discountedAmount(plan.amount, offer.percentOff) : plan.amount,
+                !discounted
+                  ? plan.displayAmount ?? plan.amount
+                  : weekly
+                    ? weeklyAmount(discountedAmount(plan.amount, offer.percentOff))
+                    : discountedAmount(plan.amount, offer.percentOff),
                 locale,
               );
           const suffix = native

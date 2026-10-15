@@ -512,11 +512,16 @@ test("a creator's own deal is what their contract says, in every language", () =
     const shared = creatorTermsMarkdown(locale, "si", { pay: VIEWS_AND_CODE, applied: false });
     assert.match(shared, /Kodo DAVID50 si delita\./, `${locale} special agreement`);
     assert.match(shared, /2000\s?€|€2000|2\.000\s?€|€2,000/, `${locale} shared cap`);
+    // Every view bonus counts at most 100,000 views per video; a deal without one says nothing of it.
+    assert.match(shared, /\*\*100[.,]000 /, `${locale} views per video`);
+    assert.doesNotMatch(pija, /100[.,]000/, `${locale} no views-per-video clause`);
   }
 
   // The standard campaigns still read as before: applicants keep the sample-video clause.
   assert.match(creatorTermsMarkdown("en", "si"), /sample video you applied with/);
   assert.match(creatorTermsMarkdown("en", "balkans"), /view bonus lapses/);
+  assert.match(creatorTermsMarkdown("en", "balkans"), /at most \*\*100,000 Views per Eligible Video\*\*/);
+  assert.doesNotMatch(creatorTermsMarkdown("en", "si"), /Views per Eligible Video/);
   assert.doesNotMatch(creatorTermsMarkdown("en", "balkans"), /Discount Code/);
 });
 
@@ -568,7 +573,7 @@ test("the terms' wording only changes together with their version", async () => 
     }
   }
 
-  const TERMS_HASHES = { "2026-10-12.2": "5d91ef191253c509" };
+  const TERMS_HASHES = { "2026-10-12.3": "62bebd6ccd5667fd" };
   assert.equal(TERMS_HASHES[CREATOR_TERMS_VERSION], hash.digest("hex").slice(0, 16));
 });
 

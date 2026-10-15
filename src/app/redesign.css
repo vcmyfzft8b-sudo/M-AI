@@ -10781,32 +10781,52 @@
 
 
 
-.memo-paywall-shell[data-reason="listen"] :is(.memo-paywall-offer-percent, .memo-paywall-fine),
-.memo-paywall-shell[data-reason="tutor"] :is(.memo-paywall-offer-percent, .memo-paywall-fine) {
+.memo-paywall-shell[data-reason="listen"] :is(.memo-paywall-offer-percent, .memo-paywall-fine) {
   color: var(--on-promo);
-}
-
-.memo-paywall-shell[data-reason="tutor"] .memo-paywall-offer-save {
-  background: var(--surface);
-  color: var(--promo);
 }
 
 .memo-paywall-shell[data-reason="listen"] .memo-pw-hero {
   margin-top: 1.2rem;
 }
 
-/* Tutor: a warm room in the tutor's own orange, the plans as white cards on it. */
+/*
+ * Tutor: the top of the screen is a band of the tutor's own orange, behind
+ * Memo, the discount and the headline; the plans and the button sit on the
+ * ordinary page below it. (The whole screen in orange put the coral button on
+ * a colour it cannot stand out from, and turned the plans muddy in dark mode.)
+ * The band is drawn behind the subtitle and reaches up and out to the screen's
+ * edges, so it ends under the headline however many lines the headline takes.
+ */
 .memo-paywall-shell[data-reason="tutor"] {
   --memo-paywall-title-text: var(--on-promo);
-  --memo-paywall-plan-bg: var(--surface);
-  --memo-paywall-plan-selected-bg: var(--surface);
-  background:
-    radial-gradient(90% 50% at 50% 12%, color-mix(in oklch, var(--paywall-accent) 60%, var(--surface)), transparent 75%),
-    linear-gradient(to bottom, var(--paywall-accent), color-mix(in oklch, var(--paywall-accent) 70%, var(--ink)));
+  isolation: isolate;
 }
 
-.memo-paywall-shell[data-reason="tutor"] :is(.memo-paywall-sub, .memo-paywall-sub strong, .memo-paywall-due, .memo-paywall-foot) {
+.memo-paywall-shell[data-reason="tutor"] .memo-paywall-sub {
+  position: relative;
+}
+
+.memo-paywall-shell[data-reason="tutor"] .memo-paywall-sub::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -200vh;
+  right: -100vmax;
+  bottom: -1.4rem;
+  left: -100vmax;
+  background:
+    radial-gradient(50% 30% at 50% 88%, color-mix(in oklch, var(--paywall-accent) 75%, var(--on-promo)), transparent),
+    var(--paywall-accent);
+  pointer-events: none;
+}
+
+.memo-paywall-shell[data-reason="tutor"] :is(.memo-paywall-offer-percent, .memo-paywall-sub, .memo-paywall-sub strong) {
   color: var(--on-promo);
+}
+
+.memo-paywall-shell[data-reason="tutor"] .memo-paywall-offer-save {
+  background: var(--on-promo);
+  color: var(--paywall-accent);
 }
 
 

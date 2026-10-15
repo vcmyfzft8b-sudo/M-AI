@@ -3,7 +3,7 @@
 import { Check, CircleCheck, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { useT, useTranslations } from "@/components/i18n-provider";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -13,10 +13,11 @@ import { useAppleBilling } from "@/components/use-apple-billing";
 import { AppleBillingTerms } from "@/components/apple-billing-terms";
 import { APPLE_PRODUCTS } from "@/lib/mobile/runtime";
 import { useNativeIOS } from "@/lib/mobile/client";
-import { useInstantNavigation } from "@/components/navigation-loading";
 import { clearOfferResume } from "@/lib/offer-resume";
 import { formatCurrency } from "@/lib/utils";
 import type { PaywallReason } from "@/lib/paywall-reasons";
+import { cameFromAppPath, quietNextEntrance } from "@/lib/app-history";
+import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import { notePaywallShown } from "@/lib/paywall-offer-timing";
 import { discountedAmount, paywallOffer, weeklyAmount } from "@/lib/paywall-ladder";
 import { PaywallCompare, PaywallHero, paywallAccentStyle, paywallLayout } from "@/components/paywall-hero";
@@ -107,8 +108,8 @@ export function OnboardingPaywall({
   const { locale, t } = useTranslations();
   const native = useNativeIOS();
   const apple = useAppleBilling(native && onboardingComplete);
-  const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [selectedPaywallPlan, setSelectedPaywallPlan] = useState<BillingPlanCard["id"]>("yearly");
   const [checkoutPlan, setCheckoutPlan] = useState<BillingPlanCard["id"] | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
@@ -131,6 +132,15 @@ export function OnboardingPaywall({
    * of the prices. Once per paywall: the ref outlives the effect running twice.
    */
   const viewKey = `${reason ?? ""}?${searchParams.toString()}`;
+
+  // Where closing goes, loaded ahead, so even a close that has to navigate
+  // (the paywall after onboarding) opens it at once rather than on a skeleton.
+  const closeTo = backHref ?? "/app";
+  useEffect(() => {
+    if (onboardingComplete) {
+      safeRouterPrefetch(router, closeTo, { full: true });
+    }
+  }, [router, closeTo, onboardingComplete]);
 
   useEffect(() => {
     if (native || !onboardingComplete || hasPaidAccess) {
@@ -237,13 +247,23 @@ export function OnboardingPaywall({
       data-reason={reason ?? undefined}
       style={paywallAccentStyle(reason)}
     >
-      {navigationOverlay}
       {effectiveOnboardingComplete ? (
         <div className="app-start-dismiss-row">
           <button
             type="button"
             className="memo-close-button app-start-close-button"
-            onClick={() => navigateWithFeedback(backHref ?? "/app")}
+            onClick={() => {
+              // Opened from that page: step back to it, so it shows at once as
+              // it was. Otherwise go there, loaded ahead above. Either way
+              // without the page's entrance fades (`app-history.ts`).
+              quietNextEntrance();
+
+              if (cameFromAppPath(closeTo)) {
+                router.back();
+              } else {
+                router.push(closeTo);
+              }
+            }}
             aria-label={t("paywall.close")}
           >
             <Msym name="close" size="1.45rem" fill={false} weight={500} />

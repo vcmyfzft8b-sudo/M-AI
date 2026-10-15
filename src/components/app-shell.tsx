@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { AppLayoutProvider } from "@/components/app-layout-context";
 import { useCreatorDemoBasePath } from "@/components/creator-demo/creator-demo-context";
@@ -14,6 +14,7 @@ import { useNavigationFeedback } from "@/components/navigation-loading";
 import { useIsOffline } from "@/components/offline/offline-provider";
 import { useChipRowWheelScroll } from "@/components/use-wheel-to-horizontal";
 import { useShellPathname } from "@/components/use-shell-pathname";
+import { noteAppPath } from "@/lib/app-history";
 import {
   BRAND_LOCKUP_HEIGHT,
   BRAND_LOCKUP_SRC,
@@ -52,6 +53,14 @@ export function AppShell({
   const isOffline = useIsOffline();
   const shellPathname = useShellPathname(initialPathname);
   const router = useRouter();
+  const livePathname = usePathname();
+
+  // Which page came before, so a paywall can close by stepping back to it.
+  useEffect(() => {
+    if (livePathname) {
+      noteAppPath(livePathname);
+    }
+  }, [livePathname]);
 
   /*
    * The sideways rows — the note's pills, the chat suggestions, the tutor's

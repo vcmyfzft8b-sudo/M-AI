@@ -10698,6 +10698,16 @@
 
 
 /*
+ * Closing a paywall steps back to the screen under it, which should simply be
+ * there: its entrance fades run at no length while it reappears. A zero
+ * duration rather than `animation: none`, so the fade has already finished
+ * when the attribute goes and does not start then instead.
+ */
+html[data-paywall-closing] .memo-shell * {
+  animation-duration: 0s;
+}
+
+/*
  * The plans, laid out per feature (`paywallLayout`). "cards" is the default
  * pair; "rows" stacks them as two wide rows with the price on the right;
  * "spotlight" makes the selected plan the hero and shrinks the other to one line.

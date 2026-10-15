@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
+import { EXAM_PREPS_HREF } from "@/components/exams/exam-links";
 import { ExamScreen } from "@/components/exams/exam-screen";
 import { formatExamDay, formatExamDayLong, formatMonth, formatWeekdayShort } from "@/components/exams/exam-format";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
@@ -461,7 +462,7 @@ export function ExamSetup({
     if (window.history.length > 1) {
       router.back();
     } else {
-      navigateWithFeedback("/app/exams");
+      navigateWithFeedback(EXAM_PREPS_HREF);
     }
   }
 
@@ -595,7 +596,7 @@ export function ExamSetup({
     );
 
   return (
-    <ExamScreen backHref="/app/exams" backIcon="close" historyBack header={header} cta={cta}>
+    <ExamScreen backHref={EXAM_PREPS_HREF} backIcon="close" historyBack header={header} cta={cta}>
       {offlineToast}
 
       {notes.length === 0 && lockedCount > 0 ? (

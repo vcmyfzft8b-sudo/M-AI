@@ -11,7 +11,7 @@ import { useInstantNavigation } from "@/components/navigation-loading";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { ExamScreen } from "@/components/exams/exam-screen";
 import { formatExamDay } from "@/components/exams/exam-format";
-import { LESSON_KIND_EMOJI, LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
+import { EXAM_PREPS_HREF, LESSON_KIND_EMOJI, LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
 import {
   EXAM_LESSON_KINDS,
@@ -198,7 +198,7 @@ export function ExamDashboard({
   );
 
   return (
-    <ExamScreen backHref="/app" backLabel={t("nav.home")} trailing={trailing}>
+    <ExamScreen backHref={EXAM_PREPS_HREF} trailing={trailing}>
       <header className="memo-exam-trail-head">
         <h1>{exam.title}</h1>
         <div className="memo-exam-stats compact">
@@ -522,7 +522,7 @@ export function ExamDashboard({
                     className="memo-sheet-danger"
                     disabled={busy}
                     onClick={() =>
-                      void mutate({ method: "DELETE" }, () => navigateWithFeedback("/app/exams"))
+                      void mutate({ method: "DELETE" }, () => navigateWithFeedback(EXAM_PREPS_HREF))
                     }
                   >
                     {t("exam.dash.delete.confirm")}
@@ -541,7 +541,7 @@ export function ExamDashboard({
                   onClick={() =>
                     void mutate(
                       { method: "PATCH", body: JSON.stringify({ archived: !exam.archived_at }) },
-                      () => navigateWithFeedback("/app/exams"),
+                      () => navigateWithFeedback(EXAM_PREPS_HREF),
                     )
                   }
                 >

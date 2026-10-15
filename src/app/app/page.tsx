@@ -14,6 +14,7 @@ import { listLecturesForUser } from "@/lib/lectures";
 
 type SearchParams = Promise<{
   mode?: string;
+  view?: string;
 }>;
 
 export default async function AppHomePage({
@@ -67,7 +68,7 @@ export default async function AppHomePage({
     (host.startsWith("localhost:") ||
       host.startsWith("127.0.0.1:") ||
       host.startsWith("[::1]:"));
-  await searchParams;
+  const params = await searchParams;
 
   return (
     <>
@@ -94,6 +95,7 @@ export default async function AppHomePage({
         planPrices={planPricesFor(await getPricingCountry())}
         examPreps={examPreps}
         examPrepsCollapsed={examPrepsCollapsed}
+        initialLibraryView={params?.view === "preps" ? "preps" : "all"}
       />
     </>
   );

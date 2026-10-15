@@ -237,12 +237,17 @@ export async function listExamsForUser(
 }
 
 /** The nearest exam that has not been sat yet, for the home card. */
-/** What a library row needs: every prep still ahead of its exam, nearest first. */
+/**
+ * What a library row needs. Every prep the learner has: the ones still ahead of their exam
+ * first, nearest first, then the past ones (archived, or whose day has gone), latest first.
+ */
 export type LibraryExamPrep = {
   id: string;
   title: string;
   daysLeft: number;
   mastery: number;
+  past: boolean;
+  grade: string | null;
 };
 
 export async function listLibraryExamPreps(
@@ -251,15 +256,16 @@ export async function listLibraryExamPreps(
   now = new Date(),
 ): Promise<LibraryExamPrep[]> {
   const items = await listExamsForUser(supabase, userId, now);
+  const preps = items.map((item) => ({
+    id: item.exam.id,
+    title: item.exam.title,
+    daysLeft: item.daysLeft,
+    mastery: item.mastery,
+    past: Boolean(item.exam.archived_at) || item.daysLeft < 0,
+    grade: item.exam.actual_grade,
+  }));
 
-  return items
-    .filter((item) => !item.exam.archived_at && item.daysLeft >= 0)
-    .map((item) => ({
-      id: item.exam.id,
-      title: item.exam.title,
-      daysLeft: item.daysLeft,
-      mastery: item.mastery,
-    }));
+  return [...preps.filter((prep) => !prep.past), ...preps.filter((prep) => prep.past).reverse()];
 }
 
 type TopicLine = Pick<ExamTopicRow, "id" | "exam_id" | "lecture_id" | "position" | "title" | "source">;

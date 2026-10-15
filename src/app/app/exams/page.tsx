@@ -1,12 +1,8 @@
-import { ExamList } from "@/components/exams/exam-list";
-import { requireUser } from "@/lib/auth";
-import { listExamsForUser } from "@/lib/exams/exams-server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
-export default async function ExamsPage() {
-  const user = await requireUser();
-  const supabase = await createSupabaseServerClient();
-  const items = await listExamsForUser(supabase, user.id);
+import { EXAM_PREPS_HREF } from "@/components/exams/exam-links";
 
-  return <ExamList items={items} />;
+/** Every prep lives in the library, in its exam-prep folder; this address opens that folder. */
+export default function ExamsPage() {
+  redirect(EXAM_PREPS_HREF);
 }

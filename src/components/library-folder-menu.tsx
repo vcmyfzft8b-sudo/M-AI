@@ -2,6 +2,7 @@
 
 import { Loader2 } from "lucide-react";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -135,6 +136,7 @@ export function LibraryFolderMenu({
   onFoldersChange,
   selectedFolderId,
   onSelectFolder,
+  examPreps,
 }: {
   lectures: AppLectureListItem[];
   userId: string;
@@ -142,6 +144,11 @@ export function LibraryFolderMenu({
   onFoldersChange: (folders: AppLibraryFolder[]) => void;
   selectedFolderId: string | null;
   onSelectFolder: (folderId: string | null, lectureIds: string[] | null) => void;
+  /**
+   * The exam-prep folder, pinned under "Vsi zapiski": not a folder of notes but the library's
+   * place for preps. The library decides what it shows; the picker only offers and marks it.
+   */
+  examPreps?: { count: number; selected: boolean; onSelect: () => void; onSelectAll: () => void } | null;
 }) {
   const { locale, t } = useTranslations();
   const isCreatorDemo = useIsCreatorDemo();
@@ -446,8 +453,22 @@ export function LibraryFolderMenu({
   function handleSelectAllNotes() {
     writeStoredSelectedFolderId(userId, null);
     onSelectFolder(null, null);
+    examPreps?.onSelectAll();
     animateCloseFolderSheet();
   }
+
+  function handleSelectExamPreps() {
+    writeStoredSelectedFolderId(userId, null);
+    onSelectFolder(null, null);
+    examPreps?.onSelect();
+    animateCloseFolderSheet();
+  }
+
+  const showingExamPreps = Boolean(examPreps?.selected);
+  const chipEmoji = showingExamPreps ? "🎓" : "📁";
+  const chipLabel = showingExamPreps
+    ? t("exam.library.title")
+    : (selectedFolder?.name ?? t("folders.allNotes"));
 
   function handleSelectFolder(folder: LibraryFolder) {
     writeStoredSelectedFolderId(userId, folder.id);
@@ -623,20 +644,30 @@ export function LibraryFolderMenu({
     return (
       <>
         {options.map((option) => (
-          <button
-            key={option.id ?? "all"}
-            type="button"
-            className="memo-menu-item"
-            onClick={option.onSelect}
-          >
-            <Emoji symbol="📁" size="1.05rem" />
-            <span className="memo-menu-item-label">{option.name}</span>
-            {selectedFolderId === option.id ? (
-              <span className="memo-menu-check">
-                <Msym name="check" size="0.9rem" />
-              </span>
+          <Fragment key={option.id ?? "all"}>
+            <button type="button" className="memo-menu-item" onClick={option.onSelect}>
+              <Emoji symbol="📁" size="1.05rem" />
+              <span className="memo-menu-item-label">{option.name}</span>
+              {selectedFolderId === option.id && !showingExamPreps ? (
+                <span className="memo-menu-check">
+                  <Msym name="check" size="0.9rem" />
+                </span>
+              ) : null}
+            </button>
+            {option.id === null && examPreps ? (
+              <button type="button" className="memo-menu-item memo-menu-item-preps" onClick={handleSelectExamPreps}>
+                <Emoji symbol="🎓" size="1.05rem" />
+                <span className="memo-menu-item-label">{t("exam.library.title")}</span>
+                {showingExamPreps ? (
+                  <span className="memo-menu-check">
+                    <Msym name="check" size="0.9rem" />
+                  </span>
+                ) : examPreps.count > 0 ? (
+                  <span className="memo-library-count">{examPreps.count}</span>
+                ) : null}
+              </button>
             ) : null}
-          </button>
+          </Fragment>
         ))}
 
         <div className="memo-menu-sep" />
@@ -671,10 +702,8 @@ export function LibraryFolderMenu({
         onClick={handleToggleMenu}
         aria-expanded={isOpen}
       >
-        <Emoji symbol="📁" size="1.2rem" />
-        <span className="memo-folder-chip-label">
-          {selectedFolder?.name ?? t("folders.allNotes")}
-        </span>
+        <Emoji symbol={chipEmoji} size="1.2rem" />
+        <span className="memo-folder-chip-label">{chipLabel}</span>
         <Msym name="arrow_drop_down" size="1.2rem" />
       </button>
 
@@ -685,8 +714,8 @@ export function LibraryFolderMenu({
         onClick={handleToggleMenu}
         aria-expanded={isOpen}
       >
-        <Emoji symbol="📁" size="1.1rem" />
-        <span>{selectedFolder?.name ?? t("folders.allNotes")}</span>
+        <Emoji symbol={chipEmoji} size="1.1rem" />
+        <span>{chipLabel}</span>
         <Msym name="expand_more" size="1.2rem" fill={false} weight={500} />
       </button>
 
@@ -738,11 +767,25 @@ export function LibraryFolderMenu({
                     >
                       <Emoji symbol="📁" size="1.2rem" />
                       <span className="memo-folder-row-label">{t("folders.allNotes")}</span>
-                      {selectedFolderId === null ? (
+                      {selectedFolderId === null && !showingExamPreps ? (
                         <Msym name="check" size="1.35rem" fill={false} weight={500} />
                       ) : null}
                     </button>
                   </div>
+
+                  {examPreps ? (
+                    <div className="memo-folder-row">
+                      <button type="button" className="memo-folder-row-main" onClick={handleSelectExamPreps}>
+                        <Emoji symbol="🎓" size="1.2rem" />
+                        <span className="memo-folder-row-label">{t("exam.library.title")}</span>
+                        {showingExamPreps ? (
+                          <Msym name="check" size="1.35rem" fill={false} weight={500} />
+                        ) : examPreps.count > 0 ? (
+                          <span className="memo-library-count">{examPreps.count}</span>
+                        ) : null}
+                      </button>
+                    </div>
+                  ) : null}
 
                   {liveFolders.map((folder) => (
                     <div key={folder.id} className="memo-folder-row">

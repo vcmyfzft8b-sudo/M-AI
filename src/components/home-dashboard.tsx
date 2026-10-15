@@ -31,6 +31,7 @@ import {
 } from "@/lib/install-guide";
 import { AnimatedLockup } from "@/components/animated-lockup";
 import { ExamEntryCard } from "@/components/exams/exam-entry-card";
+import { EXAM_PREPS_HREF } from "@/components/exams/exam-links";
 import { ExamLibraryList } from "@/components/exams/exam-library-list";
 import { LibraryChat } from "@/components/library-chat";
 import type { NoteSourceMode } from "@/components/note-source-modal";
@@ -927,6 +928,7 @@ export function HomeDashboard({
   planPrices,
   examPreps = [],
   examPrepsCollapsed = false,
+  initialLibraryView = "all",
 }: {
   lectures: AppLectureListItem[];
   folders: AppLibraryFolder[];
@@ -949,6 +951,8 @@ export function HomeDashboard({
   examPreps?: LibraryExamPrep[];
   /** Whether the learner folded that group away, from its cookie. */
   examPrepsCollapsed?: boolean;
+  /** "preps" opens the library on its exam-prep folder (`/app?view=preps`), where leaving a prep goes. */
+  initialLibraryView?: "all" | "preps";
 }) {
   const t = useT();
   const native = useNativeIOS();
@@ -1052,6 +1056,7 @@ export function HomeDashboard({
   const [useDashboardSwipeActions, setUseDashboardSwipeActions] = useState(false);
   const [busyLectureId, setBusyLectureId] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [libraryView, setLibraryView] = useState<"all" | "preps">(initialLibraryView);
   const [selectedFolderLectureIds, setSelectedFolderLectureIds] = useState<string[] | null>(null);
   const [openMenuLectureId, setOpenMenuLectureId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<AppLectureListItem | null>(null);
@@ -1625,10 +1630,40 @@ export function HomeDashboard({
     router.refresh();
   }, [hasClaimedDiscount, router]);
 
-  const inLibraryView = !selectedFolderId && !deferredQuery.trim();
+  /*
+   * The exam-prep folder: the library showing its preps instead of its notes. Not on the creator
+   * demo, which has no account to prepare with. The address follows it, so a reload or the way
+   * back from a prep lands on it again.
+   */
+  const showingPreps = libraryView === "preps" && !isCreatorDemo;
+  const selectLibraryView = useCallback((view: "all" | "preps") => {
+    setLibraryView(view);
+    window.history.replaceState(window.history.state, "", view === "preps" ? EXAM_PREPS_HREF : "/app");
+  }, []);
+  const handleSelectFolder = useCallback(
+    (folderId: string | null, lectureIds: string[] | null) => {
+      setSelectedFolderId(folderId);
+      setSelectedFolderLectureIds(lectureIds);
+
+      if (folderId) {
+        selectLibraryView("all");
+      }
+    },
+    [selectLibraryView],
+  );
+  const folderMenuPreps = isCreatorDemo
+    ? null
+    : {
+        count: examPreps.filter((prep) => !prep.past).length,
+        selected: showingPreps,
+        onSelect: () => selectLibraryView("preps"),
+        onSelectAll: () => selectLibraryView("all"),
+      };
+
+  const inLibraryView = !selectedFolderId && !deferredQuery.trim() && !showingPreps;
   /*
    * Preps are not filed in folders, so a folder shows none; a search matches their titles the way
-   * it matches the notes'. Hidden on the creator demo, which has no account to prepare with.
+   * it matches the notes'.
    */
   const visibleExamPreps =
     isCreatorDemo || selectedFolderId
@@ -1790,10 +1825,8 @@ export function HomeDashboard({
                 folders={libraryFolders}
                 onFoldersChange={setLibraryFolders}
                 selectedFolderId={selectedFolderId}
-                onSelectFolder={(folderId, lectureIds) => {
-                  setSelectedFolderId(folderId);
-                  setSelectedFolderLectureIds(lectureIds);
-                }}
+                onSelectFolder={handleSelectFolder}
+                examPreps={folderMenuPreps}
               />
             </div>
 
@@ -1821,10 +1854,8 @@ export function HomeDashboard({
               folders={libraryFolders}
               onFoldersChange={setLibraryFolders}
               selectedFolderId={selectedFolderId}
-              onSelectFolder={(folderId, lectureIds) => {
-                setSelectedFolderId(folderId);
-                setSelectedFolderLectureIds(lectureIds);
-              }}
+              onSelectFolder={handleSelectFolder}
+              examPreps={folderMenuPreps}
             />
           </div>
 
@@ -1860,97 +1891,105 @@ export function HomeDashboard({
               <p className="memo-inline-error">{dashboardActionError}</p>
             ) : null}
 
-            {/* Exam preps sit in the library with the notes, as a group of their own above them. */}
-            <ExamLibraryList
-              preps={visibleExamPreps}
-              notesFollow={filteredLectures.length > 0}
-              initialCollapsed={examPrepsCollapsed}
-            />
+            {showingPreps ? (
+              <ExamLibraryList view="folder" preps={visibleExamPreps} />
+            ) : (
+              <>
+              {/* Exam preps sit in the library with the notes, as a group of their own above them. */}
+              <ExamLibraryList
+                view="group"
+                preps={visibleExamPreps}
+                notesFollow={filteredLectures.length > 0}
+                initialCollapsed={examPrepsCollapsed}
+                onOpenFolder={() => selectLibraryView("preps")}
+              />
 
-            {failedLectures.length > 0 ? (
-              <div className="memo-note-list memo-failed-list">
-                {failedLectures.map((lecture) => (
-                  <div key={lecture.id} className="memo-failed-row">
-                    <span className="memo-note-emoji failed">
-                      <Msym name="warning" size="1.25rem" />
-                    </span>
-                    <span className="memo-note-copy">
-                      <span className="memo-note-title">
-                        {lecture.title ?? t("note.untitled")}
+              {failedLectures.length > 0 ? (
+                <div className="memo-note-list memo-failed-list">
+                  {failedLectures.map((lecture) => (
+                    <div key={lecture.id} className="memo-failed-row">
+                      <span className="memo-note-emoji failed">
+                        <Msym name="warning" size="1.25rem" />
                       </span>
-                      <span className="memo-note-meta">
-                        {/* The code first: the stored message was written in
-                            whatever language the pipeline ran in, which is not
-                            necessarily this reader's. */}
-                        {lectureFailureMessage(lecture.processing_metadata, t) ??
-                          lecture.error_message ??
-                          t("note.processingFailedSentence")}
+                      <span className="memo-note-copy">
+                        <span className="memo-note-title">
+                          {lecture.title ?? t("note.untitled")}
+                        </span>
+                        <span className="memo-note-meta">
+                          {/* The code first: the stored message was written in
+                              whatever language the pipeline ran in, which is not
+                              necessarily this reader's. */}
+                          {lectureFailureMessage(lecture.processing_metadata, t) ??
+                            lecture.error_message ??
+                            t("note.processingFailedSentence")}
+                        </span>
                       </span>
-                    </span>
-                    <span className="memo-failed-actions">
-                      {canRetryLectureFailure(lecture) ? (
+                      <span className="memo-failed-actions">
+                        {canRetryLectureFailure(lecture) ? (
+                          <button
+                            type="button"
+                            className="memo-button-outline small"
+                            onClick={() => void handleRetryLecture(lecture.id)}
+                            disabled={busyLectureId === lecture.id}
+                          >
+                            {busyLectureId === lecture.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : null}
+                            {t("common.retry")}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
-                          className="memo-button-outline small"
-                          onClick={() => void handleRetryLecture(lecture.id)}
+                          className="memo-button-outline small danger"
+                          onClick={() => openDeleteModal(lecture)}
                           disabled={busyLectureId === lecture.id}
                         >
-                          {busyLectureId === lecture.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : null}
-                          {t("common.retry")}
+                          {t("common.delete")}
                         </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="memo-button-outline small danger"
-                        onClick={() => openDeleteModal(lecture)}
-                        disabled={busyLectureId === lecture.id}
-                      >
-                        {t("common.delete")}
-                      </button>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
 
-            {regularLectures.length > 0 ? (
-              <div className="memo-note-list">
-                {regularLectures.map((lecture) => (
-                  <NoteRow
-                    key={lecture.id}
-                    lecture={lecture}
-                    // Without a subscription only the trial note opens; the rest
-                    // route to checkout.
-                    href={
-                      hasPaidAccess || trialLectureId === lecture.id
-                        ? `/app/lectures/${lecture.id}`
-                        : startHref
-                    }
-                    isMenuOpen={openMenuLectureId === lecture.id}
-                    isBusy={busyLectureId === lecture.id}
-                    useSwipeActions={useDashboardSwipeActions}
-                    onToggleMenu={toggleLectureMenu}
-                    onOpenRename={openRenameModal}
-                    onOpenDelete={openDeleteModal}
-                    attachMenuRef={attachMenuRef}
-                  />
-                ))}
-              </div>
-            ) : null}
+              {regularLectures.length > 0 ? (
+                <div className="memo-note-list">
+                  {regularLectures.map((lecture) => (
+                    <NoteRow
+                      key={lecture.id}
+                      lecture={lecture}
+                      // Without a subscription only the trial note opens; the rest
+                      // route to checkout.
+                      href={
+                        hasPaidAccess || trialLectureId === lecture.id
+                          ? `/app/lectures/${lecture.id}`
+                          : startHref
+                      }
+                      isMenuOpen={openMenuLectureId === lecture.id}
+                      isBusy={busyLectureId === lecture.id}
+                      useSwipeActions={useDashboardSwipeActions}
+                      onToggleMenu={toggleLectureMenu}
+                      onOpenRename={openRenameModal}
+                      onOpenDelete={openDeleteModal}
+                      attachMenuRef={attachMenuRef}
+                    />
+                  ))}
+                </div>
+              ) : null}
 
-            {filteredLectures.length === 0 && !(search && visibleExamPreps.length > 0) ? (
-              <div className="memo-empty">
-                <Emoji symbol="📝" size="2rem" />
-                <p>
-                  {t(search ? "library.empty.noMatchTitle" : "library.empty.noNotesTitle")}
-                </p>
-                <p>
-                  {t(search ? "library.empty.noMatchBody" : "library.empty.noNotesBody")}
-                </p>
-              </div>
-            ) : null}
+              {filteredLectures.length === 0 && !(search && visibleExamPreps.some((prep) => !prep.past)) ? (
+                <div className="memo-empty">
+                  <Emoji symbol="📝" size="2rem" />
+                  <p>
+                    {t(search ? "library.empty.noMatchTitle" : "library.empty.noNotesTitle")}
+                  </p>
+                  <p>
+                    {t(search ? "library.empty.noMatchBody" : "library.empty.noNotesBody")}
+                  </p>
+                </div>
+              ) : null}
+              </>
+            )}
           </div>
         </div>
 

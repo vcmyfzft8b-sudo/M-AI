@@ -1248,6 +1248,12 @@
     transform 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s;
 }
 
+/* The open folder menu hangs over the library and must clear the chat bar fixed at the bottom
+   (80), which would otherwise cover its lower rows on a short window. */
+.memo-folder-wrap:has(.memo-menu) {
+  z-index: 85;
+}
+
 .memo-folder-wrap.hidden {
   opacity: 0;
   transform: translateX(-0.9rem) scale(0.92);
@@ -26978,48 +26984,7 @@ a.memo-exam-station-go {
   height: 3.2rem;
 }
 
-/* --- list and entry -------------------------------------------------------- */
-
-.memo-exam-list-card {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.memo-exam-list-card.past {
-  opacity: 0.7;
-}
-
-.memo-exam-pick-copy .memo-exam-list-title {
-  font-size: 1.3rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-}
-
-.memo-exam-count-chip {
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 3.6rem;
-  height: 3.6rem;
-  border-radius: 999px;
-  background: var(--upgrade-tint);
-  color: var(--upgrade-ink);
-  line-height: 1;
-}
-
-.memo-exam-count-chip b {
-  font-size: 1.3rem;
-  font-weight: 800;
-}
-
-.memo-exam-count-chip i {
-  font-size: 0.72rem;
-  font-style: normal;
-  font-weight: 700;
-}
+/* --- entry ---------------------------------------------------------------- */
 
 /*
  * Exam prep's row in the "Novo" sheet: one of the options (`.memo-sheet-option`), with the same
@@ -27207,12 +27172,16 @@ a.memo-exam-station-go {
 
 .memo-library-head-link {
   color: var(--muted);
+  font: inherit;
   font-size: 0.92rem;
   font-weight: 650;
   text-decoration: none;
+  border: 0;
   border-radius: 999px;
   padding: 0.25rem 0.6rem;
   margin-right: -0.6rem;
+  background: transparent;
+  cursor: pointer;
 }
 
 .memo-library-head-link:hover {
@@ -27255,9 +27224,64 @@ a.memo-exam-station-go {
   background: color-mix(in srgb, var(--promo) 12%, var(--surface));
 }
 
+/* A past prep: the same row, quieter, its ring in the track's colour. */
+.memo-prep-row.past {
+  opacity: 0.72;
+}
+
+/*
+ * The exam-prep folder: every prep, then the row that starts a new one, cut like the rest so the
+ * folder reads as a list of preps with room for one more (the coral "Novo" stays the screen's
+ * one primary), then the past ones under their own heading.
+ */
+.memo-prep-folder {
+  display: grid;
+}
+
+.memo-prep-folder > .memo-note-list:first-child,
+.memo-prep-folder > .memo-prep-empty + .memo-note-list {
+  margin-top: 0.4rem;
+}
+
+.memo-prep-folder > .memo-library-head + .memo-note-list {
+  margin-top: 0.6rem;
+}
+
+.memo-prep-new {
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  background: transparent;
+}
+
+.memo-prep-new-tile {
+  display: grid;
+  flex: 0 0 auto;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+}
+
+.memo-prep-empty {
+  padding: 1.6rem 1rem 0.8rem;
+}
+
+.memo-prep-empty h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+/* The exam-prep folder's count, at the end of its row in the folder picker. */
+:is(.memo-menu-item, .memo-folder-row-main) > .memo-library-count {
+  margin-left: auto;
+}
+
 @media (max-width: 1099px) {
   /* The phone's note rows are the swipe surface; a prep row is cut to the same size. */
-  .memo-note-row.memo-prep-row {
+  .memo-note-row:is(.memo-prep-row, .memo-prep-new) {
     gap: 0.9rem;
     min-height: 0;
     padding: 0.95rem 1.2rem;
@@ -27317,20 +27341,6 @@ a.memo-exam-station-go {
 .memo-exam-crumb:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--focus-ring);
-}
-
-.memo-exam-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.4rem;
-}
-
-.memo-exam-head-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
 }
 
 /* --- lesson --------------------------------------------------------------- */
@@ -27897,8 +27907,7 @@ a.memo-exam-station-go {
   }
 
   /* The phone has its floating round button; the labelled link is desktop's. */
-  .memo-exam-crumb,
-  .memo-exam-head {
+  .memo-exam-crumb {
     display: none;
   }
 }

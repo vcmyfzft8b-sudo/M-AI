@@ -11,30 +11,112 @@ import type { LibraryExamPrep } from "@/lib/exams/exams-server";
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
+/** One prep, cut like a note row; Memo in the tile, ringed by how much of the goal is mastered. */
+function PrepRow({ prep }: { prep: LibraryExamPrep }) {
+  const { t } = useTranslations();
+  const mastered = percent(prep.mastery);
+
+  return (
+    <InstantLink
+      href={`/app/exams/${prep.id}`}
+      className={`memo-note-row memo-prep-row ${prep.past ? "past" : ""}`.trim()}
+    >
+      <span className="memo-prep-ring" style={{ "--prep-mastery": `${mastered}%` } as CSSProperties} aria-hidden="true">
+        <span className="memo-prep-ring-face">
+          <MemoBuddy size="2.2rem" />
+        </span>
+      </span>
+
+      <span className="memo-note-copy">
+        <span className="memo-note-title">{prep.title}</span>
+        <span className="memo-note-meta">
+          {prep.past
+            ? prep.grade
+              ? `${t("exam.list.past")} · ${t("exam.list.grade", { grade: prep.grade })}`
+              : `${t("exam.list.past")} · ${t("exam.list.mastery", { percent: mastered })}`
+            : `${
+                prep.daysLeft === 0 ? t("exam.dash.countdownToday") : t("exam.list.inDays", { count: prep.daysLeft })
+              } · ${t("exam.list.mastery", { percent: mastered })}`}
+        </span>
+      </span>
+
+      <Msym name="chevron_right" size="1.55rem" fill={false} weight={400} />
+    </InstantLink>
+  );
+}
+
 /**
- * The learner's exam preps, where their notes are: a group of its own above the notes, with
- * rows cut like note rows so it reads as part of the library. What tells a prep from a note is
- * Memo in the tile, ringed by how much of the goal is mastered, and the countdown in the meta.
- * "Vse" opens every prep, the finished ones included.
+ * The library's exam preps, where the notes are.
  *
- * The heading folds the group away, for a learner who wants their notes first. The choice is
- * kept in a cookie rather than local storage so the server paints the library already folded.
+ * In "Vsi zapiski" they are a group of their own above the notes: the preps still ahead of their
+ * exam, under a heading that folds them away (kept in a cookie, so the server paints the library
+ * already folded) and a "Vse" that opens their folder. The folder ("Priprave na test", pinned in
+ * the folder picker) holds every prep, past ones under their own heading, and the way to start a
+ * new one; it is where leaving a prep goes, so a new prep is seen to land there.
  */
 export function ExamLibraryList({
   preps,
-  notesFollow,
-  initialCollapsed,
+  view,
+  notesFollow = false,
+  initialCollapsed = false,
+  onOpenFolder,
 }: {
   preps: LibraryExamPrep[];
+  view: "group" | "folder";
   /** Whether notes are listed under the group, which then gets their heading to end it. */
-  notesFollow: boolean;
-  initialCollapsed: boolean;
+  notesFollow?: boolean;
+  initialCollapsed?: boolean;
+  onOpenFolder?: () => void;
 }) {
   const { t } = useTranslations();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const listId = useId();
+  const upcoming = preps.filter((prep) => !prep.past);
+  const past = preps.filter((prep) => prep.past);
 
-  if (preps.length === 0) {
+  if (view === "folder") {
+    return (
+      <section className="memo-prep-folder" aria-label={t("exam.library.title")}>
+        {preps.length === 0 ? (
+          <div className="memo-exam-empty memo-prep-empty">
+            <MemoBuddy mood="wave" size="6rem" thought="📅" />
+            <h2>{t("exam.list.empty.title")}</h2>
+            <p>{t("exam.list.empty.body")}</p>
+          </div>
+        ) : null}
+
+        <div className="memo-note-list">
+          {upcoming.map((prep) => (
+            <PrepRow key={prep.id} prep={prep} />
+          ))}
+          <InstantLink href="/app/exams/new" className="memo-note-row memo-prep-new">
+            <span className="memo-prep-new-tile" aria-hidden="true">
+              <Msym name="add" size="1.5rem" fill={false} weight={600} />
+            </span>
+            <span className="memo-note-copy">
+              <span className="memo-note-title">{t("exam.library.new")}</span>
+              <span className="memo-note-meta">{t("exam.entry.body")}</span>
+            </span>
+          </InstantLink>
+        </div>
+
+        {past.length > 0 ? (
+          <>
+            <div className="memo-library-head">
+              <span className="memo-eyebrow">{t("exam.list.pastSection")}</span>
+            </div>
+            <div className="memo-note-list">
+              {past.map((prep) => (
+                <PrepRow key={prep.id} prep={prep} />
+              ))}
+            </div>
+          </>
+        ) : null}
+      </section>
+    );
+  }
+
+  if (upcoming.length === 0) {
     return null;
   }
 
@@ -58,47 +140,22 @@ export function ExamLibraryList({
           onClick={toggle}
         >
           <span className="memo-eyebrow">{t("exam.library.title")}</span>
-          <span className="memo-library-count">{preps.length}</span>
+          <span className="memo-library-count">{upcoming.length}</span>
           <Msym name="expand_more" size="1.3rem" fill={false} weight={500} className="memo-library-chevron" />
         </button>
-        <InstantLink href="/app/exams" className="memo-library-head-link">
-          {t("exam.library.all")}
-        </InstantLink>
+        {onOpenFolder ? (
+          <button type="button" className="memo-library-head-link" onClick={onOpenFolder}>
+            {t("exam.library.all")}
+          </button>
+        ) : null}
       </div>
 
       <div id={listId} className="memo-prep-fold" data-open={!collapsed} inert={collapsed}>
         <div className="memo-prep-fold-inner">
           <div className="memo-note-list">
-            {preps.map((prep) => {
-              const mastered = percent(prep.mastery);
-
-              return (
-                <InstantLink key={prep.id} href={`/app/exams/${prep.id}`} className="memo-note-row memo-prep-row">
-                  <span
-                    className="memo-prep-ring"
-                    style={{ "--prep-mastery": `${mastered}%` } as CSSProperties}
-                    aria-hidden="true"
-                  >
-                    <span className="memo-prep-ring-face">
-                      <MemoBuddy size="2.2rem" />
-                    </span>
-                  </span>
-
-                  <span className="memo-note-copy">
-                    <span className="memo-note-title">{prep.title}</span>
-                    <span className="memo-note-meta">
-                      {prep.daysLeft === 0
-                        ? t("exam.dash.countdownToday")
-                        : t("exam.list.inDays", { count: prep.daysLeft })}
-                      {" · "}
-                      {t("exam.list.mastery", { percent: mastered })}
-                    </span>
-                  </span>
-
-                  <Msym name="chevron_right" size="1.55rem" fill={false} weight={400} />
-                </InstantLink>
-              );
-            })}
+            {upcoming.map((prep) => (
+              <PrepRow key={prep.id} prep={prep} />
+            ))}
           </div>
         </div>
       </div>

@@ -18,6 +18,9 @@ export const LESSON_KIND_EMOJI: Record<ExamLessonKind, string> = {
   written: "✍️",
 };
 
+/** The library opened on its exam-prep folder: where every prep lives, and where leaving one goes. */
+export const EXAM_PREPS_HREF = "/app?view=preps";
+
 /** A lesson of one topic (a module on the path). */
 export function lessonHref(examId: string, topicId: string, kind: ExamLessonKind) {
   return `/app/exams/${examId}/lesson?topic=${topicId}&kind=${kind}`;

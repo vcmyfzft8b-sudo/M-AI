@@ -477,7 +477,7 @@ export function ExamMock({
               onClick={() => briefingSheet.dismiss()}
             />
             <div
-              className={sheetClass("memo-sheet", briefingSheet.closing)}
+              className={sheetClass("memo-sheet memo-dialog", briefingSheet.closing)}
               role="dialog"
               aria-modal="true"
               aria-labelledby="exam-oral-briefing"
@@ -828,7 +828,7 @@ export function ExamMock({
             onClick={() => confirmSheet.dismiss()}
           />
           <div
-            className={sheetClass("memo-sheet", confirmSheet.closing)}
+            className={sheetClass("memo-sheet memo-dialog", confirmSheet.closing)}
             role="dialog"
             aria-modal="true"
             aria-labelledby="exam-submit-title"

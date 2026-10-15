@@ -495,7 +495,7 @@ export function ExamDashboard({
             onClick={() => menuSheet.dismiss()}
           />
           <div
-            className={sheetClass("memo-sheet", menuSheet.closing)}
+            className={sheetClass("memo-sheet memo-dialog", menuSheet.closing)}
             role="dialog"
             aria-modal="true"
             aria-labelledby="exam-menu-title"

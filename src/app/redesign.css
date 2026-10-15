@@ -25292,6 +25292,24 @@ select.memo-cp-input {
 }
 
 /* A slow float under everything else he does, so he is never quite still. */
+/*
+ * The thought cloud's frame: a point on Memo's top-right corner that the onboarding's cloud and
+ * beads are laid out from and scaled about (see thoughtLayout in memo-buddy.tsx).
+ */
+.memo-buddy-think {
+  position: absolute;
+  z-index: 5;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+/* A Memo standing alone with a thought keeps the cloud's height clear above him, as the onboarding does. */
+:is(.memo-exam-center, .memo-exam-empty) > .memo-buddy:has(> .memo-buddy-think) {
+  margin-top: 2.2rem;
+}
+
 .memo-buddy-bob {
   position: absolute;
   inset: 0;
@@ -27760,6 +27778,12 @@ a.memo-exam-station-go {
   justify-content: center;
 }
 
+/* The Generalka setup's two columns are desktop's; on the phone their contents are one column. */
+.memo-exam-mock-main,
+.memo-exam-mock-side {
+  display: contents;
+}
+
 .memo-exam-voices .memo-tutor-voice {
   flex: 0 0 calc((100% - 1rem) / 3);
   min-width: 0;
@@ -27867,6 +27891,11 @@ a.memo-exam-station-go {
     display: none;
   }
 
+  /* The last result's link is in the content on the phone; its bar has room for the title only. */
+  .memo-exam-topbar-trailing > .memo-exam-link {
+    display: none;
+  }
+
   /* The phone has its floating round button; the labelled link is desktop's. */
   .memo-exam-crumb,
   .memo-exam-head {
@@ -27882,8 +27911,25 @@ a.memo-exam-station-go {
   }
 
   .memo-exam-topbar {
-    max-width: 46rem;
     margin-bottom: 1.2rem;
+  }
+
+  /*
+   * Desktop width. An exam flow (setup, a lesson, the Generalka, the exam's path) is one column,
+   * centred in the main column as the onboarding and the app's dialogs are, at the width of the
+   * note screen's study panels the lessons reuse (40rem), so its bar, its content and its button
+   * share one pair of edges. "Izpiti", which the rail opens, is a page like Settings instead:
+   * left-aligned at the app's page measure.
+   */
+  .memo-exam-screen :is(.memo-exam-topbar, .memo-exam-page, .memo-exam-cta) {
+    width: 100%;
+    max-width: 40rem;
+    margin-inline: auto;
+  }
+
+  .memo-exam-screen.memo-exam-rail :is(.memo-exam-topbar, .memo-exam-page) {
+    max-width: 60rem;
+    margin-inline: 0;
   }
 
   /* A screen the rail opens needs no way back, so its bar goes unless it carries actions. */
@@ -27899,12 +27945,20 @@ a.memo-exam-station-go {
     padding-bottom: 1rem;
   }
 
-  /* Buttons at their own width, held at the bottom of the window while the page scrolls. */
+  /*
+   * The button under the content, centred like it, at its own width, and held at the bottom of
+   * the window while a long screen scrolls. It stands on a band of the page's own ground that
+   * fades in above it, as the phone's does, so rows scroll away under it instead of through it.
+   */
   .memo-exam-cta {
     position: sticky;
-    bottom: 1.5rem;
+    bottom: 0;
     z-index: 5;
     display: flex;
+    justify-content: center;
+    margin-top: 0.4rem;
+    padding: 1.1rem 0 1.25rem;
+    background: linear-gradient(to bottom, transparent, var(--bg) 1rem);
   }
 
   .memo-exam-cta > .memo-button-coral,
@@ -27923,6 +27977,153 @@ a.memo-exam-station-go {
   .memo-exam-zone .memo-exam-cta-row,
   .memo-exam-done .memo-exam-cta-col {
     width: 100%;
+  }
+
+  /* A button row inside a screen's content (the summary's "finish with a quiz") sits where the
+     screen's own button would: centred under the column. */
+  .memo-exam-page .memo-exam-cta-row {
+    align-self: center;
+  }
+
+  /*
+   * Every screen fits a laptop window (1440×820). A lesson's quiz head is one row, as the
+   * flashcards' is (it had only the phone's rules), its answers are the height of a row rather
+   * than a tile, and Memo watches the flashcards from the end of the grading row instead of
+   * from a row of his own.
+   */
+  .memo-exam-lesson .memo-quiz-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .memo-exam-lesson .memo-quiz-count {
+    font-size: 1.08rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .memo-exam-lesson .memo-quiz-total {
+    color: var(--muted);
+    font-size: 0.98rem;
+    font-weight: 650;
+  }
+
+  .memo-exam-lesson .lecture-quiz-card {
+    padding: 1.15rem 1.5rem 1.3rem;
+  }
+
+  .memo-exam-lesson .lecture-quiz-option {
+    min-height: 3.6rem;
+  }
+
+  .memo-exam-lesson .lecture-flashcard-stage {
+    margin-top: 1.6rem;
+  }
+
+  .memo-exam-lesson :is(.lecture-flashcard, .lecture-flashcard-rotator) {
+    min-height: 19rem;
+  }
+
+  /* "Choose one answer" over every question says what four answer rows already say. */
+  .memo-exam-screen .memo-quiz-eyebrow {
+    display: none;
+  }
+
+  .memo-exam-lesson .memo-progress.quiz {
+    margin: 0.6rem 0 1rem;
+  }
+
+  .memo-exam-lesson .memo-exam-buddy-corner {
+    position: relative;
+    z-index: 1;
+    margin-top: -3.5rem;
+    pointer-events: none;
+  }
+
+  .memo-exam-lesson .memo-exam-buddy-corner .memo-buddy {
+    pointer-events: auto;
+  }
+
+  /*
+   * The Generalka's setup, in two columns: the exam and its length on the left (Memo beside the
+   * title rather than over it), what it holds on the right (the question counts, or the
+   * examiner's manner and voice). The dial's ring and handle say how to use it here, so the
+   * phone's "drag the ring" line is left off.
+   */
+  .memo-exam-screen.memo-exam-mock-setup :is(.memo-exam-topbar, .memo-exam-page, .memo-exam-cta) {
+    max-width: 56rem;
+  }
+
+  .memo-exam-mock-setup .memo-exam-page {
+    display: grid;
+    grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+    column-gap: 2.75rem;
+    align-items: start;
+  }
+
+  .memo-exam-mock-main,
+  .memo-exam-mock-side {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    min-width: 0;
+  }
+
+  /* The question counts start level with Memo, under the room his thought cloud needs; the
+     examiner's settings are taller and use that room for their heading. */
+  .memo-exam-mock-side:has(> .memo-exam-facts) {
+    padding-top: 2.2rem;
+  }
+
+  .memo-exam-mock-side {
+    gap: 0.7rem;
+  }
+
+  .memo-exam-mock-side .memo-exam-label {
+    margin: 0;
+  }
+
+  .memo-exam-mock-side .memo-exam-pick {
+    min-height: 3.4rem;
+    padding-block: 0.45rem;
+  }
+
+  .memo-exam-mock-main .memo-exam-center {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 1rem;
+    row-gap: 0.3rem;
+    align-items: center;
+    justify-items: start;
+    padding: 2.2rem 0 0.3rem;
+    text-align: left;
+  }
+
+  .memo-exam-mock-main .memo-exam-center > .memo-buddy {
+    grid-row: 1 / span 2;
+    margin-top: 0;
+  }
+
+  .memo-exam-mock-main .memo-exam-center > .memo-exam-step-title {
+    align-self: end;
+  }
+
+  .memo-exam-mock-main .memo-exam-center > .memo-exam-fine {
+    align-self: start;
+  }
+
+  .memo-exam-mock-setup .memo-exam-dial-hint {
+    display: none;
+  }
+
+  .memo-exam-mock-side > .memo-exam-link {
+    display: none;
+  }
+
+  .memo-exam-mock-side .memo-exam-voices .memo-tutor-voice {
+    flex-basis: calc((100% - 1.5rem) / 4);
   }
 }
 

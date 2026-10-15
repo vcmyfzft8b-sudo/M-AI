@@ -40,10 +40,28 @@ const MOOD_MOVE: Record<BuddyMood, MascotMove | null> = {
 /* The small things he does on his own while nobody is talking to him, so he never looks like a still. */
 const IDLE_MOVES: MascotMove[] = ["nod", "wave", "jelly", "boing", "nod", "hop"];
 
-/** The onboarding's cloud fits a Memo about 6rem wide; a smaller or larger Memo gets it scaled to match. */
-function thoughtScale(size: string) {
+/** How wide the onboarding's Memo is: its cloud and beads are drawn, in rem, for him. */
+const ONBOARDING_MEMO_REM = 4.6;
+/** Where the cloud's first bead meets his head, from his top-right corner, at that size. */
+const THOUGHT_ANCHOR_REM = { x: 1.05, y: 0.55 };
+
+/**
+ * Places the onboarding's thought cloud on a Memo of any size, as it sits on the onboarding's.
+ * The beads have to land on his head wherever his head is, so the point they start from moves
+ * with him; the cloud itself grows less than he does (a big Memo with a cloud to scale would be
+ * all cloud), which is the onboarding's own choice for its larger loading-screen Memo.
+ */
+function thoughtLayout(size: string) {
   const rem = size.endsWith("rem") ? Number.parseFloat(size) : 6;
-  return Math.min(1.3, Math.max(0.6, rem / 6));
+  const reach = rem / ONBOARDING_MEMO_REM;
+  const scale = Math.min(1.2, Math.max(0.75, reach));
+  const shift = reach - scale;
+
+  return {
+    left: `calc(100% - ${(shift * THOUGHT_ANCHOR_REM.x).toFixed(3)}rem)`,
+    top: `${(shift * THOUGHT_ANCHOR_REM.y).toFixed(3)}rem`,
+    transform: `scale(${scale.toFixed(3)})`,
+  } satisfies CSSProperties;
 }
 
 function isCalm() {
@@ -192,8 +210,12 @@ export function MemoBuddy({
       }}
     >
       {sparkles ? <MascotSparkles /> : null}
-      {/* The onboarding's own thought cloud, sized to him (it is drawn for a Memo about 6rem wide). */}
-      {thought ? <MascotThought icon={thought} offset="0.5rem" scale={thoughtScale(size)} /> : null}
+      {/* The onboarding's own thought cloud, placed and sized as it is on the onboarding's Memo. */}
+      {thought ? (
+        <span className="memo-buddy-think" style={thoughtLayout(size)}>
+          <MascotThought icon={thought} offset="0.5rem" />
+        </span>
+      ) : null}
       <div className="memo-buddy-bob">
         <div ref={bodyRef} className="memo-buddy-body">
           <div className="memo-buddy-breathe">

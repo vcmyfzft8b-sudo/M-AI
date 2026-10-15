@@ -300,13 +300,27 @@ export function ExamMock({
   }, [phase, submit]);
 
   if (phase.name === "setup") {
+    /* The last Generalka's score, a way back to its review: under the details on the phone, and
+       opposite the way back in the desktop bar, where it does not cost the setup a row. */
+    const lastResultLink = lastResult ? (
+      <button type="button" className="memo-exam-link" onClick={() => setPhase({ name: "result", result: lastResult })}>
+        <Msym name="history" size="1.2rem" fill={false} />
+        {/* A percentage grade is the score itself, so it is said once. */}
+        {lastResult.grade.endsWith("%")
+          ? t("exam.mock.lastPercent", { percent: Math.round(lastResult.percentage) })
+          : t("exam.mock.lastResult", { grade: lastResult.grade, percent: Math.round(lastResult.percentage) })}
+      </button>
+    ) : null;
+
     return (
       <ExamScreen
+        className="memo-exam-mock-setup"
         refreshOnBack
         backHref={examHref}
         backLabel={examTitle}
         backIcon="close"
         title={t("exam.mock.title")}
+        trailing={lastResultLink}
         cta={
           <button
             type="button"
@@ -318,154 +332,151 @@ export function ExamMock({
           </button>
         }
       >
-        <div className="memo-exam-center">
-          <MemoBuddy mood="wave" size="5.5rem" thought={mode === "oral" ? "🎙️" : "🎓"} sparkles />
-          <h1 className="memo-exam-step-title">{t("exam.mock.setup.title")}</h1>
-          <p className="memo-exam-fine">{t("exam.mock.setup.body", { count: moduleCount })}</p>
-        </div>
-
-        {/* Astra's two kinds of mock exam. */}
-        <div className="memo-segment memo-exam-segment" role="group" aria-label={t("exam.mock.mode.label")}>
-          {(["written", "oral"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={mode === value ? "active" : ""}
-              aria-pressed={mode === value}
-              onClick={() => {
-                setMode(value);
-
-                // The tutor's voice is remembered on the device; the examiner starts from it.
-                if (value === "oral") {
-                  setVoice(storedVoice());
-                }
-              }}
-            >
-              {t(value === "oral" ? "exam.mock.mode.oral" : "exam.mock.mode.written")}
-            </button>
-          ))}
-        </div>
-
-        {!hasPaidAccess ? (
-          <div className="memo-exam-card memo-exam-upsell">
-            <b>{t("exam.mock.paid.title")}</b>
-            <p>{t("exam.mock.paid.body")}</p>
+        {/* Two columns on desktop (the exam and its length, then its details); one column on the phone. */}
+        <div className="memo-exam-mock-main">
+          <div className="memo-exam-center">
+            <MemoBuddy mood="wave" size="5.5rem" thought={mode === "oral" ? "🎙️" : "🎓"} sparkles />
+            <h1 className="memo-exam-step-title">{t("exam.mock.setup.title")}</h1>
+            <p className="memo-exam-fine">{t("exam.mock.setup.body", { count: moduleCount })}</p>
           </div>
-        ) : null}
 
-        {/* The length, on a circular timer. */}
-        <GaugeDial
-          value={minutes}
-          onChange={mode === "oral" ? setOralMinutes : setDuration}
-          range={mode === "oral" ? ORAL_MINUTES : MOCK_MINUTES}
-          label={t("exam.mock.duration")}
-          valueText={t("exam.minutes", { minutes })}
-          unit="min"
-          caption={
-            mode === "oral"
-              ? t("exam.oral.questions", { count: oralQuestionCount(oralMinutes) })
-              : t("exam.mock.questions", { count: counts.choice + counts.written })
-          }
-          ends={
-            mode === "oral"
-              ? [`${ORAL_MINUTES.min} min`, `${ORAL_MINUTES.max} min`]
-              : [`${MOCK_MINUTES.min} min`, `${MOCK_MINUTES.max} min`]
-          }
-        />
+          {/* Astra's two kinds of mock exam. */}
+          <div className="memo-segment memo-exam-segment" role="group" aria-label={t("exam.mock.mode.label")}>
+            {(["written", "oral"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={mode === value ? "active" : ""}
+                aria-pressed={mode === value}
+                onClick={() => {
+                  setMode(value);
 
-        {mode === "oral" ? (
-          <>
-            <span className="memo-exam-label">{t("exam.oral.vibe.label")}</span>
-            <div className="memo-exam-list">
-              {VIBES.map((option) => {
-                const isOn = vibe === option.value;
+                  // The tutor's voice is remembered on the device; the examiner starts from it.
+                  if (value === "oral") {
+                    setVoice(storedVoice());
+                  }
+                }}
+              >
+                {t(value === "oral" ? "exam.mock.mode.oral" : "exam.mock.mode.written")}
+              </button>
+            ))}
+          </div>
 
-                return (
+          {!hasPaidAccess ? (
+            <div className="memo-exam-card memo-exam-upsell">
+              <b>{t("exam.mock.paid.title")}</b>
+              <p>{t("exam.mock.paid.body")}</p>
+            </div>
+          ) : null}
+
+          {/* The length, on a circular timer. */}
+          <GaugeDial
+            value={minutes}
+            onChange={mode === "oral" ? setOralMinutes : setDuration}
+            range={mode === "oral" ? ORAL_MINUTES : MOCK_MINUTES}
+            label={t("exam.mock.duration")}
+            valueText={t("exam.minutes", { minutes })}
+            unit="min"
+            caption={
+              mode === "oral"
+                ? t("exam.oral.questions", { count: oralQuestionCount(oralMinutes) })
+                : t("exam.mock.questions", { count: counts.choice + counts.written })
+            }
+            ends={
+              mode === "oral"
+                ? [`${ORAL_MINUTES.min} min`, `${ORAL_MINUTES.max} min`]
+                : [`${MOCK_MINUTES.min} min`, `${MOCK_MINUTES.max} min`]
+            }
+          />
+        </div>
+
+        <div className="memo-exam-mock-side">
+          {mode === "oral" ? (
+            <>
+              <span className="memo-exam-label">{t("exam.oral.vibe.label")}</span>
+              <div className="memo-exam-list">
+                {VIBES.map((option) => {
+                  const isOn = vibe === option.value;
+
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`memo-exam-pick ${isOn ? "on" : ""}`.trim()}
+                      aria-pressed={isOn}
+                      onClick={() => setVibe(option.value)}
+                    >
+                      <span className="memo-exam-pick-copy">
+                        <b>
+                          {t(option.labelKey)}
+                          {option.value === "strict" ? (
+                            <span className="memo-exam-trail-source">{t("exam.oral.recommended")}</span>
+                          ) : null}
+                        </b>
+                        <span>{t(option.bodyKey)}</span>
+                      </span>
+                      <Msym
+                        name={isOn ? "radio_button_checked" : "radio_button_unchecked"}
+                        size="1.5rem"
+                        fill={isOn}
+                        className="memo-exam-pick-mark"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+              {/* The tutor's own voice picker: each voice in its colour, and a tap plays it. */}
+              <span className="memo-exam-label">{t("exam.oral.voice")}</span>
+              <div className="memo-tutor-voices memo-exam-voices" role="radiogroup" aria-label={t("exam.oral.voice")}>
+                {NOTE_TTS_VOICES.map((option) => (
                   <button
-                    key={option.value}
+                    key={option}
                     type="button"
-                    className={`memo-exam-pick ${isOn ? "on" : ""}`.trim()}
-                    aria-pressed={isOn}
-                    onClick={() => setVibe(option.value)}
+                    role="radio"
+                    aria-checked={voice === option}
+                    className={`memo-tutor-voice ${voice === option ? "active" : ""} ${
+                      previewVoice === option ? "playing" : ""
+                    }`.trim()}
+                    style={{ "--voice-hue": voiceHue(option) } as CSSProperties}
+                    onClick={() => void auditionVoice(option)}
                   >
-                    <span className="memo-exam-pick-copy">
-                      <b>
-                        {t(option.labelKey)}
-                        {option.value === "strict" ? (
-                          <span className="memo-exam-trail-source">{t("exam.oral.recommended")}</span>
-                        ) : null}
-                      </b>
-                      <span>{t(option.bodyKey)}</span>
-                    </span>
-                    <Msym
-                      name={isOn ? "radio_button_checked" : "radio_button_unchecked"}
-                      size="1.5rem"
-                      fill={isOn}
-                      className="memo-exam-pick-mark"
-                    />
+                    <span className="memo-tutor-voice-dot" aria-hidden="true" />
+                    <span>{option}</span>
                   </button>
-                );
-              })}
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="memo-exam-card memo-exam-facts">
+              {/* The questions fill the time set: how long each kind takes, as the timer counts it. */}
+              <div>
+                <Msym name="quiz" size="1.3rem" fill={false} />
+                <span>
+                  {t("exam.mock.choice")}
+                  <small>{t("exam.mock.perQuestion", { minutes: minutesFormat.format(MOCK_QUESTION_MINUTES.choice) })}</small>
+                </span>
+                <b>{counts.choice}</b>
+              </div>
+              <div>
+                <Msym name="edit" size="1.3rem" fill={false} />
+                <span>
+                  {t("exam.mock.written")}
+                  <small>{t("exam.mock.perQuestion", { minutes: minutesFormat.format(MOCK_QUESTION_MINUTES.written) })}</small>
+                </span>
+                <b>{counts.written}</b>
+              </div>
+              <div>
+                <Msym name="flag" size="1.3rem" fill={false} />
+                <span>{t("exam.mock.pass")}</span>
+                <b>{passPercentage} %</b>
+              </div>
             </div>
-            {/* The tutor's own voice picker: each voice in its colour, and a tap plays it. */}
-            <span className="memo-exam-label">{t("exam.oral.voice")}</span>
-            <div className="memo-tutor-voices memo-exam-voices" role="radiogroup" aria-label={t("exam.oral.voice")}>
-              {NOTE_TTS_VOICES.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  role="radio"
-                  aria-checked={voice === option}
-                  className={`memo-tutor-voice ${voice === option ? "active" : ""} ${
-                    previewVoice === option ? "playing" : ""
-                  }`.trim()}
-                  style={{ "--voice-hue": voiceHue(option) } as CSSProperties}
-                  onClick={() => void auditionVoice(option)}
-                >
-                  <span className="memo-tutor-voice-dot" aria-hidden="true" />
-                  <span>{option}</span>
-                </button>
-              ))}
-            </div>
-          </>
-        ) : (
-          <div className="memo-exam-card memo-exam-facts">
-            {/* The questions fill the time set: how long each kind takes, as the timer counts it. */}
-            <div>
-              <Msym name="quiz" size="1.3rem" fill={false} />
-              <span>
-                {t("exam.mock.choice")}
-                <small>{t("exam.mock.perQuestion", { minutes: minutesFormat.format(MOCK_QUESTION_MINUTES.choice) })}</small>
-              </span>
-              <b>{counts.choice}</b>
-            </div>
-            <div>
-              <Msym name="edit" size="1.3rem" fill={false} />
-              <span>
-                {t("exam.mock.written")}
-                <small>{t("exam.mock.perQuestion", { minutes: minutesFormat.format(MOCK_QUESTION_MINUTES.written) })}</small>
-              </span>
-              <b>{counts.written}</b>
-            </div>
-            <div>
-              <Msym name="flag" size="1.3rem" fill={false} />
-              <span>{t("exam.mock.pass")}</span>
-              <b>{passPercentage} %</b>
-            </div>
-          </div>
-        )}
+          )}
 
-        {error ? <p className="memo-inline-error">{error}</p> : null}
+          {error ? <p className="memo-inline-error">{error}</p> : null}
 
-        {lastResult ? (
-          <button type="button" className="memo-exam-link" onClick={() => setPhase({ name: "result", result: lastResult })}>
-            <Msym name="history" size="1.2rem" fill={false} />
-            {/* A percentage grade is the score itself, so it is said once. */}
-            {lastResult.grade.endsWith("%")
-              ? t("exam.mock.lastPercent", { percent: Math.round(lastResult.percentage) })
-              : t("exam.mock.lastResult", { grade: lastResult.grade, percent: Math.round(lastResult.percentage) })}
-          </button>
-        ) : null}
+          {lastResultLink}
+        </div>
 
         {/* Astra's instructions before an oral exam, ending in "I'm ready". */}
         {briefingOpen ? (

@@ -12,11 +12,13 @@ import { PAYWALL_REASONS, type PaywallReason } from "./paywall-reasons.ts";
  * ever shows a lower rung than one already reached, and the daily wheel's 50 %
  * stays the best price there is, so nothing here may go past it.
  *
- * The moments live in a cookie the server writes (`POST
- * /api/billing/paywall-view`), kept only while they still lift the price.
+ * The moments belong to the account (`profiles.paywall_moments`, written by
+ * `POST /api/billing/paywall-view`), kept only while they still lift the
+ * price, so a second account on the same device starts from the plain price
+ * and the same account on another device carries on where it was.
  * A paywall shows the rung its own moment will reach before it is recorded,
  * then the server's answer. Checkout gives the rung the paywall showed, but
- * never more than the cookie allows. Every discount covers the first payment
+ * never more than the account's moments allow. Every discount covers the first payment
  * only and comes without a trial or a promo code.
  *
  * Web only for now: the app sells through Apple, whose prices come from App
@@ -37,20 +39,27 @@ export const PAYWALL_LADDER: readonly PaywallOffer[] = [
   { step: 4, percentOff: 40, coupon: "memo40-first-cycle" },
 ];
 
-export const PAYWALL_SEEN_COOKIE = "memo-paywall-seen";
-export const PAYWALL_SEEN_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+/**
+ * The browser cookie the ladder first lived in, before it moved to the
+ * account. Never read; the paywall clears it so it cannot linger.
+ */
+export const LEGACY_PAYWALL_COOKIE = "memo-paywall-seen";
 
 const LAST_STEP = PAYWALL_LADDER.length;
 
-/** The paywall moments recorded so far, oldest first; only as many as still lift the price. */
+/**
+ * The paywall moments recorded so far, oldest first; only as many as still
+ * lift the price. Accepts the account's stored list (`profiles.paywall_moments`)
+ * or the dot-joined form the ladder first used; anything else reads as none.
+ */
 export function readSeenReasons(value: unknown): PaywallReason[] {
-  if (typeof value !== "string" || value.length === 0 || value.length > 200) {
-    return [];
-  }
+  const parts =
+    Array.isArray(value) ? value
+    : typeof value === "string" && value.length > 0 && value.length <= 200 ? value.split(".")
+    : [];
 
-  return value
-    .split(".")
-    .filter((part): part is PaywallReason => (PAYWALL_REASONS as readonly string[]).includes(part))
+  return parts
+    .filter((part): part is PaywallReason => typeof part === "string" && (PAYWALL_REASONS as readonly string[]).includes(part))
     .slice(0, LAST_STEP - 1);
 }
 

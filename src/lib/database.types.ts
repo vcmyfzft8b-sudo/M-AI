@@ -190,6 +190,7 @@ export type Database = {
           discount_wheel_spun_at: string | null;
           discount_wheel_coupon: string | null;
           discount_wheel_redeemed_at: string | null;
+          paywall_moments: string[];
           install_guide_seen_at: string | null;
           ui_language: string | null;
         };
@@ -226,6 +227,7 @@ export type Database = {
           discount_wheel_spun_at?: string | null;
           discount_wheel_coupon?: string | null;
           discount_wheel_redeemed_at?: string | null;
+          paywall_moments?: string[];
           install_guide_seen_at?: string | null;
           ui_language?: string | null;
         };
@@ -261,6 +263,7 @@ export type Database = {
           discount_wheel_spun_at?: string | null;
           discount_wheel_coupon?: string | null;
           discount_wheel_redeemed_at?: string | null;
+          paywall_moments?: string[];
           install_guide_seen_at?: string | null;
           ui_language?: string | null;
         };

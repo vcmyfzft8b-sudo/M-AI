@@ -97,7 +97,7 @@ export default async function AppLayout({
         </AppShell>
         <ImpersonationBannerSlot />
         {/* Browsing offers for a free learner on the web (`paywall-nudge.tsx`). */}
-        {!native && appState?.onboardingComplete && !appState.hasPaidAccess ? <PaywallNudge /> : null}
+        {!native && appState?.onboardingComplete && !appState.hasPaidAccess ? <PaywallNudge userId={user.id} /> : null}
       </OfflineProvider>
     </NavigationFeedbackProvider>
   );

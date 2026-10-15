@@ -1,4 +1,4 @@
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { OnboardingPaywall } from "@/components/onboarding-paywall";
@@ -9,7 +9,8 @@ import {
   purchasableBillingPlansFor,
 } from "@/lib/billing";
 import { isPaywallReason, readPaywallBack } from "@/lib/paywall-reasons";
-import { PAYWALL_SEEN_COOKIE, paywallOfferFor, readSeenReasons, recordSeenReason } from "@/lib/paywall-ladder";
+import { paywallOfferFor, recordSeenReason } from "@/lib/paywall-ladder";
+import { readPaywallMoments } from "@/lib/paywall-moments";
 import { isNativeUserAgent } from "@/lib/mobile/runtime";
 
 export default async function AppStartPage({
@@ -47,7 +48,7 @@ export default async function AppStartPage({
   // app keeps Apple's prices, so it always shows the first step
   // (`paywall-ladder.ts`).
   const native = isNativeUserAgent((await headers()).get("user-agent"));
-  const seen = readSeenReasons((await cookies()).get(PAYWALL_SEEN_COOKIE)?.value);
+  const seen = native ? [] : await readPaywallMoments(appState.user.id);
   const offerStep = native ? 1 : paywallOfferFor(reason, seen).step;
   // A browsing offer may say it got better only when its moment lifts the price.
   const offerImproved = reason !== null && recordSeenReason(seen, reason).length > seen.length;

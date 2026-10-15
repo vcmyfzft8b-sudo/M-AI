@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { isNativeUserAgent } from "@/lib/mobile/runtime";
 import { getAppleEntitlement } from "@/lib/mobile/apple";
 import { NextResponse } from "next/server";
@@ -17,7 +16,8 @@ import {
 } from "@/lib/billing";
 import { hasLiveStripeSubscription } from "@/lib/billing-access";
 import { getDiscountWheelState } from "@/lib/discount-wheel";
-import { PAYWALL_LADDER, PAYWALL_SEEN_COOKIE, checkoutOffer, readSeenReasons } from "@/lib/paywall-ladder";
+import { PAYWALL_LADDER, checkoutOffer } from "@/lib/paywall-ladder";
+import { readPaywallMoments } from "@/lib/paywall-moments";
 import { PAYWALL_REASONS } from "@/lib/paywall-reasons";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -28,7 +28,7 @@ const checkoutSchema = z.object({
   plan: z.enum(PURCHASABLE_BILLING_PLAN_IDS),
   /** What opened the paywall; kept on the subscription for reporting. */
   reason: z.enum(PAYWALL_REASONS).nullish(),
-  /** The rung the paywall showed; capped by the cookie (`checkoutOffer`). */
+  /** The rung the paywall showed; capped by the account's moments (`checkoutOffer`). */
   step: z.number().int().min(1).max(PAYWALL_LADDER.length).nullish(),
 });
 
@@ -97,10 +97,7 @@ export async function POST(request: Request) {
     const wheelCoupon = wheel.hasUnredeemedPrize ? wheel.coupon : null;
     // Otherwise the rung the paywall showed, never above what the recorded
     // paywall moments allow (`paywall-ladder.ts`). The wheel's 50 % beats it.
-    const ladderOffer = checkoutOffer(
-      parsed.data.step ?? null,
-      readSeenReasons((await cookies()).get(PAYWALL_SEEN_COOKIE)?.value),
-    );
+    const ladderOffer = checkoutOffer(parsed.data.step ?? null, await readPaywallMoments(appState.user.id));
     const coupon = wheelCoupon ?? ladderOffer.coupon;
 
     /*

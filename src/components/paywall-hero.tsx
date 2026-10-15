@@ -130,7 +130,7 @@ export function PaywallCompare() {
   );
 }
 
-export function PaywallHero({ reason, sticker }: { reason: PaywallReason; sticker?: string | null }) {
+export function PaywallHero({ reason }: { reason: PaywallReason }) {
   const t = useT();
   let scene: ReactNode;
 
@@ -250,10 +250,6 @@ export function PaywallHero({ reason, sticker }: { reason: PaywallReason; sticke
   return (
     <div className={`memo-pw-hero ${reason}`} style={paywallAccentStyle(reason)} aria-hidden="true">
       {scene}
-      {/* The discount, slapped on the scene like a sticker (the podcast and practice rooms). */}
-      {sticker && (reason === "podcast" || reason === "regenerate") ? (
-        <span className="memo-pw-sticker">{sticker}</span>
-      ) : null}
     </div>
   );
 }

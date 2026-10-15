@@ -235,10 +235,7 @@ export function OnboardingPaywall({
 
       {/* A feature's paywall shows the feature, moving, in place of the list. */}
       {reason && !hasNotice ? (
-        <PaywallHero
-          reason={reason}
-          sticker={discounted ? t("paywall.offer.badge", { percent: offer.percentOff }) : null}
-        />
+        <PaywallHero reason={reason} />
       ) : null}
 
       {discounted ? (
@@ -317,11 +314,8 @@ export function OnboardingPaywall({
               role="radio"
               aria-checked={selected}
             >
-              {discounted ? (
-                <span className="memo-paywall-plan-badge offer">
-                  {t("paywall.offer.badge", { percent: offer.percentOff })}
-                </span>
-              ) : plan.id === "yearly" ? (
+              {/* The discount is said once, above the plans; the cards only strike the old price. */}
+              {plan.id === "yearly" ? (
                 <span className="memo-paywall-plan-badge">{t("paywall.mostPopular")}</span>
               ) : null}
               <span className="memo-paywall-plan-header">
@@ -338,7 +332,8 @@ export function OnboardingPaywall({
                 <small>{suffix}</small>
               </span>
               <span className="memo-paywall-plan-detail">{detail}</span>
-              {plan.id === "yearly" && yearlySavings > 0 ? (
+              {/* Not beside a discount: two percentages on one card contradict each other. */}
+              {plan.id === "yearly" && yearlySavings > 0 && !discounted ? (
                 <span className="memo-paywall-save">
                   {t("paywall.save", { percent: yearlySavings })}
                 </span>
@@ -352,9 +347,7 @@ export function OnboardingPaywall({
           never name Stripe there — not even while the products are loading. */}
       <p className="memo-paywall-due">
         <CircleCheck className="h-5 w-5" />
-        {discounted
-          ? t("paywall.offer.due", { percent: offer.percentOff })
-          : t(trialEligible ? "paywall.nothingToday" : native ? "native.securePayment" : "paywall.securePayment")}
+        {t(trialEligible ? "paywall.nothingToday" : native ? "native.securePayment" : "paywall.securePayment")}
       </p>
 
       <button

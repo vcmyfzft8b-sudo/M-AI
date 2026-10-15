@@ -10226,6 +10226,13 @@
   text-decoration-thickness: 2px;
 }
 
+/* The general paywall's benefits as a plain list, not three boxes. */
+.memo-paywall-benefit {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 /* Under the headline of a feature's paywall: what the plan adds, in one line. */
 .memo-paywall-sub {
   max-width: 22rem;
@@ -10267,20 +10274,7 @@
   width: 100%;
   align-self: stretch;
   height: 10.5rem;
-  margin: 0.4rem 0 0.8rem;
-  overflow: hidden;
-  border-radius: 26px;
-  background:
-    radial-gradient(120% 90% at 50% 0%, color-mix(in oklch, var(--paywall-accent) 28%, transparent), transparent 70%),
-    color-mix(in oklch, var(--paywall-accent) 10%, var(--surface));
-  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--paywall-accent) 24%, transparent);
-}
-
-/* The read-aloud scene is the one dark room: a little stage with the lights down. */
-.memo-pw-hero.listen {
-  background:
-    radial-gradient(90% 80% at 30% 20%, color-mix(in oklch, var(--paywall-accent) 55%, transparent), transparent 70%),
-    color-mix(in oklch, var(--paywall-accent) 30%, var(--ink));
+  margin: 0.4rem 0 0.6rem;
 }
 
 .memo-pw-scene {
@@ -10625,14 +10619,6 @@
 .memo-paywall-plan-grid.rows .memo-paywall-save,
 .memo-paywall-plan-grid.spotlight .memo-paywall-save { grid-area: save; margin-top: 0.1rem; }
 
-.memo-paywall-plan-grid.rows .memo-paywall-plan-badge,
-.memo-paywall-plan-grid.spotlight .memo-paywall-plan-badge {
-  top: -0.7rem;
-  left: auto;
-  right: 1rem;
-  transform: none;
-}
-
 .memo-paywall-plan-grid.spotlight .memo-paywall-plan.selected {
   padding: 1.3rem 1.2rem 1.1rem;
   box-shadow: 0 10px 28px color-mix(in oklch, var(--paywall-accent, var(--promo)) 28%, transparent);
@@ -10659,36 +10645,6 @@
  * primary action, and the page still lands on one phone screen.
  */
 
-/* Chat: the pitch arrives as Memo's messages, left-aligned like a thread. */
-.memo-paywall-shell[data-reason="chat"] .memo-paywall-title,
-.memo-paywall-shell[data-reason="chat"] .memo-paywall-sub {
-  position: relative;
-  justify-self: start;
-  width: fit-content;
-  max-width: 88%;
-  margin: 0 0 0.5rem;
-  padding: 0.75rem 1rem;
-  border-radius: 22px 22px 22px 6px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  text-align: left;
-}
-
-.memo-paywall-shell[data-reason="chat"] .memo-paywall-title {
-  font-size: 1.55rem;
-  line-height: 1.15;
-}
-
-.memo-paywall-shell[data-reason="chat"] .memo-paywall-sub {
-  margin-bottom: 1rem;
-  color: var(--text);
-}
-
-.memo-paywall-shell[data-reason="chat"] .memo-paywall-offer {
-  justify-self: start;
-  margin: 0 0 0.5rem;
-}
-
 /* Read-aloud: the lights go down — a dark "now playing" screen in either appearance. */
 .memo-paywall-shell[data-reason="listen"] {
   --memo-paywall-title-text: var(--on-photo);
@@ -10709,10 +10665,8 @@
   color: var(--on-photo);
 }
 
-.memo-paywall-shell[data-reason="listen"] .memo-pw-hero.listen {
-  height: 11rem;
+.memo-paywall-shell[data-reason="listen"] .memo-pw-hero {
   margin-top: 1.2rem;
-  box-shadow: 0 20px 50px color-mix(in oklch, var(--paywall-accent) 40%, transparent);
 }
 
 /* Tutor: a warm room in the tutor's own orange, the plans as white cards on it. */
@@ -10729,15 +10683,11 @@
   color: var(--on-promo);
 }
 
-.memo-paywall-shell[data-reason="tutor"] .memo-pw-hero {
-  background: transparent;
-  box-shadow: none;
-}
-
 .memo-paywall-shell[data-reason="tutor"] .memo-pw-orb {
   width: 6.4rem;
   height: 6.4rem;
-  background: radial-gradient(circle at 35% 30%, var(--surface), color-mix(in oklch, var(--paywall-accent) 50%, var(--surface)) 70%);
+  /* White in both appearances: the orb is lit, whatever the page is. */
+  background: radial-gradient(circle at 35% 30%, var(--on-promo), color-mix(in oklch, var(--paywall-accent) 50%, var(--on-promo)) 70%);
 }
 
 .memo-paywall-shell[data-reason="tutor"] .memo-pw-wave span {
@@ -10746,29 +10696,6 @@
 
 .memo-paywall-shell[data-reason="tutor"] .memo-paywall-offer {
   background: var(--surface);
-}
-
-/* Podcast: an on-air studio, the discount slapped on the scene as a sticker. */
-.memo-pw-sticker {
-  position: absolute;
-  top: 0.7rem;
-  right: 0.7rem;
-  display: grid;
-  place-items: center;
-  width: 4.4rem;
-  height: 4.4rem;
-  border-radius: 999px;
-  background: var(--promo);
-  color: var(--on-promo);
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  line-height: 1.05;
-  text-align: center;
-  text-transform: uppercase;
-  rotate: 12deg;
-  box-shadow: 0 6px 16px color-mix(in oklch, var(--promo) 45%, transparent);
-  animation: memo-pw-stamp 0.6s 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .memo-paywall-shell[data-reason="podcast"] .memo-pw-hero::before {
@@ -10784,11 +10711,6 @@
   animation: memo-pw-dot 1.4s infinite;
 }
 
-.memo-paywall-shell[data-reason="podcast"] .memo-paywall-offer,
-.memo-paywall-shell[data-reason="regenerate"] .memo-paywall-offer {
-  display: none;
-}
-
 /* New note: a page of lined paper with a margin; the plans are sticky notes. */
 .memo-paywall-shell[data-reason="note"] {
   background:
@@ -10797,51 +10719,10 @@
     var(--surface);
 }
 
-.memo-paywall-shell[data-reason="note"] .memo-pw-hero {
-  background: transparent;
-  box-shadow: none;
-}
-
 .memo-paywall-shell[data-reason="note"] .memo-paywall-title {
   width: fit-content;
   padding: 0 0.3rem;
   background: linear-gradient(to top, color-mix(in oklch, var(--paywall-accent) 35%, transparent) 0 40%, transparent 40%);
-}
-
-.memo-paywall-shell[data-reason="note"] .memo-paywall-plan {
-  border: 0;
-  border-radius: 12px;
-  background: color-mix(in oklch, var(--paywall-accent) 16%, var(--surface));
-  box-shadow: 0 10px 20px var(--hover-ring);
-}
-
-.memo-paywall-shell[data-reason="note"] .memo-paywall-plan:nth-child(1) { rotate: -2.5deg; }
-.memo-paywall-shell[data-reason="note"] .memo-paywall-plan:nth-child(2) { rotate: 2deg; }
-
-.memo-paywall-shell[data-reason="note"] .memo-paywall-plan.selected {
-  outline: 3px solid var(--paywall-accent);
-  outline-offset: 3px;
-}
-
-/* A strip of tape holding each sticky note to the page. */
-.memo-paywall-shell[data-reason="note"] .memo-paywall-plan::after {
-  content: "";
-  position: absolute;
-  top: -0.55rem;
-  left: 50%;
-  width: 3.4rem;
-  height: 1.1rem;
-  translate: -50% 0;
-  rotate: -4deg;
-  background: color-mix(in oklch, var(--surface) 70%, transparent);
-  box-shadow: 0 1px 2px var(--hover-ring);
-}
-
-.memo-paywall-shell[data-reason="note"] .memo-paywall-plan-badge {
-  top: -0.6rem;
-  left: auto;
-  right: -0.4rem;
-  transform: rotate(8deg);
 }
 
 /* Library: free and the plan side by side, with the real limits. */
@@ -10891,40 +10772,6 @@
 
 .memo-pw-compare thead .plan { border-radius: 14px 14px 0 0; color: var(--paywall-accent); }
 .memo-pw-compare tbody tr:last-child .plan { border-radius: 0 0 14px 14px; }
-
-/* Older note: a vault — the discount handed over as a ticket with a torn edge. */
-.memo-paywall-shell[data-reason="locked"] .memo-paywall-offer {
-  position: relative;
-  padding: 0.65rem 1.4rem;
-  border: 2px dashed color-mix(in oklch, var(--paywall-accent) 70%, var(--text));
-  border-radius: 12px;
-  background: color-mix(in oklch, var(--paywall-accent) 18%, var(--surface));
-  color: var(--text);
-  font-size: 0.95rem;
-  -webkit-mask: radial-gradient(circle at 0 50%, transparent 0.55rem, #000 0.6rem) left / 51% 100% no-repeat,
-    radial-gradient(circle at 100% 50%, transparent 0.55rem, #000 0.6rem) right / 51% 100% no-repeat;
-  mask: radial-gradient(circle at 0 50%, transparent 0.55rem, #000 0.6rem) left / 51% 100% no-repeat,
-    radial-gradient(circle at 100% 50%, transparent 0.55rem, #000 0.6rem) right / 51% 100% no-repeat;
-}
-
-.memo-paywall-shell[data-reason="locked"] .memo-paywall-offer::before {
-  content: "🔑 ";
-}
-
-/* New practice: the plans are a pair of flashcards, tipped like a dealt hand. */
-.memo-paywall-shell[data-reason="regenerate"] .memo-paywall-plan {
-  border-radius: 18px;
-  box-shadow: 0 12px 24px var(--hover-ring);
-  background-image: repeating-linear-gradient(135deg, color-mix(in oklch, var(--paywall-accent) 8%, transparent) 0 0.6rem, transparent 0.6rem 1.2rem);
-}
-
-.memo-paywall-shell[data-reason="regenerate"] .memo-paywall-plan:nth-child(1) { rotate: -3deg; }
-.memo-paywall-shell[data-reason="regenerate"] .memo-paywall-plan:nth-child(2) { rotate: 3deg; translate: 0 0.4rem; }
-
-@keyframes memo-pw-stamp {
-  from { opacity: 0; scale: 2.2; rotate: -20deg; }
-  to { opacity: 1; scale: 1; rotate: 12deg; }
-}
 
 @keyframes memo-pw-rise { from { opacity: 0; translate: 0 0.5rem; } to { opacity: 1; translate: 0 0; } }
 @keyframes memo-pw-dot { 0%, 60%, 100% { opacity: 0.3; } 30% { opacity: 1; } }

@@ -8914,7 +8914,8 @@
 
 @keyframes memo-wheel-rays { to { rotate: 360deg; } }
 @keyframes memo-wheel-bulb { 0% { opacity: 1; } 50% { opacity: 0.2; box-shadow: none; } }
-@keyframes memo-wheel-bulb-all { 0% { opacity: 1; scale: 1.4; } 50% { opacity: 0.3; scale: 1; box-shadow: none; } }
+/* Brighter, not bigger: a scale would multiply the rim offset and throw the bulbs off the wheel. */
+@keyframes memo-wheel-bulb-all { 0% { opacity: 1; box-shadow: 0 0 10px 4px color-mix(in oklch, var(--promo) 85%, transparent); } 50% { opacity: 0.3; box-shadow: none; } }
 @keyframes memo-wheel-wiggle { 0%, 100% { rotate: -8deg; } 50% { rotate: 8deg; } }
 @keyframes memo-wheel-jump {
   0%, 100% { transform: translate(-50%, -50%) scale(1); }
@@ -9118,7 +9119,7 @@
 }
 
 .memo-offer-plan.selected .memo-offer-radio {
-  border: 0.42rem solid #ffffff;
+  border: 0.42rem solid var(--text);
 }
 
 .memo-offer-plan-copy {

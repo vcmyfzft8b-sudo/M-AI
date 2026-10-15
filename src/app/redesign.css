@@ -26981,9 +26981,24 @@ a.memo-exam-station-go {
   gap: 0.35rem;
 }
 
-/* The examiner's voices, as the tutor offers them, left-aligned under their label. */
+/*
+ * The examiner's voices, as the tutor offers them, in three equal columns so the grid is
+ * symmetric; the last, shorter row is centred.
+ */
 .memo-exam-voices {
-  justify-content: flex-start;
+  justify-content: center;
+}
+
+.memo-exam-voices .memo-tutor-voice {
+  flex: 0 0 calc((100% - 1rem) / 3);
+  min-width: 0;
+  padding-right: 0.6rem;
+}
+
+.memo-exam-voices .memo-tutor-voice span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The instructions before an oral exam. */

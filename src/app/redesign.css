@@ -27359,6 +27359,7 @@ button.memo-exam-card:hover {
   border-radius: 22px;
   background: var(--surface);
   box-shadow: var(--shadow);
+  text-align: left;
 }
 
 .memo-exam-goal-head {
@@ -27428,14 +27429,14 @@ button.memo-exam-card:hover {
   color: var(--success);
 }
 
-.memo-exam-facts {
+.memo-exam-goal-facts {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.5rem;
 }
 
-.memo-exam-facts > span {
+.memo-exam-goal-facts > span {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
@@ -27446,9 +27447,10 @@ button.memo-exam-card:hover {
   color: var(--muted);
   font-size: 0.86rem;
   font-weight: 650;
+  white-space: nowrap;
 }
 
-.memo-exam-facts b {
+.memo-exam-goal-facts b {
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }

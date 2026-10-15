@@ -264,7 +264,7 @@ export function ExamDashboard({
             {goalLeft === 0 ? t("exam.dash.goal.reached") : t("exam.dash.goal.left", { percent: goalLeft })}
           </p>
         </section>
-        <div className="memo-exam-facts">
+        <div className="memo-exam-goal-facts">
           <span>
             <Emoji symbol="📅" size="1rem" />
             {examPassed ? (

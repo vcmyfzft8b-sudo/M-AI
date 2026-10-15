@@ -20,7 +20,13 @@
  *            prints under the sphere.
  * The last two are landing locales only; the app never plays them.
  *
- * Usage:  node scripts/generate-tutor-voice-clips.mjs [--voice Grace] [--language sl] [--force]
+ * All four are spoken by Gemini since 2026-10-14, in the Gemini voice each name maps to
+ * (src/lib/tutor/gemini-voices.ts), because that is what the app now sounds like
+ * (scripts/lib/gemini-speech.mjs; ffmpeg has to be on the PATH). `TTS_PROVIDER=soniox` renders
+ * them with Soniox again.
+ *
+ * Usage:  node scripts/generate-tutor-voice-clips.mjs [--voice Grace] [--language sl]
+ *           [--kind sample,tutor,answer] [--force]
  */
 
 import fs from "node:fs";
@@ -30,6 +36,7 @@ import { fileURLToPath } from "node:url";
 import { SonioxNodeClient } from "@soniox/node";
 
 import { synthesizeTtsChunkWithTimestamps } from "../src/lib/note-tts-synthesis.ts";
+import { geminiMp3 } from "./lib/gemini-speech.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT_DIR = path.join(ROOT, "public", "tutor-demo");
@@ -191,8 +198,15 @@ function arg(name) {
   return index < 0 ? undefined : process.argv[index + 1];
 }
 
+/* Every clip, in the voice the app now speaks with: Gemini for the tutor and the podcast alike. */
+const GEMINI_KINDS = new Set(["sample", "podcast", "tutor", "answer"]);
+
 /* The app's own synthesis path, so these clips are made the way a note is read. */
-async function synthesize(client, { text, voice, language, model }) {
+async function synthesize(client, { text, voice, language, model, kind }) {
+  if (GEMINI_KINDS.has(kind)) {
+    return (await geminiMp3({ text, voice, language, bitrate: BITRATE, timeoutMs: TIMEOUT_MS })).audio;
+  }
+
   const { audio } = await synthesizeTtsChunkWithTimestamps({
     client,
     text,
@@ -211,16 +225,17 @@ async function main() {
   loadEnv();
 
   const apiKey = process.env.SONIOX_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("SONIOX_API_KEY is not set — put it in .env.local.");
-  }
-
   const model = process.env.SONIOX_TTS_MODEL || "tts-rt-v2";
-  const client = new SonioxNodeClient({ api_key: apiKey });
+  /* Only the podcast clips still need Soniox; a run of tutor clips needs only Gemini. */
+  const client = apiKey ? new SonioxNodeClient({ api_key: apiKey }) : null;
+
+  if (process.env.TTS_PROVIDER === "soniox") {
+    GEMINI_KINDS.clear();
+  }
   const force = process.argv.includes("--force");
   const onlyVoice = arg("voice");
   const onlyLanguage = arg("language");
+  const onlyKinds = arg("kind")?.split(",");
 
   const jobs = [];
 
@@ -230,6 +245,10 @@ async function main() {
     ["tutor", TUTOR],
     ["answer", ANSWER],
   ]) {
+    if (onlyKinds && !onlyKinds.includes(kind)) {
+      continue;
+    }
+
     for (const [language, text] of Object.entries(texts)) {
       if (onlyLanguage && onlyLanguage !== language) {
         continue;
@@ -252,6 +271,10 @@ async function main() {
   }
 
   const pending = jobs.filter((job) => force || !fs.existsSync(job.file));
+
+  if (!client && pending.some((job) => !GEMINI_KINDS.has(job.kind))) {
+    throw new Error("SONIOX_API_KEY is not set — put it in .env.local.");
+  }
   console.log(`${jobs.length} clips, ${pending.length} to render at ${BITRATE / 1000} kbps.`);
 
   let done = 0;

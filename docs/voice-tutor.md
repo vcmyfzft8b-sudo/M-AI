@@ -28,6 +28,54 @@ This is the same architecture as Soniox's own Voice Agent reference app — ther
 hosted speech-to-speech endpoint to use instead, only STT, TTS and translation, with
 agents built by the customer or through LiveKit/Pipecat.
 
+## The voice: Gemini since 2026-10-14
+
+Every voice in the app — the tutor, read-aloud and the podcast — is Gemini's
+`gemini-3.8-flash-tts` since 2026-10-14. Soniox still does all the listening (the tutor's
+realtime recognizer and read-aloud's alignment transcription). `TTS_PROVIDER=soniox` puts the
+old voice back everywhere without a code change, and so does a deployment with no
+`GEMINI_API_KEY`.
+
+**Why.** The owner found the Soniox voice odd, and a blind test on the same Slovenian tutor
+passage agreed (Gemini 3.1 Pro as a native-listener judge, three runs per clip): Gemini Schedar
+8.8 pronunciation / 7.3 natural, Kore 8.2 / 6.0, Soniox Grace 7.7 / 5.3 — and on an earlier
+passage no Soniox voice scored above 4.3 for natural. Takes vary from one request to the next.
+
+**What is sent is the text and nothing else.** A style line in front of it ("read this like a
+warm tutor") was read out loud in 5 of 12 clips, sometimes in an American accent, and slowed the
+voice by a quarter; plain text was word-perfect in every take and paced like Soniox. The model
+also refuses a system instruction. The tutor's `[laughs]`/`[sighs]`/`[clears throat]`/`[whispers]`
+tags are performed as sounds, as they were on Soniox.
+
+**Voices.** The picker keeps its eleven names; `src/lib/tutor/gemini-voices.ts` maps each to a
+Gemini voice of the same gender (measured by pitch — Google's list does not say, and its
+"female" Pulcherrima sits at 126 Hz) and character. Grace → Kore and Daniel → Schedar, the two
+winners. Google has no native Slovenian voices; these are its multilingual ones.
+
+**How the tutor gets it.** Gemini has no single-purpose browser key, so the session route mints
+a signed token (`src/lib/tutor/speech-token.ts`, same lifetime as the slice) and the browser
+posts each piece of speech to `POST /api/tutor/speech`, which streams back bare 24 kHz PCM.
+`GeminiTutorSpeechOutput` (`src/lib/tutor/gemini-speech-output.ts`) has the same contract as
+the Soniox class: the turn is cut into pieces at sentence ends (`speech-pieces.ts` — the first
+sentence as soon as it is written, then whole sentences), two requests in flight, audio
+scheduled strictly in order. Gemini reports no timestamps, so each piece's characters are
+spread over its audio by weight; that places an interruption to within a word, which is all the
+interruption record and the echo test use.
+
+**Read-aloud and the podcast** synthesize with Gemini on the server, encode to 64 kbps MP3 with
+`@breezystack/lamejs` (a function has no ffmpeg), and store it as before. Read-aloud's word
+highlight comes from transcribing the chunk — the path the Soniox REST fallback always used —
+and falls back to an even spread if that fails. The model is part of both cache keys, so the
+first play of anything after the switch makes it again in the new voice.
+
+**Pre-rendered clips** (voice previews, the landing demo, `/ugc/oral-quiz`) are made by
+`scripts/generate-tutor-voice-clips.mjs` and `scripts/generate-oral-quiz-clips.mjs` through
+`scripts/lib/gemini-speech.mjs`; they need ffmpeg locally.
+
+**Cost.** $9 per million audio tokens at 25 tokens a second is $0.81 an hour of speech (Soniox:
+$0.70), logged to `ai_usage_events` as stage `tutor_speech`. Google's pricing page says it
+doubles on 2027-01-01, to $1.63 an hour.
+
 ## The pieces
 
 | File | What it is |
@@ -36,7 +84,10 @@ agents built by the customer or through LiveKit/Pipecat.
 | `src/lib/tutor-voice.ts` | Reads the note, plans the running order, streams one spoken turn. |
 | `src/lib/tutor-realtime.ts` | Mints the two temporary keys. |
 | `src/lib/tutor/turn-audio.ts` | The decisions: where an interrupted turn was cut, whether the mic heard the tutor's own echo, which band of the spectrum a frame sat in, and when that counts as somebody speaking. No browser globals — unit-tested in `tests/tutor-turn-audio.test.mjs`. |
-| `src/lib/tutor/speech-output.ts` | The TTS socket and the Web Audio graph that plays it. |
+| `src/lib/tutor/speech-output.ts` | The Soniox TTS socket and the Web Audio graph that plays it (`TTS_PROVIDER=soniox`). |
+| `src/lib/tutor/gemini-speech-output.ts` | The same contract on Gemini: one request per piece, played in order. The default. |
+| `src/lib/tutor/speech-pieces.ts` | Where a turn is cut into pieces, and how a piece's audio is mapped back onto its characters. |
+| `src/app/api/tutor/speech` | One piece of the tutor's speech, streamed from Gemini as PCM. |
 | `src/lib/tutor/speech-input.ts` | The microphone, the worklet, and the recognizer socket. |
 | `src/lib/tutor/voice-colors.ts` | A hue per voice, so the sphere looks like the voice picked. |
 | `src/components/lecture-tutor.tsx` | The sphere, the voice picker and the conversation loop. |
@@ -340,7 +391,7 @@ and a closing), 1570 spoken words — about fifteen minutes of audio.
 | --- | --- | --- |
 | Lesson plan (gemini-2.5-flash) | 2 379 in / 820 out | $0.0028 |
 | Spoken turns (glm-5.3-flash) | 58 198 in / 4 299 out over 11 calls | $0.0054 |
-| Text-to-speech | 15.0 min at $0.70/hr | **$0.1744** |
+| Text-to-speech | 15.0 min at $0.70/hr (Soniox; Gemini is $0.81/hr, $1.63 from 2027) | **$0.1744** |
 | Speech-to-text | 20.2 min of open microphone at $0.12/hr | $0.0404 |
 | **Total** | | **≈ $0.22** |
 

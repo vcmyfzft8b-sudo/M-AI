@@ -3,7 +3,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import { SonioxNodeClient, type TranscriptToken } from "@soniox/node";
+import { SonioxNodeClient } from "@soniox/node";
 
 import { getUserEntitlementState } from "@/lib/billing";
 import { STORAGE_BUCKET } from "@/lib/constants";
@@ -13,7 +13,11 @@ import { resolveSourceLanguage } from "@/lib/source-language";
 import { needsEnglishSpeechFallback, resolveSpeechLanguage, toSpeechScript } from "@/lib/speech-language";
 import { prepareSpeechText } from "@/lib/speech-translation";
 import { DEFAULT_NOTE_TTS_VOICE, type NoteTtsVoice } from "@/lib/note-tts-settings";
-import type { TtsAlignmentPiece } from "@/lib/note-tts-alignment";
+import {
+  alignTtsTokensToWords,
+  type TtsAlignmentToken,
+  type TtsAlignmentWord,
+} from "@/lib/note-tts-alignment";
 import {
   TtsAudioTruncatedError,
   synthesizeTtsChunkWithTimestamps,
@@ -26,14 +30,11 @@ import {
 } from "@/lib/note-tts-text";
 import { isMissingLectureReferenceError } from "@/lib/postgres-errors";
 import { getServerEnv, requireSonioxEnv } from "@/lib/server-env";
+import { speechModel, speechProvider, synthesizeGeminiMp3 } from "@/lib/speech-synthesis";
 import { retryTransientStorageOperation } from "@/lib/storage-download-errors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
-export type TtsAlignmentWord = {
-  wordIndex: number;
-  startMs: number;
-  endMs: number;
-};
+export type { TtsAlignmentWord } from "@/lib/note-tts-alignment";
 
 export type TtsQuotaState = {
   allowed: boolean;
@@ -224,157 +225,6 @@ function buildTtsStoragePath(params: {
     params.contentHash,
     `${String(params.chunkIndex).padStart(4, "0")}-${safeStorageSegment(params.model)}-${safeStorageSegment(params.voice)}.mp3`,
   ].join("/");
-}
-
-function normalizeAlignmentText(value: string) {
-  return value
-    .normalize("NFKD")
-    .replace(/\p{Mark}/gu, "")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, "");
-}
-
-type TtsAlignmentToken = TtsAlignmentPiece & Partial<Pick<TranscriptToken, "is_audio_event">>;
-
-function collectTranscriptPieces(tokens: TtsAlignmentToken[]) {
-  return tokens
-    .map((token, index) => ({
-      index,
-      text: normalizeAlignmentText(token.text),
-      startMs: token.start_ms,
-      endMs: token.end_ms,
-    }))
-    .filter((token) => token.text.length > 0 && !tokens[token.index]?.is_audio_event);
-}
-
-function interpolateMissingTimings(params: {
-  timings: Array<TtsAlignmentWord | null>;
-  wordStartIndex: number;
-  durationMs: number;
-}) {
-  const timings = [...params.timings];
-  const durationMs = Math.max(params.durationMs, timings.length * 250, 1);
-
-  for (let index = 0; index < timings.length; index += 1) {
-    if (timings[index]) {
-      continue;
-    }
-
-    const previousIndex = (() => {
-      for (let candidate = index - 1; candidate >= 0; candidate -= 1) {
-        if (timings[candidate]) {
-          return candidate;
-        }
-      }
-
-      return -1;
-    })();
-    const nextIndex = (() => {
-      for (let candidate = index + 1; candidate < timings.length; candidate += 1) {
-        if (timings[candidate]) {
-          return candidate;
-        }
-      }
-
-      return timings.length;
-    })();
-    const previousEnd = previousIndex >= 0 ? timings[previousIndex]?.endMs ?? 0 : 0;
-    const nextStart =
-      nextIndex < timings.length ? timings[nextIndex]?.startMs ?? durationMs : durationMs;
-    const missingCount = nextIndex - previousIndex - 1;
-    const sliceMs = Math.max(80, (nextStart - previousEnd) / Math.max(missingCount, 1));
-    const offset = index - previousIndex - 1;
-    const startMs = Math.max(0, Math.round(previousEnd + sliceMs * offset));
-    const endMs = Math.min(durationMs, Math.max(startMs + 80, Math.round(startMs + sliceMs)));
-
-    timings[index] = {
-      wordIndex: params.wordStartIndex + index,
-      startMs,
-      endMs,
-    };
-  }
-
-  return timings.filter((timing): timing is TtsAlignmentWord => Boolean(timing));
-}
-
-export function alignTtsTokensToWords(params: {
-  words: NoteTtsWord[];
-  tokens: TtsAlignmentToken[];
-  wordStartIndex: number;
-  durationMs: number;
-}) {
-  const transcriptPieces = collectTranscriptPieces(params.tokens);
-  const timings: Array<TtsAlignmentWord | null> = Array.from({ length: params.words.length }, () => null);
-  let tokenIndex = 0;
-
-  for (const [wordOffset, word] of params.words.entries()) {
-    const target = normalizeAlignmentText(word.text);
-
-    if (!target) {
-      continue;
-    }
-
-    let bestMatch:
-      | {
-          startPieceIndex: number;
-          endPieceIndex: number;
-        }
-      | null = null;
-
-    for (
-      let candidateStart = tokenIndex;
-      candidateStart < Math.min(transcriptPieces.length, tokenIndex + 8);
-      candidateStart += 1
-    ) {
-      let accumulated = "";
-
-      for (
-        let candidateEnd = candidateStart;
-        candidateEnd < Math.min(transcriptPieces.length, candidateStart + 8);
-        candidateEnd += 1
-      ) {
-        accumulated += transcriptPieces[candidateEnd].text;
-
-        if (accumulated === target || accumulated.includes(target) || target.includes(accumulated)) {
-          bestMatch = {
-            startPieceIndex: candidateStart,
-            endPieceIndex: candidateEnd,
-          };
-
-          if (accumulated === target) {
-            break;
-          }
-        }
-
-        if (accumulated.length > target.length + 8) {
-          break;
-        }
-      }
-
-      if (bestMatch) {
-        break;
-      }
-    }
-
-    if (!bestMatch) {
-      continue;
-    }
-
-    const startPiece = transcriptPieces[bestMatch.startPieceIndex];
-    const endPiece = transcriptPieces[bestMatch.endPieceIndex];
-    timings[wordOffset] = {
-      wordIndex: word.index,
-      startMs: Math.max(0, Math.round(startPiece.startMs)),
-      endMs: Math.max(startPiece.startMs + 80, Math.round(endPiece.endMs)),
-    };
-    tokenIndex = bestMatch.endPieceIndex + 1;
-  }
-
-  return interpolateMissingTimings({
-    timings,
-    wordStartIndex: params.wordStartIndex,
-    durationMs: params.durationMs,
-  });
 }
 
 export async function getTtsUsageState(params: {
@@ -929,6 +779,79 @@ async function transcribeGeneratedAudio(params: {
 // a second bill per chunk. The REST path stays as the fallback for a stream that fails for a
 // reason retrying will not fix — but not for the organization's concurrent-stream cap, which the
 // caller retries, and not for a truncation, which REST would repeat silently.
+/**
+ * A chunk in the Gemini voice, the default since 2026-10-14.
+ *
+ * Gemini reports no timestamps, so the highlight is placed the way the Soniox REST fallback always
+ * placed it: the audio is transcribed and its words matched back to the note's. That costs a few
+ * seconds per chunk, which Gemini more than gives back — it speaks a minute of audio in about
+ * fifteen seconds, where the Soniox stream took close to a minute. A transcription that fails
+ * leaves the words spread evenly over the chunk rather than failing the chunk: a highlight that
+ * drifts by a word beats no audio.
+ */
+async function synthesizeGeminiAlignedChunk(params: {
+  text: string;
+  chunkWords: NoteTtsWord[];
+  wordStartIndex: number;
+  language: string;
+  voice: NoteTtsVoice;
+  clientReferenceId: string;
+  userId: string;
+  lectureId: string;
+}) {
+  const startedAt = Date.now();
+  const { audio, durationMs } = await synthesizeGeminiMp3({
+    text: params.text,
+    voice: params.voice,
+    language: params.language,
+    bitrate: TTS_OUTPUT_BITRATE,
+    timeoutMs: TTS_STREAM_TIMEOUT_MS,
+    usage: { stage: "read_aloud_speech", userId: params.userId, lectureId: params.lectureId },
+  });
+  let tokens: TtsAlignmentToken[] = [];
+
+  try {
+    const transcript = await transcribeGeneratedAudio({
+      audio,
+      language: params.language,
+      clientReferenceId: params.clientReferenceId,
+      timeoutMs: Math.max(
+        30_000,
+        TTS_GENERATION_BUDGET_MS - (Date.now() - startedAt) - TTS_FALLBACK_SYNTHESIS_RESERVE_MS,
+      ),
+    });
+
+    tokens = (transcript?.tokens ?? []).flatMap((token) =>
+      typeof token.start_ms === "number" && typeof token.end_ms === "number"
+        ? [
+            {
+              text: token.text,
+              start_ms: token.start_ms,
+              end_ms: token.end_ms,
+              is_audio_event: token.is_audio_event,
+            },
+          ]
+        : [],
+    );
+  } catch (error) {
+    console.warn("Read-aloud alignment transcription failed; spreading words evenly", {
+      clientReferenceId: params.clientReferenceId,
+      error,
+    });
+  }
+
+  return {
+    audio,
+    durationMs,
+    alignment: alignTtsTokensToWords({
+      words: params.chunkWords,
+      tokens,
+      wordStartIndex: params.wordStartIndex,
+      durationMs,
+    }),
+  };
+}
+
 async function synthesizeAlignedTtsChunk(params: {
   text: string;
   chunkWords: NoteTtsWord[];
@@ -937,7 +860,13 @@ async function synthesizeAlignedTtsChunk(params: {
   language: string;
   voice: NoteTtsVoice;
   clientReferenceId: string;
+  userId: string;
+  lectureId: string;
 }) {
+  if (speechProvider() === "gemini") {
+    return synthesizeGeminiAlignedChunk(params);
+  }
+
   const env = getServerEnv();
   const client = getSonioxClient();
   const startedAt = Date.now();
@@ -1041,7 +970,6 @@ async function generateTtsChunk(params: {
   language: string;
   voice: NoteTtsVoice;
 }) {
-  const env = getServerEnv();
   const speechText = await prepareSpeechText(params.chunk.text, params.sourceLanguage);
   const { audio, durationMs, alignment: spokenAlignment } = await synthesizeAlignedTtsChunk({
     text: speechText,
@@ -1051,6 +979,8 @@ async function generateTtsChunk(params: {
     language: params.language,
     voice: params.voice,
     clientReferenceId: `${params.lectureId}:${params.contentHash}:${params.chunk.chunkIndex}`,
+    userId: params.userId,
+    lectureId: params.lectureId,
   });
   // A translation has no truthful word-for-word timing against the written source.
   // Empty alignment keeps playback and seeking, while suppressing misleading word highlights.
@@ -1060,7 +990,7 @@ async function generateTtsChunk(params: {
     lectureId: params.lectureId,
     contentHash: params.contentHash,
     chunkIndex: params.chunk.chunkIndex,
-    model: env.SONIOX_TTS_MODEL,
+    model: speechModel(),
     voice: params.voice,
   });
   const service = createSupabaseServiceRoleClient();
@@ -1091,7 +1021,7 @@ async function generateTtsChunk(params: {
         word_end_index: params.chunk.wordEndIndex,
         language: params.language,
         voice: params.voice,
-        model: env.SONIOX_TTS_MODEL,
+        model: speechModel(),
         audio_storage_path: audioStoragePath,
         audio_mime_type: TTS_OUTPUT_MIME_TYPE,
         duration_ms: Math.ceil(durationMs),
@@ -1219,7 +1149,6 @@ export async function getOrCreateTtsChunk(params: {
   voice?: NoteTtsVoice;
   quotaContext: TtsQuotaContext;
 }) {
-  const env = getServerEnv();
   const sourceLanguage = await resolveSourceLanguage({ text: params.sourceText, hint: params.languageHint,
     metadata: params.sourceMetadata, lectureId: params.lectureId, userId: params.userId });
   const language = resolveSpeechLanguage(sourceLanguage);
@@ -1231,7 +1160,7 @@ export async function getOrCreateTtsChunk(params: {
     chunkIndex: params.chunk.chunkIndex,
     language,
     voice,
-    model: env.SONIOX_TTS_MODEL,
+    model: speechModel(),
   };
   const cached = await getCachedTtsChunkRow(identity);
   const usage = await getTtsUsageState({
@@ -1326,7 +1255,6 @@ export async function getReadyLeadingTtsChunkCount(params: {
     return 0;
   }
 
-  const env = getServerEnv();
   const limit = Math.max(1, params.limit ?? 2);
   const { data, error } = await createSupabaseServiceRoleClient()
     .from("lecture_tts_chunks")
@@ -1335,7 +1263,7 @@ export async function getReadyLeadingTtsChunkCount(params: {
     .eq("content_hash", hashNoteTtsContent(content))
     .eq("language", resolveSpeechLanguage(resolveMaterialLanguage(content, params.languageHint)))
     .eq("voice", params.voice ?? DEFAULT_NOTE_TTS_VOICE)
-    .eq("model", env.SONIOX_TTS_MODEL)
+    .eq("model", speechModel())
     .lt("chunk_index", limit);
 
   if (error) {

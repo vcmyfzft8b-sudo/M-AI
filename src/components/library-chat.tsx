@@ -9,11 +9,18 @@ import { MemoPortal } from "@/components/memo-portal";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { useIsOffline } from "@/components/offline/offline-provider";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { ChatStudySetCard, ChatStudySetPending } from "@/components/chat-study-set";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { sheetClass, useSheet } from "@/components/use-sheet";
+import { TUTOR_HISTORY_TURN_LIMIT } from "@/lib/ai/tutor-prompt";
 import { currentPaywallBack, paywallPath, withPaywallBack } from "@/lib/paywall-reasons";
 import { requestChatAnswer } from "@/lib/chat-stream-client";
+import {
+  withAttachedSet,
+  type ChatStudyAttachment,
+  type ChatStudyKind,
+} from "@/lib/chat-study-set";
 import { getRequestErrorMessage } from "@/lib/request-error-message";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import type { AppLectureListItem, AppLibraryFolder } from "@/lib/types";
@@ -34,11 +41,14 @@ type Message = {
   id: string;
   role: "user" | "assistant";
   text: string;
+  /** Flashcards, a quiz, a test or a mind map the answer brought with it. */
+  attachment?: ChatStudyAttachment | null;
 };
 
 const SUGGESTIONS: MessageKey[] = [
   "libraryChat.suggestion.review",
   "libraryChat.suggestion.links",
+  "libraryChat.suggestion.quiz",
   "libraryChat.suggestion.plan",
 ];
 
@@ -58,13 +68,22 @@ export function LibraryChat({
   const t = useT();
   const isOffline = useIsOffline();
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
-  const logRef = useRef<HTMLDivElement | null>(null);
+  /*
+   * One per log, because both are mounted at once: the desktop panel and the phone sheet render
+   * together and the stylesheet hides one. A single shared ref ended up on whichever mounted last,
+   * the hidden phone log, so the desktop log never followed the conversation down. That went
+   * unnoticed while answers were a few lines; a study set is taller than the panel.
+   */
+  const desktopLogRef = useRef<HTMLDivElement | null>(null);
+  const mobileLogRef = useRef<HTMLDivElement | null>(null);
   const scopeRef = useRef<HTMLDivElement | null>(null);
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   /* The answer as it is being written, before it becomes a finished message. */
   const [streamingAnswer, setStreamingAnswer] = useState("");
+  /* The kind of study set being written under the answer that has just finished streaming. */
+  const [pendingStudyKind, setPendingStudyKind] = useState<ChatStudyKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scope, setScope] = useState<Scope>("recent");
   const [scopeFolderId, setScopeFolderId] = useState<string | null>(null);
@@ -89,12 +108,12 @@ export function LibraryChat({
   const hasNotes = readyCount > 0;
 
   useEffect(() => {
-    const node = logRef.current;
-
-    if (node) {
-      node.scrollTop = node.scrollHeight;
+    for (const node of [desktopLogRef.current, mobileLogRef.current]) {
+      if (node) {
+        node.scrollTop = node.scrollHeight;
+      }
     }
-  }, [messages, isTyping, streamingAnswer, open]);
+  }, [messages, isTyping, streamingAnswer, pendingStudyKind, open]);
 
   /*
    * And again whenever the keyboard takes the log's height away. The effect
@@ -110,17 +129,25 @@ export function LibraryChat({
    * note's own chat in `lecture-workspace`.
    */
   useEffect(() => {
-    const node = logRef.current;
+    const nodes = [desktopLogRef.current, mobileLogRef.current].filter(
+      (node): node is HTMLDivElement => node !== null,
+    );
 
-    if (!node || !open) {
+    if (nodes.length === 0 || !open) {
       return;
     }
 
-    const sizes = new ResizeObserver(() => {
-      node.scrollTop = node.scrollHeight;
+    const sizes = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const node = entry.target as HTMLDivElement;
+        node.scrollTop = node.scrollHeight;
+      }
     });
 
-    sizes.observe(node);
+    for (const node of nodes) {
+      sizes.observe(node);
+    }
+
     return () => sizes.disconnect();
   }, [open]);
 
@@ -199,10 +226,14 @@ export function LibraryChat({
      * back with the question is the only memory the tutor has of it. Sent
      * before the new question is added, since that travels separately.
      */
-    const history = messages.map((message) => ({
-      role: message.role,
-      content: message.text,
-    }));
+    /*
+     * Only the turns the tutor reads (`buildTutorHistory` keeps the last ten), so a long
+     * session full of sets stays well inside the route's body and turn limits.
+     */
+    const history = messages.slice(-TUTOR_HISTORY_TURN_LIMIT).map((message) =>
+      // A set it made travels beside the turn: "explain the third card" needs the cards.
+      withAttachedSet({ role: message.role, content: message.text }, message.attachment),
+    );
 
     const askedId = `u${Date.now()}`;
 
@@ -215,7 +246,11 @@ export function LibraryChat({
     setStreamingAnswer("");
 
     try {
-      const { response, payload } = await requestChatAnswer<{ answer?: string; error?: string }>({
+      const { response, payload } = await requestChatAnswer<{
+        answer?: string;
+        error?: string;
+        attachment?: ChatStudyAttachment | null;
+      }>({
         url: "/api/library-chat",
         body: {
           question,
@@ -228,7 +263,11 @@ export function LibraryChat({
         onDelta: (text) => setStreamingAnswer((current) => current + text),
         // A second attempt starts from a blank bubble: half of one answer
         // followed by all of another would read as gibberish.
-        onAttemptStart: () => setStreamingAnswer(""),
+        onAttemptStart: () => {
+          setStreamingAnswer("");
+          setPendingStudyKind(null);
+        },
+        onStudy: setPendingStudyKind,
         t,
       });
 
@@ -238,7 +277,12 @@ export function LibraryChat({
 
       setMessages((current) => [
         ...current,
-        { id: `a${Date.now()}`, role: "assistant", text: payload.answer as string },
+        {
+          id: `a${Date.now()}`,
+          role: "assistant",
+          text: payload.answer as string,
+          attachment: payload.attachment ?? null,
+        },
       ]);
     } catch (caught) {
       setError(getRequestErrorMessage(caught, t("libraryChat.error.answerFailed"), t));
@@ -254,6 +298,7 @@ export function LibraryChat({
     } finally {
       setIsTyping(false);
       setStreamingAnswer("");
+      setPendingStudyKind(null);
     }
   }
 
@@ -412,9 +457,11 @@ export function LibraryChat({
                 <Image src="/memo-mascot.png" alt="" width={320} height={288} />
               </span>
               {/* Markdown on the tutor's side only; the learner's question is
-                  shown exactly as they typed it. */}
+                  shown exactly as they typed it. A study set sits under the
+                  answer, in the same column. */}
               <div>
                 <ChatMarkdown content={message.text} />
+                {message.attachment ? <ChatStudySetCard attachment={message.attachment} /> : null}
               </div>
             </div>
           ) : (
@@ -433,7 +480,8 @@ export function LibraryChat({
               <Image src="/memo-mascot.png" alt="" width={320} height={288} />
             </span>
             <div>
-              <ChatMarkdown content={streamingAnswer} streaming />
+              <ChatMarkdown content={streamingAnswer} streaming={!pendingStudyKind} />
+              {pendingStudyKind ? <ChatStudySetPending kind={pendingStudyKind} /> : null}
             </div>
           </div>
         ) : isTyping ? (
@@ -576,7 +624,7 @@ export function LibraryChat({
                 </button>
               </div>
 
-              <div ref={logRef} className="memo-homechat-log memo-scroll">
+              <div ref={desktopLogRef} className="memo-homechat-log memo-scroll">
                 {renderLog("desktop")}
               </div>
 
@@ -719,7 +767,7 @@ export function LibraryChat({
                 </button>
               </div>
 
-              <div ref={logRef} className="memo-m-chat-log">
+              <div ref={mobileLogRef} className="memo-m-chat-log">
                 {renderLog("mobile")}
               </div>
 

@@ -191,3 +191,35 @@ test("a retry repaints from scratch rather than continuing the last attempt", as
   // Once before each attempt, including the first.
   assert.deepEqual(resets, [0, 1]);
 });
+
+test("a stream that dies after a study frame is not asked again", async () => {
+  /*
+   * The plain-call fallback streams no prose, so the `study` frame can be the first thing that
+   * arrives. It means the answer exists and its turn is being saved with a set: asking again
+   * would save the turn twice and pay for a second set.
+   */
+  const script = fetchScript(
+    () => sse([["study", { kind: "flashcards" }]]),
+    () => sse([["done", { answer: { content: "second" } }]]),
+  );
+  const studied = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = script.fetch;
+
+  try {
+    const { payload } = await requestChatAnswer({
+      url: "/api/lectures/abc/chat/stream",
+      body: { question: "Naredi mi kartice" },
+      onDelta: () => {},
+      onAttemptStart: () => {},
+      onStudy: (kind) => studied.push(kind),
+      t,
+    });
+
+    assert.equal(script.calls.length, 1);
+    assert.equal(payload, null);
+    assert.deepEqual(studied, ["flashcards"]);
+  } finally {
+    globalThis.fetch = original;
+  }
+});

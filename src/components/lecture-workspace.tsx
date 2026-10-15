@@ -75,9 +75,11 @@ import { StudyQuizQuestion, StudyPracticeQuestion } from "@/components/study-que
 import { StudyFlashcard } from "@/components/study-flashcard";
 import { LectureTutor } from "@/components/lecture-tutor";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { ChatStudySetCard, ChatStudySetPending } from "@/components/chat-study-set";
 import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { requestChatAnswer } from "@/lib/chat-stream-client";
+import type { ChatStudyKind } from "@/lib/chat-study-set";
 import { getRequestErrorMessage } from "@/lib/request-error-message";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { usePathname, useRouter } from "next/navigation";
@@ -290,6 +292,7 @@ const CHAT_SUGGESTIONS: MessageKey[] = [
   "chat.suggestion.summarize",
   "chat.suggestion.explain",
   "chat.suggestion.questions",
+  "chat.suggestion.flashcards",
   "chat.suggestion.extend",
 ];
 
@@ -1071,15 +1074,21 @@ function ChatBubble({ message }: { message: ChatMessageWithCitations }) {
    * Only the tutor's side is markdown. What the learner typed is shown exactly
    * as they typed it — an asterisk in their question is an asterisk, not the
    * start of emphasis, and their own line breaks are kept by `pre-wrap`.
+   *
+   * A study set the answer brought with it sits under the bubble rather than in
+   * it: a flashcard needs the log's whole width, not a bubble's.
    */
   return (
-    <div className={assistant ? "memo-bubble-bot" : "memo-bubble-user"}>
-      {assistant ? (
-        <ChatMarkdown content={message.content} />
-      ) : (
-        <p className="memo-bubble-copy">{message.content}</p>
-      )}
-    </div>
+    <>
+      <div className={assistant ? "memo-bubble-bot" : "memo-bubble-user"}>
+        {assistant ? (
+          <ChatMarkdown content={message.content} />
+        ) : (
+          <p className="memo-bubble-copy">{message.content}</p>
+        )}
+      </div>
+      {assistant && message.attachment ? <ChatStudySetCard attachment={message.attachment} /> : null}
+    </>
   );
 }
 
@@ -1376,6 +1385,8 @@ export function LectureWorkspace({
   const [chatLogNode, setChatLogNode] = useState<HTMLDivElement | null>(null);
   /** The answer as it is being written, replaced by the saved message at the end. */
   const [streamingAnswer, setStreamingAnswer] = useState("");
+  /* The kind of study set being written under the answer that has just finished streaming. */
+  const [pendingStudyKind, setPendingStudyKind] = useState<ChatStudyKind | null>(null);
   const flashcardFeedbackTimerRef = useRef<number | null>(null);
   const flashcardFeedbackTokenRef = useRef(0);
   const studySessionPayloadRef = useRef<string | null>(null);
@@ -2848,7 +2859,11 @@ export function LectureWorkspace({
         onDelta: (text) => setStreamingAnswer((current) => current + text),
         // A second attempt starts from a blank bubble: half of one answer
         // followed by all of another would read as gibberish.
-        onAttemptStart: () => setStreamingAnswer(""),
+        onAttemptStart: () => {
+          setStreamingAnswer("");
+          setPendingStudyKind(null);
+        },
+        onStudy: setPendingStudyKind,
         t,
       }));
     } catch (error) {
@@ -2858,6 +2873,7 @@ export function LectureWorkspace({
     } finally {
       setIsSending(false);
       setStreamingAnswer("");
+      setPendingStudyKind(null);
     }
 
     if (!response.ok) {
@@ -3901,11 +3917,12 @@ export function LectureWorkspace({
               placeholder only shows before the first token arrives. */}
           {streamingAnswer ? (
             <div className="memo-bubble-bot streaming">
-              <ChatMarkdown content={streamingAnswer} streaming />
+              <ChatMarkdown content={streamingAnswer} streaming={!pendingStudyKind} />
             </div>
           ) : isSending ? (
             <TypingDots />
           ) : null}
+          {pendingStudyKind ? <ChatStudySetPending kind={pendingStudyKind} /> : null}
         </div>
 
         <div className="memo-chat-foot">

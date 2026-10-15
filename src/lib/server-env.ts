@@ -23,6 +23,11 @@ const serverEnvSchema = z.object({
   GEMINI_OCR_LITE_MODEL: trimmedString.default("gemini-3.5-flash-lite"),
   GEMINI_OCR_STRONG_MODEL: trimmedString.default("gemini-3-flash-preview"),
   GEMINI_EMBEDDING_MODEL: trimmedString.default("gemini-embedding-001"),
+  // Every voice in the app — tutor, read-aloud, podcast. Chosen over Soniox tts-rt-v2 by a blind
+  // listening test on Slovenian and Croatian (2026-10-14); see docs/voice-tutor.md.
+  GEMINI_TTS_MODEL: trimmedString.default("gemini-3.8-flash-tts"),
+  // Which engine speaks. "soniox" puts the old voice back everywhere without a code change.
+  TTS_PROVIDER: z.enum(["gemini", "soniox"]).default("gemini"),
   OPENROUTER_API_KEY: optionalTrimmedString,
   SONIOX_API_KEY: optionalTrimmedString,
   SONIOX_MODEL: trimmedString.default("stt-async-v4"),
@@ -64,6 +69,8 @@ export function getServerEnv() {
     GEMINI_OCR_LITE_MODEL: firstSetEnv("GEMINI_OCR_LITE_MODEL", "GEMINI_OCR_MODEL"),
     GEMINI_OCR_STRONG_MODEL: firstSetEnv("GEMINI_OCR_STRONG_MODEL", "GEMINI_OCR_RESCUE_MODEL"),
     GEMINI_EMBEDDING_MODEL: process.env.GEMINI_EMBEDDING_MODEL,
+    GEMINI_TTS_MODEL: firstSetEnv("GEMINI_TTS_MODEL"),
+    TTS_PROVIDER: firstSetEnv("TTS_PROVIDER"),
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     SONIOX_API_KEY: process.env.SONIOX_API_KEY,
     SONIOX_MODEL: process.env.SONIOX_MODEL,

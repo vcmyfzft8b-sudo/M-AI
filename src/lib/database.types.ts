@@ -873,6 +873,7 @@ export type Database = {
           role: "user" | "assistant";
           content: string;
           citations_json: Json;
+          attachment_json: Json | null;
           created_at: string;
         };
         Insert: {
@@ -882,11 +883,13 @@ export type Database = {
           role: "user" | "assistant";
           content: string;
           citations_json?: Json;
+          attachment_json?: Json | null;
           created_at?: string;
         };
         Update: {
           content?: string;
           citations_json?: Json;
+          attachment_json?: Json | null;
         };
       };
       lecture_study_assets: {

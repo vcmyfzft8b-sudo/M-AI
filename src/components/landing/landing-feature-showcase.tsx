@@ -1,55 +1,45 @@
 "use client";
 
 import Image from "next/image";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType } from "react";
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { useT, useTranslations } from "@/components/i18n-provider";
-import { Emoji, Msym } from "@/components/msym";
+import { Msym } from "@/components/msym";
 import { TypingDots } from "@/components/typing-dots";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 
 import { LandingAppScope } from "./app/landing-app-scope";
-import { landingNoteMeta, landingNoteTitleMeta } from "./app/landing-note-meta";
+import { landingNoteTitleMeta } from "./app/landing-note-meta";
 import { LandingFlashcardsScreen } from "./app/landing-flashcards-screen";
 import { LandingMindmapScreen } from "./app/landing-mindmap-screen";
-import { LandingPalaceScreen } from "./app/landing-palace-screen";
-import { LandingPodcastScreen } from "./app/landing-podcast-screen";
 import { LandingQuizScreen } from "./app/landing-quiz-screen";
-import { LandingSpeedReadScreen } from "./app/landing-speed-read-screen";
 import { LandingTestScreen } from "./app/landing-test-screen";
-import { LandingSampleNote, SAMPLE_NOTE_BLOCKS, sampleNoteWordCount } from "./landing-sample-note";
+import { LandingSampleNote, SAMPLE_NOTE_BLOCKS } from "./landing-sample-note";
 import { LandingScaledFrame } from "./landing-scaled-frame";
-import { LandingTutorDemo } from "./landing-tutor-demo";
-import type { SourceDetail, SourceKind } from "./memo-app-preview-data";
 
 /*
- * What the product does, one row per feature, each beside the app doing it.
+ * The core of the product, one row per feature, each beside the app doing it:
+ * the note, the four study modes that matter most before an exam, and the chat
+ * that reaches across every note. Capture is "How it works" step one and the
+ * tutor has its own section; the rest of the pill row (podcast, palace, speed
+ * reading) is shown in the hero phone and "How it works", so this list stays
+ * short.
  *
- * The captions are product copy. Every illustration is the app's own markup —
- * the New note screen, the rendered note, the read-aloud dock, the library chat
- * and, for the study features, the shared screens in `./app/` — drawn at phone
- * width inside a phone-sized screen and scaled to fit, never a drawing of it.
- * What they *contain* is the landing's sample lecture on business information
- * systems, which stands in for the learner's own material.
- *
- * The order is the app's: capture, the note and the two things its screen does
- * besides being read (listen, and the tutor), the study pills in the order the
- * note's pill row lists them, and last the chat, which reaches across every note.
+ * Every illustration is the app's own markup — the rendered note, the library
+ * chat and, for the study features, the shared
+ * screens in `./app/` — drawn at phone width inside a phone-sized screen and
+ * scaled to fit, never a drawing of it. What they *contain* is the landing's
+ * sample lecture on business information systems, which stands in for the
+ * learner's own material.
  */
 const FEATURES = [
-  { id: "capture", titleKey: "showcase.captureTitle", descKey: "showcase.captureDesc" },
   { id: "notes", titleKey: "showcase.notesTitle", descKey: "showcase.notesDesc" },
-  { id: "listen", titleKey: "showcase.listenTitle", descKey: "showcase.listenDesc" },
-  { id: "tutor", titleKey: "showcase.tutorTitle", descKey: "showcase.tutorDesc" },
   { id: "flashcards", titleKey: "showcase.cardsTitle", descKey: "showcase.cardsDesc" },
-  { id: "podcast", titleKey: "showcase.podcastTitle", descKey: "showcase.podcastDesc" },
   { id: "quiz", titleKey: "showcase.quizTitle", descKey: "showcase.quizDesc" },
   { id: "mindmap", titleKey: "showcase.mindmapTitle", descKey: "showcase.mindmapDesc" },
-  { id: "palace", titleKey: "showcase.palaceTitle", descKey: "showcase.palaceDesc" },
   { id: "test", titleKey: "showcase.testsTitle", descKey: "showcase.testsDesc" },
-  { id: "speed", titleKey: "showcase.speedTitle", descKey: "showcase.speedDesc" },
   { id: "chat", titleKey: "showcase.chatTitle", descKey: "showcase.chatDesc" },
 ] as const satisfies ReadonlyArray<{ id: string; titleKey: MessageKey; descKey: MessageKey }>;
 
@@ -92,105 +82,6 @@ function useTicker(running: boolean, ms: number) {
   return tick;
 }
 
-/* ── Capture: the New note screen ────────────────────────────── */
-
-/* home-dashboard.tsx's QUICK_ACTIONS, and the note each one makes in this demo. */
-const QUICK_ACTIONS = [
-  {
-    id: "record",
-    labelKey: "library.quickAction.record",
-    icon: "radio_button_checked",
-    accent: "record",
-    emoji: "🎙️",
-    titleKey: "flowDemo.noteTitle.audio",
-    note: { source: "audio", detail: { minutes: 48 } },
-  },
-  {
-    id: "link",
-    labelKey: "library.quickAction.link",
-    icon: "link",
-    accent: "",
-    emoji: "🔗",
-    titleKey: "flowDemo.noteTitle.doc",
-    note: { source: "link" },
-  },
-  {
-    id: "text",
-    labelKey: "library.quickAction.document",
-    icon: "description",
-    accent: "",
-    emoji: "📄",
-    titleKey: "flowDemo.noteTitle.pdf",
-    note: { source: "pdf", detail: { pages: 24 } },
-  },
-  {
-    id: "upload",
-    labelKey: "library.quickAction.audio",
-    icon: "cloud_upload",
-    accent: "",
-    emoji: "🎙️",
-    titleKey: "flowDemo.past.lecture3",
-    note: { source: "audio", detail: { minutes: 52 } },
-  },
-] as const satisfies ReadonlyArray<{
-  id: string;
-  labelKey: MessageKey;
-  icon: string;
-  accent: string;
-  emoji: string;
-  titleKey: MessageKey;
-  note: { source: SourceKind; detail?: SourceDetail };
-}>;
-
-function CapturePanel({ active }: PanelProps) {
-  const { t, locale } = useTranslations();
-  const motion = useMotionAllowed();
-  /* Three beats per source: it is picked, it lands as a note being written, the note is ready. */
-  const tick = useTicker(active && motion, 1300);
-  const cycle = Math.floor(tick / 3);
-  const phase = motion ? tick % 3 : 2;
-  const action = QUICK_ACTIONS[cycle % QUICK_ACTIONS.length];
-  /* While the next source is being picked, the list still shows the last one's note. */
-  const rowCycle = phase === 0 ? cycle - 1 : cycle;
-  const row = rowCycle >= 0 ? QUICK_ACTIONS[rowCycle % QUICK_ACTIONS.length] : null;
-
-  return (
-    <div className="landing-v2-flow-pad landing-v2-fx-capture">
-      <h1 className="memo-home-h1">{t("library.newNote")}</h1>
-      <p className="memo-home-sub">{t("library.newNoteSub")}</p>
-      <div className="memo-quick-grid">
-        {QUICK_ACTIONS.map((quick) => (
-          <div
-            key={quick.id}
-            className={`memo-quick-card ${motion && phase === 0 && quick.id === action.id ? "landing-v2-fx-picked" : ""}`.trim()}
-          >
-            <span className={`memo-quick-tile ${quick.accent}`.trim()}>
-              <Msym name={quick.icon} size="1.45rem" />
-            </span>
-            <span className="memo-quick-label">{t(quick.labelKey)}</span>
-          </div>
-        ))}
-      </div>
-      <div className="memo-note-list">
-        {row ? (
-          <div key={rowCycle} className="memo-note-row landing-v2-flow-new-row">
-            <span className="memo-note-emoji">
-              <Emoji symbol={row.emoji} size="1.3rem" />
-            </span>
-            <span className="memo-note-copy">
-              <span className="memo-note-title">{t(row.titleKey)}</span>
-              <span className="memo-note-meta">
-                {landingNoteMeta(t, locale, { ...row.note, writing: phase === 1 })}
-              </span>
-            </span>
-            <Msym name="chevron_right" size="1.55rem" fill={false} weight={400} />
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 /* ── Notes: the note tab ─────────────────────────────────────── */
 
 function NotesPanel({ active }: PanelProps) {
@@ -213,92 +104,12 @@ function NotesPanel({ active }: PanelProps) {
   );
 }
 
-/* ── Listen: read-aloud over the note ────────────────────────── */
-
-/* Roughly the voice's pace at 1×: about three words a second. */
-const READ_WORD_MS = 320;
-
-function formatClock(seconds: number) {
-  const total = Math.max(0, Math.round(seconds));
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
-}
-
-function ListenPanel({ active }: PanelProps) {
-  const { t, locale } = useTranslations();
-  const motion = useMotionAllowed();
-  const [playing, setPlaying] = useState(true);
-  const total = sampleNoteWordCount(t);
-  const tick = useTicker(active && motion && playing, READ_WORD_MS);
-  /* A beat of silence at the end, and it starts again. */
-  const word = motion ? tick % (total + 6) : 12;
-  const readWord = word < total ? word : null;
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  /* The note follows the voice, as the app keeps the spoken word in view — by
-     moving this box, never the page. */
-  useEffect(() => {
-    const box = scrollRef.current;
-    if (!box) return;
-    if (readWord === null) {
-      box.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-    const el = box.querySelector<HTMLElement>(`[data-word-index="${readWord}"]`);
-    if (!el) return;
-    const top = el.getBoundingClientRect().top - box.getBoundingClientRect().top;
-    if (top > box.clientHeight * 0.55) {
-      box.scrollTo({ top: box.scrollTop + top - box.clientHeight * 0.3, behavior: "smooth" });
-    }
-  }, [readWord]);
-
-  const progress = Math.min(100, Math.round(((readWord ?? total) / total) * 100));
-
-  return (
-    <div className="landing-v2-fx-column">
-      <div ref={scrollRef} className="landing-v2-fx-scroll landing-v2-flow-pad">
-        <LandingSampleNote
-          t={t}
-          emoji="🎙️"
-          title={t("flowDemo.noteTitle.audio")}
-          meta={landingNoteTitleMeta(t, locale, SAMPLE_NOTE_META)}
-          readWord={readWord}
-        />
-      </div>
-      <div className="landing-v2-fx-dock">
-        <div className="memo-dock-pill reading">
-          <div className="memo-dock-layer memo-dock-player on">
-            <button
-              type="button"
-              className="memo-dock-play"
-              onClick={() => setPlaying((current) => !current)}
-              aria-label={t(playing ? "readAloud.pause" : "readAloud.resume")}
-            >
-              <Msym name={playing ? "pause" : "play_arrow"} size="1.35rem" />
-            </button>
-            <span className="memo-dock-track">
-              <span style={{ width: `${progress}%` }} />
-            </span>
-            <span className="memo-dock-time">{formatClock(((readWord ?? total) * READ_WORD_MS) / 1000)}</span>
-            <span className="note-read-usage-menu" aria-hidden="true">
-              <span className="note-read-usage-trigger">
-                <Msym name="tune" size="1.25rem" fill={false} weight={500} />
-              </span>
-            </span>
-            <span className="memo-dock-close" aria-hidden="true">
-              <Msym name="close" size="1.45rem" fill={false} weight={500} />
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ── Chat: the library chat ──────────────────────────────────── */
 
 const CHAT_SUGGESTIONS: MessageKey[] = [
   "libraryChat.suggestion.review",
   "libraryChat.suggestion.links",
+  "libraryChat.suggestion.quiz",
   "libraryChat.suggestion.plan",
 ];
 
@@ -411,56 +222,29 @@ function ChatPanel({ active }: PanelProps) {
   );
 }
 
-/* ── The study screens ───────────────────────────────────────── */
-
-function TutorPanel() {
-  /* It does not start by itself: it has a voice, and a voice may only be started
-     by the visitor, so it waits on its own button. */
-  return <LandingTutorDemo />;
-}
-
 const PANELS: Record<FeatureId, ComponentType<PanelProps>> = {
-  capture: CapturePanel,
   notes: NotesPanel,
-  listen: ListenPanel,
-  tutor: TutorPanel,
   flashcards: ({ active }) => <LandingFlashcardsScreen autoplay={active} />,
-  podcast: ({ active }) => <LandingPodcastScreen autoplay={active} />,
   quiz: ({ active }) => <LandingQuizScreen autoplay={active} />,
   mindmap: ({ active }) => <LandingMindmapScreen autoplay={active} />,
-  palace: ({ active }) => <LandingPalaceScreen autoplay={active} />,
   test: ({ active }) => <LandingTestScreen autoplay={active} />,
-  speed: ({ active }) => <LandingSpeedReadScreen autoplay={active} />,
   chat: ChatPanel,
 };
 
-/* Screens that are a full note tab get the note's side inset; the chat panel and
-   the tab bodies that carry their own chrome do not. */
-const PADDED: ReadonlySet<FeatureId> = new Set([
-  "tutor",
-  "flashcards",
-  "podcast",
-  "quiz",
-  "mindmap",
-  "palace",
-  "test",
-  "speed",
-]);
-
-/* One phone-sized screen holding the app. */
+/*
+ * One phone-sized screen holding the app. The study screens carry the note
+ * screen's own gutter and layout (`.landing-study-frame`), so they go in bare: a
+ * second padded wrapper around them pushed each one 5px past the screen, and the
+ * screen scrolled.
+ */
 function FeatureScreen({ id }: { id: FeatureId }) {
   const Panel = PANELS[id];
-  let body: ReactNode = <Panel active />;
-
-  if (PADDED.has(id)) {
-    body = <div className="landing-v2-fx-scroll landing-v2-fx-tab">{body}</div>;
-  }
 
   return (
     <div className="landing-v2-fx-phone">
       <LandingAppScope className="landing-v2-fx-screen">
         <LandingScaledFrame fill width={SCREEN_WIDTH}>
-          {body}
+          <Panel active />
         </LandingScaledFrame>
       </LandingAppScope>
     </div>
@@ -491,58 +275,22 @@ export function LandingFeatureShowcase() {
 
   return (
     <div className="landing-v2-fx-layout">
-      <div style={{ display: "grid", alignContent: "start", gap: "2px" }}>
+      <div className="landing-v2-fx-list">
         {FEATURES.map((feature, i) => {
           const on = active === i;
           return (
             <Fragment key={feature.id}>
               <button
                 type="button"
+                className="landing-v2-fx-item"
+                data-active={on ? "true" : "false"}
                 onClick={() => setActive(i)}
                 aria-expanded={on}
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: "0.85rem",
-                  width: "100%",
-                  padding: "0.95rem 0.5rem",
-                  border: "none",
-                  borderBottom: "1px solid var(--l-line-faint)",
-                  background: "transparent",
-                  fontFamily: "inherit",
-                  textAlign: "left",
-                  cursor: "pointer",
-                }}
               >
-                <span
-                  style={{
-                    flexShrink: 0,
-                    width: "3px",
-                    height: "1.9rem",
-                    marginTop: "0.15rem",
-                    borderRadius: "999px",
-                    background: on ? "var(--l-label)" : "transparent",
-                    transition: "background 260ms ease",
-                  }}
-                />
-                <span style={{ display: "grid", gap: "3px", textAlign: "left" }}>
-                  <span
-                    style={{
-                      color: on ? "var(--l-label)" : "var(--l-second)",
-                      fontSize: "1.05rem",
-                      fontWeight: 700,
-                      lineHeight: 1.25,
-                      transition: "color 260ms ease",
-                    }}
-                  >
-                    {t(feature.titleKey)}
-                  </span>
-                  {/* The title's colour already marks the active row; dimming
-                      this line as well pushed it under 3:1 against the page. */}
-                  <span style={{ color: "var(--l-second)", fontSize: "0.9rem", lineHeight: 1.45 }}>
-                    {t(feature.descKey)}
-                  </span>
-                </span>
+                <span className="landing-v2-fx-item-title">{t(feature.titleKey)}</span>
+                {/* The title's colour already marks the active row; dimming
+                    this line as well pushed it under 3:1 against the page. */}
+                <span className="landing-v2-fx-item-desc">{t(feature.descKey)}</span>
               </button>
 
               {/* Stacked layouts show the demo right under its feature; the

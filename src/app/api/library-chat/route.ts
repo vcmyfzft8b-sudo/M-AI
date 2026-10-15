@@ -29,6 +29,8 @@ const librarySchema = z.object({
       z.object({
         role: z.enum(["user", "assistant"]),
         content: z.string().trim().min(1).max(4000),
+        /* A set the tutor attached under this turn, described; trimmed again on the server. */
+        attachedSet: z.string().trim().max(8000).optional(),
       }),
     )
     .max(40)
@@ -116,6 +118,7 @@ export async function POST(request: Request) {
             useTranscripts: parsed.data.useTranscripts,
             history: parsed.data.history,
             onDelta: send.delta,
+            onStudy: send.study,
           }),
         budgetMs: getInvocationBudgetMs({
           maxDurationSeconds: maxDuration,

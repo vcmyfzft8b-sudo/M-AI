@@ -115,7 +115,7 @@ export const en: Messages = {
 
   /* ---- Landing page ---- */
   "landing.hero.title": "Never write lecture notes again!",
-  "landing.hero.lead": "Memo AI is your AI notetaker for lectures. From audio recordings, PDFs, documents and links it produces notes, transcripts, flashcards, quizzes, practice tests, mind maps and podcasts, plus a tutor that explains it all out loud and an AI chat.",
+  "landing.hero.lead": "Memo AI is your AI notetaker for lectures. Record or upload a lecture, a PDF or a link, and get clean notes, flashcards and quizzes in minutes.",
   "landing.cta.tryFree": "Try it for €0",
   "landing.cta.signIn": "Sign in",
   "landing.hero.previewLabel": "{brand} app preview",
@@ -142,7 +142,7 @@ export const en: Messages = {
   "landing.seo.featureFlashcards": "Flashcards from your notes",
   "landing.seo.featureQuizzes": "Quizzes and practice tests",
   "landing.seo.featureTutor": "A tutor that explains your notes out loud",
-  "landing.seo.featureChat": "AI chat with your material",
+  "landing.seo.featureChat": "AI chat with your material that makes flashcards, quizzes and mind maps on request",
   "landing.seo.featureReadAloud": "Notes read aloud",
   "landing.seo.featurePodcast": "Podcast episodes about your notes",
   "landing.seo.featureMindmap": "Mind maps of your notes",
@@ -317,6 +317,7 @@ export const en: Messages = {
   "chat.suggestion.summarize": "Summarise the lecture",
   "chat.suggestion.explain": "Explain a key concept",
   "chat.suggestion.questions": "Write me 5 questions",
+  "chat.suggestion.flashcards": "Make me flashcards",
   "chat.suggestion.extend": "Extend the notes",
   "chat.intro": "Hi, I'm Memo AI. Ask me anything about this lecture — a summary, an explanation of a concept, or an exam-style example.",
   "chat.introTranscript": " I use the notes and the transcript as context.",
@@ -338,6 +339,28 @@ export const en: Messages = {
   "chat.expand": "Expand",
   "chat.label": "Chat",
   "chat.error.answerFailed": "The answer could not be generated.",
+
+  /* ---- Chat — study sets made on request ---- */
+  "chat.set.making.flashcards": "Making your flashcards …",
+  "chat.set.making.quiz": "Putting your quiz together …",
+  "chat.set.making.test": "Writing your test questions …",
+  "chat.set.making.mindmap": "Drawing your mindmap …",
+  "chat.set.count.cards": {
+    one: "{count} card",
+    other: "{count} cards",
+  },
+  "chat.set.count.questions": {
+    one: "{count} question",
+    other: "{count} questions",
+  },
+  "chat.set.count.topics": {
+    one: "{count} topic",
+    other: "{count} topics",
+  },
+  "chat.set.failed": "This set could not be made. Ask again in a moment.",
+  "chat.set.testFinished": "The test is finished",
+  "chat.set.skip": "Show the answer",
+  "chat.set.openMindmap": "Open the mindmap",
 
   /* ---- Study tools — flashcards ---- */
   "study.edit": "Edit",
@@ -1204,6 +1227,7 @@ export const en: Messages = {
   "libraryChat.suggestion.review": "What should I revise?",
   "libraryChat.suggestion.links": "Find the connections",
   "libraryChat.suggestion.plan": "Make me a study plan",
+  "libraryChat.suggestion.quiz": "Quiz me on my notes",
   "libraryChat.error.answerFailed": "The answer could not be prepared.",
   "libraryChat.scopeCaption": "Notes to search",
   "libraryChat.scope.recent": "Recent notes",
@@ -1436,30 +1460,18 @@ export const en: Messages = {
   "preview.help.transcriptTitle": "The transcript is too short or inaccurate",
 
   /* ---- Landing feature showcase ---- */
-  "showcase.captureTitle": "Record it or upload it",
-  "showcase.captureDesc": "Lectures, PDFs, documents, photos of notes and links.",
   "showcase.notesTitle": "Get clean notes",
   "showcase.notesDesc": "Tidy notes and transcripts, without typing any of it out.",
-  "showcase.tutorTitle": "Talk it through",
-  "showcase.tutorDesc": "The tutor explains your note out loud and answers when you cut in with a question.",
   "showcase.cardsTitle": "Flashcards",
   "showcase.cardsDesc": "Key concepts turn into cards for quick revision.",
   "showcase.quizTitle": "Quizzes",
   "showcase.quizDesc": "Check what you understood, with questions from your own material.",
   "showcase.testsTitle": "Tests",
   "showcase.testsDesc": "Practise longer answers and get ready for the real thing.",
-  "showcase.listenTitle": "Listen to your notes",
-  "showcase.listenDesc": "The app reads your notes aloud, without you looking at the screen.",
-  "showcase.podcastTitle": "A podcast of your note",
-  "showcase.podcastDesc": "Two hosts talk your note through – for the bus or the gym.",
   "showcase.mindmapTitle": "Mind map",
   "showcase.mindmapDesc": "Shows how the topics in your note connect to each other.",
-  "showcase.palaceTitle": "Memory palace",
-  "showcase.palaceDesc": "Walk through a small town where every stop is a question from your note.",
-  "showcase.speedTitle": "Speed reading",
-  "showcase.speedDesc": "Your note one word at a time, at the pace that suits you.",
   "showcase.chatTitle": "Ask your notes",
-  "showcase.chatDesc": "Chat about one note, or ask across all of them at once.",
+  "showcase.chatDesc": "Chat about one note or all of them, and ask for flashcards, a quiz or a mind map right in the chat.",
   "showcase.chat.question": "What's the difference between a transactional system and a decision support system?",
   "showcase.chat.answer": "A **transactional system** records the day-to-day business events, while a **decision support system** analyses that data for management.\n\n- Transactional: many small, routine entries\n- Decision support: scenarios and reports for decisions",
 
@@ -2189,7 +2201,10 @@ export const en: Messages = {
 
   /* The memory palace: the city a note's cards are laid out in. */
   "note.tab.palace": "Palace",
-  "palace.hintTouch": "Left thumb to walk · drag right to look",
+  "palace.next": "Next memory, {distance} m away",
+  "palace.toast.collected": "Memory collected",
+  "palace.toast.moved": "Not yet. It moved somewhere new, find it again",
+  "palace.hintTouch": "Left thumb to walk, push to the edge to run · drag right to look",
   "palace.reviewMissed": "Review missed ({count})",
   "palace.inside": "Indoors",
   "palace.outside": "Outdoors",

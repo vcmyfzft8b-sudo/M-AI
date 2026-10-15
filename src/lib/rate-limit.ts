@@ -130,6 +130,14 @@ export const rateLimitPresets = {
     { windowSeconds: 300, maxRequests: 60, scope: "user" },
     { windowSeconds: 3600, maxRequests: 240, scope: "user" },
   ] satisfies RateLimitRule[],
+  /*
+   * One request per piece of the tutor's speech — a sentence or a few, every three to six seconds
+   * while it talks. Held in memory so the check costs nothing on a path that runs before every
+   * sentence; per instance, it is a ceiling on a token replayed in a loop, not an exact meter.
+   */
+  tutorSpeech: [
+    { windowSeconds: 300, maxRequests: 200, scope: "user", storage: "memory" },
+  ] satisfies RateLimitRule[],
   expensiveChat: [
     { windowSeconds: 300, maxRequests: 12, scope: "user" },
     { windowSeconds: 3600, maxRequests: 60, scope: "user" },

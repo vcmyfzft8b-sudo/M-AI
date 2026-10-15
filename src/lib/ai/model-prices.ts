@@ -34,6 +34,9 @@ export const MODEL_PRICES: Record<string, ModelPrice> = {
   "gemini-3.1-flash-lite": { inputUsdPerMillion: 0.25, outputUsdPerMillion: 1.5 },
   "gemini-3-flash-preview": { inputUsdPerMillion: 0.5, outputUsdPerMillion: 3 },
   "gemini-2.5-flash-lite": { inputUsdPerMillion: 0.1, outputUsdPerMillion: 0.4 },
+  // The tutor's voice. Output is audio at 25 tokens a second, so $9/M is $0.81 an hour of speech.
+  // Google's pricing page says both rates double on 2027-01-01 (to $1.00 / $18.00): update then.
+  "gemini-3.8-flash-tts": { inputUsdPerMillion: 0.5, outputUsdPerMillion: 9 },
 };
 
 export function normalizePricedModel(model: string) {

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import { SUN_DIRECTION as SUN } from "./sun";
+import { SUN_DIRECTION as SUN } from "./sun.ts";
 
 /**
  * The air the town stands in: sky, sun, haze and the light they throw.
@@ -31,6 +31,28 @@ const HORIZON = new THREE.Color(0.55, 0.74, 0.93);
 export const HAZE_COLOR = new THREE.Color(0.62, 0.77, 0.92);
 
 const SKY_RADIUS = 640;
+
+/*
+ * three's PCF shadow turns its five taps by a per-pixel noise meant to be
+ * averaged away by a temporal pass, which this renderer does not have. The
+ * noise is fixed to the screen, so walking slid every shadow edge through a
+ * still grain: the edges crawled. A fixed turn gives the same soft edge, the
+ * same cost, and an edge that moves with the world. If a three upgrade changes
+ * the chunk the replace finds nothing and the stock filter stays.
+ */
+const NOISY_SHADOW_TURN = "interleavedGradientNoise( gl_FragCoord.xy ) * PI2";
+
+THREE.ShaderChunk.shadowmap_pars_fragment = THREE.ShaderChunk.shadowmap_pars_fragment
+  .split(NOISY_SHADOW_TURN)
+  .join("0.7853981");
+
+/** The sun's side of the shadow camera: its right and up, as `lookAt` builds them. */
+const SHADOW_RIGHT = new THREE.Vector3(0, 1, 0).cross(SUN_DIRECTION).normalize();
+const SHADOW_UP = SUN_DIRECTION.clone().cross(SHADOW_RIGHT).normalize();
+/** Half the width of ground the sun's shadow map covers, in metres. */
+const SHADOW_HALF_SPAN = 70;
+/** How far ahead of the walker the shadowed square is centred. */
+const SHADOW_LEAD = 30;
 
 const skyVertex = /* glsl */ `
   varying vec3 vDirection;
@@ -136,8 +158,11 @@ function createSky() {
 }
 
 export type Lighting = {
-  /** The sun follows the player: a shadow map only covers what is nearby. */
-  follow: (x: number, z: number) => void;
+  /**
+   * The sun follows the player: a shadow map only covers what is nearby. Give
+   * it the way the camera looks and the covered square leads the view.
+   */
+  follow: (x: number, z: number, viewX?: number, viewZ?: number) => void;
   /** Once a frame: the clouds drift and the dome stays centred on the camera. */
   update: (seconds: number, camera: THREE.Camera) => void;
   dispose: () => void;
@@ -199,28 +224,54 @@ export function createLighting(
   /* Instanced boxes shadow-acne badly without this; it is cheaper than a bias
      large enough to hide it, which would detach every shadow from its wall. */
   sun.shadow.normalBias = 0.15;
-  sun.shadow.radius = 3;
+  /*
+   * The soft edge, held to the same width on the ground whatever the map's
+   * size. three's PCF spreads five noise-rotated taps across it, which reads as
+   * stipple without a temporal pass to average it; at three texels of a phone's
+   * 1024 map that was a 40 cm band of grain under every eave.
+   */
+  sun.shadow.radius = 3 * Math.min(1, shadowMapSize / 2048);
 
   const shadowCamera = sun.shadow.camera;
 
-  shadowCamera.left = -70;
-  shadowCamera.right = 70;
-  shadowCamera.top = 70;
-  shadowCamera.bottom = -70;
+  shadowCamera.left = -SHADOW_HALF_SPAN;
+  shadowCamera.right = SHADOW_HALF_SPAN;
+  shadowCamera.top = SHADOW_HALF_SPAN;
+  shadowCamera.bottom = -SHADOW_HALF_SPAN;
   shadowCamera.near = 20;
   shadowCamera.far = 260;
   shadowCamera.updateProjectionMatrix();
 
   scene.add(ambient, sun, sun.target);
 
+  /* One texel of the shadow map, on the ground plane the sun looks at. */
+  const texel = (SHADOW_HALF_SPAN * 2) / shadowMapSize;
+  const centre = new THREE.Vector3();
+
   return {
-    follow: (x, z) => {
-      sun.position.set(
-        x + SUN_DIRECTION.x * 120,
-        SUN_DIRECTION.y * 120,
-        z + SUN_DIRECTION.z * 120,
-      );
-      sun.target.position.set(x, 0, z);
+    follow: (x, z, viewX = 0, viewZ = 0) => {
+      /*
+       * Centred ahead of the walker rather than on them: half the square used
+       * to lie behind the camera, and the edge of the shadows ran across the
+       * street in plain view. Led by 30 m it falls about where the haze begins.
+       */
+      centre.set(x + viewX * SHADOW_LEAD, 0, z + viewZ * SHADOW_LEAD);
+
+      /*
+       * Moved in whole texels of the map, measured across the sun's view. A
+       * map that slides by fractions of a texel redraws every edge a little
+       * differently each frame, and shadows shimmer as you walk.
+       */
+      const right = Math.round(centre.dot(SHADOW_RIGHT) / texel) * texel;
+      const up = Math.round(centre.dot(SHADOW_UP) / texel) * texel;
+      const along = centre.dot(SUN_DIRECTION);
+
+      centre
+        .copy(SHADOW_RIGHT).multiplyScalar(right)
+        .addScaledVector(SHADOW_UP, up)
+        .addScaledVector(SUN_DIRECTION, along);
+      sun.position.copy(centre).addScaledVector(SUN_DIRECTION, 120);
+      sun.target.position.copy(centre);
       sun.target.updateMatrixWorld();
     },
     update: (seconds, camera) => {

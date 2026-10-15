@@ -37,6 +37,8 @@ export function ExamOral({
 }) {
   const { t } = useTranslations();
   const [index, setIndex] = useState(0);
+  /* The exam could not start (no microphone, no talking time, no Web Audio): nothing is pending any more. */
+  const [refused, setRefused] = useState(false);
   const answersRef = useRef<Record<string, string>>({});
   const currentRef = useRef({ index: 0, followedUp: false });
   const endAnswerRef = useRef<(unknown?: boolean) => Promise<void>>(async () => undefined);
@@ -122,13 +124,42 @@ export function ExamOral({
     endAnswerRef.current = endAnswer;
   });
 
+  /*
+   * Time runs out while the learner is answering: what they said so far is kept and the examiner
+   * closes the exam, rather than the clock sitting at 00:00 until they stop talking. (Between
+   * answers, `endAnswer` checks the clock itself.)
+   */
+  const outOfTimeListening = phase === "listening" && elapsed >= durationMinutes * 60;
+
+  useEffect(() => {
+    if (!outOfTimeListening) {
+      return;
+    }
+
+    const heardNow = stopListening();
+    const question = questions[currentRef.current.index];
+
+    if (question && heardNow) {
+      answersRef.current[question.id] = [answersRef.current[question.id], heardNow].filter(Boolean).join(" ");
+    }
+
+    setPhase("thinking");
+    void say(t("exam.oral.closing")).then(finish);
+  }, [finish, outOfTimeListening, questions, say, setPhase, stopListening, t]);
+
   /* Starting: the microphone first, then the talking time and keys, then the first question. */
   useEffect(() => {
     let cancelled = false;
 
     void voiceSession.start().then((started) => {
-      if (started && !cancelled) {
+      if (cancelled) {
+        return;
+      }
+
+      if (started) {
         void ask(0);
+      } else {
+        setRefused(true);
       }
     });
 
@@ -141,8 +172,9 @@ export function ExamOral({
   }, []);
 
   const left = Math.max(0, durationMinutes * 60 - elapsed);
-  const status =
-    phase === "preparing"
+  const status = refused
+    ? t("exam.oral.state.refused")
+    : phase === "preparing"
       ? t("exam.oral.state.preparing")
       : phase === "speaking"
         ? t("exam.oral.state.speaking")
@@ -174,7 +206,7 @@ export function ExamOral({
         {status}
       </p>
 
-      <p className="memo-exam-oral-question">{questions[index]?.prompt}</p>
+      {refused ? null : <p className="memo-exam-oral-question">{questions[index]?.prompt}</p>}
 
       <div className="memo-tutor-caption">
         {heard ? <p className={`memo-tutor-heard ${phase === "listening" ? "draft" : ""}`.trim()}>{heard}</p> : null}
@@ -197,7 +229,7 @@ export function ExamOral({
           type="button"
           className="memo-button-ghost memo-exam-oral-end"
           onClick={() => {
-            if (phase === "preparing" || Object.keys(answersRef.current).length === 0) {
+            if (refused || phase === "preparing" || Object.keys(answersRef.current).length === 0) {
               teardown();
               onQuit();
               return;

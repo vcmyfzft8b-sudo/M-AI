@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import { planPendingTopics } from "@/lib/exams/exams-server";
 import { examIdParamsSchema } from "@/lib/exams/exam-validation";
 import { captureRouteError } from "@/lib/monitoring";
@@ -38,13 +39,21 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
 
   try {
-    const planned = await planPendingTopics(auth.supabase, auth.user.id, params.data.id);
+    const userId = auth.user.id;
+    // Planning reads the notes with a model, so it follows the notes' own access, as lessons do.
+    const result = await planPendingTopics(auth.supabase, userId, params.data.id, async (lectureId) =>
+      (await canUseLectureFeatures(userId, lectureId, "study")).allowed,
+    );
 
-    if (planned === null) {
+    if (result === null) {
       return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
     }
 
-    return NextResponse.json({ planned });
+    if (result.refused) {
+      return createBillingRequiredResponse(await tr("api.trialOnly.study"), "trial_exhausted");
+    }
+
+    return NextResponse.json({ planned: result.planned });
   } catch (error) {
     captureRouteError(error, { route: "api:exams:topics:post", operation: "plan", request, userId: auth.user.id });
     return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });

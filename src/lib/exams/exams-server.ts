@@ -1,5 +1,6 @@
 import "server-only";
 
+import { loadEveryRow } from "@/lib/admin/paged-rows";
 import type {
   ExamLessonResultRow,
   ExamMockAttemptRow,
@@ -38,6 +39,7 @@ import {
 } from "@/lib/exams/exam-model";
 import {
   ensureTopicItems,
+  ExamModelCallRefused,
   planExpansionTopics,
   planNoteTopics,
   schoolLine,
@@ -50,6 +52,8 @@ import {
   type TopicItemGroup,
 } from "@/lib/exams/exam-topics-server";
 import { planTutorLesson, type TutorStep } from "@/lib/exams/exam-tutor-server";
+
+export { ExamModelCallRefused };
 import { markAnswerWithRetry } from "@/lib/practice-test";
 import {
   isBlankAnswer,
@@ -119,24 +123,26 @@ const LESSON_SIZE = {
 
 /* ---------------------------------------------------------------- reading */
 
+/*
+ * Every result, oldest first. PostgREST stops a select at 1000 rows without saying so, and mastery
+ * goes by each lesson's latest score, so a single capped read would keep the oldest results and
+ * drop exactly the ones that count.
+ */
 async function readResults(supabase: ExamSupabase, userId: string, examIds: string[]) {
   if (examIds.length === 0) {
     return [] as ExamLessonResultRow[];
   }
 
-  const { data, error } = await supabase
-    .from("exam_lesson_results")
-    .select("*")
-    .eq("user_id", userId)
-    .in("exam_id", examIds)
-    .order("completed_at", { ascending: true })
-    .limit(5000);
-
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as ExamLessonResultRow[];
+  return loadEveryRow<ExamLessonResultRow>((from, to) =>
+    supabase
+      .from("exam_lesson_results")
+      .select("*")
+      .eq("user_id", userId)
+      .in("exam_id", examIds)
+      .order("completed_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 }
 
 async function readActiveDays(supabase: ExamSupabase, userId: string) {
@@ -156,28 +162,47 @@ async function readActiveDays(supabase: ExamSupabase, userId: string) {
   );
 }
 
-function planFor(exam: ExamRow, states: ModuleState[], results: ExamLessonResultRow[], today: string) {
-  const resultsToday = results.filter((row) => dayKey(row.completed_at) === today);
-  const firstTry = new Map<string, string>();
-
-  for (const row of results) {
-    const key = `${row.lecture_id}:${row.lesson_kind}`;
-
-    if (!firstTry.has(key)) {
-      firstTry.set(key, dayKey(row.completed_at));
-    }
-  }
-
-  const untriedDoneToday = [...firstTry.values()].filter((day) => day === today).length;
-
-  return dailyPlan({
+/**
+ * Today's goal, set by the work that was left when the day began: the modules as they stood on
+ * the results from before today (and the mock, if it was graded before today). Finishing a lesson,
+ * a first try or a repeat, then moves "done" and never the goal. Once the exam day has passed
+ * there is no goal.
+ */
+function planFor(
+  exam: ExamRow,
+  modules: { topicId: string; lectureId: string }[],
+  states: ModuleState[],
+  results: ExamLessonResultRow[],
+  mockOutcome: MockOutcome | null,
+  now: Date,
+): DailyPlan {
+  const today = dayKey(now);
+  const before = results.filter((row) => dayKey(row.completed_at) < today);
+  const mockBefore = mockOutcome && dayKey(mockOutcome.at) < today ? mockOutcome : null;
+  const target = exam.target_mastery / 100;
+  const atStartOfDay = examModuleStates(modules, before, target, mockBefore, now);
+  const plan = dailyPlan({
+    examDate: exam.exam_date,
+    today,
+    dailyMinutes: exam.daily_minutes,
+    states: atStartOfDay,
+    resultsToday: results.length - before.length,
+    untriedDoneToday: 0,
+  });
+  const remaining = dailyPlan({
     examDate: exam.exam_date,
     today,
     dailyMinutes: exam.daily_minutes,
     states,
-    resultsToday: resultsToday.length,
-    untriedDoneToday,
-  });
+    resultsToday: 0,
+    untriedDoneToday: 0,
+  }).remaining;
+
+  return {
+    ...plan,
+    goal: daysBetween(today, exam.exam_date) < 0 ? 0 : plan.goal,
+    remaining,
+  };
 }
 
 export async function listExamsForUser(
@@ -223,12 +248,13 @@ export async function listExamsForUser(
   return exams.map((exam) => {
     const lectureIds = modules.filter((row) => row.exam_id === exam.id).map((row) => row.lecture_id);
     const examResults = results.filter((row) => row.exam_id === exam.id);
+    // Without the notes' status here, only a placeholder (topics not planned yet) is known unready.
     const ordered = orderModules(
       lectureIds,
       topics.filter((topic) => topic.exam_id === exam.id),
-    );
+    ).map((module) => ({ ...module, available: module.topic !== null }));
     const states = examModuleStates(ordered, examResults, exam.target_mastery / 100, null, now);
-    const plan = planFor(exam, states, examResults, today);
+    const plan = planFor(exam, ordered, states, examResults, null, now);
 
     return {
       exam,
@@ -432,7 +458,12 @@ export async function getExamDetail(
   > | null;
   const mockOutcome = mockOutcomeFrom(mockRow);
   const target = exam.target_mastery / 100;
-  const ordered = orderModules(lectureIds, topics);
+  // A note still being made, or one whose topics are not planned yet, is skipped by the path and
+  // does not hold back the modules after it.
+  const ordered = orderModules(lectureIds, topics).map((module) => ({
+    ...module,
+    available: lectures.get(module.lectureId)?.status === "ready" && module.topic !== null,
+  }));
   const states = examModuleStates(ordered, results, target, mockOutcome, now);
   const modules = states.map((state, index) => {
     const lecture = lectures.get(state.lectureId);
@@ -456,7 +487,7 @@ export async function getExamDetail(
     mastery: examMastery(states),
     modules,
     stage: examStage(states, mockOutcome, target),
-    plan: planFor(exam, states, results, today),
+    plan: planFor(exam, ordered, states, results, mockOutcome, now),
     streak: streakDays(activeDays, today),
     latestMock:
       mockRow && mockRow.percentage !== null && mockRow.graded_at
@@ -728,9 +759,19 @@ export async function planExamTopics(
 
 /**
  * Plans the topics of an exam's notes that have none yet: a note that was still being made when
- * the exam was set up, or an exam from before topics. Returns how many notes were planned.
+ * the exam was set up, or an exam from before topics. Only notes the learner can study are planned
+ * (`canStudy`, the notes' own access); `refused` says every note waiting was one they cannot.
+ *
+ * The exam screen asks for this while a note shows as "preparing", so two requests can plan the
+ * same note at once. Each checks again just before it stores its topics, and once stored keeps
+ * only the first plan stored for the note (`keepFirstPlan`), so a note never ends up with two.
  */
-export async function planPendingTopics(supabase: ExamSupabase, userId: string, examId: string) {
+export async function planPendingTopics(
+  supabase: ExamSupabase,
+  userId: string,
+  examId: string,
+  canStudy: (lectureId: string) => Promise<boolean>,
+): Promise<{ planned: number; refused: boolean } | null> {
   const exam = await readOwnedExam(supabase, userId, examId);
 
   if (!exam) {
@@ -745,19 +786,42 @@ export async function planPendingTopics(supabase: ExamSupabase, userId: string, 
   const missing = lectureIds.filter((lectureId) => !withTopics.has(lectureId));
 
   if (missing.length === 0) {
-    return 0;
+    return { planned: 0, refused: false };
+  }
+
+  const studiable: string[] = [];
+
+  for (const lectureId of missing) {
+    if (await canStudy(lectureId)) {
+      studiable.push(lectureId);
+    }
+  }
+
+  if (studiable.length === 0) {
+    return { planned: 0, refused: true };
   }
 
   const plans = await planExamTopics(supabase, userId, {
-    lectureIds: missing,
+    lectureIds: studiable,
     aiExpand: false,
     schoolLevel: exam.school_level,
     schoolYear: exam.school_year,
   });
-  const ready = plans.filter((plan) => plan.status === "planned" && plan.topics.length > 0);
+  // Another request may have planned some of these notes while this one was calling the model.
+  const plannedMeanwhile = new Set(
+    (await readTopicLines(supabase, userId, [examId])).map((topic) => topic.lecture_id),
+  );
+  const ready = plans.filter(
+    (plan) => plan.status === "planned" && plan.topics.length > 0 && !plannedMeanwhile.has(plan.lectureId),
+  );
 
-  if (ready.length > 0) {
-    const { error } = await supabase.from("exam_topics").insert(
+  if (ready.length === 0) {
+    return { planned: 0, refused: false };
+  }
+
+  const { data, error } = await supabase
+    .from("exam_topics")
+    .insert(
       ready.flatMap((plan) =>
         plan.topics.map((topic, position) => ({
           exam_id: examId,
@@ -770,14 +834,75 @@ export async function planPendingTopics(supabase: ExamSupabase, userId: string, 
           key_points: topic.keyPoints,
         })),
       ) as never,
-    );
+    )
+    .select("id");
 
-    if (error) {
-      throw error;
-    }
+  if (error) {
+    throw error;
   }
 
-  return ready.length;
+  const ours = new Set(((data ?? []) as { id: string }[]).map((row) => row.id));
+
+  for (const plan of ready) {
+    await keepFirstPlan(supabase, userId, examId, plan.lectureId, ours);
+  }
+
+  return { planned: ready.length, refused: false };
+}
+
+/*
+ * When two requests stored a plan for the same note, the one stored first stays and the other is
+ * deleted, whichever request notices. Each looks only after its own insert, so the one that looks
+ * last always sees both plans; both agree on which was first (`created_at`, then the lowest id).
+ */
+async function keepFirstPlan(
+  supabase: ExamSupabase,
+  userId: string,
+  examId: string,
+  lectureId: string,
+  ours: Set<string>,
+) {
+  const { data, error } = await supabase
+    .from("exam_topics")
+    .select("id, created_at")
+    .eq("exam_id", examId)
+    .eq("lecture_id", lectureId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw error;
+  }
+
+  type Stored = { id: string; created_at: string };
+  const rows = (data ?? []) as Stored[];
+  const batchOf = (row: Stored) => (ours.has(row.id) ? "ours" : row.created_at);
+  const batches = new Map<string, Stored[]>();
+
+  for (const row of rows) {
+    batches.set(batchOf(row), [...(batches.get(batchOf(row)) ?? []), row]);
+  }
+
+  if (batches.size < 2) {
+    return;
+  }
+
+  const isBefore = (left: Stored, right: Stored) => {
+    const gap = Date.parse(left.created_at) - Date.parse(right.created_at);
+    return gap < 0 || (gap === 0 && left.id < right.id);
+  };
+  const first = (batch: Stored[]) => batch.reduce((min, row) => (isBefore(row, min) ? row : min));
+  const keep = [...batches.values()].reduce((winner, batch) => (isBefore(first(batch), first(winner)) ? batch : winner));
+  const kept = new Set(keep.map((row) => row.id));
+  const drop = rows.filter((row) => !kept.has(row.id)).map((row) => row.id);
+  const { error: deleteError } = await supabase
+    .from("exam_topics")
+    .delete()
+    .in("id", drop)
+    .eq("user_id", userId);
+
+  if (deleteError) {
+    throw deleteError;
+  }
 }
 
 export async function readOwnedTopic(supabase: ExamSupabase, userId: string, examId: string, topicId: string) {
@@ -896,7 +1021,8 @@ export async function recordLessonResult(
     return false;
   }
 
-  const score = input.total > 0 ? Math.min(1, input.correct / input.total) : 1;
+  // A lesson with nothing to score (one skipped because it would not load) is done, but at 0.
+  const score = input.total > 0 ? Math.min(1, input.correct / input.total) : 0;
   const { error } = await supabase.from("exam_lesson_results").insert({
     exam_id: input.examId,
     lecture_id: topic.lecture_id,
@@ -1043,10 +1169,24 @@ function keyPointsOf(topic: ExamTopicRow) {
   return Array.isArray(topic.key_points) ? (topic.key_points as unknown[]).map(String) : [];
 }
 
-/** A topic the material does not cover gets its lessons written the first time one is opened. */
-async function ensureWrittenTopic(supabase: ExamSupabase, userId: string, topic: ExamTopicRow, exam: ExamRow) {
+/**
+ * A topic the material does not cover gets its lessons written the first time one is opened. Two
+ * lessons opened at once can both write them; only the first stored is kept (the update applies
+ * only while nothing is stored), and the other request uses that one.
+ */
+async function ensureWrittenTopic(
+  supabase: ExamSupabase,
+  userId: string,
+  topic: ExamTopicRow,
+  exam: ExamRow,
+  mayCallModel: () => Promise<boolean>,
+) {
   if (topic.source === "material" || topic.generated) {
     return topic;
+  }
+
+  if (!(await mayCallModel())) {
+    throw new ExamModelCallRefused();
   }
 
   const [{ data: lecture }, { data: artifact }] = await Promise.all([
@@ -1069,24 +1209,36 @@ async function ensureWrittenTopic(supabase: ExamSupabase, userId: string, topic:
     key_points: written.keyPoints,
     generated: written.content as unknown as ExamTopicRow["generated"],
   };
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("exam_topics")
     .update({ summary: updated.summary, key_points: updated.key_points, generated: updated.generated } as never)
     .eq("id", topic.id)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .is("generated", null)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     throw error;
   }
 
-  return updated;
+  if (data) {
+    return updated;
+  }
+
+  return (await readOwnedTopic(supabase, userId, topic.exam_id, topic.id)) ?? updated;
 }
 
 /*
  * Questions the AI wrote, for a topic outside the material (`gen`) or fresh for a repeat (`x`),
- * carry ids that say where to find them again: `gen:<topic>:q3`, `x:<topic>:w0`. The lessons, the
+ * carry ids that say where to find them again: `gen:<topic>:q3`, `x:<topic>:w12`. The lessons, the
  * written-answer grader and the mock exam all use these, so a question practised in a lesson is
  * recognised as practised when the mock is drawn.
+ *
+ * The number is the question's place for `gen` (written once, never changed). Fresh questions are
+ * appended and the oldest dropped at a cap, so a place would hand a seen question's id to a new one;
+ * each is stored with its own serial (`n`, from the topic's `extra.next`) instead. Fresh questions
+ * stored before serials have none and keep their place as their number, as they always had.
  */
 type ContentKind = "q" | "w" | "f";
 
@@ -1094,11 +1246,24 @@ function contentId(origin: "gen" | "x", topicId: string, kind: ContentKind, inde
   return `${origin}:${topicId}:${kind}${index}`;
 }
 
-const CONTENT_ID = /^(gen|x):([0-9a-f-]{36}):([qwf])(\d{1,3})$/;
+const CONTENT_ID = /^(gen|x):([0-9a-f-]{36}):([qwf])(\d{1,6})$/;
 
 function parseContentId(id: string) {
   const match = CONTENT_ID.exec(id);
   return match ? { origin: match[1] as "gen" | "x", topicId: match[2], kind: match[3] as ContentKind, index: Number(match[4]) } : null;
+}
+
+/** A topic's fresh questions as stored in `exam_topics.extra`. */
+type StoredFresh = {
+  quiz?: (FreshTopicQuestions["quiz"][number] & { n?: number })[];
+  written?: (FreshTopicQuestions["written"][number] & { n?: number })[];
+  /** The serial the next fresh question gets; absent on rows stored before serials. */
+  next?: number;
+};
+
+/** A stored question's number in its id: its serial, or its place when it was stored without one. */
+function serialOf(question: { n?: number }, index: number) {
+  return typeof question.n === "number" ? question.n : index;
 }
 
 type PoolQuestion = {
@@ -1109,9 +1274,9 @@ type PoolQuestion = {
   explanation: string;
 };
 
-function contentQuiz(origin: "gen" | "x", topicId: string, quiz: GeneratedTopicContent["quiz"] | undefined): PoolQuestion[] {
+function contentQuiz(origin: "gen" | "x", topicId: string, quiz: StoredFresh["quiz"] | undefined): PoolQuestion[] {
   return (quiz ?? []).map((question, index) => ({
-    id: contentId(origin, topicId, "q", index),
+    id: contentId(origin, topicId, "q", serialOf(question, index)),
     prompt: question.prompt,
     options: question.options,
     correct_option_idx: question.correctIndex,
@@ -1119,9 +1284,9 @@ function contentQuiz(origin: "gen" | "x", topicId: string, quiz: GeneratedTopicC
   }));
 }
 
-function contentWritten(origin: "gen" | "x", topicId: string, written: GeneratedTopicContent["written"] | undefined) {
+function contentWritten(origin: "gen" | "x", topicId: string, written: StoredFresh["written"] | undefined) {
   return (written ?? []).map((question, index) => ({
-    id: contentId(origin, topicId, "w", index),
+    id: contentId(origin, topicId, "w", serialOf(question, index)),
     prompt: question.prompt,
     importance: null as number | null,
   }));
@@ -1150,6 +1315,10 @@ async function readNotesMarkdown(supabase: ExamSupabase, lectureId: string) {
  * Writes fresh questions for a topic whose pool the learner has seen through, keeps them on the
  * topic and returns the topic's fresh questions so far. A failure leaves the pool as it was: the
  * repeat then reuses seen questions, which beats no lesson.
+ *
+ * The write only lands if nobody else topped the topic up since it was read (`extra.next` is
+ * unchanged); otherwise the other request's questions are the ones kept and returned, so a lesson
+ * never shows questions that were not stored under the ids it hands out.
  */
 async function topUpFresh(
   supabase: ExamSupabase,
@@ -1158,10 +1327,15 @@ async function topUpFresh(
   topic: ExamTopicRow,
   kind: "quiz" | "written",
   avoid: string[],
-): Promise<FreshTopicQuestions> {
-  const current = (topic.extra as unknown as FreshTopicQuestions | null) ?? { quiz: [], written: [] };
+  mayCallModel: () => Promise<boolean>,
+): Promise<StoredFresh> {
+  const current = (topic.extra as unknown as StoredFresh | null) ?? { quiz: [], written: [] };
 
   try {
+    if (!(await mayCallModel())) {
+      return current;
+    }
+
     const fresh = await writeFreshQuestions({
       userId,
       lectureId: topic.lecture_id,
@@ -1174,17 +1348,42 @@ async function topUpFresh(
       written: kind === "written" ? FRESH_BATCH.written : 0,
       avoid,
     });
-    const next = {
-      quiz: [...(current.quiz ?? []), ...fresh.quiz].slice(-FRESH_KEEP.quiz),
-      written: [...(current.written ?? []), ...fresh.written].slice(-FRESH_KEEP.written),
+    // Questions stored before serials keep their place as their number; new ones count on from there.
+    const kept = {
+      quiz: (current.quiz ?? []).map((question, index) => ({ ...question, n: serialOf(question, index) })),
+      written: (current.written ?? []).map((question, index) => ({ ...question, n: serialOf(question, index) })),
     };
-    const { error } = await supabase
+    let serial =
+      current.next ?? Math.max(0, ...[...kept.quiz, ...kept.written].map((question) => question.n + 1));
+    const next: StoredFresh = {
+      quiz: [...kept.quiz, ...fresh.quiz.map((question) => ({ ...question, n: serial++ }))].slice(-FRESH_KEEP.quiz),
+      written: [...kept.written, ...fresh.written.map((question) => ({ ...question, n: serial++ }))].slice(
+        -FRESH_KEEP.written,
+      ),
+      next: serial,
+    };
+    const update = supabase
       .from("exam_topics")
       .update({ extra: next } as never)
       .eq("id", topic.id)
       .eq("user_id", userId);
+    const { data, error } = await (current.next === undefined
+      ? update.is("extra->>next" as never, null)
+      : update.eq("extra->>next" as never, String(current.next) as never)
+    )
+      .select("id")
+      .maybeSingle();
 
-    return error ? current : next;
+    if (error) {
+      return current;
+    }
+
+    if (data) {
+      return next;
+    }
+
+    const stored = await readOwnedTopic(supabase, userId, topic.exam_id, topic.id);
+    return (stored?.extra as unknown as StoredFresh | null) ?? current;
   } catch {
     return current;
   }
@@ -1203,8 +1402,19 @@ async function topUpFresh(
 export async function loadLesson(
   supabase: ExamSupabase,
   userId: string,
-  input: { examId: string; topicId: string; kind: ExamLessonKind },
+  input: {
+    examId: string;
+    topicId: string;
+    kind: ExamLessonKind;
+    /**
+     * Asked before each model call the lesson needs (its rate limit). When it says no, a lesson
+     * that cannot be built without the call throws `ExamModelCallRefused`; a repeat that only
+     * wanted fresh questions reuses seen ones instead.
+     */
+    mayCallModel?: () => Promise<boolean>;
+  },
 ): Promise<LessonLoad | null> {
+  const mayCallModel = input.mayCallModel ?? (async () => true);
   const [exam, found] = await Promise.all([
     readOwnedExam(supabase, userId, input.examId),
     readOwnedTopic(supabase, userId, input.examId, input.topicId),
@@ -1230,7 +1440,7 @@ export async function loadLesson(
   const attempts = prior.filter((row) => row.lesson_kind === input.kind).length;
   const seen = new Set(prior.flatMap((row) => row.item_ids ?? []));
   const seed = `${input.examId}:${input.topicId}:${input.kind}:${attempts}`;
-  const topic = await ensureWrittenTopic(supabase, userId, found, exam);
+  const topic = await ensureWrittenTopic(supabase, userId, found, exam, mayCallModel);
   const generated = topic.source === "material" ? null : (topic.generated as unknown as GeneratedTopicContent | null);
   const lectureId = topic.lecture_id;
 
@@ -1255,6 +1465,10 @@ export async function loadLesson(
   }
 
   if (input.kind === "tutor") {
+    if (!(await mayCallModel())) {
+      throw new ExamModelCallRefused();
+    }
+
     const steps = await planTutorLesson({
       userId,
       lectureId,
@@ -1285,11 +1499,16 @@ export async function loadLesson(
   }
 
   if (!generated) {
-    await ensureTopicItems(supabase, userId, { examId: input.examId, lectureId, group: ITEM_GROUP[input.kind] });
+    await ensureTopicItems(supabase, userId, {
+      examId: input.examId,
+      lectureId,
+      group: ITEM_GROUP[input.kind],
+      mayCallModel,
+    });
   }
 
   const assigned = generated ? topic : ((await readOwnedTopic(supabase, userId, input.examId, input.topicId)) ?? topic);
-  const extra = (assigned.extra as unknown as FreshTopicQuestions | null) ?? null;
+  const extra = (assigned.extra as unknown as StoredFresh | null) ?? null;
 
   if (input.kind === "flashcards") {
     const { data, error } = await supabase
@@ -1372,7 +1591,15 @@ export async function loadLesson(
     let pool = [...base, ...contentQuiz("x", topic.id, extra?.quiz)];
 
     if (needsFreshItems(pool, seen, size)) {
-      const fresh = await topUpFresh(supabase, userId, exam, assigned, "quiz", pool.map((question) => question.prompt));
+      const fresh = await topUpFresh(
+        supabase,
+        userId,
+        exam,
+        assigned,
+        "quiz",
+        pool.map((question) => question.prompt),
+        mayCallModel,
+      );
       pool = [...base, ...contentQuiz("x", topic.id, fresh.quiz)];
     }
 
@@ -1410,7 +1637,15 @@ export async function loadLesson(
   let pool = [...base, ...contentWritten("x", topic.id, extra?.written)];
 
   if (needsFreshItems(pool, seen, LESSON_SIZE.written)) {
-    const fresh = await topUpFresh(supabase, userId, exam, assigned, "written", pool.map((question) => question.prompt));
+    const fresh = await topUpFresh(
+      supabase,
+      userId,
+      exam,
+      assigned,
+      "written",
+      pool.map((question) => question.prompt),
+      mayCallModel,
+    );
     pool = [...base, ...contentWritten("x", topic.id, fresh.written)];
   }
 
@@ -1436,9 +1671,9 @@ export async function gradeTopicWritten(
   const ref = parseContentId(input.questionId);
   const content =
     ref && topic && ref.topicId === topic.id && ref.kind === "w"
-      ? ((ref.origin === "gen" ? topic.generated : topic.extra) as unknown as FreshTopicQuestions | null)
+      ? ((ref.origin === "gen" ? topic.generated : topic.extra) as unknown as StoredFresh | null)
       : null;
-  const question = ref ? content?.written?.[ref.index] : undefined;
+  const question = ref ? content?.written?.find((entry, index) => serialOf(entry, index) === ref.index) : undefined;
 
   if (!question) {
     return null;
@@ -1544,34 +1779,35 @@ export async function startMockExam(
   };
   const weakestFirst = [...lectureIds].sort((left, right) => noteMastery(left) - noteMastery(right));
   const seed = `${input.examId}:mock:${now.toISOString()}`;
-  const [{ data: quizData, error: quizError }, { data: writtenData, error: writtenError }] =
-    await Promise.all([
+  // Every question of every note: a single select would stop at PostgREST's 1000 rows.
+  const [quizData, writtenData] = await Promise.all([
+    loadEveryRow<QuizRow & { lecture_id: string }>((from, to) =>
       supabase
         .from("quiz_questions")
         .select("id, lecture_id, prompt, options_json, correct_option_idx, explanation")
         .in("lecture_id", lectureIds)
-        .limit(2000),
-      supabase
-        .from("practice_test_questions")
-        .select("id, lecture_id, prompt, answer_guide, importance")
-        .in("lecture_id", lectureIds)
-        .limit(2000),
-    ]);
-
-  if (quizError || writtenError) {
-    throw quizError ?? writtenError;
-  }
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    loadEveryRow<{ id: string; lecture_id: string; prompt: string; answer_guide: string; importance: number | null }>(
+      (from, to) =>
+        supabase
+          .from("practice_test_questions")
+          .select("id, lecture_id, prompt, answer_guide, importance")
+          .in("lecture_id", lectureIds)
+          .order("id", { ascending: true })
+          .range(from, to),
+    ),
+  ]);
 
   const counts = mockQuestionCounts(input.durationMinutes);
   const choicePools = new Map<string, MockQuestion[]>();
   const writtenPools = new Map<string, MockQuestion[]>();
 
   for (const lectureId of lectureIds) {
-    const quiz = quizRows(
-      ((quizData ?? []) as (QuizRow & { lecture_id: string })[]).filter(
-        (row) => row.lecture_id === lectureId,
-      ),
-    ).filter((question) => question.options.length >= 2);
+    const quiz = quizRows(quizData.filter((row) => row.lecture_id === lectureId)).filter(
+      (question) => question.options.length >= 2,
+    );
     choicePools.set(
       lectureId,
       seededShuffle(quiz, `${seed}:${lectureId}:choice`).map((question) => {
@@ -1589,15 +1825,7 @@ export async function startMockExam(
       }),
     );
 
-    const written = (
-      (writtenData ?? []) as {
-        id: string;
-        lecture_id: string;
-        prompt: string;
-        answer_guide: string;
-        importance: number | null;
-      }[]
-    ).filter((row) => row.lecture_id === lectureId && row.answer_guide.trim().length > 0);
+    const written = writtenData.filter((row) => row.lecture_id === lectureId && row.answer_guide.trim().length > 0);
     writtenPools.set(
       lectureId,
       pickWritten(written, written.length, `${seed}:${lectureId}`).map((row) => ({
@@ -1627,7 +1855,7 @@ export async function startMockExam(
 
   for (const topic of (topicRows ?? []) as Pick<ExamTopicRow, "id" | "lecture_id" | "generated" | "extra">[]) {
     for (const origin of ["gen", "x"] as const) {
-      const content = (origin === "gen" ? topic.generated : topic.extra) as unknown as FreshTopicQuestions | null;
+      const content = (origin === "gen" ? topic.generated : topic.extra) as unknown as StoredFresh | null;
 
       if (!content) {
         continue;
@@ -1650,7 +1878,7 @@ export async function startMockExam(
       );
       writtenPools.get(topic.lecture_id)?.push(
         ...(content.written ?? []).map((question, index) => ({
-          id: contentId(origin, topic.id, "w", index),
+          id: contentId(origin, topic.id, "w", serialOf(question, index)),
           lectureId: topic.lecture_id,
           kind: "written" as const,
           prompt: question.prompt,
@@ -1811,6 +2039,34 @@ export async function startMockExam(
       lectureId: weakestFirst[0],
     },
   };
+}
+
+/*
+ * How long after its clock runs out a mock still takes examiner turns and a hand-in: the oral
+ * examiner's clock starts when the learner is ready, not when the attempt was made, and a hand-in
+ * can be retried after a failed grading. Past this the attempt is closed for good.
+ */
+const MOCK_GRACE_MINUTES = 30;
+
+export function mockAttemptExpired(
+  attempt: Pick<ExamMockAttemptRow, "started_at" | "duration_minutes">,
+  now = new Date(),
+) {
+  return now.getTime() > Date.parse(attempt.started_at) + (attempt.duration_minutes + MOCK_GRACE_MINUTES) * 60_000;
+}
+
+/** Closes an attempt that ran out of time without being handed in, so it stops counting as open. */
+export async function expireMockAttempt(supabase: ExamSupabase, userId: string, attemptId: string) {
+  const { error } = await supabase
+    .from("exam_mock_attempts")
+    .update({ status: "failed" } as never)
+    .eq("id", attemptId)
+    .eq("user_id", userId)
+    .eq("status", "in_progress");
+
+  if (error) {
+    throw error;
+  }
 }
 
 export async function readMockAttempt(

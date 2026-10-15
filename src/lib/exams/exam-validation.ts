@@ -52,7 +52,8 @@ export const examPlanSchema = z.object({
 
 export const topicWrittenCheckSchema = z.object({
   topicId: z.string().uuid(),
-  questionId: z.string().regex(/^(gen|x):[0-9a-f-]{36}:w\d{1,3}$/),
+  // A fresh question's number is its stored serial, which keeps counting past 999.
+  questionId: z.string().regex(/^(gen|x):[0-9a-f-]{36}:w\d{1,6}$/),
   typedAnswer: createSanitizedStringSchema({ multiline: true, trim: true, maxLength: 12000 }),
   declaredUnknown: z.boolean(),
 });
@@ -81,17 +82,26 @@ export const lessonResultSchema = z.object({
   itemIds: z.array(z.string().regex(/^[A-Za-z0-9:_-]{1,100}$/)).max(40).optional(),
 });
 
-export const mockStartSchema = z.object({
-  durationMinutes: z
-    .number()
-    .int()
-    .min(ORAL_MINUTES.min)
-    .max(MOCK_MINUTES.max)
-    .refine((value) => value % 5 === 0),
-  mode: z.enum(["written", "oral"]).default("written"),
-  voice: createSanitizedStringSchema({ trim: true, maxLength: 40 }).nullable().optional(),
-  vibe: z.enum(["strict", "friendly", "encouraging"]).nullable().optional(),
-});
+export const mockStartSchema = z
+  .object({
+    durationMinutes: z
+      .number()
+      .int()
+      .min(ORAL_MINUTES.min)
+      .max(MOCK_MINUTES.max)
+      .refine((value) => value % 5 === 0),
+    mode: z.enum(["written", "oral"]).default("written"),
+    voice: createSanitizedStringSchema({ trim: true, maxLength: 40 }).nullable().optional(),
+    vibe: z.enum(["strict", "friendly", "encouraging"]).nullable().optional(),
+  })
+  // Each mode has its own gauge: written 10–120 minutes, oral 5–30.
+  .refine(
+    (value) =>
+      value.mode === "oral"
+        ? value.durationMinutes <= ORAL_MINUTES.max
+        : value.durationMinutes >= MOCK_MINUTES.min,
+    { message: "Invalid duration for this mode.", path: ["durationMinutes"] },
+  );
 
 export const mockSubmitSchema = z.object({
   answers: z

@@ -26,6 +26,12 @@ import { voiceHue } from "@/lib/tutor/voice-colors";
 
 type Stage = "idle" | "running" | "paused";
 
+/*
+ * The silence that ends an answer only starts once the learner has said something; a learner who
+ * says nothing at all is taken, after this long, not to know, and the tutor teaches the answer.
+ */
+const NO_SPEECH_MS = 20_000;
+
 export function ExamTutorLesson({
   examId,
   topicId,
@@ -173,6 +179,18 @@ export function ExamTutorLesson({
     endAnswerRef.current = endAnswer;
   });
 
+  /* Nothing heard at all since the question: an empty answer, so the step moves on. */
+  const waitingInSilence = stage === "running" && !textMode && phase === "listening" && !heard;
+
+  useEffect(() => {
+    if (!waitingInSilence) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => void endAnswerRef.current(""), NO_SPEECH_MS);
+    return () => window.clearTimeout(timer);
+  }, [waitingInSilence, index]);
+
   /* Leaving the screen closes the session and reports the talking time used. */
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => () => session.teardown(), []);
@@ -209,6 +227,16 @@ export function ExamTutorLesson({
     continueRef.current = null;
     setAwaitingContinue(false);
     hush();
+    setStage("running");
+    void teach(currentRef.current.index);
+  }
+
+  /* The voice dropped: the same point again, in writing. */
+  function continueInWriting() {
+    flowRef.current += 1;
+    continueRef.current = null;
+    setAwaitingContinue(false);
+    session.switchToText();
     setStage("running");
     void teach(currentRef.current.index);
   }
@@ -309,7 +337,29 @@ export function ExamTutorLesson({
         </>
       ) : null}
 
-      {error && !textMode ? <p className="memo-inline-error memo-tutor-error">{error}</p> : null}
+      {/* Spoken answers end on their own when the learner goes quiet; these end one at once. */}
+      {stage === "running" && !textMode && phase === "listening" ? (
+        <div className="memo-exam-oral-actions">
+          <button type="button" className="memo-button-ghost" onClick={() => void endAnswer("")}>
+            {t("test.dontKnow")}
+          </button>
+          <button type="button" className="memo-primary-pill" onClick={() => void endAnswer()}>
+            {t("exam.oral.done")}
+          </button>
+        </div>
+      ) : null}
+
+      {error && !textMode ? (
+        <>
+          <p className="memo-inline-error memo-tutor-error">{error}</p>
+          {running && !preparing ? (
+            <button type="button" className="memo-tutor-second" onClick={continueInWriting}>
+              <Msym name="keyboard" size="1.2rem" fill={false} weight={500} />
+              <span>{t("exam.tutor.toText")}</span>
+            </button>
+          ) : null}
+        </>
+      ) : null}
 
       {/* Where the lesson has got to: the topic, and its points as a bar. */}
       {running && !preparing ? (

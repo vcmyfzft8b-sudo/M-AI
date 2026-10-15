@@ -19,6 +19,7 @@ import {
   mockQuestionCounts,
   ORAL_MINUTES,
   oralQuestionCount,
+  wholePercent,
 } from "@/lib/exams/exam-model";
 import type { MockQuestionForLearner, MockResult } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -50,7 +51,12 @@ type Phase =
   | { name: "setup" }
   | { name: "sitting"; attempt: Attempt }
   | { name: "oral"; attempt: Attempt }
-  | { name: "grading"; attempt: Attempt }
+  /*
+   * Handed in. The answers ride along so that a failed grading can be sent again as they were:
+   * `failed` keeps the learner here, with a retry, whenever going back to the questions would not
+   * help (an oral mock, or a written one whose clock has already run out).
+   */
+  | { name: "grading"; attempt: Attempt; answers: Record<string, Answer>; failed?: boolean }
   | { name: "result"; result: MockResult };
 
 function answered(question: MockQuestionForLearner, answer: Answer | undefined) {
@@ -187,7 +193,7 @@ export function ExamMock({
       submitting.current = true;
       setConfirmOpen(false);
       setError(null);
-      setPhase({ name: "grading", attempt });
+      setPhase({ name: "grading", attempt, answers: current });
 
       const response = await fetch(`/api/exams/${examId}/mock/${attempt.id}`, {
         method: "POST",
@@ -200,6 +206,15 @@ export function ExamMock({
       submitting.current = false;
 
       if (!payload?.result) {
+        const clockOut = Date.now() >= new Date(attempt.startedAt).getTime() + attempt.durationMinutes * 60_000;
+
+        // Back to the questions only while there is time to use them: the written mock's clock
+        // would hand in again at once, and an oral mock's answers exist only here.
+        if (attempt.mode === "oral" || clockOut) {
+          setPhase({ name: "grading", attempt, answers: current, failed: true });
+          return;
+        }
+
         setError(t("exam.mock.error.submit"));
         setPhase({ name: "sitting", attempt });
         return;
@@ -250,8 +265,8 @@ export function ExamMock({
         <Msym name="history" size="1.2rem" fill={false} />
         {/* A percentage grade is the score itself, so it is said once. */}
         {lastResult.grade.endsWith("%")
-          ? t("exam.mock.lastPercent", { percent: Math.round(lastResult.percentage) })
-          : t("exam.mock.lastResult", { grade: lastResult.grade, percent: Math.round(lastResult.percentage) })}
+          ? t("exam.mock.lastPercent", { percent: wholePercent(lastResult.percentage) })
+          : t("exam.mock.lastResult", { grade: lastResult.grade, percent: wholePercent(lastResult.percentage) })}
       </button>
     ) : null;
 
@@ -319,7 +334,7 @@ export function ExamMock({
             range={mode === "oral" ? ORAL_MINUTES : MOCK_MINUTES}
             label={t("exam.mock.duration")}
             valueText={t("exam.minutes", { minutes })}
-            unit="min"
+            unit={t("exam.minutesUnit")}
             caption={
               mode === "oral"
                 ? t("exam.oral.questions", { count: oralQuestionCount(oralMinutes) })
@@ -327,8 +342,8 @@ export function ExamMock({
             }
             ends={
               mode === "oral"
-                ? [`${ORAL_MINUTES.min} min`, `${ORAL_MINUTES.max} min`]
-                : [`${MOCK_MINUTES.min} min`, `${MOCK_MINUTES.max} min`]
+                ? [t("exam.minutes", { minutes: ORAL_MINUTES.min }), t("exam.minutes", { minutes: ORAL_MINUTES.max })]
+                : [t("exam.minutes", { minutes: MOCK_MINUTES.min }), t("exam.minutes", { minutes: MOCK_MINUTES.max })]
             }
           />
         </div>
@@ -394,7 +409,7 @@ export function ExamMock({
               <div>
                 <Msym name="flag" size="1.3rem" fill={false} />
                 <span>{t("exam.mock.pass")}</span>
-                <b>{passPercentage} %</b>
+                <b>{t("exam.percent", { percent: passPercentage })}</b>
               </div>
             </div>
           )}
@@ -483,6 +498,31 @@ export function ExamMock({
   }
 
   if (phase.name === "grading") {
+    const { attempt, answers: handedIn } = phase;
+
+    if (phase.failed) {
+      return (
+        <ExamScreen
+          refreshOnBack
+          backHref={examHref}
+          backLabel={examTitle}
+          backIcon="close"
+          title={t("exam.mock.title")}
+          cta={
+            <button type="button" className="memo-button-coral" onClick={() => void submit(attempt, handedIn)}>
+              {t("common.retry")}
+            </button>
+          }
+        >
+          <div className="memo-exam-center memo-exam-grading" role="alert">
+            <MemoBuddy mood="sad" size="7rem" />
+            <h1 className="memo-exam-step-title">{t("exam.mock.gradingFailed.title")}</h1>
+            <p className="memo-exam-fine">{t("exam.mock.gradingFailed.body")}</p>
+          </div>
+        </ExamScreen>
+      );
+    }
+
     return (
       <ExamScreen
         refreshOnBack
@@ -532,7 +572,8 @@ export function ExamMock({
             <span className="memo-eyebrow">{t("exam.mock.title")}</span>
             <h1>{t("exam.mock.result.grade", { grade: result.grade })}</h1>
             <p>
-              {Math.round(result.percentage)} % · {t("exam.mock.result.points", { score: Math.round(result.totalScore * 10) / 10, total: result.maxScore })}
+              {/* Floored, as every score shown beside a pass mark is: 89.6 % must not read as 90 %. */}
+              {t("exam.percent", { percent: wholePercent(result.percentage) })} · {t("exam.mock.result.points", { score: Math.round(result.totalScore * 10) / 10, total: result.maxScore })}
             </p>
           </div>
         </div>

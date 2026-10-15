@@ -51,7 +51,19 @@ true/false and written answer count in full. The summary counts as done but not 
 **Scores fade** (`fadedScore`, spaced review): a lesson keeps its score for three days, then loses
 4 % of it a day, never below 60 %. A perfect lesson against an 85 % target is due again about a
 week later, a bare pass sooner, so a topic learned weeks before the exam comes back for review
-before it. Lessons due only because they faded show as "Osveži" on the path (`refresh`).
+before it. Lessons due only because they faded show as "Osveži" on the path (`refresh`), and a
+mastered module due for one reads "obvladano · čas za osvežitev". **Fading only schedules a
+refresh; it never un-masters a module.** Only a new try under the pass mark, or a failed mock, does.
+Without that, a big exam could never be mastered all at once (8 topics × 5 lessons at 5 a day: the
+first lessons fade below 90 % before the last ones are done), and the mock would never come up.
+
+**Pass marks** (`lessonPassThreshold`, `lessonPassed`): the learner sees the target they chose, but
+each lesson is checked against a mark it can actually score. No mark is above 95 %
+(`LESSON_PASS_CAP`), so a 100 % target does not demand flawless lessons forever. The tutor, marked
+1 / ½ / ¼ per step over three steps, passes at 2.5 of 3 at most (one step right only after the
+explanation). Scores are stored as `real` (9/10 reads back as 0.8999…), so every comparison allows
+a 0.0001 margin. Displayed percentages round **down** (`percent`, `wholePercent`): 89.6 % against a
+90 % mark shows "89 %", never the mark itself.
 
 ### Until the goal is reached and proved
 
@@ -59,10 +71,17 @@ The exam does not end when every lesson has been opened once. Like Astra, it kee
 until the learner has the knowledge and has shown it (`examStage`, `examNextStep`):
 
 1. **Learn** (`learned`): every lesson of every module done once.
-2. **Practise** (`mastered`): every practice lesson's latest score at or above the exam's target.
-   A lesson under it comes back on the path as a repeat station, weakest first, and each try draws
-   questions the learner has not been shown (see below). Modules are taken in order: the path
-   points at the first one not yet mastered.
+2. **Practise** (`mastered`): every practice lesson's latest score at its pass mark. A lesson under
+   it comes back on the path as a repeat station, weakest first, and each try draws questions the
+   learner has not been shown (see below).
+
+The order of next steps (`examNextStep`): first the untried lessons of the first module that can be
+opened (one whose note is still being made, or whose topics are not planned yet, is skipped and does
+not hold back the ones after it), so the whole exam is learned before anything is repeated; then
+lessons under their mark, weakest first across modules, except one that has already failed twice
+today (`MAX_FAILED_TRIES_PER_DAY`), which rests until tomorrow so one hard lesson cannot hold up the
+plan; in the prove stage, the mock; then the most faded lesson. A learner who plateaus under a mark
+keeps practising and does not get the mock. The lesson screen's "next" button takes the same step.
 3. **Prove**: with every module mastered, the mock exam is the next step. Passing it at the target
    makes the learner **ready**. A mock under the target sends the modules it found weak back to
    practise: their quiz and written answer count only once redone after that mock
@@ -98,7 +117,11 @@ topic (`exam_topics.extra`). Flashcards are memorised, so they come back by the 
 repetition instead. The mock exam holds back every question the learner practised and fills the
 time with unseen ones, written for the mock where the banks run short; practised questions come back
 only if that writing fails. AI-written questions carry ids that say where they live
-(`gen:<topic>:q3`, `x:<topic>:w0`), so practised ones are recognised everywhere.
+(`gen:<topic>:q3`, `x:<topic>:w0`), so practised ones are recognised everywhere. A fresh question's
+number is a serial stored with it (`n`, counted on from `extra.next`), never its place in the list:
+the list keeps only the newest (`FRESH_KEEP`), and a place would hand a seen question's id to a new
+one. Fresh questions stored before serials keep their place as their number. Two lessons topping up
+the same topic at once cannot both write: the write only lands while `extra.next` is what was read.
 
 The daily goal counts the repeats still owed, not only untried lessons. The lesson's done screen
 applies the same rule to decide what comes next (the next lesson, a repeat, the next module, or the
@@ -113,7 +136,9 @@ material is picked, is in `src/lib/exams/exam-model.ts`. It is pure and tested
 - **Days are Ljubljana days**, as everywhere else in the product.
 - **The daily goal** spreads the untried lessons over the days left, but is never less than the
   learner's daily minutes buy (6 minutes a lesson). It is computed against what was left at the
-  start of the day, so finishing a lesson moves "done", not the goal.
+  start of the day (the modules on the results from before today, `planFor`), so finishing a
+  lesson, a first try or a repeat, moves "done", not the goal. Once the exam day has passed there
+  is no goal.
 - **Grades:** the setup only offers a target percentage (75/90/100 %); the model still maps
   university 5–10 and school 1–5 scales, which older rows or a future setting may use.
 
@@ -195,14 +220,35 @@ the answers; "Ponovi generalko" retries and "Nadaljuj" returns to the path. The 
 one paid-only part: setup, path, lessons and readiness follow the notes' own access (a free account
 can prep from its free note).
 
-## Tables (`supabase/migrations/0062_exam_prep.sql`, `0063_exam_tutor_and_fresh_questions.sql`)
+## Tables (`supabase/migrations/0065_exam_prep.sql`, `0066_exam_tutor_and_fresh_questions.sql`)
 
 `exams`, `exam_modules`, `exam_topics`, `exam_lesson_results`, `exam_mock_attempts`. All are
-owner-only by RLS and every route uses the client that verified the learner (`getRouteUser`). The
-migration was first written as 0061 and applied to staging only; PR #579 claimed 0061 too, so it
-moved to 0062 (staging's 0061 record was reverted and its tables dropped first). `0063` adds the `tutor`
-lesson kind, `exam_lesson_results.item_ids` and `exam_topics.extra`; it was applied to staging
-(with the owner's go-ahead) from this branch, never to production.
+owner-only by RLS and every route uses the client that verified the learner (`getRouteUser`); an
+update cannot move a module, topic or mock attempt onto another exam or note (`0066` recreates the
+update policies with the insert policies' checks). The migration was first written as 0061 and
+applied to staging only; PR #579 claimed 0061 too, so it moved to 0062 (staging's 0061 record was
+reverted and its tables dropped first). Main then shipped `0064` to production, and `supabase db
+push` refuses a local migration older than the newest remote one, so 0062 and 0063 became 0065 and
+0066. Staging still records 0062 and 0063: revert those records and drop the exam tables before
+0065 and 0066 apply there. `0066` adds the `tutor` lesson kind, `exam_lesson_results.item_ids` and
+`exam_topics.extra`. Neither is on production.
+
+## Access and limits
+
+- Setup, planning, lessons, the tutor and readiness follow the notes' own access
+  (`canUseLectureFeatures`): `POST /api/exams` leaves out a note the account cannot study and
+  answers 402 when none is left; `POST /api/exams/[id]/topics` plans only studiable notes.
+- The mock exam is paid-only at every step: starting it, each oral examiner turn and the hand-in.
+  An attempt takes turns and a hand-in until 30 minutes after its clock ran out
+  (`mockAttemptExpired`); after that it is closed (`failed`).
+- An archived exam takes no lessons, tutor turns or mocks (409); its lesson page sends the learner
+  back to the exam screen, which offers to bring it back.
+- The lesson route has the read limit, since the client polls it; a load that has to call the
+  model (the tutor's plan, sorting items into topics, writing a topic's lessons or fresh questions)
+  is also held to the expensive limit. A lesson written for the first time is only stored if no
+  other request stored one first.
+- Topics planned on the exam screen are checked again before they are stored, and if two requests
+  still stored a plan for the same note, the first stored is kept (`keepFirstPlan`).
 
 ## Memo, animated
 
@@ -226,5 +272,6 @@ sparkle and runs the sheen at once. The landing, paywall and onboarding keep the
 Astra has these and they are deliberately not built (owner's decision, 2026-10-15): focus mode (iOS
 Screen Time), classrooms and shared or public exam preps, the "+2 grades or refund" guarantee, and
 real past matura papers. Nor are Astra's date strip, quick date buttons and Modules/Path/Plan tabs:
-the owner asked for the simpler screens. The landing page shows the "Novo" label but not yet the
-exam-prep card or a feature-list entry.
+the owner asked for the simpler screens. The landing's hero phone shows the exam-prep row in its
+"Novo" sheet (the app's own `ExamEntryCard`); tapping it there only closes the sheet, since the
+landing has no exam screens. Exam prep is not in the landing's feature list or FAQ.

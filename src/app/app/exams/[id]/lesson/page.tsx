@@ -2,10 +2,11 @@ import { notFound, redirect } from "next/navigation";
 
 import { ExamLesson } from "@/components/exams/exam-lesson";
 import { requireUser } from "@/lib/auth";
-import { getPaywallPath, getViewerAppState } from "@/lib/billing";
-import { isExamLessonKind } from "@/lib/exams/exam-model";
+import { getViewerAppState } from "@/lib/billing";
+import { examNextStep, isExamLessonKind } from "@/lib/exams/exam-model";
 import { getExamDetail } from "@/lib/exams/exams-server";
 import { getTranslations } from "@/lib/i18n/server";
+import { paywallPath } from "@/lib/paywall-reasons";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 
@@ -37,27 +38,33 @@ export default async function ExamLessonPage({
     notFound();
   }
 
+  // An archived exam takes no more lessons; its screen offers to bring it back.
+  if (detail.exam.archived_at) {
+    redirect(`/app/exams/${detail.exam.id}`);
+  }
+
   const current = detail.modules[index];
 
   if (!appState?.hasPaidAccess && appState?.trialLectureId !== current.lectureId) {
-    redirect(getPaywallPath());
+    redirect(paywallPath("exam", `/app/exams/${detail.exam.id}`));
   }
 
   /*
-   * After this module the path goes to the next module in order that is not mastered yet (the
-   * learner can open it), or, when every other module is mastered, to the mock exam.
+   * After this lesson the path's own next step (`examNextStep`), looked at as if this module were
+   * done: the next module it would open, or the mock exam once the plan is at that stage.
    */
   const canOpen = (lectureId: string) => Boolean(appState?.hasPaidAccess) || appState?.trialLectureId === lectureId;
-  const others = [...detail.modules.slice(index + 1), ...detail.modules.slice(0, index)];
-  const following = others.find((entry) => entry.ready && !entry.mastered && canOpen(entry.lectureId)) ?? null;
-  const after = following
+  const others = detail.modules.filter((_, position) => position !== index);
+  const step = examNextStep(others, detail.stage, canOpen);
+  const following = step?.type === "lesson" ? others.find((entry) => entry.topicId === step.topicId) ?? null : null;
+  const after = following && step?.type === "lesson"
     ? {
         type: "module" as const,
         topicId: following.topicId,
         title: following.title?.trim() || t("note.untitled"),
-        kind: following.nextKind,
+        kind: step.kind,
       }
-    : others.every((entry) => entry.mastered)
+    : step?.type === "mock" || (step === null && others.every((entry) => entry.mastered))
       ? { type: "mock" as const }
       : null;
 

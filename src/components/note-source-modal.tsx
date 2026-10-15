@@ -335,6 +335,7 @@ export function NoteSourceModal({
   onClose,
   canCreateNotes,
   onCreated,
+  paywallBack = "/app",
 }: {
   mode: NoteSourceMode | null;
   open: boolean;
@@ -345,6 +346,11 @@ export function NoteSourceModal({
    * joins the exam being set up, and the learner stays in the setup.
    */
   onCreated?: (lectureId: string) => void;
+  /**
+   * Where the paywall's close returns to: home by default, never this sheet's own address, which
+   * would reopen the sheet. Exam setup passes its own page, so closing the paywall goes back there.
+   */
+  paywallBack?: string;
 }) {
   const t = useT();
   const router = useRouter();
@@ -452,8 +458,8 @@ export function NoteSourceModal({
     // Home itself, never this sheet's own address, which would reopen the sheet
     // and send the learner straight back here.
     replacingNextPage();
-    router.replace(paywallPath("note", "/app"));
-  }, [canCreateNotes, onClose, open, router]);
+    router.replace(paywallPath("note", paywallBack));
+  }, [canCreateNotes, onClose, open, paywallBack, router]);
 
   // Creator demo: stage a file for the visible source, so the creator can hit
   // "Ustvari" immediately. Picking their own file — or recording for real —
@@ -598,7 +604,7 @@ export function NoteSourceModal({
 
   function redirectToPaywall() {
     onClose();
-    navigateWithFeedback(paywallPath("note", "/app"));
+    navigateWithFeedback(paywallPath("note", paywallBack));
   }
 
   const replaceAudioSource = useCallback(async (nextSource: AudioSource) => {

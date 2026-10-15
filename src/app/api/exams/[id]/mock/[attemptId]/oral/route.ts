@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { createBillingRequiredResponse, hasPaidAccessForUserId } from "@/lib/billing";
 import { examinerTurn, type OralVibe } from "@/lib/exams/exam-oral-server";
-import { readMockAttempt } from "@/lib/exams/exams-server";
+import { mockAttemptExpired, readMockAttempt } from "@/lib/exams/exams-server";
 import { captureRouteError } from "@/lib/monitoring";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -56,6 +57,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     if (!attempt || attempt.mode !== "oral" || attempt.status !== "in_progress" || !question) {
       return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
+    }
+
+    // The mock exam is paid-only, every turn of it, and an attempt past its time takes no more.
+    if (!(await hasPaidAccessForUserId(auth.user.id))) {
+      return createBillingRequiredResponse(await tr("api.exam.mockPaid"));
+    }
+
+    if (mockAttemptExpired(attempt)) {
+      return NextResponse.json({ error: await tr("api.exam.mockExpired") }, { status: 409 });
     }
 
     const turn = await examinerTurn({

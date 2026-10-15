@@ -51,6 +51,13 @@ const ANSWER_SILENCE_MS = 3500;
 /* A fresh key is fetched this long before the current slice of talking time runs out. */
 const RENEW_BEFORE_SECONDS = 25;
 
+/* One slice of talking time. Settling it clears `grantId`, so the same slice is never reported twice. */
+type Grant = { grantId: string | null; grantedSeconds: number; startedAt: number };
+
+function grantOf(session: Session): Grant {
+  return { grantId: session.grantId, grantedSeconds: session.grantedSeconds, startedAt: Date.now() };
+}
+
 export function useExamVoice({
   lectureId,
   voice,
@@ -82,9 +89,15 @@ export function useExamVoice({
   const envelopeRef = useRef(new LevelEnvelope());
   const heardRef = useRef("");
   const silenceRef = useRef<number | null>(null);
-  const grantRef = useRef<{ grantId: string | null; grantedSeconds: number; startedAt: number } | null>(null);
+  const grantRef = useRef<Grant | null>(null);
   const startedAtRef = useRef(0);
   const closedRef = useRef(false);
+  /*
+   * Which start() is the live one. Every start and every teardown moves it on, so a start still
+   * waiting on the microphone or the session when it was cancelled (and perhaps started again)
+   * knows to close what it opened rather than build a second session beside the new one.
+   */
+  const generationRef = useRef(0);
   const renewingRef = useRef(false);
   /* The session's speech language: the voice speaks it, and the recogniser listens for it. */
   const languageRef = useRef(fallbackLanguage);
@@ -106,20 +119,21 @@ export function useExamVoice({
     }
   }, []);
 
-  const settle = useCallback(
-    (keepalive = false) => {
-      const grant = grantRef.current;
+  /* Reports the talking time one slice used, once. */
+  const settleGrant = useCallback(
+    (grant: Grant | null, keepalive = false) => {
+      const grantId = grant?.grantId;
 
-      if (!grant?.grantId) {
+      if (!grant || !grantId) {
         return;
       }
 
-      grantRef.current = { ...grant, grantId: null };
+      grant.grantId = null;
       void fetch(`/api/lectures/${lectureId}/tutor/usage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          grantId: grant.grantId,
+          grantId,
           secondsUsed: Math.min(grant.grantedSeconds, Math.round((Date.now() - grant.startedAt) / 1000)),
         }),
         keepalive,
@@ -128,7 +142,10 @@ export function useExamVoice({
     [lectureId],
   );
 
+  const settle = useCallback((keepalive = false) => settleGrant(grantRef.current, keepalive), [settleGrant]);
+
   const teardown = useCallback(() => {
+    generationRef.current += 1;
     closedRef.current = true;
     clearSilence();
     inputRef.current?.close();
@@ -150,7 +167,6 @@ export function useExamVoice({
       throw new Error(payload?.error ?? t("exam.oral.error.start"));
     }
 
-    grantRef.current = { grantId: payload.grantId, grantedSeconds: payload.grantedSeconds, startedAt: Date.now() };
     return payload;
   }, [lectureId, t, voice]);
 
@@ -210,6 +226,26 @@ export function useExamVoice({
     outputRef.current?.stop({ fadeOut: true });
   }, [clearSilence]);
 
+  /*
+   * The voice has dropped (the recogniser or the speech output lost its connection): with
+   * `allowText`, the rest goes on in writing. The microphone and keys are closed and the talking
+   * time used so far is reported; what is said next is shown, and the learner types.
+   */
+  const switchToText = useCallback(() => {
+    if (!allowText || closedRef.current) {
+      return;
+    }
+
+    clearSilence();
+    inputRef.current?.close();
+    outputRef.current?.close();
+    inputRef.current = null;
+    outputRef.current = null;
+    settle(true);
+    setError(null);
+    setTextMode(true);
+  }, [allowText, clearSilence, settle]);
+
   const finish = useCallback(() => {
     if (closedRef.current) {
       return;
@@ -222,9 +258,15 @@ export function useExamVoice({
   /** Starts the session: microphone, talking time and keys. False if it could not start at all. */
   const start = useCallback(async (): Promise<boolean> => {
     // A remount (React's development double mount, or a fast remount) starts a fresh session.
+    const generation = (generationRef.current += 1);
+    const stale = () => generation !== generationRef.current;
     closedRef.current = false;
 
     const fallBack = (message: string) => {
+      if (stale()) {
+        return false;
+      }
+
       if (allowText) {
         setTextMode(true);
         startedAtRef.current = Date.now();
@@ -247,18 +289,39 @@ export function useExamVoice({
       return fallBack(t("tutor.error.micDenied"));
     }
 
+    const stopMicrophone = () => microphone.getTracks().forEach((track) => track.stop());
+
+    if (stale()) {
+      stopMicrophone();
+      return false;
+    }
+
+    let grant: Grant | null = null;
+    let output: TutorSpeechOutput | GeminiTutorSpeechOutput | null = null;
+    let input: TutorSpeechInput | null = null;
+    // Everything this start opened, closed: on a failure, or when a newer start or a teardown has
+    // overtaken it while it waited.
+    const abandon = () => {
+      stopMicrophone();
+      input?.close();
+      output?.close();
+      settleGrant(grant, true);
+    };
+
     try {
       const session = await openSession();
-      languageRef.current = session.language;
+      grant = grantOf(session);
 
-      if (closedRef.current) {
-        microphone.getTracks().forEach((track) => track.stop());
-        settle(true);
+      if (stale()) {
+        abandon();
         return false;
       }
 
+      grantRef.current = grant;
+      languageRef.current = session.language;
+
       const SpeechOutput = session.realtime.tts.provider === "gemini" ? GeminiTutorSpeechOutput : TutorSpeechOutput;
-      const output = new SpeechOutput(
+      output = new SpeechOutput(
         {
           url: session.realtime.tts.url,
           apiKey: session.realtime.tts.apiKey,
@@ -268,7 +331,7 @@ export function useExamVoice({
         },
         { onError: () => setError(t("tutor.error.connection")) },
       );
-      const input = new TutorSpeechInput(
+      input = new TutorSpeechInput(
         { ...session.realtime.stt, languages: [session.language] },
         {
           onPartial: (text) => {
@@ -293,24 +356,25 @@ export function useExamVoice({
         },
       );
 
-      outputRef.current = output;
-      inputRef.current = input;
       await output.connect();
       await output.resumeAudio();
       await input.start(microphone);
+
+      if (stale()) {
+        abandon();
+        return false;
+      }
+
       input.setMuted(true);
+      outputRef.current = output;
+      inputRef.current = input;
       startedAtRef.current = Date.now();
       return true;
     } catch (caught) {
-      microphone.getTracks().forEach((track) => track.stop());
-      inputRef.current?.close();
-      outputRef.current?.close();
-      inputRef.current = null;
-      outputRef.current = null;
-      settle(true);
+      abandon();
       return fallBack(caught instanceof Error ? caught.message : t("exam.oral.error.start"));
     }
-  }, [allowText, clearSilence, openSession, settle, t]);
+  }, [allowText, clearSilence, openSession, settleGrant, t]);
 
   /*
    * Closing the tab or locking the phone does not unmount anything, so the talking time used is
@@ -340,8 +404,18 @@ export function useExamVoice({
       ) {
         renewingRef.current = true;
         settle();
+        const generation = generationRef.current;
         void openSession()
           .then(async (session) => {
+            const next = grantOf(session);
+
+            // Ended while the key was on its way: the new slice is reported unused at once.
+            if (generation !== generationRef.current) {
+              settleGrant(next, true);
+              return;
+            }
+
+            grantRef.current = next;
             outputRef.current?.useKey(session.realtime.tts.apiKey);
             await inputRef.current?.useKey(session.realtime.stt.apiKey);
           })
@@ -353,7 +427,7 @@ export function useExamVoice({
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [openSession, settle, t]);
+  }, [openSession, settle, settleGrant, t]);
 
   /* The sphere follows whichever voice is sounding, as it does for the tutor. */
   useEffect(() => {
@@ -386,6 +460,7 @@ export function useExamVoice({
     listen,
     stopListening,
     hush,
+    switchToText,
     finish,
     teardown,
   };

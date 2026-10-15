@@ -13,12 +13,14 @@ import {
 
 /*
  * In the header he is livelier than on a lesson screen: a hop or a bounce every few seconds, and
- * blinks about twice as often, since at this size a single blink is easy to miss.
+ * blinks about twice as often and a little slower, since at this size a quick blink is easy to miss
+ * (the lids are also enlarged for this size in redesign.css).
  */
 const LOCKUP_IDLE: BuddyIdle = {
   moves: ["hop", "boing", "hop", "wave"],
   every: [3000, 5500],
   blinkEvery: [1400, 3200],
+  blinkPace: 1.5,
 };
 
 /* How long a tap's sweep of the shine takes (the `memo-lockup-shine-tap` animation). */

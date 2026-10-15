@@ -52,6 +52,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
     }
 
+    if (exam.archived_at) {
+      return NextResponse.json({ error: await tr("api.exam.archived") }, { status: 409 });
+    }
+
     if (!(await hasPaidAccessForUserId(auth.user.id))) {
       return createBillingRequiredResponse(await tr("api.exam.mockPaid"));
     }

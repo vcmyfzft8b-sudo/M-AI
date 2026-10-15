@@ -1,6 +1,9 @@
 -- Claimed after checking main (at 0060) and the open PRs on 2026-10-15. First written as 0061 and
 -- applied to staging only; PR #579 claimed 0061 too, so this file moved to 0062 and staging's 0061
--- record was reverted (its tables dropped) before re-applying it here. It was never on production.
+-- record was reverted (its tables dropped) before re-applying it there. Main then shipped 0064 to
+-- production, and `supabase db push` refuses a local version older than the newest remote one, so
+-- it moved again to 0065. Staging's 0062 and 0063 records must be reverted and the exam tables
+-- dropped before 0065 and 0066 apply there. Never on production.
 --
 -- ---------------------------------------------------------------------------
 -- Exam prep ("Priprava na izpit")

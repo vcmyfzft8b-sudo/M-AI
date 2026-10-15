@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
-import { loadLesson, readOwnedTopic } from "@/lib/exams/exams-server";
+import { ExamModelCallRefused, loadLesson, readOwnedExam, readOwnedTopic } from "@/lib/exams/exams-server";
 import { examIdParamsSchema, lessonQuerySchema } from "@/lib/exams/exam-validation";
 import { captureRouteError } from "@/lib/monitoring";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -46,23 +46,50 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
-  try {
-    const topic = await readOwnedTopic(auth.supabase, auth.user.id, params.data.id, query.data.topicId);
+  const userId = auth.user.id;
+  /*
+   * Most loads only read, and the client polls this route while a note's material is being made,
+   * so the route itself has the read limit. A load that has to call the model (the tutor's plan,
+   * sorting a note's items into topics, writing a topic's lessons or fresh questions) is also
+   * held to the expensive limit, asked once per request just before the first call.
+   */
+  const model: { limited: Promise<Response | null> | null } = { limited: null };
+  const mayCallModel = async () => {
+    model.limited ??= enforceRateLimit({
+      request,
+      route: "api:exams:lesson:generate",
+      rules: rateLimitPresets.expensiveMutate,
+      userId,
+    });
 
-    if (!topic) {
+    return (await model.limited) === null;
+  };
+
+  try {
+    const [exam, topic] = await Promise.all([
+      readOwnedExam(auth.supabase, userId, params.data.id),
+      readOwnedTopic(auth.supabase, userId, params.data.id, query.data.topicId),
+    ]);
+
+    if (!exam || !topic) {
       return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
     }
 
-    const access = await canUseLectureFeatures(auth.user.id, topic.lecture_id, "study");
+    if (exam.archived_at) {
+      return NextResponse.json({ error: await tr("api.exam.archived") }, { status: 409 });
+    }
+
+    const access = await canUseLectureFeatures(userId, topic.lecture_id, "study");
 
     if (!access.allowed) {
       return createBillingRequiredResponse(await tr("api.trialOnly.study"), access.code);
     }
 
-    const load = await loadLesson(auth.supabase, auth.user.id, {
+    const load = await loadLesson(auth.supabase, userId, {
       examId: params.data.id,
       topicId: topic.id,
       kind: query.data.kind,
+      mayCallModel,
     });
 
     if (!load) {
@@ -71,6 +98,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
     return NextResponse.json(load);
   } catch (error) {
+    const limitedResponse = error instanceof ExamModelCallRefused ? await model.limited : null;
+
+    if (limitedResponse) {
+      return limitedResponse;
+    }
+
     captureRouteError(error, {
       route: "api:exams:lesson:get",
       operation: "load",

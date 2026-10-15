@@ -30,6 +30,7 @@ import { formatCalendarDate } from "@/lib/utils";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { Component } from "react";
 
+import { ExamEntryCard } from "@/components/exams/exam-entry-card";
 import { Emoji, Msym } from "@/components/msym";
 import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, SEO_BRAND_NAME } from "@/lib/brand";
 
@@ -2376,6 +2377,8 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
         {GRAB}
         {sheetTitle(t("library.new"), t("common.close"), this.closeSheet)}
         <div style={{ display: "grid", gap: "12.8px" }}>
+          {/* The app's own exam-prep row, first in "Novo" as it is in the app. */}
+          <ExamEntryCard onOpen={() => this.closeSheet()} />
           {CREATE_OPTIONS.map((option) => (
             <button
               key={option.id}

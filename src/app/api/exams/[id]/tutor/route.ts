@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { readOwnedTopic } from "@/lib/exams/exams-server";
+import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
+import { readOwnedExam, readOwnedTopic } from "@/lib/exams/exams-server";
 import { tutorTurn } from "@/lib/exams/exam-tutor-server";
 import { captureRouteError } from "@/lib/monitoring";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -53,10 +54,24 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
 
   try {
-    const topic = await readOwnedTopic(auth.supabase, auth.user.id, params.data.id, parsed.data.topicId);
+    const [exam, topic] = await Promise.all([
+      readOwnedExam(auth.supabase, auth.user.id, params.data.id),
+      readOwnedTopic(auth.supabase, auth.user.id, params.data.id, parsed.data.topicId),
+    ]);
 
-    if (!topic) {
+    if (!exam || !topic) {
       return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
+    }
+
+    if (exam.archived_at) {
+      return NextResponse.json({ error: await tr("api.exam.archived") }, { status: 409 });
+    }
+
+    // The tutor teaches from the topic's note, so it follows the note's access, as the lesson does.
+    const access = await canUseLectureFeatures(auth.user.id, topic.lecture_id, "study");
+
+    if (!access.allowed) {
+      return createBillingRequiredResponse(await tr("api.trialOnly.study"), access.code);
     }
 
     const turn = await tutorTurn({

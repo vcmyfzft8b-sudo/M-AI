@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { useT } from "@/components/i18n-provider";
+import { cameFromAppPath } from "@/lib/app-history";
 
 /**
  * The frame every exam screen shares, built the way the app's other full screens are.
@@ -37,7 +38,11 @@ export function ExamScreen({
   backIcon?: "arrow_back" | "close";
   /** The destination's name, shown on desktop. Omit on screens the rail itself opens. */
   backLabel?: string;
-  /** Go back to wherever the learner came from when there is somewhere to go back to. */
+  /**
+   * Step back rather than navigate when the page before this one, in this tab, was `backHref`'s:
+   * the router then shows it as it was left. Arriving any other way (an e-mail link, a sign-in, a
+   * reload) there is no page of ours behind, and stepping back would leave the app.
+   */
   historyBack?: boolean;
   /**
    * Reload the screen it goes back to. Set it where the learner may have changed what that
@@ -58,7 +63,7 @@ export function ExamScreen({
   const { navigateWithFeedback, overlay, isNavigating } = useInstantNavigation();
 
   function goBack() {
-    if (historyBack && window.history.length > 1) {
+    if (historyBack && cameFromAppPath(backHref)) {
       router.back();
       return;
     }

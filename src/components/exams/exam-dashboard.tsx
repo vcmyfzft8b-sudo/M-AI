@@ -12,6 +12,7 @@ import { sheetClass, useSheet } from "@/components/use-sheet";
 import { ExamScreen } from "@/components/exams/exam-screen";
 import { formatExamDay } from "@/components/exams/exam-format";
 import { EXAM_PREPS_HREF, LESSON_KIND_EMOJI, LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
+import { prefetchLesson } from "@/components/exams/lesson-prefetch";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
 import {
   EXAM_LESSON_KINDS,
@@ -54,12 +55,15 @@ export function ExamDashboard({
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  /* A save, archive or delete that did not go through: said where it was asked for. */
+  const [failed, setFailed] = useState(false);
   const [grade, setGrade] = useState(exam.actual_grade ?? "");
   const [gradeSaved, setGradeSaved] = useState(Boolean(exam.actual_grade));
   const currentRef = useRef<HTMLElement | null>(null);
   const closeMenu = useCallback(() => {
     setMenuOpen(false);
     setConfirmDelete(false);
+    setFailed(false);
   }, []);
   const menuSheet = useSheet(closeMenu, { locked: busy });
   const markCurrent = useCallback((node: HTMLElement | null) => {
@@ -69,6 +73,14 @@ export function ExamDashboard({
   const canOpen = (lectureId: string) => hasPaidAccess || trialLectureId === lectureId;
   const stage = detail.stage;
   const next = examNextStep(modules, stage, canOpen);
+  const nextTutorTopic = next?.type === "lesson" && next.kind === "tutor" ? next.topicId : null;
+
+  /* The tutor plans by a model call; when it is the next step, start it before the learner taps. */
+  useEffect(() => {
+    if (nextTutorTopic) {
+      prefetchLesson(exam.id, nextTutorTopic, "tutor");
+    }
+  }, [exam.id, nextTutorTopic]);
   const target = exam.target_mastery;
   /* A module's stations: its six lessons, then a repeat for each lesson still under the target. */
   const stationCount = (module: ExamModuleView) =>
@@ -132,6 +144,7 @@ export function ExamDashboard({
 
   async function mutate(init: RequestInit, after: () => void) {
     setBusy(true);
+    setFailed(false);
 
     try {
       const response = await fetch(`/api/exams/${exam.id}`, {
@@ -141,7 +154,12 @@ export function ExamDashboard({
 
       if (response.ok) {
         after();
+      } else {
+        setFailed(true);
       }
+    } catch {
+      // Offline, or the request never came back.
+      setFailed(true);
     } finally {
       setBusy(false);
     }
@@ -170,7 +188,10 @@ export function ExamDashboard({
     }
 
     if (module.mastered) {
-      return t("exam.dash.mastered", { percent: percent(module.mastery) });
+      // Fading never un-masters a module; it only asks for a refresh (exam-model.ts).
+      return module.refresh.length > 0
+        ? t("exam.dash.masteredRefresh")
+        : t("exam.dash.mastered", { percent: percent(module.mastery) });
     }
 
     if (module.learned) {
@@ -214,7 +235,7 @@ export function ExamDashboard({
             </span>
           </div>
           <div>
-            <b>{percent(detail.mastery)} %</b>
+            <b>{t("exam.percent", { percent: percent(detail.mastery) })}</b>
             <span>{t("exam.dash.target", { percent: exam.target_mastery })}</span>
           </div>
           <div>
@@ -280,6 +301,7 @@ export function ExamDashboard({
                 </button>
               </div>
             ) : null}
+            {failed && !menuOpen ? <p className="memo-inline-error">{t("exam.dash.actionFailed")}</p> : null}
           </div>
         </div>
       ) : null}
@@ -433,7 +455,7 @@ export function ExamDashboard({
                       ) : (
                         <span className="memo-exam-station-label">
                           {repeat
-                            ? `${t(module.refresh.includes(kind) ? "exam.path.refresh" : "exam.path.repeat")} · ${t(LESSON_KIND_KEY[kind])} · ${percent(score ?? 0)} %`
+                            ? `${t(module.refresh.includes(kind) ? "exam.path.refresh" : "exam.path.repeat")} · ${t(LESSON_KIND_KEY[kind])} · ${t("exam.percent", { percent: percent(score ?? 0) })}`
                             : t(LESSON_KIND_KEY[kind])}
                         </span>
                       )}
@@ -474,10 +496,10 @@ export function ExamDashboard({
           )}
           <span>
             {stage === "ready" && detail.latestMock
-              ? t("exam.path.mock.passed", { percent: Math.round(detail.latestMock.percentage) })
+              ? t("exam.path.mock.passed", { percent: percent(detail.latestMock.percentage / 100) })
               : stage === "prove"
                 ? detail.latestMock
-                  ? t("exam.path.mock.retry", { percent: Math.round(detail.latestMock.percentage), target })
+                  ? t("exam.path.mock.retry", { percent: percent(detail.latestMock.percentage / 100), target })
                   : t("exam.path.mock.prove", { target })
                 : t("exam.path.mock.later")}
           </span>
@@ -516,6 +538,7 @@ export function ExamDashboard({
                 <Msym name="close" size="1.45rem" fill={false} weight={500} />
               </button>
             </div>
+            {failed ? <p className="memo-inline-error">{t("exam.dash.actionFailed")}</p> : null}
             {confirmDelete ? (
               <>
                 <p className="memo-sheet-copy">{t("exam.dash.delete.body")}</p>

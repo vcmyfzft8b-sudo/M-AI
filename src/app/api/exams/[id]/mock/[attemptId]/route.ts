@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { createBillingRequiredResponse, hasPaidAccessForUserId } from "@/lib/billing";
 import {
+  expireMockAttempt,
+  mockAttemptExpired,
   mockResultFromAttempt,
   readMockAttempt,
   readOwnedExam,
@@ -69,6 +71,12 @@ export async function POST(
 
     if (!(await hasPaidAccessForUserId(auth.user.id))) {
       return createBillingRequiredResponse(await tr("api.exam.mockPaid"));
+    }
+
+    // An attempt handed in long after its clock ran out is closed rather than graded.
+    if (attempt.status !== "in_progress" || mockAttemptExpired(attempt)) {
+      await expireMockAttempt(auth.supabase, auth.user.id, attempt.id);
+      return NextResponse.json({ error: await tr("api.exam.mockExpired") }, { status: 409 });
     }
 
     const result = await submitMockExam(auth.supabase, auth.user.id, {

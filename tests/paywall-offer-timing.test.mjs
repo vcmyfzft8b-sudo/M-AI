@@ -57,10 +57,14 @@ test("a drag, or a tap that closes a row's actions, never opens the offer", () =
   assert.match(nudge, /target\.closest\("\.memo-swipe-row\.open"\)/);
 });
 
-test("the new-note sheet's paywall closes to home, never to the sheet that sent it", () => {
+test("the new-note sheet's paywall closes to home (or the page that opened it), never to the sheet", () => {
   const modal = readFileSync(new URL("../src/components/note-source-modal.tsx", import.meta.url), "utf8");
-  assert.match(modal, /replacingNextPage\(\);\s*router\.replace\(paywallPath\("note", "\/app"\)\);/);
-  assert.match(modal, /navigateWithFeedback\(paywallPath\("note", "\/app"\)\);/);
+  assert.match(modal, /paywallBack = "\/app",/);
+  assert.match(modal, /replacingNextPage\(\);\s*router\.replace\(paywallPath\("note", paywallBack\)\);/);
+  assert.match(modal, /navigateWithFeedback\(paywallPath\("note", paywallBack\)\);/);
+  // Exam setup is a page of its own, not the sheet, so its paywall returns there.
+  const setup = readFileSync(new URL("../src/components/exams/exam-setup.tsx", import.meta.url), "utf8");
+  assert.match(setup, /paywallBack="\/app\/exams\/new"/);
   const moments = readFileSync(new URL("../src/lib/paywall-moments.ts", import.meta.url), "utf8");
   assert.match(moments, /const after = alreadyCounted \? before : recordSeenReason\(before, reason\);/);
 });

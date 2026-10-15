@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
 import { createExam, listExamsForUser } from "@/lib/exams/exams-server";
 import { examCreateSchema } from "@/lib/exams/exam-validation";
 import { captureRouteError } from "@/lib/monitoring";
@@ -65,7 +66,28 @@ export async function POST(request: Request) {
   }
 
   try {
-    const created = await createExam(auth.supabase, auth.user.id, parsed.data);
+    /*
+     * An exam studies its notes, so it follows the notes' own access, as planning and lessons do:
+     * a note the account cannot study is left out, and an exam with none left is refused.
+     */
+    const lectureIds: string[] = [];
+    let refusal: Awaited<ReturnType<typeof canUseLectureFeatures>> | null = null;
+
+    for (const lectureId of new Set(parsed.data.lectureIds)) {
+      const access = await canUseLectureFeatures(auth.user.id, lectureId, "study");
+
+      if (access.allowed) {
+        lectureIds.push(lectureId);
+      } else {
+        refusal = access;
+      }
+    }
+
+    if (lectureIds.length === 0 && refusal && !refusal.allowed) {
+      return createBillingRequiredResponse(await tr("api.trialOnly.study"), refusal.code);
+    }
+
+    const created = await createExam(auth.supabase, auth.user.id, { ...parsed.data, lectureIds });
 
     if ("error" in created) {
       return NextResponse.json({ error: await tr("api.exam.noNotes") }, { status: 422 });

@@ -170,7 +170,8 @@ test("grades follow the exam's own scale", () => {
   assert.equal(gradeForPercentage("school_1_5", 40, 50), "1");
   assert.equal(gradeForPercentage("school_1_5", 50, 50), "2");
   assert.equal(gradeForPercentage("school_1_5", 100, 50), "5");
-  assert.equal(gradeForPercentage("percent", 73.6, 50), "74 %");
+  // Floored, like every percentage shown beside a target.
+  assert.equal(gradeForPercentage("percent", 73.6, 50), "73 %");
 });
 
 test("a lesson drawn twice on the same day is the same lesson", () => {
@@ -438,9 +439,10 @@ test("passed lessons fade after a few days, so a topic comes back for review bef
   assert.equal(fresh[0].mastered, true);
   assert.deepEqual(fresh[0].refresh, []);
 
-  // Eight days on, a perfect score has faded to 80 %: under an 85 % target, every lesson is due.
+  // Eight days on, a perfect score has faded to 80 %: under an 85 % target, every lesson is due
+  // for a refresh. Fading alone does not un-master the module (only a new try that falls short does).
   const later = examModuleStates(mods("a"), results, 0.85, null, new Date("2026-10-09T10:00:00Z"));
-  assert.equal(later[0].mastered, false);
+  assert.equal(later[0].mastered, true);
   assert.equal(later[0].latest.quiz, 0.8);
   assert.deepEqual([...later[0].refresh].sort(), ["flashcards", "quiz", "true_false", "tutor", "written"]);
 

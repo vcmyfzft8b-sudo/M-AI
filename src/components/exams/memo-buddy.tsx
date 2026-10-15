@@ -26,7 +26,8 @@ import {
 export type BuddyMood = "idle" | "wave" | "cheer" | "happy" | "sad" | "think";
 
 const CALM_QUERY = "(prefers-reduced-motion: reduce)";
-const ACCENT = "#ff6d68";
+/* The coral token is what his own particles wear; this, its first stop, only if the token is missing. */
+const ACCENT_FALLBACK = "#ff6d68";
 
 const MOOD_MOVE: Record<BuddyMood, MascotMove | null> = {
   idle: null,
@@ -43,6 +44,8 @@ export type BuddyIdle = {
   every: readonly [number, number];
   /** Between his blinks (ms, at least and at most); the onboarding's 2.4–6.2 s when left out. */
   blinkEvery?: readonly [number, number];
+  /** How much longer each blink takes than the onboarding's (1 when left out). */
+  blinkPace?: number;
 };
 
 const IDLE: BuddyIdle = { moves: ["nod", "wave", "jelly", "boing", "nod", "hop"], every: [4500, 8500] };
@@ -118,6 +121,7 @@ export function MemoBuddy({
     });
   }, []);
 
+  const blinkPace = idle.blinkPace ?? 1;
   const blink = useCallback((kind: Parameters<typeof blinkFrames>[0]) => {
     const root = rootRef.current;
 
@@ -126,13 +130,14 @@ export function MemoBuddy({
     }
 
     const frames = blinkFrames(kind);
+    const duration = frames.duration * blinkPace;
     root
       .querySelectorAll<HTMLElement>("[data-memo-lid]")
-      .forEach((lid) => lid.animate?.(frames.lid as Keyframe[], { duration: frames.duration }));
+      .forEach((lid) => lid.animate?.(frames.lid as Keyframe[], { duration }));
     root
       .querySelectorAll<HTMLElement>("[data-memo-lash]")
-      .forEach((lash) => lash.animate?.(frames.lash as Keyframe[], { duration: frames.duration }));
-  }, []);
+      .forEach((lash) => lash.animate?.(frames.lash as Keyframe[], { duration }));
+  }, [blinkPace]);
 
   const burst = useCallback((kind: "sparkle" | "confetti") => {
     const host = burstRef.current;
@@ -141,7 +146,10 @@ export function MemoBuddy({
       return;
     }
 
-    for (const particle of burstParticles({ kind, small: true, accent: ACCENT })) {
+    // `--coral` is a gradient, which a particle's `background` takes as it is.
+    const accent = getComputedStyle(host).getPropertyValue("--coral").trim() || ACCENT_FALLBACK;
+
+    for (const particle of burstParticles({ kind, small: true, accent })) {
       const piece = document.createElement("span");
       piece.style.cssText = particle.css;
       host.appendChild(piece);

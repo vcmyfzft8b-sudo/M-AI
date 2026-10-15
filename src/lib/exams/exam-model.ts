@@ -34,6 +34,12 @@ export const LESSON_WEIGHT: Record<(typeof PRACTICE_LESSON_KINDS)[number], numbe
  * until it is done again, so a topic learned weeks before the exam comes back for review before
  * it, instead of counting as known on the day. A perfect lesson against an 85 % target is due
  * again about a week later; a bare pass sooner. It never fades below 60 % of what was scored.
+ *
+ * Fading schedules a refresh ("Osveži"); it never un-masters a module. A lesson the learner passed
+ * stays passed until a new try of it falls short. Otherwise an exam of many topics could never be
+ * mastered all at once (eight topics are forty practice lessons, and a perfect one stays above a
+ * 90 % mark for five and a half days), so the mock exam would never come up. The mock exam is what
+ * checks that faded knowledge is still there: a mock under the target sends its weak modules back.
  */
 export const REVIEW_GRACE_DAYS = 3;
 export const REVIEW_FADE_PER_DAY = 0.04;
@@ -54,6 +60,65 @@ export function fadedScore(score: number, completedAt: string, now: Date | null)
 
   return value * Math.max(REVIEW_FLOOR, 1 - REVIEW_FADE_PER_DAY * (days - REVIEW_GRACE_DAYS));
 }
+
+/*
+ * Passing a lesson. The learner chooses the exam's target (75, 90, 100 % …) and sees it as chosen,
+ * but each lesson is checked against a pass mark derived from it that a lesson can actually score:
+ *
+ * - No pass mark is above LESSON_PASS_CAP (95 %). At a 100 % target every lesson would otherwise
+ *   have to be flawless, and one wrong flashcard, a grader's half point or a day of fading would
+ *   put "ready" out of reach for good.
+ * - The tutor is marked per step in whole, half and quarter points (`tutorStepPoints`) over three
+ *   steps, so its scores jump 100 % → 83 % → 75 %. Its pass mark is never above what one slip
+ *   leaves (one step right only after the tutor explained it: 2.5 of 3), so an 85–100 % target does
+ *   not demand a flawless conversation.
+ * - Scores are stored as `real`: a 9/10 quiz reads back as 0.89999998. Every comparison allows
+ *   PASS_EPSILON, far below one question's worth.
+ *
+ * The mock exam is checked against `passThreshold(target)`, the same cap without the tutor rule.
+ */
+export const LESSON_PASS_CAP = 0.95;
+/** The tutor lesson's steps (`TUTOR_STEPS` in exam-tutor-server.ts; keep the two in step). */
+export const TUTOR_LESSON_STEPS = 3;
+export const TUTOR_PASS_CAP = (TUTOR_LESSON_STEPS - 0.5) / TUTOR_LESSON_STEPS;
+export const PASS_EPSILON = 1e-4;
+
+/** The pass mark for the exam as a whole (the mock exam), 0..1, from the learner's target. */
+export function passThreshold(target: number) {
+  return Math.min(Number.isFinite(target) ? clamp01(target) : 1, LESSON_PASS_CAP);
+}
+
+/** The pass mark one lesson is held to, 0..1. The summary is read, so it has none. */
+export function lessonPassThreshold(kind: ExamLessonKind, target: number) {
+  if (kind === "summary") {
+    return 0;
+  }
+
+  const mark = passThreshold(target);
+  return kind === "tutor" ? Math.min(mark, TUTOR_PASS_CAP) : mark;
+}
+
+/** Whether a score (0..1) reaches a pass mark, allowing for how scores are stored. */
+export function meetsPassMark(score: number, mark: number) {
+  return Number.isFinite(score) && score >= mark - PASS_EPSILON;
+}
+
+/** Whether one try of a lesson passed, the rule the path and the lesson's done screen share. */
+export function lessonPassed(kind: ExamLessonKind, score: number, target: number) {
+  return meetsPassMark(score, lessonPassThreshold(kind, target));
+}
+
+/** Whether a mock exam (percentage 0..100) passed the exam's target. */
+export function mockPassed(percentage: number, target: number) {
+  return Number.isFinite(percentage) && meetsPassMark(percentage / 100, passThreshold(target));
+}
+
+/*
+ * A lesson the learner keeps failing is not offered again the same day after this many tries:
+ * the path moves on to other work (the next module, other repeats, refreshes) and comes back to it
+ * the next day, so one hard lesson cannot hold the whole plan.
+ */
+export const MAX_FAILED_TRIES_PER_DAY = 2;
 
 export type ExamGradingScale = "uni_5_10" | "school_1_5" | "percent";
 export type ExamFormat = "written" | "oral" | "both";
@@ -209,10 +274,13 @@ export type ModuleState = {
   lessonsDone: number;
   /** Every lesson has been done once: the first pass through the module is over. */
   learned: boolean;
-  /** Learned, and every practice lesson's latest score reaches the exam's target. */
+  /**
+   * Learned, and every practice lesson's latest try reached its pass mark (`lessonPassThreshold`).
+   * A passed lesson that has only faded since is due for a refresh but keeps the module mastered.
+   */
   mastered: boolean;
   unlocked: boolean;
-  /** Practice lessons to repeat until they reach the target, weakest first. Empty until learned. */
+  /** Practice lessons to repeat until they reach the pass mark, weakest first. Empty until learned. */
   review: ExamLessonKind[];
   /** Of those, the ones that had passed and have only faded below it since (due for review). */
   refresh: ExamLessonKind[];
@@ -222,6 +290,8 @@ export type ModuleState = {
   done: Record<ExamLessonKind, boolean>;
   /** The latest score of each practice lesson as it stands today (faded), or null when untried. */
   latest: Record<ExamLessonKind, number | null>;
+  /** Tries of each lesson on `now`'s Ljubljana day that fell short of its pass mark (0 without `now`). */
+  failedToday: Record<ExamLessonKind, number>;
 };
 
 /*
@@ -239,14 +309,21 @@ export type MockOutcome = {
   byLecture: Record<string, number>;
 };
 
+/* An instant as milliseconds, so `…Z` and `…+00:00` stamps compare by time, not by spelling. */
+function instantOf(value: string | null | undefined) {
+  const time = value ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(time) ? time : Number.NEGATIVE_INFINITY;
+}
+
 function latestByKind(results: LessonResultLike[]) {
-  const latest = {} as Record<ExamLessonKind, { score: number; at: string } | undefined>;
+  const latest = {} as Record<ExamLessonKind, { score: number; at: string; time: number } | undefined>;
 
   for (const result of results) {
     const current = latest[result.lesson_kind];
+    const time = instantOf(result.completed_at);
 
-    if (!current || result.completed_at > current.at) {
-      latest[result.lesson_kind] = { score: result.score, at: result.completed_at };
+    if (!current || time > current.time) {
+      latest[result.lesson_kind] = { score: result.score, at: result.completed_at, time };
     }
   }
 
@@ -268,46 +345,69 @@ export function moduleProgress(
   const done = {} as Record<ExamLessonKind, boolean>;
   const scores = {} as Record<ExamLessonKind, number | null>;
   const raw = {} as Record<ExamLessonKind, number | null>;
+  const failedToday = {} as Record<ExamLessonKind, number>;
+  const today = now && Number.isFinite(now.getTime()) ? dayKey(now) : null;
 
   for (const kind of EXAM_LESSON_KINDS) {
     const entry = latest[kind];
     done[kind] = entry !== undefined;
     raw[kind] = entry ? clamp01(entry.score) : null;
     scores[kind] = entry ? fadedScore(entry.score, entry.at, now) : null;
+    failedToday[kind] = 0;
   }
 
+  if (today) {
+    for (const result of results) {
+      if (
+        result.lesson_kind !== "summary" &&
+        Number.isFinite(instantOf(result.completed_at)) &&
+        dayKey(result.completed_at) === today &&
+        !lessonPassed(result.lesson_kind, clamp01(result.score), target)
+      ) {
+        failedToday[result.lesson_kind] += 1;
+      }
+    }
+  }
+
+  const mark = (kind: ExamLessonKind) => lessonPassThreshold(kind, target);
   const totalWeight = PRACTICE_LESSON_KINDS.reduce((sum, kind) => sum + LESSON_WEIGHT[kind], 0);
   const mastery =
     PRACTICE_LESSON_KINDS.reduce((sum, kind) => sum + LESSON_WEIGHT[kind] * (scores[kind] ?? 0), 0) / totalWeight;
   const lessonsDone = EXAM_LESSON_KINDS.filter((kind) => done[kind]).length;
   const learned = lessonsDone === EXAM_LESSON_KINDS.length;
+  const proveAfter = proveSince === null ? null : instantOf(proveSince);
   const needsProof = (kind: ExamLessonKind) =>
-    proveSince !== null &&
+    proveAfter !== null &&
     (MOCK_PROOF_KINDS as readonly ExamLessonKind[]).includes(kind) &&
-    (latest[kind]?.at ?? "") <= proveSince;
+    (latest[kind]?.time ?? Number.NEGATIVE_INFINITY) <= proveAfter;
+  /* Under the mark by the latest try itself, or owed to a failed mock: these keep a module unmastered. */
+  const failing = (kind: ExamLessonKind) => !meetsPassMark(raw[kind] ?? 0, mark(kind)) || needsProof(kind);
+  /* Passed, and only faded under the mark since: due for a refresh. */
+  const faded = (kind: ExamLessonKind) => !failing(kind) && !meetsPassMark(scores[kind] ?? 0, mark(kind));
   const review = learned
     ? [...PRACTICE_LESSON_KINDS]
-        .filter((kind) => (scores[kind] ?? 0) < target - 1e-9 || needsProof(kind))
+        .filter((kind) => failing(kind) || faded(kind))
         .sort((left, right) => (scores[left] ?? 0) - (scores[right] ?? 0))
     : [];
-  const refresh = review.filter(
-    (kind) => !needsProof(kind) && (raw[kind] ?? 0) >= target - 1e-9 && (scores[kind] ?? 0) < target - 1e-9,
-  );
+  const refresh = review.filter(faded);
+  const owed = review.filter(failing);
   const firstUntried = EXAM_LESSON_KINDS.find((kind) => !done[kind]);
   const weakest = [...PRACTICE_LESSON_KINDS].sort(
     (left, right) => (scores[left] ?? 0) - (scores[right] ?? 0),
   )[0];
+  const rested = (kind: ExamLessonKind) => failedToday[kind] < MAX_FAILED_TRIES_PER_DAY;
 
   return {
     mastery,
     lessonsDone,
     learned,
-    mastered: learned && review.length === 0,
+    mastered: learned && owed.length === 0,
     review,
     refresh,
-    nextKind: firstUntried ?? review[0] ?? weakest,
+    nextKind: firstUntried ?? owed.find(rested) ?? refresh.find(rested) ?? owed[0] ?? review[0] ?? weakest,
     done,
     latest: scores,
+    failedToday,
   };
 }
 
@@ -315,9 +415,13 @@ export function moduleProgress(
  * Every module's state, in path order. A module is one topic; it is unlocked when it is the first,
  * when the one before it has been learned, or when the learner has already started it (Astra's
  * "test out": taking a locked module's quiz opens it). `target` is the exam's goal as 0..1.
+ *
+ * A module marked `available: false` (its note is still being made, its topics are not planned,
+ * or the learner cannot open it) does not hold the path: the module after it unlocks as if it had
+ * been learned, so one unfinished note never locks the rest of the exam.
  */
 export function examModuleStates(
-  modulesInOrder: { topicId: string; lectureId: string }[],
+  modulesInOrder: { topicId: string; lectureId: string; available?: boolean }[],
   results: LessonResultLike[],
   target = 1,
   mock: MockOutcome | null = null,
@@ -335,15 +439,18 @@ export function examModuleStates(
     byTopic.set(result.topic_id, list);
   }
 
-  const failedMock = mock && mock.percentage < target * 100 - 1e-9 ? mock : null;
+  const failedMock = mock && !mockPassed(mock.percentage, target) ? mock : null;
   const states: ModuleState[] = [];
 
   modulesInOrder.forEach(({ topicId, lectureId }, position) => {
     const weakInMock =
-      failedMock !== null && lectureId in failedMock.byLecture && failedMock.byLecture[lectureId] < target - 1e-9;
+      failedMock !== null &&
+      lectureId in failedMock.byLecture &&
+      !meetsPassMark(failedMock.byLecture[lectureId], passThreshold(target));
     const progress = moduleProgress(byTopic.get(topicId) ?? [], target, weakInMock ? failedMock.at : null, now);
     const previous = states[position - 1];
-    const unlocked = position === 0 || Boolean(previous?.learned) || progress.lessonsDone > 0;
+    const previousSkipped = modulesInOrder[position - 1]?.available === false && Boolean(previous?.unlocked);
+    const unlocked = position === 0 || Boolean(previous?.learned) || previousSkipped || progress.lessonsDone > 0;
 
     states.push({ topicId, lectureId, position, unlocked, ...progress });
   });
@@ -353,13 +460,14 @@ export function examModuleStates(
 
 /*
  * Where the learner is, the way Astra moves a student to the exam: learn every module once,
- * practise each until its lessons reach the target, prove it with a mock exam at or above the
- * target, then stay ready. A score that slips, or a mock that falls short, sends them back.
+ * practise each until its lessons reach their pass marks, prove it with a mock exam at or above the
+ * target, then stay ready. A new try that falls short, or a mock that does, sends them back; fading
+ * alone only schedules refreshes (see `fadedScore`). An exam with no modules yet is still learning.
  */
 export type ExamStage = "learn" | "practise" | "prove" | "ready";
 
 export function examStage(states: Pick<ModuleState, "learned" | "mastered">[], mock: MockOutcome | null, target: number): ExamStage {
-  if (states.some((state) => !state.learned)) {
+  if (states.length === 0 || states.some((state) => !state.learned)) {
     return "learn";
   }
 
@@ -367,7 +475,7 @@ export function examStage(states: Pick<ModuleState, "learned" | "mastered">[], m
     return "practise";
   }
 
-  return mock && mock.percentage >= target * 100 - 1e-9 ? "ready" : "prove";
+  return mock && mockPassed(mock.percentage, target) ? "ready" : "prove";
 }
 
 export type ExamNextStep =
@@ -376,59 +484,129 @@ export type ExamNextStep =
   | null;
 
 /**
- * What the path points at. Modules are taken in order and each is finished before the next:
- * its untried lessons, then its lessons still under the target. With every module mastered the
- * mock exam is next; once it has been passed, the weakest lesson anywhere keeps the knowledge
- * fresh until the exam. Modules still being made, locked or not paid for are skipped.
+ * What `examNextStep` reads of a module. `refresh` and `failedToday` come with `examModuleStates`;
+ * `ready` and `pending` are the screen's own (`ExamModuleView`): a module whose note is still being
+ * made, or that is only a placeholder until its topics are planned, has no lessons to open yet.
+ */
+export type ExamNextStepModule = Pick<
+  ModuleState,
+  "topicId" | "lectureId" | "learned" | "mastered" | "unlocked" | "review" | "nextKind" | "done" | "latest"
+> &
+  Partial<Pick<ModuleState, "refresh" | "failedToday">> & { ready?: boolean; pending?: boolean };
+
+/**
+ * What the path points at.
+ *
+ * 1. **Learn first.** The first module on the path with an untried lesson gets it, ahead of every
+ *    repeat and refresh, so a learner who struggles with one lesson, or whose early modules fade,
+ *    still gets through every topic.
+ * 2. **Practise.** Then lessons that fell short of their pass mark, weakest first across modules;
+ *    one that has failed `MAX_FAILED_TRIES_PER_DAY` times today waits until tomorrow while other
+ *    work exists.
+ * 3. **Prove.** With every module mastered the mock exam is next. Faded lessons do not hold it
+ *    back: the mock is the check that they are still known.
+ * 4. **Refresh.** Otherwise the most faded passed lesson (practise and ready), or once ready the
+ *    weakest lesson anywhere, keeps the knowledge fresh until the exam.
+ *
+ * Modules the learner cannot open (`canOpen`), whose note is not ready, or that are placeholders
+ * are skipped, and do not keep the modules after them locked.
  */
 export function examNextStep(
-  states: Pick<
-    ModuleState,
-    "topicId" | "lectureId" | "learned" | "mastered" | "unlocked" | "review" | "nextKind" | "done" | "latest"
-  >[],
+  states: ExamNextStepModule[],
   stage: ExamStage,
   canOpen: (lectureId: string) => boolean = () => true,
 ): ExamNextStep {
-  const open = states.filter((state) => state.unlocked && canOpen(state.lectureId));
+  if (states.length === 0) {
+    return null;
+  }
+
+  const usable = (state: ExamNextStepModule) =>
+    state.ready !== false && state.pending !== true && canOpen(state.lectureId);
+  const reachable: boolean[] = [];
+
+  states.forEach((state, index) => {
+    const previous = states[index - 1];
+    reachable.push(
+      state.unlocked || (index > 0 && reachable[index - 1] && (previous.learned || !usable(previous))),
+    );
+  });
+
+  const open = states.filter((state, index) => reachable[index] && usable(state));
+  const lesson = (state: ExamNextStepModule, kind: ExamLessonKind, review: boolean): ExamNextStep => ({
+    type: "lesson",
+    topicId: state.topicId,
+    lectureId: state.lectureId,
+    kind,
+    review,
+  });
 
   for (const state of open) {
-    if (!state.mastered) {
-      const untried = EXAM_LESSON_KINDS.find((kind) => !state.done[kind]);
-      return untried
-        ? { type: "lesson", topicId: state.topicId, lectureId: state.lectureId, kind: untried, review: false }
-        : {
-            type: "lesson",
-            topicId: state.topicId,
-            lectureId: state.lectureId,
-            kind: state.review[0] ?? state.nextKind,
-            review: true,
-          };
+    const untried = EXAM_LESSON_KINDS.find((kind) => !state.done[kind]);
+
+    if (untried) {
+      return lesson(state, untried, false);
     }
+  }
+
+  type Candidate = { state: ExamNextStepModule; kind: ExamLessonKind; score: number; order: number };
+  const owed: Candidate[] = [];
+  const due: Candidate[] = [];
+  const resting: Candidate[] = [];
+  let order = 0;
+
+  for (const state of open) {
+    for (const kind of state.review) {
+      const candidate = { state, kind, score: state.latest[kind] ?? 0, order: order++ };
+
+      if ((state.failedToday?.[kind] ?? 0) >= MAX_FAILED_TRIES_PER_DAY) {
+        resting.push(candidate);
+      } else if (state.refresh?.includes(kind)) {
+        due.push(candidate);
+      } else {
+        owed.push(candidate);
+      }
+    }
+  }
+
+  const weakest = (list: Candidate[]) =>
+    [...list].sort((left, right) => left.score - right.score || left.order - right.order)[0] ?? null;
+  const firstOwed = weakest(owed);
+
+  if (firstOwed) {
+    return lesson(firstOwed.state, firstOwed.kind, true);
   }
 
   if (stage === "prove") {
     return { type: "mock" };
   }
 
+  const firstDue = weakest(due);
+
+  if (firstDue) {
+    return lesson(firstDue.state, firstDue.kind, true);
+  }
+
   if (stage === "ready") {
-    let best: { topicId: string; lectureId: string; kind: ExamLessonKind; score: number } | null = null;
+    const everything: Candidate[] = [];
 
     for (const state of open) {
       for (const kind of PRACTICE_LESSON_KINDS) {
-        const score = state.latest[kind] ?? 0;
-
-        if (!best || score < best.score) {
-          best = { topicId: state.topicId, lectureId: state.lectureId, kind, score };
+        if ((state.failedToday?.[kind] ?? 0) < MAX_FAILED_TRIES_PER_DAY) {
+          everything.push({ state, kind, score: state.latest[kind] ?? 0, order: order++ });
         }
       }
     }
 
-    return best
-      ? { type: "lesson", topicId: best.topicId, lectureId: best.lectureId, kind: best.kind, review: true }
-      : null;
+    const keepSharp = weakest(everything);
+
+    if (keepSharp) {
+      return lesson(keepSharp.state, keepSharp.kind, true);
+    }
   }
 
-  return null;
+  /* Nothing else to do today: the lesson that is resting is still better than nothing. */
+  const fallback = weakest(resting);
+  return fallback ? lesson(fallback.state, fallback.kind, true) : null;
 }
 
 export function examMastery(states: Pick<ModuleState, "mastery">[]): number {
@@ -447,8 +625,25 @@ export function clamp01(value: number) {
   return Math.min(1, Math.max(0, value));
 }
 
+/*
+ * Percentages for display are floored, never rounded: they sit next to the learner's target, and
+ * 89.6 % shown as "90 %" beside a 90 % target that it did not pass reads as a contradiction. The
+ * same PASS_EPSILON as the pass check absorbs how scores are stored (0.9 reads back as 0.89999998),
+ * so a number shows as the target exactly when it passes it.
+ */
+
+/** A 0..1 share as a whole percentage for display, floored (0.896 → 89). */
 export function percent(value: number) {
-  return Math.round(clamp01(value) * 100);
+  return wholePercent(clamp01(value) * 100);
+}
+
+/** A 0..100 percentage (a mock exam's) as a whole number for display, floored the same way. */
+export function wholePercent(percentage: number) {
+  if (!Number.isFinite(percentage)) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, Math.floor(percentage + PASS_EPSILON * 100)));
 }
 
 /* ---------------------------------------------------------------- daily plan */
@@ -538,11 +733,12 @@ export function gradeForPercentage(
   percentage: number,
   passPercentage: number,
 ): string {
-  const value = Math.max(0, Math.min(100, percentage));
-  const pass = Math.max(1, Math.min(99, passPercentage));
+  const value = Number.isFinite(percentage) ? Math.max(0, Math.min(100, percentage)) : 0;
+  const pass = Number.isFinite(passPercentage) ? Math.max(1, Math.min(99, passPercentage)) : 50;
 
   if (scale === "percent") {
-    return `${Math.round(value)} %`;
+    // Floored like every percentage shown beside a target (see `wholePercent`).
+    return `${wholePercent(value)} %`;
   }
 
   const bands = scale === "uni_5_10" ? 5 : 4;
@@ -854,13 +1050,16 @@ export function summarizeMock(results: MockAnswerResult[]) {
   }
 
   const written = results.filter((result) => result.kind === "written");
+  // A question worth nothing (maxScore 0) sorts as 0, not NaN, which would scramble the order.
+  const share = (result: MockAnswerResult) =>
+    result.maxScore > 0 && Number.isFinite(result.score) ? result.score / result.maxScore : 0;
   const strengths = [...written]
-    .sort((left, right) => right.score / right.maxScore - left.score / left.maxScore)
+    .sort((left, right) => share(right) - share(left))
     .map((result) => result.strengths.trim())
     .filter(Boolean)
     .slice(0, 2);
   const weakPoints = [...written]
-    .sort((left, right) => left.score / left.maxScore - right.score / right.maxScore)
+    .sort((left, right) => share(left) - share(right))
     .map((result) => result.missingPoints.trim())
     .filter(Boolean)
     .slice(0, 2);

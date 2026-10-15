@@ -19,6 +19,14 @@ type TopicSupabase = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 export type TopicItemGroup = "flashcards" | "quiz" | "written";
 
+/** A lesson needed a model call and its rate limit said no; the lesson route answers 429. */
+export class ExamModelCallRefused extends Error {
+  constructor() {
+    super("The lesson's model call was refused by its rate limit.");
+    this.name = "ExamModelCallRefused";
+  }
+}
+
 export type PlannedTopic = {
   title: string;
   summary: string;
@@ -258,7 +266,13 @@ const ITEM_SOURCES: Record<TopicItemGroup, { table: string; column: "flashcard_i
 export async function ensureTopicItems(
   supabase: TopicSupabase,
   userId: string,
-  input: { examId: string; lectureId: string; group: TopicItemGroup },
+  input: {
+    examId: string;
+    lectureId: string;
+    group: TopicItemGroup;
+    /** Asked before the sorting call; when it says no, `ExamModelCallRefused` is thrown. */
+    mayCallModel?: () => Promise<boolean>;
+  },
 ) {
   const source = ITEM_SOURCES[input.group];
   const { data: topicRows, error: topicError } = await supabase
@@ -304,6 +318,10 @@ export async function ensureTopicItems(
 
   if (!stale && topics.every((topic) => topic.assigned_kinds.includes(input.group))) {
     return;
+  }
+
+  if (input.mayCallModel && !(await input.mayCallModel())) {
+    throw new ExamModelCallRefused();
   }
 
   const placement = await assignItemsToTopics({

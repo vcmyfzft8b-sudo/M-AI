@@ -14,7 +14,15 @@ import { LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
 import { ExamScreen } from "@/components/exams/exam-screen";
 import { MemoBuddy, type BuddyMood } from "@/components/exams/memo-buddy";
 import { ExamTutorLesson } from "@/components/exams/exam-tutor-lesson";
-import { EXAM_LESSON_KINDS, PRACTICE_LESSON_KINDS, type ExamLessonKind } from "@/lib/exams/exam-model";
+import { lessonUrl, prefetchLesson, takePrefetchedLesson } from "@/components/exams/lesson-prefetch";
+import {
+  EXAM_LESSON_KINDS,
+  lessonPassed,
+  lessonPassThreshold,
+  percent,
+  PRACTICE_LESSON_KINDS,
+  type ExamLessonKind,
+} from "@/lib/exams/exam-model";
 import type { LessonGenerator, LessonLoad, LessonPayload } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { NOTE_TTS_VOICE_STORAGE_KEY } from "@/lib/note-tts-settings";
@@ -50,7 +58,8 @@ type Phase =
       total: number;
       headline: "lesson" | "learned" | "mastered";
       /** The score, when a practice lesson came in under the target and will come back. */
-      below: number | null;
+      /** The score and the lesson's pass mark, both in whole percent, when it fell short. */
+      below: { score: number; need: number } | null;
       following: { label: string; href: string } | null;
     };
 
@@ -140,11 +149,17 @@ export function ExamLesson({
     setBuddy((current) => ({ mood, key: current.key + 1 }));
   }, []);
 
-  const load = useCallback(async () => {
-    const response = await fetch(
-      `/api/exams/${examId}/lesson?topicId=${module.topicId}&kind=${kind}`,
-      { cache: "no-store" },
-    );
+  const fetchLesson = useCallback(async () => {
+    const early = await takePrefetchedLesson(examId, module.topicId, kind);
+
+    if (early) {
+      const ready = early.body as Extract<LessonLoad, { status: "ready" }>;
+      lessonRef.current = ready.lesson;
+      setPhase({ name: "playing", lesson: ready.lesson });
+      return;
+    }
+
+    const response = await fetch(lessonUrl(examId, module.topicId, kind), { cache: "no-store" });
 
     if (response.status === 402) {
       // Back to the prep, not this lesson, which would only send the learner here again.
@@ -180,19 +195,63 @@ export function ExamLesson({
     setPhase({ name: "generating", generator: load.generator });
   }, [examId, kind, module.lectureId, module.topicId]);
 
+  /*
+   * A network failure on the first load is a failed lesson (with its retry); on a poll while the
+   * material is being made it is only a missed poll, and the next one follows.
+   */
+  const load = useCallback(
+    async ({ polling = false }: { polling?: boolean } = {}) => {
+      try {
+        await fetchLesson();
+      } catch {
+        if (!polling) {
+          setPhase({ name: "failed", generator: null });
+        }
+      }
+    },
+    [fetchLesson],
+  );
+
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  /* The summary leads to the tutor, which plans by a model call: start it while the summary is read. */
+  const readingSummary = phase.name === "playing" && phase.lesson.kind === "summary";
+
   useEffect(() => {
-    if (phase.name !== "generating") {
+    if (readingSummary) {
+      prefetchLesson(examId, module.topicId, "tutor");
+    }
+  }, [examId, module.topicId, readingSummary]);
+
+  /* While the material is being made, a poll every few seconds, each one scheduled after the last whatever it returned. */
+  const generating = phase.name === "generating";
+
+  useEffect(() => {
+    if (!generating) {
       return;
     }
 
-    const timer = window.setTimeout(() => void load(), POLL_MS);
-    return () => window.clearTimeout(timer);
-  }, [load, phase]);
+    let stopped = false;
+    let timer = 0;
+    const schedule = () => {
+      timer = window.setTimeout(async () => {
+        await load({ polling: true });
+
+        if (!stopped) {
+          schedule();
+        }
+      }, POLL_MS);
+    };
+
+    schedule();
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [generating, load]);
 
   async function save(correct: number, total: number, difficulty: number | null) {
     setSaveError(false);
@@ -238,7 +297,7 @@ export function ExamLesson({
       ? [...PRACTICE_LESSON_KINDS]
           .filter(
             (entry) =>
-              (latestAfter[entry] ?? 0) < goal - 1e-9 || (entry !== kind && module.review.includes(entry)),
+              !lessonPassed(entry, latestAfter[entry] ?? 0, goal) || (entry !== kind && module.review.includes(entry)),
           )
           .sort((left, right) => (latestAfter[left] ?? 0) - (latestAfter[right] ?? 0))
       : [];
@@ -253,7 +312,24 @@ export function ExamLesson({
           : after?.type === "mock"
             ? { label: t("exam.lesson.done.mock"), href: `${examHref}/mock` }
             : null;
-    const below = isPractice && score < goal - 1e-9 ? Math.round(score * 100) : null;
+    // The tutor plans by a model call; start it now so the next lesson opens without the wait.
+    const followingLesson = untried
+      ? { topicId: module.topicId, kind: untried }
+      : reviewAfter[0]
+        ? { topicId: module.topicId, kind: reviewAfter[0] }
+        : after?.type === "module"
+          ? { topicId: after.topicId, kind: after.kind }
+          : null;
+
+    if (followingLesson?.kind === "tutor") {
+      prefetchLesson(examId, followingLesson.topicId, "tutor");
+    }
+
+    // `percent` floors: a score under the pass mark must never read as the mark (89.6 % is not "90 %").
+    const below =
+      isPractice && !lessonPassed(kind, score, goal)
+        ? { score: percent(score), need: percent(lessonPassThreshold(kind, goal)) }
+        : null;
 
     react(below === null ? "cheer" : "happy");
     setPhase({
@@ -274,7 +350,7 @@ export function ExamLesson({
   const kindIndex = EXAM_LESSON_KINDS.indexOf(kind);
   const scoreLine = (correct: number, total: number) =>
     kind === "tutor"
-      ? t("exam.tutor.score", { percent: Math.round((correct / Math.max(1, total)) * 100) })
+      ? t("exam.tutor.score", { percent: percent(correct / Math.max(1, total)) })
       : t("exam.zone.score", { correct, total });
   const title = `${t("exam.dash.module", { index: module.position + 1 })} · ${t(LESSON_KIND_KEY[kind])}`;
 
@@ -393,7 +469,7 @@ export function ExamLesson({
                     : t("exam.lesson.done.title")}
             </h2>
             {phase.below !== null ? (
-              <p>{t("exam.lesson.done.below", { score: phase.below, target })}</p>
+              <p>{t("exam.lesson.done.below", { score: phase.below.score, target: phase.below.need })}</p>
             ) : phase.total > 0 ? (
               <p>{scoreLine(phase.correct, phase.total)}</p>
             ) : null}
@@ -501,8 +577,37 @@ function LessonBody({
   /* Astra's summary audio: the topic summary, spoken in the learner's read-aloud voice. */
   const [listening, setListening] = useState<"idle" | "loading" | "playing">("idle");
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  /* Gone from the screen: a recording still on its way must never start over the next lesson. */
+  const unmountedRef = useRef(false);
 
-  useEffect(() => () => audioRef.current?.pause(), []);
+  useEffect(() => {
+    unmountedRef.current = false;
+
+    return () => {
+      unmountedRef.current = true;
+      audioRef.current?.pause();
+    };
+  }, []);
+
+  /* "Playing" only once the browser has actually started it (autoplay rules can refuse). */
+  async function play(audio: HTMLAudioElement) {
+    try {
+      await audio.play();
+    } catch {
+      if (!unmountedRef.current) {
+        setListening("idle");
+      }
+
+      return;
+    }
+
+    if (unmountedRef.current) {
+      audio.pause();
+      return;
+    }
+
+    setListening("playing");
+  }
 
   async function toggleListening() {
     if (listening === "playing") {
@@ -512,8 +617,7 @@ function LessonBody({
     }
 
     if (audioRef.current) {
-      void audioRef.current.play();
-      setListening("playing");
+      await play(audioRef.current);
       return;
     }
 
@@ -530,7 +634,11 @@ function LessonBody({
       `/api/exams/${examId}/topics/${topicId}/speech${voice ? `?voice=${encodeURIComponent(voice)}` : ""}`,
       { method: "POST" },
     ).catch(() => null);
-    const payload = response?.ok ? ((await response.json()) as { url?: string }) : null;
+    const payload = response?.ok ? ((await response.json().catch(() => null)) as { url?: string } | null) : null;
+
+    if (unmountedRef.current) {
+      return;
+    }
 
     if (!payload?.url) {
       setListening("idle");
@@ -540,8 +648,7 @@ function LessonBody({
     const audio = new Audio(payload.url);
     audio.onended = () => setListening("idle");
     audioRef.current = audio;
-    await audio.play().catch(() => setListening("idle"));
-    setListening("playing");
+    await play(audio);
   }
   const [answer, setAnswer] = useState("");
   const [unknown, setUnknown] = useState(false);
@@ -607,14 +714,24 @@ function LessonBody({
             type="button"
             className={`memo-chip ${listening === "playing" ? "active" : ""}`.trim()}
             aria-pressed={listening === "playing"}
-            disabled={listening === "loading"}
-            onClick={() => void toggleListening()}
+            aria-busy={listening === "loading"}
+            onClick={() => {
+              if (listening !== "loading") {
+                void toggleListening();
+              }
+            }}
           >
-            <Msym name={listening === "playing" ? "pause" : "volume_up"} size="1.1rem" />{" "}
-            {listening === "loading" ? t("exam.lesson.listenLoading") : t("exam.lesson.listen")}
+            {/* The label stays put while the audio is prepared; only the icon turns into a spinner. */}
+            {listening === "loading" ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Msym name={listening === "playing" ? "pause" : "volume_up"} size="1.1rem" />
+            )}
+            <span>{t("exam.lesson.listen")}</span>
           </button>
           <button type="button" className="memo-chip" onClick={() => setSpeedReading(true)}>
-            <Msym name="bolt" size="1.1rem" /> {t("exam.lesson.speedRead")}
+            <Msym name="bolt" size="1.1rem" />
+            <span>{t("exam.lesson.speedRead")}</span>
           </button>
         </div>
       </div>

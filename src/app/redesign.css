@@ -1969,38 +1969,41 @@
 /*
  * A sheet's titled header (title centred, round close at the end) as it reads in the desktop
  * dialog. The phone styles it in the sheet rules below; these keep the title clear of the close.
+ * Desktop only: on the phone `.memo-dialog` sheets are ordinary sheets.
  */
-.memo-dialog .memo-sheet-title {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2.9rem;
-  margin-bottom: 1.1rem;
-  padding: 0 3.4rem;
-  text-align: center;
-}
+@media (min-width: 1100px) {
+  .memo-dialog .memo-sheet-title {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.9rem;
+    margin-bottom: 1.1rem;
+    padding: 0 3.4rem;
+    text-align: center;
+  }
 
-.memo-dialog .memo-sheet-title > span {
-  font-size: 1.25rem;
-  font-weight: 750;
-  letter-spacing: -0.03em;
-}
+  .memo-dialog .memo-sheet-title > span {
+    font-size: 1.25rem;
+    font-weight: 750;
+    letter-spacing: -0.03em;
+  }
 
-.memo-dialog .memo-sheet-title .memo-sheet-close {
-  position: absolute;
-  right: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.9rem;
-  height: 2.9rem;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: var(--tile);
-  color: var(--text);
-  cursor: pointer;
+  .memo-dialog .memo-sheet-title .memo-sheet-close {
+    position: absolute;
+    right: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.9rem;
+    height: 2.9rem;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: var(--tile);
+    color: var(--text);
+    cursor: pointer;
+  }
 }
 
 .memo-sheet-heading {
@@ -28887,6 +28890,23 @@ a.memo-exam-station-go {
   width: 32%;
   /* The whole lockup takes the tap (animated-lockup.tsx), so Memo's own tap must not hop him twice. */
   pointer-events: none;
+}
+
+/*
+ * At the lockup's size (about 45px) the onboarding's eyelids, sized for a big Memo, leave the
+ * bottom of each pupil showing, so a blink read as a droop. Here they are a little wider and
+ * deeper and the lash line sits lower, so a blink closes his eyes. The sizes are inline styles
+ * (MascotFigure), hence !important.
+ */
+.memo-lockup-brain [data-memo-lid] {
+  width: 10.6% !important;
+  height: 13% !important;
+  margin: -0.4% 0 0 -0.9%;
+}
+
+.memo-lockup-brain [data-memo-lash] {
+  width: 10.6% !important;
+  margin: 1.9% 0 0 -0.9%;
 }
 
 .memo-lockup-brain .memo-buddy img {

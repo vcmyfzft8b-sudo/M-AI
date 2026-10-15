@@ -1283,6 +1283,58 @@ test("an exam keeps its notes, topics and results, and takes them with it when d
   assert.equal(lectures, 1);
 });
 
+test("an exam's rows can be updated by their learner but never moved to another exam or note", options, async () => {
+  const { db, query } = await migratedDatabase();
+  try {
+    const owner = "33333333-3333-4333-8333-333333333333";
+    const other = "44444444-4444-4444-8444-444444444444";
+    await query("insert into auth.users (id) values ($1), ($2)", [owner, other]);
+    const [inExam, outside, theirs] = await query(
+      `insert into public.lectures (user_id, source_type, status)
+       values ($1,'text','ready'), ($1,'text','ready'), ($2,'text','ready') returning id`,
+      [owner, other],
+    );
+    const [exam] = await query(`insert into public.exams (user_id, title, exam_date) values ($1,'Kemija','2026-11-02') returning id`, [owner]);
+    const [theirExam] = await query(`insert into public.exams (user_id, title, exam_date) values ($1,'Fizika','2026-11-02') returning id`, [other]);
+    await query(`insert into public.exam_modules (exam_id, lecture_id, user_id, position) values ($1,$2,$3,0)`, [exam.id, inExam.id, owner]);
+    const [topic] = await query(
+      `insert into public.exam_topics (exam_id, lecture_id, user_id, position, title) values ($1,$2,$3,0,'Kisline') returning id`,
+      [exam.id, inExam.id, owner],
+    );
+    const [mock] = await query(
+      `insert into public.exam_mock_attempts (exam_id, user_id, duration_minutes) values ($1,$2,20) returning id`,
+      [exam.id, owner],
+    );
+
+    await db.exec(`
+      create or replace function auth.uid() returns uuid language sql stable as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      grant usage on schema auth to authenticated;
+      grant all on public.exams, public.exam_modules, public.exam_topics, public.exam_mock_attempts,
+        public.lectures to authenticated;
+    `);
+    await query("select set_config('request.jwt.claim.sub', $1, false)", [owner]);
+    await db.exec("set role authenticated");
+
+    // What the app writes: a topic's fresh questions, and a graded mock.
+    const updated = await query(`update public.exam_topics set extra = '{"quiz":[],"written":[],"next":0}' where id = $1 returning id`, [topic.id]);
+    assert.equal(updated.length, 1);
+    const graded = await query(`update public.exam_mock_attempts set status = 'graded', percentage = 80 where id = $1 returning id`, [mock.id]);
+    assert.equal(graded.length, 1);
+
+    // Moving a topic to a note outside the exam, or a module or mock onto someone else's, is refused.
+    await assert.rejects(query(`update public.exam_topics set lecture_id = $1 where id = $2`, [outside.id, topic.id]), /row-level security/);
+    await assert.rejects(
+      query(`update public.exam_modules set lecture_id = $1 where exam_id = $2`, [theirs.id, exam.id]),
+      /row-level security/,
+    );
+    await assert.rejects(query(`update public.exam_mock_attempts set exam_id = $1 where id = $2`, [theirExam.id, mock.id]), /row-level security/);
+  } finally {
+    await db.close();
+  }
+});
+
 test("a chat answer can carry the study set it made, and older rows carry none", options, async () => {
   const { query } = await migratedDatabase();
 

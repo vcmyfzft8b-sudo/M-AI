@@ -15,6 +15,7 @@ import { MemoSays } from "@/components/exams/memo-says";
 import { TargetDial } from "@/components/exams/target-dial";
 import type { NoteSourceMode } from "@/components/note-source-modal";
 import { useOfflineGuard } from "@/components/offline/offline-notice";
+import { cameFromAppPath } from "@/lib/app-history";
 import {
   addDays,
   daysBetween,
@@ -267,6 +268,8 @@ export function ExamSetup({
    */
   const reviewArmed = useRef(false);
   const addedTopics = useRef(0);
+  /* Which plan request is the latest: an older one's answer, arriving late, is dropped whole. */
+  const planRequest = useRef(0);
 
   const stepIndex = STEPS.indexOf(step);
   const notesById = useMemo(() => new Map(notes.map((note) => [note.id, note])), [notes]);
@@ -288,6 +291,8 @@ export function ExamSetup({
     }
 
     const key = planKey;
+    const request = ++planRequest.current;
+    const stale = () => request !== planRequest.current;
     setPlan({ status: "loading", key });
 
     try {
@@ -297,6 +302,10 @@ export function ExamSetup({
         body: JSON.stringify({ lectureIds: selected, aiExpand, schoolLevel, schoolYear }),
       });
 
+      if (stale()) {
+        return;
+      }
+
       if (response.status === 402) {
         navigateWithFeedback(paywallPath("exam", currentPaywallBack()));
         return;
@@ -305,6 +314,10 @@ export function ExamSetup({
       const payload = (await response.json().catch(() => null)) as {
         notes?: (PlanNote & { topics: Omit<PlanTopic, "key" | "lectureId" | "kept">[] })[];
       } | null;
+
+      if (stale()) {
+        return;
+      }
 
       if (!response.ok || !payload?.notes) {
         setPlan((current) => (current.status === "loading" && current.key === key ? { status: "failed", key } : current));
@@ -328,7 +341,9 @@ export function ExamSetup({
         ),
       );
     } catch {
-      setPlan((current) => (current.status === "loading" && current.key === key ? { status: "failed", key } : current));
+      if (!stale()) {
+        setPlan((current) => (current.status === "loading" && current.key === key ? { status: "failed", key } : current));
+      }
     }
   }
 
@@ -459,8 +474,9 @@ export function ExamSetup({
       return;
     }
 
-    // The first screen's button leaves setup, back to wherever it was opened from.
-    if (window.history.length > 1) {
+    // The first screen's button leaves setup: a step back when it was opened from the app's home
+    // (where "Novo" lives), otherwise to the preps folder, never back out of the app.
+    if (cameFromAppPath(EXAM_PREPS_HREF)) {
       router.back();
     } else {
       navigateWithFeedback(EXAM_PREPS_HREF);
@@ -529,6 +545,11 @@ export function ExamSetup({
           })),
         }),
       });
+      if (response.status === 402) {
+        navigateWithFeedback(paywallPath("exam", currentPaywallBack()));
+        return;
+      }
+
       const payload = (await response.json().catch(() => null)) as
         | { exam?: { id: string }; error?: string }
         | null;
@@ -1093,6 +1114,7 @@ export function ExamSetup({
           canCreateNotes={canCreateNotes}
           onClose={() => setSourceMode(null)}
           onCreated={addCreated}
+          paywallBack="/app/exams/new"
         />
       ) : null}
     </ExamScreen>

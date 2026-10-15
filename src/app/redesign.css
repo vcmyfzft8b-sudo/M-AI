@@ -10910,6 +10910,51 @@
 .memo-pw-compare thead .plan { border-radius: 14px 14px 0 0; color: var(--paywall-accent); }
 .memo-pw-compare tbody tr:last-child .plan { border-radius: 0 0 14px 14px; }
 
+/*
+ * Browsing offer: Memo hops with a gift beside the prices offered before, each
+ * crossed out and each lower than the last, so the headline under them reads
+ * as the better one. The newest of them sits nearest Memo.
+ */
+.memo-pw-scene.offer {
+  gap: 1.1rem;
+}
+
+.memo-pw-tags {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+
+.memo-pw-tag-old {
+  position: relative;
+  padding: 0.35rem 0.8rem;
+  border: 1.5px dashed var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 800;
+  white-space: nowrap;
+  rotate: calc(-4deg + var(--i) * 5deg);
+  animation: memo-pw-rise 0.45s calc(var(--i) * 0.15s) both;
+}
+
+.memo-pw-tag-old::after {
+  content: "";
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  top: 50%;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--promo);
+  transform-origin: left;
+  animation: memo-pw-strike 0.35s calc(0.3s + var(--i) * 0.15s) both;
+}
+
+@keyframes memo-pw-strike { from { scale: 0 1; } to { scale: 1 1; } }
+
 @keyframes memo-pw-rise { from { opacity: 0; translate: 0 0.5rem; } to { opacity: 1; translate: 0 0; } }
 @keyframes memo-pw-dot { 0%, 60%, 100% { opacity: 0.3; } 30% { opacity: 1; } }
 @keyframes memo-pw-word {

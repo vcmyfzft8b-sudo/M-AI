@@ -43,6 +43,7 @@ function load(component, native, products = []) {
     "@/lib/utils": { formatCurrency: value => `€${value.toFixed(2)}` },
     "@/lib/billing-regions": { STANDARD_PLAN_PRICES: { monthly: 20, yearly: 130 } },
     "@/lib/paywall-ladder": paywallLadder,
+    "@/lib/paywall-offer-timing": { notePaywallShown() {} },
     "@/components/paywall-hero": {
       PaywallHero: ({ reason }) => React.createElement("div", { className: "memo-pw-hero", "data-reason": reason }),
       paywallLayout: reason => (reason ? "rows" : "cards"),

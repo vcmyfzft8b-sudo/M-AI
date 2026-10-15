@@ -108,6 +108,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "quiz",
   "radio_button_checked",
   "record_voice_over",
+  "redeem",
   "refresh",
   "remove",
   "replay",

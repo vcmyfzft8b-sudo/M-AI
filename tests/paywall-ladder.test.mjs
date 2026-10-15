@@ -80,7 +80,28 @@ test("checkout reads the discount from the cookie, lets the wheel win, and drops
 
 test("the app never moves down the ladder", () => {
   const view = readFileSync(new URL("../src/app/api/billing/paywall-view/route.ts", import.meta.url), "utf8");
-  assert.match(view, /if \(isNativeUserAgent\(request\.headers\.get\("user-agent"\)\)\) \{\s*return NextResponse\.json\(\{ seen: \[\] \}\);/);
+  assert.match(view, /if \(isNativeUserAgent\(request\.headers\.get\("user-agent"\)\)\) \{\s*return NextResponse\.json\(\{ seen: \[\], advanced: false \}\);/);
   const page = readFileSync(new URL("../src/app/app/start/page.tsx", import.meta.url), "utf8");
   assert.match(page, /const offerStep = native\s*\? 1/);
+});
+
+test("browsing offers climb a rung each, then hold the top one", () => {
+  let seen = [];
+  const percents = [];
+  for (let shown = 0; shown < 5; shown += 1) {
+    seen = recordSeenReason(seen, "offer");
+    percents.push(paywallOfferFor("offer", seen).percentOff);
+  }
+  assert.deepEqual(percents, [20, 30, 40, 40, 40]);
+  assert.deepEqual(seen, ["offer", "offer", "offer"], "an offer on the top rung is not recorded");
+  assert.deepEqual(readSeenReasons("offer.offer.offer.offer.chat"), ["offer", "offer", "offer", "chat"]);
+});
+
+test("a feature limit met after browsing offers starts from the better rung", () => {
+  assert.equal(paywallOfferFor("chat", ["offer"]).percentOff, 30);
+  assert.equal(paywallOfferFor("chat", ["offer", "offer"]).percentOff, 40);
+  // Before any offer or limit, the browsing offer is the plain price.
+  assert.equal(paywallOfferFor("offer", []).percentOff, 0);
+  // After a limit, an offer records the next rung.
+  assert.equal(paywallOfferFor("offer", recordSeenReason(["chat"], "offer")).percentOff, 30);
 });

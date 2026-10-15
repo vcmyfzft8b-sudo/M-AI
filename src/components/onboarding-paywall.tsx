@@ -17,6 +17,7 @@ import { useInstantNavigation } from "@/components/navigation-loading";
 import { clearOfferResume } from "@/lib/offer-resume";
 import { formatCurrency } from "@/lib/utils";
 import type { PaywallReason } from "@/lib/paywall-reasons";
+import { notePaywallShown } from "@/lib/paywall-offer-timing";
 import { discountedAmount, paywallOffer, weeklyAmount } from "@/lib/paywall-ladder";
 import { PaywallCompare, PaywallHero, paywallAccentStyle, paywallLayout } from "@/components/paywall-hero";
 import {
@@ -83,6 +84,7 @@ export function OnboardingPaywall({
   reason = null,
   backHref = null,
   offerStep = 1,
+  offerImproved = false,
 }: {
   profile: ProfileRow | null;
   subscription: BillingSubscriptionRow | null;
@@ -96,6 +98,11 @@ export function OnboardingPaywall({
   backHref?: string | null;
   /** This paywall's step on the offer ladder (`paywall-ladder.ts`); web only. */
   offerStep?: number;
+  /**
+   * A browsing offer that just lifted the price may say so; one shown on the
+   * top rung, where nothing is left to lift, says the best price still stands.
+   */
+  offerImproved?: boolean;
 }) {
   const { locale, t } = useTranslations();
   const native = useNativeIOS();
@@ -112,10 +119,18 @@ export function OnboardingPaywall({
   /*
    * A feature's paywall records that its limit was met, so the next feature to
    * run out offers more. Not in the app, not for the paywalls no feature opened,
-   * and not while the survey is still showing instead of the prices.
+   * and not while the survey is still showing instead of the prices. A browsing
+   * offer was recorded before it opened (`paywall-nudge.tsx`), so not that one.
    */
   useEffect(() => {
-    if (native || !reason || !onboardingComplete || hasPaidAccess) {
+    if (native || !onboardingComplete || hasPaidAccess) {
+      return;
+    }
+
+    // Any paywall keeps the browsing offer away for a while (`paywall-nudge.tsx`).
+    notePaywallShown();
+
+    if (!reason || reason === "offer") {
       return;
     }
 
@@ -243,7 +258,7 @@ export function OnboardingPaywall({
 
       {/* A feature's paywall shows the feature, moving, in place of the list. */}
       {reason && !hasNotice ? (
-        <PaywallHero reason={reason} />
+        <PaywallHero reason={reason} step={offer.step} />
       ) : null}
 
       {/* The discount is the headline; that it covers only the first payment is
@@ -258,7 +273,11 @@ export function OnboardingPaywall({
       ) : null}
 
       <h1 className="memo-paywall-title">
-        {t(reason ? `paywall.reason.${reason}.title` : "paywall.title")}
+        {t(
+          reason === "offer" && !offerImproved
+            ? "paywall.reason.offer.titleBest"
+            : reason ? `paywall.reason.${reason}.title` : "paywall.title",
+        )}
       </h1>
       {reason ? (
         <p className="memo-paywall-sub">

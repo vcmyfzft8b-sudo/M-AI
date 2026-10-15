@@ -7,6 +7,7 @@ import { Msym } from "@/components/msym";
 import { MascotFigure, MascotSparkles, useMascot } from "@/components/onboarding-mascot";
 import type { PaywallReason } from "@/lib/paywall-reasons";
 import { NOTE_TABS } from "@/lib/note-tabs";
+import { PAYWALL_LADDER } from "@/lib/paywall-ladder";
 
 /**
  * The top of a feature's paywall: Memo, doing the thing the learner just ran
@@ -34,6 +35,7 @@ const SCENES: Record<PaywallReason, { accent?: string; layout: PaywallLayout }> 
   locked: { accent: tint("palace"), layout: "cards" },
   regenerate: { accent: tint("flashcards"), layout: "cards" },
   library: { accent: tint("mindmap"), layout: "spotlight" },
+  offer: { layout: "cards" },
 };
 
 export type PaywallLayout = "cards" | "rows" | "spotlight";
@@ -149,7 +151,27 @@ export function PaywallCompare() {
   );
 }
 
-export function PaywallHero({ reason }: { reason: PaywallReason }) {
+/**
+ * The prices this learner was offered before, crossed out, each a little lower
+ * than the one before it: what makes the browsing offer read as "better than
+ * last time" without saying the new price twice (the headline below says it).
+ */
+function EarlierOffers({ step }: { step: number }) {
+  const t = useT();
+  const earlier = PAYWALL_LADDER.filter((offer) => offer.step < step);
+
+  return (
+    <span className="memo-pw-tags">
+      {earlier.map((offer, index) => (
+        <span key={offer.step} className="memo-pw-tag-old" style={{ "--i": index } as CSSProperties}>
+          {offer.percentOff ? `−${offer.percentOff}%` : t("paywall.demo.fullPrice")}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?: number }) {
   const t = useT();
   let scene: ReactNode;
 
@@ -234,6 +256,15 @@ export function PaywallHero({ reason }: { reason: PaywallReason }) {
             <span className="memo-pw-card"><Msym name="account_tree" size="1.2rem" fill={false} weight={500} /></span>
           </span>
           <Memo move="hop" badge="refresh" />
+        </span>
+      );
+      break;
+    case "offer":
+      scene = (
+        <span className="memo-pw-scene offer">
+          <EarlierOffers step={step} />
+          <Memo move="hop" badge="redeem" />
+          <MascotSparkles />
         </span>
       );
       break;

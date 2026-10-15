@@ -14,12 +14,13 @@ import { isPaywallReason, readPaywallBack } from "@/lib/paywall-reasons";
  * which is the honest behaviour for a demo of a payment screen — better a
  * visible error than a fake success. Prices are the visitor's own, as on the
  * real screen (`billing-regions.ts`). `?for=` shows each feature's version of it,
- * and `?step=` each rung of the offer ladder (`paywall-ladder.ts`).
+ * and `?step=` each rung of the offer ladder (`paywall-ladder.ts`); `?better=1`
+ * is the browsing offer's "just got better" headline.
  */
 export default async function CreatorDemoStartPage({
   searchParams,
 }: {
-  searchParams: Promise<{ for?: string | string[]; back?: string | string[]; step?: string | string[] }>;
+  searchParams: Promise<{ for?: string | string[]; back?: string | string[]; step?: string | string[]; better?: string | string[] }>;
 }) {
   const query = await searchParams;
 
@@ -34,6 +35,7 @@ export default async function CreatorDemoStartPage({
         reason={isPaywallReason(query.for) ? query.for : null}
         backHref={readPaywallBack(query.back) ?? "/creator"}
         offerStep={typeof query.step === "string" ? Number.parseInt(query.step, 10) || 1 : 1}
+        offerImproved={query.better === "1"}
       />
     </main>
   );

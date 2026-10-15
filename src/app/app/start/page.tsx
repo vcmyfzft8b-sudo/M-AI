@@ -15,7 +15,7 @@ import { isNativeUserAgent } from "@/lib/mobile/runtime";
 export default async function AppStartPage({
   searchParams,
 }: {
-  searchParams: Promise<{ for?: string | string[]; back?: string | string[] }>;
+  searchParams: Promise<{ for?: string | string[]; back?: string | string[]; better?: string | string[] }>;
 }) {
   const query = await searchParams;
   const reason = isPaywallReason(query.for) ? query.for : null;
@@ -63,6 +63,8 @@ export default async function AppStartPage({
         reason={reason}
         backHref={backHref}
         offerStep={offerStep}
+        // Set by the browsing offer when it lifted the price; only the headline reads it.
+        offerImproved={query.better === "1"}
       />
     </main>
   );

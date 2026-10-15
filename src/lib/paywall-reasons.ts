@@ -28,6 +28,11 @@ export const PAYWALL_REASONS = [
   "regenerate",
   /** Asking across every note is paid only. */
   "library",
+  /**
+   * No limit at all: an offer that finds a free learner while they browse
+   * (`paywall-nudge.tsx`), each one better than the last.
+   */
+  "offer",
 ] as const;
 
 export type PaywallReason = (typeof PAYWALL_REASONS)[number];

@@ -19,6 +19,12 @@ import { PAYWALL_REASONS, type PaywallReason } from "./paywall-reasons.ts";
  * cookie, never from the request alone. Reaching the last rung needs nothing
  * but hitting three limits, which is why the last rung stays under the wheel.
  *
+ * A learner who has not run into anything yet still climbs: while they browse,
+ * an offer finds them now and then (`paywall-nudge.tsx`), and each one moves
+ * them up a rung, exactly as a feature limit would. It is recorded as `offer`,
+ * the one entry that may appear more than once, and only while it still lifts
+ * the price; at the top rung the offer keeps showing the 40 % it reached.
+ *
  * Web only for now: the app sells through Apple, whose prices come from App
  * Store Connect, so it always shows the first step.
  */
@@ -51,8 +57,14 @@ export function readSeenReasons(value: unknown): PaywallReason[] {
   const seen: PaywallReason[] = [];
 
   for (const part of value.split(".")) {
-    if ((PAYWALL_REASONS as readonly string[]).includes(part) && !seen.includes(part as PaywallReason)) {
-      seen.push(part as PaywallReason);
+    if (!(PAYWALL_REASONS as readonly string[]).includes(part)) {
+      continue;
+    }
+
+    const reason = part as PaywallReason;
+
+    if (reason === "offer" ? seen.length < LAST_STEP - 1 : !seen.includes(reason)) {
+      seen.push(reason);
     }
   }
 
@@ -63,8 +75,16 @@ export function writeSeenReasons(seen: readonly PaywallReason[]) {
   return seen.join(".");
 }
 
-/** Adds a feature the first time its limit is met; never reorders. */
+/**
+ * Adds a feature the first time its limit is met; never reorders. An offer is
+ * added every time it is shown, but only while it still lifts the price — once
+ * the learner is on the top rung it changes nothing.
+ */
 export function recordSeenReason(seen: readonly PaywallReason[], reason: PaywallReason): PaywallReason[] {
+  if (reason === "offer") {
+    return seen.length < LAST_STEP - 1 ? [...seen, reason] : [...seen];
+  }
+
   return seen.includes(reason) ? [...seen] : [...seen, reason];
 }
 
@@ -76,11 +96,12 @@ export function paywallOffer(step: number): PaywallOffer {
 
 /**
  * The offer a paywall shows. A feature's own rung is its place in the order
- * the limits were met — or the next place, the first time. No feature: the
- * best rung reached, or the plain price before any limit.
+ * the limits were met — or the next place, the first time. No feature, or an
+ * offer (recorded before it is shown): the best rung reached, or the plain
+ * price before any.
  */
 export function paywallOfferFor(reason: PaywallReason | null, seen: readonly PaywallReason[]): PaywallOffer {
-  if (!reason) {
+  if (!reason || reason === "offer") {
     return paywallOffer(seen.length === 0 ? 1 : seen.length + 1);
   }
 

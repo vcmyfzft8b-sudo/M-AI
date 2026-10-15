@@ -2178,13 +2178,9 @@ export function HomeDashboard({
                 <Msym name="close" size="1.45rem" fill={false} weight={500} />
               </button>
             </div>
-            {!isCreatorDemo ? (
-              <>
-                <ExamEntryCard upcoming={upcomingExam} onOpen={openExamPrep} />
-                <span className="memo-eyebrow memo-exam-sheet-label">{t("library.newNote")}</span>
-              </>
-            ) : null}
             <div className="memo-sheet-list">
+              {/* Exam prep leads the list as one of its options, marked out only by its coral. */}
+              {!isCreatorDemo ? <ExamEntryCard upcoming={upcomingExam} onOpen={openExamPrep} /> : null}
               {CREATE_OPTIONS.map((option) => (
                 <button
                   key={option.id}

@@ -258,7 +258,14 @@ export function ExamDashboard({
             <div className="memo-progress goal">
               <div style={{ width: `${known}%` }} />
             </div>
-            <span className="memo-exam-goal-mark" style={{ left: `${exam.target_mastery}%` }} aria-hidden="true" />
+            {/* The goal on the bar: a target the fill runs towards. */}
+            <span
+              className={`memo-exam-goal-mark ${goalLeft === 0 ? "hit" : ""}`.trim()}
+              style={{ "--goal": `${exam.target_mastery}%` } as CSSProperties}
+              aria-hidden="true"
+            >
+              <Emoji symbol="🎯" size="1.05rem" />
+            </span>
           </div>
           <p className={`memo-exam-goal-left ${goalLeft === 0 ? "reached" : ""}`.trim()}>
             {goalLeft === 0 ? t("exam.dash.goal.reached") : t("exam.dash.goal.left", { percent: goalLeft })}

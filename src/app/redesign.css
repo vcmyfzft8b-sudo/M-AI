@@ -27397,7 +27397,7 @@ button.memo-exam-card:hover {
 
 .memo-exam-goal-bar {
   position: relative;
-  padding: 0.3rem 0;
+  padding: 0.5rem 0;
 }
 
 .memo-exam-goal .memo-progress.goal {
@@ -27408,15 +27408,26 @@ button.memo-exam-card:hover {
   background: var(--coral);
 }
 
-/* The goal on the bar: a notch taller than the track, so it reads as the line to cross. */
+/*
+ * The goal on the bar: a target in a round badge centred on the goal, kept inside the track at
+ * the ends (a 100 % goal sits at the right edge, not half off it). Reached, it rings green.
+ */
 .memo-exam-goal-mark {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 0.25rem;
-  margin-left: -0.125rem;
+  top: 50%;
+  left: clamp(1rem, var(--goal), calc(100% - 1rem));
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
   border-radius: 999px;
-  background: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow), inset 0 0 0 1.5px var(--line);
+  transform: translate(-50%, -50%);
+}
+
+.memo-exam-goal-mark.hit {
+  box-shadow: var(--shadow), inset 0 0 0 2px var(--success);
 }
 
 .memo-exam-goal-left {

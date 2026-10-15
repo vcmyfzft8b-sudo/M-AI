@@ -31,6 +31,7 @@ function loadRoute(path) {
     "@/lib/discount-wheel": { getDiscountWheelState: reached("wheel") },
     "next/headers": { cookies: async () => ({ get: () => undefined }) },
     "@/lib/paywall-ladder": paywallLadder,
+    "@/lib/paywall-moments": { readPaywallMoments: async () => [] },
     "@/lib/paywall-reasons": paywallReasons,
     "@/lib/rate-limit": { rateLimitPresets: { mutate: [] }, enforceRateLimit: reached("rateLimit") },
     "@/lib/request-validation": { parseJsonRequest: reached("parse") },

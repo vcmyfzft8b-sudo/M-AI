@@ -89,6 +89,7 @@ function loadCheckout({ country, body }) {
     "@/lib/discount-wheel": { getDiscountWheelState: async () => ({ hasUnredeemedPrize: false }) },
     "next/headers": { cookies: async () => ({ get: () => undefined }) },
     "@/lib/paywall-ladder": paywallLadder,
+    "@/lib/paywall-moments": { readPaywallMoments: async () => [] },
     "@/lib/paywall-reasons": paywallReasons,
     "@/lib/rate-limit": { rateLimitPresets: { mutate: [] }, enforceRateLimit: async () => null },
     "@/lib/request-validation": {

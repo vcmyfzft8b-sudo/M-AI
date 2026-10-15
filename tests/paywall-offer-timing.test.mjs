@@ -12,7 +12,7 @@ test("a browsing offer opens on every fourth click without a paywall", () => {
 
 test("the browsing offer runs on the web only, for an onboarded learner who has not paid", () => {
   const layout = readFileSync(new URL("../src/app/app/layout.tsx", import.meta.url), "utf8");
-  assert.match(layout, /\{!native && appState\?\.onboardingComplete && !appState\.hasPaidAccess \? <PaywallNudge \/> : null\}/);
+  assert.match(layout, /\{!native && appState\?\.onboardingComplete && !appState\.hasPaidAccess \? <PaywallNudge userId=\{user\.id\} \/> : null\}/);
 
   const nudge = readFileSync(new URL("../src/components/paywall-nudge.tsx", import.meta.url), "utf8");
   // Never in a recording, settings or support.
@@ -61,6 +61,27 @@ test("the new-note sheet's paywall closes to home, never to the sheet that sent 
   const modal = readFileSync(new URL("../src/components/note-source-modal.tsx", import.meta.url), "utf8");
   assert.match(modal, /replacingNextPage\(\);\s*router\.replace\(paywallPath\("note", "\/app"\)\);/);
   assert.match(modal, /navigateWithFeedback\(paywallPath\("note", "\/app"\)\);/);
-  const view = readFileSync(new URL("../src/app/api/billing/paywall-view/route.ts", import.meta.url), "utf8");
-  assert.match(view, /const seen = parsed\.data\.counted \? before : recordSeenReason\(before, parsed\.data\.reason\);/);
+  const moments = readFileSync(new URL("../src/lib/paywall-moments.ts", import.meta.url), "utf8");
+  assert.match(moments, /const after = alreadyCounted \? before : recordSeenReason\(before, reason\);/);
+});
+
+test("another account on the same tab starts its own count", async () => {
+  const store = new Map();
+  globalThis.window = {
+    sessionStorage: {
+      getItem: (k) => store.get(k) ?? null,
+      setItem: (k, v) => store.set(k, String(v)),
+      removeItem: (k) => store.delete(k),
+    },
+  };
+  const { countOfferScreen, noteOfferAccount, OFFER_SCREENS_KEY } = await import("../src/lib/paywall-offer-timing.ts?accounts");
+  noteOfferAccount("ana");
+  countOfferScreen(); countOfferScreen(); countOfferScreen();
+  assert.equal(store.get(OFFER_SCREENS_KEY), "3");
+  noteOfferAccount("ana");
+  assert.equal(store.get(OFFER_SCREENS_KEY), "3", "the same account keeps counting");
+  noteOfferAccount("bor");
+  assert.equal(store.get(OFFER_SCREENS_KEY), undefined, "a new account starts from nothing");
+  assert.equal(countOfferScreen(), false);
+  delete globalThis.window;
 });

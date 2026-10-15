@@ -5,7 +5,7 @@
  *
  * The count is this tab's own (sessionStorage), a convenience rather than a
  * record: losing it only means the next offer comes a few screens later. What
- * the offer is worth lives in the server's cookie, never here.
+ * the offer is worth lives on the account, never here.
  */
 
 /** The click that opens the offer: this many since the last paywall. */
@@ -40,6 +40,30 @@ export function countOfferScreen() {
 
 /** This tab's paywall visits already counted, newest last. */
 const COUNTED_VISITS_KEY = "memo-paywall-visits";
+
+/** The account this tab's counts belong to. */
+const ACCOUNT_KEY = "memo-offer-account";
+
+/**
+ * Starts this tab's counts afresh when another account signs in on it, so
+ * nothing one account did carries over to the next (the ladder itself lives
+ * on the account, `paywall-moments.ts`).
+ */
+export function noteOfferAccount(userId: string) {
+  try {
+    if (window.sessionStorage.getItem(ACCOUNT_KEY) === userId) {
+      return;
+    }
+
+    window.sessionStorage.removeItem(OFFER_SCREENS_KEY);
+    window.sessionStorage.removeItem(COUNTED_VISITS_KEY);
+    // The wheel offer a previous account left open for its checkout round trip.
+    window.sessionStorage.removeItem("memo-offer-resume");
+    window.sessionStorage.setItem(ACCOUNT_KEY, userId);
+  } catch {
+    // Storage blocked: there are no counts to carry over either.
+  }
+}
 
 /**
  * Whether this visit to the paywall was already counted as a moment, and

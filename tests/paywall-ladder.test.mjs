@@ -72,7 +72,10 @@ test("checkout charges the rung shown, and never more than the cookie allows", (
   assert.equal(checkoutOffer(4, []).percentOff, 0, "no moment, no discount");
 });
 
-test("the cookie keeps known moments, only as many as still lift the price", () => {
+test("the stored moments keep known names, only as many as still lift the price", () => {
+  assert.deepEqual(readSeenReasons(["chat", "bogus", "chat", "offer", "tutor", "note"]), ["chat", "chat", "offer"]);
+  assert.deepEqual(readSeenReasons(null), []);
+  assert.deepEqual(readSeenReasons([1, {}, "listen"]), ["listen"]);
   assert.deepEqual(readSeenReasons("chat.bogus.chat.offer.tutor.note"), ["chat", "chat", "offer"]);
   assert.deepEqual(readSeenReasons(""), []);
   assert.deepEqual(readSeenReasons(undefined), []);
@@ -93,7 +96,7 @@ test("prices: the discount to the cent, the year by the week rounded down", () =
 
 test("a discounted checkout has no trial and no promo-code field; the wheel wins", () => {
   const route = readFileSync(new URL("../src/app/api/billing/checkout/route.ts", import.meta.url), "utf8");
-  assert.match(route, /checkoutOffer\(\s*parsed\.data\.step \?\? null,\s*readSeenReasons\(\(await cookies\(\)\)\.get\(PAYWALL_SEEN_COOKIE\)\?\.value\),/);
+  assert.match(route, /checkoutOffer\(parsed\.data\.step \?\? null, await readPaywallMoments\(appState\.user\.id\)\)/);
   assert.match(route, /const coupon = wheelCoupon \?\? ladderOffer\.coupon;/);
   assert.match(route, /!hasPriorStripeSubscription && !coupon;/);
   assert.match(route, /\.\.\.\(coupon\s*\? \{ discounts: \[\{ coupon \}\] \}\s*: \{ allow_promotion_codes: true \}\)/);
@@ -104,4 +107,36 @@ test("the app never moves up the ladder", () => {
   assert.match(view, /if \(isNativeUserAgent\(request\.headers\.get\("user-agent"\)\)\) \{\s*return NextResponse\.json\(\{ seen: \[\], advanced: false, step: 1 \}\);/);
   const page = readFileSync(new URL("../src/app/app/start/page.tsx", import.meta.url), "utf8");
   assert.match(page, /const offerStep = native \? 1 :/);
+});
+
+test("the ladder belongs to the account, never to the device", () => {
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const view = read("../src/app/api/billing/paywall-view/route.ts");
+  assert.match(view, /recordPaywallMoment\(user\.id, parsed\.data\.reason, parsed\.data\.counted === true\)/);
+  assert.match(view, /response\.cookies\.delete\(LEGACY_PAYWALL_COOKIE\)/);
+  assert.match(read("../src/app/app/start/page.tsx"), /await readPaywallMoments\(appState\.user\.id\)/);
+  const moments = read("../src/lib/paywall-moments.ts");
+  assert.match(moments, /\.select\("paywall_moments"\)\s*\.eq\("id", userId\)/);
+  assert.match(moments, /\.update\(\{ paywall_moments: after \} as never\)\s*\.eq\("id", userId\)/);
+  // Nothing reads the old device-wide cookie any more.
+  for (const path of ["../src/app/api/billing/checkout/route.ts", "../src/app/app/start/page.tsx", view && "../src/app/api/billing/paywall-view/route.ts"]) {
+    assert.doesNotMatch(read(path), /cookies\(\)\)?\.get\(/, path);
+  }
+  const migration = read("../supabase/migrations/0064_paywall_moments.sql");
+  assert.match(migration, /add column if not exists paywall_moments text\[\] not null default '\{\}'/);
+});
+
+test("two accounts on one device climb their own ladders", () => {
+  // The server keeps one list per account; the device holds none.
+  const store = new Map();
+  const visit = (user, reason) => {
+    const before = store.get(user) ?? [];
+    const shown = paywallOfferFor(reason, before).percentOff;
+    store.set(user, recordSeenReason(before, reason));
+    return shown;
+  };
+  assert.deepEqual(["chat", "offer", "listen"].map((r) => visit("ana", r)), [20, 30, 40]);
+  assert.equal(visit("bor", "chat"), 20, "a second account on the same phone starts at the first rung");
+  assert.equal(paywallOfferFor(null, store.get("bor")).percentOff, 20);
+  assert.equal(paywallOfferFor(null, store.get("ana")).percentOff, 40, "and the first keeps its own");
 });

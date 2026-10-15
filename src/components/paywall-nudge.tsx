@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-import { countOfferScreen } from "@/lib/paywall-offer-timing";
+import { countOfferScreen, noteOfferAccount } from "@/lib/paywall-offer-timing";
 import { paywallPath } from "@/lib/paywall-reasons";
 
 /**
@@ -56,9 +56,14 @@ function opensSomething(target: Element, from: string) {
   return true;
 }
 
-export function PaywallNudge() {
+export function PaywallNudge({ userId }: { userId: string }) {
   const pathname = usePathname();
   const router = useRouter();
+
+  // A different account on this tab starts its own count.
+  useEffect(() => {
+    noteOfferAccount(userId);
+  }, [userId]);
 
   useEffect(() => {
     if (!pathname || !isBrowsing(pathname)) {

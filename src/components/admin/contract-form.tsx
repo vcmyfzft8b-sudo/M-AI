@@ -1,7 +1,8 @@
 "use client";
 
-import { createCreatorContractAction } from "@/app/admin/(dashboard)/actions";
+import { createCreatorContractAction, updateCreatorContractAction } from "@/app/admin/(dashboard)/actions";
 import type { ContractPay } from "@/lib/ugc/creator-pay";
+import type { CampaignLocale, CreatorMarket } from "@/lib/ugc/creator-program";
 
 import { ActionForm, SubmitButton } from "./forms";
 
@@ -15,17 +16,31 @@ import { ActionForm, SubmitButton } from "./forms";
  * pay section is written from whichever are filled in. On a creator's page the defaults
  * come from what the dashboard already knows about their pay; otherwise from the
  * campaign's standard pay.
+ *
+ * With `contract`, it edits that contract in place instead (`/admin/contracts/<id>/edit`):
+ * every field starts from what it says now, and its full text is in a box to rewrite.
  */
 export function ContractForm({
   creatorId,
   defaultName,
   defaultEmail,
   defaultPay,
+  contract,
 }: {
   creatorId?: string;
   defaultName?: string;
   defaultEmail?: string;
   defaultPay: ContractPay;
+  contract?: {
+    id: string;
+    kind: "contract" | "application";
+    market: CreatorMarket;
+    locale: CampaignLocale;
+    minor: boolean;
+    signed: boolean;
+    text: string;
+    handWritten: boolean;
+  };
 }) {
   const amount = (value: number) => (value > 0 ? String(value) : "");
 
@@ -48,8 +63,12 @@ export function ContractForm({
 
   return (
     // Without a creator the next contract is for somebody else, so the fields start over.
-    <ActionForm action={createCreatorContractAction} resetOnSuccess={!creatorId}>
+    <ActionForm
+      action={contract ? updateCreatorContractAction : createCreatorContractAction}
+      resetOnSuccess={!creatorId && !contract}
+    >
       {creatorId ? <input type="hidden" name="creator_id" value={creatorId} /> : null}
+      {contract ? <input type="hidden" name="contract_id" value={contract.id} /> : null}
 
       <div className="admin-form-grid">
         <div className="admin-field">
@@ -69,17 +88,22 @@ export function ContractForm({
             className="admin-input"
             type="email"
             name="email"
+            required={contract?.kind === "application"}
             defaultValue={defaultEmail}
             placeholder="for your records"
           />
-          <span className="admin-help">Kept with the contract. Nothing is sent to it.</span>
+          <span className="admin-help">
+            {contract?.kind === "application"
+              ? "The email they applied with."
+              : "Kept with the contract. Nothing is sent to it."}
+          </span>
         </div>
 
         <div className="admin-field">
           <label className="admin-label" htmlFor="contract-market">
             Campaign
           </label>
-          <select id="contract-market" className="admin-select" name="market" defaultValue="si">
+          <select id="contract-market" className="admin-select" name="market" defaultValue={contract?.market ?? "si"}>
             <option value="si">Slovenia (contract in Slovenian)</option>
             <option value="balkans">Balkans</option>
           </select>
@@ -89,7 +113,12 @@ export function ContractForm({
           <label className="admin-label" htmlFor="contract-locale">
             Balkan language
           </label>
-          <select id="contract-locale" className="admin-select" name="locale" defaultValue="hr">
+          <select
+            id="contract-locale"
+            className="admin-select"
+            name="locale"
+            defaultValue={contract && contract.locale !== "sl" ? contract.locale : "hr"}
+          >
             <option value="hr">Croatian</option>
             <option value="bs">Bosnian</option>
             <option value="sr">Serbian</option>
@@ -99,7 +128,7 @@ export function ContractForm({
       </div>
 
       <label className="admin-check">
-        <input type="checkbox" name="minor" />
+        <input type="checkbox" name="minor" defaultChecked={contract?.minor} />
         <span>Under 18: a parent or guardian signs too</span>
       </label>
 
@@ -153,8 +182,44 @@ export function ContractForm({
         />
       </div>
 
+      {contract ? (
+        <>
+          <p className="admin-subheading">Contract text</p>
+          <input type="hidden" name="terms_shown" value={contract.text} />
+          <div className="admin-field">
+            <label className="admin-label" htmlFor="contract-terms_text">
+              {contract.signed ? "The text they signed, as it will now read" : "The text they will sign"}
+            </label>
+            {/* Keyed by the text, so a save that rewrote it shows the new text rather than the typed one. */}
+            <textarea
+              key={contract.text}
+              id="contract-terms_text"
+              className="admin-textarea admin-contract-editor"
+              name="terms_text"
+              rows={24}
+              spellCheck={false}
+              defaultValue={contract.text}
+            />
+            <span className="admin-help">
+              {contract.handWritten
+                ? "Written by hand: the details and pay above no longer change it."
+                : "Generated from the details and pay above, and rewritten when you change them. Edit it here and your text is kept exactly as written."}{" "}
+              Markdown: **bold**, ### heading.
+            </span>
+          </div>
+          <label className="admin-check">
+            <input key={contract.text} type="checkbox" name="regenerate" />
+            <span>Write the text from the details and pay instead (drops any changes made by hand)</span>
+          </label>
+        </>
+      ) : null}
+
       <div className="admin-form-actions">
-        <SubmitButton pendingLabel="Creating…">Create contract</SubmitButton>
+        {contract ? (
+          <SubmitButton pendingLabel="Saving…">Save changes</SubmitButton>
+        ) : (
+          <SubmitButton pendingLabel="Creating…">Create contract</SubmitButton>
+        )}
       </div>
     </ActionForm>
   );

@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * One contract as it stands: the signature record and, once signed, the exact text that
- * was accepted (stored at the moment of signing). Unsigned, it shows the text the
- * creator will see.
+ * was accepted (stored at the moment of signing, or as an admin last edited it).
+ * Unsigned, it shows the text the creator will see.
  */
 export default async function ContractPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
@@ -36,6 +36,10 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
     ["IP address", contract.signedIp ?? "—"],
     ["Browser", contract.signedUserAgent ?? "—"],
     ["Email", contract.email ?? "—"],
+    [
+      "Last edited",
+      contract.editedAt ? `${formatDateTime(contract.editedAt)}${contract.editedBy ? ` by ${contract.editedBy}` : ""}` : "—",
+    ],
   ];
 
   return (
@@ -51,13 +55,18 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
             {contract.market === "si" ? "Slovenia" : "Balkans"}
           </p>
         </div>
-        {contract.status === "signed" ? (
-          <Badge tone="green">Signed</Badge>
-        ) : contract.status === "void" ? (
-          <Badge tone="grey">Withdrawn</Badge>
-        ) : (
-          <Badge tone="red">Waiting for signature</Badge>
-        )}
+        <div className="admin-contract-actions">
+          {contract.status === "signed" ? (
+            <Badge tone="green">Signed</Badge>
+          ) : contract.status === "void" ? (
+            <Badge tone="grey">Withdrawn</Badge>
+          ) : (
+            <Badge tone="red">Waiting for signature</Badge>
+          )}
+          <PendingLink className="admin-button" data-size="sm" href={`/admin/contracts/${contract.id}/edit`}>
+            Edit
+          </PendingLink>
+        </div>
       </header>
 
       <Section title="Signature">

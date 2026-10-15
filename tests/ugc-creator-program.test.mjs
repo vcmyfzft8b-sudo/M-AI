@@ -37,6 +37,7 @@ import {
 } from "../src/lib/ugc/creator-program.ts";
 import { CREATOR_TERMS_VERSION, creatorTermsMarkdown } from "../src/lib/ugc/creator-terms.ts";
 import { parseContractPay } from "../src/lib/ugc/creator-pay.ts";
+import { editedContractText, generatedContractText } from "../src/lib/ugc/contract-edit.ts";
 
 const CATALOGUES = { sl, en, hr, bs, sr };
 
@@ -66,10 +67,14 @@ test("an applicant who signed earlier terms is shown the campaign pay of that ve
   // Slovenian pay has not changed.
   assert.deepEqual(campaignTermsAt("si", "2026-10-11.1"), CREATOR_TERMS.si);
 
-  // The admin and a signed join link both go through it, and a signed link shows what was signed.
-  assert.match(readSource("src/lib/admin/contracts.ts"), /campaignTermsAt\(row\.market, row\.terms_accepted_at \? row\.terms_version : null\)/);
+  // The admin and a signed join link both read an applicant's terms through one place
+  // (unless the admin gave them their own deal), and a signed link shows what was signed.
+  const rows = readSource("src/lib/ugc/contract-rows.ts");
+  assert.match(rows, /parseContractPay\(row\.contract_pay\) \?\? campaignPay\(campaignTermsAt\(row\.market, signed \? row\.terms_version : null\)\)/);
+  assert.match(rows, /const signed = row\.terms_accepted_at !== null/);
+  assert.match(readSource("src/lib/admin/contracts.ts"), /applicationRowTerms\(row\)/);
   const signing = readSource("src/lib/ugc/creator-signing.server.ts");
-  assert.match(signing, /campaignTermsAt\(application\.market, application\.terms_accepted_at \? application\.terms_version : null\)/);
+  assert.match(signing, /applicationRowTerms\(application/);
   assert.match(signing, /signable\.signedText \?\?/);
 });
 
@@ -556,6 +561,62 @@ test("a contract can be created for someone who is not in the dashboard", () => 
 
   const page = readSource("src/app/admin/(dashboard)/contracts/page.tsx");
   assert.match(page, /<ContractForm defaultPay=\{campaignPay\(CREATOR_TERMS\.si\)\} \/>/, "the contracts page creates one with no creator");
+});
+
+test("an edited contract keeps what the admin typed, and otherwise follows its details", () => {
+  const before = { locale: "sl", market: "si", pay: PIJA, applied: false };
+  const raised = { ...before, pay: { ...PIJA, perTikTok: 12 } };
+  const generated = generatedContractText(before);
+  const edit = (overrides) =>
+    editedContractText({ submitted: generated, current: generated, handWritten: false, before, after: before, regenerate: false, ...overrides });
+
+  // Only the email changed: the text, signed or not, is left word for word.
+  assert.deepEqual(edit({}), { text: generated, handWritten: false, regenerated: false });
+  // The browser's line endings and trailing space are not an edit.
+  assert.equal(edit({ submitted: `${generated.replace(/\n/g, "\r\n")}  ` }).handWritten, false);
+
+  // A new deal with the text untouched: the text is written from the new deal.
+  const repaid = edit({ after: raised });
+  assert.equal(repaid.regenerated, true);
+  assert.equal(repaid.text, generatedContractText(raised));
+  assert.notEqual(repaid.text, generated);
+
+  // Typed text wins, and stays hand-written when the deal changes later.
+  const typed = `${generated}\n### Dodatno\n\nVelja tudi za YouTube Shorts.\n`;
+  const handWritten = edit({ submitted: typed, after: raised });
+  assert.deepEqual(handWritten, { text: typed, handWritten: true, regenerated: false });
+  assert.deepEqual(
+    edit({ submitted: typed, current: typed, handWritten: true, after: raised }),
+    { text: typed, handWritten: true, regenerated: false },
+  );
+
+  // Asking for generated text drops the hand-written version.
+  assert.deepEqual(edit({ submitted: typed, current: typed, handWritten: true, after: raised, regenerate: true }), {
+    text: generatedContractText(raised),
+    handWritten: false,
+    regenerated: true,
+  });
+});
+
+test("every contract can be edited in place, and the signature record is never rewritten", () => {
+  const actions = readSource("src/app/admin/(dashboard)/actions.ts");
+  const update = actions.slice(actions.indexOf("export async function updateCreatorContractAction"));
+  const body = update.slice(0, update.indexOf("\nexport async function"));
+  assert.match(body, /await requireAdmin\(\)/, "the action re-checks the allowlist itself");
+  assert.doesNotMatch(body, /sendAcceptanceEmail|resend\.com|fetch\(/, "editing a contract must not send anything");
+  // Same link, same signature: never a new token, a status change or a new signature.
+  assert.doesNotMatch(body, /join_token|status:|signed_at|signed_name|guardian_name|signed_ip|signed_user_agent|terms_accepted_|terms_signed_name|terms_guardian_name/);
+  // Both kinds of contract, and a signed one's stored text is the edited text.
+  assert.match(body, /"ugc_creator_contracts"/);
+  assert.match(body, /"ugc_creator_applications"/);
+  assert.match(body, /terms_snapshot: edited\.text/);
+
+  // The signing link shows the hand-written text until signed, and the signed text after.
+  const signing = readSource("src/lib/ugc/creator-signing.server.ts");
+  assert.match(signing, /signable\.signedText \?\?\s*signable\.override \?\?/);
+
+  // Every row, of either kind, links to its edit page.
+  assert.match(readSource("src/components/admin/contract-row.tsx"), /href=\{`\/admin\/contracts\/\$\{contract\.id\}\/edit`\}/);
 });
 
 test("the terms' wording only changes together with their version", async () => {

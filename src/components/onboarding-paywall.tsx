@@ -18,7 +18,7 @@ import { formatCurrency } from "@/lib/utils";
 import type { PaywallReason } from "@/lib/paywall-reasons";
 import { cameFromAppPath, quietNextEntrance } from "@/lib/app-history";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
-import { notePaywallShown } from "@/lib/paywall-offer-timing";
+import { notePaywallShown, paywallVisitCounted } from "@/lib/paywall-offer-timing";
 import { discountedAmount, paywallOffer, weeklyAmount } from "@/lib/paywall-ladder";
 import { PaywallCompare, PaywallHero, paywallAccentStyle, paywallLayout } from "@/components/paywall-hero";
 import {
@@ -118,13 +118,6 @@ export function OnboardingPaywall({
    * Until then, the rung the page predicted; the two agree unless a cached
    * copy of this page was shown, which the answer then corrects.
    */
-  const [recorded, setRecorded] = useState<{ step: number; advanced: boolean } | null>(null);
-  const viewRequest = useRef<{ key: string; done: Promise<unknown> } | null>(null);
-  // The app sells at Apple's prices, so it never shows a step past the first.
-  const offer = paywallOffer(native ? 1 : recorded?.step ?? offerStep);
-  const discounted = offer.percentOff > 0;
-  const improved = recorded ? recorded.advanced : offerImproved;
-
   /*
    * A paywall opened by a limit or a browsing offer records its moment, so the
    * offer climbs a rung (`paywall-ladder.ts`). Not in the app, not for the
@@ -132,14 +125,32 @@ export function OnboardingPaywall({
    * of the prices. Once per paywall: the ref outlives the effect running twice.
    */
   const viewKey = `${reason ?? ""}?${searchParams.toString()}`;
+  const [recorded, setRecorded] = useState<{ key: string; step: number; advanced: boolean } | null>(null);
+  const viewRequest = useRef<{ key: string; done: Promise<unknown> } | null>(null);
+  // Only this paywall's own answer; another one's may still be on screen.
+  const answer = recorded?.key === viewKey ? recorded : null;
+  // The app sells at Apple's prices, so it never shows a step past the first.
+  const offer = paywallOffer(native ? 1 : answer?.step ?? offerStep);
+  const discounted = offer.percentOff > 0;
+  const improved = answer ? answer.advanced : offerImproved;
 
-  // Where closing goes, loaded ahead, so even a close that has to navigate
-  // (the paywall after onboarding) opens it at once rather than on a skeleton.
+  // Where closing goes. A close that has to navigate rather than step back
+  // (the paywall after onboarding) gets it loaded ahead, so it opens at once
+  // rather than on a skeleton. Checked a moment after mounting, once the shell
+  // has noted this page.
   const closeTo = backHref ?? "/app";
   useEffect(() => {
-    if (onboardingComplete) {
-      safeRouterPrefetch(router, closeTo, { full: true });
+    if (!onboardingComplete) {
+      return;
     }
+
+    const timer = window.setTimeout(() => {
+      if (!cameFromAppPath(closeTo)) {
+        safeRouterPrefetch(router, closeTo, { full: true });
+      }
+    }, 300);
+
+    return () => window.clearTimeout(timer);
   }, [router, closeTo, onboardingComplete]);
 
   useEffect(() => {
@@ -154,15 +165,19 @@ export function OnboardingPaywall({
       return;
     }
 
+    // A reload, or coming back to it through history, is the same moment
+    // again: the server answers with the rung it reached and records nothing.
+    const counted = paywallVisitCounted();
+
     const done = fetch("/api/billing/paywall-view", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify({ reason, counted }),
     })
       .then((response) => (response.ok ? (response.json() as Promise<{ step?: unknown; advanced?: unknown }>) : null))
       .then((body) => {
         if (body && typeof body.step === "number") {
-          setRecorded({ step: body.step, advanced: body.advanced === true });
+          setRecorded({ key: viewKey, step: body.step, advanced: body.advanced === true });
         }
       })
       .catch(() => null);

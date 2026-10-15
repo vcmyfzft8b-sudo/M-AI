@@ -27,6 +27,9 @@ import { paywallPath } from "@/lib/paywall-reasons";
 /** Paths that neither count as browsing nor open an offer. */
 const NOT_BROWSING = ["/app/start", "/app/new", "/app/settings", "/app/support", "/app/consent"];
 
+/** Movement past which a press is a drag, not a tap. */
+const DRAG_PX = 10;
+
 /** What counts as opening something: a link in the app, a note row, a note tab. */
 const OPENS = 'a[href], [role="link"], .memo-tabs button';
 
@@ -62,6 +65,14 @@ export function PaywallNudge() {
       return;
     }
 
+    // Where the press started: a click that ends a drag (a swiped row) opens
+    // nothing, and the row ignores it too.
+    let pressedAt: { x: number; y: number } | null = null;
+
+    function onPointerDown(event: PointerEvent) {
+      pressedAt = { x: event.clientX, y: event.clientY };
+    }
+
     // In the capture phase: before the click does anything, and before it
     // re-renders which tab is current.
     function onClick(event: MouseEvent) {
@@ -69,9 +80,19 @@ export function PaywallNudge() {
         return;
       }
 
+      const dragged =
+        pressedAt !== null && Math.hypot(event.clientX - pressedAt.x, event.clientY - pressedAt.y) > DRAG_PX;
+      pressedAt = null;
       const target = event.target instanceof Element ? event.target.closest(OPENS) : null;
 
-      if (!target || !opensSomething(target, pathname!) || !countOfferScreen()) {
+      if (
+        dragged ||
+        !target ||
+        // A tap on a row with its actions showing closes them, not the row.
+        target.closest(".memo-swipe-row.open") ||
+        !opensSomething(target, pathname!) ||
+        !countOfferScreen()
+      ) {
         return;
       }
 
@@ -83,8 +104,12 @@ export function PaywallNudge() {
       router.push(`${paywallPath("offer", pathname!)}&t=${Date.now()}`);
     }
 
+    document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("click", onClick, true);
-    return () => document.removeEventListener("click", onClick, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("click", onClick, true);
+    };
   }, [pathname, router]);
 
   return null;

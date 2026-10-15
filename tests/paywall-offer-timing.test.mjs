@@ -35,3 +35,32 @@ test("only a click opens the browsing offer, in place of what it would have open
   // Arriving on a page, going back or reloading counts for nothing.
   assert.doesNotMatch(nudge, /usePathname\(\)[\s\S]*if \(countOfferScreen\(\)\) \{\s*openOffer/);
 });
+
+test("a reload or a return through history is the same paywall visit; opening it again later is a new one", async () => {
+  const store = new Map();
+  globalThis.window = {
+    location: { pathname: "/app/start", search: "?for=chat" },
+    history: { length: 4 },
+    sessionStorage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) },
+  };
+  const { paywallVisitCounted } = await import("../src/lib/paywall-offer-timing.ts?visits");
+  assert.equal(paywallVisitCounted(), false, "first visit counts");
+  assert.equal(paywallVisitCounted(), true, "a reload does not");
+  window.history.length = 6;
+  assert.equal(paywallVisitCounted(), false, "the same paywall opened again later counts");
+  delete globalThis.window;
+});
+
+test("a drag, or a tap that closes a row's actions, never opens the offer", () => {
+  const nudge = readFileSync(new URL("../src/components/paywall-nudge.tsx", import.meta.url), "utf8");
+  assert.match(nudge, /Math\.hypot\(event\.clientX - pressedAt\.x, event\.clientY - pressedAt\.y\) > DRAG_PX/);
+  assert.match(nudge, /target\.closest\("\.memo-swipe-row\.open"\)/);
+});
+
+test("the new-note sheet's paywall closes to home, never to the sheet that sent it", () => {
+  const modal = readFileSync(new URL("../src/components/note-source-modal.tsx", import.meta.url), "utf8");
+  assert.match(modal, /replacingNextPage\(\);\s*router\.replace\(paywallPath\("note", "\/app"\)\);/);
+  assert.match(modal, /navigateWithFeedback\(paywallPath\("note", "\/app"\)\);/);
+  const view = readFileSync(new URL("../src/app/api/billing/paywall-view/route.ts", import.meta.url), "utf8");
+  assert.match(view, /const seen = parsed\.data\.counted \? before : recordSeenReason\(before, parsed\.data\.reason\);/);
+});

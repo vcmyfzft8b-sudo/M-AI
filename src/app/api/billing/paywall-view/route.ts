@@ -19,6 +19,8 @@ import { parseJsonRequest } from "@/lib/request-validation";
 
 const viewSchema = z.object({
   reason: z.enum(PAYWALL_REASONS),
+  /** A visit already counted (a reload): answer with the rung, record nothing. */
+  counted: z.boolean().optional(),
 });
 
 /**
@@ -58,7 +60,7 @@ export async function POST(request: Request) {
 
   const jar = await cookies();
   const before = readSeenReasons(jar.get(PAYWALL_SEEN_COOKIE)?.value);
-  const seen = recordSeenReason(before, parsed.data.reason);
+  const seen = parsed.data.counted ? before : recordSeenReason(before, parsed.data.reason);
   const response = NextResponse.json({
     seen,
     advanced: seen.length > before.length,

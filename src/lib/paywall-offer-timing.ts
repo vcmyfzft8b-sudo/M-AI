@@ -37,3 +37,29 @@ export function countOfferScreen() {
     return false;
   }
 }
+
+/** This tab's paywall visits already counted, newest last. */
+const COUNTED_VISITS_KEY = "memo-paywall-visits";
+
+/**
+ * Whether this visit to the paywall was already counted as a moment, and
+ * notes it if not. A visit is the address and its place in this tab's
+ * history: a reload, or returning to it through history, is the same visit;
+ * opening the same paywall again later is a new one.
+ */
+export function paywallVisitCounted() {
+  try {
+    const visit = `${window.location.pathname}${window.location.search}#${window.history.length}`;
+    const visits: unknown = JSON.parse(window.sessionStorage.getItem(COUNTED_VISITS_KEY) ?? "[]");
+    const list = Array.isArray(visits) ? visits.filter((item): item is string => typeof item === "string") : [];
+
+    if (list.includes(visit)) {
+      return true;
+    }
+
+    window.sessionStorage.setItem(COUNTED_VISITS_KEY, JSON.stringify([...list, visit].slice(-30)));
+    return false;
+  } catch {
+    return false;
+  }
+}

@@ -11019,7 +11019,7 @@
   align-items: center;
   gap: 0.6rem;
   padding: 0.7rem 1rem;
-  border-radius: 22px 22px 22px 6px;
+  border-radius: 22px 22px 22px 12px;
   background: var(--surface);
   box-shadow: var(--shadow);
   animation: memo-pw-rise 0.5s 0.3s both;

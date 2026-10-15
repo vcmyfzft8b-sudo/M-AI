@@ -13,6 +13,8 @@
 let current: string | null = null;
 let previous: string | null = null;
 
+let nextReplaces = false;
+
 const QUIET_ENTRANCE = "data-paywall-closing";
 let quietUntilArrival = false;
 let quietSafety: number | undefined;
@@ -23,8 +25,11 @@ export function noteAppPath(path: string) {
     return;
   }
 
-  previous = current;
+  // A page that replaced the one before it has nothing behind it to step
+  // back to; stepping back would leave past it.
+  previous = nextReplaces ? null : current;
   current = path;
+  nextReplaces = false;
 
   // The page a closing screen returned to is up: let its fades back once they
   // would have finished, so they do not start then instead.
@@ -32,6 +37,11 @@ export function noteAppPath(path: string) {
     quietUntilArrival = false;
     window.setTimeout(endQuietEntrance, 400);
   }
+}
+
+/** Call before `router.replace`: the next page has no page of ours behind it. */
+export function replacingNextPage() {
+  nextReplaces = true;
 }
 
 function endQuietEntrance() {

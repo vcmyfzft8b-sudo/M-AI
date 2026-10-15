@@ -17,7 +17,13 @@ import {
   examModuleStates,
   examNextStep,
   examStage,
+  firstPassKind,
   gradeForPercentage,
+  lessonFormatChoices,
+  LESSONS_TO_LEARN,
+  MIN_PRACTICE_FORMATS,
+  moduleAfterLesson,
+  practiceKindToOffer,
   isValidDay,
   mockMinutes,
   mockQuestionCounts,
@@ -62,17 +68,27 @@ test("calendar arithmetic ignores daylight-saving changes", () => {
 });
 
 test("a module is mastered by its practice lessons, and the summary only counts as done", () => {
-  const states = examModuleStates(mods("a"),
+  const one = examModuleStates(mods("a"), [result("a", "summary", 1), result("a", "flashcards", 1)]);
+
+  assert.equal(one[0].lessonsDone, 2);
+  assert.equal(one[0].lessonsLeft, 1);
+  assert.equal(one[0].learned, false);
+  assert.equal(one[0].mastered, false);
+  // One format alone is not the whole topic: the missing second counts as a full lesson at 0.
+  assert.equal(one[0].mastery, 0.5 / 1.5);
+  // The path suggests the first untried format in the default order: the tutor.
+  assert.equal(one[0].nextKind, "tutor");
+
+  const two = examModuleStates(mods("a"),
     [result("a", "summary", 1), result("a", "flashcards", 1), result("a", "quiz", 0.6)],
   );
 
-  assert.equal(states[0].lessonsDone, 3);
-  assert.equal(states[0].learned, false);
-  assert.equal(states[0].mastered, false);
-  // Weighted: flashcards count half (the learner grades them), the other four lessons in full.
-  assert.equal(states[0].mastery, (0.5 * 1 + 0.6) / 4.5);
-  // The tutor comes straight after the summary.
-  assert.equal(states[0].nextKind, "tutor");
+  assert.equal(two[0].lessonsDone, 3);
+  assert.equal(two[0].lessonsLeft, 0);
+  assert.equal(two[0].learned, true);
+  assert.equal(two[0].mastered, false);
+  // Weighted over the formats done: flashcards count half (the learner grades them), the quiz in full.
+  assert.equal(two[0].mastery, (0.5 * 1 + 0.6) / 1.5);
 });
 
 test("only the latest try of a lesson counts toward mastery", () => {
@@ -100,7 +116,8 @@ test("modules unlock in order, and starting a locked one opens it", () => {
   assert.equal(states[0].mastered, true);
   // A mastered module continues with its weakest practice lesson.
   assert.ok(["tutor", "flashcards", "quiz", "true_false", "written"].includes(states[0].nextKind));
-  assert.equal(examMastery(states), (1 + 0 + 0 + 0.9 / 4.5) / 4);
+  // Module d has one format done: the missing second counts as a full lesson at 0.
+  assert.equal(examMastery(states), (1 + 0 + 0 + 0.9 / 2) / 4);
 });
 
 test("the daily goal spreads what is left over the days before the exam", () => {
@@ -108,15 +125,16 @@ test("the daily goal spreads what is left over the days before the exam", () => 
     examDate: "2026-10-26",
     today: "2026-10-14",
     dailyMinutes: 30,
-    states: [{ lessonsDone: 0, review: [] }, { lessonsDone: 0, review: [] }, { lessonsDone: 0, review: [] }, { lessonsDone: 0, review: [] }],
+    states: [{ lessonsLeft: 3, review: [] }, { lessonsLeft: 3, review: [] }, { lessonsLeft: 3, review: [] }, { lessonsLeft: 3, review: [] }],
     resultsToday: 0,
     untriedDoneToday: 0,
   });
 
-  // 24 lessons over 12 days is 2 a day, but 30 minutes buys 5.
+  // A summary and two formats per topic: 12 lessons over 12 days is 1 a day, but 30 minutes buys 5.
+  assert.equal(LESSONS_TO_LEARN, 3);
   assert.equal(plan.goal, 5);
   assert.equal(plan.daysLeft, 12);
-  assert.equal(plan.remaining, 24);
+  assert.equal(plan.remaining, 12);
 });
 
 test("finishing a lesson moves today's count, not today's goal", () => {
@@ -124,7 +142,7 @@ test("finishing a lesson moves today's count, not today's goal", () => {
     examDate: "2026-10-16",
     today: "2026-10-14",
     dailyMinutes: 15,
-    states: [{ lessonsDone: 0, review: [] }, { lessonsDone: 0, review: [] }],
+    states: [{ lessonsLeft: 3, review: [] }, { lessonsLeft: 3, review: [] }],
     resultsToday: 0,
     untriedDoneToday: 0,
   });
@@ -132,13 +150,13 @@ test("finishing a lesson moves today's count, not today's goal", () => {
     examDate: "2026-10-16",
     today: "2026-10-14",
     dailyMinutes: 15,
-    states: [{ lessonsDone: 1, review: [] }, { lessonsDone: 0, review: [] }],
+    states: [{ lessonsLeft: 2, review: [] }, { lessonsLeft: 3, review: [] }],
     resultsToday: 1,
     untriedDoneToday: 1,
   });
 
-  // 12 lessons over 2 days.
-  assert.equal(before.goal, 6);
+  // 6 lessons over 2 days.
+  assert.equal(before.goal, 3);
   assert.equal(after.goal, before.goal);
   assert.equal(after.doneToday, 1);
 });
@@ -367,19 +385,36 @@ test("a mock under the target sends its weak modules back to prove themselves", 
   const results = [...learnedModule("a", all), ...learnedModule("b", all)];
   const states = examModuleStates(mods("a", "b"), results, 0.9, failed);
 
-  // Module a did well in the mock; module b has to pass its quiz and written answer again.
+  // Module a did well in the mock; module b owes one format redone, and the path suggests the
+  // weakest it has done (all tied, so the first in order).
   assert.equal(states[0].mastered, true);
-  assert.deepEqual([...states[1].review].sort(), ["quiz", "written"]);
+  assert.equal(states[1].proofOwed, true);
+  assert.equal(states[1].mastered, false);
+  assert.deepEqual(states[1].review, ["tutor"]);
   assert.equal(examStage(states, failed, 0.9), "practise");
 
+  // Any format will do: flashcards, not the suggested tutor, redone after the mock prove it.
   const redone = examModuleStates(mods("a", "b"),
-    [...results, result("b", "quiz", 1, "2026-10-17T10:00:00Z"), result("b", "written", 0.9, "2026-10-17T11:00:00Z")],
+    [...results, result("b", "flashcards", 1, "2026-10-17T10:00:00Z")],
     0.9,
     failed,
   );
 
+  assert.equal(redone[1].proofOwed, false);
+  assert.deepEqual(redone[1].review, []);
   // Proven again, so the mock is next once more.
   assert.equal(examStage(redone, failed, 0.9), "prove");
+
+  // A redo after the mock that falls short is no proof: that format is owed until it passes.
+  const short = examModuleStates(mods("a", "b"),
+    [...results, result("b", "quiz", 0.5, "2026-10-17T10:00:00Z")],
+    0.9,
+    failed,
+  );
+
+  assert.equal(short[1].proofOwed, false);
+  assert.deepEqual(short[1].review, ["quiz"]);
+  assert.equal(short[1].mastered, false);
 });
 
 test("the daily goal counts the repeats still owed", () => {
@@ -387,7 +422,7 @@ test("the daily goal counts the repeats still owed", () => {
     examDate: "2026-10-26",
     today: "2026-10-14",
     dailyMinutes: 30,
-    states: [{ lessonsDone: 6, review: ["quiz", "written"] }],
+    states: [{ lessonsLeft: 0, review: ["quiz", "written"] }],
     resultsToday: 0,
     untriedDoneToday: 0,
   });
@@ -483,4 +518,125 @@ test("the tutor marks a step by whether it was right at the first ask", () => {
   assert.equal(tutorStepPoints(["wrong", "correct"]), 0.5);
   assert.equal(tutorStepPoints(["partial", "partial"]), 0.25);
   assert.equal(tutorStepPoints(["wrong", "wrong"]), 0);
+});
+
+test("the learner picks the formats: flashcards and a quiz learn and master a module, no tutor needed", () => {
+  const [state] = examModuleStates(mods("a"),
+    [result("a", "summary", 1), result("a", "flashcards", 1), result("a", "quiz", 0.9)],
+    0.9,
+  );
+
+  assert.equal(MIN_PRACTICE_FORMATS, 2);
+  assert.equal(state.learned, true);
+  assert.equal(state.mastered, true);
+  assert.equal(state.done.tutor, false);
+  assert.deepEqual(state.review, []);
+  assert.equal(state.mastery, (0.5 + 0.9) / 1.5);
+
+  // Two formats without the summary are not learned yet: the summary is what the path asks for.
+  const [noSummary] = examModuleStates(mods("a"), [result("a", "flashcards", 1), result("a", "quiz", 1)], 0.9);
+  assert.equal(noSummary.learned, false);
+  assert.equal(noSummary.lessonsLeft, 1);
+  assert.equal(noSummary.nextKind, "summary");
+});
+
+test("formats never tried do not count against mastery, but one tried and failed does", () => {
+  const base = [result("a", "summary", 1), result("a", "tutor", 1), result("a", "written", 1)];
+  const [mastered] = examModuleStates(mods("a"), base, 0.9);
+  assert.equal(mastered.mastered, true);
+  assert.equal(mastered.mastery, 1);
+
+  // A third format, tried by choice and under the mark, comes back as a repeat until it passes.
+  const [third] = examModuleStates(mods("a"), [...base, result("a", "true_false", 0.6, "2026-10-15T10:00:00Z")], 0.9);
+  assert.equal(third.mastered, false);
+  assert.deepEqual(third.review, ["true_false"]);
+  assert.equal(third.nextKind, "true_false");
+  assert.equal(third.mastery, (1 + 1 + 0.6) / 3);
+});
+
+test("the path suggests the summary, then the first untried format, and moves on once two are done", () => {
+  const empty = examModuleStates(mods("a", "b"), [], 0.9);
+  assert.equal(examNextStep(empty, "learn")?.kind, "summary");
+
+  const read = examModuleStates(mods("a", "b"), [result("a", "summary", 1)], 0.9);
+  assert.equal(examNextStep(read, "learn")?.kind, "tutor");
+
+  // The learner skipped the suggested tutor and did written instead: still one format short, so the
+  // first untried in order (the tutor) is suggested, but written counts.
+  const chose = examModuleStates(mods("a", "b"), [result("a", "summary", 1), result("a", "written", 1)], 0.9);
+  assert.equal(chose[0].lessonsLeft, 1);
+  assert.equal(examNextStep(chose, "learn")?.kind, "tutor");
+
+  // A second chosen format learns it, and the path goes on to the next module.
+  const learned = examModuleStates(mods("a", "b"),
+    [result("a", "summary", 1), result("a", "written", 1), result("a", "true_false", 1)],
+    0.9,
+  );
+  assert.equal(learned[0].learned, true);
+  assert.equal(learned[1].unlocked, true);
+  assert.deepEqual(examNextStep(learned, "learn"), { type: "lesson", topicId: "b", lectureId: "b", kind: "summary", review: false });
+  assert.equal(firstPassKind(learned[0].done), null);
+});
+
+test("once ready, keeping sharp only offers formats the learner has done", () => {
+  const results = [result("a", "summary", 1), result("a", "flashcards", 0.95), result("a", "quiz", 1)];
+  const passed = { at: "2026-10-16T10:00:00Z", percentage: 95, byLecture: { a: 1 } };
+  const states = examModuleStates(mods("a"), results, 0.9, passed);
+
+  assert.equal(examStage(states, passed, 0.9), "ready");
+  assert.deepEqual(examNextStep(states, "ready"), { type: "lesson", topicId: "a", lectureId: "a", kind: "flashcards", review: true });
+});
+
+test("the lesson screen's next step follows the same rules as the path", () => {
+  const [before] = examModuleStates(mods("a"), [result("a", "summary", 1), result("a", "flashcards", 1)], 0.9);
+
+  // A quiz at the mark learns and masters the module, so nothing in it is left to suggest.
+  const passed = moduleAfterLesson(before, "quiz", 0.9, 0.9);
+  assert.equal(passed.learned, true);
+  assert.equal(passed.mastered, true);
+  assert.equal(passed.firstPass, null);
+  assert.deepEqual(passed.review, []);
+
+  // Under the mark it learns the module but comes back as a repeat.
+  const short = moduleAfterLesson(before, "quiz", 0.5, 0.9);
+  assert.equal(short.learned, true);
+  assert.equal(short.mastered, false);
+  assert.deepEqual(short.review, ["quiz"]);
+
+  // Before the second format, the first untried one (the tutor) is still the suggestion.
+  const [read] = examModuleStates(mods("a"), [result("a", "summary", 1)], 0.9);
+  assert.equal(moduleAfterLesson(read, "written", 1, 0.9).firstPass, "tutor");
+  assert.equal(moduleAfterLesson(read, "tutor", 1, 0.9).firstPass, "flashcards");
+
+  // After a failed mock, any format redone is the proof it wanted.
+  const failed = { at: "2026-10-16T10:00:00Z", percentage: 60, byLecture: { a: 0.5 } };
+  const [owed] = examModuleStates(mods("a"), [result("a", "summary", 1), result("a", "flashcards", 1), result("a", "quiz", 1)], 0.9, failed);
+  assert.equal(owed.proofOwed, true);
+  assert.deepEqual(owed.review, ["flashcards"]);
+  const proven = moduleAfterLesson(owed, "quiz", 1, 0.9);
+  assert.equal(proven.mastered, true);
+  assert.deepEqual(proven.review, []);
+
+  // With every format done, the format to offer is the weakest.
+  const [all] = examModuleStates(mods("a"),
+    ["summary", "tutor", "flashcards", "quiz", "true_false", "written"].map((kind) => result("a", kind, kind === "true_false" ? 0.7 : 1)),
+    0.9,
+  );
+  assert.equal(practiceKindToOffer(all), "true_false");
+  assert.equal(practiceKindToOffer(read), "tutor");
+});
+
+test("the format chips list the module's other practice formats, with a score once done", () => {
+  const [state] = examModuleStates(mods("a"), [result("a", "summary", 1), result("a", "quiz", 0.8)], 0.9);
+  const choices = lessonFormatChoices(state, ["tutor"]);
+
+  assert.deepEqual(choices, [
+    { kind: "flashcards", done: false, score: null },
+    { kind: "quiz", done: true, score: 0.8 },
+    { kind: "true_false", done: false, score: null },
+    { kind: "written", done: false, score: null },
+  ]);
+  // The summary is never a chip, and the lesson just done and the suggestion are left out.
+  assert.deepEqual(lessonFormatChoices(state, ["quiz", "tutor", null]).map((choice) => choice.kind), ["flashcards", "true_false", "written"]);
+  assert.equal(lessonFormatChoices(state).length, 5);
 });

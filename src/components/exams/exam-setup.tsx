@@ -19,9 +19,9 @@ import { cameFromAppPath } from "@/lib/app-history";
 import {
   addDays,
   daysBetween,
-  EXAM_LESSON_KINDS,
   isValidDay,
   LESSON_MINUTES,
+  LESSONS_TO_LEARN,
   MAX_EXAM_MODULES,
   MAX_SETUP_UPLOADS,
   monthGrid,
@@ -279,7 +279,8 @@ export function ExamSetup({
   const planKey = `${selected.join(",")}|${aiExpand ? 1 : 0}`;
   const keptTopics = planTopics.filter((topic) => topic.kept);
   const moduleCount = plan.status === "done" ? Math.max(1, keptTopics.length) : selected.length;
-  const lessons = moduleCount * EXAM_LESSON_KINDS.length;
+  // What it takes to learn every topic: its summary and two formats of the learner's choice.
+  const lessons = moduleCount * LESSONS_TO_LEARN;
   const yearOptions =
     schoolLevel && ROLE_FOR_LEVEL[schoolLevel]
       ? getOnboardingYearOptions(locale, ROLE_FOR_LEVEL[schoolLevel], schoolLevel)

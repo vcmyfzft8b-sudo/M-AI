@@ -10,18 +10,22 @@ import { useInstantNavigation } from "@/components/navigation-loading";
 import { NoteSpeedReader } from "@/components/note-speed-reader";
 import { StudyFlashcard, type StudyFlashcardExit } from "@/components/study-flashcard";
 import { StudyPracticeQuestion, StudyQuizQuestion } from "@/components/study-question";
-import { LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
+import { LESSON_KIND_EMOJI, LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
 import { ExamScreen } from "@/components/exams/exam-screen";
 import { MemoBuddy, type BuddyMood } from "@/components/exams/memo-buddy";
 import { ExamTutorLesson } from "@/components/exams/exam-tutor-lesson";
 import { lessonUrl, prefetchLesson, takePrefetchedLesson } from "@/components/exams/lesson-prefetch";
 import {
   EXAM_LESSON_KINDS,
+  isPracticeKind,
+  lessonFormatChoices,
   lessonPassed,
   lessonPassThreshold,
+  moduleAfterLesson,
   percent,
-  PRACTICE_LESSON_KINDS,
+  practiceKindToOffer,
   type ExamLessonKind,
+  type LessonFormatChoice,
 } from "@/lib/exams/exam-model";
 import type { LessonGenerator, LessonLoad, LessonPayload } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -57,10 +61,11 @@ type Phase =
       correct: number;
       total: number;
       headline: "lesson" | "learned" | "mastered";
-      /** The score, when a practice lesson came in under the target and will come back. */
       /** The score and the lesson's pass mark, both in whole percent, when it fell short. */
       below: { score: number; need: number } | null;
       following: { label: string; href: string } | null;
+      /** The module's other practice formats, which the learner may pick instead of `following`. */
+      choices: LessonFormatChoice[];
     };
 
 /*
@@ -102,6 +107,10 @@ export type ExamLessonModule = {
   latest: Record<ExamLessonKind, number | null>;
   /** Practice lessons the path still wants repeated, weakest first. */
   review: ExamLessonKind[];
+  /** Of those, the ones only due because they faded. */
+  refresh?: ExamLessonKind[];
+  /** A failed mock wants one practice format redone in this module. */
+  proofOwed?: boolean;
   learned: boolean;
   mastered: boolean;
 };
@@ -218,11 +227,16 @@ export function ExamLesson({
   }, [load]);
 
   /*
-   * Where the summary's button goes: the module's next lesson not done yet (the tutor the first
-   * time, something else once the tutor is done). Its label names it, and when it is the tutor,
-   * which plans by a model call, the plan is started while the summary is read.
+   * Where the summary's button goes: the format the path suggests next (the first untried one in
+   * the default order, the tutor the first time), else a repeat, else a format to try. Its label
+   * names it, and when it is the tutor, which plans by a model call, the plan is started while the
+   * summary is read. The chips under the summary offer every other format instead: the learner
+   * picks how to practise, and whatever they pick counts (`MIN_PRACTICE_FORMATS`).
    */
-  const afterSummary = nextKindAfter({ ...module.done, summary: true }) ?? "flashcards";
+  const goal = target / 100;
+  const summaryAfter = moduleAfterLesson(module, "summary", 1, goal);
+  const afterSummary = summaryAfter.firstPass ?? summaryAfter.review[0] ?? practiceKindToOffer(module);
+  const summaryChoices = lessonFormatChoices(module, [afterSummary]);
   const readingSummary = phase.name === "playing" && phase.lesson.kind === "summary";
 
   useEffect(() => {
@@ -258,7 +272,8 @@ export function ExamLesson({
     };
   }, [generating, load]);
 
-  async function save(correct: number, total: number, difficulty: number | null) {
+  /** Saves the lesson; a summary then opens `then` (a format the learner picked) or the suggestion. */
+  async function save(correct: number, total: number, difficulty: number | null, then?: ExamLessonKind) {
     setSaveError(false);
     setPhase({ name: "saving" });
 
@@ -281,50 +296,40 @@ export function ExamLesson({
       return;
     }
 
-    const doneAfter = { ...module.done, [kind]: true };
-
     if (kind === "summary") {
-      navigateWithFeedback(lessonHref(examId, module.topicId, afterSummary), { refresh: true });
+      navigateWithFeedback(lessonHref(examId, module.topicId, then ?? afterSummary), { refresh: true });
       return;
     }
 
     /*
-     * The same rule the path uses (`moduleProgress`): once every lesson has been done, a practice
-     * lesson under the target comes back until it reaches it, and the module is mastered when
-     * none is left. Lessons the path already wanted repeated for another reason stay wanted.
+     * The same rules the path uses (`moduleAfterLesson`, after `moduleProgress`): until the module
+     * is learned its next suggested format, then any format under its pass mark, weakest first,
+     * and once nothing in this module is left, the path's next module or the mock exam.
      */
-    const goal = target / 100;
     const score = total > 0 ? Math.min(1, correct / total) : 1;
-    const isPractice = (PRACTICE_LESSON_KINDS as readonly ExamLessonKind[]).includes(kind);
-    const latestAfter = { ...module.latest, [kind]: isPractice ? score : module.latest[kind] };
-    const learnedAfter = EXAM_LESSON_KINDS.every((entry) => doneAfter[entry]);
-    const reviewAfter = learnedAfter
-      ? [...PRACTICE_LESSON_KINDS]
-          .filter(
-            (entry) =>
-              !lessonPassed(entry, latestAfter[entry] ?? 0, goal) || (entry !== kind && module.review.includes(entry)),
-          )
-          .sort((left, right) => (latestAfter[left] ?? 0) - (latestAfter[right] ?? 0))
-      : [];
-    const masteredAfter = learnedAfter && reviewAfter.length === 0;
-    const untried = nextKindAfter(doneAfter);
-    const following = untried
-      ? { label: t("exam.lesson.done.next", { lesson: t(LESSON_KIND_KEY[untried]) }), href: lessonHref(examId, module.topicId, untried) }
-      : reviewAfter[0]
-        ? { label: t("exam.lesson.done.repeat", { lesson: t(LESSON_KIND_KEY[reviewAfter[0]]) }), href: lessonHref(examId, module.topicId, reviewAfter[0]) }
-        : after?.type === "module"
-          ? { label: t("exam.lesson.done.nextModule", { title: after.title }), href: lessonHref(examId, after.topicId, after.kind) }
-          : after?.type === "mock"
-            ? { label: t("exam.lesson.done.mock"), href: `${examHref}/mock` }
-            : null;
-    // The tutor plans by a model call; start it now so the next lesson opens without the wait.
-    const followingLesson = untried
-      ? { topicId: module.topicId, kind: untried }
-      : reviewAfter[0]
-        ? { topicId: module.topicId, kind: reviewAfter[0] }
-        : after?.type === "module"
-          ? { topicId: after.topicId, kind: after.kind }
+    const isPractice = isPracticeKind(kind);
+    const state = moduleAfterLesson(module, kind, score, goal);
+    const nextHere = state.firstPass
+      ? { kind: state.firstPass, repeat: false }
+      : state.review[0]
+        ? { kind: state.review[0], repeat: true }
+        : null;
+    const following = nextHere
+      ? {
+          label: t(nextHere.repeat ? "exam.lesson.done.repeat" : "exam.lesson.done.next", { lesson: t(LESSON_KIND_KEY[nextHere.kind]) }),
+          href: lessonHref(examId, module.topicId, nextHere.kind),
+        }
+      : after?.type === "module"
+        ? { label: t("exam.lesson.done.nextModule", { title: after.title }), href: lessonHref(examId, after.topicId, after.kind) }
+        : after?.type === "mock"
+          ? { label: t("exam.lesson.done.mock"), href: `${examHref}/mock` }
           : null;
+    // The tutor plans by a model call; start it now so the next lesson opens without the wait.
+    const followingLesson = nextHere
+      ? { topicId: module.topicId, kind: nextHere.kind }
+      : after?.type === "module"
+        ? { topicId: after.topicId, kind: after.kind }
+        : null;
 
     if (followingLesson?.kind === "tutor") {
       prefetchLesson(examId, followingLesson.topicId, "tutor");
@@ -341,15 +346,12 @@ export function ExamLesson({
       name: "done",
       correct,
       total,
-      headline: masteredAfter && !module.mastered ? "mastered" : learnedAfter && !module.learned ? "learned" : "lesson",
+      headline: state.mastered && !module.mastered ? "mastered" : state.learned && !module.learned ? "learned" : "lesson",
       below,
       following,
+      // Any other format of this topic, whichever comes next: the one just done and the suggestion aside.
+      choices: lessonFormatChoices(state, [kind, nextHere?.kind]),
     });
-  }
-
-  function nextKindAfter(done: Record<ExamLessonKind, boolean>) {
-    const after = EXAM_LESSON_KINDS.slice(EXAM_LESSON_KINDS.indexOf(kind) + 1).find((entry) => !done[entry]);
-    return after ?? EXAM_LESSON_KINDS.find((entry) => !done[entry]) ?? null;
   }
 
   const kindIndex = EXAM_LESSON_KINDS.indexOf(kind);
@@ -420,7 +422,7 @@ export function ExamLesson({
       <div className="memo-exam-lesson-head">
         <div className="memo-exam-lesson-steps" aria-label={t("exam.lesson.progress", { index: kindIndex + 1, total: EXAM_LESSON_KINDS.length })}>
           {EXAM_LESSON_KINDS.map((entry, index) => (
-            <i key={entry} className={module.done[entry] || index < kindIndex ? "on" : index === kindIndex ? "current" : ""} />
+            <i key={entry} className={index === kindIndex ? "current" : module.done[entry] ? "on" : ""} />
           ))}
         </div>
         <span className="memo-exam-lesson-module">{module.title}</span>
@@ -447,6 +449,8 @@ export function ExamLesson({
             lectureId={module.lectureId}
             onReact={react}
             buddy={buddy}
+            choices={summaryChoices}
+            onChoose={(choice) => void save(1, 1, null, choice)}
             onFinish={(correct, total) =>
               phase.lesson.kind === "summary" ? void save(1, 1, null) : enterZone(correct, total)
             }
@@ -478,6 +482,10 @@ export function ExamLesson({
             ) : phase.total > 0 ? (
               <p>{scoreLine(phase.correct, phase.total)}</p>
             ) : null}
+            <FormatChoices
+              choices={phase.choices}
+              onChoose={(choice) => navigateWithFeedback(lessonHref(examId, module.topicId, choice), { refresh: true })}
+            />
           </div>
         )}
       </div>
@@ -496,6 +504,55 @@ function NextStepButton({
     <button type="button" className="memo-button-coral" onClick={() => onGo(step.href)}>
       {step.label}
     </button>
+  );
+}
+
+/*
+ * Astra's "choose your lesson format": the module's other practice formats as chips under the
+ * screen's one coral button, each with its picture, and a tick with the latest score once done.
+ */
+function FormatChoices({
+  choices,
+  onChoose,
+}: {
+  choices: LessonFormatChoice[];
+  onChoose: (kind: ExamLessonKind) => void;
+}) {
+  const { t } = useTranslations();
+
+  if (choices.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="memo-exam-formats">
+      <span className="memo-eyebrow">{t("exam.lesson.choose.title")}</span>
+      <div className="memo-chip-row memo-exam-chips">
+        {choices.map((choice) => {
+          const name = t(LESSON_KIND_KEY[choice.kind]);
+          const score = choice.score === null ? null : percent(choice.score);
+
+          return (
+            <button
+              key={choice.kind}
+              type="button"
+              className={`memo-chip ${choice.done ? "done" : ""}`.trim()}
+              aria-label={score === null ? name : t("exam.lesson.choose.done", { lesson: name, percent: score })}
+              onClick={() => onChoose(choice.kind)}
+            >
+              <Emoji symbol={LESSON_KIND_EMOJI[choice.kind]} size="1.05rem" />
+              <span>{name}</span>
+              {score !== null ? (
+                <span className="memo-exam-format-score" aria-hidden="true">
+                  <Msym name="check" size="0.95rem" weight={700} />
+                  {t("exam.percent", { percent: score })}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -562,6 +619,8 @@ function LessonBody({
   onFinish,
   onReact,
   buddy,
+  choices,
+  onChoose,
 }: {
   lesson: LessonPayload;
   examId: string;
@@ -570,6 +629,9 @@ function LessonBody({
   onFinish: (correct: number, total: number) => void;
   onReact: (mood: BuddyMood) => void;
   buddy: { mood: BuddyMood; key: number };
+  /** The summary's other formats to pick from (see `FormatChoices`). */
+  choices: LessonFormatChoice[];
+  onChoose: (kind: ExamLessonKind) => void;
 }) {
   const { t } = useTranslations();
   const [index, setIndex] = useState(0);
@@ -739,6 +801,7 @@ function LessonBody({
             <span>{t("exam.lesson.speedRead")}</span>
           </button>
         </div>
+        <FormatChoices choices={choices} onChoose={onChoose} />
       </div>
     );
   }

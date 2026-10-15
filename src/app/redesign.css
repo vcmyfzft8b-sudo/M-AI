@@ -26862,6 +26862,42 @@ button.memo-exam-card:hover {
   box-shadow: inset 0 0 0 1px var(--ink);
 }
 
+/*
+ * "Ali izberi drugače": a lesson's other practice formats, as chips under its one coral button
+ * (the summary and the done screen). A format already done carries a tick and its latest score.
+ */
+.memo-exam-formats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.memo-exam-formats .memo-chip-row {
+  margin-bottom: 0;
+}
+
+.memo-exam-center .memo-exam-formats {
+  align-items: center;
+  width: 100%;
+}
+
+.memo-exam-center .memo-exam-formats .memo-chip-row {
+  justify-content: center;
+}
+
+.memo-exam-format-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.memo-exam-format-score .msym {
+  color: var(--promo);
+}
+
 .memo-exam-list {
   display: flex;
   flex-direction: column;
@@ -27559,6 +27595,20 @@ button.memo-exam-card:hover {
 
 .memo-exam-station.repeat.current .memo-exam-station-node {
   background: var(--coral);
+}
+
+/* A format the learner did not pick for a learned module: optional, so quieter, never locked. */
+.memo-exam-station.optional .memo-exam-station-node {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--line);
+}
+
+.memo-exam-station.optional .memo-exam-station-node .memo-emoji {
+  opacity: 0.55;
+}
+
+.memo-exam-station.optional .memo-exam-station-node:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--line), 0 0 0 3px var(--focus-ring);
 }
 
 .memo-exam-station-check.repeat {

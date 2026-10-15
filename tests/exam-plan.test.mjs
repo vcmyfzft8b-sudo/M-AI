@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   EXAM_LESSON_KINDS,
   LESSON_PASS_CAP,
+  LESSONS_TO_LEARN,
   MAX_FAILED_TRIES_PER_DAY,
   PRACTICE_LESSON_KINDS,
   dayKey,
@@ -24,11 +25,12 @@ import {
 /*
  * The study plan, run as a learner would live it: a fake clock, a few lessons a day, each result
  * fed back into the model, scores stored as `real` (Math.fround) the way Postgres keeps them.
+ * `pick` is the learner choosing a lesson format other than the one the path suggests.
  */
 const DAY = 86_400_000;
 const START = Date.parse("2026-10-01T06:00:00Z"); // 08:00 in Ljubljana
 
-function simulate({ topics = 8, days = 21, perDay = 5, target = 0.9, score, mockScore = 1 }) {
+function simulate({ topics = 8, days = 21, perDay = 5, target = 0.9, score, mockScore = 1, pick = null }) {
   const modules = Array.from({ length: topics }, (_, index) => ({ topicId: `t${index + 1}`, lectureId: `n${index + 1}` }));
   const results = [];
   const log = [];
@@ -39,11 +41,16 @@ function simulate({ topics = 8, days = 21, perDay = 5, target = 0.9, score, mock
       const now = new Date(START + day * DAY + slot * 20 * 60_000);
       const states = examModuleStates(modules, results, target, mock, now);
       const stage = examStage(states, mock, target);
-      const next = examNextStep(states, stage);
+      const suggested = examNextStep(states, stage);
 
-      if (!next) {
+      if (!suggested) {
         break;
       }
+
+      const next =
+        pick && suggested.type === "lesson"
+          ? { ...suggested, kind: pick(suggested, states.find((state) => state.topicId === suggested.topicId)) }
+          : suggested;
 
       if (next.type === "mock") {
         mock = {
@@ -86,8 +93,9 @@ test("a perfect learner with 8 topics in 21 days learns every topic, then proves
   const lastStart = run.log.findIndex((entry) => entry.topicId === "t8");
   assert.ok(lastStart > 0);
   assert.equal(run.log.slice(0, lastStart).filter((entry) => entry.review).length, 0);
-  // 48 first passes take under ten days at five a day, and the mock comes right after.
-  assert.ok(run.log.findIndex((entry) => entry.type === "mock") === 48);
+  // A summary and two formats per topic: 24 first passes take five days at five a day, and the
+  // mock comes right after.
+  assert.equal(run.log.findIndex((entry) => entry.type === "mock"), 8 * LESSONS_TO_LEARN);
 });
 
 test("a learner who scores exactly 90 % (one slip on the tutor) learns all 8 and is ready at a 90 % target", () => {
@@ -138,13 +146,58 @@ test("at a 100 % target, fading never takes 'ready' away again", () => {
   const stage = examStage(states, run.mock, 1);
 
   assert.equal(stage, "ready");
-  assert.ok(states.every((state) => state.mastered && state.refresh.length === PRACTICE_LESSON_KINDS.length));
+  // Every format the learner did is due (the formats they never chose are not).
+  assert.ok(
+    states.every(
+      (state) => state.mastered && state.refresh.length === PRACTICE_LESSON_KINDS.filter((kind) => state.done[kind]).length,
+    ),
+  );
   assert.equal(examNextStep(states, stage)?.type, "lesson");
 
   // And a refreshed lesson passes again, so the pass marks are reachable after any amount of fading.
   for (const kind of PRACTICE_LESSON_KINDS) {
     assert.ok(lessonPassed(kind, kind === "tutor" ? Math.fround(ONE_SLIP / 3) : 1, 1), kind);
   }
+});
+
+test("a learner who only ever picks flashcards and quizzes masters every topic and is ready, never meeting the tutor", () => {
+  const CHOSEN = ["flashcards", "quiz"];
+  const run = simulate({
+    score: () => 1,
+    // Whatever the path suggests, this learner reads the summary and then uses flashcards and quizzes.
+    pick: (next, state) =>
+      next.kind === "summary" || CHOSEN.includes(next.kind) ? next.kind : CHOSEN.find((kind) => !state.done[kind]) ?? "quiz",
+  });
+
+  assert.ok(run.states.every((state) => state.learned && state.mastered), "every module mastered");
+  assert.equal(run.stage, "ready");
+  assert.deepEqual(
+    [...new Set(run.results.map((entry) => entry.lesson_kind))].sort(),
+    ["flashcards", "quiz", "summary"],
+  );
+  assert.ok(run.states.every((state) => !state.done.tutor));
+  assert.equal(run.log.findIndex((entry) => entry.type === "mock"), 8 * LESSONS_TO_LEARN);
+});
+
+test("a learner who picks a different pair per topic still reaches every module", () => {
+  const pairs = [["tutor", "written"], ["true_false", "quiz"], ["written", "flashcards"]];
+  const run = simulate({
+    topics: 6,
+    score: (kind) => (kind === "written" ? 0.9 : 1),
+    pick: (next, state) => {
+      const pair = pairs[Number(next.topicId.slice(1)) % pairs.length];
+      return next.kind === "summary" || next.review || pair.includes(next.kind)
+        ? next.kind
+        : pair.find((kind) => !state.done[kind]) ?? next.kind;
+    },
+  });
+
+  assert.ok(run.states.every((state) => state.learned && state.mastered));
+  assert.equal(run.stage, "ready");
+  run.states.forEach((state, index) => {
+    const pair = pairs[(index + 1) % pairs.length];
+    assert.deepEqual(PRACTICE_LESSON_KINDS.filter((kind) => state.done[kind]), PRACTICE_LESSON_KINDS.filter((kind) => pair.includes(kind)));
+  });
 });
 
 test("pass marks: capped at 95 %, the tutor at what one slip leaves", () => {

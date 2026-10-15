@@ -2,10 +2,11 @@
  * Exam prep, everything that is arithmetic rather than I/O.
  *
  * An exam is a date and a list of notes, split into topics. Each topic is a module on the
- * learner's path, and a module is a fixed chain of six short lessons: read the summary, have the
- * voice tutor explain it and ask about it, then flashcards, a quiz, true/false and one written
- * answer. Mastery, the daily plan, the streak and which modules are unlocked are all derived here
- * from the lesson results, so the server, the screens and the tests agree on one definition of each.
+ * learner's path. A module starts with its summary; after that the learner picks how to practise
+ * it, as in Astra: the voice tutor, flashcards, a quiz, true/false or a written answer. Any two of
+ * those, after the summary, learn the module (`MIN_PRACTICE_FORMATS`); no one format is forced.
+ * Mastery, the daily plan, the streak and which modules are unlocked are all derived here from the
+ * lesson results, so the server, the screens and the tests agree on one definition of each.
  *
  * Kept free of imports so `node --test` can load it without the app's path aliases.
  */
@@ -13,8 +14,55 @@
 export const EXAM_LESSON_KINDS = ["summary", "tutor", "flashcards", "quiz", "true_false", "written"] as const;
 export type ExamLessonKind = (typeof EXAM_LESSON_KINDS)[number];
 
-/** The lessons that test something. The summary is read, so it counts as done but not as mastery. */
+/**
+ * The lessons that test something, also called the practice formats, in the order the path suggests
+ * them. The summary is read, so it counts as done but not as mastery.
+ */
 export const PRACTICE_LESSON_KINDS = ["tutor", "flashcards", "quiz", "true_false", "written"] as const;
+export type PracticeLessonKind = (typeof PRACTICE_LESSON_KINDS)[number];
+
+/*
+ * The learner chooses how to practise a topic (Astra's "choose your lesson format"). A module is
+ * learned once its summary is read and this many different practice formats have been done, the
+ * learner's choice of which; the path suggests the first untried one in `PRACTICE_LESSON_KINDS`
+ * order, but whatever the learner picks counts. Two, so a topic is always checked in more than one
+ * way, and never all five, so nobody is made to talk to the tutor or to write answers.
+ */
+export const MIN_PRACTICE_FORMATS = 2;
+
+/** The lessons it takes to learn one module: the summary and `MIN_PRACTICE_FORMATS` formats. */
+export const LESSONS_TO_LEARN = 1 + MIN_PRACTICE_FORMATS;
+
+export function isPracticeKind(kind: ExamLessonKind): kind is PracticeLessonKind {
+  return (PRACTICE_LESSON_KINDS as readonly ExamLessonKind[]).includes(kind);
+}
+
+/** The practice formats done at least once, in `PRACTICE_LESSON_KINDS` order. */
+export function practiceFormatsDone(done: Record<ExamLessonKind, boolean>): PracticeLessonKind[] {
+  return PRACTICE_LESSON_KINDS.filter((kind) => done[kind]);
+}
+
+/** Whether a module is learned: its summary read and `MIN_PRACTICE_FORMATS` formats done. */
+export function isModuleLearned(done: Record<ExamLessonKind, boolean>) {
+  return done.summary && practiceFormatsDone(done).length >= MIN_PRACTICE_FORMATS;
+}
+
+/** The lessons still needed to learn a module (0 once it is learned). */
+export function lessonsLeftToLearn(done: Record<ExamLessonKind, boolean>) {
+  return (done.summary ? 0 : 1) + Math.max(0, MIN_PRACTICE_FORMATS - practiceFormatsDone(done).length);
+}
+
+/**
+ * The first-pass lesson the path suggests for a module that is not learned yet: the summary, then
+ * the first untried format in `PRACTICE_LESSON_KINDS` order. Null once the module is learned.
+ */
+export function firstPassKind(done: Record<ExamLessonKind, boolean>): ExamLessonKind | null {
+  if (isModuleLearned(done)) {
+    return null;
+  }
+
+  return done.summary ? (PRACTICE_LESSON_KINDS.find((kind) => !done[kind]) ?? null) : "summary";
+}
 
 /*
  * How much each lesson counts towards a topic's mastery. Flashcards are graded by the learner
@@ -268,23 +316,36 @@ export type ModuleState = {
   lectureId: string;
   /** 0-based place on the path. */
   position: number;
-  /** 0..1, the weighted average of each practice lesson's latest (faded) score; untried ones count 0. */
+  /**
+   * 0..1, the weighted average (`LESSON_WEIGHT`) of the latest (faded) score of each practice
+   * format the learner has done. Formats never tried do not count, except that until
+   * `MIN_PRACTICE_FORMATS` have been done each missing one counts as a full lesson at 0, so one
+   * good format alone never reads as a mastered topic.
+   */
   mastery: number;
   /** Lessons tried at least once, out of `EXAM_LESSON_KINDS.length`. */
   lessonsDone: number;
-  /** Every lesson has been done once: the first pass through the module is over. */
+  /** Lessons still needed to learn the module, out of `LESSONS_TO_LEARN` (0 once learned). */
+  lessonsLeft: number;
+  /** The summary is read and `MIN_PRACTICE_FORMATS` practice formats are done: the first pass is over. */
   learned: boolean;
   /**
-   * Learned, and every practice lesson's latest try reached its pass mark (`lessonPassThreshold`).
-   * A passed lesson that has only faded since is due for a refresh but keeps the module mastered.
+   * Learned, and every practice format the learner has done has its latest try at its pass mark
+   * (`lessonPassThreshold`); formats never tried do not count against it. A passed lesson that has
+   * only faded since is due for a refresh but keeps the module mastered.
    */
   mastered: boolean;
   unlocked: boolean;
+  /**
+   * A failed mock exam found this module weak and no practice format has been redone since: one
+   * (any) is owed before the module counts as mastered again (`MOCK_PROOF_KINDS`).
+   */
+  proofOwed: boolean;
   /** Practice lessons to repeat until they reach the pass mark, weakest first. Empty until learned. */
   review: ExamLessonKind[];
   /** Of those, the ones that had passed and have only faded below it since (due for review). */
   refresh: ExamLessonKind[];
-  /** The lesson this module wants next: the first untried one, else the weakest to repeat. */
+  /** The lesson this module wants next: its first-pass suggestion (`firstPassKind`), else the weakest to repeat. */
   nextKind: ExamLessonKind;
   /** Whether each lesson has been done, keyed by kind. */
   done: Record<ExamLessonKind, boolean>;
@@ -295,10 +356,11 @@ export type ModuleState = {
 };
 
 /*
- * A failed mock exam asks for proof again: in a module the mock found weak, the lessons that
- * test the same way (the quiz and the written answer) count only once they are redone after it.
+ * A failed mock exam asks for proof again: a module the mock found weak counts as mastered only
+ * once one of these is redone after the mock (and passes). Any practice format will do, since the
+ * learner chooses how to practise; the path suggests the weakest one they have done.
  */
-export const MOCK_PROOF_KINDS = ["quiz", "written"] as const satisfies readonly ExamLessonKind[];
+export const MOCK_PROOF_KINDS: readonly PracticeLessonKind[] = PRACTICE_LESSON_KINDS;
 
 /** A graded mock exam, as far as the path cares: when, how well, and per note how well. */
 export type MockOutcome = {
@@ -332,7 +394,7 @@ function latestByKind(results: LessonResultLike[]) {
 
 /**
  * One module's progress against the exam's target (0..1). `proveSince` is set when a failed mock
- * found this module weak; its quiz and written answer then have to be passed again after it.
+ * found this module weak; one practice format then has to be redone after it (`MOCK_PROOF_KINDS`).
  * `now` turns on spaced review: scores fade with the days since the lesson (see `fadedScore`).
  */
 export function moduleProgress(
@@ -370,45 +432,60 @@ export function moduleProgress(
   }
 
   const mark = (kind: ExamLessonKind) => lessonPassThreshold(kind, target);
-  const totalWeight = PRACTICE_LESSON_KINDS.reduce((sum, kind) => sum + LESSON_WEIGHT[kind], 0);
-  const mastery =
-    PRACTICE_LESSON_KINDS.reduce((sum, kind) => sum + LESSON_WEIGHT[kind] * (scores[kind] ?? 0), 0) / totalWeight;
+  const byScore = (left: ExamLessonKind, right: ExamLessonKind) => (scores[left] ?? 0) - (scores[right] ?? 0);
+  const tried = practiceFormatsDone(done);
+  const mastery = practiceMastery(scores, tried);
   const lessonsDone = EXAM_LESSON_KINDS.filter((kind) => done[kind]).length;
-  const learned = lessonsDone === EXAM_LESSON_KINDS.length;
+  const learned = isModuleLearned(done);
   const proveAfter = proveSince === null ? null : instantOf(proveSince);
-  const needsProof = (kind: ExamLessonKind) =>
+  const proofOwed =
     proveAfter !== null &&
-    (MOCK_PROOF_KINDS as readonly ExamLessonKind[]).includes(kind) &&
-    (latest[kind]?.time ?? Number.NEGATIVE_INFINITY) <= proveAfter;
-  /* Under the mark by the latest try itself, or owed to a failed mock: these keep a module unmastered. */
-  const failing = (kind: ExamLessonKind) => !meetsPassMark(raw[kind] ?? 0, mark(kind)) || needsProof(kind);
+    !MOCK_PROOF_KINDS.some((kind) => (latest[kind]?.time ?? Number.NEGATIVE_INFINITY) > proveAfter);
+  /* A format the learner has done whose latest try is under its mark: it keeps the module unmastered. */
+  const failing = (kind: ExamLessonKind) => !meetsPassMark(raw[kind] ?? 0, mark(kind));
   /* Passed, and only faded under the mark since: due for a refresh. */
   const faded = (kind: ExamLessonKind) => !failing(kind) && !meetsPassMark(scores[kind] ?? 0, mark(kind));
+  const failingKinds = learned ? tried.filter(failing) : [];
+  /*
+   * Owed to a failed mock with nothing failing: the weakest format the learner has done is the one
+   * the path suggests redoing (any other one redone would do as well).
+   */
+  const proofKind = learned && proofOwed && failingKinds.length === 0 ? ([...tried].sort(byScore)[0] ?? null) : null;
+  const owedKinds: ExamLessonKind[] = proofKind ? [...failingKinds, proofKind] : failingKinds;
   const review = learned
-    ? [...PRACTICE_LESSON_KINDS]
-        .filter((kind) => failing(kind) || faded(kind))
-        .sort((left, right) => (scores[left] ?? 0) - (scores[right] ?? 0))
+    ? [...tried].filter((kind) => owedKinds.includes(kind) || faded(kind)).sort(byScore)
     : [];
-  const refresh = review.filter(faded);
-  const owed = review.filter(failing);
-  const firstUntried = EXAM_LESSON_KINDS.find((kind) => !done[kind]);
-  const weakest = [...PRACTICE_LESSON_KINDS].sort(
-    (left, right) => (scores[left] ?? 0) - (scores[right] ?? 0),
-  )[0];
+  const refresh = review.filter((kind) => !owedKinds.includes(kind));
+  const owed = review.filter((kind) => owedKinds.includes(kind));
+  const weakest = [...tried].sort(byScore)[0] ?? PRACTICE_LESSON_KINDS[0];
   const rested = (kind: ExamLessonKind) => failedToday[kind] < MAX_FAILED_TRIES_PER_DAY;
 
   return {
     mastery,
     lessonsDone,
+    lessonsLeft: lessonsLeftToLearn(done),
     learned,
-    mastered: learned && owed.length === 0,
+    mastered: learned && owed.length === 0 && !proofOwed,
+    proofOwed,
     review,
     refresh,
-    nextKind: firstUntried ?? owed.find(rested) ?? refresh.find(rested) ?? owed[0] ?? review[0] ?? weakest,
+    nextKind:
+      firstPassKind(done) ?? owed.find(rested) ?? refresh.find(rested) ?? owed[0] ?? review[0] ?? weakest,
     done,
     latest: scores,
     failedToday,
   };
+}
+
+/*
+ * The weighted average of the formats tried. Until `MIN_PRACTICE_FORMATS` are tried, each missing
+ * one counts as a full lesson at 0: one perfect quiz is half a topic, not all of it.
+ */
+function practiceMastery(scores: Record<ExamLessonKind, number | null>, tried: readonly PracticeLessonKind[]) {
+  const missing = Math.max(0, MIN_PRACTICE_FORMATS - tried.length);
+  const weight = tried.reduce((sum, kind) => sum + LESSON_WEIGHT[kind], 0) + missing;
+
+  return weight > 0 ? tried.reduce((sum, kind) => sum + LESSON_WEIGHT[kind] * (scores[kind] ?? 0), 0) / weight : 0;
 }
 
 /**
@@ -497,16 +574,18 @@ export type ExamNextStepModule = Pick<
 /**
  * What the path points at.
  *
- * 1. **Learn first.** The first module on the path with an untried lesson gets it, ahead of every
+ * 1. **Learn first.** The first module on the path that is not learned gets its first-pass
+ *    suggestion (`firstPassKind`: the summary, then the first untried format), ahead of every
  *    repeat and refresh, so a learner who struggles with one lesson, or whose early modules fade,
- *    still gets through every topic.
+ *    still gets through every topic. Formats beyond `MIN_PRACTICE_FORMATS` are never suggested:
+ *    the learner picks them on the lesson screen or the path.
  * 2. **Practise.** Then lessons that fell short of their pass mark, weakest first across modules;
  *    one that has failed `MAX_FAILED_TRIES_PER_DAY` times today waits until tomorrow while other
  *    work exists.
  * 3. **Prove.** With every module mastered the mock exam is next. Faded lessons do not hold it
  *    back: the mock is the check that they are still known.
  * 4. **Refresh.** Otherwise the most faded passed lesson (practise and ready), or once ready the
- *    weakest lesson anywhere, keeps the knowledge fresh until the exam.
+ *    weakest format the learner has done anywhere, keeps the knowledge fresh until the exam.
  *
  * Modules the learner cannot open (`canOpen`), whose note is not ready, or that are placeholders
  * are skipped, and do not keep the modules after them locked.
@@ -541,7 +620,7 @@ export function examNextStep(
   });
 
   for (const state of open) {
-    const untried = EXAM_LESSON_KINDS.find((kind) => !state.done[kind]);
+    const untried = state.learned ? null : firstPassKind(state.done);
 
     if (untried) {
       return lesson(state, untried, false);
@@ -590,8 +669,9 @@ export function examNextStep(
     const everything: Candidate[] = [];
 
     for (const state of open) {
+      // Only formats the learner has chosen: an untried one is theirs to pick, not a chore.
       for (const kind of PRACTICE_LESSON_KINDS) {
-        if ((state.failedToday?.[kind] ?? 0) < MAX_FAILED_TRIES_PER_DAY) {
+        if (state.done[kind] && (state.failedToday?.[kind] ?? 0) < MAX_FAILED_TRIES_PER_DAY) {
           everything.push({ state, kind, score: state.latest[kind] ?? 0, order: order++ });
         }
       }
@@ -607,6 +687,105 @@ export function examNextStep(
   /* Nothing else to do today: the lesson that is resting is still better than nothing. */
   const fallback = weakest(resting);
   return fallback ? lesson(fallback.state, fallback.kind, true) : null;
+}
+
+/* ---------------------------------------------------------------- the lesson screens */
+
+/** What the lesson screens know of their module (`ModuleState`, passed down by the lesson page). */
+export type LessonModuleLike = Pick<ModuleState, "done" | "latest" | "review"> &
+  Partial<Pick<ModuleState, "refresh" | "proofOwed">>;
+
+export type ModuleAfterLesson = {
+  done: Record<ExamLessonKind, boolean>;
+  latest: Record<ExamLessonKind, number | null>;
+  learned: boolean;
+  mastered: boolean;
+  /** Practice lessons still to repeat, weakest first (owed ones and refreshes, as on the path). */
+  review: ExamLessonKind[];
+  /** The first-pass lesson still suggested (`firstPassKind`), or null once the module is learned. */
+  firstPass: ExamLessonKind | null;
+};
+
+/**
+ * The module as it stands once one more lesson is saved, by the same rules as `moduleProgress`,
+ * from what the lesson screen has (the module's state before it, not its results). The lesson's
+ * done screen uses it to say what comes next and whether the module was just learned or mastered.
+ * A practice lesson redone after a failed mock is the proof that mock asked for. `target` is the
+ * exam's goal as 0..1.
+ */
+export function moduleAfterLesson(
+  module: LessonModuleLike,
+  kind: ExamLessonKind,
+  score: number,
+  target: number,
+): ModuleAfterLesson {
+  const practice = isPracticeKind(kind);
+  const done = { ...module.done, [kind]: true };
+  const latest = { ...module.latest, [kind]: practice ? clamp01(score) : module.latest[kind] };
+  const refresh = (module.refresh ?? []).filter((entry) => entry !== kind);
+  const proofOwed = Boolean(module.proofOwed) && !practice;
+  const learned = isModuleLearned(done);
+  const owed = practiceFormatsDone(done).filter((entry) => {
+    if (entry === kind) {
+      return !lessonPassed(entry, latest[entry] ?? 0, target);
+    }
+
+    if (!module.review.includes(entry) || refresh.includes(entry)) {
+      return false;
+    }
+
+    // Owed for the mock alone, and this lesson was the proof: only a score under the mark keeps it.
+    return module.proofOwed && practice ? !lessonPassed(entry, latest[entry] ?? 0, target) : true;
+  });
+  const review = learned
+    ? [...new Set([...owed, ...refresh])].sort((left, right) => (latest[left] ?? 0) - (latest[right] ?? 0))
+    : [];
+
+  return {
+    done,
+    latest,
+    learned,
+    mastered: learned && owed.length === 0 && !proofOwed,
+    review,
+    firstPass: firstPassKind(done),
+  };
+}
+
+/**
+ * A practice format to offer when the module has nothing to suggest: the first untried one, else
+ * the weakest the learner has done.
+ */
+export function practiceKindToOffer(module: Pick<ModuleState, "done" | "latest">): PracticeLessonKind {
+  const untried = PRACTICE_LESSON_KINDS.find((kind) => !module.done[kind]);
+
+  if (untried) {
+    return untried;
+  }
+
+  return [...PRACTICE_LESSON_KINDS].sort((left, right) => (module.latest[left] ?? 0) - (module.latest[right] ?? 0))[0];
+}
+
+export type LessonFormatChoice = {
+  kind: PracticeLessonKind;
+  done: boolean;
+  /** The latest (faded) score, 0..1, when the format has been done. */
+  score: number | null;
+};
+
+/**
+ * Astra's "choose your lesson format": the module's practice formats the learner may pick instead
+ * of the suggested lesson, in `PRACTICE_LESSON_KINDS` order, leaving out `exclude` (the suggestion
+ * the screen's one button already offers, and the lesson just finished).
+ */
+export function lessonFormatChoices(
+  module: Pick<ModuleState, "done" | "latest">,
+  exclude: readonly (ExamLessonKind | null | undefined)[] = [],
+): LessonFormatChoice[] {
+  return PRACTICE_LESSON_KINDS.filter((kind) => !exclude.includes(kind)).map((kind) => ({
+    kind,
+    done: Boolean(module.done[kind]),
+    score: module.done[kind] ? (module.latest[kind] ?? 0) : null,
+  }));
 }
 
 export function examMastery(states: Pick<ModuleState, "mastery">[]): number {
@@ -655,7 +834,7 @@ export type DailyPlan = {
   doneToday: number;
   /** Days left before the exam, today included; 0 once the exam day has passed. */
   daysLeft: number;
-  /** Lessons still owed across the exam: untried ones, plus repeats under the target. */
+  /** Lessons still owed across the exam: the ones each module needs to be learned, plus repeats. */
   remaining: number;
 };
 
@@ -668,14 +847,14 @@ export function dailyPlan(input: {
   examDate: string;
   today: string;
   dailyMinutes: number;
-  states: Pick<ModuleState, "lessonsDone" | "review">[];
+  states: Pick<ModuleState, "lessonsLeft" | "review">[];
   resultsToday: number;
   untriedDoneToday: number;
 }): DailyPlan {
-  const totalLessons = input.states.length * EXAM_LESSON_KINDS.length;
-  const tried = input.states.reduce((sum, state) => sum + state.lessonsDone, 0);
+  // The lessons each module still needs to be learned (`LESSONS_TO_LEARN`), not every format.
+  const toLearn = input.states.reduce((sum, state) => sum + Math.max(0, state.lessonsLeft), 0);
   const repeats = input.states.reduce((sum, state) => sum + state.review.length, 0);
-  const remaining = Math.max(0, totalLessons - tried) + repeats;
+  const remaining = toLearn + repeats;
   const remainingAtStartOfDay = remaining + input.untriedDoneToday;
   const untilExam = daysBetween(input.today, input.examDate);
   const daysLeft = untilExam < 0 ? 0 : Math.max(1, untilExam);

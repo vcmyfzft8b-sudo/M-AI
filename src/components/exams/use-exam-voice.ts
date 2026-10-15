@@ -81,6 +81,8 @@ export function useExamVoice({
   const [error, setError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [textMode, setTextMode] = useState(false);
+  /* Why the lesson went on in writing (no microphone, no talking time, the voice dropped), as said to the learner. */
+  const [textNote, setTextNote] = useState<string | null>(null);
 
   const phaseRef = useRef<VoicePhase>("preparing");
   const outputRef = useRef<TutorSpeechOutput | GeminiTutorSpeechOutput | null>(null);
@@ -244,7 +246,8 @@ export function useExamVoice({
     settle(true);
     setError(null);
     setTextMode(true);
-  }, [allowText, clearSilence, settle]);
+    setTextNote(t("tutor.error.connection"));
+  }, [allowText, clearSilence, settle, t]);
 
   const finish = useCallback(() => {
     if (closedRef.current) {
@@ -261,6 +264,9 @@ export function useExamVoice({
     const generation = (generationRef.current += 1);
     const stale = () => generation !== generationRef.current;
     closedRef.current = false;
+    // A start after writing (the learner asked to try the microphone again) tries the voice first.
+    setTextMode(false);
+    setTextNote(null);
 
     const fallBack = (message: string) => {
       if (stale()) {
@@ -269,6 +275,7 @@ export function useExamVoice({
 
       if (allowText) {
         setTextMode(true);
+        setTextNote(message);
         startedAtRef.current = Date.now();
         return true;
       }
@@ -452,6 +459,7 @@ export function useExamVoice({
     error,
     elapsed,
     textMode,
+    textNote,
     orbRef,
     languageRef,
     startedAtRef,

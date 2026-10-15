@@ -16,7 +16,9 @@ import { prefetchLesson } from "@/components/exams/lesson-prefetch";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
 import {
   EXAM_LESSON_KINDS,
+  LESSONS_TO_LEARN,
   examNextStep,
+  isPracticeKind,
   percent,
   type ExamLessonKind,
   type ExamStage,
@@ -33,11 +35,16 @@ const STAGES: { stage: Exclude<ExamStage, "ready">; key: MessageKey }[] = [
 ];
 
 /*
- * The exam, as Astra and Duolingo draw a course: one path down the screen. Each note is a module
+ * The exam, as Astra and Duolingo draw a course: one path down the screen. Each topic is a module
  * with a heading, its six lessons are stations joined by a line, and a lesson still under the
  * target comes back as a repeat station until it reaches it. The step to do next carries the
  * screen's one call to action, with Memo beside it. Once every module is mastered the mock exam
  * is that step, and passing it at the target is what makes the learner ready.
+ *
+ * The learner chooses how to practise: the summary and any two formats learn a module
+ * (`MIN_PRACTICE_FORMATS`), so once it is learned the formats they did not pick are quiet,
+ * optional stations, never locks. Every station of an open module can be tapped at any time, the
+ * practice ones before the summary too (the path suggests the summary first; it does not insist).
  */
 export function ExamDashboard({
   detail,
@@ -198,7 +205,8 @@ export function ExamDashboard({
       return t("exam.path.practise", { percent: percent(module.mastery), target });
     }
 
-    return t("exam.dash.lessonsDone", { done: module.lessonsDone, total: EXAM_LESSON_KINDS.length });
+    // Learning a module takes the summary and two formats of the learner's choice, not all six.
+    return t("exam.path.toLearn", { done: LESSONS_TO_LEARN - module.lessonsLeft, total: LESSONS_TO_LEARN });
   }
 
   const trailing = (
@@ -377,6 +385,8 @@ export function ExamDashboard({
                     next.kind === kind &&
                     (repeat ? next.review : !next.review || !module.review.includes(kind));
                   const isDone = repeat ? false : module.done[kind];
+                  /* A format the learner did not pick, once the module is learned without it: theirs to try. */
+                  const optional = !repeat && module.learned && isPracticeKind(kind) && !module.done[kind];
                   const blocked = !module.ready;
                   const last = stationIndex === stations.length - 1;
                   const score = module.latest[kind];
@@ -389,6 +399,7 @@ export function ExamDashboard({
                         "memo-exam-station",
                         isDone ? "done" : "",
                         repeat ? "repeat" : "",
+                        optional ? "optional" : "",
                         isCurrent ? "current" : "",
                         locked || blocked ? "locked" : "",
                       ]
@@ -456,7 +467,9 @@ export function ExamDashboard({
                         <span className="memo-exam-station-label">
                           {repeat
                             ? `${t(module.refresh.includes(kind) ? "exam.path.refresh" : "exam.path.repeat")} · ${t(LESSON_KIND_KEY[kind])} · ${t("exam.percent", { percent: percent(score ?? 0) })}`
-                            : t(LESSON_KIND_KEY[kind])}
+                            : optional
+                              ? `${t(LESSON_KIND_KEY[kind])} · ${t("exam.path.optional")}`
+                              : t(LESSON_KIND_KEY[kind])}
                         </span>
                       )}
                     </li>

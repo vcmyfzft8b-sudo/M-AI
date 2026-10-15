@@ -231,6 +231,19 @@ export function ExamTutorLesson({
     void teach(currentRef.current.index);
   }
 
+  /* In writing, the learner asks for the voice again: a new session, and the current point again. */
+  async function tryVoice() {
+    flowRef.current += 1;
+    continueRef.current = null;
+    setAwaitingContinue(false);
+    session.teardown();
+    setStage("running");
+
+    if (await session.start()) {
+      void teach(currentRef.current.index);
+    }
+  }
+
   /* The voice dropped: the same point again, in writing. */
   function continueInWriting() {
     flowRef.current += 1;
@@ -257,7 +270,9 @@ export function ExamTutorLesson({
       : phase === "speaking"
         ? "tutor.state.speaking"
         : phase === "listening"
-          ? "tutor.state.listening"
+          ? textMode
+            ? "exam.tutor.state.yourTurn"
+            : "tutor.state.listening"
           : phase === "thinking"
             ? "tutor.state.thinking"
             : null;
@@ -333,7 +348,12 @@ export function ExamTutorLesson({
               <Msym name="arrow_forward" size="1.2rem" fill={false} weight={500} />
             </button>
           ) : null}
-          <p className="memo-tutor-hint">{t("exam.tutor.textHint")}</p>
+          {/* Why it is in writing, and the way back to talking. */}
+          <p className="memo-tutor-hint">{session.textNote ?? t("exam.tutor.textHint")}</p>
+          <button type="button" className="memo-tutor-second" onClick={() => void tryVoice()}>
+            <Msym name="mic" size="1.2rem" fill={false} weight={500} />
+            <span>{t("exam.tutor.tryVoice")}</span>
+          </button>
         </>
       ) : null}
 

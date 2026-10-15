@@ -6,7 +6,7 @@ import { getPricingCountry, getViewerAppState } from "@/lib/billing";
 import { planPricesFor } from "@/lib/billing-regions";
 import { getDiscountWheelState } from "@/lib/discount-wheel";
 import { requireUser } from "@/lib/auth";
-import { nearestUpcomingExam } from "@/lib/exams/exams-server";
+import { listLibraryExamPreps } from "@/lib/exams/exams-server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { listLibraryFoldersForUser } from "@/lib/library-folders";
 import { listLecturesForUser } from "@/lib/lectures";
@@ -35,7 +35,7 @@ export default async function AppHomePage({
    * mount, exactly as it used to. Paid accounts skip the query entirely — the
    * slot they would fill does not exist for them.
    */
-  const [lectures, folders, wheel, upcomingExam] = await Promise.all([
+  const [lectures, folders, wheel, examPreps] = await Promise.all([
     listLecturesForUser(user.id),
     listLibraryFoldersForUser(user.id),
     appState?.hasPaidAccess
@@ -44,10 +44,13 @@ export default async function AppHomePage({
           console.error("[app] discount wheel state failed", error);
           return null;
         }),
-    // The exam the "Novo" sheet continues. Like the wheel, never worth the home screen.
+    // The exam preps the library lists above the notes. Like the wheel, never worth the home screen.
     createSupabaseServerClient()
-      .then((supabase) => nearestUpcomingExam(supabase, user.id))
-      .catch(() => null),
+      .then((supabase) => listLibraryExamPreps(supabase, user.id))
+      .catch((error) => {
+        console.error("[app] exam preps failed", error);
+        return [];
+      }),
   ]);
   // Whether the settings gear wears the "add to home screen" dot. Read off the
   // profile the entitlement state already loaded — null means this account has
@@ -87,7 +90,7 @@ export default async function AppHomePage({
         installGuideSeen={installGuideSeen}
         showDevDashboard={showDevDashboard}
         planPrices={planPricesFor(await getPricingCountry())}
-        upcomingExam={upcomingExam}
+        examPreps={examPreps}
       />
     </>
   );

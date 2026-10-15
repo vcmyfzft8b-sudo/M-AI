@@ -27056,6 +27056,96 @@ a.memo-exam-station-go {
   margin: 1.2rem 0 0.85rem;
 }
 
+/*
+ * The library's exam preps: a group of their own above the notes, headed and closed by an
+ * eyebrow so the two never run together. The rows are note rows; Memo in the tile, ringed by
+ * how much of the goal is mastered, is what says "prep" rather than "note".
+ */
+.memo-prep-group {
+  display: grid;
+}
+
+.memo-library-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2rem;
+  margin: 1.35rem 0 0;
+  padding: 0 0.3rem;
+}
+
+.memo-prep-group > .memo-library-head:first-child {
+  margin-top: 0.4rem;
+}
+
+.memo-library-head-link {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 650;
+  text-decoration: none;
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+  margin-right: -0.6rem;
+}
+
+.memo-library-head-link:hover {
+  color: var(--text);
+}
+
+.memo-library-head-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-prep-group > .memo-note-list,
+.memo-prep-group + .memo-note-list {
+  margin-top: 0.6rem;
+}
+
+.memo-prep-ring {
+  display: grid;
+  flex: 0 0 auto;
+  width: 3rem;
+  height: 3rem;
+  padding: 3px;
+  place-items: center;
+  border-radius: 999px;
+  background: conic-gradient(var(--promo) var(--prep-mastery, 0%), var(--tile) 0);
+}
+
+.memo-prep-ring-face {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--promo) 12%, var(--surface));
+}
+
+@media (max-width: 1099px) {
+  /* The phone's note rows are the swipe surface; a prep row is cut to the same size. */
+  .memo-note-row.memo-prep-row {
+    gap: 0.9rem;
+    min-height: 0;
+    padding: 0.95rem 1.2rem;
+  }
+
+  .memo-library-head {
+    margin-top: 1.25rem;
+  }
+
+  .memo-prep-group > .memo-library-head:first-child {
+    margin-top: 0;
+  }
+
+  .memo-prep-group > .memo-note-list,
+  .memo-prep-group + .memo-note-list {
+    margin-top: 0.5rem;
+  }
+}
+
 /* --- navigation ----------------------------------------------------------- */
 
 /* Desktop's labelled way back: where it goes, in words, above the title. */

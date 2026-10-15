@@ -237,35 +237,29 @@ export async function listExamsForUser(
 }
 
 /** The nearest exam that has not been sat yet, for the home card. */
-export async function nearestUpcomingExam(supabase: ExamSupabase, userId: string, now = new Date()) {
-  const today = dayKey(now);
-  const { data, error } = await supabase
-    .from("exams")
-    .select("id, title, exam_date")
-    .eq("user_id", userId)
-    .is("archived_at", null)
-    .gte("exam_date", today)
-    .order("exam_date", { ascending: true })
-    .limit(2);
+/** What a library row needs: every prep still ahead of its exam, nearest first. */
+export type LibraryExamPrep = {
+  id: string;
+  title: string;
+  daysLeft: number;
+  mastery: number;
+};
 
-  if (error) {
-    return null;
-  }
+export async function listLibraryExamPreps(
+  supabase: ExamSupabase,
+  userId: string,
+  now = new Date(),
+): Promise<LibraryExamPrep[]> {
+  const items = await listExamsForUser(supabase, userId, now);
 
-  const rows = (data ?? []) as Pick<ExamRow, "id" | "title" | "exam_date">[];
-  const first = rows[0];
-
-  if (!first) {
-    return null;
-  }
-
-  return {
-    id: first.id,
-    title: first.title,
-    examDate: first.exam_date,
-    daysLeft: daysBetween(today, first.exam_date),
-    hasMore: rows.length > 1,
-  };
+  return items
+    .filter((item) => !item.exam.archived_at && item.daysLeft >= 0)
+    .map((item) => ({
+      id: item.exam.id,
+      title: item.exam.title,
+      daysLeft: item.daysLeft,
+      mastery: item.mastery,
+    }));
 }
 
 type TopicLine = Pick<ExamTopicRow, "id" | "exam_id" | "lecture_id" | "position" | "title" | "source">;

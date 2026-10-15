@@ -1,4 +1,4 @@
-# Exam prep ("Priprava na izpit")
+# Exam prep ("Priprava na test")
 
 A learner names an exam, gives its date and picks the notes it covers; Memo turns that into a
 study path. It follows Astra AI's exam-prep flow, drawn in Memo's own components.
@@ -6,8 +6,15 @@ study path. It follows Astra AI's exam-prep flow, drawn in Memo's own components
 ## Where it lives
 
 - **"Novo"** (the phone dock button, formerly "Nov zapisek", and the desktop heading above the
-  quick actions) opens a sheet whose first item is the coral exam-prep card. With an exam set up,
-  the card continues the nearest one. The four note sources follow it, unchanged.
+  quick actions) opens a sheet whose first item is the coral exam-prep card. Like every option
+  there, it always starts something new (`/app/exams/new`). The four note sources follow it.
+- **The library:** a learner may have any number of preps. Every prep still ahead of its exam is
+  listed in "Moji zapiski" as a group of its own ("Priprave na test", with "Vse" → `/app/exams`)
+  above the notes, which then get a "Zapiski" heading. The rows are note rows; Memo in a ring of
+  mastery marks them as preps. Preps are not filed in folders, so a folder shows none; a search
+  matches their titles (`listLibraryExamPreps`, `ExamLibraryList`). Past and archived preps
+  appear only on `/app/exams`. Storage stays separate: preps are `exams` rows that reference
+  their notes through `exam_modules`, never `lectures` rows.
 - **Desktop rail:** "Izpiti" → `/app/exams`.
 - Routes: `/app/exams` (list), `/app/exams/new` (setup), `/app/exams/[id]` (dashboard),
   `/app/exams/[id]/lesson?topic=&kind=` (one lesson), `/app/exams/[id]/mock` (mock exam).

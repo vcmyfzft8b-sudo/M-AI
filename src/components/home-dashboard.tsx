@@ -2,6 +2,7 @@
 import { nativeRequest, useNativeIOS } from "@/lib/mobile/client";
 import { halfOffProducts } from "@/lib/mobile/products";
 import type { PlanPrices } from "@/lib/billing-regions";
+import type { LibraryExamPrep } from "@/lib/exams/exams-server";
 
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
@@ -29,7 +30,8 @@ import {
   shouldOfferInstallGuide,
 } from "@/lib/install-guide";
 import { AnimatedLockup } from "@/components/animated-lockup";
-import { ExamEntryCard, type UpcomingExam } from "@/components/exams/exam-entry-card";
+import { ExamEntryCard } from "@/components/exams/exam-entry-card";
+import { ExamLibraryList } from "@/components/exams/exam-library-list";
 import { LibraryChat } from "@/components/library-chat";
 import type { NoteSourceMode } from "@/components/note-source-modal";
 import { Emoji, Msym } from "@/components/msym";
@@ -923,7 +925,7 @@ export function HomeDashboard({
   installGuideSeen = false,
   showDevDashboard,
   planPrices,
-  upcomingExam = null,
+  examPreps = [],
 }: {
   lectures: AppLectureListItem[];
   folders: AppLibraryFolder[];
@@ -942,8 +944,8 @@ export function HomeDashboard({
   showDevDashboard: boolean;
   /** What the wheel's offer is priced at for this buyer's country. */
   planPrices?: PlanPrices;
-  /** The nearest exam being prepared for, which the "Novo" sheet continues. */
-  upcomingExam?: UpcomingExam | null;
+  /** The exam preps still ahead of their exam, listed in the library above the notes. */
+  examPreps?: LibraryExamPrep[];
 }) {
   const t = useT();
   const native = useNativeIOS();
@@ -1622,6 +1624,14 @@ export function HomeDashboard({
 
   const inLibraryView = !selectedFolderId && !deferredQuery.trim();
   /*
+   * Preps are not filed in folders, so a folder shows none; a search matches their titles the way
+   * it matches the notes'. Hidden on the creator demo, which has no account to prepare with.
+   */
+  const visibleExamPreps =
+    isCreatorDemo || selectedFolderId
+      ? []
+      : examPreps.filter((prep) => !search || prep.title.toLowerCase().includes(search));
+  /*
    * The wheel is on offer while the server says there is a spin left and this
    * session has not already used it. `hasClaimedDiscount` is what covers the
    * gap between spinning and the server catching up.
@@ -1722,7 +1732,7 @@ export function HomeDashboard({
             <p className="memo-home-sub">{t("library.newNoteSub")}</p>
 
             {!isCreatorDemo ? (
-              <ExamEntryCard upcoming={upcomingExam} onOpen={openExamPrep} className="memo-exam-entry-desktop" />
+              <ExamEntryCard onOpen={openExamPrep} className="memo-exam-entry-desktop" />
             ) : null}
 
             <div className="memo-quick-grid">
@@ -1847,6 +1857,9 @@ export function HomeDashboard({
               <p className="memo-inline-error">{dashboardActionError}</p>
             ) : null}
 
+            {/* Exam preps sit in the library with the notes, as a group of their own above them. */}
+            <ExamLibraryList preps={visibleExamPreps} notesFollow={filteredLectures.length > 0} />
+
             {failedLectures.length > 0 ? (
               <div className="memo-note-list memo-failed-list">
                 {failedLectures.map((lecture) => (
@@ -1920,7 +1933,7 @@ export function HomeDashboard({
               </div>
             ) : null}
 
-            {filteredLectures.length === 0 ? (
+            {filteredLectures.length === 0 && !(search && visibleExamPreps.length > 0) ? (
               <div className="memo-empty">
                 <Emoji symbol="📝" size="2rem" />
                 <p>
@@ -2180,7 +2193,7 @@ export function HomeDashboard({
             </div>
             <div className="memo-sheet-list">
               {/* Exam prep leads the list as one of its options, marked out only by its coral. */}
-              {!isCreatorDemo ? <ExamEntryCard upcoming={upcomingExam} onOpen={openExamPrep} /> : null}
+              {!isCreatorDemo ? <ExamEntryCard onOpen={openExamPrep} /> : null}
               {CREATE_OPTIONS.map((option) => (
                 <button
                   key={option.id}

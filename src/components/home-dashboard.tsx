@@ -23,6 +23,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { flushSync } from "react-dom";
 
 import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
+import { paywallPath } from "@/lib/paywall-reasons";
 import { useT, useTranslations } from "@/components/i18n-provider";
 import {
   detectInstallPlatform,
@@ -968,6 +969,9 @@ export function HomeDashboard({
   const homeHref = useAppHref("/app");
   // The upgrade screen exists on the demo too; `/app/start` would walk out of it.
   const startHref = useAppHref("/app/start");
+  // A second note and a locked note each have their own version of the paywall.
+  const newNotePaywallHref = useAppHref(paywallPath("note"));
+  const lockedNotePaywallHref = useAppHref(paywallPath("locked"));
   const isCreatorDemo = useIsCreatorDemo();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
@@ -1284,7 +1288,7 @@ export function HomeDashboard({
     }
 
     if (!canCreateNotes) {
-      navigateDashboardWithFeedback(startHref);
+      navigateDashboardWithFeedback(newNotePaywallHref);
       return;
     }
 
@@ -1955,7 +1959,7 @@ export function HomeDashboard({
                       href={
                         hasPaidAccess || trialLectureId === lecture.id
                           ? `/app/lectures/${lecture.id}`
-                          : startHref
+                          : lockedNotePaywallHref
                       }
                       isMenuOpen={openMenuLectureId === lecture.id}
                       isBusy={busyLectureId === lecture.id}
@@ -2019,7 +2023,7 @@ export function HomeDashboard({
                * opens either way; the note sources in it still go to the paywall on their own.
                */
               if (!canCreateNotes && isCreatorDemo) {
-                navigateDashboardWithFeedback(startHref);
+                navigateDashboardWithFeedback(newNotePaywallHref);
                 return;
               }
 

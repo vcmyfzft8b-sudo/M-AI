@@ -29,6 +29,8 @@ import { useInstantNavigation } from "@/components/navigation-loading";
 import { MemoPortal } from "@/components/memo-portal";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { Emoji, Msym } from "@/components/msym";
+import { replacingNextPage } from "@/lib/app-history";
+import { paywallPath } from "@/lib/paywall-reasons";
 import { createAudioLectureWithProcessingChunks } from "@/lib/audio-lecture-upload";
 import {
   AUDIO_FILE_INPUT_ACCEPT,
@@ -447,7 +449,10 @@ export function NoteSourceModal({
     }
 
     onClose();
-    router.replace("/app/start");
+    // Home itself, never this sheet's own address, which would reopen the sheet
+    // and send the learner straight back here.
+    replacingNextPage();
+    router.replace(paywallPath("note", "/app"));
   }, [canCreateNotes, onClose, open, router]);
 
   // Creator demo: stage a file for the visible source, so the creator can hit
@@ -593,7 +598,7 @@ export function NoteSourceModal({
 
   function redirectToPaywall() {
     onClose();
-    navigateWithFeedback("/app/start");
+    navigateWithFeedback(paywallPath("note", "/app"));
   }
 
   const replaceAudioSource = useCallback(async (nextSource: AudioSource) => {

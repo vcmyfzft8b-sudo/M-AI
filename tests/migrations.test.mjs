@@ -828,6 +828,23 @@ test("a bulk upsert of mixed-shape rows would null a not-null column", options, 
  * was the primary key, so the podcast's seconds and the tutor's were the same number by
  * construction, and no amount of correct arithmetic on top would have separated them.
  */
+test("each account starts the paywall discount ladder empty and keeps its own", options, async () => {
+  const { query } = await migratedDatabase();
+  const [ana] = await query(`insert into auth.users (email) values ('ana@memo.app') returning id`);
+  const [bor] = await query(`insert into auth.users (email) values ('bor@memo.app') returning id`);
+
+  // Migration 0064: an existing or new account has climbed no rungs.
+  const [fresh] = await query(`select paywall_moments from public.profiles where id = $1`, [ana.id]);
+  assert.deepEqual(fresh.paywall_moments, []);
+
+  // The write paywall-view makes: the whole list, for that account only.
+  await query(`update public.profiles set paywall_moments = $2 where id = $1`, [ana.id, ["chat", "offer", "listen"]]);
+  const [mine] = await query(`select paywall_moments from public.profiles where id = $1`, [ana.id]);
+  const [theirs] = await query(`select paywall_moments from public.profiles where id = $1`, [bor.id]);
+  assert.deepEqual(mine.paywall_moments, ["chat", "offer", "listen"]);
+  assert.deepEqual(theirs.paywall_moments, [], "a second account is untouched");
+});
+
 async function seedUser(query, email = "split@example.test") {
   const [{ id }] = await query(
     `insert into auth.users (email) values ($1) returning id`,

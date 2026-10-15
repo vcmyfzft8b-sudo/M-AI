@@ -117,6 +117,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "radio_button_checked",
   "radio_button_unchecked",
   "record_voice_over",
+  "redeem",
   "refresh",
   "remove",
   "replay",

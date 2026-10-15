@@ -9,6 +9,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { en } from "../src/lib/i18n/messages/en.ts";
 import { createTranslator } from "../src/lib/i18n/translate.ts";
 
+import * as paywallReasons from "../src/lib/paywall-reasons.ts";
+
 const t = createTranslator("en", [en]);
 
 function load(native) {
@@ -18,7 +20,9 @@ function load(native) {
     "react-dom": { createPortal: node => node },
     "@/lib/mobile/client": { useNativeIOS: () => native, nativeRequest() { throw new Error("No Apple calls during render"); } },
     "@/lib/mobile/billing-notice": { nativeBillingFailureKey: () => "native.verifyFailed" },
+    "next/navigation": { usePathname: () => "/app/lectures/abc" },
     "@/components/creator-demo/creator-demo-context": { useAppHref: href => href },
+    "@/lib/paywall-reasons": paywallReasons,
     "@/components/instant-link": { InstantLink: ({ children, href, className }) => React.createElement("a", { href, className }, children) },
     "@/components/i18n-provider": { useT: () => t },
     "@/components/memo-portal": { MemoPortal: ({ children }) => children },
@@ -81,6 +85,7 @@ test("a refused tutor start opens the tutor-time sheet instead of seeming to do 
 test("without a subscription, the offer goes straight to the paywall", () => {
   const html = render(usage({ hasPaidAccess: false, remainingSeconds: 0, limitSeconds: 60, usedSeconds: 60 }));
   assert.match(html, /Your trial is used up/);
-  assert.match(html, /href="\/app\/start"[^>]*>See plans/);
+  // The paywall that names the tutor, closing back to the note it was opened on.
+  assert.match(html, /href="\/app\/start\?for=tutor&amp;back=%2Fapp%2Flectures%2Fabc"[^>]*>See plans/);
   assert.doesNotMatch(html, /href="\/app\/settings"/);
 });

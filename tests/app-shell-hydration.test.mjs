@@ -26,6 +26,7 @@ function shell(initialPathname, clientPathname, { hydrated = false, basePath = n
   const modules = {
     react: React, "react/jsx-runtime": jsx,
     "next/navigation": { usePathname: () => clientPathname, useRouter: () => router },
+    "@/lib/app-history": { noteAppPath() {} },
     "@/components/viewport-portal": { useIsHydrated: () => hydrated },
     "next/image": { default: () => null },
     "@/components/animated-lockup": { AnimatedLockup: () => null },
@@ -85,6 +86,7 @@ function recovery({ initial = "/app/lectures/note", client = "/app", hydrated = 
       useEffect: run => { effect = run; },
     },
     "next/navigation": { usePathname: () => client, useRouter: () => router },
+    "@/lib/app-history": { noteAppPath() {} },
     "@/components/viewport-portal": { useIsHydrated: () => hydrated },
   });
   return {

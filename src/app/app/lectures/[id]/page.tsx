@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { LectureWorkspace } from "@/components/lecture-workspace";
 import { OfflineLectureCapture } from "@/components/offline/offline-capture";
 import { requireUser } from "@/lib/auth";
-import { getPaywallPath, getViewerAppState } from "@/lib/billing";
+import { getViewerAppState } from "@/lib/billing";
+import { paywallPath } from "@/lib/paywall-reasons";
 import { ensureUserOwnsLecture, getLectureDetailForUser } from "@/lib/lectures";
 import { routeIdParamSchema } from "@/lib/validation";
 
@@ -34,7 +35,7 @@ export default async function LecturePage({
   }
 
   if (!appState?.hasPaidAccess && appState?.trialLectureId !== id) {
-    redirect(getPaywallPath());
+    redirect(paywallPath("locked", "/app"));
   }
 
   const detail = await getLectureDetailForUser({

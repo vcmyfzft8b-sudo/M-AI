@@ -14,6 +14,7 @@ import { TypingDots } from "@/components/typing-dots";
 import { useDictation } from "@/components/use-dictation";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { TUTOR_HISTORY_TURN_LIMIT } from "@/lib/ai/tutor-prompt";
+import { currentPaywallBack, paywallPath, withPaywallBack } from "@/lib/paywall-reasons";
 import { requestChatAnswer } from "@/lib/chat-stream-client";
 import {
   withAttachedSet,
@@ -216,7 +217,7 @@ export function LibraryChat({
     }
 
     if (!hasPaidAccess) {
-      navigateWithFeedback("/app/start");
+      navigateWithFeedback(withPaywallBack(paywallPath("library"), currentPaywallBack()));
       return;
     }
 

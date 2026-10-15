@@ -11,8 +11,11 @@ import type {
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { createPortal } from "react-dom";
+import { usePathname } from "next/navigation";
 
 import { useT } from "@/components/i18n-provider";
+import { useAppHref } from "@/components/creator-demo/creator-demo-context";
+import { InstantLink } from "@/components/instant-link";
 import { Msym } from "@/components/msym";
 import { MemoPortal } from "@/components/memo-portal";
 import { useOfflineGuard } from "@/components/offline/offline-notice";
@@ -47,6 +50,7 @@ import {
   type NoteTtsInlineToken,
 } from "@/lib/note-tts-text";
 import type { NoteAnnotation, NoteMediaAsset, NoteMediaBlock } from "@/lib/note-doc";
+import { paywallPath } from "@/lib/paywall-reasons";
 
 type NoteReadMediaBlock = NoteMediaBlock & {
   media: NoteMediaAsset | null;
@@ -1467,6 +1471,8 @@ export function NoteReadAloud({
   onDeleteMedia?: (mediaId: string) => void;
 }) {
   const t = useT();
+  const pathname = usePathname();
+  const listenPaywallHref = useAppHref(paywallPath("listen", pathname));
   const { isOffline, blockedOffline, offlineToast } = useOfflineGuard();
   const document = useMemo(() => parseNoteTtsDocument(content), [content]);
   const chunks = useMemo(() => buildNoteTtsChunks(document), [document]);
@@ -3194,6 +3200,12 @@ export function NoteReadAloud({
         <div className="memo-note-toolbar">
           {toolbarAccessory}
           {error ? <span className="memo-note-toolbar-error">{error}</span> : null}
+          {/* Only the free account's version of the limit has a way past it. */}
+          {error && error === t(TTS_FREE_DAILY_LIMIT_KEY) ? (
+            <InstantLink className="memo-button-outline small" href={listenPaywallHref}>
+              {t("readAloud.upgrade")}
+            </InstantLink>
+          ) : null}
         </div>
       ) : null}
       {ttsGenerationProgress ? (

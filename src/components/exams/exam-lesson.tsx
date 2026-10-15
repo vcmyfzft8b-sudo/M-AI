@@ -123,6 +123,8 @@ export function ExamLesson({
   const [phase, setPhase] = useState<Phase>({ name: "loading" });
   const [buddy, setBuddy] = useState<{ mood: BuddyMood; key: number }>({ mood: "wave", key: 0 });
   const [saveError, setSaveError] = useState(false);
+  /* The learning-zone answer, 1 (too easy) to 5 (too hard). */
+  const [difficulty, setDifficulty] = useState(3);
   const startedGeneration = useRef(false);
   const lessonRef = useRef<LessonPayload | null>(null);
   /* `navigateWithFeedback` is a new function every render; a load keyed on it would restart forever. */
@@ -274,8 +276,64 @@ export function ExamLesson({
       : t("exam.zone.score", { correct, total });
   const title = `${t("exam.dash.module", { index: module.position + 1 })} · ${t(LESSON_KIND_KEY[kind])}`;
 
+  function retryLoad(generator: LessonGenerator | null) {
+    startedGeneration.current = false;
+    setPhase({ name: "loading" });
+
+    if (generator) {
+      void fetch(`/api/lectures/${module.lectureId}/${GENERATOR_ROUTE[generator]}`, { method: "POST" })
+        .catch(() => null)
+        .finally(() => void load());
+    } else {
+      void load();
+    }
+  }
+
+  function enterZone(correct: number, total: number) {
+    setDifficulty(3);
+    setPhase({ name: "zone", correct, total });
+  }
+
+  /*
+   * The screen's buttons, at the foot of the phone like every other exam screen's (and held at the
+   * bottom of the window on desktop) rather than wherever the content happens to end.
+   */
+  const cta =
+    phase.name === "failed" ? (
+      <div className="memo-exam-cta-row">
+        <button type="button" className="memo-button-ghost" onClick={() => retryLoad(phase.generator)}>
+          {t("common.retry")}
+        </button>
+        <button type="button" className="memo-button-coral" onClick={() => void save(0, 0, null)}>
+          {t("exam.lesson.skip")}
+        </button>
+      </div>
+    ) : phase.name === "playing" && phase.lesson.kind === "summary" ? (
+      <button type="button" className="memo-button-coral" onClick={() => void save(1, 1, null)}>
+        {t("exam.lesson.summary.next")}
+      </button>
+    ) : phase.name === "zone" ? (
+      <div className="memo-exam-cta-row">
+        <button type="button" className="memo-button-ghost" onClick={() => retryLoad(null)}>
+          {t("exam.zone.retry")}
+        </button>
+        <button type="button" className="memo-button-coral" onClick={() => void save(phase.correct, phase.total, difficulty)}>
+          {t("exam.zone.continue")}
+        </button>
+      </div>
+    ) : phase.name === "done" ? (
+      <div className="memo-exam-cta-col">
+        {phase.following ? (
+          <NextStepButton step={phase.following} onGo={(href) => navigateWithFeedback(href, { refresh: true })} />
+        ) : null}
+        <button type="button" className="memo-button-ghost" onClick={() => navigateWithFeedback(examHref, { refresh: true })}>
+          {t("exam.lesson.done.back")}
+        </button>
+      </div>
+    ) : null;
+
   return (
-    <ExamScreen backHref={examHref} backIcon="close" backLabel={examTitle} title={title} refreshOnBack>
+    <ExamScreen backHref={examHref} backIcon="close" backLabel={examTitle} title={title} refreshOnBack cta={cta}>
       <div className="memo-exam-lesson-head">
         <div className="memo-exam-lesson-steps" aria-label={t("exam.lesson.progress", { index: kindIndex + 1, total: EXAM_LESSON_KINDS.length })}>
           {EXAM_LESSON_KINDS.map((entry, index) => (
@@ -297,29 +355,6 @@ export function ExamLesson({
           <div className="memo-exam-center">
             <MemoBuddy mood="sad" size="6rem" />
             <p className="memo-study-empty-title">{t("exam.lesson.failed")}</p>
-            <div className="memo-exam-cta-row">
-              <button
-                type="button"
-                className="memo-button-ghost"
-                onClick={() => {
-                  startedGeneration.current = false;
-                  setPhase({ name: "loading" });
-
-                  if (phase.generator) {
-                    void fetch(`/api/lectures/${module.lectureId}/${GENERATOR_ROUTE[phase.generator]}`, { method: "POST" })
-                      .catch(() => null)
-                      .finally(() => void load());
-                  } else {
-                    void load();
-                  }
-                }}
-              >
-                {t("common.retry")}
-              </button>
-              <button type="button" className="memo-button-coral" onClick={() => void save(0, 0, null)}>
-                {t("exam.lesson.skip")}
-              </button>
-            </div>
           </div>
         ) : phase.name === "playing" ? (
           <LessonBody
@@ -330,7 +365,7 @@ export function ExamLesson({
             onReact={react}
             buddy={buddy}
             onFinish={(correct, total) =>
-              phase.lesson.kind === "summary" ? void save(1, 1, null) : setPhase({ name: "zone", correct, total })
+              phase.lesson.kind === "summary" ? void save(1, 1, null) : enterZone(correct, total)
             }
           />
         ) : phase.name === "zone" ? (
@@ -339,11 +374,8 @@ export function ExamLesson({
             total={phase.total}
             scoreLine={scoreLine(phase.correct, phase.total)}
             error={saveError}
-            onRetry={() => {
-              setPhase({ name: "loading" });
-              void load();
-            }}
-            onContinue={(difficulty) => void save(phase.correct, phase.total, difficulty)}
+            difficulty={difficulty}
+            onDifficulty={setDifficulty}
           />
         ) : (
           <div className="memo-exam-center memo-exam-done">
@@ -363,14 +395,6 @@ export function ExamLesson({
             ) : phase.total > 0 ? (
               <p>{scoreLine(phase.correct, phase.total)}</p>
             ) : null}
-            <div className="memo-exam-cta-col">
-              {phase.following ? (
-                <NextStepButton step={phase.following} onGo={(href) => navigateWithFeedback(href, { refresh: true })} />
-              ) : null}
-              <button type="button" className="memo-button-ghost" onClick={() => navigateWithFeedback(examHref, { refresh: true })}>
-                {t("exam.lesson.done.back")}
-              </button>
-            </div>
           </div>
         )}
       </div>
@@ -397,18 +421,17 @@ function LearningZone({
   total,
   scoreLine,
   error,
-  onRetry,
-  onContinue,
+  difficulty,
+  onDifficulty,
 }: {
   correct: number;
   total: number;
   scoreLine: string;
   error: boolean;
-  onRetry: () => void;
-  onContinue: (difficulty: number) => void;
+  difficulty: number;
+  onDifficulty: (difficulty: number) => void;
 }) {
   const { t } = useTranslations();
-  const [difficulty, setDifficulty] = useState(3);
   const ratio = total > 0 ? correct / total : 1;
   const hint =
     difficulty <= 2 ? "exam.zone.hintHarder" : difficulty >= 4 ? "exam.zone.hintEasier" : "exam.zone.hintSame";
@@ -434,7 +457,7 @@ function LearningZone({
           value={difficulty}
           aria-label={t("exam.zone.question")}
           className="memo-exam-zone-range"
-          onChange={(event) => setDifficulty(Number(event.target.value))}
+          onChange={(event) => onDifficulty(Number(event.target.value))}
         />
         <div className="memo-exam-zone-labels">
           <span>{t("exam.zone.easy")}</span>
@@ -444,14 +467,6 @@ function LearningZone({
       </div>
       <p className="memo-exam-fine">{t(hint)}</p>
       {error ? <p className="memo-inline-error">{t("exam.lesson.saveFailed")}</p> : null}
-      <div className="memo-exam-cta-row">
-        <button type="button" className="memo-button-ghost" onClick={onRetry}>
-          {t("exam.zone.retry")}
-        </button>
-        <button type="button" className="memo-button-coral" onClick={() => onContinue(difficulty)}>
-          {t("exam.zone.continue")}
-        </button>
-      </div>
     </div>
   );
 }
@@ -598,11 +613,6 @@ function LessonBody({
           </button>
           <button type="button" className="memo-chip" onClick={() => setSpeedReading(true)}>
             <Msym name="bolt" size="1.1rem" /> {t("exam.lesson.speedRead")}
-          </button>
-        </div>
-        <div className="memo-exam-cta-row">
-          <button type="button" className="memo-button-coral" onClick={() => onFinish(1, 1)}>
-            {t("exam.lesson.summary.next")}
           </button>
         </div>
       </div>

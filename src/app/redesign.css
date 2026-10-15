@@ -27393,11 +27393,6 @@ a.memo-exam-station-go {
   font-weight: 600;
 }
 
-.memo-exam-zone .memo-exam-cta-row,
-.memo-exam-done .memo-exam-cta-col {
-  max-width: 26rem;
-}
-
 /* --- mock exam ------------------------------------------------------------ */
 
 .memo-exam-upsell {
@@ -27948,7 +27943,7 @@ a.memo-exam-station-go {
   /* The button spans the column, as the onboarding's does: a full-width pill under the
      full-width cards and options above it, not a short one floating in the middle. A row of
      two (the Generalka's back and next) splits it in equal halves, like the sheets' rows. */
-  .memo-exam-cta > :is(.memo-button-coral, .memo-exam-cta-row) {
+  .memo-exam-cta > :is(.memo-button-coral, .memo-exam-cta-row, .memo-exam-cta-col) {
     flex: 1 1 auto;
     width: 100%;
     max-width: 40rem;
@@ -27956,11 +27951,6 @@ a.memo-exam-station-go {
 
   .memo-exam-cta-row > .memo-button-ghost {
     flex: 1 1 0;
-  }
-
-  .memo-exam-zone .memo-exam-cta-row,
-  .memo-exam-done .memo-exam-cta-col {
-    width: 100%;
   }
 
   /*

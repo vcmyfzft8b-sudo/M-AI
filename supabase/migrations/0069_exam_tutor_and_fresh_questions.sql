@@ -1,5 +1,6 @@
 -- Claimed after checking main (at 0061) and the open PRs on 2026-10-15 as 0063; renumbered to 0066
--- with 0065 (formerly 0062) once main shipped 0064. Extends 0065; neither is on production yet.
+-- once main shipped 0064, and to 0069 once main shipped 0067. Extends 0068 (the exam tables);
+-- neither is on production yet.
 --
 -- ---------------------------------------------------------------------------
 -- Exam prep: the tutor lesson, and practice that does not repeat itself
@@ -32,11 +33,11 @@ alter table public.exam_topics
 -- Updates keep a row inside the learner's own exam and notes
 -- ---------------------------------------------------------------------------
 --
--- 0065's update policies only checked `user_id`, so an update could move a module, topic or mock
+-- 0068's update policies only checked `user_id`, so an update could move a module, topic or mock
 -- attempt onto another exam or note than the insert policies allow. The app never changes those
 -- columns (it updates a topic's items, lessons and fresh questions, and grades a mock), so the new
 -- row must pass the same ownership checks as an insert. Dropped and recreated so this also applies
--- where 0065's policies already exist.
+-- where 0068's policies already exist.
 
 drop policy if exists "exam_modules_update_own" on public.exam_modules;
 create policy "exam_modules_update_own" on public.exam_modules

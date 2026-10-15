@@ -263,18 +263,19 @@ the answers; "Ponovi generalko" retries and "Nadaljuj" returns to the path. The 
 one paid-only part: setup, path, lessons and readiness follow the notes' own access (a free account
 can prep from its free note).
 
-## Tables (`supabase/migrations/0065_exam_prep.sql`, `0066_exam_tutor_and_fresh_questions.sql`)
+## Tables (`supabase/migrations/0068_exam_prep.sql`, `0069_exam_tutor_and_fresh_questions.sql`)
 
 `exams`, `exam_modules`, `exam_topics`, `exam_lesson_results`, `exam_mock_attempts`. All are
 owner-only by RLS and every route uses the client that verified the learner (`getRouteUser`); an
-update cannot move a module, topic or mock attempt onto another exam or note (`0066` recreates the
-update policies with the insert policies' checks). The migration was first written as 0061 and
-applied to staging only; PR #579 claimed 0061 too, so it moved to 0062 (staging's 0061 record was
-reverted and its tables dropped first). Main then shipped `0064` to production, and `supabase db
-push` refuses a local migration older than the newest remote one, so 0062 and 0063 became 0065 and
-0066. Staging still records 0062 and 0063: revert those records and drop the exam tables before
-0065 and 0066 apply there. `0066` adds the `tutor` lesson kind, `exam_lesson_results.item_ids` and
-`exam_topics.extra`. Neither is on production.
+update cannot move a module, topic or mock attempt onto another exam or note (`0069` recreates the
+update policies with the insert policies' checks). `0069` adds the `tutor` lesson kind,
+`exam_lesson_results.item_ids` and `exam_topics.extra`. Neither is on production.
+
+The numbers moved while the PR was open, because `supabase db push` refuses a local migration older
+than the newest one production has: 0061 → 0062 (PR #579 took 0061), 0062/0063 → 0065/0066 (main
+shipped 0064), 0065/0066 → 0068/0069 (main shipped 0067). Each time, staging's old records were
+reverted only after the exam tables were dropped (so the revert is true), and the files were pushed
+again under the new numbers. Never `repair --status applied`.
 
 ## Access and limits
 

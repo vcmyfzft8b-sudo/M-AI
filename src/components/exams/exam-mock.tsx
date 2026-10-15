@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useTranslations } from "@/components/i18n-provider";
 import { MemoPortal } from "@/components/memo-portal";
@@ -8,6 +8,7 @@ import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { ExamOral } from "@/components/exams/exam-oral";
+import { ExamVoicePicker } from "@/components/exams/exam-voice-picker";
 import { storedTutorVoice } from "@/components/exams/use-exam-voice";
 import { ExamScreen } from "@/components/exams/exam-screen";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
@@ -21,15 +22,7 @@ import {
 } from "@/lib/exams/exam-model";
 import type { MockQuestionForLearner, MockResult } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
-import { TutorClipPlayer } from "@/lib/tutor/clip-player";
-import { voiceSampleClip } from "@/lib/tutor/voice-clips";
-import { voiceHue } from "@/lib/tutor/voice-colors";
-import {
-  DEFAULT_NOTE_TTS_VOICE,
-  NOTE_TTS_VOICE_STORAGE_KEY,
-  NOTE_TTS_VOICES,
-  type NoteTtsVoice,
-} from "@/lib/note-tts-settings";
+import { DEFAULT_NOTE_TTS_VOICE, type NoteTtsVoice } from "@/lib/note-tts-settings";
 
 type Attempt = {
   id: string;
@@ -103,10 +96,6 @@ export function ExamMock({
   const [voice, setVoice] = useState<NoteTtsVoice>(DEFAULT_NOTE_TTS_VOICE);
   const [vibe, setVibe] = useState<Vibe>("strict");
   const [briefingOpen, setBriefingOpen] = useState(false);
-  /* The voice whose sample is playing, as in the tutor's picker. */
-  const [previewVoice, setPreviewVoice] = useState<NoteTtsVoice | null>(null);
-  const clipRef = useRef<TutorClipPlayer | null>(null);
-  const clipTokenRef = useRef(0);
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [index, setIndex] = useState(0);
@@ -125,45 +114,6 @@ export function ExamMock({
   const counts = mockQuestionCounts(duration);
   const minutes = mode === "oral" ? oralMinutes : duration;
   const minutesFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
-
-  useEffect(() => () => clipRef.current?.destroy(), []);
-
-  /*
-   * Picking a voice plays its sample, the tutor's pre-rendered one (free and instant), and keeps
-   * it as the learner's voice for the tutor too, since it is the same setting.
-   */
-  async function auditionVoice(next: NoteTtsVoice) {
-    setVoice(next);
-    clipTokenRef.current += 1;
-    const token = clipTokenRef.current;
-    clipRef.current?.stop();
-
-    try {
-      window.localStorage.setItem(NOTE_TTS_VOICE_STORAGE_KEY, next);
-    } catch {
-      /* The choice still holds for this exam. */
-    }
-
-    if (!clipRef.current) {
-      clipRef.current = new TutorClipPlayer();
-    }
-
-    const player = clipRef.current;
-    setPreviewVoice(next);
-    player.onEnded = () => {
-      if (token === clipTokenRef.current) {
-        setPreviewVoice(null);
-      }
-    };
-
-    try {
-      await player.play(voiceSampleClip(next, locale));
-    } catch {
-      if (token === clipTokenRef.current) {
-        setPreviewVoice(null);
-      }
-    }
-  }
 
   const storageKey = phase.name === "sitting" ? `memo-exam-mock:${phase.attempt.id}` : null;
 
@@ -419,24 +369,7 @@ export function ExamMock({
               </div>
               {/* The tutor's own voice picker: each voice in its colour, and a tap plays it. */}
               <span className="memo-exam-label">{t("exam.oral.voice")}</span>
-              <div className="memo-tutor-voices memo-exam-voices" role="radiogroup" aria-label={t("exam.oral.voice")}>
-                {NOTE_TTS_VOICES.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    role="radio"
-                    aria-checked={voice === option}
-                    className={`memo-tutor-voice ${voice === option ? "active" : ""} ${
-                      previewVoice === option ? "playing" : ""
-                    }`.trim()}
-                    style={{ "--voice-hue": voiceHue(option) } as CSSProperties}
-                    onClick={() => void auditionVoice(option)}
-                  >
-                    <span className="memo-tutor-voice-dot" aria-hidden="true" />
-                    <span>{option}</span>
-                  </button>
-                ))}
-              </div>
+              <ExamVoicePicker voice={voice} onChange={setVoice} label={t("exam.oral.voice")} />
             </>
           ) : (
             <div className="memo-exam-card memo-exam-facts">

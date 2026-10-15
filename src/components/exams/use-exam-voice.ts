@@ -203,6 +203,13 @@ export function useExamVoice({
     return heardRef.current.trim();
   }, [clearSilence]);
 
+  /* Cuts the voice off mid-line and closes the microphone (a pause, or going back over a point). */
+  const hush = useCallback(() => {
+    clearSilence();
+    inputRef.current?.setMuted(true);
+    outputRef.current?.stop({ fadeOut: true });
+  }, [clearSilence]);
+
   const finish = useCallback(() => {
     if (closedRef.current) {
       return;
@@ -378,6 +385,7 @@ export function useExamVoice({
     say,
     listen,
     stopListening,
+    hush,
     finish,
     teardown,
   };

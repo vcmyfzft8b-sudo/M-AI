@@ -27688,10 +27688,33 @@ a.memo-exam-station-go {
 }
 
 /*
- * The tutor lesson, on the oral exam's stage: what the tutor says is written out under the sphere,
- * quieter once it has been said; in writing (no voice) it stays the thing being read, under Memo.
- * An answer can always be typed.
+ * The app's tutor fills the height its screen leaves and lets the sphere take the spare room
+ * (see `.memo-tutor` in the desktop and phone blocks). A tutor lesson's panel gives it that
+ * height: the rest of the column on the phone, the rest of the window on desktop (less the app's
+ * header, the lesson's bar and the page's foot).
  */
+.memo-panel.study.memo-exam-lesson:has(> .memo-exam-tutor) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+@media (min-width: 1100px) {
+  .memo-panel.study.memo-exam-lesson:has(> .memo-exam-tutor) {
+    min-height: calc(100dvh - 21rem);
+  }
+}
+
+/*
+ * The tutor lesson is the app's voice tutor (`.memo-tutor`) on a topic. Its voice row opens the
+ * voice chips in place, and in writing (no voice) the tutor's line and an answer box sit under Memo.
+ */
+.memo-exam-tutor-voices {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.8rem 0.2rem 0.2rem;
+}
+
 .memo-exam-tutor-line {
   max-width: 32rem;
   margin: 0;
@@ -27701,26 +27724,14 @@ a.memo-exam-station-go {
   text-wrap: pretty;
 }
 
-.memo-exam-tutor:not(.in-writing).phase-listening .memo-exam-tutor-line,
-.memo-exam-tutor:not(.in-writing).phase-thinking .memo-exam-tutor-line {
-  color: var(--muted);
-  font-size: 0.92rem;
-}
-
-.memo-exam-tutor-mode {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
 .memo-exam-tutor-type {
   display: flex;
   align-items: center;
   align-self: stretch;
   gap: 0.5rem;
+  width: 100%;
   max-width: 32rem;
   margin: 0 auto;
-  width: 100%;
 }
 
 .memo-exam-tutor-type .memo-field {

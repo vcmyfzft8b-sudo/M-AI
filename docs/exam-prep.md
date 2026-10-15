@@ -73,12 +73,18 @@ until the learner has the knowledge and has shown it (`examStage`, `examNextStep
 Right after the summary, the voice tutor teaches the topic (`exam-tutor-server.ts`,
 `ExamTutorLesson`): it plans three steps from the topic and its note (`planTutorLesson`, the fast
 `tutor_turn` model, a few seconds), and in each it explains one point out loud and asks an open
-question about it. The answer is spoken or typed. `tutorTurn` marks it against the step's answer
+question about it, and the learner answers out loud. `tutorTurn` marks it against the step's answer
 guide: right at the first ask is a full point; otherwise the tutor says what was missing, explains
 it and asks again (right then: half; partly right at best: a quarter), then gives the answer and
-moves on (`tutorStepPoints`). Results are stored in quarters and shown as a percentage. It runs on
-the voice tutor's own session and talking time (`useExamVoice`, shared with the oral mock); with no
-microphone, no talking time or no Web Audio it runs in writing, Memo in place of the sphere.
+moves on (`tutorStepPoints`). Results are stored in quarters and shown as a percentage.
+
+It looks and works like the app's own voice tutor on a note (`LectureTutor`), with the same markup
+and styles: the sphere riding the voice, the voice row and "Začni" before it starts, a one-word
+status with its dot, only the learner's own words captioned, the topic row with its bar, and the
+round transport (go back over the point, pause, end). It is a conversation: the learner answers
+out loud and going quiet ends the answer. It runs on the voice tutor's own session and talking
+time (`useExamVoice`, shared with the oral mock); with no microphone, no talking time or no Web
+Audio it runs in writing, Memo in place of the sphere and a box to type in.
 
 ### Practice that does not repeat itself
 

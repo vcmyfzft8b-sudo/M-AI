@@ -27961,28 +27961,22 @@ a.memo-exam-station-go {
     background: linear-gradient(to bottom, transparent, var(--bg) 1rem);
   }
 
-  .memo-exam-cta > .memo-button-coral,
-  .memo-exam-cta-row > .memo-button-coral {
-    flex: 0 0 auto;
-    width: auto;
-    min-width: 16rem;
-    padding: 0 2rem;
+  /* The button spans the column, as the onboarding's does: a full-width pill under the
+     full-width cards and options above it, not a short one floating in the middle. A row of
+     two (the Generalka's back and next) splits it in equal halves, like the sheets' rows. */
+  .memo-exam-cta > :is(.memo-button-coral, .memo-exam-cta-row) {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 40rem;
   }
 
-  .memo-exam-cta-row,
-  .memo-exam-cta > .memo-exam-cta-row {
-    width: auto;
+  .memo-exam-cta-row > .memo-button-ghost {
+    flex: 1 1 0;
   }
 
   .memo-exam-zone .memo-exam-cta-row,
   .memo-exam-done .memo-exam-cta-col {
     width: 100%;
-  }
-
-  /* A button row inside a screen's content (the summary's "finish with a quiz") sits where the
-     screen's own button would: centred under the column. */
-  .memo-exam-page .memo-exam-cta-row {
-    align-self: center;
   }
 
   /*
@@ -28015,7 +28009,15 @@ a.memo-exam-station-go {
   }
 
   .memo-exam-lesson .lecture-quiz-option {
-    min-height: 3.6rem;
+    min-height: 3.3rem;
+  }
+
+  .memo-exam-lesson .lecture-quiz-options {
+    gap: 0.55rem;
+  }
+
+  .memo-exam-lesson .lecture-quiz-prompt {
+    margin-bottom: 0.9rem;
   }
 
   .memo-exam-lesson .lecture-flashcard-stage {

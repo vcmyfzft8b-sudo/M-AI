@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { useTranslations } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
 import { requestTutorMicrophone, TutorSpeechInput } from "@/lib/tutor/speech-input";
+import { GeminiTutorSpeechOutput } from "@/lib/tutor/gemini-speech-output";
 import { hasWebAudio, TutorSpeechOutput } from "@/lib/tutor/speech-output";
 import { LevelEnvelope } from "@/lib/tutor/turn-audio";
 import { voiceHue } from "@/lib/tutor/voice-colors";
@@ -26,7 +27,8 @@ type Session = {
   grantedSeconds: number;
   realtime: {
     stt: { apiKey: string; url: string; model: string };
-    tts: { apiKey: string; url: string; model: string; voice: NoteTtsVoice };
+    /* Gemini unless the server says Soniox (TTS_PROVIDER), exactly as the tutor reads it. */
+    tts: { provider?: "gemini" | "soniox"; apiKey: string; url: string; model: string; voice: NoteTtsVoice };
   };
 };
 
@@ -63,7 +65,7 @@ export function ExamOral({
   const [elapsed, setElapsed] = useState(0);
 
   const phaseRef = useRef<Phase>("preparing");
-  const outputRef = useRef<TutorSpeechOutput | null>(null);
+  const outputRef = useRef<TutorSpeechOutput | GeminiTutorSpeechOutput | null>(null);
   const inputRef = useRef<TutorSpeechInput | null>(null);
   const orbRef = useRef<HTMLDivElement | null>(null);
   const envelopeRef = useRef(new LevelEnvelope());
@@ -283,8 +285,16 @@ export function ExamOral({
           return;
         }
 
-        const output = new TutorSpeechOutput(
-          { ...session.realtime.tts, language: session.language },
+        /* The examiner speaks with the tutor's voice: Gemini's, or Soniox's when the server says so. */
+        const SpeechOutput = session.realtime.tts.provider === "gemini" ? GeminiTutorSpeechOutput : TutorSpeechOutput;
+        const output = new SpeechOutput(
+          {
+            url: session.realtime.tts.url,
+            apiKey: session.realtime.tts.apiKey,
+            model: session.realtime.tts.model,
+            voice: session.realtime.tts.voice,
+            language: session.language,
+          },
           { onError: () => setError(t("tutor.error.connection")) },
         );
         const input = new TutorSpeechInput(

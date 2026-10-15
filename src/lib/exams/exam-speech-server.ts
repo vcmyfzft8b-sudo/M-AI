@@ -10,13 +10,16 @@ import { TTS_OUTPUT_BITRATE, TTS_OUTPUT_FORMAT, TTS_OUTPUT_MIME_TYPE } from "@/l
 import type { NoteTtsVoice } from "@/lib/note-tts-settings";
 import { getServerEnv, requireSonioxEnv } from "@/lib/server-env";
 import { resolveSpeechLanguage } from "@/lib/speech-language";
+import { speechModel, speechProvider, synthesizeGeminiMp3 } from "@/lib/speech-synthesis";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 /*
  * Astra's summary has an audio player. A topic summary is short (a paragraph and a few key
  * points), so it is spoken in one request and kept: the file is written once per topic, voice and
  * text, and every later play is a signed link to it. The text is always the topic's stored summary,
- * never anything the browser sends.
+ * never anything the browser sends. It is spoken by the app's voice engine, the one the tutor and
+ * read-aloud use (Gemini, or Soniox when TTS_PROVIDER says so); the engine's model is in the file's
+ * key, so switching engines makes the new voice rather than replaying the old one.
  */
 
 /* Well under the provider's 180 s per request: a summary and its points read in about a minute. */
@@ -39,6 +42,7 @@ export function topicSpeechText(topic: Pick<ExamTopicRow, "title" | "summary" | 
 
 export async function topicSummaryAudio(params: {
   userId: string;
+  lectureId: string;
   topic: ExamTopicRow;
   languageHint: string | null;
   voice: NoteTtsVoice;
@@ -50,7 +54,7 @@ export async function topicSummaryAudio(params: {
   }
 
   const env = getServerEnv();
-  const hash = createHash("sha256").update(`${env.SONIOX_TTS_MODEL}:${params.voice}:${text}`).digest("hex").slice(0, 24);
+  const hash = createHash("sha256").update(`${speechModel()}:${params.voice}:${text}`).digest("hex").slice(0, 24);
   const path = ["tts", params.userId, "exam", params.topic.id, `${hash}.${TTS_OUTPUT_FORMAT}`].join("/");
   const storage = createSupabaseServiceRoleClient().storage.from(STORAGE_BUCKET);
   const existing = await storage.createSignedUrl(path, 10 * 60);
@@ -59,14 +63,27 @@ export async function topicSummaryAudio(params: {
     return existing.data.signedUrl;
   }
 
-  const audio = await soniox().tts.generate({
-    text,
-    model: env.SONIOX_TTS_MODEL,
-    voice: params.voice,
-    language: resolveSpeechLanguage(params.languageHint),
-    audio_format: TTS_OUTPUT_FORMAT,
-    bitrate: TTS_OUTPUT_BITRATE,
-  });
+  const language = resolveSpeechLanguage(params.languageHint);
+  const audio =
+    speechProvider() === "gemini"
+      ? (
+          await synthesizeGeminiMp3({
+            text,
+            voice: params.voice,
+            language,
+            bitrate: TTS_OUTPUT_BITRATE,
+            timeoutMs: 90_000,
+            usage: { stage: "read_aloud_speech", userId: params.userId, lectureId: params.lectureId },
+          })
+        ).audio
+      : await soniox().tts.generate({
+          text,
+          model: env.SONIOX_TTS_MODEL,
+          voice: params.voice,
+          language,
+          audio_format: TTS_OUTPUT_FORMAT,
+          bitrate: TTS_OUTPUT_BITRATE,
+        });
   const { error } = await storage.upload(path, Buffer.from(audio), { contentType: TTS_OUTPUT_MIME_TYPE, upsert: true });
 
   if (error) {

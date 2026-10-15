@@ -61,6 +61,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       .maybeSingle();
     const url = await topicSummaryAudio({
       userId: auth.user.id,
+      lectureId: topic.lecture_id,
       topic,
       languageHint: (lecture as { language_hint: string | null } | null)?.language_hint ?? null,
       voice,

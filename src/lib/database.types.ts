@@ -394,6 +394,9 @@ export type Database = {
           grading_scale: "uni_5_10" | "school_1_5" | "percent";
           pass_percentage: number;
           actual_grade: string | null;
+          school_level: string | null;
+          school_year: string | null;
+          ai_expand: boolean;
           archived_at: string | null;
           created_at: string;
           updated_at: string;
@@ -410,6 +413,9 @@ export type Database = {
           grading_scale?: "uni_5_10" | "school_1_5" | "percent";
           pass_percentage?: number;
           actual_grade?: string | null;
+          school_level?: string | null;
+          school_year?: string | null;
+          ai_expand?: boolean;
           archived_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -424,6 +430,9 @@ export type Database = {
           grading_scale?: "uni_5_10" | "school_1_5" | "percent";
           pass_percentage?: number;
           actual_grade?: string | null;
+          school_level?: string | null;
+          school_year?: string | null;
+          ai_expand?: boolean;
           archived_at?: string | null;
           updated_at?: string;
         };
@@ -447,11 +456,59 @@ export type Database = {
           position?: number;
         };
       };
+      exam_topics: {
+        Row: {
+          id: string;
+          exam_id: string;
+          lecture_id: string;
+          user_id: string;
+          position: number;
+          title: string;
+          source: "material" | "added" | "ai";
+          summary: string;
+          key_points: Json;
+          flashcard_ids: string[];
+          quiz_ids: string[];
+          written_ids: string[];
+          assigned_kinds: string[];
+          generated: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          exam_id: string;
+          lecture_id: string;
+          user_id: string;
+          position: number;
+          title: string;
+          source?: "material" | "added" | "ai";
+          summary?: string;
+          key_points?: Json;
+          flashcard_ids?: string[];
+          quiz_ids?: string[];
+          written_ids?: string[];
+          assigned_kinds?: string[];
+          generated?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          position?: number;
+          title?: string;
+          summary?: string;
+          key_points?: Json;
+          flashcard_ids?: string[];
+          quiz_ids?: string[];
+          written_ids?: string[];
+          assigned_kinds?: string[];
+          generated?: Json | null;
+        };
+      };
       exam_lesson_results: {
         Row: {
           id: string;
           exam_id: string;
           lecture_id: string;
+          topic_id: string | null;
           user_id: string;
           lesson_kind: "summary" | "flashcards" | "quiz" | "true_false" | "written";
           correct: number;
@@ -464,6 +521,7 @@ export type Database = {
           id?: string;
           exam_id: string;
           lecture_id: string;
+          topic_id?: string | null;
           user_id: string;
           lesson_kind: "summary" | "flashcards" | "quiz" | "true_false" | "written";
           correct?: number;
@@ -480,12 +538,17 @@ export type Database = {
           exam_id: string;
           user_id: string;
           status: "in_progress" | "graded" | "failed";
+          mode: "written" | "oral";
+          voice: string | null;
+          vibe: string | null;
           duration_minutes: number;
           questions: Json;
           answers: Json;
           total_score: number | null;
           max_score: number | null;
           percentage: number | null;
+          review: Json | null;
+          time_spent_seconds: number | null;
           started_at: string;
           submitted_at: string | null;
           graded_at: string | null;
@@ -495,22 +558,30 @@ export type Database = {
           exam_id: string;
           user_id: string;
           status?: "in_progress" | "graded" | "failed";
+          mode?: "written" | "oral";
+          voice?: string | null;
+          vibe?: string | null;
           duration_minutes: number;
           questions?: Json;
           answers?: Json;
           total_score?: number | null;
           max_score?: number | null;
           percentage?: number | null;
+          review?: Json | null;
+          time_spent_seconds?: number | null;
           started_at?: string;
           submitted_at?: string | null;
           graded_at?: string | null;
         };
         Update: {
           status?: "in_progress" | "graded" | "failed";
+          questions?: Json;
           answers?: Json;
           total_score?: number | null;
           max_score?: number | null;
           percentage?: number | null;
+          review?: Json | null;
+          time_spent_seconds?: number | null;
           submitted_at?: string | null;
           graded_at?: string | null;
         };
@@ -2228,6 +2299,7 @@ export type BillingSubscriptionRow =
 export type LectureRow = Database["public"]["Tables"]["lectures"]["Row"];
 export type ExamRow = Database["public"]["Tables"]["exams"]["Row"];
 export type ExamModuleRow = Database["public"]["Tables"]["exam_modules"]["Row"];
+export type ExamTopicRow = Database["public"]["Tables"]["exam_topics"]["Row"];
 export type ExamLessonResultRow =
   Database["public"]["Tables"]["exam_lesson_results"]["Row"];
 export type ExamMockAttemptRow =

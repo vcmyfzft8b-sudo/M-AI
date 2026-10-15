@@ -1155,7 +1155,7 @@ test("account erasure blocks stale storage tokens and survives auth deletion", o
   } finally { await db.close(); }
 });
 
-test("an exam keeps its notes and results, and takes them with it when deleted", options, async () => {
+test("an exam keeps its notes, topics and results, and takes them with it when deleted", options, async () => {
   const { db, query } = await migratedDatabase();
   const [user] = await query(`insert into auth.users (email) values ('exam@example.com') returning id`);
   const [lecture] = await query(
@@ -1172,15 +1172,47 @@ test("an exam keeps its notes and results, and takes them with it when deleted",
   assert.equal(exam.grading_scale, "uni_5_10");
   assert.equal(exam.target_mastery, 90);
   assert.equal(exam.pass_percentage, 50);
+  // Letting the AI add topics beyond the material is opt-in, as Astra recommends.
+  assert.equal(exam.ai_expand, false);
 
   await query(
     `insert into public.exam_modules (exam_id, lecture_id, user_id, position) values ($1,$2,$3,0)`,
     [exam.id, lecture.id, user.id],
   );
-  await query(
-    `insert into public.exam_lesson_results (exam_id, lecture_id, user_id, lesson_kind, correct, total, score)
-     values ($1,$2,$3,'quiz',4,5,0.8)`,
+  const [topic] = await query(
+    `insert into public.exam_topics (exam_id, lecture_id, user_id, position, title)
+     values ($1,$2,$3,0,'Ponudba in povpraševanje') returning *`,
     [exam.id, lecture.id, user.id],
+  );
+  assert.equal(topic.source, "material");
+  assert.deepEqual(topic.assigned_kinds, []);
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into public.exam_topics (exam_id, lecture_id, user_id, position, title, source)
+         values ($1,$2,$3,1,'Elastičnost','guessed')`,
+        [exam.id, lecture.id, user.id],
+      ),
+    /check constraint/,
+  );
+  await query(
+    `insert into public.exam_lesson_results (exam_id, lecture_id, topic_id, user_id, lesson_kind, correct, total, score)
+     values ($1,$2,$3,$4,'quiz',4,5,0.8)`,
+    [exam.id, lecture.id, topic.id, user.id],
+  );
+  const [mock] = await query(
+    `insert into public.exam_mock_attempts (exam_id, user_id, duration_minutes, mode, vibe)
+     values ($1,$2,20,'oral','strict') returning *`,
+    [exam.id, user.id],
+  );
+  assert.equal(mock.mode, "oral");
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into public.exam_mock_attempts (exam_id, user_id, duration_minutes, mode) values ($1,$2,20,'video')`,
+        [exam.id, user.id],
+      ),
+    /check constraint/,
   );
 
   // A lesson kind the app does not have, and a score outside 0..1, are refused.
@@ -1207,10 +1239,14 @@ test("an exam keeps its notes and results, and takes them with it when deleted",
 
   const [{ modules }] = await query(`select count(*)::int as modules from public.exam_modules`);
   const [{ results }] = await query(`select count(*)::int as results from public.exam_lesson_results`);
+  const [{ topics }] = await query(`select count(*)::int as topics from public.exam_topics`);
+  const [{ mocks }] = await query(`select count(*)::int as mocks from public.exam_mock_attempts`);
   const [{ lectures }] = await query(`select count(*)::int as lectures from public.lectures`);
 
   assert.equal(modules, 0);
   assert.equal(results, 0);
+  assert.equal(topics, 0);
+  assert.equal(mocks, 0);
   // The note itself is the learner's, not the exam's.
   assert.equal(lectures, 1);
 });

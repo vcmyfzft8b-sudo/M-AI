@@ -94,7 +94,7 @@ past result) and grades the written answers in parallel with `markAnswerWithRetr
 paid-only part: setup, path, lessons and readiness follow the notes' own access (a free account can
 prep from its free note).
 
-## Tables (`supabase/migrations/0061_exam_prep.sql`)
+## Tables (`supabase/migrations/0062_exam_prep.sql`)
 
 `exams`, `exam_modules`, `exam_lesson_results`, `exam_mock_attempts`. All four are owner-only by RLS
 and every route uses the client that verified the learner (`getRouteUser`).

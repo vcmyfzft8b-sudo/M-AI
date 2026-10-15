@@ -24,7 +24,7 @@ import { voiceHue } from "@/lib/tutor/voice-colors";
  * tutor's lines are shown, Memo stands in for the sphere, and the answers are typed.
  */
 
-type Stage = "idle" | "running" | "paused" | "finished";
+type Stage = "idle" | "running" | "paused";
 
 export function ExamTutorLesson({
   examId,
@@ -50,7 +50,6 @@ export function ExamTutorLesson({
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState("");
   const [pickingVoice, setPickingVoice] = useState(false);
-  const [result, setResult] = useState<{ points: number; firstTry: number } | null>(null);
   /* In writing, the tutor's reply waits to be read: the next point comes when the learner goes on. */
   const [awaitingContinue, setAwaitingContinue] = useState(false);
   const continueRef = useRef<(() => void) | null>(null);
@@ -62,14 +61,13 @@ export function ExamTutorLesson({
   const session = useExamVoice({ lectureId, voice, allowText: true, onAnswerEnd: () => void endAnswerRef.current() });
   const { phase, heard, line, error, textMode, orbRef, say, listen, stopListening, setPhase, hush } = session;
 
+  /* The lesson is over (or ended): its score goes to the lesson's own result screen, as every lesson's does. */
   const wrapUp = useCallback(() => {
     flowRef.current += 1;
     session.finish();
     const points = steps.reduce((sum, _, stepIndex) => sum + tutorStepPoints(verdictsRef.current[stepIndex] ?? []), 0);
-    const firstTry = steps.filter((_, stepIndex) => verdictsRef.current[stepIndex]?.[0] === "correct").length;
-    setResult({ points, firstTry });
-    setStage("finished");
-  }, [session, steps]);
+    onFinish(points, steps.length);
+  }, [onFinish, session, steps]);
 
   const teach = useCallback(
     async (stepIndex: number) => {
@@ -182,13 +180,19 @@ export function ExamTutorLesson({
   /* "Začni": a tap, so the voice may play; the microphone and talking time, then the first point. */
   async function begin() {
     verdictsRef.current = [];
-    setResult(null);
     setPickingVoice(false);
     setStage("running");
 
     if (await session.start()) {
       void teach(0);
     }
+  }
+
+  /* Cancelling while it prepares goes back to the start, as the app's tutor does. */
+  function cancel() {
+    flowRef.current += 1;
+    session.teardown();
+    setStage("idle");
   }
 
   function pause() {
@@ -232,7 +236,7 @@ export function ExamTutorLesson({
 
   return (
     <div
-      className={`memo-tutor memo-exam-tutor phase-${stage === "paused" ? "paused" : running ? phase : stage} ${
+      className={`memo-tutor memo-exam-tutor phase-${stage === "paused" ? "paused" : running ? phase : "idle"} ${
         textMode ? "in-writing" : ""
       }`.trim()}
       style={{ "--orb-hue": voiceHue(voice) } as CSSProperties}
@@ -253,13 +257,6 @@ export function ExamTutorLesson({
         <div className="memo-tutor-intro">
           <p className="memo-tutor-title">{t("exam.tutor.idle.title")}</p>
           <p className="memo-tutor-lede">{t("exam.tutor.idle.lede")}</p>
-        </div>
-      ) : stage === "finished" ? (
-        <div className="memo-tutor-intro">
-          <p className="memo-tutor-title">{t("exam.tutor.finished.title")}</p>
-          <p className="memo-tutor-lede">
-            {t("exam.tutor.finished.lede", { correct: result?.firstTry ?? 0, total: steps.length })}
-          </p>
         </div>
       ) : preparing ? (
         <div className="memo-tutor-loading-copy" role="status">
@@ -363,18 +360,11 @@ export function ExamTutorLesson({
             <span>{t("tutor.start")}</span>
           </button>
         </>
-      ) : stage === "finished" ? (
-        <div className="memo-tutor-actions">
-          <button type="button" className="memo-tutor-start" onClick={() => onFinish(result?.points ?? 0, steps.length)}>
-            <Msym name="arrow_forward" size="1.3rem" fill={false} weight={500} />
-            <span>{t("exam.tutor.next")}</span>
-          </button>
-          <button type="button" className="memo-tutor-second" onClick={() => void begin()}>
-            <Msym name="replay" size="1.2rem" fill={false} weight={500} />
-            <span>{t("tutor.restart")}</span>
-          </button>
-        </div>
-      ) : preparing ? null : (
+      ) : preparing ? (
+        <button type="button" className="memo-button-ghost memo-tutor-cancel" onClick={cancel}>
+          {t("common.cancel")}
+        </button>
+      ) : (
         /* The app tutor's transport: back over the point, pause or carry on, end. */
         <div className="memo-tutor-controls">
           <button type="button" className="memo-tutor-control" onClick={replayPoint} aria-label={t("exam.tutor.repeat")}>

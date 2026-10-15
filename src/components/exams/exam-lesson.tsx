@@ -347,13 +347,16 @@ export function ExamLesson({
           />
         ) : (
           <div className="memo-exam-center memo-exam-done">
-            <MemoBuddy mood={buddy.mood} moodKey={buddy.key} size="7rem" sparkles />
+            {/* Sparkles celebrate a lesson that reached the goal, not one that will come back. */}
+            <MemoBuddy mood={buddy.mood} moodKey={buddy.key} size="7rem" sparkles={phase.below === null} />
             <h2>
               {phase.headline === "mastered"
                 ? t("exam.lesson.done.module")
                 : phase.headline === "learned"
                   ? t("exam.lesson.done.learned", { target })
-                  : t("exam.lesson.done.title")}
+                  : phase.below !== null
+                    ? t("exam.lesson.done.titleBelow")
+                    : t("exam.lesson.done.title")}
             </h2>
             {phase.below !== null ? (
               <p>{t("exam.lesson.done.below", { score: phase.below, target })}</p>

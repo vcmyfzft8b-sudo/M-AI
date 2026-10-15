@@ -2390,13 +2390,13 @@ export const sl = {
   "push.enableAllow": "Obvesti me",
   "push.enableSkip": "Ne, hvala",
 
-  /* ---- Priprava na izpit ---- */
+  /* ---- Priprava na test ---- */
   "library.new": "Novo",
   "nav.exams": "Izpiti",
   "api.exam.noNotes": "Izberi vsaj en dokončan zapisek.",
   "api.exam.noQuestions": "Zapiski še nimajo vprašanj za generalko. Najprej opravi nekaj lekcij.",
   "api.exam.mockPaid": "Generalka je na voljo s paketom.",
-  "exam.entry.title": "Priprava na izpit",
+  "exam.entry.title": "Priprava na test",
   "exam.entry.body": "Učna pot, kvizi in generalka",
   "exam.entry.start": "Začni",
   "exam.entry.continue": "Nadaljuj",
@@ -2457,7 +2457,7 @@ export const sl = {
   "exam.setup.material.existing": { one: "Ali izberi iz svojih zapiskov ({count})", two: "Ali izberi iz svojih zapiskov ({count})", few: "Ali izberi iz svojih zapiskov ({count})", other: "Ali izberi iz svojih zapiskov ({count})" },
   "exam.setup.material.title": "Iz česa se boš učil?",
   "exam.setup.material.notReady": "Še se ustvarja",
-  "exam.setup.material.locked.title": "Priprava na izpit je del paketa",
+  "exam.setup.material.locked.title": "Priprava na test je del paketa",
   "exam.setup.material.locked.body": "Iz tvojih zapiskov sestavi učno pot, kvize in generalko. Brezplačno lahko uporabiš le svoj prvi zapisek.",
   "exam.setup.subject.title": "Za kateri predmet?",
   "exam.setup.subject.placeholder": "npr. Mikroekonomija",

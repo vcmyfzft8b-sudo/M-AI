@@ -10313,20 +10313,22 @@
 .memo-pw-memo.hop .memo-pw-memo-body { animation: memo-pw-hop 1.2s cubic-bezier(0.33, 0.9, 0.6, 1) infinite; }
 .memo-pw-memo.float .memo-pw-memo-body { animation: memo-pw-float 3s ease-in-out infinite; }
 
-.memo-pw-prop {
+/* The feature's icon, pinned to Memo's shoulder in the feature's colour. */
+.memo-pw-tag {
   position: absolute;
   z-index: 3;
-  font-size: 1.8rem;
-  line-height: 1;
-  pointer-events: none;
+  right: -0.3rem;
+  top: 0.1rem;
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  background: var(--paywall-accent);
+  color: var(--on-promo);
+  box-shadow: 0 4px 10px color-mix(in oklch, var(--paywall-accent) 40%, transparent);
 }
-
-.memo-pw-prop.on-head { left: 50%; top: -0.6rem; translate: -45% 0; animation: inherit; }
-.memo-pw-memo.groove .memo-pw-prop { animation: memo-pw-groove 0.9s ease-in-out infinite; }
-.memo-pw-memo.nod .memo-pw-prop { animation: memo-pw-nod 1.6s ease-in-out infinite; }
-.memo-pw-prop.cap { top: -1rem; font-size: 2rem; }
-.memo-pw-prop.in-hand { right: -0.6rem; bottom: 0.2rem; animation: memo-pw-wave 2.4s ease-in-out infinite; }
-.memo-pw-prop.key { right: -0.4rem; bottom: 0.6rem; transform-origin: 20% 20%; animation: memo-pw-swing 1.6s ease-in-out infinite; }
 
 /* Chat: Memo answering, the conversation beside him. */
 .memo-pw-chat {
@@ -10397,18 +10399,6 @@
   animation: memo-pw-word calc(var(--n) * 0.35s) calc(var(--i) * 0.35s) infinite;
 }
 
-.memo-pw-notes-float span {
-  position: absolute;
-  color: var(--on-promo);
-  font-size: 1.3rem;
-  opacity: 0;
-  animation: memo-pw-note-up 2.4s ease-out infinite;
-}
-
-.memo-pw-notes-float span:nth-child(1) { left: 1.6rem; bottom: 2rem; }
-.memo-pw-notes-float span:nth-child(2) { left: 5.6rem; bottom: 3rem; animation-delay: 0.8s; }
-.memo-pw-notes-float span:nth-child(3) { left: 3.4rem; bottom: 4.5rem; animation-delay: 1.6s; }
-
 .memo-pw-wave {
   display: flex;
   align-items: center;
@@ -10429,26 +10419,32 @@
   background: var(--on-promo);
 }
 
-/* Tutor and podcast: Memo beside the voice, which breathes as on its screen. */
-.memo-pw-tutor,
-.memo-pw-podcast {
+/* Tutor and podcast: Memo speaking — a bubble with the voice moving in it. */
+.memo-pw-voice {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1rem;
+  border-radius: 22px 22px 22px 6px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: memo-pw-rise 0.5s 0.3s both;
+}
+
+.memo-pw-voice .memo-pw-wave {
+  height: 2.2rem;
+}
+
+.memo-pw-play {
   display: grid;
-  justify-items: center;
-  gap: 0.5rem;
-}
-
-.memo-pw-orb {
-  width: 5.2rem;
-  height: 5.2rem;
+  place-items: center;
+  flex: none;
+  width: 2.3rem;
+  height: 2.3rem;
   border-radius: 999px;
-  background: radial-gradient(circle at 35% 30%, color-mix(in oklch, var(--paywall-accent) 35%, var(--surface)), var(--paywall-accent) 70%);
-  box-shadow: 0 10px 30px color-mix(in oklch, var(--paywall-accent) 45%, transparent);
-  animation: memo-pw-breathe 2.4s ease-in-out infinite;
-}
-
-.memo-pw-orb.small {
-  width: 4.2rem;
-  height: 4.2rem;
+  background: var(--paywall-accent);
+  color: var(--on-promo);
 }
 
 /* New note: Memo writing, a bright idea, notes flying out of the pad. */
@@ -10478,15 +10474,15 @@
 .memo-pw-fly .memo-pw-note.two { bottom: 1.4rem; animation: memo-pw-fly-in 3.2s 1.6s ease-in-out infinite; }
 .memo-pw-scene.note { justify-content: flex-start; padding-left: 2.6rem; }
 
-.memo-pw-note-emoji {
+.memo-pw-note-icon {
   display: grid;
   place-items: center;
   flex: none;
   width: 1.9rem;
   height: 1.9rem;
   border-radius: 12px;
-  background: var(--bg);
-  font-size: 0.95rem;
+  background: color-mix(in oklch, var(--paywall-accent) 16%, transparent);
+  color: var(--paywall-accent);
 }
 
 .memo-pw-note-lines {
@@ -10519,7 +10515,7 @@
 }
 
 .memo-pw-note.blurred .memo-pw-note-lines,
-.memo-pw-note.blurred .memo-pw-note-emoji {
+.memo-pw-note.blurred .memo-pw-note-icon {
   filter: blur(3px);
 }
 
@@ -10549,7 +10545,10 @@
 .memo-pw-card {
   width: 2.6rem;
   height: 3.3rem;
-  font-size: 1.2rem;
+}
+
+.memo-pw-orbit > span {
+  color: var(--paywall-accent);
 }
 
 .memo-pw-orbit > span:nth-child(1) { left: calc(50% - 1.3rem); top: -0.4rem; }
@@ -10569,19 +10568,6 @@
 .memo-pw-orbit.planets > span:nth-child(3) { left: -0.4rem; bottom: 0.2rem; }
 .memo-pw-orbit.planets > span:nth-child(4) { right: -0.4rem; bottom: 0.2rem; }
 
-.memo-pw-answer {
-  position: absolute;
-  right: 0.8rem;
-  top: 0.8rem;
-  display: grid;
-  place-items: center;
-  width: 2.6rem;
-  height: 2.6rem;
-  border-radius: 999px;
-  background: var(--paywall-accent);
-  color: var(--on-promo);
-  animation: memo-pw-breathe 2s ease-in-out infinite;
-}
 
 /*
  * The plans, laid out per feature (`paywallLayout`). "cards" is the default
@@ -10683,33 +10669,10 @@
   color: var(--on-promo);
 }
 
-.memo-paywall-shell[data-reason="tutor"] .memo-pw-orb {
-  width: 6.4rem;
-  height: 6.4rem;
-  /* White in both appearances: the orb is lit, whatever the page is. */
-  background: radial-gradient(circle at 35% 30%, var(--on-promo), color-mix(in oklch, var(--paywall-accent) 50%, var(--on-promo)) 70%);
-}
-
-.memo-paywall-shell[data-reason="tutor"] .memo-pw-wave span {
-  background: var(--on-promo);
-}
-
 .memo-paywall-shell[data-reason="tutor"] .memo-paywall-offer {
   background: var(--surface);
 }
 
-.memo-paywall-shell[data-reason="podcast"] .memo-pw-hero::before {
-  content: "";
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  width: 0.75rem;
-  height: 0.75rem;
-  border-radius: 999px;
-  background: var(--promo);
-  box-shadow: 0 0 0 0.3rem color-mix(in oklch, var(--promo) 25%, transparent);
-  animation: memo-pw-dot 1.4s infinite;
-}
 
 /* New note: a page of lined paper with a margin; the plans are sticky notes. */
 .memo-paywall-shell[data-reason="note"] {

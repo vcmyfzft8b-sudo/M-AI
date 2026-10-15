@@ -4,7 +4,7 @@ import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { useT } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
-import { MascotFigure, MascotSparkles, MascotThought, useMascot } from "@/components/onboarding-mascot";
+import { MascotFigure, MascotSparkles, useMascot } from "@/components/onboarding-mascot";
 import type { PaywallReason } from "@/lib/paywall-reasons";
 import { NOTE_TABS } from "@/lib/note-tabs";
 
@@ -59,10 +59,12 @@ function Wave({ bars = 9 }: { bars?: number }) {
   );
 }
 
-function NoteCard({ emoji, className = "" }: { emoji: string; className?: string }) {
+function NoteCard({ icon, className = "" }: { icon: string; className?: string }) {
   return (
     <span className={`memo-pw-note ${className}`.trim()}>
-      <span className="memo-pw-note-emoji">{emoji}</span>
+      <span className="memo-pw-note-icon">
+        <Msym name={icon} size="1.1rem" fill={false} weight={500} />
+      </span>
       <span className="memo-pw-note-lines">
         <span />
         <span />
@@ -72,8 +74,8 @@ function NoteCard({ emoji, className = "" }: { emoji: string; className?: string
   );
 }
 
-/** Memo, blinking, with whatever he is wearing or holding for this scene. */
-function Memo({ move, prop, propClass = "", thought }: { move: string; prop?: string; propClass?: string; thought?: string }) {
+/** Memo, blinking, with the feature's icon pinned to his shoulder. */
+function Memo({ move, badge }: { move: string; badge?: string }) {
   const root = useRef<HTMLSpanElement | null>(null);
   // Read once; it only decides whether he blinks, never what is drawn.
   const [calm] = useState(
@@ -88,8 +90,25 @@ function Memo({ move, prop, propClass = "", thought }: { move: string; prop?: st
       <span className="memo-pw-memo-body">
         <MascotFigure />
       </span>
-      {prop ? <span className={`memo-pw-prop ${propClass}`.trim()}>{prop}</span> : null}
-      {thought ? <MascotThought icon={thought} offset="-1.4rem" scale={0.9} /> : null}
+      {badge ? (
+        <span className="memo-pw-tag">
+          <Msym name={badge} size="1.15rem" fill={false} weight={600} />
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+/** A voice, speaking: a bubble with a moving wave in it. */
+function Voice({ bars = 11, play = false }: { bars?: number; play?: boolean }) {
+  return (
+    <span className="memo-pw-voice">
+      {play ? (
+        <span className="memo-pw-play">
+          <Msym name="play_arrow" size="1.2rem" fill weight={600} />
+        </span>
+      ) : null}
+      <Wave bars={bars} />
     </span>
   );
 }
@@ -138,7 +157,7 @@ export function PaywallHero({ reason }: { reason: PaywallReason }) {
     case "chat":
       scene = (
         <span className="memo-pw-scene chat">
-          <Memo move="wave" />
+          <Memo move="wave" badge="forum" />
           <span className="memo-pw-chat">
             <span className="memo-pw-bubble mine">{t("paywall.demo.chatQuestion")}</span>
             <span className="memo-pw-bubble theirs">{t("paywall.demo.chatAnswer")}</span>
@@ -155,12 +174,7 @@ export function PaywallHero({ reason }: { reason: PaywallReason }) {
       const words = t("paywall.demo.listenLine").split(" ");
       scene = (
         <span className="memo-pw-scene listen">
-          <span className="memo-pw-notes-float" aria-hidden="true">
-            <span>♪</span>
-            <span>♫</span>
-            <span>♪</span>
-          </span>
-          <Memo move="groove" prop="🎧" propClass="on-head" />
+          <Memo move="groove" badge="headphones" />
           <span className="memo-pw-listen">
             <span className="memo-pw-listen-line">
               {words.map((word, index) => (
@@ -169,7 +183,7 @@ export function PaywallHero({ reason }: { reason: PaywallReason }) {
                 </span>
               ))}
             </span>
-            <Wave bars={12} />
+            <Wave bars={14} />
           </span>
         </span>
       );
@@ -178,22 +192,16 @@ export function PaywallHero({ reason }: { reason: PaywallReason }) {
     case "tutor":
       scene = (
         <span className="memo-pw-scene tutor">
-          <Memo move="nod" prop="🎓" propClass="on-head cap" />
-          <span className="memo-pw-tutor">
-            <span className="memo-pw-orb" />
-            <Wave bars={7} />
-          </span>
+          <Memo move="nod" badge="school" />
+          <Voice bars={13} />
         </span>
       );
       break;
     case "podcast":
       scene = (
         <span className="memo-pw-scene podcast">
-          <Memo move="sway" prop="🎙️" propClass="in-hand" />
-          <span className="memo-pw-podcast">
-            <span className="memo-pw-orb small" />
-            <Wave bars={10} />
-          </span>
+          <Memo move="sway" badge="mic" />
+          <Voice bars={12} play />
         </span>
       );
       break;
@@ -201,10 +209,10 @@ export function PaywallHero({ reason }: { reason: PaywallReason }) {
       scene = (
         <span className="memo-pw-scene note">
           <span className="memo-pw-fly">
-            <NoteCard emoji="🧬" className="one" />
-            <NoteCard emoji="📈" className="two" />
+            <NoteCard icon="description" className="one" />
+            <NoteCard icon="description" className="two" />
           </span>
-          <Memo move="write" thought="💡" />
+          <Memo move="write" badge="edit_square" />
           <MascotSparkles />
         </span>
       );
@@ -212,8 +220,8 @@ export function PaywallHero({ reason }: { reason: PaywallReason }) {
     case "locked":
       scene = (
         <span className="memo-pw-scene locked">
-          <NoteCard emoji="📈" className="blurred big" />
-          <Memo move="peek" prop="🔑" propClass="in-hand key" />
+          <NoteCard icon="description" className="blurred big" />
+          <Memo move="peek" badge="lock" />
         </span>
       );
       break;
@@ -221,11 +229,11 @@ export function PaywallHero({ reason }: { reason: PaywallReason }) {
       scene = (
         <span className="memo-pw-scene regenerate">
           <span className="memo-pw-orbit">
-            <span className="memo-pw-card">❓</span>
-            <span className="memo-pw-card">💡</span>
-            <span className="memo-pw-card">✅</span>
+            <span className="memo-pw-card"><Msym name="style" size="1.2rem" fill={false} weight={500} /></span>
+            <span className="memo-pw-card"><Msym name="quiz" size="1.2rem" fill={false} weight={500} /></span>
+            <span className="memo-pw-card"><Msym name="account_tree" size="1.2rem" fill={false} weight={500} /></span>
           </span>
-          <Memo move="hop" />
+          <Memo move="hop" badge="refresh" />
         </span>
       );
       break;
@@ -233,15 +241,13 @@ export function PaywallHero({ reason }: { reason: PaywallReason }) {
       scene = (
         <span className="memo-pw-scene library">
           <span className="memo-pw-orbit planets">
-            <span>🧬</span>
-            <span>📈</span>
-            <span>🌿</span>
-            <span>🏛️</span>
+            {["description", "style", "quiz", "podcasts"].map((icon) => (
+              <span key={icon}>
+                <Msym name={icon} size="1.1rem" fill={false} weight={500} />
+              </span>
+            ))}
           </span>
-          <Memo move="float" />
-          <span className="memo-pw-answer">
-            <Msym name="forum" size="1.2rem" fill={false} weight={500} />
-          </span>
+          <Memo move="float" badge="forum" />
         </span>
       );
       break;

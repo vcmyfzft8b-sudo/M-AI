@@ -27771,7 +27771,7 @@ a.memo-exam-station-go {
 /*
  * Exam prep's row in the "Novo" sheet: one of the options (`.memo-sheet-option`), with the same
  * height, padding, tile and type, sitting first in the same list. It is the primary by a touch of
- * coral only: the tinted tile Memo sits in, a coral edge and a small coral arrow.
+ * coral only: the tinted tile Memo sits in and a faint coral edge, which firms up on hover.
  */
 .memo-exam-entry {
   display: flex;
@@ -27779,11 +27779,11 @@ a.memo-exam-station-go {
   gap: 1.05rem;
   width: 100%;
   min-height: 4.6rem;
-  padding: 0.5rem 1rem 0.5rem 1.2rem;
+  padding: 0.5rem 1.2rem;
   border: 0;
   border-radius: 20px;
-  background: color-mix(in srgb, var(--promo) 6%, var(--surface));
-  box-shadow: var(--shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--promo) 45%, transparent);
+  background: color-mix(in srgb, var(--promo) 3%, var(--surface));
+  box-shadow: var(--shadow), inset 0 0 0 1px color-mix(in srgb, var(--promo) 24%, transparent);
   color: var(--text);
   cursor: pointer;
   font: inherit;
@@ -27794,7 +27794,7 @@ a.memo-exam-station-go {
 }
 
 .memo-exam-entry:hover {
-  box-shadow: var(--shadow), inset 0 0 0 1.5px var(--promo);
+  box-shadow: var(--shadow), inset 0 0 0 1px color-mix(in srgb, var(--promo) 55%, transparent);
 }
 
 .memo-exam-entry:active {
@@ -27803,7 +27803,7 @@ a.memo-exam-station-go {
 
 .memo-exam-entry:focus-visible {
   outline: none;
-  box-shadow: var(--shadow), inset 0 0 0 1.5px var(--promo), 0 0 0 3px var(--focus-ring);
+  box-shadow: var(--shadow), inset 0 0 0 1px color-mix(in srgb, var(--promo) 55%, transparent), 0 0 0 3px var(--focus-ring);
 }
 
 .memo-exam-entry-tile {
@@ -27842,24 +27842,12 @@ a.memo-exam-station-go {
   white-space: nowrap;
 }
 
-.memo-exam-entry-go {
-  display: grid;
-  flex: 0 0 auto;
-  width: 2.2rem;
-  height: 2.2rem;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--coral);
-  box-shadow: var(--memo-coral-glow);
-  color: var(--on-photo);
-}
-
 .memo-exam-entry-desktop {
   margin: 1.2rem 0 0.85rem;
 }
 
 /*
- * The library's exam-prep folder. Its rows are note rows; Memo in the tile, ringed by how much
+ * The library's exam-prep folder. Its rows are note rows; an exam emoji in the tile, ringed by how much
  * of the goal is mastered, is what says "prep" rather than "note". An eyebrow heads its past ones.
  */
 .memo-library-head {
@@ -27930,22 +27918,6 @@ a.memo-exam-station-go {
   margin-top: 0.6rem;
 }
 
-.memo-prep-new {
-  box-shadow: inset 0 0 0 1.5px var(--line);
-  background: transparent;
-}
-
-.memo-prep-new-tile {
-  display: grid;
-  flex: 0 0 auto;
-  width: 3rem;
-  height: 3rem;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--tile);
-  color: var(--text);
-}
-
 .memo-prep-empty {
   padding: 1.6rem 1rem 0.8rem;
 }
@@ -27982,7 +27954,7 @@ a.memo-exam-station-go {
 
 @media (max-width: 1099px) {
   /* The phone's note rows are the swipe surface; a prep row is cut to the same size. */
-  .memo-note-row:is(.memo-prep-row, .memo-prep-new) {
+  .memo-note-row.memo-prep-row {
     gap: 0.9rem;
     min-height: 0;
     padding: 0.95rem 1.2rem;
@@ -28889,8 +28861,8 @@ a.memo-exam-station-go {
 
 /*
  * The lockup with Memo standing in for its still brain (src/components/animated-lockup.tsx).
- * The wordmark is the lockup image cropped to its lettering; the brain is laid over the left
- * third, where the image's own brain was. Sized by height, like the images it replaces.
+ * The wordmark is the lockup's lettering alone (memo-wordmark.png, outline closed round the M);
+ * the brain is laid over the left third, where the image's own brain was. Sized by height, like the images it replaces.
  */
 .memo-lockup-animated {
   position: relative;
@@ -28906,7 +28878,6 @@ a.memo-exam-station-go {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  clip-path: inset(0 0 0 35.5%);
 }
 
 .memo-lockup-brain {
@@ -28914,6 +28885,8 @@ a.memo-exam-station-go {
   left: 3.2%;
   top: 1%;
   width: 32%;
+  /* The whole lockup takes the tap (animated-lockup.tsx), so Memo's own tap must not hop him twice. */
+  pointer-events: none;
 }
 
 .memo-lockup-brain .memo-buddy img {
@@ -28941,9 +28914,8 @@ a.memo-exam-station-go {
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  clip-path: inset(0 0 0 35.5%);
-  -webkit-mask: url("/memo-lockup.png") center / 100% 100% no-repeat;
-  mask: url("/memo-lockup.png") center / 100% 100% no-repeat;
+  -webkit-mask: url("/memo-wordmark.png") center / 100% 100% no-repeat;
+  mask: url("/memo-wordmark.png") center / 100% 100% no-repeat;
   background: linear-gradient(
     105deg,
     transparent 0 42%,
@@ -28952,7 +28924,22 @@ a.memo-exam-station-go {
   );
   background-size: 300% 100%;
   background-position: 120% 0;
-  animation: memo-lockup-shine 6.5s ease-in-out 1.2s infinite;
+  animation: memo-lockup-shine 4.5s ease-in-out 1.2s infinite;
+}
+
+/* A tap runs one sweep straight away, whatever the idle shine is doing. */
+.memo-lockup-animated.is-shining::after {
+  animation: memo-lockup-shine-tap 1.4s ease-in-out;
+}
+
+@keyframes memo-lockup-shine-tap {
+  0% {
+    background-position: 120% 0;
+  }
+
+  100% {
+    background-position: -20% 0;
+  }
 }
 
 @keyframes memo-lockup-shine {
@@ -28960,7 +28947,8 @@ a.memo-exam-station-go {
     background-position: 120% 0;
   }
 
-  22%,
+  /* The sweep itself stays ~1.4 s; only the pause between sweeps is shorter. */
+  32%,
   100% {
     background-position: -20% 0;
   }

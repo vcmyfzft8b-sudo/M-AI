@@ -19,6 +19,7 @@ import type { LessonGenerator, LessonLoad, LessonPayload } from "@/lib/exams/exa
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { NOTE_TTS_VOICE_STORAGE_KEY } from "@/lib/note-tts-settings";
 import { FLASHCARD_EXIT_ANIMATION_MS, type FlashcardBucket } from "@/lib/study/flashcard-drag";
+import { paywallPath } from "@/lib/paywall-reasons";
 
 const POLL_MS = 4000;
 
@@ -146,7 +147,8 @@ export function ExamLesson({
     );
 
     if (response.status === 402) {
-      navigateRef.current("/app/start");
+      // Back to the prep, not this lesson, which would only send the learner here again.
+      navigateRef.current(paywallPath("exam", `/app/exams/${examId}`));
       return;
     }
 

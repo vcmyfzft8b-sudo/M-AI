@@ -6,7 +6,8 @@ study path. It follows Astra AI's exam-prep flow, drawn in Memo's own components
 ## Where it lives
 
 - **"Novo"** (the phone dock button, formerly "Nov zapisek", and the desktop heading above the
-  quick actions) opens a sheet whose first item is the coral exam-prep card. Like every option
+  quick actions) opens a sheet whose first item is the exam-prep card (Memo in a coral tile, a faint coral edge,
+  no arrow). Like every option
   there, it always starts something new (`/app/exams/new`). The four note sources follow it.
 - **The library:** a learner may have any number of preps, and they live in "Moji zapiski", in
   a folder of their own.
@@ -14,12 +15,13 @@ study path. It follows Astra AI's exam-prep flow, drawn in Memo's own components
     its count) once there is a prep, then the learner's own folders, in the desktop menu and the
     phone sheet alike. The chip names the open folder. There is no prep list on the notes view.
   - The folder shows every prep, the ones ahead first and past or archived ones under "Pretekli
-    izpiti", and a row that starts a new one. Its address is `/app?view=preps`
+    izpiti". A new prep starts from "Novo" only. Its address is `/app?view=preps`
     (`EXAM_PREPS_HREF`); leaving a prep (the exam's back button, archiving, deleting, closing
     setup) goes there, and arriving that way the chip pulses twice in coral, so a new prep is seen
     to land in it. `/app/exams` redirects there.
-  - The rows are note rows; Memo in a ring of mastery marks them as preps. A search in the folder
-    matches their titles (`listLibraryExamPreps`, `ExamLibraryList`). Storage stays separate:
+  - The rows are note rows; an exam emoji (📝 📚 🎓 …, one per row in turn) in a ring of mastery
+    marks them as preps. A search in the folder matches their titles, and one that matches nothing
+    says so rather than showing the "no preps yet" screen (`listLibraryExamPreps`, `ExamLibraryList`). Storage stays separate:
     preps are `exams` rows that reference their notes through `exam_modules`, never `lectures`
     rows.
 - **Desktop rail:** no entry of its own; "Domov" stays lit on every exam page, and an exam page
@@ -212,9 +214,12 @@ Scripted moves are skipped under `prefers-reduced-motion`; the CSS breathing is 
 rule.
 
 `src/components/animated-lockup.tsx` puts the same Memo into the "Memo AI" lockup in the app's own
-chrome (phone home bar, desktop header): the lettering is the lockup image cropped by `clip-path`,
-the brain is a live `MemoBuddy` laid exactly over the image's brain, and a sheen masked by the
-lockup crosses it now and then. The landing, paywall and onboarding keep the still image.
+chrome (phone home bar, desktop header): the lettering is `public/memo-wordmark.png` (the lockup's
+own pixels with the brain taken out and the sticker outline closed round the "M"; a `clip-path` crop
+of the lockup left the M's outline cut flat), the brain is a live `MemoBuddy` laid exactly over the
+image's brain, livelier than elsewhere (a hop every 3–5.5 s, a blink every 1.4–3.2 s), and a sheen
+masked by the lettering crosses it every 4.5 s. A tap anywhere on the lockup makes him hop with a
+sparkle and runs the sheen at once. The landing, paywall and onboarding keep the still image.
 
 ## Not built yet
 

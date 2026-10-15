@@ -23,6 +23,7 @@ import {
 import { pathBuddySide, pathOffset, pathSegment } from "@/lib/exams/exam-path";
 import type { ExamDetail, ExamModuleView } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
+import { currentPaywallBack, paywallPath } from "@/lib/paywall-reasons";
 
 const STAGES: { stage: Exclude<ExamStage, "ready">; key: MessageKey }[] = [
   { stage: "learn", key: "exam.path.stage.learn" },
@@ -148,7 +149,7 @@ export function ExamDashboard({
 
   function openModule(module: ExamModuleView, kind: ExamLessonKind) {
     if (!canOpen(module.lectureId)) {
-      navigateWithFeedback("/app/start");
+      navigateWithFeedback(paywallPath("exam", currentPaywallBack()));
       return;
     }
 

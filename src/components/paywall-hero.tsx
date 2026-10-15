@@ -35,6 +35,7 @@ const SCENES: Record<PaywallReason, { accent?: string; layout: PaywallLayout }> 
   locked: { accent: tint("palace"), layout: "cards" },
   regenerate: { accent: tint("flashcards"), layout: "cards" },
   library: { accent: tint("mindmap"), layout: "spotlight" },
+  exam: { accent: tint("test"), layout: "spotlight" },
   offer: { layout: "cards" },
 };
 
@@ -256,6 +257,19 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
             <span className="memo-pw-card"><Msym name="account_tree" size="1.2rem" fill={false} weight={500} /></span>
           </span>
           <Memo move="hop" badge="refresh" />
+        </span>
+      );
+      break;
+    case "exam":
+      scene = (
+        <span className="memo-pw-scene regenerate">
+          <span className="memo-pw-orbit">
+            <span className="memo-pw-card"><Msym name="event" size="1.2rem" fill={false} weight={500} /></span>
+            <span className="memo-pw-card"><Msym name="style" size="1.2rem" fill={false} weight={500} /></span>
+            <span className="memo-pw-card"><Msym name="assignment" size="1.2rem" fill={false} weight={500} /></span>
+          </span>
+          <Memo move="nod" badge="school" />
+          <MascotSparkles />
         </span>
       );
       break;

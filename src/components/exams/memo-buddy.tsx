@@ -38,7 +38,14 @@ const MOOD_MOVE: Record<BuddyMood, MascotMove | null> = {
 };
 
 /* The small things he does on his own while nobody is talking to him, so he never looks like a still. */
-const IDLE_MOVES: MascotMove[] = ["nod", "wave", "jelly", "boing", "nod", "hop"];
+export type BuddyIdle = {
+  moves: readonly MascotMove[];
+  every: readonly [number, number];
+  /** Between his blinks (ms, at least and at most); the onboarding's 2.4–6.2 s when left out. */
+  blinkEvery?: readonly [number, number];
+};
+
+const IDLE: BuddyIdle = { moves: ["nod", "wave", "jelly", "boing", "nod", "hop"], every: [4500, 8500] };
 
 /** How wide the onboarding's Memo is: its cloud and beads are drawn, in rem, for him. */
 const ONBOARDING_MEMO_REM = 4.6;
@@ -76,6 +83,7 @@ export function MemoBuddy({
   sparkles = false,
   className,
   label,
+  idle = IDLE,
 }: {
   mood?: BuddyMood;
   /** Changes to replay the mood's move even when the mood itself is unchanged (two right answers). */
@@ -87,7 +95,10 @@ export function MemoBuddy({
   className?: string;
   /** Accessible name; omitted when he is decoration next to text that says the same. */
   label?: string;
+  /** His unprompted moves and how often they come (ms between them, at least and at most). */
+  idle?: BuddyIdle;
 }) {
+  const blinkEvery = idle.blinkEvery;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const burstRef = useRef<HTMLDivElement | null>(null);
@@ -155,28 +166,28 @@ export function MemoBuddy({
       timer = setTimeout(() => {
         blink(pickIdleBlink(Math.random()));
         schedule();
-      }, nextBlinkDelay(Math.random()));
+      }, blinkEvery ? blinkEvery[0] + Math.random() * (blinkEvery[1] - blinkEvery[0]) : nextBlinkDelay(Math.random()));
     };
 
     schedule();
 
     return () => clearTimeout(timer);
-  }, [blink]);
+  }, [blink, blinkEvery]);
 
   /* Now and then, unprompted, a little move: a nod, a wave, a wiggle. */
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const schedule = () => {
       timer = setTimeout(() => {
-        play(IDLE_MOVES[Math.floor(Math.random() * IDLE_MOVES.length)]);
+        play(idle.moves[Math.floor(Math.random() * idle.moves.length)]);
         schedule();
-      }, 4500 + Math.random() * 4000);
+      }, idle.every[0] + Math.random() * (idle.every[1] - idle.every[0]));
     };
 
     schedule();
 
     return () => clearTimeout(timer);
-  }, [play]);
+  }, [idle, play]);
 
   /* A mood is played once when it arrives. */
   useEffect(() => {

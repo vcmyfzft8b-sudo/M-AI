@@ -28,6 +28,7 @@ import {
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { noteEmoji } from "@/lib/note-emoji";
 import { getOnboardingYearOptions, SCHOOL_OPTIONS } from "@/lib/onboarding-options";
+import { currentPaywallBack, paywallPath } from "@/lib/paywall-reasons";
 
 export type ExamSetupNote = {
   id: string;
@@ -297,7 +298,7 @@ export function ExamSetup({
       });
 
       if (response.status === 402) {
-        navigateWithFeedback("/app/start");
+        navigateWithFeedback(paywallPath("exam", currentPaywallBack()));
         return;
       }
 
@@ -375,7 +376,7 @@ export function ExamSetup({
     }
 
     if (!canCreateNotes) {
-      navigateWithFeedback("/app/start");
+      navigateWithFeedback(paywallPath("note", currentPaywallBack()));
       return;
     }
 
@@ -604,7 +605,7 @@ export function ExamSetup({
           <MemoBuddy mood="wave" size="7rem" thought="🎓" />
           <h1>{t("exam.setup.material.locked.title")}</h1>
           <p>{t("exam.setup.material.locked.body")}</p>
-          <button type="button" className="memo-button-coral" onClick={() => navigateWithFeedback("/app/start")}>
+          <button type="button" className="memo-button-coral" onClick={() => navigateWithFeedback(paywallPath("exam", currentPaywallBack()))}>
             {t("exam.mock.paid.cta")}
           </button>
         </div>

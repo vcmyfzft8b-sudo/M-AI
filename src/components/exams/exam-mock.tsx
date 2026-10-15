@@ -23,6 +23,7 @@ import {
 import type { MockQuestionForLearner, MockResult } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { DEFAULT_NOTE_TTS_VOICE, type NoteTtsVoice } from "@/lib/note-tts-settings";
+import { currentPaywallBack, paywallPath } from "@/lib/paywall-reasons";
 
 type Attempt = {
   id: string;
@@ -136,7 +137,7 @@ export function ExamMock({
 
   async function start() {
     if (!hasPaidAccess) {
-      navigateWithFeedback("/app/start");
+      navigateWithFeedback(paywallPath("exam", currentPaywallBack()));
       return;
     }
 
@@ -153,7 +154,7 @@ export function ExamMock({
     }).catch(() => null);
 
     if (response?.status === 402) {
-      navigateWithFeedback("/app/start");
+      navigateWithFeedback(paywallPath("exam", currentPaywallBack()));
       return;
     }
 

@@ -1897,7 +1897,7 @@ export function HomeDashboard({
             ) : null}
 
             {showingPreps ? (
-              <ExamLibraryList preps={visibleExamPreps} />
+              <ExamLibraryList preps={visibleExamPreps} searching={Boolean(search)} />
             ) : (
               <>
               {failedLectures.length > 0 ? (

@@ -2548,6 +2548,7 @@ export const en: Messages = {
   "exam.mock.duration": "Time",
   "exam.mock.choice": "Multiple choice",
   "exam.mock.written": "Written answers",
+  "exam.mock.perQuestion": "~{minutes} min each",
   "exam.mock.pass": "Pass mark",
   "exam.mock.start": "Start the mock exam",
   "exam.mock.starting": "Preparing questions…",

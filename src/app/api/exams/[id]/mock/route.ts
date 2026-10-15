@@ -9,6 +9,9 @@ import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { getRouteUser } from "@/lib/supabase/server";
 import { tr } from "@/lib/i18n/server";
 
+/* When the notes cannot fill the time set, the missing questions are written with one model call. */
+export const maxDuration = 120;
+
 const MOCK_START_MAX_BYTES = 1024;
 
 /** Starts a mock exam ("Generalka"). Paid plans only: grading it is the most expensive call. */

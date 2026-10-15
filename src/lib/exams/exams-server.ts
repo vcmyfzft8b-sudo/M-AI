@@ -40,6 +40,7 @@ import {
   planNoteTopics,
   schoolLine,
   writeTopicContent,
+  writeMockQuestions,
   type GeneratedTopicContent,
   type PlannedTopic,
   type TopicItemGroup,
@@ -1474,6 +1475,116 @@ export async function startMockExam(
         answerGuide: row.answer_guide,
       })),
     );
+  }
+
+  /*
+   * The notes' own banks first, then the questions written for topics outside the material, then,
+   * only if the time the learner set is still not filled, questions written for this mock from
+   * the notes, so a 45-minute mock really is 45 minutes of questions.
+   */
+  const { data: generatedRows, error: generatedError } = await supabase
+    .from("exam_topics")
+    .select("id, lecture_id, generated")
+    .eq("exam_id", input.examId)
+    .eq("user_id", userId)
+    .not("generated", "is", null);
+
+  if (generatedError) {
+    throw generatedError;
+  }
+
+  for (const topic of (generatedRows ?? []) as Pick<ExamTopicRow, "id" | "lecture_id" | "generated">[]) {
+    const content = topic.generated as unknown as GeneratedTopicContent;
+
+    choicePools.get(topic.lecture_id)?.push(
+      ...(content.quiz ?? []).map((question, index) => {
+        const shuffled = shuffleQuestion(
+          {
+            id: `gen:${topic.id}:q${index}`,
+            prompt: question.prompt,
+            options: question.options,
+            correct_option_idx: question.correctIndex,
+            explanation: question.explanation,
+          },
+          seed,
+        );
+
+        return {
+          id: shuffled.id,
+          lectureId: topic.lecture_id,
+          kind: "choice" as const,
+          prompt: shuffled.prompt,
+          options: shuffled.options,
+          correctIndex: shuffled.correctIndex,
+          explanation: shuffled.explanation,
+        };
+      }),
+    );
+    writtenPools.get(topic.lecture_id)?.push(
+      ...(content.written ?? []).map((question, index) => ({
+        id: `gen:${topic.id}:w${index}`,
+        lectureId: topic.lecture_id,
+        kind: "written" as const,
+        prompt: question.prompt,
+        answerGuide: question.answerGuide,
+      })),
+    );
+  }
+
+  const poolSize = (pools: Map<string, MockQuestion[]>) =>
+    [...pools.values()].reduce((sum, pool) => sum + pool.length, 0);
+  const missingChoice = mode === "oral" ? 0 : Math.max(0, counts.choice - poolSize(choicePools));
+  const missingWritten =
+    mode === "oral"
+      ? Math.max(0, oralQuestionCount(input.durationMinutes) - poolSize(writtenPools) - poolSize(choicePools))
+      : Math.max(0, counts.written - poolSize(writtenPools));
+
+  if (missingChoice + missingWritten > 0) {
+    const [exam, { data: noteRows }, { data: artifactRows }] = await Promise.all([
+      readOwnedExam(supabase, userId, input.examId),
+      supabase.from("lectures").select("id, title").in("id", lectureIds),
+      supabase.from("lecture_artifacts").select("lecture_id, structured_notes_md").in("lecture_id", lectureIds),
+    ]);
+    const titles = new Map(((noteRows ?? []) as { id: string; title: string | null }[]).map((row) => [row.id, row.title]));
+    const notes = new Map(
+      ((artifactRows ?? []) as { lecture_id: string; structured_notes_md: string | null }[]).map((row) => [
+        row.lecture_id,
+        row.structured_notes_md ?? "",
+      ]),
+    );
+    const sources = lectureIds.filter((lectureId) => (notes.get(lectureId) ?? "").trim().length > 0);
+    const extra = await writeMockQuestions({
+      userId,
+      notes: sources.map((lectureId) => ({ title: titles.get(lectureId) ?? "", notesMarkdown: notes.get(lectureId) ?? "" })),
+      choice: missingChoice,
+      written: missingWritten,
+      avoid: [...choicePools.values(), ...writtenPools.values()].flat().map((question) => question.prompt),
+      school: schoolLine(exam?.school_level ?? null, exam?.school_year ?? null),
+    });
+
+    extra.forEach((question, index) => {
+      const lectureId = sources[question.noteIndex];
+
+      if (question.kind === "choice") {
+        choicePools.get(lectureId)?.push({
+          id: `gen:mock:${now.getTime()}:${index}`,
+          lectureId,
+          kind: "choice",
+          prompt: question.prompt,
+          options: question.options,
+          correctIndex: question.correctIndex,
+          explanation: question.explanation,
+        });
+      } else {
+        writtenPools.get(lectureId)?.push({
+          id: `gen:mock:${now.getTime()}:${index}`,
+          lectureId,
+          kind: "written",
+          prompt: question.prompt,
+          answerGuide: question.answerGuide,
+        });
+      }
+    });
   }
 
   /*

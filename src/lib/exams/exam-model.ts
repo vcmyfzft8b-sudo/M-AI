@@ -686,11 +686,26 @@ export function oralQuestionCount(durationMinutes: number) {
   return Math.min(8, Math.max(2, Math.round(durationMinutes / 4)));
 }
 
+/*
+ * The mock exam fills the time it is given, as Astra's timer promises: about a minute and a half
+ * for a multiple-choice question and six for a written answer (what the grader expects of one),
+ * a little over half the time on written answers. 45 minutes is 14 + 4, 90 is 28 + 8.
+ */
+export const MOCK_QUESTION_MINUTES = { choice: 1.5, written: 6 } as const;
+
 export function mockQuestionCounts(durationMinutes: number) {
-  return {
-    choice: Math.min(15, Math.max(3, Math.round(durationMinutes / 6))),
-    written: Math.min(6, Math.max(1, Math.round(durationMinutes / 15))),
-  };
+  const written = Math.max(1, Math.round((durationMinutes * 0.55) / MOCK_QUESTION_MINUTES.written));
+  const choice = Math.max(
+    3,
+    Math.round((durationMinutes - written * MOCK_QUESTION_MINUTES.written) / MOCK_QUESTION_MINUTES.choice),
+  );
+
+  return { choice, written };
+}
+
+/** How long a set of mock questions takes, in minutes, at the paces above. */
+export function mockMinutes(counts: { choice: number; written: number }) {
+  return counts.choice * MOCK_QUESTION_MINUTES.choice + counts.written * MOCK_QUESTION_MINUTES.written;
 }
 
 /**

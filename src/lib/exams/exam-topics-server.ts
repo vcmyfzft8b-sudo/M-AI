@@ -415,3 +415,90 @@ Write in the language of the note (if the note is empty, the language of the top
     },
   };
 }
+
+/* ---------------------------------------------------------------- mock top-up */
+
+const mockTopUpSchema = z.object({
+  choice: z.array(
+    z.object({
+      noteIndex: z.number().int(),
+      prompt: z.string(),
+      options: z.array(z.string()),
+      correctIndex: z.number().int(),
+      explanation: z.string(),
+    }),
+  ),
+  written: z.array(z.object({ noteIndex: z.number().int(), prompt: z.string(), answerGuide: z.string() })),
+});
+
+export type MockTopUpQuestion =
+  | { kind: "choice"; noteIndex: number; prompt: string; options: string[]; correctIndex: number; explanation: string }
+  | { kind: "written"; noteIndex: number; prompt: string; answerGuide: string };
+
+/**
+ * More exam questions when the notes' own banks cannot fill the time the learner set for a mock
+ * exam: exam-style multiple-choice and written questions from the notes, spread across them.
+ * Snapshotted into the attempt only; nothing is added to the notes.
+ */
+export async function writeMockQuestions(params: {
+  userId: string;
+  notes: { title: string; notesMarkdown: string }[];
+  choice: number;
+  written: number;
+  avoid: string[];
+  school: string;
+}): Promise<MockTopUpQuestion[]> {
+  if (params.notes.length === 0 || (params.choice <= 0 && params.written <= 0)) {
+    return [];
+  }
+
+  const perNote = Math.max(4000, Math.floor(24_000 / params.notes.length));
+
+  try {
+    const result = await generateStructuredObject({
+      schema: mockTopUpSchema,
+      stage: "study_items",
+      maxOutputTokens: Math.min(16_000, 600 + params.choice * 220 + params.written * 320),
+      instructions: `Write exam questions for a student's mock exam from their notes (the input), the way their teacher would set them.
+
+Write exactly ${params.choice} multiple-choice questions (4 options, exactly one correct, correctIndex 0-based, a one-sentence explanation) and exactly ${params.written} written questions (each with an answerGuide: a bullet list, "- ", of the 2 to 4 points a full answer must contain). Spread them across the notes and their topics; noteIndex says which note a question is from. Only ask what the notes teach, test understanding rather than wording, and do not repeat or rephrase the questions listed under "avoid".
+
+Write in the language of the notes. Student level: ${params.school}.`,
+      input: JSON.stringify({
+        notes: params.notes.map((note, index) => ({ index, title: note.title, notes: note.notesMarkdown.slice(0, perNote) })),
+        avoid: params.avoid.slice(0, 120).map((prompt) => prompt.slice(0, 160)),
+      }),
+      usageContext: { stage: "exam_mock_top_up", userId: params.userId },
+    });
+    const noteIndex = (index: number) => Math.min(params.notes.length - 1, Math.max(0, index));
+
+    return [
+      ...result.choice
+        .map((question) => ({
+          kind: "choice" as const,
+          noteIndex: noteIndex(question.noteIndex),
+          prompt: clean(question.prompt, 600),
+          options: question.options.map((option) => clean(option, 300)).filter(Boolean).slice(0, 5),
+          correctIndex: question.correctIndex,
+          explanation: clean(question.explanation, 800),
+        }))
+        .filter(
+          (question) =>
+            question.prompt && question.options.length >= 2 && question.correctIndex >= 0 && question.correctIndex < question.options.length,
+        )
+        .slice(0, params.choice),
+      ...result.written
+        .map((question) => ({
+          kind: "written" as const,
+          noteIndex: noteIndex(question.noteIndex),
+          prompt: clean(question.prompt, 600),
+          answerGuide: question.answerGuide.trim().slice(0, 1500),
+        }))
+        .filter((question) => question.prompt && question.answerGuide)
+        .slice(0, params.written),
+    ];
+  } catch {
+    // A shorter mock beats no mock: the learner still gets every question the notes have.
+    return [];
+  }
+}

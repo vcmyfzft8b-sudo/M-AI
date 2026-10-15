@@ -26730,6 +26730,14 @@ a.memo-exam-station-go {
   flex: 1;
 }
 
+/* A row's second line: how long one question of that kind takes. */
+.memo-exam-facts span small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
 .memo-exam-facts .msym {
   color: var(--muted);
 }

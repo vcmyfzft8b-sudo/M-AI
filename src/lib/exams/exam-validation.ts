@@ -95,7 +95,8 @@ export const mockSubmitSchema = z.object({
   answers: z
     .array(
       z.object({
-        questionId: z.string().uuid(),
+        // A note's own question (its id), or one written for a topic or for this mock ("gen:…").
+        questionId: z.string().uuid().or(z.string().regex(/^gen:[A-Za-z0-9:-]{1,100}$/)),
         selected: z.number().int().min(0).max(20).nullable().optional(),
         text: createSanitizedStringSchema({ multiline: true, trim: true, maxLength: 12000 })
           .or(z.literal(""))
@@ -103,7 +104,8 @@ export const mockSubmitSchema = z.object({
         unknown: z.boolean().optional(),
       }),
     )
-    .max(40),
+    // A two-hour mock is about 47 questions (mockQuestionCounts).
+    .max(80),
 });
 
 export const examIdParamsSchema = z.object({ id: z.string().uuid() });

@@ -2579,6 +2579,7 @@ export const sl = {
   "exam.mock.duration": "Čas",
   "exam.mock.choice": "Izbirna vprašanja",
   "exam.mock.written": "Pisni odgovori",
+  "exam.mock.perQuestion": "~{minutes} min na vprašanje",
   "exam.mock.pass": "Prag za pozitivno",
   "exam.mock.start": "Začni generalko",
   "exam.mock.starting": "Pripravljam vprašanja …",

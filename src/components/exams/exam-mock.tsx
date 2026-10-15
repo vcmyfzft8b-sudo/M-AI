@@ -11,7 +11,13 @@ import { ExamOral } from "@/components/exams/exam-oral";
 import { ExamScreen } from "@/components/exams/exam-screen";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
 import { GaugeDial } from "@/components/exams/target-dial";
-import { MOCK_MINUTES, mockQuestionCounts, ORAL_MINUTES, oralQuestionCount } from "@/lib/exams/exam-model";
+import {
+  MOCK_MINUTES,
+  MOCK_QUESTION_MINUTES,
+  mockQuestionCounts,
+  ORAL_MINUTES,
+  oralQuestionCount,
+} from "@/lib/exams/exam-model";
 import type { MockQuestionForLearner, MockResult } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import {
@@ -96,7 +102,7 @@ export function ExamMock({
   moduleTitles: Record<string, string>;
   lastResult: MockResult | null;
 }) {
-  const { t } = useTranslations();
+  const { t, locale } = useTranslations();
   const { navigateWithFeedback } = useInstantNavigation();
   const [phase, setPhase] = useState<Phase>({ name: "setup" });
   const [mode, setMode] = useState<"written" | "oral">("written");
@@ -122,6 +128,7 @@ export function ExamMock({
   const briefingSheet = useSheet(closeBriefing);
   const counts = mockQuestionCounts(duration);
   const minutes = mode === "oral" ? oralMinutes : duration;
+  const minutesFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
 
   const storageKey = phase.name === "sitting" ? `memo-exam-mock:${phase.attempt.id}` : null;
 
@@ -374,14 +381,21 @@ export function ExamMock({
           </>
         ) : (
           <div className="memo-exam-card memo-exam-facts">
+            {/* The questions fill the time set: how long each kind takes, as the timer counts it. */}
             <div>
               <Msym name="quiz" size="1.3rem" fill={false} />
-              <span>{t("exam.mock.choice")}</span>
+              <span>
+                {t("exam.mock.choice")}
+                <small>{t("exam.mock.perQuestion", { minutes: minutesFormat.format(MOCK_QUESTION_MINUTES.choice) })}</small>
+              </span>
               <b>{counts.choice}</b>
             </div>
             <div>
               <Msym name="edit" size="1.3rem" fill={false} />
-              <span>{t("exam.mock.written")}</span>
+              <span>
+                {t("exam.mock.written")}
+                <small>{t("exam.mock.perQuestion", { minutes: minutesFormat.format(MOCK_QUESTION_MINUTES.written) })}</small>
+              </span>
               <b>{counts.written}</b>
             </div>
             <div>

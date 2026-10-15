@@ -2559,6 +2559,7 @@ export const hr: Messages = {
   "exam.mock.duration": "Vrijeme",
   "exam.mock.choice": "Pitanja s ponuđenim odgovorima",
   "exam.mock.written": "Pismeni odgovori",
+  "exam.mock.perQuestion": "~{minutes} min po pitanju",
   "exam.mock.pass": "Prag za prolaz",
   "exam.mock.start": "Počni probni ispit",
   "exam.mock.starting": "Pripremam pitanja…",

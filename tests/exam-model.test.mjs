@@ -19,6 +19,7 @@ import {
   examStage,
   gradeForPercentage,
   isValidDay,
+  mockMinutes,
   mockQuestionCounts,
   monthGrid,
   pickFlashcards,
@@ -240,8 +241,8 @@ test("a mock exam covers every note before repeating one", () => {
     spreadAcrossModules(pools, ["c", "a", "b"], 5).map((item) => item.id),
     [5, 1, 4, 6, 2],
   );
-  assert.deepEqual(mockQuestionCounts(90), { choice: 15, written: 6 });
-  assert.deepEqual(mockQuestionCounts(30), { choice: 5, written: 2 });
+  assert.deepEqual(mockQuestionCounts(45), { choice: 14, written: 4 });
+  assert.deepEqual(mockQuestionCounts(90), { choice: 28, written: 8 });
 });
 
 test("a mock result names its strengths, weak points and weakest note", () => {
@@ -410,4 +411,12 @@ test("modules are topics: two topics of one note progress separately", () => {
     kind: "flashcards",
     review: false,
   });
+});
+
+test("a mock exam's questions fill the time it is set for", () => {
+  for (let minutes = 10; minutes <= 120; minutes += 5) {
+    const counts = mockQuestionCounts(minutes);
+    assert.ok(Math.abs(mockMinutes(counts) - minutes) <= 1.5, `${minutes} min: ${JSON.stringify(counts)}`);
+    assert.ok(counts.written >= 1 && counts.choice >= 3);
+  }
 });

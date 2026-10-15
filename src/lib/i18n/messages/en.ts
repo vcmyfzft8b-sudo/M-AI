@@ -2553,7 +2553,6 @@ export const en: Messages = {
   "exam.lesson.keyPoints": "Key points",
   "exam.lesson.speedRead": "Speed reading",
   "exam.lesson.listen": "Listen",
-  "exam.lesson.summary.next": "Next: the tutor explains",
   "exam.tutor.intro": "Let's go through {topic}. I'll explain a few things and ask you about each one.",
   "exam.tutor.idle.title": "The tutor explains",
   "exam.tutor.idle.lede": "It explains the topic's key points and asks you about each one. You answer out loud.",

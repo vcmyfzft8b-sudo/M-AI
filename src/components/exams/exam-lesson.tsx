@@ -217,14 +217,19 @@ export function ExamLesson({
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  /* The summary leads to the tutor, which plans by a model call: start it while the summary is read. */
+  /*
+   * Where the summary's button goes: the module's next lesson not done yet (the tutor the first
+   * time, something else once the tutor is done). Its label names it, and when it is the tutor,
+   * which plans by a model call, the plan is started while the summary is read.
+   */
+  const afterSummary = nextKindAfter({ ...module.done, summary: true }) ?? "flashcards";
   const readingSummary = phase.name === "playing" && phase.lesson.kind === "summary";
 
   useEffect(() => {
-    if (readingSummary) {
+    if (readingSummary && afterSummary === "tutor") {
       prefetchLesson(examId, module.topicId, "tutor");
     }
-  }, [examId, module.topicId, readingSummary]);
+  }, [afterSummary, examId, module.topicId, readingSummary]);
 
   /* While the material is being made, a poll every few seconds, each one scheduled after the last whatever it returned. */
   const generating = phase.name === "generating";
@@ -279,7 +284,7 @@ export function ExamLesson({
     const doneAfter = { ...module.done, [kind]: true };
 
     if (kind === "summary") {
-      navigateWithFeedback(lessonHref(examId, module.topicId, nextKindAfter(doneAfter) ?? "flashcards"), { refresh: true });
+      navigateWithFeedback(lessonHref(examId, module.topicId, afterSummary), { refresh: true });
       return;
     }
 
@@ -388,7 +393,7 @@ export function ExamLesson({
       </div>
     ) : phase.name === "playing" && phase.lesson.kind === "summary" ? (
       <button type="button" className="memo-button-coral" onClick={() => void save(1, 1, null)}>
-        {t("exam.lesson.summary.next")}
+        {t("exam.lesson.done.next", { lesson: t(LESSON_KIND_KEY[afterSummary]) })}
       </button>
     ) : phase.name === "zone" ? (
       <div className="memo-exam-cta-row">

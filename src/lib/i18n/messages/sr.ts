@@ -2567,7 +2567,6 @@ export const sr: Messages = {
   "exam.lesson.keyPoints": "Bitno",
   "exam.lesson.speedRead": "Brzo čitanje",
   "exam.lesson.listen": "Poslušaj",
-  "exam.lesson.summary.next": "Dalje: tutor objašnjava",
   "exam.tutor.intro": "Prođimo kroz temu {topic}. Objasniću ti nekoliko stvari i posle svake te nešto pitati.",
   "exam.tutor.idle.title": "Tutor objašnjava",
   "exam.tutor.idle.lede": "Objasni ti ključne stvari teme i posle svake te nešto pita. Odgovaraš naglas.",

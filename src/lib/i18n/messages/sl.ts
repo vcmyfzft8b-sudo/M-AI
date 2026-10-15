@@ -2590,7 +2590,6 @@ export const sl = {
   "exam.lesson.keyPoints": "Bistvo",
   "exam.lesson.speedRead": "Hitro branje",
   "exam.lesson.listen": "Poslušaj",
-  "exam.lesson.summary.next": "Naprej: razlaga s tutorjem",
   "exam.tutor.intro": "Pojdiva skozi temo {topic}. Razložim ti nekaj stvari in te po vsaki kaj vprašam.",
   "exam.tutor.idle.title": "Razlaga s tutorjem",
   "exam.tutor.idle.lede": "Razloži ti ključne stvari teme in te po vsaki kaj vpraša. Odgovarjaš na glas.",

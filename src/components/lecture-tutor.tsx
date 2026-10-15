@@ -34,6 +34,7 @@ import { LISTEN_RETRY_STABLE_MS, listeningRetryMayRun, nextListeningRetryDelay }
 import { PreparedTutorReply, preparedReplyKey } from "@/lib/tutor/prepared-reply";
 import { TutorClipPlayer } from "@/lib/tutor/clip-player";
 import { reportTutorFailure, resetTutorFailureReports } from "@/lib/tutor/report";
+import { GeminiTutorSpeechOutput } from "@/lib/tutor/gemini-speech-output";
 import { SpeechOutputError, TutorSpeechOutput, hasWebAudio } from "@/lib/tutor/speech-output";
 import { credentialsExpireAt, isFinalSlice, nextSliceDueAt } from "@/lib/tutor/slice";
 import { appendSpokenSoFar } from "@/lib/tutor/spoken-so-far";
@@ -145,9 +146,20 @@ type TutorSessionResponse = {
   usage: TutorUsage;
   realtime: {
     stt: { apiKey: string; url: string; model: string; expiresAt: string };
-    tts: { apiKey: string; url: string; model: string; voice: NoteTtsVoice; expiresAt: string };
+    tts: {
+      /* Absent from a server that predates the switch, which can only have meant Soniox. */
+      provider?: "gemini" | "soniox";
+      apiKey: string;
+      url: string;
+      model: string;
+      voice: NoteTtsVoice;
+      expiresAt: string;
+    };
   };
 };
+
+/** The tutor's voice: Gemini by default, Soniox when the server says so. Same contract either way. */
+type TutorVoiceOutput = TutorSpeechOutput | GeminiTutorSpeechOutput;
 
 type TurnKind = "opening" | "teach" | "answer" | "feedback" | "resume" | "closing";
 
@@ -254,7 +266,7 @@ export function LectureTutor({
   const orbRef = useRef<HTMLDivElement | null>(null);
   const envelopeRef = useRef(new LevelEnvelope());
 
-  const outputRef = useRef<TutorSpeechOutput | null>(null);
+  const outputRef = useRef<TutorVoiceOutput | null>(null);
   const inputRef = useRef<TutorSpeechInput | null>(null);
   const planRef = useRef<TutorPlan | null>(null);
   /**
@@ -907,7 +919,7 @@ export function LectureTutor({
       inputRef.current?.resetUtterance();
 
       const index = options.index ?? topicIndexRef.current;
-      let turn: ReturnType<TutorSpeechOutput["speak"]> | null = null;
+      let turn: ReturnType<TutorVoiceOutput["speak"]> | null = null;
       const buffer = new SpeechTextBuffer();
 
       try {
@@ -1573,7 +1585,9 @@ export function LectureTutor({
         return;
       }
 
-      const output = new TutorSpeechOutput(
+      const SpeechOutput =
+        session.realtime.tts.provider === "gemini" ? GeminiTutorSpeechOutput : TutorSpeechOutput;
+      const output: TutorVoiceOutput = new SpeechOutput(
         {
           url: session.realtime.tts.url,
           apiKey: session.realtime.tts.apiKey,

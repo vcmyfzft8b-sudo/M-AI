@@ -12,6 +12,13 @@ import {
 } from "@/lib/ai/errors";
 import { stripDashPunctuation } from "@/lib/ai/answer-punctuation";
 import { chatAnswerSchema } from "@/lib/ai/schemas";
+import { generateChatStudySet } from "@/lib/chat-study-generation";
+import {
+  withAttachedSet,
+  parseChatStudyAttachment,
+  type ChatStudyAttachment,
+  type ChatStudyKind,
+} from "@/lib/chat-study-set";
 import { generateStructuredObject, streamStructuredObject } from "@/lib/ai/json";
 import { createEmbeddings } from "@/lib/ai/embeddings";
 import { parseAudioChunkManifest } from "@/lib/audio-processing";
@@ -1130,6 +1137,20 @@ type RpcMatchResult = {
   similarity: number;
 };
 
+/** PostgREST's "no such column" and Postgres' own, for a write that names `attachment_json`. */
+function isMissingAttachmentColumn(error: { code?: string; message?: string }) {
+  return (
+    (error.code === "PGRST204" || error.code === "42703") &&
+    (error.message ?? "").includes("attachment_json")
+  );
+}
+
+/**
+ * How much of the written note a chat study set is made from. Enough for a long lecture's note
+ * whole; past it, the summary and key topics still cover the rest.
+ */
+const CHAT_STUDY_NOTE_CHAR_CAP = 60_000;
+
 /**
  * Streams the answer when there is somewhere to send it and the stage is routed
  * through the gateway, and returns null whenever it cannot — no handler, not
@@ -1218,6 +1239,8 @@ export async function answerLectureChat(params: {
    * the answer.
    */
   onDelta?: (text: string) => void;
+  /** The answer asked for a study set of this kind, and it is being written now. */
+  onStudy?: (kind: ChatStudyKind) => void;
 }) {
   const supabase = createSupabaseServiceRoleClient();
 
@@ -1238,9 +1261,15 @@ export async function answerLectureChat(params: {
        * limit can be applied to; it is flipped back before it is sent, since
        * the model should read it in the order it happened.
        */
+      /*
+       * Every column rather than a list, so that a set attached to an earlier turn reaches the
+       * model (see `withAttachedSet`) without this read depending on the column
+       * being there: a list naming it would fail outright in the minutes between a deploy and
+       * its migration, and the tutor would answer with no memory at all.
+       */
       supabase
         .from("chat_messages")
-        .select("role, content")
+        .select("*")
         .eq("lecture_id", params.lectureId)
         .eq("user_id", params.userId)
         .order("created_at", { ascending: false })
@@ -1261,7 +1290,12 @@ export async function answerLectureChat(params: {
   const lectureRow = (lecture ?? null) as { title: string | null } | null;
 
   const conversation = buildTutorHistory(
-    ((priorMessages ?? []) as TutorHistoryTurn[]).slice().reverse(),
+    ((priorMessages ?? []) as Array<TutorHistoryTurn & { attachment_json?: unknown }>)
+      .slice()
+      .reverse()
+      .map((message) =>
+        withAttachedSet({ role: message.role, content: message.content }, message.attachment_json),
+      ),
   );
 
   /*
@@ -1309,6 +1343,32 @@ export async function answerLectureChat(params: {
     (await generateStructuredObject(call));
   const answerText = stripDashPunctuation(answer.answer);
 
+  /*
+   * The learner asked for flashcards, a quiz, a test or a mind map. The reply introducing it is
+   * already written (and, streamed, already read); the set is written now from the whole note,
+   * not from the few transcript chunks the question happened to retrieve, since "make me cards"
+   * names no passage to retrieve.
+   */
+  let attachment: ChatStudyAttachment | null = null;
+
+  if (answer.studyRequest) {
+    params.onStudy?.(answer.studyRequest.kind);
+    attachment = await generateChatStudySet({
+      request: answer.studyRequest,
+      question: params.question,
+      reply: answerText,
+      material: {
+        noteTitle: lectureRow?.title ?? null,
+        summary: artifactRow?.summary ?? null,
+        keyTopics: artifactRow?.key_topics ?? [],
+        notes: artifactRow?.structured_notes_md?.slice(0, CHAT_STUDY_NOTE_CHAR_CAP) ?? null,
+        conversation,
+      },
+      userId: params.userId,
+      lectureId: params.lectureId,
+    });
+  }
+
   const citations = answer.citations.map((citation) => ({
     idx: citation.idx,
     startMs: citation.startMs,
@@ -1330,12 +1390,29 @@ export async function answerLectureChat(params: {
     role: "assistant" as const,
     content: answerText,
     citations_json: citations,
+    ...(attachment ? { attachment_json: attachment } : {}),
   };
 
-  const { data: insertedMessages, error: insertError } = await supabase
+  let { data: insertedMessages, error: insertError } = await supabase
     .from("chat_messages")
     .insert([userMessage, assistantMessage] as never)
     .select("*");
+
+  /*
+   * The set's column arrives by migration after the code that writes it is deployed, and on a
+   * Preview it arrives only once staging is synced. In that window the turn is saved without
+   * its set rather than not at all: the learner still has the set on screen, and the tutor still
+   * remembers the conversation.
+   */
+  if (insertError && attachment && isMissingAttachmentColumn(insertError)) {
+    const withoutAttachment = { ...assistantMessage };
+    delete (withoutAttachment as { attachment_json?: unknown }).attachment_json;
+
+    ({ data: insertedMessages, error: insertError } = await supabase
+      .from("chat_messages")
+      .insert([userMessage, withoutAttachment] as never)
+      .select("*"));
+  }
 
   if (insertError) {
     console.error("[chat] could not save the turn; returning the answer unsaved", insertError);
@@ -1348,14 +1425,20 @@ export async function answerLectureChat(params: {
     role: "user" | "assistant";
     content: string;
     citations_json: unknown;
+    attachment_json?: unknown;
     created_at: string;
   }>;
 
-  const mapped = persistedMessages.map((message) => ({
+  const mapped = persistedMessages.map(({ attachment_json: storedAttachment, ...message }) => ({
     ...message,
     citations: Array.isArray(message.citations_json)
       ? (message.citations_json as unknown as ChatMessageWithCitations["citations"])
       : [],
+    // The set just made, whether or not the row could hold it (see the retry above).
+    attachment:
+      message.role === "assistant"
+        ? (parseChatStudyAttachment(storedAttachment) ?? attachment)
+        : null,
   }));
 
   /*
@@ -1371,6 +1454,7 @@ export async function answerLectureChat(params: {
     id: `unsaved-${Date.now()}`,
     created_at: new Date().toISOString(),
     citations,
+    attachment,
   } as unknown as ChatMessageWithCitations;
 
   return {

@@ -4,14 +4,17 @@ import { z } from "zod";
 import { SonioxNodeClient } from "@soniox/node";
 
 import { generateStructuredObject } from "@/lib/ai/json";
+import { GEMINI_TTS_SAMPLE_RATE, startGeminiSpeech } from "@/lib/gemini-tts";
 import { tr } from "@/lib/i18n/server";
 import { resolveSpeechLanguage, toSpeechScript } from "@/lib/speech-language";
 import { synthesizeTtsChunkWithTimestamps } from "@/lib/note-tts-synthesis";
 import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { getServerEnv } from "@/lib/server-env";
+import { speechProvider } from "@/lib/speech-synthesis";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { hasStaticVoiceSamples } from "@/lib/tutor/voice-clips";
+import { geminiVoiceFor } from "@/lib/tutor/gemini-voices";
+import { CLIP_VERSION, hasStaticVoiceSamples } from "@/lib/tutor/voice-clips";
 
 export const maxDuration = 60;
 
@@ -61,6 +64,49 @@ const sampleLineSchema = z.object({
     .max(240)
     .describe("The sentence, in the requested language, as a person would say it out loud."),
 });
+
+/** Bare 16-bit mono PCM, wrapped so an `<audio>` element can play it. */
+function wavFile(pcm: Buffer, sampleRate: number) {
+  const header = Buffer.alloc(44);
+
+  header.write("RIFF", 0, "ascii");
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write("WAVE", 8, "ascii");
+  header.write("fmt ", 12, "ascii");
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * 2, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write("data", 36, "ascii");
+  header.writeUInt32LE(pcm.length, 40);
+
+  return Buffer.concat([header, pcm]);
+}
+
+/*
+ * The audition, in the voice the app actually speaks with: Gemini since 2026-10-14, for the tutor
+ * and the podcast alike, unless the server has been switched back with TTS_PROVIDER.
+ */
+async function geminiSample(params: { apiKey: string; model: string; line: string; voice: string; language: string }) {
+  const audio = await startGeminiSpeech({
+    apiKey: params.apiKey,
+    model: params.model,
+    text: params.line,
+    voice: params.voice,
+    language: params.language,
+    signal: AbortSignal.timeout(30_000),
+  });
+  const chunks: Uint8Array[] = [];
+
+  for await (const chunk of audio) {
+    chunks.push(chunk);
+  }
+
+  return wavFile(Buffer.concat(chunks), GEMINI_TTS_SAMPLE_RATE);
+}
 
 /** A year, because the answer for a given voice and language never changes. */
 const CACHE_HEADER = "public, max-age=31536000, s-maxage=31536000, immutable";
@@ -136,21 +182,41 @@ export async function GET(request: Request) {
     const kind = parsed.data.context === "podcast" ? "podcast" : "sample";
 
     return NextResponse.redirect(
-      new URL(`/tutor-demo/${language}/${parsed.data.voice.toLowerCase()}-${kind}.mp3`, url),
+      new URL(`/tutor-demo/${language}/${parsed.data.voice.toLowerCase()}-${kind}.mp3?v=${CLIP_VERSION}`, url),
       308,
     );
   }
 
   const env = getServerEnv();
+  const geminiKey = speechProvider() === "gemini" ? env.GEMINI_API_KEY : undefined;
 
-  if (!env.SONIOX_API_KEY) {
+  if (!geminiKey && !env.SONIOX_API_KEY) {
     return NextResponse.json({ error: await tr("api.tutorStartFailed") }, { status: 503 });
   }
 
   try {
     const line = await sampleLineFor(language, parsed.data.context);
+
+    if (geminiKey) {
+      const audio = await geminiSample({
+        apiKey: geminiKey,
+        model: env.GEMINI_TTS_MODEL,
+        line,
+        voice: geminiVoiceFor(parsed.data.voice),
+        language,
+      });
+
+      return new NextResponse(audio as unknown as BodyInit, {
+        headers: {
+          "Content-Type": "audio/wav",
+          "Cache-Control": CACHE_HEADER,
+          "Content-Length": String(audio.byteLength),
+        },
+      });
+    }
+
     const { audio } = await synthesizeTtsChunkWithTimestamps({
-      client: new SonioxNodeClient({ api_key: env.SONIOX_API_KEY }),
+      client: new SonioxNodeClient({ api_key: env.SONIOX_API_KEY ?? "" }),
       text: line,
       model: env.SONIOX_TTS_MODEL,
       voice: parsed.data.voice,

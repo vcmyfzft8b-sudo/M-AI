@@ -67,11 +67,15 @@ test("How it works shows the app's own study pills", () => {
   }
 });
 
-test("the feature list has a row and a screen for every study tab", () => {
+/* The feature list is the core only (docs/landing-page-sync.md); every study tab is
+   still shown in the hero phone and How it works. What it does list must be drawn
+   with the app's own screen. */
+test("every study row in the feature list draws the app's screen", () => {
   const showcase = readSource("src/components/landing/landing-feature-showcase.tsx");
+  const listed = NOTE_STUDY_TABS.filter((tab) => new RegExp(`id: "${tab.id}"`).test(showcase));
+  assert.ok(listed.length > 0, "the feature list shows no study tab at all");
 
-  for (const tab of NOTE_STUDY_TABS) {
-    assert.match(showcase, new RegExp(`id: "${tab.id}"`), `the feature list has no "${tab.id}" row`);
+  for (const tab of listed) {
     const component = exportedComponent(LANDING_SCREEN_FOR_TAB[tab.id]);
     assert.match(showcase, new RegExp(`<${component}\\b`), `the feature list never draws the ${tab.id} screen`);
   }

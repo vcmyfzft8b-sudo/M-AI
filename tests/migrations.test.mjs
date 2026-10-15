@@ -1250,3 +1250,24 @@ test("an exam keeps its notes, topics and results, and takes them with it when d
   // The note itself is the learner's, not the exam's.
   assert.equal(lectures, 1);
 });
+
+test("a chat answer can carry the study set it made, and older rows carry none", options, async () => {
+  const { query } = await migratedDatabase();
+
+  const [column] = await query(`select data_type, is_nullable from information_schema.columns
+    where table_schema = 'public' and table_name = 'chat_messages' and column_name = 'attachment_json'`);
+
+  assert.deepEqual(column, { data_type: "jsonb", is_nullable: "YES" });
+
+  const set = { version: 1, kind: "flashcards", title: "Osmoza", cards: [{ front: "Kaj?", back: "To." }] };
+  const [stored] = await query(
+    `with u as (insert into auth.users (id) values (gen_random_uuid()) returning id),
+          l as (insert into public.lectures (user_id, source_type) select id, 'text' from u returning id, user_id)
+     insert into public.chat_messages (lecture_id, user_id, role, content, attachment_json)
+       select id, user_id, 'assistant', 'Tukaj so kartice.', $1::jsonb from l
+     returning attachment_json`,
+    [JSON.stringify(set)],
+  );
+
+  assert.deepEqual(stored.attachment_json, set);
+});

@@ -10,6 +10,7 @@
  * the middle of a recording.
  */
 import { buildNoteTtsChunks, parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
+import { CLIP_VERSION } from "@/lib/tutor/voice-clips";
 import { getDemoContent } from "@/lib/creator-demo/content";
 import { buildDemoMindmap } from "@/lib/creator-demo/mindmap";
 import { demoT } from "@/lib/creator-demo/demo-translator";
@@ -633,7 +634,7 @@ async function handleDemoPodcastRoute(
       : "Grace";
 
     return json({
-      audioUrl: `/tutor-demo/${language}/${voice.toLowerCase()}-podcast.mp3`,
+      audioUrl: `/tutor-demo/${language}/${voice.toLowerCase()}-podcast.mp3?v=${CLIP_VERSION}`,
       durationMs: DEMO_PODCAST_SEGMENT_MS,
     });
   }

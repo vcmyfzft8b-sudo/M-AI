@@ -47,6 +47,8 @@ type Walker = {
   nextRest: number;
   x: number;
   z: number;
+  /** How solid they are drawn, eased: faded while standing in the camera's way. */
+  opacity: number;
 };
 
 export type Crowd = {
@@ -55,6 +57,12 @@ export type Crowd = {
   colliders: Collider[];
   /** `view` is the direction the camera looks, so people only reappear behind it. */
   update: (delta: number, player: { x: number; z: number }, view: { x: number; z: number }) => void;
+  /**
+   * Fade anyone standing between the camera and the player. Someone walking
+   * behind the player stops to wait for them, which with the camera close
+   * behind put a stranger's back in front of the lens.
+   */
+  clearView: (delta: number, camera: { x: number; z: number }, player: { x: number; z: number }) => void;
   dispose: () => void;
 };
 
@@ -99,6 +107,7 @@ export function createCrowd(layout: PalaceLayout, count: number): Crowd {
       nextRest: random.range(8, 30),
       x: 0,
       z: 0,
+      opacity: 1,
     };
   });
 
@@ -187,6 +196,28 @@ export function createCrowd(layout: PalaceLayout, count: number): Crowd {
 
         colliders[index].x = walker.x;
         colliders[index].z = walker.z;
+      });
+    },
+    clearView: (delta, camera, player) => {
+      const lineX = player.x - camera.x;
+      const lineZ = player.z - camera.z;
+      const length = Math.hypot(lineX, lineZ);
+
+      walkers.forEach((walker) => {
+        let inTheWay = false;
+
+        if (length > 0.5) {
+          const fromX = walker.x - camera.x;
+          const fromZ = walker.z - camera.z;
+          /* How far along the camera's line to the player, and how far off it. */
+          const along = (fromX * lineX + fromZ * lineZ) / length;
+          const off = Math.abs(fromX * lineZ - fromZ * lineX) / length;
+
+          inTheWay = along > -0.6 && along < length - 0.3 && off < 1.1;
+        }
+
+        walker.opacity += ((inTheWay ? 0.2 : 1) - walker.opacity) * (1 - Math.exp(-delta * 10));
+        walker.avatar.setOpacity?.(walker.opacity);
       });
     },
     dispose: () => {

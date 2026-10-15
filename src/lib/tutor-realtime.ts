@@ -2,8 +2,10 @@ import "server-only";
 
 import { SonioxNodeClient } from "@soniox/node";
 
-import { requireSonioxEnv } from "@/lib/server-env";
+import { getServerEnv, requireSonioxEnv } from "@/lib/server-env";
 import { type NoteTtsVoice } from "@/lib/note-tts-settings";
+import { speechProvider } from "@/lib/speech-synthesis";
+import { signTutorSpeechToken, tutorSpeechTokenSecret } from "@/lib/tutor/speech-token";
 
 /**
  * How the voice tutor reaches Soniox, and why it does it from the browser.
@@ -23,6 +25,12 @@ import { type NoteTtsVoice } from "@/lib/note-tts-settings";
  * key opens a speech stream and nothing else. Neither can read the account, buy
  * anything, or reach any other endpoint, and both expire on their own. The real
  * key never leaves the server.
+ *
+ * The tutor's voice is Gemini since 2026-10-14 (see docs/voice-tutor.md), and Gemini has no key
+ * that can do only one thing. So the speech half is a signed token for our own
+ * `/api/tutor/speech` route instead, minted for the same slice and expiring with it; the
+ * recognizer is still Soniox and still gets its own temporary key. `TTS_PROVIDER=soniox`
+ * puts the Soniox voice back.
  */
 
 /**
@@ -43,6 +51,8 @@ export type TutorRealtimeCredentials = {
     model: string;
   };
   tts: {
+    /** Which engine `apiKey` and `url` belong to. The client builds a different player for each. */
+    provider: "gemini" | "soniox";
     apiKey: string;
     expiresAt: string;
     url: string;
@@ -73,22 +83,54 @@ export async function createTutorRealtimeCredentials(params: {
   clientReferenceId: string;
   /** The slice these keys are for. Soniox refuses anything outside 1..3600. */
   ttlSeconds: number;
+  /** Who the speech token is for. Gemini's route checks both before it spends anything. */
+  userId: string;
+  lectureId: string;
 }): Promise<TutorRealtimeCredentials> {
   const env = requireSonioxEnv();
+  const serverEnv = getServerEnv();
   const client = getSonioxClient();
   const expiresInSeconds = Math.max(1, Math.min(Math.round(params.ttlSeconds), TUTOR_KEY_MAX_TTL_SECONDS));
-  const [stt, tts] = await Promise.all([
+  const provider = speechProvider();
+  const [stt, sonioxTts] = await Promise.all([
     client.auth.createTemporaryKey({
       usage_type: "transcribe_websocket",
       expires_in_seconds: expiresInSeconds,
       client_reference_id: params.clientReferenceId,
     }),
-    client.auth.createTemporaryKey({
-      usage_type: "tts_rt",
-      expires_in_seconds: expiresInSeconds,
-      client_reference_id: params.clientReferenceId,
-    }),
+    provider === "soniox"
+      ? client.auth.createTemporaryKey({
+          usage_type: "tts_rt",
+          expires_in_seconds: expiresInSeconds,
+          client_reference_id: params.clientReferenceId,
+        })
+      : null,
   ]);
+
+  const tts: TutorRealtimeCredentials["tts"] = sonioxTts
+    ? {
+        provider: "soniox",
+        apiKey: sonioxTts.api_key,
+        expiresAt: sonioxTts.expires_at,
+        url: "wss://tts-rt.soniox.com/tts-websocket",
+        model: env.SONIOX_TTS_MODEL,
+        voice: params.voice,
+      }
+    : (() => {
+        const expiresAt = Math.floor(Date.now() / 1000) + expiresInSeconds;
+
+        return {
+          provider: "gemini" as const,
+          apiKey: signTutorSpeechToken(
+            { userId: params.userId, lectureId: params.lectureId, expiresAt },
+            tutorSpeechTokenSecret(serverEnv.SUPABASE_SERVICE_ROLE_KEY),
+          ),
+          expiresAt: new Date(expiresAt * 1000).toISOString(),
+          url: "/api/tutor/speech",
+          model: serverEnv.GEMINI_TTS_MODEL,
+          voice: params.voice,
+        };
+      })();
 
   return {
     stt: {
@@ -97,12 +139,6 @@ export async function createTutorRealtimeCredentials(params: {
       url: "wss://stt-rt.soniox.com/transcribe-websocket",
       model: env.SONIOX_STT_REALTIME_MODEL,
     },
-    tts: {
-      apiKey: tts.api_key,
-      expiresAt: tts.expires_at,
-      url: "wss://tts-rt.soniox.com/tts-websocket",
-      model: env.SONIOX_TTS_MODEL,
-      voice: params.voice,
-    },
+    tts,
   };
 }

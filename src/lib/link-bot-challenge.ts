@@ -33,6 +33,9 @@ const CHALLENGE_MARKERS = [
   /\benable javascript and cookies to continue\b/i,
   /\bverify you are (?:a )?human\b/i,
   /captcha-delivery\.com/i,
+  // An Azure Application Gateway firewall answers a server-side fetch with a bare "403 Forbidden"
+  // signed by the gateway, while a browser gets the page (2026-10-15). It is no sign-in wall.
+  /\bmicrosoft-azure-application-gateway\b/i,
 ];
 
 export function looksLikeBotChallenge(params: {

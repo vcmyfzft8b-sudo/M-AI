@@ -31,6 +31,22 @@ test("a bot screen is recognised by its markup when the title says nothing", () 
   );
 });
 
+test("a web application firewall's refusal is a bot screen, not a sign-in wall", () => {
+  const refusal = `<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<center><h1>403 Forbidden</h1></center>
+<hr><center>Microsoft-Azure-Application-Gateway/v2</center>
+</body>
+</html>`;
+
+  assert.equal(looksLikeBotChallenge({ html: refusal, title: "403 Forbidden" }), true);
+  assert.equal(
+    looksLikeBotChallenge({ html: "<html><head><title>403 Forbidden</title></head><body>nginx</body></html>", title: "403 Forbidden" }),
+    false,
+  );
+});
+
 test("Cloudflare's own header is enough", () => {
   const headers = new Headers({ "cf-mitigated": "challenge" });
 

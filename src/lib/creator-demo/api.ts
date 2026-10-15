@@ -11,11 +11,6 @@
  */
 import { buildNoteTtsChunks, parseNoteTtsDocument, stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import { CLIP_VERSION } from "@/lib/tutor/voice-clips";
-import {
-  demoReadAloudChunkCount,
-  demoReadAloudClipPath,
-  findDemoReadAloudClip,
-} from "@/lib/creator-demo/read-aloud-clips";
 import { getDemoContent } from "@/lib/creator-demo/content";
 import { buildDemoMindmap } from "@/lib/creator-demo/mindmap";
 import { demoT } from "@/lib/creator-demo/demo-translator";
@@ -181,7 +176,13 @@ function createSilentWavDataUrl(durationSeconds: number) {
   return `data:audio/wav;base64,${window.btoa(binary)}`;
 }
 
-function buildTtsPlan(lectureId: string) {
+/*
+ * Loaded on first use rather than imported: the word timings are ~150 KB, and this module is also
+ * imported by the landing page's podcast screen, which must not carry them.
+ */
+const loadReadAloudClips = () => import("@/lib/creator-demo/read-aloud-clips");
+
+async function buildTtsPlan(lectureId: string) {
   const detail = getDemoLectureDetail(lectureId);
   const notes = detail?.artifact?.structured_notes_md;
 
@@ -194,6 +195,7 @@ function buildTtsPlan(lectureId: string) {
   );
 
   const chunks = buildNoteTtsChunks(document);
+  const { demoReadAloudChunkCount } = await loadReadAloudClips();
   /*
    * The recorded opening, when there is one: the demo reads the first minute in the real voice and
    * stops there, rather than going on in silence (read-aloud-clips.ts).
@@ -209,8 +211,8 @@ function buildTtsPlan(lectureId: string) {
 
 const TTS_LIMIT_SECONDS = 3600;
 
-function ttsStatus(lectureId: string) {
-  const plan = buildTtsPlan(lectureId);
+async function ttsStatus(lectureId: string) {
+  const plan = await buildTtsPlan(lectureId);
 
   return {
     available: true,
@@ -225,14 +227,16 @@ function ttsStatus(lectureId: string) {
   };
 }
 
-function ttsChunk(lectureId: string, chunkIndex: number) {
-  const plan = buildTtsPlan(lectureId);
+async function ttsChunk(lectureId: string, chunkIndex: number) {
+  const plan = await buildTtsPlan(lectureId);
   const chunk = chunkIndex < (plan?.chunkCount ?? 0) ? plan?.chunks[chunkIndex] : undefined;
 
   if (!plan || !chunk) {
     return json({ error: demoT("readAloud.unavailable") }, 404);
   }
 
+  /* The default voice whichever one is picked: all eleven would be ~50 MB for a demo. */
+  const { demoReadAloudClipPath, findDemoReadAloudClip } = await loadReadAloudClips();
   const clip = findDemoReadAloudClip({
     locale: getCreatorDemoState().locale,
     lectureId,
@@ -502,7 +506,7 @@ async function handleLectureRoute(
 
     case "tts": {
       if (tail[0] === "status") {
-        return json(ttsStatus(lectureId));
+        return json(await ttsStatus(lectureId));
       }
 
       if (tail[0] === "chunks") {

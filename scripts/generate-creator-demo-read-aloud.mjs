@@ -278,7 +278,7 @@ async function main() {
       }
 
       manifest.clips[locale][lectureId] = clips.map((clip) => ({ ...clip, alignment: inOrder(clip.alignment, clip.durationMs) }));
-      fs.writeFileSync(MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`);
+      fs.writeFileSync(MANIFEST, `${JSON.stringify(manifest)}\n`);
     }
   }
 

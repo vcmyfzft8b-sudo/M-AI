@@ -115,6 +115,23 @@
   pointer-events: none;
 }
 
+/* While the fill is still a dot (the first card, the first question), the strip
+   shrinks to a 2px tick in its middle. The fill is a size container, so the
+   strip only shows once there is room for it to read as a highlight. */
+.memo-progress > div,
+.memo-tutor-topicbar > span,
+.memo-podcast-progress > span {
+  container-type: inline-size;
+}
+
+@container (max-width: 2.5rem) {
+  .memo-progress > div::after,
+  .memo-tutor-topicbar > span::after,
+  .memo-podcast-progress > span::after {
+    display: none;
+  }
+}
+
 .memo-progress > div::before,
 .memo-tutor-topicbar > span::before,
 .memo-podcast-progress > span::before {

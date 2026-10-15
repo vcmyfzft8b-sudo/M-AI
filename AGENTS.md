@@ -72,9 +72,11 @@ follow-up before merging.
   app's own component wherever it is pure. One component per app screen lives in
   `src/components/landing/app/`. Never add an inline-styled copy of an app screen. (The hero
   phone's chrome and the note tabs' phone layout are still hand-kept copies — the doc lists them.)
-- A new note tab or study mode goes into the hero phone's tabs, the "How it works" study pills and
-  the feature list, in `NOTE_TABS` order, with copy in all five catalogues; also update the hero
-  lead, the JSON-LD `featureList` and the FAQ if they list features.
+- A new note tab or study mode goes into the hero phone's tabs and the "How it works" study pills,
+  in `NOTE_TABS` order, with copy in all five catalogues; also update the JSON-LD `featureList`
+  and the FAQ if they list features. The feature list ("Capture it, organise it…") names the core
+  only — notes, flashcards, quizzes, mind map, tests, chat — and the hero lead only notes,
+  flashcards and quizzes; a new mode joins neither by default (docs/landing-page-sync.md).
 - Compare side by side at phone width, dark and light: `/creator/lectures/demo-note-mikroekonomija`
   (the real app, no login) against `/`. Run `tests/landing-app-parity.test.mjs`.
 - Where each feature appears on the landing, and the full checklist:

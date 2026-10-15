@@ -10289,51 +10289,50 @@
  * regular price struck through beside the first-payment price.
  */
 /*
- * The discount, said once and plainly: the percentage large, then what it is
- * worth in money on the plan that is selected.
+ * The discount is the headline of a discounted paywall: the percentage huge in
+ * the brand coral, what it saves on the selected plan beneath it. That it is
+ * for the first payment only is the small print at the foot.
  */
 .memo-paywall-offer {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  box-sizing: border-box;
-  width: 100%;
-  margin: 0 0 0.7rem;
-  padding: 0.6rem 1rem 0.6rem 0.7rem;
-  border-radius: 20px;
-  background: color-mix(in oklch, var(--promo) 12%, var(--surface));
-  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--promo) 30%, transparent);
-  text-align: left;
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.6rem;
+  text-align: center;
 }
 
 .memo-paywall-offer-percent {
-  flex: none;
-  padding: 0.25rem 0.6rem;
-  border-radius: 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  color: var(--promo);
+  font-size: 4rem;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+}
+
+.memo-paywall-offer-percent small {
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.memo-paywall-offer-save {
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
   background: var(--promo);
   color: var(--on-promo);
-  font-size: 1.85rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 1.1;
-}
-
-.memo-paywall-offer-copy {
-  display: grid;
-  gap: 0.1rem;
-  min-width: 0;
-}
-
-.memo-paywall-offer-copy strong {
-  color: var(--text);
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   font-weight: 750;
-  letter-spacing: -0.02em;
 }
 
-.memo-paywall-offer-copy span {
+/* For the first payment only: said, but small and last. */
+.memo-paywall-fine {
+  margin: 0.2rem 0 0;
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: 0.78rem;
+  text-align: center;
 }
 
 .memo-paywall-plan-badge.offer {
@@ -10779,13 +10778,16 @@
   color: var(--on-photo);
 }
 
-.memo-paywall-shell[data-reason="listen"] .memo-paywall-offer {
-  background: var(--on-photo-chip);
-  box-shadow: none;
+
+
+.memo-paywall-shell[data-reason="listen"] :is(.memo-paywall-offer-percent, .memo-paywall-fine),
+.memo-paywall-shell[data-reason="tutor"] :is(.memo-paywall-offer-percent, .memo-paywall-fine) {
+  color: var(--on-promo);
 }
 
-.memo-paywall-shell[data-reason="listen"] .memo-paywall-offer-copy :is(strong, span) {
-  color: var(--on-photo);
+.memo-paywall-shell[data-reason="tutor"] .memo-paywall-offer-save {
+  background: var(--surface);
+  color: var(--promo);
 }
 
 .memo-paywall-shell[data-reason="listen"] .memo-pw-hero {
@@ -10806,10 +10808,7 @@
   color: var(--on-promo);
 }
 
-.memo-paywall-shell[data-reason="tutor"] .memo-paywall-offer {
-  background: var(--surface);
-  box-shadow: none;
-}
+
 
 
 /* New note: a page of lined paper with a margin; the plans are sticky notes. */
@@ -10827,6 +10826,22 @@
 }
 
 /* Library: free and the plan side by side, with the real limits. */
+.memo-paywall-shell[data-reason]:has(.memo-paywall-offer) .memo-pw-hero {
+  height: 8.6rem;
+}
+
+.memo-paywall-shell[data-reason="library"]:has(.memo-paywall-offer) .memo-pw-hero {
+  height: 5.4rem;
+}
+
+.memo-paywall-shell[data-reason="library"]:has(.memo-paywall-offer) .memo-pw-scene {
+  scale: 0.62;
+}
+
+.memo-paywall-shell[data-reason="library"] .memo-paywall-offer-percent {
+  font-size: 3.2rem;
+}
+
 .memo-paywall-shell[data-reason="library"] .memo-pw-hero {
   height: 7.6rem;
 }
@@ -10845,7 +10860,7 @@
 
 .memo-pw-compare th,
 .memo-pw-compare td {
-  padding: 0.42rem 0.6rem;
+  padding: 0.3rem 0.6rem;
   text-align: left;
 }
 

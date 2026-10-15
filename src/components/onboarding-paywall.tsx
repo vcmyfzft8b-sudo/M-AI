@@ -185,7 +185,7 @@ export function OnboardingPaywall({
   // What the discount is worth on the plan that is selected, in money.
   const savingPlan = paywallPlans.find((plan) => plan.id === selectedPaywallPlan) ?? paywallPlans[0];
   const savingLine = discounted && savingPlan
-    ? t(savingPlan.id === "yearly" ? "paywall.offer.saveYear" : "paywall.offer.saveMonth", {
+    ? t("paywall.offer.save", {
         amount: formatCurrency(savingPlan.amount - discountedAmount(savingPlan.amount, offer.percentOff), locale),
       })
     : null;
@@ -246,13 +246,14 @@ export function OnboardingPaywall({
         <PaywallHero reason={reason} />
       ) : null}
 
+      {/* The discount is the headline; that it covers only the first payment is
+          the small print at the foot, with the renewal price on each plan. */}
       {discounted ? (
         <div className="memo-paywall-offer">
-          <span className="memo-paywall-offer-percent">−{offer.percentOff}%</span>
-          <span className="memo-paywall-offer-copy">
-            <strong>{t("paywall.offer.pill", { percent: offer.percentOff })}</strong>
-            <span>{savingLine}</span>
+          <span className="memo-paywall-offer-percent">
+            −{offer.percentOff}%<small>{t("paywall.offer.off")}</small>
           </span>
+          {savingLine ? <span className="memo-paywall-offer-save">{savingLine}</span> : null}
         </div>
       ) : null}
 
@@ -406,6 +407,7 @@ export function OnboardingPaywall({
           {t("paywall.cancelAnytime")}
         </span>
       </div>
+      {discounted ? <p className="memo-paywall-fine">{t("paywall.offer.firstOnly")}</p> : null}
       {native ? <AppleBillingTerms busy={apple.busy} onRestore={() => void apple.restore()} /> : null}
     </section>
   );

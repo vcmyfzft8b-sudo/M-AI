@@ -132,7 +132,10 @@ test("the code form's yearly card leads with the weekly price and says what is b
 
 test("a later paywall on the web offers the ladder's discount, and the app never does", () => {
   const web = paywall(false, [], { reason: "chat", offerStep: 3 });
-  assert.match(web, /30% off your first payment/);
+  // The discount is the headline; first-payment-only is the small print.
+  assert.match(web, /−30%<small>OFF<\/small>/);
+  assert.match(web, /You save €39\.00/);
+  assert.match(web, /class="memo-paywall-fine">The discount applies to your first payment only\./);
   assert.match(web, /€91\.00 for the first year, then €130\.00/);
   assert.match(web, /€14\.00 for the first month, then €20\.00/);
   assert.match(web, /<s class="memo-paywall-plan-was">€20\.00<\/s>/);

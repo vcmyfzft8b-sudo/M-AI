@@ -70,7 +70,10 @@ first play of anything after the switch makes it again in the new voice.
 
 **Pre-rendered clips** (voice previews, the landing demo, `/ugc/oral-quiz`) are made by
 `scripts/generate-tutor-voice-clips.mjs` and `scripts/generate-oral-quiz-clips.mjs` through
-`scripts/lib/gemini-speech.mjs`; they need ffmpeg locally.
+`scripts/lib/gemini-speech.mjs`; they need ffmpeg locally. The `/creator` demo's read-aloud plays
+the first minute of each demo note from clips made by `scripts/generate-creator-demo-read-aloud.mjs`
+(Grace/Kore, five languages, word timings transcribed); re-run it after editing a demo note, or
+`tests/creator-demo-read-aloud.test.mjs` fails and the demo falls back to a silent reading.
 
 **Cost.** $9 per million audio tokens at 25 tokens a second is $0.81 an hour of speech (Soniox:
 $0.70), logged to `ai_usage_events` as stage `tutor_speech`. Google's pricing page says it

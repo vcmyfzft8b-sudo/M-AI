@@ -43,7 +43,11 @@ import {
 } from "@/lib/ugc/sync";
 import type { Json, UgcCreatorApplicationRow } from "@/lib/database.types";
 import { campaignLocale, type CreatorMarket } from "@/lib/ugc/creator-program";
-import { contractPaySchema } from "@/lib/ugc/creator-pay";
+import { contractPaySchema, sameContractPay, type ContractPay } from "@/lib/ugc/creator-pay";
+import { editedContractText, normalizeContractText } from "@/lib/ugc/contract-edit";
+import { applicationCampaignPay } from "@/lib/ugc/contract-rows";
+import { CREATOR_TERMS_VERSION } from "@/lib/ugc/creator-terms";
+import { contractSourceTerms, loadContractSource } from "@/lib/admin/contracts";
 import { sendAcceptanceEmail } from "@/lib/ugc/send-acceptance-email";
 
 /**
@@ -1230,35 +1234,34 @@ export async function readOnlineCountAction(): Promise<number> {
 
 const CONTRACT_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/**
- * Creates a contract with the deal entered here (`ContractPay`), either for a creator
- * already in the program (from their page, `creator_id` set) or for anyone else (from
- * `/admin/contracts`, no creator). Nothing is emailed: the page shows the signing link
- * (`/ugc/join/<token>`), and the admin sends it to them themselves. A contract is never
- * edited once created: a changed deal is a new contract, and the old one can be
- * withdrawn.
- */
-export async function createCreatorContractAction(
-  _previous: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
-  const context = await requireAdmin();
-  const creatorId = readString(formData, "creator_id");
+/** The longest contract text the admin may write by hand (the generated terms are ~15,000). */
+const CONTRACT_TEXT_MAX = 100000;
+
+type ContractFields = {
+  fullName: string;
+  email: string;
+  market: CreatorMarket;
+  requestedLocale: string;
+  minor: boolean;
+  pay: ContractPay;
+};
+
+/** The details and pay the contract form sends, checked; a message to show when they are not right. */
+function readContractFields(formData: FormData): ContractFields | string {
   const fullName = readString(formData, "full_name");
   const email = readString(formData, "email").toLowerCase();
   const market = readString(formData, "market");
-  const requestedLocale = readString(formData, "locale");
 
   if (fullName.length < 3 || fullName.length > 120) {
-    return fail("Enter their full name as it should appear on the contract.");
+    return "Enter their full name as it should appear on the contract.";
   }
 
   if (email && (!CONTRACT_EMAIL.test(email) || email.length > 254)) {
-    return fail("That email address does not look right (or leave it empty).");
+    return "That email address does not look right (or leave it empty).";
   }
 
   if (market !== "si" && market !== "balkans") {
-    return fail("Pick the campaign: Slovenia or Balkans.");
+    return "Pick the campaign: Slovenia or Balkans.";
   }
 
   const pay = contractPaySchema.safeParse({
@@ -1273,7 +1276,36 @@ export async function createCreatorContractAction(
   });
 
   if (!pay.success) {
-    return fail("Check the pay: amounts are 0 or more, the deal has to pay something, and the note fits in 2,000 characters.");
+    return "Check the pay: amounts are 0 or more, the deal has to pay something, and the note fits in 2,000 characters.";
+  }
+
+  return {
+    fullName,
+    email,
+    market,
+    requestedLocale: readString(formData, "locale"),
+    minor: formData.get("minor") === "on",
+    pay: pay.data,
+  };
+}
+
+/**
+ * Creates a contract with the deal entered here (`ContractPay`), either for a creator
+ * already in the program (from their page, `creator_id` set) or for anyone else (from
+ * `/admin/contracts`, no creator). Nothing is emailed: the page shows the signing link
+ * (`/ugc/join/<token>`), and the admin sends it to them themselves. It can be edited
+ * later (`updateCreatorContractAction`).
+ */
+export async function createCreatorContractAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const context = await requireAdmin();
+  const creatorId = readString(formData, "creator_id");
+  const fields = readContractFields(formData);
+
+  if (typeof fields === "string") {
+    return fail(fields);
   }
 
   const serviceRole = createSupabaseServiceRoleClient();
@@ -1288,12 +1320,12 @@ export async function createCreatorContractAction(
 
   const { error } = await insertInto(serviceRole, "ugc_creator_contracts", {
     creator_id: creatorId || null,
-    email: email || null,
-    full_name: fullName,
-    market,
-    locale: campaignLocale(market, requestedLocale),
-    minor: formData.get("minor") === "on",
-    pay: pay.data as unknown as Json,
+    email: fields.email || null,
+    full_name: fields.fullName,
+    market: fields.market,
+    locale: campaignLocale(fields.market, fields.requestedLocale),
+    minor: fields.minor,
+    pay: fields.pay as unknown as Json,
     created_by: context.user.email ?? null,
   });
 
@@ -1301,7 +1333,130 @@ export async function createCreatorContractAction(
     return fail(`Could not save the contract: ${error.message}`);
   }
 
-  return ok(`Contract for ${fullName} created. Copy its signing link below and send it to them.`);
+  return ok(`Contract for ${fields.fullName} created. Copy its signing link below and send it to them.`);
+}
+
+/**
+ * Edits any contract in place, on the same signing link: one created here or an accepted
+ * applicant's terms. Details, pay and the text itself can all change. A signed contract
+ * stays signed and its stored text becomes the edited one (the terms allow Memo AI to
+ * change them; no new signature is asked for). The signature record (typed name,
+ * guardian, time, IP, browser) is never touched. Nothing is sent to the creator.
+ *
+ * The text follows `editedContractText`: what the admin typed in the text box wins;
+ * untouched, generated text is generated again when the pay, campaign or language changed.
+ */
+export async function updateCreatorContractAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const context = await requireAdmin();
+  const id = readString(formData, "contract_id");
+  const fields = readContractFields(formData);
+
+  if (typeof fields === "string") {
+    return fail(fields);
+  }
+
+  const source = id ? await loadContractSource(id) : null;
+
+  if (!source) {
+    return fail("That contract no longer exists.");
+  }
+
+  if (source.kind === "application" && !fields.email) {
+    return fail("An applicant's contract needs their email: it is how they applied.");
+  }
+
+  const before = contractSourceTerms(source);
+  const locale = campaignLocale(fields.market, fields.requestedLocale);
+  const edited = editedContractText({
+    submitted: readString(formData, "terms_text"),
+    current: before.text,
+    handWritten: before.override !== null,
+    before,
+    after: { locale, market: fields.market, pay: fields.pay, applied: before.applied },
+    regenerate: formData.get("regenerate") === "on",
+  });
+
+  if (edited.text.trim().length === 0) {
+    return fail("The contract text cannot be empty. Tick “Write the text from the details and pay” to get it back.");
+  }
+
+  if (edited.text.length > CONTRACT_TEXT_MAX) {
+    return fail("The contract text is too long.");
+  }
+
+  const override = edited.handWritten ? edited.text : null;
+  const editedAt = new Date().toISOString();
+  const editor = context.user.email ?? null;
+  const serviceRole = createSupabaseServiceRoleClient();
+
+  // A signed contract's stored text is what the creator now has; regenerated text is
+  // written at the current terms version. A signature from before the text was kept gets
+  // one only when the text actually changes: fixing an email must not invent the words
+  // they signed.
+  const textChanged = edited.text !== normalizeContractText(before.text);
+  const storedVersion = before.signed && edited.regenerated ? CREATOR_TERMS_VERSION : null;
+  const signedText =
+    before.signed && (before.signedText !== null || textChanged)
+      ? { terms_snapshot: edited.text, ...(storedVersion ? { terms_version: storedVersion } : {}) }
+      : {};
+
+  const { data, error } =
+    source.kind === "contract"
+      ? await updateIn(serviceRole, "ugc_creator_contracts", {
+          full_name: fields.fullName,
+          email: fields.email || null,
+          market: fields.market,
+          locale,
+          minor: fields.minor,
+          pay: fields.pay as unknown as Json,
+          terms_override: override,
+          edited_at: editedAt,
+          edited_by: editor,
+          ...signedText,
+        })
+          .eq("id", source.row.id)
+          .select("id")
+      : await updateIn(serviceRole, "ugc_creator_applications", {
+          full_name: fields.fullName,
+          email: fields.email,
+          market: fields.market,
+          // An applicant's page language stays as it was unless the contract's language changes.
+          ...(locale !== before.locale ? { locale } : {}),
+          // Their age decides unless the admin says otherwise.
+          contract_minor: fields.minor === (source.row.age !== null && source.row.age < 18) ? null : fields.minor,
+          // Campaign pay stays implicit, so a campaign pay change still reaches them.
+          contract_pay: sameContractPay(
+            fields.pay,
+            applicationCampaignPay(fields.market, before.signed ? (storedVersion ?? source.row.terms_version) : null),
+          )
+            ? null
+            : (fields.pay as unknown as Json),
+          terms_override: override,
+          terms_edited_at: editedAt,
+          terms_edited_by: editor,
+          ...signedText,
+        })
+          .eq("id", source.row.id)
+          .select("id");
+
+  if (error) {
+    return fail(
+      error.code === "23505" ? "Another application already uses that email." : `Could not save the contract: ${error.message}`,
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return fail("That contract no longer exists.");
+  }
+
+  return ok(
+    before.signed
+      ? `Saved. ${fields.fullName}'s signed contract now says this, on the same link. Nothing was sent to them.`
+      : `Saved. The signing link shows the new version. Nothing was sent to ${fields.fullName}.`,
+  );
 }
 
 /** Withdraws an unsigned contract: its link stops working. A signed one stays on record. */

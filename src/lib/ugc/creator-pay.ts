@@ -48,6 +48,20 @@ export function campaignPay(terms: CreatorTerms): ContractPay {
   };
 }
 
+/** Two deals that pay the same and say the same. */
+export function sameContractPay(a: ContractPay, b: ContractPay): boolean {
+  return (
+    a.perTikTok === b.perTikTok &&
+    a.perInstagram === b.perInstagram &&
+    a.viewRatePer1k === b.viewRatePer1k &&
+    a.codeSharePercent === b.codeSharePercent &&
+    a.monthlyFee === b.monthlyFee &&
+    a.bonusCap === b.bonusCap &&
+    a.videosPerMonth === b.videosPerMonth &&
+    a.note === b.note
+  );
+}
+
 export function hasVideoPay(pay: ContractPay): boolean {
   return pay.perTikTok > 0 || pay.perInstagram > 0;
 }

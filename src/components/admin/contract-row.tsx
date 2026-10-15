@@ -11,7 +11,7 @@ const CAMPAIGN = { si: "Slovenia", balkans: "Balkans" } as const;
 /**
  * One contract: who, the deal, and where it stands. Unsigned, it shows the signing link
  * to copy and send (nothing is emailed from here); signed, who signed when, and a link to
- * the exact text they accepted.
+ * the exact text they accepted. Any of them can be edited (`/admin/contracts/<id>/edit`).
  */
 export function ContractRow({ contract, showCreatorLink = false }: { contract: ContractRecord; showCreatorLink?: boolean }) {
   return (
@@ -54,19 +54,27 @@ export function ContractRow({ contract, showCreatorLink = false }: { contract: C
       <p className="admin-help">
         {contract.kind === "application" ? "Accepted" : "Created"} {formatDateTime(contract.createdAt)}
         {contract.createdBy ? ` by ${contract.createdBy}` : ""}
+        {contract.editedAt
+          ? ` · edited ${formatDateTime(contract.editedAt)}${contract.editedBy ? ` by ${contract.editedBy}` : ""}`
+          : ""}
         {contract.email ? ` · ${contract.email}` : ""}
       </p>
 
-      {contract.kind === "contract" && contract.status === "sent" ? (
-        <InlineAction
-          action={voidCreatorContractAction}
-          fields={{ contract_id: contract.id }}
-          variant="danger"
-          confirm={`Withdraw the contract for ${contract.name}? Its link stops working.`}
-        >
-          Withdraw
-        </InlineAction>
-      ) : null}
+      <div className="admin-contract-actions">
+        <PendingLink className="admin-button" data-size="sm" href={`/admin/contracts/${contract.id}/edit`}>
+          Edit
+        </PendingLink>
+        {contract.kind === "contract" && contract.status === "sent" ? (
+          <InlineAction
+            action={voidCreatorContractAction}
+            fields={{ contract_id: contract.id }}
+            variant="danger"
+            confirm={`Withdraw the contract for ${contract.name}? Its link stops working.`}
+          >
+            Withdraw
+          </InlineAction>
+        ) : null}
+      </div>
     </div>
   );
 }

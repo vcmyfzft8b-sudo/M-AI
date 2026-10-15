@@ -166,9 +166,24 @@ contract** takes:
 
 **Nothing is sent to the creator.** The contract shows a signing link (`/ugc/join/<token>`)
 with a Copy button, and the admin sends it themselves. The creator signs it like an
-applicant: one tap, with a parent or guardian for a minor. A contract is never edited: a
-changed deal is a new contract, and an unsigned one can be withdrawn (its link stops
-opening). Two people sharing one creator row get a contract each.
+applicant: one tap, with a parent or guardian for a minor. An unsigned contract can be
+withdrawn (its link stops opening). Two people sharing one creator row get a contract each.
+
+**Any contract can be edited by hand** at `/admin/contracts/<id>/edit` (the Edit button on
+every row): contracts created here and accepted applicants' terms alike, signed or not.
+Name, email, campaign, language, under-18, every pay field, the special clause and the
+full text itself can change. It is saved in place on the same signing link, and nothing is
+sent to the creator.
+- **Text.** The form shows the current text in a box. Whatever is typed there is kept
+  exactly as written (`terms_override`); left untouched, generated text is generated again
+  when the pay, campaign or language change (`editedContractText` in
+  `src/lib/ugc/contract-edit.ts`). A tick box goes back to generated text.
+- **Signed contracts stay signed.** Their stored text (`terms_snapshot`) becomes the
+  edited one, without a new signature: the terms let Memo AI change them. The signature
+  record (typed names, time, IP, browser) is never edited.
+- **Applicants** can be given their own deal (`contract_pay`, null keeps the campaign's
+  pay) and an under-18 setting that overrides their age (`contract_minor`).
+- Every edit records who made it and when (`edited_at` / `terms_edited_at`).
 
 **Every signature is stored for good**, with the exact text signed (`terms_snapshot`):
 - contracts in `ugc_creator_contracts`;

@@ -47,7 +47,7 @@ function load(component, native, products = []) {
     "@/lib/paywall-offer-timing": { notePaywallShown() {}, paywallVisitCounted: () => false },
     "@/components/paywall-hero": {
       PaywallHero: ({ reason }) => React.createElement("div", { className: "memo-pw-hero", "data-reason": reason }),
-      PaywallWelcome: () => React.createElement("div", { className: "memo-pw-hero welcome" }),
+      PaywallBrand: () => React.createElement("div", { className: "memo-pw-brand" }),
       PaywallMascot: () => React.createElement("span", { className: "memo-pw-memo" }),
       paywallLayout: reason => (reason ? "rows" : "cards"),
       paywallAccentStyle: () => undefined,
@@ -75,7 +75,7 @@ const trial = [
 test("iOS and PWA render the same paywall structure, benefits, cards and CTA", () => {
   const web = paywall(false, []);
   const ios = paywall(true, trial);
-  for (const className of ["memo-pw-hero welcome", "memo-paywall-title", "memo-paywall-benefits", "memo-paywall-plan-grid", "memo-paywall-plan-header", "memo-paywall-plan-price", "memo-paywall-cta", "memo-paywall-foot"]) {
+  for (const className of ["memo-pw-brand", "memo-paywall-title", "memo-paywall-benefits", "memo-paywall-plan-grid", "memo-paywall-plan-header", "memo-paywall-plan-price", "memo-paywall-cta", "memo-paywall-foot"]) {
     assert.ok(web.includes(className), className);
     assert.ok(ios.includes(className), className);
   }

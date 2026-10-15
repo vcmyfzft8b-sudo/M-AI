@@ -26981,6 +26981,11 @@ a.memo-exam-station-go {
   gap: 0.35rem;
 }
 
+/* The examiner's voices, as the tutor offers them, left-aligned under their label. */
+.memo-exam-voices {
+  justify-content: flex-start;
+}
+
 /* The instructions before an oral exam. */
 .memo-exam-briefing {
   display: flex;

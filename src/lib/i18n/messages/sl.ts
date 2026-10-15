@@ -2603,6 +2603,7 @@ export const sl = {
   "exam.mock.error.start": "Generalke ni bilo mogoče začeti. Poskusi znova.",
   "exam.mock.error.submit": "Oddaja ni uspela. Odgovori so ostali tukaj, poskusi znova.",
   "exam.mock.lastResult": "Zadnji rezultat: ocena {grade} ({percent} %)",
+  "exam.mock.lastPercent": "Zadnji rezultat: {percent} %",
   "exam.mock.result.title": "Rezultat",
   "exam.mock.result.grade": "Ocena {grade}",
   "exam.mock.result.points": "{score} od {total} točk",

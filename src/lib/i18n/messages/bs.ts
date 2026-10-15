@@ -2583,6 +2583,7 @@ export const bs: Messages = {
   "exam.mock.error.start": "Probni ispit nije moguće pokrenuti. Pokušaj ponovo.",
   "exam.mock.error.submit": "Predaja nije uspjela. Odgovori su ostali ovdje, pokušaj ponovo.",
   "exam.mock.lastResult": "Zadnji rezultat: ocjena {grade} ({percent} %)",
+  "exam.mock.lastPercent": "Zadnji rezultat: {percent} %",
   "exam.mock.result.title": "Rezultat",
   "exam.mock.result.grade": "Ocjena {grade}",
   "exam.mock.result.points": "{score} od {total} bodova",

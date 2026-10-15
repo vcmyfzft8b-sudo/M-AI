@@ -2572,6 +2572,7 @@ export const en: Messages = {
   "exam.mock.error.start": "The mock exam could not start. Try again.",
   "exam.mock.error.submit": "Handing in failed. Your answers are still here, try again.",
   "exam.mock.lastResult": "Last result: grade {grade} ({percent}%)",
+  "exam.mock.lastPercent": "Last result: {percent} %",
   "exam.mock.result.title": "Result",
   "exam.mock.result.grade": "Grade {grade}",
   "exam.mock.result.points": "{score} of {total} points",

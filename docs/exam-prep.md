@@ -12,7 +12,9 @@ study path. It follows Astra AI's exam-prep flow, drawn in Memo's own components
   listed in "Moji zapiski" as a group of its own ("Priprave na test", with "Vse" → `/app/exams`)
   above the notes, which then get a "Zapiski" heading. The rows are note rows; Memo in a ring of
   mastery marks them as preps. Preps are not filed in folders, so a folder shows none; a search
-  matches their titles (`listLibraryExamPreps`, `ExamLibraryList`). Past and archived preps
+  matches their titles (`listLibraryExamPreps`, `ExamLibraryList`). The heading folds the group away; the
+  choice is kept in the `memo-preps-collapsed` cookie, which the server reads so the page paints
+  folded. Past and archived preps
   appear only on `/app/exams`. Storage stays separate: preps are `exams` rows that reference
   their notes through `exam_modules`, never `lectures` rows.
 - **Desktop rail:** "Izpiti" → `/app/exams`.

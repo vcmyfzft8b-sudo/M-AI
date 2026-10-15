@@ -27079,6 +27079,77 @@ a.memo-exam-station-go {
   margin-top: 0.4rem;
 }
 
+.memo-library-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2rem;
+  margin-left: -0.6rem;
+  padding: 0 0.5rem 0 0.6rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+}
+
+.memo-library-toggle:hover .memo-eyebrow,
+.memo-library-toggle:hover .memo-library-chevron {
+  color: var(--text);
+}
+
+.memo-library-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-library-count {
+  display: inline-grid;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.35rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-library-chevron {
+  color: var(--muted);
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.memo-library-toggle[aria-expanded="false"] .memo-library-chevron {
+  transform: rotate(-90deg);
+}
+
+/* Folding animates the rows' height down to nothing; the inner box keeps their shadows. */
+.memo-prep-fold {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.memo-prep-fold[data-open="false"] {
+  grid-template-rows: 0fr;
+}
+
+.memo-prep-fold-inner {
+  min-height: 0;
+  overflow: hidden;
+  margin: 0 -0.75rem;
+  padding: 0 0.75rem 0.75rem;
+}
+
+.memo-prep-fold[data-open="false"] .memo-prep-fold-inner {
+  visibility: hidden;
+  transition: visibility 0s 0.28s;
+}
+
 .memo-library-head-link {
   color: var(--muted);
   font-size: 0.92rem;
@@ -27098,8 +27169,13 @@ a.memo-exam-station-go {
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
-.memo-prep-group > .memo-note-list,
+.memo-prep-fold .memo-note-list,
 .memo-prep-group + .memo-note-list {
+  margin-top: 0.6rem;
+}
+
+/* The fold's room for the rows' shadows is taken back from the heading under it. */
+.memo-prep-fold + .memo-library-head {
   margin-top: 0.6rem;
 }
 
@@ -27140,8 +27216,12 @@ a.memo-exam-station-go {
     margin-top: 0;
   }
 
-  .memo-prep-group > .memo-note-list,
+  .memo-prep-fold .memo-note-list,
   .memo-prep-group + .memo-note-list {
+    margin-top: 0.5rem;
+  }
+
+  .memo-prep-fold + .memo-library-head {
     margin-top: 0.5rem;
   }
 }

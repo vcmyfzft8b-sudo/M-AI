@@ -42,6 +42,9 @@ export const MAX_EXAM_TOPICS = 200;
  */
 export const MAX_SETUP_UPLOADS = 8;
 
+/** Remembers that the learner folded the library's exam preps away; read on the server so it paints folded. */
+export const EXAM_PREPS_COLLAPSED_COOKIE = "memo-preps-collapsed";
+
 /* The target mastery a learner can set, and the dial's step. The create route enforces the range. */
 export const TARGET_MIN = 50;
 export const TARGET_MAX = 100;

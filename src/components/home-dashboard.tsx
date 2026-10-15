@@ -926,6 +926,7 @@ export function HomeDashboard({
   showDevDashboard,
   planPrices,
   examPreps = [],
+  examPrepsCollapsed = false,
 }: {
   lectures: AppLectureListItem[];
   folders: AppLibraryFolder[];
@@ -946,6 +947,8 @@ export function HomeDashboard({
   planPrices?: PlanPrices;
   /** The exam preps still ahead of their exam, listed in the library above the notes. */
   examPreps?: LibraryExamPrep[];
+  /** Whether the learner folded that group away, from its cookie. */
+  examPrepsCollapsed?: boolean;
 }) {
   const t = useT();
   const native = useNativeIOS();
@@ -1858,7 +1861,11 @@ export function HomeDashboard({
             ) : null}
 
             {/* Exam preps sit in the library with the notes, as a group of their own above them. */}
-            <ExamLibraryList preps={visibleExamPreps} notesFollow={filteredLectures.length > 0} />
+            <ExamLibraryList
+              preps={visibleExamPreps}
+              notesFollow={filteredLectures.length > 0}
+              initialCollapsed={examPrepsCollapsed}
+            />
 
             {failedLectures.length > 0 ? (
               <div className="memo-note-list memo-failed-list">

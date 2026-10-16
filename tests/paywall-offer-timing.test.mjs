@@ -15,8 +15,8 @@ test("the browsing offer runs on the web only, for an onboarded learner who has 
   assert.match(layout, /\{!native && appState\?\.onboardingComplete && !appState\.hasPaidAccess \? <PaywallNudge userId=\{user\.id\} \/> : null\}/);
 
   const nudge = readFileSync(new URL("../src/components/paywall-nudge.tsx", import.meta.url), "utf8");
-  // Never in a recording, settings or support.
-  assert.match(nudge, /NOT_BROWSING = \["\/app\/start", "\/app\/new", "\/app\/settings", "\/app\/support", "\/app\/consent"\]/);
+  // Every screen counts, settings and support included; only the paywall itself and consent do not.
+  assert.match(nudge, /NOT_BROWSING = \["\/app\/start", "\/app\/consent"\]/);
 });
 
 test("every paywall restarts the count, and records its moment once before checkout", () => {
@@ -26,14 +26,33 @@ test("every paywall restarts the count, and records its moment once before check
   assert.match(paywall, /body: JSON\.stringify\(\{ plan, reason, step: offer\.step \}\)/);
 });
 
-test("only a click opens the browsing offer, in place of what it would have opened", () => {
+test("every tap on anything pressable counts, and the fourth opens the offer in its place", () => {
   const nudge = readFileSync(new URL("../src/components/paywall-nudge.tsx", import.meta.url), "utf8");
-  assert.match(nudge, /const OPENS = 'a\[href\], \[role="link"\], \.memo-tabs button';/);
-  assert.match(nudge, /return target\.getAttribute\("aria-current"\) !== "page";/);
+  const tappable = nudge.match(/const TAPPABLE = \[([\s\S]*?)\]\.join/)[1];
+  for (const selector of ["a[href]", "button", '[role="button"]', '[role="link"]', '[role="tab"]', '[role="switch"]', 'input[type="checkbox"]']) {
+    assert.ok(tappable.includes(selector), selector);
+  }
+  // Typing is not a tap, and a label would count its control's one tap twice.
+  assert.doesNotMatch(tappable, /"label"|textarea|input\[type="text"\]/);
+  assert.match(nudge, /event\.target\.closest\(TAPPABLE\)/);
+  // Enter sending the chat, or a key pressing a button, is not a tap.
+  assert.match(nudge, /if \(event\.detail === 0 \|\| event\.button !== 0/);
+  assert.match(nudge, /target\.matches\(":disabled, \[aria-disabled='true'\]"\)/);
+  assert.doesNotMatch(nudge, /opensSomething|aria-current/);
   assert.match(nudge, /event\.preventDefault\(\);\s*event\.stopPropagation\(\);/);
   assert.match(nudge, /document\.addEventListener\("click", onClick, true\)/);
   // Arriving on a page, going back or reloading counts for nothing.
   assert.doesNotMatch(nudge, /usePathname\(\)[\s\S]*if \(countOfferScreen\(\)\) \{\s*openOffer/);
+});
+
+test("nothing counts or opens while a recording, an upload or a tutor session is live, or inside an offer", () => {
+  const nudge = readFileSync(new URL("../src/components/paywall-nudge.tsx", import.meta.url), "utf8");
+  assert.match(nudge, /const NEVER_HERE = "\[data-offer-hold\], \.memo-wheel-sheet, \.memo-offer-sheet, \.memo-paywall-shell";/);
+  assert.match(nudge, /target\.closest\(NEVER_HERE\) \|\|\s*\/\/[^\n]*\n\s*document\.querySelector\("\[data-offer-hold\]"\) \|\|\s*!countOfferScreen\(\)/);
+  const modal = readFileSync(new URL("../src/components/note-source-modal.tsx", import.meta.url), "utf8");
+  assert.match(modal, /data-offer-hold=\{isRecording \|\| isStarting \|\| busyLabel \? "" : undefined\}/);
+  const tutor = readFileSync(new URL("../src/components/lecture-tutor.tsx", import.meta.url), "utf8");
+  assert.match(tutor, /data-offer-hold=\{phase === "idle" \? undefined : ""\}/);
 });
 
 test("a reload or a return through history is the same paywall visit; opening it again later is a new one", async () => {

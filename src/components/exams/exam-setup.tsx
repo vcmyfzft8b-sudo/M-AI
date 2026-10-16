@@ -698,17 +698,6 @@ export function ExamSetup({
               <span className="memo-exam-dropzone-lead">{t("exam.setup.material.pick")}</span>
               <span className="memo-dropzone-title">{t("exam.setup.material.pickHint")}</span>
             </button>
-            {/* What cannot be uploaded: a lecture recorded now, or a link. */}
-            <div className="memo-exam-dropzone-more">
-              <button type="button" disabled={uploadsLeft <= 0 || examFull} onClick={() => openSource("record")}>
-                <Emoji symbol="🎙️" size="1rem" />
-                <span>{t("library.create.record")}</span>
-              </button>
-              <button type="button" disabled={uploadsLeft <= 0 || examFull} onClick={() => openSource("link")}>
-                <Emoji symbol="🔗" size="1rem" />
-                <span>{t("library.create.link")}</span>
-              </button>
-            </div>
           </div>
 
           {added.length > 0 ? (

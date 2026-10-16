@@ -196,18 +196,21 @@ learner's onboarding answer) → daily minutes → "Creating your study path" �
 
 **The study path is planned in the background** (`POST /api/exams/plan`) as soon as the material and
 the switch are settled, the way Astra reviews the uploads while the learner answers the rest; the
-building screen only waits for it. The **review** is Astra's topic checklist, one group per note:
-untick to leave a topic out, the pencil to rename it, "Dodaj temo" to add one's own. Nothing is
-stored until "Start"; `createExam` stores the topics as the learner left them. A note that was still
-being made at setup has no topics yet; the exam screen plans them (`POST /api/exams/[id]/topics`)
-once it is ready.
+building screen only waits for it. The **review** is the AI's plan, read-only (the owner wanted the
+plan made for the learner, not edited by them): a numbered path of modules, one card per topic with
+its note and the emojis of what it holds, then the mock exam and the goal. The planner asks for at
+least two topics per note and asks again when an answer has fewer (`planNoteTopics`). Nothing is
+stored until "Start"; `createExam` stores the planned topics. A note that was still being made at
+setup has no topics yet; the exam screen plans them (`POST /api/exams/[id]/topics`) once it is ready.
 
-**Material leads with new uploads.** The primary card opens the normal note-source modal (document
-or photos, recording, audio file, link) on top of the setup; `NoteSourceModal`'s `onCreated` hands
-the new note's id back instead of navigating to it, and the note joins the exam while it is still
-being made (`createExam` accepts any owned note that has not failed). Notes already in the app are
-the secondary choice, behind "Ali izberi iz svojih zapiskov". Without `canCreateNotes` the upload
-card sends the learner to `/app/start`.
+**Material leads with one upload field.** "Naloži gradivo" takes anything a note can be made from:
+tap to pick files, photos or the camera, or drop files on it. The picked files open the normal
+note-source modal (`initialFiles`), which takes them as it takes a drop: one audio file is a
+recording, anything else documents or photos. There is no separate record or link option here.
+`NoteSourceModal`'s `onCreated` hands the new note's id back instead of navigating to it, and the
+note joins the exam while it is still being made (`createExam` accepts any owned note that has not
+failed). Notes already in the app are the secondary choice, behind "Ali izberi iz svojih zapiskov".
+Without `canCreateNotes` the field sends the learner to the paywall.
 
 ## The exam screen
 

@@ -1,4 +1,4 @@
-// A SharePoint or OneDrive for Business "anyone with the link" share opens the document in Word,
+// A SharePoint or OneDrive "anyone with the link" share opens the document in Word,
 // PowerPoint or the PDF viewer online: a script shell with no readable text. The same link with
 // `download=1` serves the file itself, which we can read like any uploaded document.
 //
@@ -7,12 +7,29 @@
 // that second request is sent to the tenant's sign-in page instead.
 
 // The share link's first path segment names the kind of item: w(ord), p(owerpoint), b (PDF).
+// Personal OneDrive serves the same shares from onedrive.live.com, and its 1drv.ms short links
+// name the kind without the colons (`1drv.ms/p/c/...`).
 const DOWNLOADABLE_SHARE_KINDS = new Set([":w:", ":p:", ":b:"]);
+const DOWNLOADABLE_SHORT_SHARE_KINDS = new Set(["w", "p", "b"]);
+
+function normalizeHostname(hostname: string) {
+  return hostname.trim().toLowerCase().replace(/\.$/, "");
+}
 
 function isSharePointHost(hostname: string) {
-  const normalized = hostname.trim().toLowerCase().replace(/\.$/, "");
+  const normalized = normalizeHostname(hostname);
 
-  return normalized === "sharepoint.com" || normalized.endsWith(".sharepoint.com");
+  return (
+    normalized === "sharepoint.com" ||
+    normalized.endsWith(".sharepoint.com") ||
+    normalized === "onedrive.live.com"
+  );
+}
+
+function isShareKind(url: URL, kind: string) {
+  return normalizeHostname(url.hostname) === "1drv.ms"
+    ? DOWNLOADABLE_SHORT_SHARE_KINDS.has(kind)
+    : isSharePointHost(url.hostname) && DOWNLOADABLE_SHARE_KINDS.has(kind);
 }
 
 /**
@@ -20,13 +37,9 @@ function isSharePointHost(hostname: string) {
  * link is not a share of a document we read.
  */
 export function shareLinkDownloadUrl(url: URL): URL | null {
-  if (!isSharePointHost(url.hostname)) {
-    return null;
-  }
-
   const kind = url.pathname.split("/").filter(Boolean)[0]?.toLowerCase() ?? "";
 
-  if (!DOWNLOADABLE_SHARE_KINDS.has(kind) || url.searchParams.get("download") === "1") {
+  if (!isShareKind(url, kind) || url.searchParams.get("download") === "1") {
     return null;
   }
 

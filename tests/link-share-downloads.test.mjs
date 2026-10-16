@@ -21,6 +21,22 @@ test("downloads a shared Word, PowerPoint or PDF document instead of opening it 
   }
 });
 
+// Synthetic personal OneDrive shares: the 1drv.ms short link and the page it redirects to.
+test("downloads a personal OneDrive share, short link or full", () => {
+  for (const url of [
+    "https://1drv.ms/p/c/ABCDEF0123456789/IQAbCdEfGh123",
+    "https://1drv.ms/w/c/ABCDEF0123456789/IQAbCdEfGh123?e=XyZ123",
+    "https://onedrive.live.com/:p:/g/personal/ABCDEF0123456789/IQAbCdEfGh123?ithint=file%2cpptx",
+  ]) {
+    const download = shareLinkDownloadUrl(new URL(url));
+
+    assert.ok(download, url);
+    assert.equal(download.searchParams.get("download"), "1");
+    assert.equal(download.hostname, new URL(url).hostname);
+    assert.equal(download.pathname, new URL(url).pathname);
+  }
+});
+
 test("leaves every other link as it was pasted", () => {
   for (const url of [
     "https://example.sharepoint.com/:x:/s/Team/AbC?e=1",
@@ -28,6 +44,10 @@ test("leaves every other link as it was pasted", () => {
     `${WORD_SHARE}&download=1`,
     "https://sharepoint.com.example.org/:w:/g/personal/x/AbC",
     "https://en.wikipedia.org/:w:/wiki/Photosynthesis",
+    "https://1drv.ms/x/c/ABCDEF0123456789/IQAbCdEfGh123",
+    "https://1drv.ms/f/c/ABCDEF0123456789/IQAbCdEfGh123",
+    "https://onedrive.live.com/p/c/ABCDEF0123456789/IQAbCdEfGh123",
+    "https://example.org/p/c/ABCDEF0123456789/IQAbCdEfGh123",
   ]) {
     assert.equal(shareLinkDownloadUrl(new URL(url)), null, url);
   }

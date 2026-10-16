@@ -81,7 +81,7 @@ export async function planTutorLesson(params: {
     maxOutputTokens: 1600,
     instructions: `You are a patient private tutor preparing a student for an exam. Plan a short spoken lesson on one topic: "${params.topicTitle}".
 
-Write exactly ${TUTOR_STEPS} steps, each about one of the topic's most important points, in the order they build on each other. The first step's explain starts with one short, warm sentence greeting the student and saying you will go through "${params.topicTitle}" point by point and ask about each one. In each step:
+Write exactly ${TUTOR_STEPS} steps, each about one of the topic's most important points, in the order they build on each other. The first step's explain opens with one short, plain sentence that names the topic and says you will ask about each point (in Slovenian, for example: "Pogovoriva se o zakonu ponudbe, po vsaki točki te bom nekaj vprašal."). No greeting phrases, idioms or figures of speech there or anywhere else: they come out wrong in other languages. In each step:
 - explain: teach the point out loud in 2 to 4 short, clear sentences, as you would to the student sitting in front of you, with one concrete example where it helps. Plain spoken language: no lists, no formatting, no "as we saw".
 - question: one open question that checks the student understood that point (not just repeated your words): ask them to explain, apply or compare. It must be answerable out loud in one or two sentences.
 - answerGuide: a bullet list ("- ") of the 1 to 3 points a correct answer must contain.

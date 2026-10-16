@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
@@ -76,13 +76,17 @@ const ROLE_FOR_LEVEL: Record<string, string> = {
   university: "university_student",
 };
 
-/* The app's upload pipeline, run without its sheet: material is the prep's, never a note being made. */
 /* How many uploads run at once. */
 const PARALLEL_UPLOADS = 3;
 
-const NoteSourceModal = dynamic(() =>
-  import("@/components/note-source-modal").then((module) => module.NoteSourceModal),
-);
+/*
+ * The app's upload pipeline, run without its sheet: material is the prep's, never a note being
+ * made. Fetched as soon as the setup opens, and rendered under its own empty Suspense boundary:
+ * left to suspend on the first upload, it reached the route's loading screen and swapped the whole
+ * setup for the notes list's skeleton until its code had arrived.
+ */
+const loadUploadPipeline = () => import("@/components/note-source-modal").then((module) => module.NoteSourceModal);
+const NoteSourceModal = dynamic(loadUploadPipeline, { loading: () => null });
 
 /* The one upload field takes anything a note can be made from: documents, photos (or the camera), audio. */
 const ANY_MATERIAL_ACCEPT = [DOCUMENT_FILE_INPUT_ACCEPT, SCAN_IMAGE_INPUT_ACCEPT, AUDIO_FILE_INPUT_ACCEPT].join(",");
@@ -415,6 +419,11 @@ export function ExamSetup({
 
   /* The building screen waits for the plan (and at least a moment), then shows it. */
   const planReady = plan.status === "done" && plan.key === planKey;
+
+  // The upload pipeline's code, fetched now so the first pick starts uploading at once.
+  useEffect(() => {
+    void loadUploadPipeline();
+  }, []);
 
   useEffect(() => {
     if (step !== "building" || !planReady) {
@@ -1186,21 +1195,23 @@ export function ExamSetup({
        * The material being read: the app's own upload pipeline, without its sheet. It stays mounted
        * whichever step the learner is on, so going on does not stop it.
        */}
-      {activeUploads.map((upload) => (
-        <NoteSourceModal
-          key={`${upload.key}:${upload.attempt}`}
-          mode={upload.kind === "audio" ? "upload" : "text"}
-          open
-          headless
-          canCreateNotes={canCreateNotes}
-          onClose={() => undefined}
-          initialFiles={upload.files}
-          paywallBack="/app/exams/new"
-          onBusy={(label) => updatePendingUpload(upload.key, { status: "uploading", busy: label })}
-          onFailed={(message) => updatePendingUpload(upload.key, { status: "failed", busy: null, message })}
-          onCreated={(lectureId) => uploadReady(upload.key, lectureId)}
-        />
-      ))}
+      <Suspense fallback={null}>
+        {activeUploads.map((upload) => (
+          <NoteSourceModal
+            key={`${upload.key}:${upload.attempt}`}
+            mode={upload.kind === "audio" ? "upload" : "text"}
+            open
+            headless
+            canCreateNotes={canCreateNotes}
+            onClose={() => undefined}
+            initialFiles={upload.files}
+            paywallBack="/app/exams/new"
+            onBusy={(label) => updatePendingUpload(upload.key, { status: "uploading", busy: label })}
+            onFailed={(message) => updatePendingUpload(upload.key, { status: "failed", busy: null, message })}
+            onCreated={(lectureId) => uploadReady(upload.key, lectureId)}
+          />
+        ))}
+      </Suspense>
     </ExamScreen>
   );
 }

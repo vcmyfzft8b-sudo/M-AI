@@ -674,6 +674,8 @@ export function LibraryFolderMenu({
                 ) : null}
               </button>
             ) : null}
+            {/* The app's own (all notes, exam preps) apart from the learner's folders. */}
+            {option.id === null && liveFolders.length > 0 ? <div className="memo-menu-sep" /> : null}
           </Fragment>
         ))}
 
@@ -793,34 +795,39 @@ export function LibraryFolderMenu({
                       </button>
                     </div>
                   ) : null}
-
-                  {liveFolders.map((folder) => (
-                    <div key={folder.id} className="memo-folder-row">
-                      <button
-                        type="button"
-                        className="memo-folder-row-main"
-                        onClick={() => handleSelectFolder(folder)}
-                      >
-                        <Emoji symbol="📁" size="1.2rem" />
-                        <span className="memo-folder-row-label">{folder.name}</span>
-                        {selectedFolderId === folder.id ? (
-                          <Msym name="check" size="1.35rem" fill={false} weight={500} />
-                        ) : null}
-                      </button>
-                      <button
-                        type="button"
-                        className="memo-folder-row-menu"
-                        onClick={() => {
-                          setIsOpen(false);
-                          setFolderActionTarget(folder);
-                        }}
-                        aria-label={t("folders.options", { name: folder.name })}
-                      >
-                        <Msym name="more_horiz" size="1.5rem" fill={false} weight={500} />
-                      </button>
-                    </div>
-                  ))}
                 </div>
+
+                {/* The learner's own folders, a card of their own a little apart from the app's two. */}
+                {liveFolders.length > 0 ? (
+                  <div className="memo-folder-card">
+                    {liveFolders.map((folder) => (
+                      <div key={folder.id} className="memo-folder-row">
+                        <button
+                          type="button"
+                          className="memo-folder-row-main"
+                          onClick={() => handleSelectFolder(folder)}
+                        >
+                          <Emoji symbol="📁" size="1.2rem" />
+                          <span className="memo-folder-row-label">{folder.name}</span>
+                          {selectedFolderId === folder.id ? (
+                            <Msym name="check" size="1.35rem" fill={false} weight={500} />
+                          ) : null}
+                        </button>
+                        <button
+                          type="button"
+                          className="memo-folder-row-menu"
+                          onClick={() => {
+                            setIsOpen(false);
+                            setFolderActionTarget(folder);
+                          }}
+                          aria-label={t("folders.options", { name: folder.name })}
+                        >
+                          <Msym name="more_horiz" size="1.5rem" fill={false} weight={500} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
 
                 <div className="memo-folder-sheet-cta">
                   <button

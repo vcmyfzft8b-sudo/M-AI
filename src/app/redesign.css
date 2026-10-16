@@ -13931,6 +13931,11 @@ html[data-paywall-closing] .memo-shell * {
     border-top: 1px solid var(--line);
   }
 
+  /* The app's two rows and the learner's folders are two cards, a little apart. */
+  .memo-folder-card + .memo-folder-card {
+    margin-top: 0.75rem;
+  }
+
   .memo-folder-row-main {
     display: flex;
     align-items: center;

@@ -2591,7 +2591,7 @@ export const bs: Messages = {
   "exam.lesson.skip": "Preskoči lekciju",
   "exam.lesson.saveFailed": "Rezultat nije sačuvan. Pokušaj ponovo.",
   "exam.lesson.done.title": "Lekcija gotova!",
-  "exam.lesson.done.titleBelow": "Lekcija je završena",
+  "exam.lesson.done.titleBelow": "Još nije na cilju",
   "exam.lesson.done.mock": "Na probni ispit",
   "exam.lesson.done.repeat": "Ponovi: {lesson}",
   "exam.lesson.done.below": "Rezultat: {score} %. Za cilj trebaš {target} %, pa ćemo ovo ponoviti.",

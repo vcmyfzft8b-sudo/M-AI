@@ -2614,7 +2614,7 @@ export const sl = {
   "exam.lesson.skip": "Preskoči lekcijo",
   "exam.lesson.saveFailed": "Rezultata ni bilo mogoče shraniti. Poskusi znova.",
   "exam.lesson.done.title": "Lekcija opravljena!",
-  "exam.lesson.done.titleBelow": "Lekcija je končana",
+  "exam.lesson.done.titleBelow": "Še ni na cilju",
   "exam.lesson.done.mock": "Na generalko",
   "exam.lesson.done.repeat": "Ponovi: {lesson}",
   "exam.lesson.done.below": "Rezultat: {score} %. Za cilj potrebuješ {target} %, zato to še ponoviva.",

@@ -27039,6 +27039,11 @@ button.memo-exam-card:hover {
   min-width: 0;
 }
 
+/* An odd one out takes the whole row, so the grid stays symmetrical. */
+.memo-exam-formats .memo-chip:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
 .memo-exam-formats .memo-chip > span:not(.memo-exam-format-score) {
   overflow: hidden;
   text-overflow: ellipsis;

@@ -468,12 +468,13 @@ export function ExamLesson({
             {/* Sparkles celebrate a lesson that reached the goal, not one that will come back. */}
             <MemoBuddy mood={buddy.mood} moodKey={buddy.key} size="7rem" sparkles={phase.below === null} />
             <h2>
-              {phase.headline === "mastered"
-                ? t("exam.lesson.done.module")
-                : phase.headline === "learned"
-                  ? t("exam.lesson.done.learned", { target })
-                  : phase.below !== null
-                    ? t("exam.lesson.done.titleBelow")
+              {/* A lesson that comes back is never called finished, whatever the module reached. */}
+              {phase.below !== null
+                ? t("exam.lesson.done.titleBelow")
+                : phase.headline === "mastered"
+                  ? t("exam.lesson.done.module")
+                  : phase.headline === "learned"
+                    ? t("exam.lesson.done.learned", { target })
                     : t("exam.lesson.done.title")}
             </h2>
             {phase.below !== null ? (

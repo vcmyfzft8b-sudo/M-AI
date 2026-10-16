@@ -2577,7 +2577,7 @@ export const en: Messages = {
   "exam.lesson.skip": "Skip lesson",
   "exam.lesson.saveFailed": "The result could not be saved. Try again.",
   "exam.lesson.done.title": "Lesson done!",
-  "exam.lesson.done.titleBelow": "Lesson finished",
+  "exam.lesson.done.titleBelow": "Not there yet",
   "exam.lesson.done.mock": "On to the mock exam",
   "exam.lesson.done.repeat": "Repeat: {lesson}",
   "exam.lesson.done.below": "Score: {score}%. Your goal is {target}%, so we will repeat this one.",

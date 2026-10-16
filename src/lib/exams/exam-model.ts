@@ -256,15 +256,18 @@ export type LessonResultLike = {
 };
 
 /*
- * Topic mastery, the way Astra AI moves it. Measured on its app on 2026-10-16: a topic went
- * 0 → 5 % after a 40 % lesson, → 15 % after a 100 % one, → 23 % after a 71 % one. That is an
- * exponential average: every lesson moves the topic a step (`MASTERY_RATE`) towards the score it
- * got. So mastery is the learner's accuracy, earned over many lessons: about eleven perfect lessons
- * take a topic from 0 to 75 %, and a learner who answers 70 % right never reaches a 75 % goal. A
- * lesson that tests nothing (the summary) moves nothing; flashcards, which the learner grades, move
- * half as far as a lesson that proved something.
+ * Topic mastery, the way Astra AI moves it: every lesson moves the topic a step (`MASTERY_RATE`)
+ * towards what the lesson showed the learner knows (an exponential average). Measured on Astra's
+ * app on 2026-10-16, a topic went 0 → 5 → 15 → 23 % after lessons of 40, 100 and 71 %: a step of
+ * 0.12. Ours is 0.2: simulated learners with a known, growing knowledge (tests/exam-plan.test.mjs)
+ * showed that at 0.12 the average lags so far behind what they know that half of those who knew the
+ * material at the goal were never told they were ready before the exam; at 0.2 that is rare, and
+ * the mock exam still stops anyone who is not. So mastery is accuracy, earned over many lessons:
+ * about eight good lessons take a topic from 0 to 75 %, and a learner who knows 70 % never reaches
+ * a 75 % goal. A lesson that tests nothing (the summary) moves nothing; flashcards, which the
+ * learner grades, move half as far.
  */
-export const MASTERY_RATE = 0.12;
+export const MASTERY_RATE = 0.2;
 
 export const MASTERY_WEIGHT: Record<ExamLessonKind, number> = {
   summary: 0,
@@ -275,10 +278,30 @@ export const MASTERY_WEIGHT: Record<ExamLessonKind, number> = {
   written: 1,
 };
 
+/*
+ * What a score says about knowledge once lucky guesses are taken out: a true/false statement is
+ * right half the time by chance and a four-option question a quarter of the time, so 80 % on
+ * true/false is 60 % known. Without this a learner who knows little would reach the goal on
+ * guessable lessons alone and fail the real exam.
+ */
+export const GUESS_RATE: Record<ExamLessonKind, number> = {
+  summary: 0,
+  tutor: 0,
+  flashcards: 0,
+  quiz: 0.25,
+  true_false: 0.5,
+  written: 0,
+};
+
+export function knownShare(kind: ExamLessonKind, score: number) {
+  const guess = GUESS_RATE[kind];
+  return clamp01((clamp01(score) - guess) / (1 - guess));
+}
+
 /** A topic's mastery (0..1) once a lesson of `kind` scoring `score` is added to it. */
 export function masteryAfterLesson(mastery: number, kind: ExamLessonKind, score: number) {
   const current = clamp01(mastery);
-  return clamp01(current + MASTERY_RATE * MASTERY_WEIGHT[kind] * (clamp01(score) - current));
+  return clamp01(current + MASTERY_RATE * MASTERY_WEIGHT[kind] * (knownShare(kind, score) - current));
 }
 
 /**

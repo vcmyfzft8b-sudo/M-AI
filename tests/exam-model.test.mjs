@@ -309,30 +309,25 @@ function lessons(topic, kind, score, count, start = "2026-10-14T08:00:00Z") {
   );
 }
 
-test("mastery moves a step towards each lesson's score, as Astra measured (0 → 5 → 15 → 23 %)", () => {
-  // The three lessons studied on Astra on 2026-10-16: 40 %, 100 %, 71 %.
-  let mastery = 0;
-  const seen = [];
-
-  for (const score of [0.4, 1, 5 / 7]) {
-    mastery = masteryAfterLesson(mastery, "quiz", score);
-    seen.push(Math.round(mastery * 100));
-  }
-
-  // Astra showed 5, 15 and 23 %; one exponential step size reproduces it to a point.
-  for (const [index, astra] of [5, 15, 23].entries()) {
-    assert.ok(Math.abs(seen[index] - astra) <= 1, `${seen[index]} vs Astra's ${astra}`);
-  }
-  assert.equal(MASTERY_RATE, 0.12);
+test("mastery moves a step towards what each lesson showed, guesses taken out", () => {
+  // Astra's measured step was 0.12 (0 → 5 → 15 → 23 % after 40, 100 and 71 %); ours is 0.2, chosen by
+  // the simulated learners in exam-plan.test.mjs. The shape is the same: each lesson adds a step.
+  assert.equal(MASTERY_RATE, 0.2);
+  assert.ok(Math.abs(masteryAfterLesson(0, "written", 1) - 0.2) < 1e-9);
+  assert.ok(Math.abs(masteryAfterLesson(0.2, "written", 1) - 0.36) < 1e-9);
+  // A lucky guess is not knowledge: half right on true/false, a quarter on a quiz, is nothing known.
+  assert.equal(masteryAfterLesson(0, "true_false", 0.5), 0);
+  assert.equal(masteryAfterLesson(0, "quiz", 0.25), 0);
+  assert.ok(Math.abs(masteryAfterLesson(0, "true_false", 0.8) - 0.2 * 0.6) < 1e-9);
   // The summary tests nothing and moves nothing; flashcards move half as far.
   assert.equal(masteryAfterLesson(0.5, "summary", 1), 0.5);
-  assert.ok(Math.abs(masteryAfterLesson(0, "flashcards", 1) - 0.06) < 1e-9);
+  assert.ok(Math.abs(masteryAfterLesson(0, "flashcards", 1) - 0.1) < 1e-9);
 });
 
 test("a topic's mastery replays its lessons in order, and a learner at 70 % never reaches 75 %", () => {
   assert.equal(topicMastery([]).mastery, 0);
-  const perfect = topicMastery(lessons("a", "quiz", 1, 11)).mastery;
-  assert.ok(perfect >= 0.75 && perfect < 0.8, `eleven perfect lessons reach 75 %: ${perfect}`);
+  const perfect = topicMastery(lessons("a", "quiz", 1, 7)).mastery;
+  assert.ok(perfect >= 0.75 && perfect < 0.8, `seven perfect lessons reach 75 %: ${perfect}`);
   const steady = topicMastery(lessons("a", "quiz", 0.7, 60)).mastery;
   assert.ok(steady < 0.75, `mastery is accuracy, earned: ${steady}`);
   // Order matters: the newest lesson weighs most.
@@ -342,10 +337,10 @@ test("a topic's mastery replays its lessons in order, and a learner at 70 % neve
 });
 
 test("lessons to the target count the steps a good learner still needs", () => {
-  // About 15 a topic from nothing to 75 % (Astra: "about 61 more lessons" for four topics).
-  assert.equal(lessonsToTarget(0, 0.75), 15);
+  // About nine a topic from nothing to 75 %, for a learner who gets 90 % right.
+  assert.equal(lessonsToTarget(0, 0.75), 9);
   assert.equal(lessonsToTarget(0.8, 0.75), 0);
-  assert.equal(lessonsToTarget(0.7, 0.75), 3);
+  assert.equal(lessonsToTarget(0.7, 0.75), 2);
   // A 100 % goal is held to the 95 % cap, and needs near-perfect lessons.
   assert.ok(lessonsToTarget(0, 1) > lessonsToTarget(0, 0.9));
 });
@@ -379,7 +374,7 @@ test("topics open in order: on target or after four practice lessons, or once st
   const started = examModuleStates(mods("a", "b", "c"), lessons("c", "quiz", 1, 1), 0.75);
   assert.equal(started[2].unlocked, true);
   // Readiness counts every topic, started or not (Astra: 23 % on one of four topics is 6 %).
-  assert.equal(Math.round(examMastery(started) * 100), 4);
+  assert.equal(Math.round(examMastery(started) * 100), 7);
   assert.equal(topicsOnTarget(started, 0.75), 0);
 });
 
@@ -470,10 +465,10 @@ test("on the exam's eve each topic gets a flashcard refresher before the mock", 
 
 test("the daily plan spreads the lessons every topic still needs over the days left", () => {
   const base = { examDate: "2026-10-26", today: "2026-10-16", dailyMinutes: 6, target: 0.75, resultsToday: 0 };
-  // Four fresh topics at 75 %: 15 lessons each, 60 over 10 days is 6 a day (Astra said about 61, 7 a day).
+  // Four fresh topics at 75 %: 9 lessons each, 36 over 10 days is 4 a day.
   const plan = dailyPlan({ ...base, states: [{ mastery: 0 }, { mastery: 0 }, { mastery: 0 }, { mastery: 0 }] });
-  assert.equal(plan.remaining, 60);
-  assert.equal(plan.goal, 6);
+  assert.equal(plan.remaining, 36);
+  assert.equal(plan.goal, 4);
   assert.equal(plan.daysLeft, 10);
   // A topic's open gaps are one lesson more; a topic on target needs none.
   assert.equal(dailyPlan({ ...base, states: [{ mastery: 0.8, pressingGaps: 2 }] }).remaining, 1);

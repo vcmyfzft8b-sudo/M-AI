@@ -97,7 +97,7 @@ test("a perfect learner with 4 topics in 14 days learns every topic, brings each
 
   // About what the plan promised: every topic from 0 to 75 %, a lesson at a time.
   const mockAt = run.log.findIndex((entry) => entry.type === "mock");
-  assert.ok(mockAt > 4 * 10 && mockAt < 4 * (lessonsToTarget(0, 0.75) + 6), `mock after ${mockAt} lessons`);
+  assert.ok(mockAt > 4 * 6 && mockAt < 4 * (lessonsToTarget(0, 0.75) + 6), `mock after ${mockAt} lessons`);
 });
 
 test("a learner who gets 70 % right never reaches a 75 % goal, but reaches every topic and is not drilled", () => {
@@ -272,4 +272,120 @@ test("grades, mock summaries and proof times survive bad numbers and mixed times
   assert.equal(state.proofOwed, false);
   // Sanity: Ljubljana days still key the daily cap.
   assert.equal(dayKey("2026-10-16T22:30:00Z"), "2026-10-17");
+});
+
+/* ---------------------------------------------------------------- learners with hidden knowledge */
+
+/*
+ * The question that matters: when the prep says a learner is ready, do they know the material at
+ * their goal? Each simulated learner has a true knowledge per topic, unknown to the model: it starts
+ * low, grows with every lesson on the topic and fades on days the topic is not studied. Answers
+ * follow it (a quiz is right by luck a quarter of the time, true/false half, flashcards are graded a
+ * little generously), the mock exam is mostly written. The plan drives them, eight lessons a day.
+ */
+function seeded(seed) {
+  let state = seed >>> 0;
+  return () => (state = (state * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+}
+
+const GUESS = { quiz: 0.25, true_false: 0.5, written: 0, tutor: 0, flashcards: 0, summary: 0 };
+const ITEMS = { quiz: 5, true_false: 5, written: 1, tutor: 3, flashcards: 8, summary: 0 };
+
+function hiddenKnowledge({ topics, days, target, start, learn, seed, perDay = 8 }) {
+  const random = seeded(seed);
+  const modules = Array.from({ length: topics }, (_, index) => ({ topicId: `t${index}`, lectureId: `n${index}` }));
+  const known = modules.map(() => Math.max(0.05, start + (random() - 0.5) * 0.2));
+  const studied = modules.map(() => START);
+  const results = [];
+  let mock = null;
+  let readyKnown = null;
+
+  for (let day = 0; day < days; day += 1) {
+    known.forEach((value, index) => {
+      if ((START + day * DAY - studied[index]) / DAY > 1) known[index] = value * 0.98;
+    });
+
+    for (let slot = 0; slot < perDay; slot += 1) {
+      const now = new Date(START + day * DAY + slot * 25 * 60_000);
+      const states = examModuleStates(modules, results, target, mock, now);
+      const stage = examStage(states, mock, target);
+
+      if (stage === "ready" && readyKnown === null) {
+        readyKnown = [...known];
+      }
+
+      const next = examNextStep(states, stage, () => true, { finalDay: days - day <= 1 });
+
+      if (!next) {
+        break;
+      }
+
+      if (next.type === "mock") {
+        const byLecture = Object.fromEntries(
+          modules.map((module, index) => [module.lectureId, (2 * known[index] + known[index] + (1 - known[index]) * 0.25) / 3]),
+        );
+        const percentage = (Object.values(byLecture).reduce((sum, value) => sum + value, 0) / topics) * 100;
+        mock = { at: now.toISOString(), percentage, byLecture };
+        continue;
+      }
+
+      const index = modules.findIndex((module) => module.topicId === next.topicId);
+      let score = 1;
+
+      if (next.kind !== "summary") {
+        const chance = next.kind === "flashcards" ? Math.min(1, known[index] + 0.1) : known[index] + (1 - known[index]) * GUESS[next.kind];
+        let right = 0;
+        for (let item = 0; item < ITEMS[next.kind]; item += 1) {
+          if (random() < chance) right += 1;
+        }
+        score = right / ITEMS[next.kind];
+      }
+
+      results.push({ lecture_id: next.lectureId, topic_id: next.topicId, lesson_kind: next.kind, score: Math.fround(score), completed_at: now.toISOString() });
+      known[index] += (next.kind === "flashcards" ? learn * 0.7 : learn) * (1 - known[index]);
+      studied[index] = now.getTime();
+    }
+  }
+
+  return { readyKnown, finalKnown: known };
+}
+
+const mean = (values) => values.reduce((sum, value) => sum + value, 0) / values.length;
+
+test("a learner the prep calls ready knows the material at their goal, then and on the exam day", () => {
+  let ready = 0;
+
+  for (const target of [0.75, 0.9]) {
+    for (const learn of [0.06, 0.08, 0.12]) {
+      for (const seed of [1, 2, 3, 4]) {
+        const run = hiddenKnowledge({ topics: 4, days: 14, target, start: 0.25, learn, seed });
+
+        if (run.readyKnown) {
+          ready += 1;
+          assert.ok(mean(run.readyKnown) >= target - 0.02, `ready at ${mean(run.readyKnown).toFixed(2)} against ${target}`);
+          assert.ok(mean(run.finalKnown) >= target - 0.02, `exam day at ${mean(run.finalKnown).toFixed(2)} against ${target}`);
+        }
+      }
+    }
+  }
+
+  assert.ok(ready >= 12, `most learners get there in two weeks (${ready} of 24)`);
+});
+
+test("a learner who knows the material is told so before the exam, not held back by old lessons", () => {
+  // Quick learners: they know every topic well above the goal well before the exam day.
+  let knewIt = 0;
+  let toldReady = 0;
+
+  for (const seed of [1, 2, 3, 4, 5, 6]) {
+    const run = hiddenKnowledge({ topics: 4, days: 14, target: 0.75, start: 0.4, learn: 0.12, seed });
+
+    if (Math.min(...run.finalKnown) >= 0.85) {
+      knewIt += 1;
+      toldReady += run.readyKnown ? 1 : 0;
+    }
+  }
+
+  assert.ok(knewIt >= 4);
+  assert.equal(toldReady, knewIt);
 });

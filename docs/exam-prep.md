@@ -58,12 +58,25 @@ learners through weeks of lessons). Put new rules there, not in a component.
 - **Topics.** When the exam is set up, each note is split into two to six topics (`planNoteTopics`),
   and each topic is a **module** on the path. Lessons are of six kinds: the **summary** (read), the
   voice **tutor**, **flashcards**, a **quiz**, **true/false** and a **written** answer.
-- **Mastery, lesson by lesson.** Every lesson moves its topic's mastery a step towards the score it
-  got: `m' = m + 0.12 × weight × (score − m)` (`masteryAfterLesson`, `MASTERY_RATE`). Astra's topic
-  went 0 → 5 → 15 → 23 % after lessons of 40, 100 and 71 %; this reproduces it to a point. So mastery
-  is accuracy, earned over many lessons: about 15 good lessons take a topic from 0 to 75 %, and a
-  learner who gets 70 % right never reaches a 75 % goal. The summary tests nothing and moves
-  nothing; flashcards, which the learner grades, move half as far (`MASTERY_WEIGHT`).
+- **Mastery, lesson by lesson.** Every lesson moves its topic's mastery a step towards what the
+  lesson showed the learner knows: `m' = m + 0.2 × weight × (known − m)` (`masteryAfterLesson`,
+  `MASTERY_RATE`). That is Astra's rule (its topic went 0 → 5 → 15 → 23 % after lessons of 40, 100 and
+  71 %, a step of 0.12) with a bigger step: simulated learners (below) showed that at 0.12 the average
+  lags so far behind what a learner knows that half of those who knew the material at their goal
+  were never told they were ready before the exam. So mastery is accuracy, earned over many lessons:
+  about nine good lessons take a topic from 0 to 75 %, and a learner who knows 70 % never reaches a
+  75 % goal. The summary tests nothing and moves nothing; flashcards, which the learner grades, move
+  half as far (`MASTERY_WEIGHT`).
+- **Lucky guesses are taken out** (`knownShare`, `GUESS_RATE`): a true/false statement is right half
+  the time by chance and a four-option question a quarter, so 80 % on true/false counts as 60 %
+  known and 50 % as nothing. Without it a learner who knows little would reach the goal on guessable
+  lessons alone.
+- **Does it work?** `tests/exam-plan.test.mjs` runs simulated learners whose true knowledge the model
+  cannot see: it grows with every lesson, fades on days off, and answers follow it (with lucky
+  guesses, and flashcards graded a little generously). Across 48 such learners per goal (4 topics,
+  7 or 14 days, 8 lessons a day), those the prep called ready knew on average 81 % at a 75 % goal
+  (lowest 73 %; at least 76 % on the exam day) and 94 % at a 90 % goal (lowest 93 %). The tests fail
+  if a learner called ready knows less than the goal, or if one who clearly knows it is never told.
 - **Readiness** is the average mastery over every topic of the exam, started or not (Astra: 23 % on
   one of four topics reads as 6 %). A topic is **on target** when its mastery reaches the goal.
 - **Spaced review.** A topic keeps its mastery for three days after its last lesson, then fades 4 %

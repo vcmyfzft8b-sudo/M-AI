@@ -2582,7 +2582,6 @@ export const hr: Messages = {
   "exam.lesson.trueFalse.false": "Netočno",
   "exam.lesson.trueFalse.statement": "{prompt} Odgovor: „{claim}”. Točno?",
   "exam.lesson.trueFalse.answer": "Točan odgovor: {answer}",
-  "exam.lesson.writtenHint": "Piši svojim riječima. Memo ocjenjuje odgovor po točkama, kao profesor.",
   "exam.lesson.generating.cards": "Pripremam kartice za ovu lekciju…",
   "exam.lesson.generating.quiz": "Pripremam pitanja za ovu lekciju…",
   "exam.lesson.generating.test": "Pripremam pismena pitanja za ovu lekciju…",

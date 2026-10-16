@@ -2568,7 +2568,6 @@ export const en: Messages = {
   "exam.lesson.trueFalse.false": "False",
   "exam.lesson.trueFalse.statement": "{prompt} Answer: “{claim}”. True?",
   "exam.lesson.trueFalse.answer": "The right answer: {answer}",
-  "exam.lesson.writtenHint": "Write it in your own words. Memo marks it point by point, like a professor.",
   "exam.lesson.generating.cards": "Making flashcards for this lesson…",
   "exam.lesson.generating.quiz": "Making questions for this lesson…",
   "exam.lesson.generating.test": "Making written questions for this lesson…",

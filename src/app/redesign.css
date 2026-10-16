@@ -28412,12 +28412,6 @@ a.memo-exam-station-go {
   gap: 0.3rem;
 }
 
-.memo-exam-buddy-corner {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 0.4rem;
-}
-
 .memo-exam-zone-card {
   display: flex;
   flex-direction: column;
@@ -29100,17 +29094,6 @@ a.memo-exam-station-go {
 
   .memo-exam-lesson .memo-progress.quiz {
     margin: 0.6rem 0 1rem;
-  }
-
-  .memo-exam-lesson .memo-exam-buddy-corner {
-    position: relative;
-    z-index: 1;
-    margin-top: -3.5rem;
-    pointer-events: none;
-  }
-
-  .memo-exam-lesson .memo-exam-buddy-corner .memo-buddy {
-    pointer-events: auto;
   }
 
   /*

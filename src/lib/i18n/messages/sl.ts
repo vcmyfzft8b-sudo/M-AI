@@ -2605,7 +2605,6 @@ export const sl = {
   "exam.lesson.trueFalse.false": "Ne drži",
   "exam.lesson.trueFalse.statement": "{prompt} Odgovor: »{claim}«. Drži?",
   "exam.lesson.trueFalse.answer": "Pravilen odgovor: {answer}",
-  "exam.lesson.writtenHint": "Piši s svojimi besedami. Memo oceni odgovor po točkah, kot profesor.",
   "exam.lesson.generating.cards": "Pripravljam kartice za to lekcijo …",
   "exam.lesson.generating.quiz": "Pripravljam vprašanja za to lekcijo …",
   "exam.lesson.generating.test": "Pripravljam pisna vprašanja za to lekcijo …",

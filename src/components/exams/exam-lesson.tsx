@@ -471,7 +471,6 @@ export function ExamLesson({
             topicId={module.topicId}
             lectureId={module.lectureId}
             onReact={react}
-            buddy={buddy}
             choices={summaryChoices}
             onChoose={(choice) => void save(1, 1, null, choice)}
             onFinish={(correct, total) =>
@@ -642,7 +641,6 @@ function LessonBody({
   lectureId,
   onFinish,
   onReact,
-  buddy,
   choices,
   onChoose,
 }: {
@@ -652,7 +650,6 @@ function LessonBody({
   lectureId: string;
   onFinish: (correct: number, total: number) => void;
   onReact: (mood: BuddyMood) => void;
-  buddy: { mood: BuddyMood; key: number };
   /** The summary's other formats to pick from (see `FormatChoices`). */
   choices: LessonFormatChoice[];
   onChoose: (kind: ExamLessonKind) => void;
@@ -819,9 +816,6 @@ function LessonBody({
           exit={exit}
           disabled={Boolean(exit)}
         />
-        <div className="memo-exam-buddy-corner">
-          <MemoBuddy mood={buddy.mood} moodKey={buddy.key} size="3.6rem" />
-        </div>
       </>
     );
   }
@@ -981,6 +975,16 @@ function LessonBody({
 
   return (
     <div className="lecture-practice-stage">
+      {/* The note's test head: the question and where it sits, over the bar. */}
+      <div className="memo-test-meta">
+        <span className="memo-test-no">{t("quiz.questionN", { index: index + 1 })}</span>
+        <span className="memo-test-count">
+          {index + 1} / {lesson.questions.length}
+        </span>
+      </div>
+      <div className="memo-progress test">
+        <div style={{ width: `${Math.round(((index + 1) / lesson.questions.length) * 100)}%` }} />
+      </div>
       <StudyPracticeQuestion
         prompt={question.prompt}
         answer={answer}
@@ -1019,9 +1023,6 @@ function LessonBody({
               {mark.expectedAnswer}
             </p>
           ) : null}
-          <div className="memo-exam-buddy-corner">
-            <MemoBuddy mood={buddy.mood} moodKey={buddy.key} size="3.4rem" />
-          </div>
         </div>
       ) : null}
 
@@ -1063,9 +1064,6 @@ function LessonBody({
           </button>
         )}
       </div>
-      <p className="memo-exam-fine">
-        <Emoji symbol="✍️" size="1rem" /> {t("exam.lesson.writtenHint")}
-      </p>
     </div>
   );
 }

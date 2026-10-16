@@ -83,6 +83,8 @@ export function useExamVoice({
   const [textMode, setTextMode] = useState(false);
   /* Why the lesson went on in writing (no microphone, no talking time, the voice dropped), as said to the learner. */
   const [textNote, setTextNote] = useState<string | null>(null);
+  /* Whether the tutor's voice is on: in writing it still speaks when only the microphone is missing. */
+  const [speaks, setSpeaks] = useState(false);
 
   const phaseRef = useRef<VoicePhase>("preparing");
   const outputRef = useRef<TutorSpeechOutput | GeminiTutorSpeechOutput | null>(null);
@@ -154,6 +156,7 @@ export function useExamVoice({
     outputRef.current?.close();
     inputRef.current = null;
     outputRef.current = null;
+    setSpeaks(false);
     settle(true);
   }, [clearSilence, settle]);
 
@@ -243,6 +246,7 @@ export function useExamVoice({
     outputRef.current?.close();
     inputRef.current = null;
     outputRef.current = null;
+    setSpeaks(false);
     settle(true);
     setError(null);
     setTextMode(true);
@@ -288,15 +292,22 @@ export function useExamVoice({
       return fallBack(t("tutor.error.unsupported"));
     }
 
-    let microphone: MediaStream;
+    /*
+     * Without a microphone the voice still speaks when the lesson allows writing: the tutor talks,
+     * asks and marks as always, and the learner types the answers. Only an exam that must be spoken
+     * stops here.
+     */
+    let microphone: MediaStream | null = null;
 
     try {
       microphone = await requestTutorMicrophone();
     } catch {
-      return fallBack(t("tutor.error.micDenied"));
+      if (!allowText) {
+        return fallBack(t("tutor.error.micDenied"));
+      }
     }
 
-    const stopMicrophone = () => microphone.getTracks().forEach((track) => track.stop());
+    const stopMicrophone = () => microphone?.getTracks().forEach((track) => track.stop());
 
     if (stale()) {
       stopMicrophone();
@@ -338,44 +349,57 @@ export function useExamVoice({
         },
         { onError: () => setError(t("tutor.error.connection")) },
       );
-      input = new TutorSpeechInput(
-        { ...session.realtime.stt, languages: [session.language] },
-        {
-          onPartial: (text) => {
-            if (phaseRef.current !== "listening") {
-              return;
-            }
+      if (microphone) {
+        input = new TutorSpeechInput(
+          { ...session.realtime.stt, languages: [session.language] },
+          {
+            onPartial: (text) => {
+              if (phaseRef.current !== "listening") {
+                return;
+              }
 
-            setHeard([heardRef.current, text].filter(Boolean).join(" "));
-            clearSilence();
-          },
-          onUtterance: (text) => {
-            if (phaseRef.current !== "listening" || !text.trim()) {
-              return;
-            }
+              setHeard([heardRef.current, text].filter(Boolean).join(" "));
+              clearSilence();
+            },
+            onUtterance: (text) => {
+              if (phaseRef.current !== "listening" || !text.trim()) {
+                return;
+              }
 
-            heardRef.current = [heardRef.current, text.trim()].filter(Boolean).join(" ");
-            setHeard(heardRef.current);
-            clearSilence();
-            silenceRef.current = window.setTimeout(() => onAnswerEndRef.current(), ANSWER_SILENCE_MS);
+              heardRef.current = [heardRef.current, text.trim()].filter(Boolean).join(" ");
+              setHeard(heardRef.current);
+              clearSilence();
+              silenceRef.current = window.setTimeout(() => onAnswerEndRef.current(), ANSWER_SILENCE_MS);
+            },
+            onError: () => setError(t("tutor.error.connection")),
           },
-          onError: () => setError(t("tutor.error.connection")),
-        },
-      );
+        );
+      }
 
       await output.connect();
       await output.resumeAudio();
-      await input.start(microphone);
+
+      if (input && microphone) {
+        await input.start(microphone);
+      }
 
       if (stale()) {
         abandon();
         return false;
       }
 
-      input.setMuted(true);
+      input?.setMuted(true);
       outputRef.current = output;
       inputRef.current = input;
+      setSpeaks(true);
       startedAtRef.current = Date.now();
+
+      if (!microphone) {
+        // Spoken to, answering in writing.
+        setTextMode(true);
+        setTextNote(t("exam.tutor.noMicVoice"));
+      }
+
       return true;
     } catch (caught) {
       abandon();
@@ -460,6 +484,7 @@ export function useExamVoice({
     elapsed,
     textMode,
     textNote,
+    speaks,
     orbRef,
     languageRef,
     startedAtRef,

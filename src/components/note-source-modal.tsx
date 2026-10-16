@@ -150,7 +150,7 @@ function pickRecorderMimeType() {
   return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
 }
 
-function isAudioSourceFile(file: File) {
+export function isAudioSourceFile(file: File) {
   if (file.type.startsWith("audio/")) {
     return true;
   }
@@ -336,6 +336,7 @@ export function NoteSourceModal({
   canCreateNotes,
   onCreated,
   paywallBack = "/app",
+  initialFiles,
 }: {
   mode: NoteSourceMode | null;
   open: boolean;
@@ -351,6 +352,12 @@ export function NoteSourceModal({
    * would reopen the sheet. Exam setup passes its own page, so closing the paywall goes back there.
    */
   paywallBack?: string;
+  /**
+   * Files the learner already picked before the sheet opened (exam setup's one upload field).
+   * They are taken as a drop would be: one audio file becomes a recording, anything else a
+   * document or photos.
+   */
+  initialFiles?: File[];
 }) {
   const t = useT();
   const router = useRouter();
@@ -358,6 +365,8 @@ export function NoteSourceModal({
   const isCreatorDemo = demoBasePath != null;
   const isCollegeCreatorDemo = useIsCollegeCreatorDemo();
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
+  const takeFilesRef = useRef<(files: File[]) => void>(() => undefined);
+  const tookInitialFilesRef = useRef(false);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
@@ -448,6 +457,20 @@ export function NoteSourceModal({
       setShowAudioImportGuide(false);
     }
   }, [mode]);
+
+  useEffect(() => {
+    takeFilesRef.current = takeFiles;
+  });
+
+  /* Files picked before the sheet opened are taken once, as soon as it is open. */
+  useEffect(() => {
+    if (!open || tookInitialFilesRef.current || !initialFiles?.length) {
+      return;
+    }
+
+    tookInitialFilesRef.current = true;
+    takeFilesRef.current(initialFiles);
+  }, [initialFiles, open]);
 
   useEffect(() => {
     if (!open || canCreateNotes !== false) {
@@ -2072,9 +2095,11 @@ export function NoteSourceModal({
 
   function handleSheetDrop(event: React.DragEvent<HTMLElement>) {
     event.preventDefault();
+    takeFiles(Array.from(event.dataTransfer.files ?? []));
+  }
 
-    const files = Array.from(event.dataTransfer.files ?? []);
-
+  /* Files from a drop, or picked before the sheet opened: whatever the sheet can handle. */
+  function takeFiles(files: File[]) {
     if (files.length === 0) {
       return;
     }

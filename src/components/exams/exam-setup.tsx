@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
-import { EXAM_PREPS_HREF } from "@/components/exams/exam-links";
+import { EXAM_PREPS_HREF, LESSON_KIND_EMOJI } from "@/components/exams/exam-links";
 import { ExamScreen } from "@/components/exams/exam-screen";
 import { formatExamDay, formatExamDayLong, formatMonth, formatWeekdayShort } from "@/components/exams/exam-format";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
@@ -17,8 +17,15 @@ import type { NoteSourceMode } from "@/components/note-source-modal";
 import { useOfflineGuard } from "@/components/offline/offline-notice";
 import { cameFromAppPath } from "@/lib/app-history";
 import {
+  AUDIO_FILE_INPUT_ACCEPT,
+  DOCUMENT_FILE_INPUT_ACCEPT,
+  SCAN_IMAGE_INPUT_ACCEPT,
+  SUPPORTED_AUDIO_EXTENSIONS,
+} from "@/lib/constants";
+import {
   addDays,
   daysBetween,
+  EXAM_LESSON_KINDS,
   isValidDay,
   LESSON_MINUTES,
   LESSONS_TO_LEARN,
@@ -80,6 +87,19 @@ const SOURCE_OPTIONS: { mode: NoteSourceMode; emoji: string; labelKey: MessageKe
   { mode: "upload", emoji: "🔊", labelKey: "library.quickAction.audio" },
   { mode: "link", emoji: "🔗", labelKey: "library.create.link" },
 ];
+
+/* The one upload field takes anything a note can be made from: documents, photos (or the camera), audio. */
+const ANY_MATERIAL_ACCEPT = [DOCUMENT_FILE_INPUT_ACCEPT, SCAN_IMAGE_INPUT_ACCEPT, AUDIO_FILE_INPUT_ACCEPT].join(",");
+
+/* What the note-source sheet will make of a pick: one audio file is a recording, anything else documents or photos. */
+function materialModeFor(files: File[]): NoteSourceMode {
+  const [first] = files;
+  const extension = first?.name.split(".").pop()?.toLowerCase() ?? "";
+  const audio =
+    files.length === 1 &&
+    (first.type.startsWith("audio/") || (SUPPORTED_AUDIO_EXTENSIONS as readonly string[]).includes(extension));
+  return audio ? "upload" : "text";
+}
 
 /*
  * The setup is built like the app's onboarding: one question per screen, asked by Memo, with a
@@ -247,6 +267,10 @@ export function ExamSetup({
    */
   const [added, setAdded] = useState<{ id: string; mode: NoteSourceMode }[]>([]);
   const [sourceMode, setSourceMode] = useState<NoteSourceMode | null>(null);
+  /* Files picked in the upload field, handed to the note-source sheet as it opens. */
+  const [pickedFiles, setPickedFiles] = useState<File[] | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const materialInputRef = useRef<HTMLInputElement | null>(null);
   const [showExisting, setShowExisting] = useState(Boolean(initialFolder));
   /* Astra's switch: may the AI add topics the material leaves out? Off, as Astra recommends. */
   const [aiExpand, setAiExpand] = useState(false);
@@ -258,16 +282,12 @@ export function ExamSetup({
    */
   const [plan, setPlan] = useState<PlanState>({ status: "idle" });
   const [planTopics, setPlanTopics] = useState<PlanTopic[]>([]);
-  const [editingTopic, setEditingTopic] = useState<string | null>(null);
-  const [addingTo, setAddingTo] = useState<string | null>(null);
-  const [newTopic, setNewTopic] = useState("");
   /*
    * "Next" and "Start my plan" sit in the same place, so a quick double tap on the last question
    * would otherwise create the exam before its review has been seen: the review arms its button
    * a moment after it appears.
    */
   const reviewArmed = useRef(false);
-  const addedTopics = useRef(0);
   /* Which plan request is the latest: an older one's answer, arriving late, is dropped whole. */
   const planRequest = useRef(0);
 
@@ -403,6 +423,20 @@ export function ExamSetup({
     setSourceMode(mode);
   }
 
+  /* The upload field: whatever was picked or dropped goes to the sheet that makes notes of it. */
+  function openFiles(files: File[]) {
+    if (files.length === 0) {
+      return;
+    }
+
+    const mode = materialModeFor(files);
+    openSource(mode);
+
+    if (canCreateNotes && uploadsLeft > 0 && !examFull) {
+      setPickedFiles(files);
+    }
+  }
+
   function addCreated(lectureId: string) {
     const mode = sourceMode ?? "text";
     setSourceMode(null);
@@ -482,34 +516,6 @@ export function ExamSetup({
     } else {
       navigateWithFeedback(EXAM_PREPS_HREF);
     }
-  }
-
-  function updateTopic(key: string, patch: Partial<PlanTopic>) {
-    setPlanTopics((current) => current.map((topic) => (topic.key === key ? { ...topic, ...patch } : topic)));
-  }
-
-  function addTopic(lectureId: string) {
-    const title = newTopic.trim();
-
-    if (!title) {
-      setAddingTo(null);
-      return;
-    }
-
-    setPlanTopics((current) => [
-      ...current,
-      {
-        key: `${lectureId}:added:${(addedTopics.current += 1)}`,
-        lectureId,
-        title: title.slice(0, 160),
-        summary: "",
-        keyPoints: [],
-        source: "added",
-        kept: true,
-      },
-    ]);
-    setNewTopic("");
-    setAddingTo(null);
   }
 
   async function create() {
@@ -656,21 +662,52 @@ export function ExamSetup({
                   ? t("exam.setup.material.examFull", { count: MAX_EXAM_MODULES })
                   : t("exam.setup.material.uploadBody")}
             </span>
-            <div className="memo-exam-upload-grid">
-              {SOURCE_OPTIONS.map((option) => (
-                <button
-                  key={option.mode}
-                  type="button"
-                  className="memo-exam-upload-option"
-                  disabled={uploadsLeft <= 0 || examFull}
-                  onClick={() => openSource(option.mode)}
-                >
-                  <span className="memo-exam-pick-emoji">
-                    <Emoji symbol={option.emoji} size="1.2rem" />
-                  </span>
-                  <span>{t(option.labelKey)}</span>
-                </button>
-              ))}
+            {/* One field for any material: tap to pick files, photos or the camera, or drop files on it. */}
+            <input
+              ref={materialInputRef}
+              type="file"
+              accept={ANY_MATERIAL_ACCEPT}
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                event.target.value = "";
+                openFiles(files);
+              }}
+            />
+            <button
+              type="button"
+              className={`memo-dropzone memo-exam-dropzone ${dragging ? "dragging" : ""}`.trim()}
+              disabled={uploadsLeft <= 0 || examFull}
+              onClick={() => materialInputRef.current?.click()}
+              onDragOver={(event) => {
+                if (Array.from(event.dataTransfer.types).includes("Files")) {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "copy";
+                  setDragging(true);
+                }
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDragging(false);
+                openFiles(Array.from(event.dataTransfer.files ?? []));
+              }}
+            >
+              <Msym name="cloud_upload" className="memo-dropzone-icon" />
+              <span className="memo-exam-dropzone-lead">{t("exam.setup.material.pick")}</span>
+              <span className="memo-dropzone-title">{t("exam.setup.material.pickHint")}</span>
+            </button>
+            {/* What cannot be uploaded: a lecture recorded now, or a link. */}
+            <div className="memo-exam-dropzone-more">
+              <button type="button" disabled={uploadsLeft <= 0 || examFull} onClick={() => openSource("record")}>
+                <Emoji symbol="🎙️" size="1rem" />
+                <span>{t("library.create.record")}</span>
+              </button>
+              <button type="button" disabled={uploadsLeft <= 0 || examFull} onClick={() => openSource("link")}>
+                <Emoji symbol="🔗" size="1rem" />
+                <span>{t("library.create.link")}</span>
+              </button>
             </div>
           </div>
 
@@ -984,126 +1021,83 @@ export function ExamSetup({
           </div>
 
           {/*
-            Astra's plan review: the topics the material was split into, per note, to keep, rename
-            or drop, and a topic of one's own to add. Each kept topic is a module on the path.
+            The plan the AI made, to look forward to rather than to edit: each topic is a module on
+            a path, in order, with what it holds, then the mock exam and the goal at the end.
           */}
           <div className="memo-exam-route-head">
             <span>
-              <b>{t("exam.setup.review.topicsTitle", { count: keptTopics.length })}</b>
-              <span>{t("exam.setup.review.topicsBody")}</span>
+              <b>{t("exam.setup.review.pathTitle")}</b>
+              <span>{t("exam.setup.review.topicsTitle", { count: keptTopics.length })}</span>
             </span>
           </div>
-          {selected.map((lectureId) => {
-            const note = notesById.get(lectureId);
-            const source = added.find((entry) => entry.id === lectureId);
-            const noteLabel = note
-              ? note.title?.trim() || t("note.untitled")
-              : t(SOURCE_OPTIONS.find((option) => option.mode === source?.mode)?.labelKey ?? "exam.setup.material.newMaterial");
-            const pending = plan.status === "done" && plan.notes.find((entry) => entry.lectureId === lectureId)?.status === "pending";
-            const topics = planTopics.filter((topic) => topic.lectureId === lectureId);
+          <ol className="memo-exam-plan">
+            {selected.flatMap((lectureId) => {
+              const note = notesById.get(lectureId);
+              const source = added.find((entry) => entry.id === lectureId);
+              const noteLabel = note
+                ? note.title?.trim() || t("note.untitled")
+                : t(SOURCE_OPTIONS.find((option) => option.mode === source?.mode)?.labelKey ?? "exam.setup.material.newMaterial");
+              const emoji = note?.emoji || noteEmoji({ id: lectureId, title: note?.title ?? null });
+              const pending =
+                plan.status === "done" && plan.notes.find((entry) => entry.lectureId === lectureId)?.status === "pending";
 
-            return (
-              <div key={lectureId} className="memo-exam-topics">
-                <span className="memo-exam-topics-note">
-                  <Emoji symbol={note?.emoji || noteEmoji({ id: lectureId, title: note?.title ?? null })} size="1rem" />
-                  {noteLabel}
-                </span>
-                {pending ? (
-                  <p className="memo-exam-topics-pending">{t("exam.setup.review.pending")}</p>
-                ) : (
-                  <ul>
-                    {topics.map((topic) => (
-                      <li key={topic.key} className={topic.kept ? "" : "dropped"}>
-                        <button
-                          type="button"
-                          className="memo-exam-topic-check"
-                          aria-pressed={topic.kept}
-                          aria-label={topic.kept ? t("exam.setup.review.dropTopic") : t("exam.setup.review.keepTopic")}
-                          onClick={() => updateTopic(topic.key, { kept: !topic.kept })}
-                        >
-                          <Msym name={topic.kept ? "check_circle" : "radio_button_unchecked"} size="1.4rem" fill={topic.kept} />
-                        </button>
-                        {editingTopic === topic.key ? (
-                          <input
-                            id={`exam-topic-${topic.key}`}
-                            className="memo-field memo-exam-topic-input"
-                            value={topic.title}
-                            maxLength={160}
-                            autoFocus
-                            onChange={(event) => updateTopic(topic.key, { title: event.target.value })}
-                            onBlur={() => setEditingTopic(null)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                setEditingTopic(null);
-                              }
-                            }}
-                          />
-                        ) : (
-                          <span className="memo-exam-topic-title">
-                            {topic.title}
-                            {topic.source !== "material" ? (
-                              <span className="memo-exam-trail-source">
-                                {t(topic.source === "ai" ? "exam.path.source.ai" : "exam.path.source.added")}
-                              </span>
-                            ) : null}
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          className="memo-icon-button"
-                          aria-label={t("exam.setup.review.renameTopic")}
-                          onClick={() => setEditingTopic(editingTopic === topic.key ? null : topic.key)}
-                        >
-                          <Msym name="edit" size="1.1rem" fill={false} />
-                        </button>
-                      </li>
-                    ))}
-                    <li className="add">
-                      {addingTo === lectureId ? (
-                        <form
-                          className="memo-exam-topic-add"
-                          onSubmit={(event) => {
-                            event.preventDefault();
-                            addTopic(lectureId);
-                          }}
-                        >
-                          <input
-                            id={`exam-topic-add-${lectureId}`}
-                            className="memo-field memo-exam-topic-input"
-                            value={newTopic}
-                            maxLength={160}
-                            autoFocus
-                            placeholder={t("exam.setup.review.addPlaceholder")}
-                            onChange={(event) => setNewTopic(event.target.value)}
-                          />
-                          <button type="submit" className="memo-primary-pill" disabled={!newTopic.trim()}>
-                            {t("exam.setup.review.add")}
-                          </button>
-                        </form>
-                      ) : (
-                        <button
-                          type="button"
-                          className="memo-exam-topic-addlink"
-                          onClick={() => {
-                            setNewTopic("");
-                            setAddingTo(lectureId);
-                          }}
-                        >
-                          <Msym name="add" size="1.2rem" fill={false} /> {t("exam.setup.review.addTopic")}
-                        </button>
-                      )}
-                    </li>
-                  </ul>
-                )}
-              </div>
-            );
-          })}
-          <div className="memo-exam-topics-mock">
-            <Emoji symbol="🏆" size="1rem" />
-            <span>
-              <b>{t("exam.mock.title")}</b> · {t("exam.setup.review.mockMeta")}
-            </span>
-          </div>
+              if (pending) {
+                return [
+                  <li key={lectureId} className="memo-exam-plan-step pending">
+                    <span className="memo-exam-plan-node">
+                      <Emoji symbol={emoji} size="1.1rem" />
+                    </span>
+                    <span className="memo-exam-plan-card">
+                      <span className="memo-exam-plan-note">{noteLabel}</span>
+                      <span className="memo-exam-plan-meta">{t("exam.setup.review.pending")}</span>
+                    </span>
+                  </li>,
+                ];
+              }
+
+              return planTopics
+                .filter((topic) => topic.lectureId === lectureId)
+                .map((topic) => (
+                  <li key={topic.key} className="memo-exam-plan-step">
+                    <span className="memo-exam-plan-node">{keptTopics.indexOf(topic) + 1}</span>
+                    <span className="memo-exam-plan-card">
+                      <span className="memo-exam-plan-note">
+                        <Emoji symbol={emoji} size="0.9rem" />
+                        {noteLabel}
+                      </span>
+                      <b>
+                        {topic.title}
+                        {topic.source === "ai" ? <span className="memo-exam-trail-source">{t("exam.path.source.ai")}</span> : null}
+                      </b>
+                      {/* What the module holds: the summary, then the practice formats to choose from. */}
+                      <span className="memo-exam-plan-kinds" aria-hidden="true">
+                        {EXAM_LESSON_KINDS.map((kind) => (
+                          <Emoji key={kind} symbol={LESSON_KIND_EMOJI[kind]} size="0.95rem" />
+                        ))}
+                      </span>
+                    </span>
+                  </li>
+                ));
+            })}
+            <li className="memo-exam-plan-step finale">
+              <span className="memo-exam-plan-node">
+                <Emoji symbol="🏆" size="1.1rem" />
+              </span>
+              <span className="memo-exam-plan-card">
+                <b>{t("exam.mock.title")}</b>
+                <span className="memo-exam-plan-meta">{t("exam.setup.review.mockMeta")}</span>
+              </span>
+            </li>
+            <li className="memo-exam-plan-step finale goal">
+              <span className="memo-exam-plan-node">
+                <Emoji symbol="🎯" size="1.1rem" />
+              </span>
+              <span className="memo-exam-plan-card">
+                <b>{t("exam.setup.review.goalNode", { percent: target })}</b>
+                <span className="memo-exam-plan-meta">{formatExamDayLong(examDate, locale)}</span>
+              </span>
+            </li>
+          </ol>
           {error ? <p className="memo-inline-error">{error}</p> : null}
         </section>
       )}
@@ -1113,9 +1107,16 @@ export function ExamSetup({
           mode={sourceMode}
           open
           canCreateNotes={canCreateNotes}
-          onClose={() => setSourceMode(null)}
-          onCreated={addCreated}
+          onClose={() => {
+            setSourceMode(null);
+            setPickedFiles(null);
+          }}
+          onCreated={(lectureId) => {
+            setPickedFiles(null);
+            addCreated(lectureId);
+          }}
           paywallBack="/app/exams/new"
+          initialFiles={pickedFiles ?? undefined}
         />
       ) : null}
     </ExamScreen>

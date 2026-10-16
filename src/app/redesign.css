@@ -26635,50 +26635,77 @@ button.memo-exam-card:hover {
   font-size: 0.9rem;
 }
 
-.memo-exam-upload-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin-top: 0.6rem;
+/*
+ * The one upload field: the app's dropzone, tinted for exam prep. Files, photos, the camera or
+ * audio, picked or dropped; the sheet that makes the note works out which.
+ */
+.memo-exam-dropzone {
+  height: auto;
+  min-height: 9.5rem;
+  margin-top: 0.7rem;
+  padding: 1.2rem;
+  gap: 0.35rem;
+  border-color: color-mix(in srgb, var(--promo) 45%, var(--line));
+  background: color-mix(in srgb, var(--promo) 6%, var(--sunken));
 }
 
-.memo-exam-upload-option {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  min-height: 3.4rem;
-  padding: 0.45rem 0.7rem;
-  border: 0;
-  border-radius: 18px;
-  background: color-mix(in srgb, var(--promo) 10%, var(--sunken));
-  color: var(--text);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.92rem;
-  font-weight: 650;
-  line-height: 1.2;
-  text-align: left;
-  transition: box-shadow 0.16s ease;
+.memo-exam-dropzone .memo-dropzone-icon {
+  color: var(--promo);
 }
 
-.memo-exam-upload-option:disabled {
-  cursor: default;
-  opacity: 0.45;
+.memo-exam-dropzone.dragging,
+.memo-exam-dropzone:hover:not(:disabled) {
+  border-color: var(--promo);
+  background: color-mix(in srgb, var(--promo) 12%, var(--sunken));
 }
 
-.memo-exam-upload-option:hover:not(:disabled) {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--promo) 45%, transparent);
-}
-
-.memo-exam-upload-option:focus-visible {
+.memo-exam-dropzone:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
-.memo-exam-upload-option .memo-exam-pick-emoji {
-  width: 2.2rem;
-  height: 2.2rem;
-  background: var(--surface);
+.memo-exam-dropzone-lead {
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.memo-exam-dropzone .memo-dropzone-title {
+  font-size: 0.86rem;
+}
+
+/* Recording now or pasting a link: the two things a file pick cannot do. */
+.memo-exam-dropzone-more {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.memo-exam-dropzone-more button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.4rem;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.memo-exam-dropzone-more button:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-exam-dropzone-more button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 /* The secondary: notes already in the app, folded until asked for. */
@@ -26794,129 +26821,122 @@ button.memo-exam-card:hover {
   line-height: 1.35;
 }
 
-/* The plan review's topic checklist, one group per note. */
-.memo-exam-topics {
+/*
+ * The plan review: the path the AI made, read-only. Numbered stops joined by a line, one card per
+ * module (its note, its topic, what it holds), then the mock exam and the goal. The stops come in
+ * one after another, so the plan unrolls as it appears.
+ */
+.memo-exam-plan {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-}
-
-.memo-exam-topics-note {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: 700;
-}
-
-.memo-exam-topics ul {
-  display: flex;
-  flex-direction: column;
+  gap: 0.6rem;
   margin: 0;
-  padding: 0.3rem 0.6rem;
+  padding: 0;
   list-style: none;
-  border-radius: 22px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
 }
 
-.memo-exam-topics li {
+/* The line the stops hang on, behind the nodes. */
+.memo-exam-plan::before {
+  content: "";
+  position: absolute;
+  top: 1.2rem;
+  bottom: 1.2rem;
+  left: 1.2rem;
+  width: 0.2rem;
+  margin-left: -0.1rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--promo) 30%, var(--line));
+}
+
+.memo-exam-plan-step {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-height: 3rem;
-  border-top: 1px solid var(--line);
+  align-items: flex-start;
+  gap: 0.75rem;
+  animation: memo-pop-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.memo-exam-topics li:first-child {
-  border-top: 0;
-}
+.memo-exam-plan-step:nth-child(2) { animation-delay: 0.06s; }
+.memo-exam-plan-step:nth-child(3) { animation-delay: 0.12s; }
+.memo-exam-plan-step:nth-child(4) { animation-delay: 0.18s; }
+.memo-exam-plan-step:nth-child(5) { animation-delay: 0.24s; }
+.memo-exam-plan-step:nth-child(6) { animation-delay: 0.3s; }
+.memo-exam-plan-step:nth-child(n + 7) { animation-delay: 0.36s; }
 
-.memo-exam-topics li.dropped .memo-exam-topic-title {
-  color: var(--muted);
-  text-decoration: line-through;
-}
-
-.memo-exam-topic-check {
+.memo-exam-plan-node {
+  position: relative;
+  z-index: 1;
   display: grid;
   flex: 0 0 auto;
-  width: 2.2rem;
-  height: 2.2rem;
+  width: 2.4rem;
+  height: 2.4rem;
+  margin-top: 0.45rem;
   place-items: center;
-  padding: 0;
-  border: 0;
   border-radius: 999px;
-  background: none;
-  color: var(--promo);
-  cursor: pointer;
+  background: var(--coral);
+  box-shadow: var(--memo-coral-glow);
+  color: var(--on-photo);
+  font-size: 0.98rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
-.memo-exam-topics li.dropped .memo-exam-topic-check {
-  color: var(--muted);
+.memo-exam-plan-step.pending .memo-exam-plan-node,
+.memo-exam-plan-step.finale .memo-exam-plan-node {
+  background: var(--surface);
+  box-shadow: var(--shadow), inset 0 0 0 1.5px var(--line);
 }
 
-.memo-exam-topic-check:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--focus-ring);
-}
-
-.memo-exam-topic-title {
-  flex: 1;
+.memo-exam-plan-card {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.25rem;
   min-width: 0;
-  font-weight: 650;
+  padding: 0.75rem 0.95rem 0.8rem;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-align: left;
+}
+
+.memo-exam-plan-card > b {
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   line-height: 1.25;
 }
 
-.memo-exam-topic-input {
-  flex: 1;
-  min-width: 0;
-  min-height: 2.4rem;
-}
-
-.memo-exam-topic-add {
+/* Which note the module comes from, small, above its topic. */
+.memo-exam-plan-note {
   display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-  padding: 0.35rem 0;
-}
-
-.memo-exam-topic-addlink {
-  display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  min-height: 2.4rem;
-  padding: 0 0.4rem;
-  border: 0;
-  background: none;
-  color: var(--promo);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.92rem;
-  font-weight: 700;
-}
-
-.memo-exam-topics-pending {
-  margin: 0;
-  padding: 0.8rem 1rem;
-  border-radius: 22px;
-  background: var(--surface);
+  overflow: hidden;
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: 0.8rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.memo-exam-topics-mock {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+.memo-exam-plan-meta {
   color: var(--muted);
   font-size: 0.86rem;
+  font-weight: 600;
 }
 
-.memo-exam-topics-mock b {
-  color: var(--text);
+/* What a module holds: the summary and the practice formats, as their emojis. */
+.memo-exam-plan-kinds {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+  opacity: 0.85;
+}
+
+.memo-exam-plan-step.goal .memo-exam-plan-card {
+  box-shadow: var(--shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--promo) 45%, transparent);
 }
 
 /* "Your topic" / "Added by AI" beside a topic's title. */

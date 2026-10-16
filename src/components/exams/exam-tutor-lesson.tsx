@@ -88,15 +88,15 @@ export function ExamTutorLesson({
       currentRef.current = { index: stepIndex, attempt: 1 };
       setIndex(stepIndex);
       setTyped("");
-      const lead = stepIndex === 0 ? `${t("exam.tutor.intro", { topic: topicTitle })} ` : "";
-      // Spoken whole; written out (without a voice), the question stands on its own under the explanation.
-      await say(`${lead}${step.explain} ${step.question}`, `${lead}${step.explain}`);
+      // The first point opens with the tutor's own greeting, written by the plan in the note's
+      // language. Spoken whole; written out, the question stands on its own under the explanation.
+      await say(`${step.explain} ${step.question}`, step.explain);
 
       if (flow === flowRef.current) {
         listen();
       }
     },
-    [listen, say, steps, t, topicTitle, wrapUp],
+    [listen, say, steps, wrapUp],
   );
 
   /* An answer is in (spoken, or typed in writing): mark it, and the tutor answers back. */
@@ -285,7 +285,7 @@ export function ExamTutorLesson({
       style={{ "--orb-hue": voiceHue(voice) } as CSSProperties}
     >
       {/* The sphere rides whichever voice is in the room; in writing, Memo is the tutor. */}
-      {textMode && running ? (
+      {textMode && running && !session.speaks ? (
         <MemoBuddy mood={phase === "thinking" ? "think" : "idle"} size="5rem" />
       ) : (
         <div className="memo-orb" ref={orbRef} aria-hidden="true">

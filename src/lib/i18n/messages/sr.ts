@@ -2575,6 +2575,7 @@ export const sr: Messages = {
   "exam.tutor.state.yourTurn": "Na redu si",
   "exam.tutor.tryVoice": "Pokušaj sa mikrofonom",
   "exam.tutor.noMicVoice": "Mikrofon nije dostupan, pa mi odgovaraj pisano. Ja i dalje govorim.",
+  "exam.tutor.noAudio": "Zvuk nije mogao da se pusti, pa nastavljamo pisano.",
   "exam.tutor.repeat": "Ponovi ovo objašnjenje",
   "exam.tutor.typePlaceholder": "Napiši odgovor…",
   "exam.tutor.send": "Pošalji",

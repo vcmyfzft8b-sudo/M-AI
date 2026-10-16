@@ -2561,6 +2561,7 @@ export const en: Messages = {
   "exam.tutor.state.yourTurn": "Your turn",
   "exam.tutor.tryVoice": "Try the microphone",
   "exam.tutor.noMicVoice": "No microphone, so type your answers. I'll keep talking to you.",
+  "exam.tutor.noAudio": "The voice could not play here, so we'll go on in writing.",
   "exam.tutor.repeat": "Explain this again",
   "exam.tutor.typePlaceholder": "Type your answer…",
   "exam.tutor.send": "Send",

@@ -38,6 +38,39 @@ type Session = {
 };
 
 /** The voice the learner picked for the tutor on this device; the exam's voices start from it. */
+/*
+ * Starting audio needs a tap: Chrome refuses a context started without one, and iOS keeps a context
+ * created outside one silent for good. A capture (the microphone) lifts that, which is why the
+ * voice always started when the learner talked back. Without a microphone the voice starts only
+ * after the slow setup, long after the tap, so the tap itself plays a silent blip, which unlocks
+ * Web Audio for the page.
+ */
+function primeAudio() {
+  try {
+    const AudioContextClass =
+      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+
+    if (!AudioContextClass) {
+      return;
+    }
+
+    const context = new AudioContextClass();
+    const source = context.createBufferSource();
+    source.buffer = context.createBuffer(1, 1, 22050);
+    source.connect(context.destination);
+    source.start(0);
+    void context
+      .resume()
+      .catch(() => undefined)
+      .finally(() => window.setTimeout(() => void context.close().catch(() => undefined), 1000));
+  } catch {
+    /* No Web Audio here; the start below says so. */
+  }
+}
+
+/* How long the voice may take to start playing before the lesson goes on in writing instead. */
+const AUDIO_START_MS = 6000;
+
 export function storedTutorVoice(): NoteTtsVoice {
   try {
     return normalizeNoteTtsVoice(window.localStorage.getItem(NOTE_TTS_VOICE_STORAGE_KEY));
@@ -265,6 +298,8 @@ export function useExamVoice({
   /** Starts the session: microphone, talking time and keys. False if it could not start at all. */
   const start = useCallback(async (): Promise<boolean> => {
     // A remount (React's development double mount, or a fast remount) starts a fresh session.
+    // Synchronously, inside the learner's tap (start is called from it before anything is awaited).
+    primeAudio();
     const generation = (generationRef.current += 1);
     const stale = () => generation !== generationRef.current;
     closedRef.current = false;
@@ -377,7 +412,14 @@ export function useExamVoice({
       }
 
       await output.connect();
-      await output.resumeAudio();
+      // Never "preparing" for good: a voice that cannot start playing gives way to writing.
+      const audioOutput = output;
+      await Promise.race([
+        audioOutput.resumeAudio(),
+        new Promise<never>((_, reject) =>
+          window.setTimeout(() => reject(new Error(t("exam.tutor.noAudio"))), AUDIO_START_MS),
+        ),
+      ]);
 
       if (input && microphone) {
         await input.start(microphone);

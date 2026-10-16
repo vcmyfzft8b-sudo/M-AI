@@ -2598,6 +2598,7 @@ export const sl = {
   "exam.tutor.state.yourTurn": "Na vrsti si",
   "exam.tutor.tryVoice": "Poskusi z mikrofonom",
   "exam.tutor.noMicVoice": "Mikrofon ni na voljo, zato mi odgovarjaj pisno. Govorim pa še naprej.",
+  "exam.tutor.noAudio": "Zvoka ni bilo mogoče predvajati, zato nadaljujeva pisno.",
   "exam.tutor.repeat": "Ponovi to razlago",
   "exam.tutor.typePlaceholder": "Napiši odgovor …",
   "exam.tutor.send": "Pošlji",

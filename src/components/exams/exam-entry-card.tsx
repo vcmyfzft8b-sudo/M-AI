@@ -30,7 +30,6 @@ export function ExamEntryCard({
       </span>
       <span className="memo-exam-entry-copy">
         <span className="memo-exam-entry-title">{t("exam.entry.title")}</span>
-        <span className="memo-exam-entry-sub">{t("exam.entry.body")}</span>
       </span>
     </button>
   );

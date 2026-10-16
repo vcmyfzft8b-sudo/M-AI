@@ -28084,15 +28084,6 @@ a.memo-exam-station-go {
   white-space: nowrap;
 }
 
-.memo-exam-entry-sub {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .memo-exam-entry-desktop {
   margin: 1.2rem 0 0.85rem;
 }

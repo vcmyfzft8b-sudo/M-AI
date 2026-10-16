@@ -2456,7 +2456,6 @@ export const sl = {
   "api.exam.archived": "Ta priprava je arhivirana. Vrni jo med aktivne, da nadaljuješ.",
   "api.exam.mockExpired": "Čas za to generalko je potekel. Začni novo.",
   "exam.entry.title": "Priprava na test",
-  "exam.entry.body": "Učna pot, kvizi in generalka",
   "exam.library.title": "Priprave na test",
   "exam.minutes": "{minutes} min",
   "exam.minutesUnit": "min",

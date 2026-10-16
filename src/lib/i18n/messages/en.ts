@@ -2419,7 +2419,6 @@ export const en: Messages = {
   "api.exam.archived": "This exam prep is archived. Restore it to continue.",
   "api.exam.mockExpired": "This mock exam's time is up. Start a new one.",
   "exam.entry.title": "Exam prep",
-  "exam.entry.body": "Study path, quizzes and a mock exam",
   "exam.library.title": "Exam prep",
   "exam.minutes": "{minutes} min",
   "exam.minutesUnit": "min",

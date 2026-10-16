@@ -2433,7 +2433,6 @@ export const sr: Messages = {
   "api.exam.archived": "Ova priprema je arhivirana. Vrati je među aktivne da nastaviš.",
   "api.exam.mockExpired": "Vreme za ovaj probni ispit je isteklo. Započni novi.",
   "exam.entry.title": "Priprema za ispit",
-  "exam.entry.body": "Plan učenja, kvizovi i probni ispit",
   "exam.library.title": "Pripreme za ispit",
   "exam.minutes": "{minutes} min",
   "exam.minutesUnit": "min",

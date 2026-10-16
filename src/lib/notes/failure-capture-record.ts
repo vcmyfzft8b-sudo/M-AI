@@ -54,6 +54,24 @@ export function resolveOriginalFileReferences(params: {
 
   push(pendingDocument?.path, pendingDocument?.fileName, pendingDocument?.mimeType);
 
+  // Once a document has been read, pendingDocument is gone and the upload is kept on the import
+  // as sourceDocumentUpload. A failure at the note step (e.g. a PDF read as "illegible") still
+  // needs the original bytes to be judged, so capture it from there too.
+  const manualImport =
+    metadata.manualImport && typeof metadata.manualImport === "object"
+      ? (metadata.manualImport as Record<string, unknown>)
+      : null;
+  const modelMetadata =
+    manualImport?.modelMetadata && typeof manualImport.modelMetadata === "object"
+      ? (manualImport.modelMetadata as Record<string, unknown>)
+      : null;
+  const sourceDocument =
+    modelMetadata?.sourceDocumentUpload && typeof modelMetadata.sourceDocumentUpload === "object"
+      ? (modelMetadata.sourceDocumentUpload as Record<string, unknown>)
+      : null;
+
+  push(sourceDocument?.path, sourceDocument?.fileName, sourceDocument?.mimeType);
+
   for (const path of params.scanImagePaths) {
     push(path);
   }

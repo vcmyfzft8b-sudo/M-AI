@@ -103,6 +103,35 @@ test("every stored original the lecture was built from is referenced, deduped an
   assert.equal(flood.length, MAX_CAPTURED_FILES);
 });
 
+test("a document that was already read is still captured from its import", async () => {
+  const { resolveOriginalFileReferences } = await import(
+    "../src/lib/notes/failure-capture-record.ts"
+  );
+
+  const references = resolveOriginalFileReferences({
+    storagePath: null,
+    processingMetadata: {
+      manualImport: {
+        text: "x",
+        sourceType: "pdf",
+        modelMetadata: {
+          importMode: "pdf",
+          sourceDocumentUpload: {
+            path: "user-1/lec-1/documents/source.pdf",
+            fileName: "scan.pdf",
+            mimeType: "application/pdf",
+          },
+        },
+      },
+    },
+    scanImagePaths: [],
+  });
+
+  assert.deepEqual(references, [
+    { path: "user-1/lec-1/documents/source.pdf", fileName: "scan.pdf", mimeType: "application/pdf" },
+  ]);
+});
+
 test("a text-only lecture references no files at all", async () => {
   const { resolveOriginalFileReferences } = await import(
     "../src/lib/notes/failure-capture-record.ts"

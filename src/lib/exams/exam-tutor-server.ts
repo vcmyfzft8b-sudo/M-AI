@@ -3,7 +3,10 @@ import "server-only";
 import { z } from "zod";
 
 import { generateStructuredObject } from "@/lib/ai/json";
+import { repairPassage } from "@/lib/ai/language-check";
+import { shouldCheckLanguage } from "@/lib/ai/language-repair";
 import type { TutorVerdict } from "@/lib/exams/exam-model";
+import { resolvePassageLanguage } from "@/lib/tutor/spoken-language";
 
 /*
  * The tutor lesson of an exam topic: the voice tutor teaches the topic a point at a time and asks
@@ -34,6 +37,33 @@ function clean(text: string, max: number) {
   return text.replace(/\s+/g, " ").trim().slice(0, max);
 }
 
+/* A spoken line's repair may take this long; past it the line is said as written. */
+const REPAIR_DEADLINE_MS = 4000;
+
+/*
+ * Everything the tutor says is heard, not read, so its words are proofread the way the app's tutor
+ * proofreads GLM: even the Gemini writer coins words in Slovenian now and then ("grela" for "go
+ * through"), and a synthesizer pronounces them as written. The passage's own language decides the
+ * check; English, and text whose language cannot be told, go out as they are.
+ */
+async function proofreadSpoken(text: string, language: string | null, userId: string) {
+  const passageLanguage = resolvePassageLanguage(language ?? "", text);
+
+  if (!passageLanguage || !shouldCheckLanguage(passageLanguage)) {
+    return text;
+  }
+
+  const repaired = await repairPassage({
+    text,
+    language: passageLanguage,
+    spoken: true,
+    signal: AbortSignal.timeout(REPAIR_DEADLINE_MS),
+    usageContext: { stage: "language_check", userId },
+  }).catch(() => null);
+
+  return repaired?.trim() || text;
+}
+
 export async function planTutorLesson(params: {
   userId: string;
   lectureId: string;
@@ -56,7 +86,7 @@ Write exactly ${TUTOR_STEPS} steps, each about one of the topic's most important
 - question: one open question that checks the student understood that point (not just repeated your words): ask them to explain, apply or compare. It must be answerable out loud in one or two sentences.
 - answerGuide: a bullet list ("- ") of the 1 to 3 points a correct answer must contain.
 
-Teach only what the student's note says about the topic (the input); where it is thin, use standard, well-established knowledge of the subject, never invented specifics. Do not reuse the questions under "avoid". Write in the language of the note. Student level: ${params.school}.`,
+Teach only what the student's note says about the topic (the input); where it is thin, use standard, well-established knowledge of the subject, never invented specifics. Do not reuse the questions under "avoid". Write in the language of the note, as a native speaking teacher would say it: natural, everyday spoken phrasing, correct grammar and real words only, never an English phrase translated word for word. Student level: ${params.school}.`,
     input: JSON.stringify({
       topic: params.topicTitle,
       summary: params.summary,
@@ -67,7 +97,7 @@ Teach only what the student's note says about the topic (the input); where it is
     usageContext: { stage: "exam_tutor_plan", userId: params.userId, lectureId: params.lectureId },
   });
 
-  return result.steps
+  const steps = result.steps
     .map((step) => ({
       explain: clean(step.explain, 900),
       question: clean(step.question, 400),
@@ -75,6 +105,17 @@ Teach only what the student's note says about the topic (the input); where it is
     }))
     .filter((step) => step.explain && step.question && step.answerGuide)
     .slice(0, TUTOR_STEPS);
+
+  // What will be spoken is proofread, all of it at once; the answer guides are only read.
+  return Promise.all(
+    steps.map(async (step) => {
+      const [explain, question] = await Promise.all([
+        proofreadSpoken(step.explain, null, params.userId),
+        proofreadSpoken(step.question, null, params.userId),
+      ]);
+      return { ...step, explain, question };
+    }),
+  );
 }
 
 const turnSchema = z.object({ verdict: z.enum(["correct", "partial", "wrong"]), speech: z.string() });
@@ -130,7 +171,7 @@ Always speak in this language (ISO code): ${params.language}.`,
 
   return {
     verdict,
-    speech: clean(result.speech, 600),
+    speech: await proofreadSpoken(clean(result.speech, 600), params.language, params.userId),
     askAgain: firstAsk && verdict !== "correct",
   };
 }

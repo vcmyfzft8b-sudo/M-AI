@@ -7,6 +7,8 @@ import { Msym } from "@/components/msym";
 import { ExamVoicePicker } from "@/components/exams/exam-voice-picker";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
 import { storedTutorVoice, useExamVoice } from "@/components/exams/use-exam-voice";
+import { MemoPortal } from "@/components/memo-portal";
+import { sheetClass, useSheet } from "@/components/use-sheet";
 import { tutorStepPoints, type TutorVerdict } from "@/lib/exams/exam-model";
 import type { TutorStep } from "@/lib/exams/exam-tutor-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -32,13 +34,39 @@ type Stage = "idle" | "running" | "paused";
  */
 const NO_SPEECH_MS = 20_000;
 
+/* How many words a caption shows at once, at most. */
+const CAPTION_WORDS = 5;
+
 /*
- * Live captions, as subtitles: the sentence being said, word by word, with the one before it
- * fading above. Never the whole explanation at once.
+ * Live captions, as subtitles: the line cut into phrases of up to five words (a phrase also ends
+ * where a sentence does), and the phrase the voice is in is shown whole, replacing the one
+ * before. One colour; nothing lingers.
  */
-function captionWindow(spoken: string) {
-  const sentences = spoken.trim().split(/(?<=[.!?…])\s+/u).filter(Boolean);
-  return { earlier: sentences.at(-2) ?? "", current: sentences.at(-1) ?? "" };
+function captionPhrase(line: string, spoken: string) {
+  const words = line.trim().split(/\s+/u).filter(Boolean);
+  const heard = spoken.trim() ? spoken.trim().split(/\s+/u).length : 0;
+
+  if (heard === 0 || words.length === 0) {
+    return "";
+  }
+
+  let start = 0;
+
+  for (let index = 0; index < words.length; index += 1) {
+    const ends = index - start + 1 >= CAPTION_WORDS || /[.!?…:;]$/u.test(words[index]) || index === words.length - 1;
+
+    if (!ends) {
+      continue;
+    }
+
+    if (heard <= index + 1) {
+      return words.slice(start, index + 1).join(" ");
+    }
+
+    start = index + 1;
+  }
+
+  return words.slice(start).join(" ");
 }
 
 export function ExamTutorLesson({
@@ -65,6 +93,16 @@ export function ExamTutorLesson({
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState("");
   const [pickingVoice, setPickingVoice] = useState(false);
+  const pickerRef = useRef<HTMLDetailsElement | null>(null);
+  /* Closing the phone's voice sheet folds the row back too. */
+  const closeVoicePicker = useCallback(() => {
+    setPickingVoice(false);
+
+    if (pickerRef.current) {
+      pickerRef.current.open = false;
+    }
+  }, []);
+  const voiceSheet = useSheet(closeVoicePicker);
   /* In writing, the tutor's reply waits to be read: the next point comes when the learner goes on. */
   const [awaitingContinue, setAwaitingContinue] = useState(false);
   const continueRef = useRef<(() => void) | null>(null);
@@ -272,7 +310,7 @@ export function ExamTutorLesson({
   }
 
   const running = stage === "running" || stage === "paused";
-  const captionLines = captionWindow(session.caption);
+  const captionText = captionPhrase(session.speech, session.caption);
   const preparing = running && phase === "preparing";
   const statusKey: MessageKey | null =
     stage === "paused"
@@ -323,13 +361,10 @@ export function ExamTutorLesson({
         </p>
       ) : null}
 
-      {/* While the voice speaks: its words as live captions, a sentence at a time. */}
+      {/* While the voice speaks: its words as live captions, a short phrase at a time. */}
       {running && !preparing && session.speaks && phase === "speaking" ? (
         <div className="memo-tutor-caption memo-exam-tutor-captions" aria-live="off">
-          <p>
-            {captionLines.earlier ? <span className="earlier">{captionLines.earlier} </span> : null}
-            <span>{captionLines.current}</span>
-          </p>
+          <p key={captionText}>{captionText}</p>
         </div>
       ) : null}
 
@@ -439,9 +474,14 @@ export function ExamTutorLesson({
 
       {stage === "idle" ? (
         <>
-          {/* The voice, collapsed to one row that shows it and its colour, as the app's tutor has it. */}
+          {/*
+            The voice, collapsed to one row that shows it and its colour, as the app's tutor has it.
+            A tap opens the voices against the row on the desktop, and on the phone in the dragged
+            sheet every other choice in the app arrives in, so "Začni" never leaves the screen.
+          */}
           <details
             className="memo-tutor-picker memo-exam-tutor-picker"
+            ref={pickerRef}
             open={pickingVoice}
             onToggle={(event) => setPickingVoice(event.currentTarget.open)}
           >
@@ -453,11 +493,38 @@ export function ExamTutorLesson({
               </span>
               <Msym name={pickingVoice ? "expand_more" : "chevron_right"} size="1.5rem" fill={false} weight={400} />
             </summary>
-            <div className="memo-exam-tutor-voices">
+            <div className="memo-tutor-picker-popover memo-only-desktop">
               <p className="memo-tutor-picker-heading">{t("tutor.voice.hint")}</p>
               <ExamVoicePicker voice={voice} onChange={setVoice} label={t("tutor.voice.label")} />
             </div>
           </details>
+
+          {pickingVoice ? (
+            <MemoPortal>
+              <button
+                type="button"
+                className={sheetClass("note-read-usage-mobile-backdrop memo-only-mobile", voiceSheet.closing)}
+                onClick={() => voiceSheet.dismiss()}
+                aria-label={t("common.close")}
+              />
+              <div
+                className={sheetClass(
+                  "note-read-usage-mobile-sheet memo-tutor-picker-sheet memo-only-mobile",
+                  voiceSheet.closing,
+                )}
+                role="dialog"
+                aria-modal="true"
+                aria-label={t("tutor.voice.label")}
+                {...voiceSheet.dragProps}
+                // Portalled out of `.memo-tutor`, so the chosen chip's hue is passed along here.
+                style={{ ...voiceSheet.dragProps.style, "--orb-hue": voiceHue(voice) } as CSSProperties}
+              >
+                <div className="memo-grab" data-drag-handle />
+                <p className="memo-tutor-picker-heading">{t("tutor.voice.hint")}</p>
+                <ExamVoicePicker voice={voice} onChange={setVoice} label={t("tutor.voice.label")} />
+              </div>
+            </MemoPortal>
+          ) : null}
 
           <button type="button" className="memo-tutor-start" onClick={() => void begin()}>
             <Msym name="play_arrow" size="1.3rem" fill weight={500} />

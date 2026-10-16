@@ -2550,7 +2550,6 @@ export const en: Messages = {
   "exam.lesson.summary.intro": "Read the key points first, then we'll check what stuck.",
   "exam.lesson.keyPoints": "Key points",
   "exam.lesson.speedRead": "Speed reading",
-  "exam.lesson.listen": "Listen",
   "exam.tutor.idle.title": "The tutor explains",
   "exam.tutor.idle.lede": "It explains the topic's key points and asks you about each one. You answer out loud.",
   "exam.tutor.textHint": "You can answer in writing or out loud. For your voice, allow the microphone.",

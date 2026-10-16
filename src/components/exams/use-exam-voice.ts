@@ -120,6 +120,8 @@ export function useExamVoice({
   const [speaks, setSpeaks] = useState(false);
   /* What the voice has said of the current line so far, word by word: the live captions. */
   const [caption, setCaption] = useState("");
+  /* The whole of the line being spoken, so the captions can show its next phrase whole. */
+  const [speech, setSpeech] = useState("");
   const captionRef = useRef("");
 
   const phaseRef = useRef<VoicePhase>("preparing");
@@ -226,6 +228,7 @@ export function useExamVoice({
       // A new line starts its captions from nothing.
       captionRef.current = "";
       setCaption("");
+      setSpeech(text);
       const output = outputRef.current;
 
       if (!output) {
@@ -542,6 +545,7 @@ export function useExamVoice({
     textNote,
     speaks,
     caption,
+    speech,
     orbRef,
     languageRef,
     startedAtRef,

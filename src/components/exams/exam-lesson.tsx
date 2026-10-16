@@ -29,7 +29,6 @@ import {
 } from "@/lib/exams/exam-model";
 import type { LessonGenerator, LessonLoad, LessonPayload } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
-import { NOTE_TTS_VOICE_STORAGE_KEY } from "@/lib/note-tts-settings";
 import { FLASHCARD_EXIT_ANIMATION_MS, type FlashcardBucket } from "@/lib/study/flashcard-drag";
 import { paywallPath } from "@/lib/paywall-reasons";
 
@@ -641,82 +640,6 @@ function LessonBody({
   const [exit, setExit] = useState<StudyFlashcardExit | null>(null);
   const [missed, setMissed] = useState(0);
   const [speedReading, setSpeedReading] = useState(false);
-  /* Astra's summary audio: the topic summary, spoken in the learner's read-aloud voice. */
-  const [listening, setListening] = useState<"idle" | "loading" | "playing">("idle");
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  /* Gone from the screen: a recording still on its way must never start over the next lesson. */
-  const unmountedRef = useRef(false);
-
-  useEffect(() => {
-    unmountedRef.current = false;
-
-    return () => {
-      unmountedRef.current = true;
-      audioRef.current?.pause();
-    };
-  }, []);
-
-  /* "Playing" only once the browser has actually started it (autoplay rules can refuse). */
-  async function play(audio: HTMLAudioElement) {
-    try {
-      await audio.play();
-    } catch {
-      if (!unmountedRef.current) {
-        setListening("idle");
-      }
-
-      return;
-    }
-
-    if (unmountedRef.current) {
-      audio.pause();
-      return;
-    }
-
-    setListening("playing");
-  }
-
-  async function toggleListening() {
-    if (listening === "playing") {
-      audioRef.current?.pause();
-      setListening("idle");
-      return;
-    }
-
-    if (audioRef.current) {
-      await play(audioRef.current);
-      return;
-    }
-
-    setListening("loading");
-    let voice: string | null = null;
-
-    try {
-      voice = window.localStorage.getItem(NOTE_TTS_VOICE_STORAGE_KEY);
-    } catch {
-      /* The default voice, then. */
-    }
-
-    const response = await fetch(
-      `/api/exams/${examId}/topics/${topicId}/speech${voice ? `?voice=${encodeURIComponent(voice)}` : ""}`,
-      { method: "POST" },
-    ).catch(() => null);
-    const payload = response?.ok ? ((await response.json().catch(() => null)) as { url?: string } | null) : null;
-
-    if (unmountedRef.current) {
-      return;
-    }
-
-    if (!payload?.url) {
-      setListening("idle");
-      return;
-    }
-
-    const audio = new Audio(payload.url);
-    audio.onended = () => setListening("idle");
-    audioRef.current = audio;
-    await play(audio);
-  }
   const [answer, setAnswer] = useState("");
   const [unknown, setUnknown] = useState(false);
   const [marking, setMarking] = useState(false);
@@ -777,25 +700,6 @@ function LessonBody({
           ) : null}
         </div>
         <div className="memo-chip-row">
-          <button
-            type="button"
-            className={`memo-chip ${listening === "playing" ? "active" : ""}`.trim()}
-            aria-pressed={listening === "playing"}
-            aria-busy={listening === "loading"}
-            onClick={() => {
-              if (listening !== "loading") {
-                void toggleListening();
-              }
-            }}
-          >
-            {/* The label stays put while the audio is prepared; only the icon turns into a spinner. */}
-            {listening === "loading" ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Msym name={listening === "playing" ? "pause" : "volume_up"} size="1.1rem" />
-            )}
-            <span>{t("exam.lesson.listen")}</span>
-          </button>
           <button type="button" className="memo-chip" onClick={() => setSpeedReading(true)}>
             <Msym name="bolt" size="1.1rem" />
             <span>{t("exam.lesson.speedRead")}</span>

@@ -115,7 +115,7 @@ The lesson screens keep **one coral button**, the suggested next lesson, and und
 its emoji (`LESSON_KIND_EMOJI`) and name, and a tick with its latest score once done. The chips sit
 in the content, not in the bottom button bar.
 
-- **The summary** offers them under "Poslušaj" / "Hitro branje"; tapping one saves the summary as
+- **The summary** offers them under "Hitro branje"; tapping one saves the summary as
   read and opens that format instead of the suggested one.
 - **The done screen** offers them under the score, leaving out the lesson just finished and the
   one the button already suggests. What the button suggests comes from `moduleAfterLesson`, the
@@ -237,10 +237,9 @@ A **material topic** (`source = 'material'`) teaches from what the note already 
 `quiz_questions` and `practice_test_questions`, sorted into the note's topics the first time a
 lesson of that kind is opened (`ensureTopicItems`, one cheap model call per note and kind; the ids
 land on `exam_topics`, and a regenerated note is sorted again). A topic with too few items is topped
-up from the rest of its note. Its summary lesson is the topic's own summary and key points, and
-"Poslušaj" plays it (`POST /api/exams/[id]/topics/[topicId]/speech`: spoken once per voice into
-storage, then a signed link). True/false statements are made from quiz questions the quiz lesson
-did not use.
+up from the rest of its note. Its summary lesson is the topic's own summary and key points, to read
+or speed-read (the read-aloud "Poslušaj" was taken out at the owner's request; the tutor is the
+spoken lesson). True/false statements are made from quiz questions the quiz lesson did not use.
 
 A topic the learner **added**, or one the **AI added** (only with the switch on, at most two, things
 an exam on the subject usually asks that the material leaves out), has nothing to draw on: its

@@ -2587,7 +2587,6 @@ export const sl = {
   "exam.lesson.summary.intro": "Najprej na hitro preberi bistvo, potem preverjava, kaj si si zapomnil.",
   "exam.lesson.keyPoints": "Bistvo",
   "exam.lesson.speedRead": "Hitro branje",
-  "exam.lesson.listen": "Poslušaj",
   "exam.tutor.idle.title": "Razlaga s tutorjem",
   "exam.tutor.idle.lede": "Razloži ti ključne stvari teme in te po vsaki kaj vpraša. Odgovarjaš na glas.",
   "exam.tutor.textHint": "Odgovarjaš lahko pisno ali na glas. Za glas dovoli mikrofon.",

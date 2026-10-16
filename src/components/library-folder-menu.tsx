@@ -767,67 +767,70 @@ export function LibraryFolderMenu({
                   dividers and puts the per-folder menu at the end of each row,
                   rather than the desktop dropdown's flat list. */}
               <div className="library-folder-mobile-sheet-body">
-                <div className="memo-folder-card">
-                  <div className="memo-folder-row">
-                    <button
-                      type="button"
-                      className="memo-folder-row-main"
-                      onClick={handleSelectAllNotes}
-                    >
-                      <Emoji symbol="📁" size="1.2rem" />
-                      <span className="memo-folder-row-label">{t("folders.allNotes")}</span>
-                      {selectedFolderId === null && !showingExamPreps ? (
-                        <Msym name="check" size="1.35rem" fill={false} weight={500} />
-                      ) : null}
-                    </button>
-                  </div>
-
-                  {examPreps ? (
+                {/* Only the folders scroll; "Nova mapa" under them stays in view however many there are. */}
+                <div className="memo-folder-sheet-scroll">
+                  <div className="memo-folder-card">
                     <div className="memo-folder-row">
-                      <button type="button" className="memo-folder-row-main" onClick={handleSelectExamPreps}>
-                        <Emoji symbol="🎓" size="1.2rem" />
-                        <span className="memo-folder-row-label">{t("exam.library.title")}</span>
-                        {showingExamPreps ? (
+                      <button
+                        type="button"
+                        className="memo-folder-row-main"
+                        onClick={handleSelectAllNotes}
+                      >
+                        <Emoji symbol="📁" size="1.2rem" />
+                        <span className="memo-folder-row-label">{t("folders.allNotes")}</span>
+                        {selectedFolderId === null && !showingExamPreps ? (
                           <Msym name="check" size="1.35rem" fill={false} weight={500} />
-                        ) : examPreps.count > 0 ? (
-                          <span className="memo-library-count">{examPreps.count}</span>
                         ) : null}
                       </button>
                     </div>
-                  ) : null}
-                </div>
 
-                {/* The learner's own folders, a card of their own a little apart from the app's two. */}
-                {liveFolders.length > 0 ? (
-                  <div className="memo-folder-card">
-                    {liveFolders.map((folder) => (
-                      <div key={folder.id} className="memo-folder-row">
-                        <button
-                          type="button"
-                          className="memo-folder-row-main"
-                          onClick={() => handleSelectFolder(folder)}
-                        >
-                          <Emoji symbol="📁" size="1.2rem" />
-                          <span className="memo-folder-row-label">{folder.name}</span>
-                          {selectedFolderId === folder.id ? (
+                    {examPreps ? (
+                      <div className="memo-folder-row">
+                        <button type="button" className="memo-folder-row-main" onClick={handleSelectExamPreps}>
+                          <Emoji symbol="🎓" size="1.2rem" />
+                          <span className="memo-folder-row-label">{t("exam.library.title")}</span>
+                          {showingExamPreps ? (
                             <Msym name="check" size="1.35rem" fill={false} weight={500} />
+                          ) : examPreps.count > 0 ? (
+                            <span className="memo-library-count">{examPreps.count}</span>
                           ) : null}
                         </button>
-                        <button
-                          type="button"
-                          className="memo-folder-row-menu"
-                          onClick={() => {
-                            setIsOpen(false);
-                            setFolderActionTarget(folder);
-                          }}
-                          aria-label={t("folders.options", { name: folder.name })}
-                        >
-                          <Msym name="more_horiz" size="1.5rem" fill={false} weight={500} />
-                        </button>
                       </div>
-                    ))}
+                    ) : null}
                   </div>
-                ) : null}
+
+                  {/* The learner's own folders, a card of their own a little apart from the app's two. */}
+                  {liveFolders.length > 0 ? (
+                    <div className="memo-folder-card">
+                      {liveFolders.map((folder) => (
+                        <div key={folder.id} className="memo-folder-row">
+                          <button
+                            type="button"
+                            className="memo-folder-row-main"
+                            onClick={() => handleSelectFolder(folder)}
+                          >
+                            <Emoji symbol="📁" size="1.2rem" />
+                            <span className="memo-folder-row-label">{folder.name}</span>
+                            {selectedFolderId === folder.id ? (
+                              <Msym name="check" size="1.35rem" fill={false} weight={500} />
+                            ) : null}
+                          </button>
+                          <button
+                            type="button"
+                            className="memo-folder-row-menu"
+                            onClick={() => {
+                              setIsOpen(false);
+                              setFolderActionTarget(folder);
+                            }}
+                            aria-label={t("folders.options", { name: folder.name })}
+                          >
+                            <Msym name="more_horiz" size="1.5rem" fill={false} weight={500} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
 
                 <div className="memo-folder-sheet-cta">
                   <button

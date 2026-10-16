@@ -13977,19 +13977,43 @@ html[data-paywall-closing] .memo-shell * {
     cursor: pointer;
   }
 
+  .library-folder-mobile-sheet .library-folder-mobile-sheet-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  /*
+   * The folder list is the sheet's only scroller: a long list scrolls here while the title above
+   * and "Nova mapa" below stay in view. The side padding (taken back by the margin) leaves the
+   * cards' shadow room inside the scrollport.
+   */
+  .memo-folder-sheet-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0 -0.6rem;
+    padding: 0.1rem 0.6rem 0.6rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    scrollbar-width: none;
+  }
+
+  .memo-folder-sheet-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
   .memo-folder-sheet-cta {
     display: flex;
+    flex: none;
     justify-content: center;
-    margin-top: 1.4rem;
+    margin-top: 0.8rem;
     /*
-     * Room for the button's glow inside the scroller.
-     *
-     * A shadow cannot escape an ancestor that clips, and the sheet around this
-     * scrolls — so with the button flush against the end of the content the
-     * glow was sliced off square at the scrollport's edge instead of fading
-     * out. Padding here is part of what scrolls, so the glow always has
-     * somewhere to land. Margin would not do: a last child's bottom margin is
-     * not reliably part of the scrollable extent.
+     * Room for the button's glow. It sits below the scrolling list now, always in
+     * view, but the sheet around it clips: with the button flush against the
+     * sheet's padding edge the glow would be sliced off square.
      */
     padding-bottom: 1.25rem;
   }
@@ -14103,11 +14127,14 @@ html[data-paywall-closing] .memo-shell * {
     inset: auto 0 0 0;
     z-index: 126;
     /* Production lays this out as a gapped grid; the design stacks it with
-       its own margins, and the gap was adding 16px above the header. */
-    display: block;
+       its own margins, and the gap was adding 16px above the header. A column:
+       the folders scroll inside it (.memo-folder-sheet-scroll) and the header
+       and "Nova mapa" stay put. */
+    display: flex;
+    flex-direction: column;
     gap: 0;
     max-height: var(--memo-sheet-max);
-    overflow-y: auto;
+    overflow: hidden;
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     padding: 0.6rem 1.15rem
       calc(
@@ -26979,8 +27006,26 @@ button.memo-exam-card:hover {
   margin-top: 0.6rem;
 }
 
+/* The other formats as an even grid, two to a row, each chip the same width. */
 .memo-exam-formats .memo-chip-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
   margin-bottom: 0;
+}
+
+.memo-exam-formats .memo-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.memo-exam-formats .memo-chip > span:not(.memo-exam-format-score) {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .memo-exam-center .memo-exam-formats {
@@ -28266,12 +28311,13 @@ a.memo-exam-station-go {
   background: var(--track);
 }
 
+/* The app's coral, as its progress bars have it: done in full, the lesson at hand half-lit. */
 .memo-exam-lesson-steps i.on {
-  background: var(--success);
+  background: var(--promo);
 }
 
 .memo-exam-lesson-steps i.current {
-  background: var(--ink);
+  background: color-mix(in srgb, var(--promo) 45%, var(--track));
 }
 
 .memo-exam-lesson-module {
@@ -28722,21 +28768,18 @@ a.memo-exam-station-go {
   padding: 0.8rem 0.2rem 0.2rem;
 }
 
-/* The tutor's live captions: the sentence being said, the one before it fading above. */
+/* The tutor's live captions: one short phrase at a time, each fading in over the last. */
 .memo-exam-tutor-captions p {
   max-width: 30rem;
   margin: 0;
   color: var(--text);
-  font-size: 1.08rem;
-  font-weight: 600;
+  font-size: 1.25rem;
+  font-weight: 650;
   letter-spacing: -0.02em;
-  line-height: 1.45;
-  text-wrap: pretty;
-}
-
-.memo-exam-tutor-captions .earlier {
-  color: var(--muted);
-  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  text-wrap: balance;
+  animation: memo-fade-in 0.18s ease-out;
 }
 
 /* A presence, not a bead: the exam tutor's sphere keeps a larger floor than the flex share. */

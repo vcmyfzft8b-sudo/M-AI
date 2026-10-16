@@ -416,6 +416,32 @@ export function LectureTutor({
   }, [stopPreview]);
 
   /*
+   * A 429 from a tutor route is the server asking for a wait, not a fault. Start stays
+   * disabled until the wait it named has passed, and the learner is told how long.
+   */
+  const holdForRateLimit = useCallback(
+    (response: Response, payload: { retryAfterSeconds?: number } | null) => {
+      const retryAfter = Number(payload?.retryAfterSeconds ?? response.headers.get("Retry-After"));
+      const waitSeconds = Number.isFinite(retryAfter) && retryAfter > 0
+        ? Math.min(Math.ceil(retryAfter), 3600)
+        : 300;
+      const retryAt = Date.now() + waitSeconds * 1000;
+
+      retryStartAtRef.current = retryAt;
+      setRetryStartAt(retryAt);
+      clearTimer(retryStartTimerRef);
+      retryStartTimerRef.current = window.setTimeout(() => {
+        retryStartAtRef.current = 0;
+        setRetryStartAt(0);
+        setError(null);
+        retryStartTimerRef.current = null;
+      }, waitSeconds * 1000);
+      setError(t("tutor.error.rateLimited", { count: Math.ceil(waitSeconds / 60) }));
+    },
+    [t],
+  );
+
+  /*
    * The voice clips, fetched before anybody asks for one.
    *
    * Auditioning a voice plays a pre-rendered file rather than synthesizing anything, so the wait
@@ -1006,7 +1032,7 @@ export function LectureTutor({
 
         if (!response.ok || !response.headers.get("Content-Type")?.includes("text/event-stream")) {
           const payload = (await response.json().catch(() => null)) as
-            | { error?: string; code?: TutorBlock; usage?: TutorUsage }
+            | { error?: string; code?: TutorBlock; usage?: TutorUsage; retryAfterSeconds?: number }
             | null;
 
           /*
@@ -1027,6 +1053,22 @@ export function LectureTutor({
             settleGrant();
             teardown();
             planRef.current = null;
+            setPhaseNow("idle");
+
+            return;
+          }
+
+          /*
+           * The turn limit, met mid-walkthrough (2026-10-15). This threw the bare "Too
+           * many requests." into a paused session whose Continue only asked again and was
+           * refused again, each one reported as a defect. It ends the session behind the
+           * same timed wait a refused start gets.
+           */
+          if (response.status === 429) {
+            settleGrant();
+            teardown();
+            planRef.current = null;
+            holdForRateLimit(response, payload);
             setPhaseNow("idle");
 
             return;
@@ -1173,7 +1215,7 @@ export function LectureTutor({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onTurnFinished is defined below and stable
-    [lectureId, setPhaseNow, settleGrant, t, teardown],
+    [holdForRateLimit, lectureId, setPhaseNow, settleGrant, t, teardown],
   );
 
   const runTurnRef = useRef(runTurn);
@@ -1530,24 +1572,9 @@ export function LectureTutor({
         }
 
         if (response.status === 429) {
-          const retryAfter = Number(payload?.retryAfterSeconds ?? response.headers.get("Retry-After"));
-          const waitSeconds = Number.isFinite(retryAfter) && retryAfter > 0
-            ? Math.min(Math.ceil(retryAfter), 3600)
-            : 300;
-          const retryAt = Date.now() + waitSeconds * 1000;
-
-          retryStartAtRef.current = retryAt;
-          setRetryStartAt(retryAt);
-          clearTimer(retryStartTimerRef);
-          retryStartTimerRef.current = window.setTimeout(() => {
-            retryStartAtRef.current = 0;
-            setRetryStartAt(0);
-            setError(null);
-            retryStartTimerRef.current = null;
-          }, waitSeconds * 1000);
+          holdForRateLimit(response, payload);
           runIdRef.current += 1;
           planPromiseRef.current = null;
-          setError(t("tutor.error.rateLimited", { count: Math.ceil(waitSeconds / 60) }));
           setPhaseNow("idle");
 
           return;
@@ -1853,6 +1880,7 @@ export function LectureTutor({
   }, [
     closePicker,
     commitInterruption,
+    holdForRateLimit,
     scheduleFollowUp,
     scheduleListeningRetry,
     language,

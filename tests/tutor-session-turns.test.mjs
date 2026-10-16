@@ -315,6 +315,37 @@ test("a turn refused for billing shows the paywall instead of failing the walkth
 });
 
 /*
+ * `tutor/turn` answers 429 once a learner has used the hour's turns. `runTurn` threw the
+ * bare "Too many requests." into a paused session, reported it as a defect, and every
+ * Continue asked again and was refused again (2026-10-15, MEMOAI-WEB-5W).
+ */
+test("a turn refused by the rate limit waits it out instead of failing the walkthrough", async () => {
+  const h = sessionHarness();
+  h.tutor.phaseRef.current = "speaking";
+  h.state.request = () => ({
+    ok: false,
+    status: 429,
+    headers: { get: () => "600" },
+    json: async () => ({ error: "Too many requests.", retryAfterSeconds: 600 }),
+  });
+  void h.tutor.runTurn("answer", { question: "What does that mean?" });
+  await settle();
+
+  assert.equal(h.errors.length, 0, "a rate limit is not a reported failure");
+  assert.equal(h.tutor.phaseRef.current, "idle", "the session ends rather than pausing on an error");
+  assert.ok(h.state.updates.some((value) => typeof value === "string" && value.includes("tutor.error.rateLimited")));
+  assert.equal(h.state.updates.includes("Too many requests."), false, "the raw refusal is not shown");
+
+  h.state.sessionResponse = null;
+  await h.tutor.startSession();
+  assert.equal(h.state.sessionCalls ?? 0, 0, "Start stays local until the server's wait expires");
+
+  await h.tick(600_000);
+  await h.tutor.startSession();
+  assert.equal(h.state.sessionCalls, 1, "Start is available when the server's wait expires");
+});
+
+/*
  * A dropped recognizer is not silent: the screen says so.
  *
  * The microphone is the whole promise of a walkthrough — cut in whenever you like — and

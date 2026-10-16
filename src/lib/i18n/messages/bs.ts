@@ -2543,7 +2543,6 @@ export const bs: Messages = {
   "exam.picker.recommended": "Preporučeno",
   "exam.picker.gaps": "Praznine",
   "exam.picker.gaps.locked": "Uči dalje, ovdje ćeš vježbati ono što ti ne ide.",
-  "exam.picker.tutor.locked": "Vrijeme za razgovor s tutorom je potrošeno, pa vježbaš drugačije.",
   "exam.picker.repetition": "Ponavljanje",
   "exam.picker.repetition.locked": "Otključava se nakon {count} lekcija teme.",
   "exam.picker.mockWritten": "Pisani probni ispit",

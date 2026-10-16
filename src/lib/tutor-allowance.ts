@@ -56,11 +56,10 @@ export const PAID_PODCAST_DAILY_SECONDS = 30 * 60;
 export const FREE_PODCAST_LIFETIME_SECONDS = 60;
 
 /**
- * What an exam-prep tutor lesson needs to start: a lesson speaks for a few minutes, so with less
- * than this left the path offers another exercise instead of a lesson that would fall silent at
- * once.
+ * What an exam-prep tutor lesson needs to start: a whole lesson's talking (a few minutes), so one
+ * never runs dry half-way. With less left, the path quietly offers another exercise instead.
  */
-export const TUTOR_LESSON_MIN_SECONDS = 120;
+export const TUTOR_LESSON_MIN_SECONDS = 300;
 
 export function canStartTutorLesson(allowance: Pick<TutorAllowance, "hasUnlimitedUsage" | "remainingSeconds">) {
   return allowance.hasUnlimitedUsage || allowance.remainingSeconds >= TUTOR_LESSON_MIN_SECONDS;

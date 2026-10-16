@@ -11,7 +11,7 @@ import { useInstantNavigation } from "@/components/navigation-loading";
 import { NoteSpeedReader } from "@/components/note-speed-reader";
 import { StudyFlashcard, type StudyFlashcardExit } from "@/components/study-flashcard";
 import { StudyPracticeQuestion, StudyQuizQuestion } from "@/components/study-question";
-import { LESSON_KIND_KEY } from "@/components/exams/exam-links";
+import { LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
 import { ExamScreen } from "@/components/exams/exam-screen";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { MemoBuddy, type BuddyMood } from "@/components/exams/memo-buddy";
@@ -134,6 +134,7 @@ export function ExamLesson({
   module,
   kind,
   target,
+  instead,
 }: {
   examId: string;
   examTitle: string;
@@ -141,6 +142,11 @@ export function ExamLesson({
   kind: ExamLessonKind;
   /** The exam's goal, 0..100. */
   target: number;
+  /**
+   * The exercise that takes a tutor lesson's place when the account has no talking time left: the
+   * path's next lesson for the topic without the tutor. The learner is simply taken there.
+   */
+  instead: ExamLessonKind;
 }) {
   const { t } = useTranslations();
   const { navigateWithFeedback } = useInstantNavigation();
@@ -188,6 +194,16 @@ export function ExamLesson({
       return;
     }
 
+    if (response.status === 409 && kind === "tutor") {
+      const body = (await response.json().catch(() => null)) as { code?: string } | null;
+
+      // No talking time left: the topic's next exercise opens instead, without a word.
+      if (body?.code === "tutor_time") {
+        navigateRef.current(lessonHref(examId, module.topicId, instead));
+        return;
+      }
+    }
+
     if (!response.ok) {
       // A busy or briefly failing server: worth another try before the learner sees it.
       throw new LessonLoadHiccup();
@@ -221,7 +237,7 @@ export function ExamLesson({
     }
 
     setPhase({ name: "generating", generator: load.generator });
-  }, [examId, kind, module.lectureId, module.topicId]);
+  }, [examId, instead, kind, module.lectureId, module.topicId]);
 
   /*
    * A network failure, a busy server or a failed plan is tried again twice on its own, a moment
@@ -369,6 +385,11 @@ export function ExamLesson({
     }
   }
 
+  /* Out of talking time: the topic's next exercise, without a word about the tutor. */
+  function useInstead() {
+    navigateWithFeedback(lessonHref(examId, module.topicId, instead));
+  }
+
   function enterZone(correct: number, total: number) {
     setDifficulty(3);
     setPhase({ name: "zone", correct, total });
@@ -498,6 +519,7 @@ export function ExamLesson({
             onReact={react}
             onMissed={(itemId) => missedRef.current.add(itemId)}
             onRecovered={(itemId) => missedRef.current.delete(itemId)}
+            onOutOfTime={useInstead}
             onFinish={(correct, total) => enterZone(correct, total)}
           />
         ) : phase.name === "zone" ? (
@@ -619,6 +641,7 @@ function LessonBody({
   onMissed,
   onRecovered,
   onReact,
+  onOutOfTime,
 }: {
   lesson: LessonPayload;
   examId: string;
@@ -633,6 +656,8 @@ function LessonBody({
    */
   onRecovered: (itemId: string) => void;
   onReact: (mood: BuddyMood) => void;
+  /** The tutor found no talking time left: another exercise takes its place. */
+  onOutOfTime?: () => void;
 }) {
   const { t } = useTranslations();
   const [index, setIndex] = useState(0);
@@ -1054,6 +1079,7 @@ function LessonBody({
         topicTitle={lesson.topicTitle}
         steps={lesson.steps}
         onReact={onReact}
+        onOutOfTime={onOutOfTime}
         onFinish={(points, total) => onFinish(Math.round(points * TUTOR_QUARTERS), total * TUTOR_QUARTERS)}
       />
     );

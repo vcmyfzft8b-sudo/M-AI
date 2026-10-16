@@ -94,12 +94,16 @@ function grantOf(session: Session): Grant {
   return { grantId: session.grantId, grantedSeconds: session.grantedSeconds, startedAt: Date.now() };
 }
 
+/* The account has no talking time left (the session route's 402). */
+class TutorTimeError extends Error {}
+
 export function useExamVoice({
   lectureId,
   voice,
   allowText = false,
   fallbackLanguage = "sl",
   onAnswerEnd,
+  onOutOfTime,
 }: {
   /** The note whose tutor session the voice speaks through (talking time is counted there). */
   lectureId: string;
@@ -109,6 +113,11 @@ export function useExamVoice({
   fallbackLanguage?: string;
   /** The learner has gone quiet after speaking: their answer is over. */
   onAnswerEnd: () => void;
+  /**
+   * The talking time is spent before the voice could start. The lesson hands over to another
+   * exercise without a word about it; without this, the time-out is said like any other error.
+   */
+  onOutOfTime?: () => void;
 }) {
   const { t } = useTranslations();
   const [phase, setPhase] = useState<VoicePhase>("preparing");
@@ -209,6 +218,10 @@ export function useExamVoice({
     });
     const payload = (await response.json().catch(() => null)) as (Session & { error?: string }) | null;
 
+    if (response.status === 402) {
+      throw new TutorTimeError(payload?.error ?? t("exam.oral.error.time"));
+    }
+
     if (!response.ok || !payload?.realtime) {
       throw new Error(payload?.error ?? t("exam.oral.error.start"));
     }
@@ -281,7 +294,7 @@ export function useExamVoice({
    * `allowText`, the rest goes on in writing. The microphone and keys are closed and the talking
    * time used so far is reported; what is said next is shown, and the learner types.
    */
-  const switchToText = useCallback(() => {
+  const switchToText = useCallback((note: string | null = t("tutor.error.connection")) => {
     if (!allowText || closedRef.current) {
       return;
     }
@@ -295,7 +308,7 @@ export function useExamVoice({
     settle(true);
     setError(null);
     setTextMode(true);
-    setTextNote(t("tutor.error.connection"));
+    setTextNote(note);
   }, [allowText, clearSilence, settle, t]);
 
   const finish = useCallback(() => {
@@ -457,9 +470,15 @@ export function useExamVoice({
       return true;
     } catch (caught) {
       abandon();
+
+      if (caught instanceof TutorTimeError && onOutOfTime && !stale()) {
+        onOutOfTime();
+        return false;
+      }
+
       return fallBack(caught instanceof Error ? caught.message : t("exam.oral.error.start"));
     }
-  }, [allowText, clearSilence, openSession, settleGrant, t]);
+  }, [allowText, clearSilence, onOutOfTime, openSession, settleGrant, t]);
 
   /*
    * Closing the tab or locking the phone does not unmount anything, so the talking time used is
@@ -504,7 +523,15 @@ export function useExamVoice({
             outputRef.current?.useKey(session.realtime.tts.apiKey);
             await inputRef.current?.useKey(session.realtime.stt.apiKey);
           })
-          .catch(() => setError(t("exam.oral.error.time")))
+          .catch((caught) => {
+            // Out of talking time part-way: a lesson that can go on in writing does, quietly.
+            if (caught instanceof TutorTimeError && allowText) {
+              switchToText(null);
+              return;
+            }
+
+            setError(t("exam.oral.error.time"));
+          })
           .finally(() => {
             renewingRef.current = false;
           });
@@ -512,7 +539,7 @@ export function useExamVoice({
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [openSession, settle, settleGrant, t]);
+  }, [allowText, openSession, settle, settleGrant, switchToText, t]);
 
   /* The sphere follows whichever voice is sounding, as it does for the tutor. */
   useEffect(() => {

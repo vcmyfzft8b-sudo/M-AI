@@ -2529,7 +2529,6 @@ export const en: Messages = {
   "exam.picker.recommended": "Recommended",
   "exam.picker.gaps": "Knowledge gaps",
   "exam.picker.gaps.locked": "Keep studying: this will practise what you struggle with.",
-  "exam.picker.tutor.locked": "Your tutor talking time is used up, so you practise another way.",
   "exam.picker.repetition": "Repetition",
   "exam.picker.repetition.locked": "Unlocks after {count} lessons of the topic.",
   "exam.picker.mockWritten": "Written mock exam",

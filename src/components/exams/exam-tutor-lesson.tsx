@@ -77,6 +77,7 @@ export function ExamTutorLesson({
   steps,
   onFinish,
   onReact,
+  onOutOfTime,
 }: {
   examId: string;
   topicId: string;
@@ -86,6 +87,8 @@ export function ExamTutorLesson({
   /** Points scored (each step 0..1) out of the number of steps. */
   onFinish: (points: number, total: number) => void;
   onReact: (mood: "happy" | "sad") => void;
+  /** No talking time left to start with: the lesson screen opens another exercise instead. */
+  onOutOfTime?: () => void;
 }) {
   const { t } = useTranslations();
   const [voice, setVoice] = useState(storedTutorVoice);
@@ -111,7 +114,13 @@ export function ExamTutorLesson({
   /* Each run of the conversation; a pause, a repeat or the end starts a new one, and the old one stops where it is. */
   const flowRef = useRef(0);
   const endAnswerRef = useRef<(answer?: string) => Promise<void>>(async () => undefined);
-  const session = useExamVoice({ lectureId, voice, allowText: true, onAnswerEnd: () => void endAnswerRef.current() });
+  const session = useExamVoice({
+    lectureId,
+    voice,
+    allowText: true,
+    onAnswerEnd: () => void endAnswerRef.current(),
+    onOutOfTime,
+  });
   const { phase, heard, line, error, textMode, orbRef, say, listen, stopListening, setPhase, hush } = session;
 
   /* The lesson is over (or ended): its score goes to the lesson's own result screen, as every lesson's does. */

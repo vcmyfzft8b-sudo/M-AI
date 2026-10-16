@@ -2566,7 +2566,6 @@ export const sl = {
   "exam.picker.recommended": "Priporočeno",
   "exam.picker.gaps": "Vrzeli",
   "exam.picker.gaps.locked": "Uči se naprej, tu boš vadil, kar ti ne gre.",
-  "exam.picker.tutor.locked": "Čas za pogovor s tutorjem je porabljen, zato vadiš drugače.",
   "exam.picker.repetition": "Ponovitev",
   "exam.picker.repetition.locked": "Odklene se po {count} lekcijah teme.",
   "exam.picker.mockWritten": "Pisna generalka",

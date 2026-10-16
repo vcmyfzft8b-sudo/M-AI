@@ -4,7 +4,7 @@ import { ExamLesson } from "@/components/exams/exam-lesson";
 import { lessonHref } from "@/components/exams/exam-links";
 import { requireUser } from "@/lib/auth";
 import { getViewerAppState } from "@/lib/billing";
-import { isExamLessonKind } from "@/lib/exams/exam-model";
+import { isExamLessonKind, suggestedKind } from "@/lib/exams/exam-model";
 import { getExamDetail } from "@/lib/exams/exams-server";
 import { getTranslations } from "@/lib/i18n/server";
 import { paywallPath } from "@/lib/paywall-reasons";
@@ -50,9 +50,20 @@ export default async function ExamLessonPage({
     redirect(paywallPath("exam", `/app/exams/${detail.exam.id}`));
   }
 
-  // Out of talking time: the topic's next exercise instead of a tutor that cannot speak.
+  /*
+   * What takes a tutor lesson's place when there is no talking time: the topic's next lesson as the
+   * path would choose it without the tutor. Opening the tutor then simply opens that.
+   */
+  const instead = suggestedKind({
+    done: current.done,
+    lessons: current.lessons,
+    failedToday: current.failedToday,
+    gapKind: current.gapKind,
+    tutor: false,
+  });
+
   if (query.kind === "tutor" && !detail.tutorAvailable) {
-    redirect(lessonHref(detail.exam.id, current.topicId, current.nextKind === "tutor" ? "quiz" : current.nextKind));
+    redirect(lessonHref(detail.exam.id, current.topicId, instead));
   }
 
   return (
@@ -69,6 +80,7 @@ export default async function ExamLessonPage({
         rawMastery: current.rawMastery,
       }}
       target={detail.exam.target_mastery}
+      instead={instead}
     />
   );
 }

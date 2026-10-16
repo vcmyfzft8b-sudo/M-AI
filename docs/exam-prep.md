@@ -205,11 +205,14 @@ to the path too.
 
 **Talking time.** The tutor spends the account's voice allowance (`tutor-allowance.ts`: a free
 account's one lifetime minute, a subscription's half hour a day, then bought hours). A tutor lesson
-needs at least `TUTOR_LESSON_MIN_SECONDS` (2 minutes) left (`canStartTutorLesson`). Without it:
-the path never suggests the tutor (`suggestedKind` with `tutor: false` gives its turn to the next
-format), the picker shows it locked with the reason, opening a tutor lesson redirects to the topic's
-next exercise, and the lesson route refuses to plan one (409 `tutor_time`), so no model call or
-speech is spent. A lesson that runs out of time part-way finishes in writing, as before.
+starts only with a whole lesson's talking left, `TUTOR_LESSON_MIN_SECONDS` (5 minutes;
+`canStartTutorLesson`). Without it the learner never meets the tutor and is never told why: the
+path suggests the next format in its place (`suggestedKind` with `tutor: false`), the picker does
+not list it, opening a tutor lesson (an old link, a station) goes straight to that exercise
+(`instead`, from the page; the lesson route answers 409 `tutor_time` and the client follows it
+there too), and no model call or speech is spent. If the time runs out in the moment between, the
+voice session's 402 opens that exercise as well (`onOutOfTime`); a lesson that runs out part-way
+goes on in writing without a word about it.
 
 Suggested right after the summary (the first format in the default order), the voice tutor teaches
 the topic (`exam-tutor-server.ts`,

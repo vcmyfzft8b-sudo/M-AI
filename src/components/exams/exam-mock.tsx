@@ -293,7 +293,7 @@ export function ExamMock({
         {/* Two columns on desktop (the exam and its length, then its details); one column on the phone. */}
         <div className="memo-exam-mock-main">
           <div className="memo-exam-center">
-            <MemoBuddy mood="wave" size="5.5rem" thought={mode === "oral" ? "🎙️" : "🎓"} sparkles />
+            <MemoBuddy mood="wave" size="4.5rem" thought={mode === "oral" ? "🎙️" : "🎓"} sparkles />
             <h1 className="memo-exam-step-title">{t("exam.mock.setup.title")}</h1>
             <p className="memo-exam-fine">{t("exam.mock.setup.body", { count: moduleCount })}</p>
           </div>

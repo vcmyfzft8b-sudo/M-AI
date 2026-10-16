@@ -27157,6 +27157,20 @@ button.memo-exam-card:hover {
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
+/*
+ * The Generalka's setup fits one phone screen: its dial a little smaller than the setup's, and
+ * without the "drag the circle" hint, which the learner has already met on the target step.
+ */
+@media (max-width: 1099px) {
+  .memo-exam-mock-main .memo-exam-dial {
+    width: min(12.5rem, 60vw);
+  }
+
+  .memo-exam-mock-main .memo-exam-dial-hint {
+    display: none;
+  }
+}
+
 .memo-exam-dial-wrap {
   display: flex;
   flex-direction: column;

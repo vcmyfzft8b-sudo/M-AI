@@ -26404,18 +26404,6 @@ select.memo-cp-input {
   white-space: nowrap;
 }
 
-.memo-exam-cta-col {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  width: 100%;
-}
-
-.memo-exam-cta-col > * {
-  flex: 0 0 auto;
-  width: 100%;
-}
-
 .memo-exam-next {
   justify-content: center;
   height: 3.4rem;
@@ -27015,60 +27003,10 @@ button.memo-exam-card:hover {
  * "Ali izberi drugače": a lesson's other practice formats, as chips under its one coral button
  * (the summary and the done screen). A format already done carries a tick and its latest score.
  */
-.memo-exam-formats {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin-top: 0.6rem;
-}
 
 /* The other formats as an even grid, two to a row, each chip the same width. */
-.memo-exam-formats .memo-chip-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin-bottom: 0;
-}
-
-.memo-exam-formats .memo-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  width: 100%;
-  min-width: 0;
-}
 
 /* An odd one out takes the whole row, so the grid stays symmetrical. */
-.memo-exam-formats .memo-chip:last-child:nth-child(odd) {
-  grid-column: 1 / -1;
-}
-
-.memo-exam-formats .memo-chip > span:not(.memo-exam-format-score) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.memo-exam-center .memo-exam-formats {
-  align-items: center;
-  width: 100%;
-}
-
-.memo-exam-center .memo-exam-formats .memo-chip-row {
-  justify-content: center;
-}
-
-.memo-exam-format-score {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.1rem;
-  color: var(--muted);
-  font-weight: 650;
-}
-
-.memo-exam-format-score .msym {
-  color: var(--promo);
-}
 
 .memo-exam-list {
   display: flex;
@@ -27471,64 +27409,6 @@ button.memo-exam-card:hover {
 }
 
 /* Where the learner is on the way to the exam: learn, practise, prove. */
-.memo-exam-stages {
-  display: flex;
-  align-self: stretch;
-  justify-content: center;
-  gap: 0.4rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.memo-exam-stages li {
-  display: inline-flex;
-  flex: 1 1 0;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  min-width: 0;
-  min-height: 2.2rem;
-  padding: 0 0.6rem;
-  border-radius: 999px;
-  background: var(--sunken);
-  color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.memo-exam-stages li > span {
-  display: grid;
-  flex: 0 0 auto;
-  width: 1.3rem;
-  height: 1.3rem;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--tile);
-  font-size: 0.8rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.memo-exam-stages li.now {
-  background: color-mix(in srgb, var(--promo) 16%, var(--surface));
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--promo) 55%, transparent);
-  color: var(--text);
-}
-
-.memo-exam-stages li.now > span {
-  background: var(--promo);
-  color: var(--on-photo);
-}
-
-.memo-exam-stages li.done {
-  color: var(--text);
-}
-
-.memo-exam-stages li.done > span {
-  background: color-mix(in srgb, var(--promo) 22%, var(--surface));
-  color: var(--promo);
-}
 
 /* The exam in three numbers, small enough to sit in one row above the path. */
 /*
@@ -27705,10 +27585,6 @@ button.memo-exam-card:hover {
 }
 
 /* A note whose topics are still being planned: a sweep where the progress would be. */
-.memo-exam-trail-planning {
-  flex: 0 0 4rem;
-  margin-top: 0;
-}
 
 .memo-exam-trail-banner-copy {
   display: flex;
@@ -27750,24 +27626,6 @@ button.memo-exam-card:hover {
 .memo-exam-trail-banner-mark {
   flex: 0 0 auto;
   color: var(--success);
-}
-
-.memo-exam-trail-skip {
-  flex: 0 0 auto;
-  min-height: 2.2rem;
-  padding: 0 0.9rem;
-  border: 0;
-  border-radius: 999px;
-  background: var(--tile);
-  color: var(--text);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.86rem;
-  font-weight: 700;
-}
-
-.memo-exam-trail-skip:hover {
-  box-shadow: inset 0 0 0 1px var(--hover-ring);
 }
 
 .memo-exam-trail-stations {
@@ -27887,41 +27745,10 @@ button.memo-exam-card:hover {
 }
 
 /* A lesson still under the target, back on the path until it reaches it. */
-.memo-exam-station.repeat .memo-exam-station-node {
-  background: var(--surface);
-  box-shadow: 0 5px 0 var(--line), inset 0 0 0 2px color-mix(in srgb, var(--promo) 60%, transparent);
-}
-
-.memo-exam-station.repeat.current .memo-exam-station-node {
-  background: var(--coral);
-}
 
 /* A format the learner did not pick for a learned module: optional, so quieter, never locked. */
-.memo-exam-station.optional .memo-exam-station-node {
-  background: transparent;
-  box-shadow: inset 0 0 0 2px var(--line);
-}
-
-.memo-exam-station.optional .memo-exam-station-node .memo-emoji {
-  opacity: 0.55;
-}
-
-.memo-exam-station.optional .memo-exam-station-node:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--line), 0 0 0 3px var(--focus-ring);
-}
-
-.memo-exam-station-check.repeat {
-  background: var(--surface);
-  box-shadow: 0 0 0 3px var(--bg), inset 0 0 0 2px var(--promo);
-  color: var(--promo);
-}
 
 /* A topic's knowledge gaps: the badge counts the questions it will ask again. */
-.memo-exam-station.gap .memo-exam-station-check {
-  font-size: 0.78rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
 
 /* A question missed in an earlier lesson, asked again (Astra's "repeat" tag). */
 .memo-exam-gap-tag {
@@ -27988,27 +27815,6 @@ button.memo-exam-card:hover {
 }
 
 /* The station to do next carries the screen's primary action. */
-.memo-exam-station-go {
-  position: relative;
-  z-index: 2;
-  min-height: 2.2rem;
-  padding: 0 1rem;
-  border: 0;
-  border-radius: 999px;
-  background: var(--text);
-  color: var(--bg);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.86rem;
-  font-weight: 800;
-  white-space: nowrap;
-  animation: memo-station-bob 1.8s ease-in-out infinite;
-}
-
-.memo-exam-station-go:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--focus-ring);
-}
 
 @keyframes memo-station-bob {
   0%,
@@ -28036,73 +27842,364 @@ button.memo-exam-card:hover {
 }
 
 /* The end of the path: the mock exam that proves it, then the exam itself. */
-.memo-exam-trail-goal {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.35rem;
-  margin-top: 0.4rem;
-  text-align: center;
+
+/* Not yet: every module has to be mastered first. It still opens, for anyone who wants a try. */
+
+/* The prep's two tabs, Astra's "Study path" and "Progress". */
+.memo-exam-tabs {
+  align-self: center;
 }
 
-.memo-exam-trail-trophy {
-  display: grid;
-  width: 5.5rem;
-  height: 5.5rem;
-  margin-bottom: 0.3rem;
-  place-items: center;
+.memo-exam-tabs button {
+  min-width: 7rem;
+}
+
+/* "Next up": the label under the station to do next, as Astra marks it. */
+.memo-exam-station-next {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.8rem;
   border-radius: 999px;
-  background: var(--upgrade-tint);
-  box-shadow: 0 5px 0 var(--upgrade-line), inset 0 0 0 2px var(--upgrade-line);
-  color: inherit;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 0.86rem;
+  font-weight: 800;
+  white-space: nowrap;
+  animation: memo-station-bob 1.8s ease-in-out infinite;
+}
+
+.memo-exam-station-next i {
+  font-style: normal;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+/* The bottom bar: swap the lesson (Astra's left button) beside the one coral "Nadaljuj". */
+.memo-exam-next-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.memo-exam-next-bar > .memo-button-coral {
+  flex: 1;
+}
+
+.memo-exam-swap {
+  display: grid;
+  flex: 0 0 auto;
+  width: var(--btn-round);
+  height: var(--btn-round);
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.memo-exam-swap:hover {
+  box-shadow: var(--shadow), inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-exam-swap:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow), 0 0 0 3px var(--focus-ring);
+}
+
+/* Astra's mock card on the path: try the real exam whenever you like. */
+.memo-exam-mock-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+  margin-top: 0.6rem;
+  text-align: left;
+}
+
+.memo-exam-mock-card.current {
+  box-shadow: var(--shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--promo) 55%, transparent);
+}
+
+.memo-exam-mock-card b {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 750;
+  text-wrap: balance;
+}
+
+.memo-exam-mock-card p {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.memo-exam-mock-card-go {
+  grid-column: 1 / -1;
   text-decoration: none;
 }
 
-.memo-exam-trail-trophy:hover {
-  box-shadow: 0 5px 0 var(--upgrade-line), inset 0 0 0 2px var(--upgrade-line), 0 0 0 1px var(--hover-ring);
+/* The Progress tab: Astra's readiness numbers, forecast, gaps and topics. */
+.memo-exam-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-bottom: 1.5rem;
 }
 
-.memo-exam-trail-trophy:focus-visible {
-  outline: none;
-  box-shadow: 0 5px 0 var(--upgrade-line), 0 0 0 3px var(--focus-ring);
+.memo-exam-progress-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
 }
 
-/* Not yet: every module has to be mastered first. It still opens, for anyone who wants a try. */
-.memo-exam-trail-goal.later .memo-exam-trail-trophy {
-  opacity: 0.55;
+.memo-exam-progress-stats > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.8rem 0.4rem;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-align: center;
 }
 
-.memo-exam-trail-goal.current .memo-exam-trail-trophy {
-  background: var(--coral);
-  box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 55%, var(--text)), 0 0 0 6px color-mix(in srgb, var(--promo) 22%, transparent);
-  animation: memo-station-pulse 2.2s ease-in-out infinite;
+.memo-exam-progress-stats b {
+  color: var(--text);
+  font-size: 1.3rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
-.memo-exam-trail-goal.done .memo-exam-trail-trophy {
-  background: color-mix(in srgb, var(--promo) 18%, var(--surface));
-  box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 40%, var(--surface)), inset 0 0 0 2px color-mix(in srgb, var(--promo) 45%, transparent);
+.memo-exam-progress-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  text-align: left;
 }
 
-.memo-exam-trail-goal b {
+.memo-exam-progress-card > b {
   font-size: 1.08rem;
   font-weight: 750;
 }
 
-.memo-exam-trail-goal > span:not(.memo-exam-station-buddy) {
+.memo-exam-progress-card > b.on-track {
+  color: var(--success);
+}
+
+.memo-exam-progress-card > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.memo-exam-progress-topics {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-exam-progress-topics li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.memo-exam-progress-topics li.locked {
+  opacity: 0.55;
+}
+
+.memo-exam-progress-topic-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.memo-exam-progress-topic-head b {
+  min-width: 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.memo-exam-progress-topic-head span {
+  flex-shrink: 0;
+  font-size: 0.92rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-progress-topic-note {
   color: var(--muted);
   font-size: 0.86rem;
-  font-weight: 600;
 }
 
-.memo-exam-trail-goal .memo-exam-station-buddy {
-  top: 0.4rem;
+/* A topic's mastery on a bar, its goal a tick across it (the progress list and a lesson's result). */
+.memo-exam-mastery-bar {
+  position: relative;
 }
 
-a.memo-exam-station-go {
-  display: inline-flex;
+.memo-exam-mastery-bar .memo-progress.goal {
+  height: 1rem;
+  border-radius: 999px;
+}
+
+.memo-exam-mastery-bar .memo-progress.goal > div {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.memo-exam-mastery-bar > i {
+  position: absolute;
+  top: -0.2rem;
+  bottom: -0.2rem;
+  left: clamp(0px, var(--goal), 100%);
+  width: 2px;
+  border-radius: 999px;
+  background: var(--text);
+  opacity: 0.55;
+}
+
+/* A lesson's result: what it added, and the topic's mastery after it. */
+.memo-exam-gain {
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-done-mastery {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: min(100%, 20rem);
+}
+
+.memo-exam-done-mastery > span:first-child {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.memo-exam-done-mastery b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Astra's "Next lesson" picker: learn, practise or exam, and the topic. */
+.memo-exam-picker .memo-exam-tabs {
+  margin: 0 auto 0.85rem;
+}
+
+.memo-exam-picker-topics {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.memo-exam-picker-topics::-webkit-scrollbar {
+  display: none;
+}
+
+.memo-exam-picker-topics .memo-chip {
+  flex-shrink: 0;
+}
+
+.memo-exam-picker-topics .memo-chip.active {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.memo-exam-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem 0.6rem;
+  padding-top: 0.55rem;
+}
+
+.memo-exam-picker-grid.wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.memo-exam-picker-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  text-decoration: none;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 6.2rem;
+  padding: 1rem 0.75rem;
+  border: 0;
+  border-radius: 18px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: center;
+}
+
+.memo-exam-picker-item b {
+  font-size: 0.98rem;
+  font-weight: 750;
+}
+
+.memo-exam-picker-item > span:not(.memo-emoji):not(.memo-exam-picker-badge) {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.memo-exam-picker-item:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-exam-picker-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-exam-picker-item.locked {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.memo-exam-picker-item.locked:hover {
+  box-shadow: none;
+}
+
+.memo-exam-picker-badge {
+  position: absolute;
+  top: -0.55rem;
+  left: 50%;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--promo);
+  color: var(--promo);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transform: translateX(-50%);
 }
 
 .memo-exam-trail-finish {
@@ -28409,27 +28506,7 @@ a.memo-exam-station-go {
   gap: 0.5rem;
 }
 
-.memo-exam-lesson-steps {
-  display: grid;
-  grid-auto-columns: minmax(0, 1fr);
-  grid-auto-flow: column;
-  gap: 0.3rem;
-}
-
-.memo-exam-lesson-steps i {
-  height: 0.4rem;
-  border-radius: 999px;
-  background: var(--track);
-}
-
 /* The app's coral, as its progress bars have it: done in full, the lesson at hand half-lit. */
-.memo-exam-lesson-steps i.on {
-  background: var(--promo);
-}
-
-.memo-exam-lesson-steps i.current {
-  background: color-mix(in srgb, var(--promo) 45%, var(--track));
-}
 
 .memo-exam-lesson-module {
   color: var(--muted);
@@ -29134,11 +29211,6 @@ a.memo-exam-station-go {
   /* The button spans the column, as the onboarding's does: a full-width pill under the
      full-width cards and options above it, not a short one floating in the middle. A row of
      two (the Generalka's back and next) splits it in equal halves, like the sheets' rows. */
-  .memo-exam-cta > :is(.memo-button-coral, .memo-exam-cta-row, .memo-exam-cta-col) {
-    flex: 1 1 auto;
-    width: 100%;
-    max-width: 40rem;
-  }
 
   .memo-exam-cta-row > .memo-button-ghost {
     flex: 1 1 0;

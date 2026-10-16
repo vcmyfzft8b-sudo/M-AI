@@ -134,6 +134,7 @@ const MATERIAL_SYMBOL_NAMES = [
   "spellcheck",
   "stop",
   "style",
+  "swap_horiz",
   "text_fields",
   "text_snippet",
   "thumb_up",

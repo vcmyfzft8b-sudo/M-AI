@@ -50,77 +50,58 @@ the goal, and what we took from it:
 
 ## The model
 
-As in Astra, the path is made of **topics**: when the exam is set up, each note is split into two to
-six topics (`planNoteTopics`, one model call per note), the learner keeps, drops, renames or adds
-topics on the review, and each kept topic is a **module**. A module has six lessons: the
-**summary**, and five **practice formats**: the voice **tutor**, flashcards, a quiz, true/false and
-one written answer. A module is unlocked when it is the first one, when the module before it has
-been learned, or when the learner has already started it (a locked module offers a test-out quiz).
+It works the way Astra AI's exam prep works, measured in its app on 2026-10-16 (three lessons,
+their scores and what each did to the numbers). All of it is in `src/lib/exams/exam-model.ts`, pure
+and tested (`tests/exam-model.test.mjs`, and `tests/exam-plan.test.mjs`, which runs simulated
+learners through weeks of lessons). Put new rules there, not in a component.
 
-**The learner chooses the format** (Astra's next-lesson screen does the same: it suggests a lesson
-and lets the student pick how to take it). Nobody is made to talk to the tutor or to write answers:
+- **Topics.** When the exam is set up, each note is split into two to six topics (`planNoteTopics`),
+  and each topic is a **module** on the path. Lessons are of six kinds: the **summary** (read), the
+  voice **tutor**, **flashcards**, a **quiz**, **true/false** and a **written** answer.
+- **Mastery, lesson by lesson.** Every lesson moves its topic's mastery a step towards the score it
+  got: `m' = m + 0.12 × weight × (score − m)` (`masteryAfterLesson`, `MASTERY_RATE`). Astra's topic
+  went 0 → 5 → 15 → 23 % after lessons of 40, 100 and 71 %; this reproduces it to a point. So mastery
+  is accuracy, earned over many lessons: about 15 good lessons take a topic from 0 to 75 %, and a
+  learner who gets 70 % right never reaches a 75 % goal. The summary tests nothing and moves
+  nothing; flashcards, which the learner grades, move half as far (`MASTERY_WEIGHT`).
+- **Readiness** is the average mastery over every topic of the exam, started or not (Astra: 23 % on
+  one of four topics reads as 6 %). A topic is **on target** when its mastery reaches the goal.
+- **Spaced review.** A topic keeps its mastery for three days after its last lesson, then fades 4 %
+  a day (never below 60 % of what was earned), so a topic learned early drops under the goal and
+  comes back before the exam (a "Ponovitev"). One lesson brings it back: fading runs from the last
+  lesson.
+- **Pass marks** (`lessonPassThreshold`) still decide whether one lesson "failed" (for the rule
+  below that rests a format failed twice in a day). No mark is above 95 % (`LESSON_PASS_CAP`), so a
+  100 % goal means 95 % mastery; the tutor's mark is never above what one slip leaves (2.5 of 3).
 
-- A module is **learned** once its summary is read and any **two different practice formats**
-  have been done (`MIN_PRACTICE_FORMATS`, so `LESSONS_TO_LEARN` is 3). Two, so a topic is always
-  checked in more than one way; never all five, so no one format is forced.
-- It is **mastered** when it is learned and every practice format the learner *has done* in it is
-  at its pass mark. Formats never tried do not count against it; one tried by choice and failed
-  does, until it passes.
-- The path still **suggests** an order: the summary first, then the first untried format in the
-  default order (tutor, flashcards, quiz, true/false, written; `firstPassKind`). Whatever the learner
-  picks instead counts the same.
+### The path, one lesson at a time
 
-**Mastery** is the weighted average of the latest scores of the formats the learner has done
-(`LESSON_WEIGHT`): flashcards count half, because the learner grades them ("knew it" or not); the
-tutor, quiz, true/false and written answer count in full. Until two formats are done, each missing
-one counts as a full lesson at 0, so one perfect quiz reads as half a topic, not all of it. The
-summary counts as done but not as mastery.
+As in Astra, the path is one lesson after another, and the path picks the next one
+(`examNextStep`):
 
-**Scores fade** (`fadedScore`, spaced review): a lesson keeps its score for three days, then loses
-4 % of it a day, never below 60 %. A perfect lesson against an 85 % target is due again about a
-week later, a bare pass sooner, so a topic learned weeks before the exam comes back for review
-before it. Lessons due only because they faded show as "Osveži" on the path (`refresh`), and a
-mastered module due for one reads "obvladano · čas za osvežitev". **Fading only schedules a
-refresh; it never un-masters a module.** Only a new try under the pass mark, or a failed mock, does.
-Without that, a big exam could never be mastered all at once (with every format, 8 topics × 5
-lessons at 5 a day: the first lessons fade below 90 % before the last ones are done), and the mock
-would never come up.
+1. **Learn.** The first open topic that is not yet *learned*: on target, or `LESSONS_TO_OPEN_NEXT`
+   (4) practice lessons in. Topics open in order; each next one opens once the one before is
+   learned, or once the learner studies it anyway, so every topic is reached before the exam even
+   when one is hard.
+2. **Close gaps.** A topic's open knowledge gaps (below), the topic with the most first.
+3. **Practise.** The open topic furthest under the goal (faded ones included).
+4. **Exam day.** On the exam's eve and the day itself, a flashcard refresher for each topic.
+5. **Prove.** With every topic on target, the mock exam. Passing it at the goal makes the learner
+   **ready**; a mock under the goal asks the topics it found weak for a lesson after it
+   (`proofOwed`), and then the mock is next again.
+6. **Keep sharp.** Once ready, the weakest topic's next lesson, until the exam.
 
-**Pass marks** (`lessonPassThreshold`, `lessonPassed`): the learner sees the target they chose, but
-each lesson is checked against a mark it can actually score. No mark is above 95 %
-(`LESSON_PASS_CAP`), so a 100 % target does not demand flawless lessons forever. The tutor, marked
-1 / ½ / ¼ per step over three steps, passes at 2.5 of 3 at most (one step right only after the
-explanation). Scores are stored as `real` (9/10 reads back as 0.8999…), so every comparison allows
-a 0.0001 margin. Displayed percentages round **down** (`percent`, `wholePercent`): 89.6 % against a
-90 % mark shows "89 %", never the mark itself.
+**The format** of that lesson rotates by itself (`suggestedKind`), as Astra's "Next up" does (intro,
+smart text, quiz, exercise, …): every format once, in the order summary, tutor, quiz, written,
+true/false, flashcards, then round the practice ones; open gaps first, in the format that asks them
+the other way round. A format failed `MAX_FAILED_TRIES_PER_DAY` (2) times today rests until tomorrow.
+The learner can swap it for any other (below); the suggestion is only the default.
 
-### Until the goal is reached and proved
-
-The exam does not end when every lesson has been opened once. Like Astra, it keeps giving work
-until the learner has the knowledge and has shown it (`examStage`, `examNextStep`):
-
-1. **Learn** (`learned`): every module's summary and two formats of the learner's choice done once.
-2. **Practise** (`mastered`): the latest score of every format the learner has done at its pass
-   mark. A lesson under it comes back on the path as a repeat station, weakest first, and each try
-   draws questions the learner has not been shown (see below).
-
-The order of next steps (`examNextStep`): first the suggested first-pass lessons of the first module
-that is not learned and can be opened (one whose note is still being made, or whose topics are not
-planned yet, is skipped and does not hold back the ones after it), so the whole exam is learned
-before anything is repeated; formats beyond the two are never suggested, only offered; then
-lessons under their mark, weakest first across modules, except one that has already failed twice
-today (`MAX_FAILED_TRIES_PER_DAY`), which rests until tomorrow so one hard lesson cannot hold up the
-plan; then a topic's open knowledge gaps (see below); on the exam's eve and day, a flashcard
-refresher per topic; in the prove stage, the mock; then the most faded lesson (once ready, the weakest format the
-learner has done; never one they did not choose). A learner who plateaus under a mark keeps
-practising and does not get the mock. The lesson screen's "next" button takes the same step.
-3. **Prove**: with every module mastered, the mock exam is the next step. Passing it at the target
-   makes the learner **ready**. A mock under the target sends the modules it found weak back to
-   practise (`proofOwed`): each needs any one practice format redone, and passed, after that mock
-   (`MOCK_PROOF_KINDS` is every format; the path suggests the weakest one the learner has done),
-   and then the mock is next again.
-4. **Ready**: the path still offers the weakest lesson each day ("Osveži") until the exam, and a
-   score that slips below the target puts that module back into practice.
+The daily goal (`dailyPlan`) spreads the lessons every topic still needs to reach the goal
+(`lessonsToTarget`, assuming about 90 % right answers), a lesson per topic's gaps and owed proofs,
+over the days left, never less than the learner's daily minutes buy (6 minutes a lesson). It is
+computed against what was left at the start of the day, so finishing a lesson moves "done", not the
+goal. Days are Ljubljana days, as everywhere else in the product.
 
 ### Knowledge gaps: what comes back, and until when
 
@@ -138,26 +119,26 @@ own spaced repetition, and the summary and tutor show no stored questions.
   (`gapLessonKind`). Those questions carry a "Ponovitev · prej ni šlo" tag.
 - **Retried before the lesson ends.** A quiz or true/false lesson asks its misses once more before
   it finishes ("Še enkrat"), the quiz with its answers in reverse order and a false statement with
-  the right answer as the claim. The score is the first try's, and the gap stays open: it closes
-  in a later lesson, not seconds after the answer was shown.
-- **On the path.** After the lessons under their mark, a topic's gaps are the next step, the topic
-  with the most first, **before the mock exam** (Astra closes gaps before its written mock). A gap
-  missed `GAP_MAX_MISSES` (3) times still comes back in lessons but no longer holds the path, so
-  one question cannot keep the mock away for good, and a gap lesson failed twice today rests like
-  any other. A learned topic with gaps that no repeat station already covers gets a "Zapolni
-  vrzeli" station with the count. The daily plan counts a topic's gaps as one lesson more.
+  the right answer as the claim. The score is the first try's. A miss answered right there is
+  closed, as Astra counts it (its gaps stayed at 0 after a miss fixed in the lesson's own repeat);
+  one missed again stays open.
+- **On the path.** Once every topic is learned, a topic's gaps are the next step, the topic with
+  the most first, **before the mock exam** (Astra closes gaps before its written mock). A gap missed
+  `GAP_MAX_MISSES` (3) times still comes back in lessons but no longer holds the path, so one
+  question cannot keep the mock away for good. The picker's "Vrzeli" opens them directly (locked
+  while there are none). The daily plan counts a topic's gaps as one lesson more.
 - **Said out loud.** The done screen says how many gaps the lesson closed and how many questions
-  will come back until they are answered right, and its button goes after the misses straight away
-  (the other format) once the module is otherwise on track. The exam screen's goal card shows the
-  open gaps.
+  will come back until they are answered right. The goal card and the Napredek tab count the open
+  gaps.
 
 ### The forecast
 
-Under the goal bar, once two practice lessons are done: "Po tem tempu ~X % na dan izpita"
-(`examForecast`): the mastery gained per lesson so far, times the lessons of the last 14 days
-spread over all 14 (one busy first day is not a pace), carried over the days left. Green with 📈
-when it reaches the goal, muted with ⏱️ when it does not. It is not shown once ready or after the
-exam.
+Astra's: "each lesson adds about +1.9 %. To reach your goal you need about 37 more lessons, about 4
+a day. At this pace you'll be at about 8 % on exam day" (`examForecast`, once two practice lessons
+are done). The gain per lesson is readiness over the lessons done; the pace is the lessons of the
+last 14 days spread over all 14 (one busy first day is not a pace). The goal card says where the
+pace lands ("Po tem tempu ~X % na dan izpita", green with 📈 when it reaches the goal); the Napredek
+tab says all of it.
 
 ### The exam day
 
@@ -167,24 +148,24 @@ as Astra's exam-day routine does.
 
 ### Choosing the lesson format
 
-The lesson screens keep **one coral button**, the suggested next lesson, and under it a row of chips,
-"Ali izberi drugače", with the module's other practice formats (`lessonFormatChoices`): each with
-its emoji (`LESSON_KIND_EMOJI`) and name, and a tick with its latest score once done. The chips sit
-in the content, not in the bottom button bar.
+The bottom bar of the path has Astra's two buttons: the round **swap** button and the coral
+**"Nadaljuj · <lesson>"**. Swap opens the **"Naslednja lekcija"** picker (a sheet on the phone, a
+dialog on desktop), in Astra's three tabs:
 
-- **The summary** offers them under "Hitro branje"; tapping one saves the summary as
-  read and opens that format instead of the suggested one.
-- **The done screen** offers them under the score, leaving out the lesson just finished and the
-  one the button already suggests. What the button suggests comes from `moduleAfterLesson`, the
-  model's rules applied to the lesson just saved: the next first-pass format while the module is
-  not learned, else a format under its mark, else the path's next module (`after`, from
-  `examNextStep` with the stage as if this module were mastered) or the mock exam. The headline
-  says "Modul naučen!" or "Modul obvladan!" by the same rules.
-- **The path** draws all six stations. Once a module is learned, the formats the learner did not
-  pick are quiet, optional stations ("po želji"), never locked. Every station of an open module
-  can be tapped at any time, practice ones before the summary too: the path suggests the summary
-  first but does not insist (a locked module's stations still open the test-out quiz). The
-  station with the call to action is always `examNextStep`'s, so it is never an optional one.
+- **Nauči se:** Povzetek, Tutor, Kartice, and **Vrzeli** (the topic's open gaps; locked while there
+  are none).
+- **Vadi:** Kviz, Drži / ne drži, Pisni odgovor, and **Ponovitev** (the topic's weakest format again;
+  locked until the topic has had `REPETITION_AFTER` (3) practice lessons).
+- **Izpit:** the written and the oral mock exam, at any time.
+
+Topic chips choose the topic (the open ones; the path's next topic first), and the path's suggestion
+is marked "Priporočeno". Whatever the learner picks counts the same.
+
+A lesson ends Astra's way: after the learning-zone question, **"+N % znanja"** with the topic's
+mastery on a bar against the goal (or "Tema je na cilju! 🎯" when it got there), the score, and the
+gaps it closed and left. "Nadaljuj" goes back to the path, where "Next up" is the next lesson;
+"Ponovi lekcijo" does the same lesson again. The summary's "Nadaljuj" saves it as read and goes back
+to the path too.
 
 ### The tutor lesson
 
@@ -233,19 +214,6 @@ The daily goal counts the repeats still owed, not only untried lessons. The less
 applies the same rule to decide what comes next (the next lesson, a repeat, the next module, or the
 mock exam) and says when a score is under the target.
 
-All of that arithmetic, plus the daily goal, the streak, grade mapping and how
-material is picked, is in `src/lib/exams/exam-model.ts`. It is pure and tested
-(`tests/exam-model.test.mjs`). Put new rules there, not in a component.
-
-- **Modules are topics** (`examModuleStates` takes `{ topicId, lectureId }` pairs and lesson results
-  carry `topic_id`); access, grading and the mock exam still go by the topic's note.
-- **Days are Ljubljana days**, as everywhere else in the product.
-- **The daily goal** spreads the lessons still needed to learn each module (`lessonsLeft`: the summary
-  and two formats) and the repeats owed over the days left, but is never less than the
-  learner's daily minutes buy (6 minutes a lesson). It is computed against what was left at the
-  start of the day (the modules on the results from before today, `planFor`), so finishing a
-  lesson, a first try or a repeat, moves "done", not the goal. Once the exam day has passed there
-  is no goal.
 - **Grades:** the setup only offers a target percentage (75/90/100 %); the model still maps
   university 5–10 and school 1–5 scales, which older rows or a future setting may use.
 
@@ -279,15 +247,19 @@ Without `canCreateNotes` the field sends the learner to the paywall.
 
 ## The exam screen
 
-`/app/exams/[id]` is one path down the screen, as Astra and Duolingo draw a course: the exam's
-title and three numbers (days left, mastery against the goal, lessons today), then each module as
-a heading with its six lessons as round stations on a line that swings left and right (formats the
-learner did not choose for a learned module are drawn quieter, as optional). The
-station to do next carries the only call to action ("Začni · Povzetek") and Memo stands beside it;
-the screen opens scrolled to it. Done stations turn coral, a locked module's stations show a lock
-and its heading offers "Preskoči" (the test-out quiz). The mock exam (🏆) and the exam day (🏁)
-end the path. The geometry is `src/lib/exams/exam-path.ts` (tested in `tests/exam-path.test.mjs`);
-keep its row height in step with `.memo-exam-station` in `redesign.css`.
+`/app/exams/[id]` has Astra's two tabs, **Pot** and **Napredek**, under the exam's title and the goal
+card (readiness against the goal with a 🎯 on the bar, the forecast, the open gaps).
+
+- **Pot** is one path down the screen: every lesson done is a coral station with its score, grouped
+  under a heading per topic (its mastery against the goal) wherever the path moves to another
+  topic; then **"Naslednja"** (Next up) with Memo beside it, then two locked stations ("Dokončaj
+  zgornje lekcije"). Astra's mock card follows ("Kako bi ti šlo na pravem izpitu? Preveri, kadar koli
+  želiš." · "Ustvari generalko"), then the exam day (🏁). Any done station can be tapped to do that
+  lesson again. The screen opens scrolled to Next up. The geometry is `src/lib/exams/exam-path.ts`
+  (tested in `tests/exam-path.test.mjs`); keep its row height in step with `.memo-exam-station`.
+- **Napredek**: topics on target, days left and lessons done; the forecast; the knowledge gaps; and
+  every topic with its mastery on a bar against the goal and its lessons ("Odklene se, …" while
+  locked).
 
 ## Where a topic's lessons come from
 

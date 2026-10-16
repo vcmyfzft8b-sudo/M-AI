@@ -84,6 +84,7 @@
 .memo-panel .memo-progress.test > div,
 .memo-gen-track > span,
 .memo-exam-goal .memo-progress.goal > div,
+.memo-exam-mastery-bar .memo-progress.goal > div,
 .landing-v2 .landing-study-frame .memo-progress > div {
   background: var(--coral-solid);
 }

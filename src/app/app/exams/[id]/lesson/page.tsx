@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { ExamLesson } from "@/components/exams/exam-lesson";
 import { requireUser } from "@/lib/auth";
 import { getViewerAppState } from "@/lib/billing";
-import { examNextStep, examStage, isExamLessonKind } from "@/lib/exams/exam-model";
+import { isExamLessonKind } from "@/lib/exams/exam-model";
 import { getExamDetail } from "@/lib/exams/exams-server";
 import { getTranslations } from "@/lib/i18n/server";
 import { paywallPath } from "@/lib/paywall-reasons";
@@ -49,35 +49,6 @@ export default async function ExamLessonPage({
     redirect(paywallPath("exam", `/app/exams/${detail.exam.id}`));
   }
 
-  /*
-   * After this lesson the path's own next step (`examNextStep`), looked at as if this module were
-   * done: the next module it would open, or the mock exam once the plan is at that stage. The lesson
-   * screen only goes there once this module has nothing left to suggest (`moduleAfterLesson`), so
-   * this module's own first-pass lessons and repeats come first, whichever format the learner chose.
-   */
-  const canOpen = (lectureId: string) => Boolean(appState?.hasPaidAccess) || appState?.trialLectureId === lectureId;
-  const others = detail.modules.filter((_, position) => position !== index);
-  // The stage once this module is mastered: with every other module mastered too, that is the mock.
-  const stageAfter = examStage(
-    [...others, { learned: true, mastered: true }],
-    detail.latestMock
-      ? { at: detail.latestMock.gradedAt, percentage: detail.latestMock.percentage, byLecture: {} }
-      : null,
-    detail.exam.target_mastery / 100,
-  );
-  const step = examNextStep(others, stageAfter, canOpen, { finalDay: detail.daysLeft === 0 || detail.daysLeft === 1 });
-  const following = step?.type === "lesson" ? others.find((entry) => entry.topicId === step.topicId) ?? null : null;
-  const after = following && step?.type === "lesson"
-    ? {
-        type: "module" as const,
-        topicId: following.topicId,
-        title: following.title?.trim() || t("note.untitled"),
-        kind: step.kind,
-      }
-    : step?.type === "mock" || (step === null && others.every((entry) => entry.mastered))
-      ? { type: "mock" as const }
-      : null;
-
   return (
     <ExamLesson
       examId={detail.exam.id}
@@ -88,16 +59,10 @@ export default async function ExamLessonPage({
         lectureId: current.lectureId,
         title: current.title?.trim() || t("note.untitled"),
         position: current.position,
-        done: current.done,
-        latest: current.latest,
-        review: current.review,
-        refresh: current.refresh,
-        proofOwed: current.proofOwed,
-        learned: current.learned,
-        mastered: current.mastered,
+        mastery: current.mastery,
+        rawMastery: current.rawMastery,
       }}
       target={detail.exam.target_mastery}
-      after={after}
     />
   );
 }

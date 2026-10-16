@@ -4,9 +4,9 @@ import test from "node:test";
 import {
   EXAM_LESSON_KINDS,
   LESSON_PASS_CAP,
-  LESSONS_TO_LEARN,
+  LESSONS_TO_OPEN_NEXT,
   MAX_FAILED_TRIES_PER_DAY,
-  PRACTICE_LESSON_KINDS,
+  lessonsToTarget,
   dayKey,
   examModuleStates,
   examNextStep,
@@ -83,121 +83,92 @@ function simulate({ topics = 8, days = 21, perDay = 5, target = 0.9, score, mock
 
 const ONE_SLIP = tutorStepPoints(["correct"]) * 2 + tutorStepPoints(["wrong", "correct"]); // 2.5 of 3
 
-test("a perfect learner with 8 topics in 21 days learns every topic, then proves it", () => {
-  const run = simulate({ score: () => 1 });
+test("a perfect learner with 4 topics in 14 days learns every topic, brings each to the goal, then proves it", () => {
+  const run = simulate({ topics: 4, days: 14, perDay: 6, target: 0.75, score: () => 1 });
 
-  assert.ok(run.states.every((state) => state.learned), "every module learned");
+  assert.ok(run.states.every((state) => state.learned), "every topic learned");
   assert.equal(run.stage, "ready");
 
-  // Nothing is repeated or refreshed before the last module's first lesson.
-  const lastStart = run.log.findIndex((entry) => entry.topicId === "t8");
+  // Every topic is started before any topic is practised past its first four lessons.
+  const lastStart = run.log.findIndex((entry) => entry.topicId === "t4");
   assert.ok(lastStart > 0);
-  assert.equal(run.log.slice(0, lastStart).filter((entry) => entry.review).length, 0);
-  // A summary and two formats per topic: 24 first passes take five days at five a day, and the
-  // mock comes right after.
-  assert.equal(run.log.findIndex((entry) => entry.type === "mock"), 8 * LESSONS_TO_LEARN);
+  const before = run.log.slice(0, lastStart).filter((entry) => entry.topicId === "t1").length;
+  assert.ok(before <= 1 + LESSONS_TO_OPEN_NEXT + 1, `t1 had ${before} lessons before t4 started`);
+
+  // About what the plan promised: every topic from 0 to 75 %, a lesson at a time.
+  const mockAt = run.log.findIndex((entry) => entry.type === "mock");
+  assert.ok(mockAt > 4 * 10 && mockAt < 4 * (lessonsToTarget(0, 0.75) + 6), `mock after ${mockAt} lessons`);
 });
 
-test("a learner who scores exactly 90 % (one slip on the tutor) learns all 8 and is ready at a 90 % target", () => {
-  const run = simulate({ score: (kind) => (kind === "tutor" ? ONE_SLIP / 3 : 0.9), mockScore: 0.9 });
+test("a learner who gets 70 % right never reaches a 75 % goal, but reaches every topic and is not drilled", () => {
+  const run = simulate({ topics: 6, days: 14, perDay: 6, target: 0.75, score: () => 0.7 });
 
-  assert.ok(run.states.every((state) => state.learned));
-  assert.ok(run.states.every((state) => state.mastered), "0.9 stored as real still passes a 90 % mark");
-  assert.equal(run.stage, "ready");
-});
-
-test("a learner who plateaus on two lessons still reaches every module, and is not drilled all day", () => {
-  // Two slips on the tutor every time (75 %) and 80 % on every written answer, against 90 %.
-  const run = simulate({ score: (kind) => (kind === "tutor" ? 0.75 : kind === "written" ? 0.8 : 1) });
-
-  assert.ok(run.states.every((state) => state.learned), "every module learned");
-  assert.ok(run.states.every((state) => state.unlocked));
+  assert.ok(run.states.every((state) => state.unlocked && state.learned), "every topic reached");
+  assert.ok(run.states.every((state) => !state.mastered));
   assert.equal(run.stage, "practise");
+  assert.ok(run.log.every((entry) => entry.type !== "mock"));
 
-  // The last module's first pass comes before any repeat at all.
-  const lastLearned = run.log.findLastIndex((entry) => entry.review === false);
-  assert.equal(run.log.slice(0, lastLearned).filter((entry) => entry.review).length, 0);
-
-  // No lesson is failed more than the daily cap on one day while other work exists.
+  // No format is failed more than the daily cap on one topic and day while other work exists.
   const perDay = new Map();
-  for (const entry of run.log.filter((item) => item.review)) {
+  for (const entry of run.log.filter((item) => item.type !== "mock" && item.kind !== "summary")) {
     const key = `${entry.day}:${entry.topicId}:${entry.kind}`;
     perDay.set(key, (perDay.get(key) ?? 0) + 1);
   }
-  assert.ok(Math.max(...perDay.values()) <= MAX_FAILED_TRIES_PER_DAY);
+  assert.ok(Math.max(...perDay.values()) <= MAX_FAILED_TRIES_PER_DAY + 1);
 });
 
-test("the reviewer's tutor plateau (83 %) is a pass at 85, 90 and 100 % targets", () => {
-  for (const target of [0.85, 0.9, 1]) {
-    const run = simulate({ target, score: (kind) => (kind === "tutor" ? ONE_SLIP / 3 : 1), mockScore: 0.96 });
+test("at a 100 % goal the learner is held to 95 % and still gets there with near-perfect lessons", () => {
+  const run = simulate({ topics: 2, days: 14, perDay: 8, target: 1, score: () => 1, mockScore: 0.96 });
 
-    assert.ok(run.states.every((state) => state.mastered), `mastered at ${target}`);
-    assert.equal(run.stage, "ready", `ready at ${target}`);
-  }
-});
-
-test("at a 100 % target, fading never takes 'ready' away again", () => {
-  const run = simulate({ target: 1, topics: 2, days: 3, score: (kind) => (kind === "tutor" ? ONE_SLIP / 3 : 1), mockScore: 0.96 });
+  assert.ok(run.states.every((state) => state.mastered));
   assert.equal(run.stage, "ready");
-
-  // Three weeks later every lesson has faded to its floor: due for a refresh, still mastered.
-  const later = new Date(run.end.getTime() + 21 * DAY);
-  const states = examModuleStates(run.modules, run.results, 1, run.mock, later);
-  const stage = examStage(states, run.mock, 1);
-
-  assert.equal(stage, "ready");
-  // Every format the learner did is due (the formats they never chose are not).
-  assert.ok(
-    states.every(
-      (state) => state.mastered && state.refresh.length === PRACTICE_LESSON_KINDS.filter((kind) => state.done[kind]).length,
-    ),
-  );
-  assert.equal(examNextStep(states, stage)?.type, "lesson");
-
-  // And a refreshed lesson passes again, so the pass marks are reachable after any amount of fading.
-  for (const kind of PRACTICE_LESSON_KINDS) {
+  for (const kind of EXAM_LESSON_KINDS.filter((entry) => entry !== "summary")) {
     assert.ok(lessonPassed(kind, kind === "tutor" ? Math.fround(ONE_SLIP / 3) : 1, 1), kind);
   }
 });
 
-test("a learner who only ever picks flashcards and quizzes masters every topic and is ready, never meeting the tutor", () => {
+test("a learner who swaps every lesson for flashcards and quizzes still reaches the goal, never meeting the tutor", () => {
   const CHOSEN = ["flashcards", "quiz"];
   const run = simulate({
+    topics: 3,
+    days: 14,
+    perDay: 6,
+    target: 0.75,
     score: () => 1,
-    // Whatever the path suggests, this learner reads the summary and then uses flashcards and quizzes.
-    pick: (next, state) =>
-      next.kind === "summary" || CHOSEN.includes(next.kind) ? next.kind : CHOSEN.find((kind) => !state.done[kind]) ?? "quiz",
+    pick: (next) => (next.kind === "summary" || CHOSEN.includes(next.kind) ? next.kind : "quiz"),
   });
 
-  assert.ok(run.states.every((state) => state.learned && state.mastered), "every module mastered");
+  assert.ok(run.states.every((state) => state.mastered), "every topic on target");
   assert.equal(run.stage, "ready");
-  assert.deepEqual(
-    [...new Set(run.results.map((entry) => entry.lesson_kind))].sort(),
-    ["flashcards", "quiz", "summary"],
-  );
   assert.ok(run.states.every((state) => !state.done.tutor));
-  assert.equal(run.log.findIndex((entry) => entry.type === "mock"), 8 * LESSONS_TO_LEARN);
 });
 
-test("a learner who picks a different pair per topic still reaches every module", () => {
-  const pairs = [["tutor", "written"], ["true_false", "quiz"], ["written", "flashcards"]];
-  const run = simulate({
-    topics: 6,
-    score: (kind) => (kind === "written" ? 0.9 : 1),
-    pick: (next, state) => {
-      const pair = pairs[Number(next.topicId.slice(1)) % pairs.length];
-      return next.kind === "summary" || next.review || pair.includes(next.kind)
-        ? next.kind
-        : pair.find((kind) => !state.done[kind]) ?? next.kind;
-    },
-  });
-
-  assert.ok(run.states.every((state) => state.learned && state.mastered));
+test("weeks after being ready, faded topics come back as lessons and one lesson restores each", () => {
+  const run = simulate({ topics: 2, days: 10, perDay: 8, target: 0.75, score: () => 1 });
   assert.equal(run.stage, "ready");
-  run.states.forEach((state, index) => {
-    const pair = pairs[(index + 1) % pairs.length];
-    assert.deepEqual(PRACTICE_LESSON_KINDS.filter((kind) => state.done[kind]), PRACTICE_LESSON_KINDS.filter((kind) => pair.includes(kind)));
-  });
+
+  const later = new Date(run.end.getTime() + 14 * DAY);
+  const states = examModuleStates(run.modules, run.results, 0.75, run.mock, later);
+  assert.ok(states.every((state) => state.refreshDue && !state.mastered));
+  const stage = examStage(states, run.mock, 0.75);
+  assert.equal(stage, "practise");
+  assert.equal(examNextStep(states, stage)?.type, "lesson");
+});
+
+test("a topic whose suggested lesson failed twice today rests while another topic has work", () => {
+  const now = new Date("2026-10-15T15:00:00Z");
+  const results = [
+    ...learned("a", 0.4),
+    ...learned("b", 0.4),
+    result("a", "summary", 1, "2026-10-15T08:00:00Z"),
+  ];
+  const states = examModuleStates(mods("a", "b"), results, 0.9, null, now);
+  const kind = states[0].nextKind;
+  const failedTwice = [...results, result("a", kind, 0.2, "2026-10-15T09:00:00Z"), result("a", kind, 0.2, "2026-10-15T10:00:00Z")];
+  const resting = examModuleStates(mods("a", "b"), failedTwice, 0.9, null, now);
+
+  assert.equal(resting[0].failedToday[kind], 2);
+  assert.notEqual(resting[0].nextKind, kind, "the rotation moves on from a format failed twice today");
 });
 
 test("pass marks: capped at 95 %, the tutor at what one slip leaves", () => {
@@ -227,51 +198,12 @@ const result = (topic, lesson_kind, score, completed_at = "2026-10-14T10:00:00Z"
   score,
   completed_at,
 });
-const learned = (topic, scores = {}, at = "2026-10-14T10:00:00Z") =>
-  EXAM_LESSON_KINDS.map((kind) => result(topic, kind, scores[kind] ?? 1, at));
+/* A topic far enough along to open the next one: its summary and `LESSONS_TO_OPEN_NEXT` quizzes. */
+const learned = (topic, score = 1, at = "2026-10-14T10:00:00Z") => [
+  result(topic, "summary", 1, at),
+  ...Array.from({ length: LESSONS_TO_OPEN_NEXT }, () => result(topic, "quiz", score, at)),
+];
 const mods = (...ids) => ids.map((id) => ({ topicId: id, lectureId: id }));
-
-test("an untried module comes before repeats of an earlier one", () => {
-  const states = examModuleStates(mods("a", "b"), learned("a", { quiz: 0.4 }), 0.9);
-
-  assert.deepEqual(states[0].review, ["quiz"]);
-  assert.deepEqual(examNextStep(states, examStage(states, null, 0.9)), {
-    type: "lesson",
-    topicId: "b",
-    lectureId: "b",
-    kind: "summary",
-    review: false,
-  });
-});
-
-test("a lesson failed twice today rests, and the next weakest is offered instead", () => {
-  const now = new Date("2026-10-15T15:00:00Z");
-  const results = [
-    ...learned("a", { quiz: 0.6 }),
-    result("a", "written", 0.4, "2026-10-15T09:00:00Z"),
-    result("a", "written", 0.4, "2026-10-15T10:00:00Z"),
-  ];
-  const states = examModuleStates(mods("a"), results, 0.9, null, now);
-
-  assert.equal(states[0].failedToday.written, 2);
-  assert.deepEqual(states[0].review, ["written", "quiz"]);
-  assert.equal(states[0].nextKind, "quiz");
-  assert.equal(examNextStep(states, "practise")?.kind, "quiz");
-
-  // Tomorrow it is back, weakest first.
-  const tomorrow = examModuleStates(mods("a"), results, 0.9, null, new Date("2026-10-16T08:00:00Z"));
-  assert.equal(examNextStep(tomorrow, "practise")?.kind, "written");
-
-  // With nothing else left, the resting lesson is still offered rather than nothing.
-  const only = examModuleStates(
-    mods("a"),
-    [...learned("a"), ...results.slice(-2)],
-    0.9,
-    null,
-    now,
-  );
-  assert.equal(examNextStep(only, "practise")?.kind, "written");
-});
 
 test("modules that cannot be opened, are not ready or are placeholders are skipped and do not lock the rest", () => {
   const states = examModuleStates(mods("a", "b", "c"), learned("a"), 0.9);
@@ -333,12 +265,11 @@ test("grades, mock summaries and proof times survive bad numbers and mixed times
   const failed = { at: "2026-10-16T12:00:00+02:00", percentage: 60, byLecture: { a: 0.5 } };
   const [state] = examModuleStates(
     mods("a"),
-    [...learned("a"), result("a", "quiz", 1, "2026-10-16T11:00:00Z"), result("a", "written", 1, "2026-10-16T11:30:00Z")],
+    [...learned("a"), result("a", "quiz", 1, "2026-10-16T11:00:00Z")],
     0.9,
     failed,
   );
-  assert.deepEqual(state.review, []);
-  assert.equal(state.mastered, true);
+  assert.equal(state.proofOwed, false);
   // Sanity: Ljubljana days still key the daily cap.
   assert.equal(dayKey("2026-10-16T22:30:00Z"), "2026-10-17");
 });

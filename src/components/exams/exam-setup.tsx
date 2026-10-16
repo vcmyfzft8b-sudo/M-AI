@@ -28,7 +28,7 @@ import {
   EXAM_LESSON_KINDS,
   isValidDay,
   LESSON_MINUTES,
-  LESSONS_TO_LEARN,
+  lessonsToTarget,
   MAX_EXAM_MODULES,
   MAX_SETUP_UPLOADS,
   monthGrid,
@@ -299,8 +299,8 @@ export function ExamSetup({
   const planKey = `${selected.join(",")}|${aiExpand ? 1 : 0}`;
   const keptTopics = planTopics.filter((topic) => topic.kept);
   const moduleCount = plan.status === "done" ? Math.max(1, keptTopics.length) : selected.length;
-  // What it takes to learn every topic: its summary and two formats of the learner's choice.
-  const lessons = moduleCount * LESSONS_TO_LEARN;
+  // What it takes to bring every topic from nothing to the target, a lesson at a time (as Astra counts).
+  const lessons = moduleCount * lessonsToTarget(0, target / 100);
   const yearOptions =
     schoolLevel && ROLE_FOR_LEVEL[schoolLevel]
       ? getOnboardingYearOptions(locale, ROLE_FOR_LEVEL[schoolLevel], schoolLevel)

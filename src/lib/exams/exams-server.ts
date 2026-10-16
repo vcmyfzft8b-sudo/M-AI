@@ -15,6 +15,8 @@ import {
   daysBetween,
   examForecast,
   examMastery,
+  lessonsRemaining,
+  topicsOnTarget,
   examModuleStates,
   examStage,
   gradeForPercentage,
@@ -90,6 +92,15 @@ export type ExamModuleView = ModuleState & {
   source: ExamTopicRow["source"];
 };
 
+export type ExamLessonEntry = {
+  id: string;
+  topicId: string;
+  kind: ExamLessonKind;
+  /** 0..1. */
+  score: number;
+  at: string;
+};
+
 export type ExamMockSummary = {
   id: string;
   percentage: number;
@@ -110,6 +121,10 @@ export type ExamDetail = {
   forecast: ExamForecast | null;
   /** Open knowledge gaps across the exam: questions answered wrong and not right since. */
   gaps: number;
+  /** Topics whose mastery reaches the target, of `modules.length`. */
+  onTarget: number;
+  /** Every lesson done, oldest first: the path's stations. */
+  history: ExamLessonEntry[];
   streak: number;
   latestMock: ExamMockSummary | null;
 };
@@ -194,18 +209,11 @@ function planFor(
     examDate: exam.exam_date,
     today,
     dailyMinutes: exam.daily_minutes,
+    target,
     states: atStartOfDay,
     resultsToday: results.length - before.length,
-    untriedDoneToday: 0,
   });
-  const remaining = dailyPlan({
-    examDate: exam.exam_date,
-    today,
-    dailyMinutes: exam.daily_minutes,
-    states,
-    resultsToday: 0,
-    untriedDoneToday: 0,
-  }).remaining;
+  const remaining = lessonsRemaining(states, target);
 
   return {
     ...plan,
@@ -507,6 +515,16 @@ export async function getExamDetail(
     }),
     /** Questions answered wrong and not right since, across the exam (`openGaps`). */
     gaps: states.reduce((sum, state) => sum + state.gaps, 0),
+    onTarget: topicsOnTarget(states, target),
+    history: results
+      .filter((row) => row.topic_id && states.some((state) => state.topicId === row.topic_id))
+      .map((row) => ({
+        id: row.id,
+        topicId: row.topic_id as string,
+        kind: row.lesson_kind,
+        score: row.score,
+        at: row.completed_at,
+      })),
     streak: streakDays(activeDays, today),
     latestMock:
       mockRow && mockRow.percentage !== null && mockRow.graded_at

@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { StudyGenerationNotice } from "@/components/generation-notice";
 import { useTranslations } from "@/components/i18n-provider";
@@ -11,24 +11,19 @@ import { useInstantNavigation } from "@/components/navigation-loading";
 import { NoteSpeedReader } from "@/components/note-speed-reader";
 import { StudyFlashcard, type StudyFlashcardExit } from "@/components/study-flashcard";
 import { StudyPracticeQuestion, StudyQuizQuestion } from "@/components/study-question";
-import { LESSON_KIND_EMOJI, LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
+import { LESSON_KIND_KEY } from "@/components/exams/exam-links";
 import { ExamScreen } from "@/components/exams/exam-screen";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { MemoBuddy, type BuddyMood } from "@/components/exams/memo-buddy";
 import { ExamTutorLesson } from "@/components/exams/exam-tutor-lesson";
-import { lessonUrl, prefetchLesson, takePrefetchedLesson } from "@/components/exams/lesson-prefetch";
+import { lessonUrl, takePrefetchedLesson } from "@/components/exams/lesson-prefetch";
 import {
-  EXAM_LESSON_KINDS,
-  isPracticeKind,
-  lessonFormatChoices,
-  lessonPassed,
-  lessonPassThreshold,
-  moduleAfterLesson,
-  percent,
-  practiceKindToOffer,
   GAP_LESSON_KINDS,
+  masteryAfterLesson,
+  meetsPassMark,
+  passThreshold,
+  percent,
   type ExamLessonKind,
-  type LessonFormatChoice,
   type PracticeLessonKind,
   type TrueFalseStatement,
 } from "@/lib/exams/exam-model";
@@ -65,15 +60,14 @@ type Phase =
       name: "done";
       correct: number;
       total: number;
-      headline: "lesson" | "learned" | "mastered";
-      /** The score and the lesson's pass mark, both in whole percent, when it fell short. */
-      below: { score: number; need: number } | null;
-      following: { label: string; href: string } | null;
+      /** The topic's mastery before and after this lesson, 0..1 (Astra's "+N % gained"). */
+      before: number;
+      after: number;
+      /** The lesson took the topic to its target. */
+      reached: boolean;
       /** Knowledge gaps: earlier misses answered right this time, and this lesson's misses (they come back). */
       gapsClosed: number;
       gapsOpen: number;
-      /** The module's other practice formats, which the learner may pick instead of `following`. */
-      choices: LessonFormatChoice[];
     };
 
 /*
@@ -111,23 +105,10 @@ export type ExamLessonModule = {
   lectureId: string;
   title: string;
   position: number;
-  done: Record<ExamLessonKind, boolean>;
-  latest: Record<ExamLessonKind, number | null>;
-  /** Practice lessons the path still wants repeated, weakest first. */
-  review: ExamLessonKind[];
-  /** Of those, the ones only due because they faded. */
-  refresh?: ExamLessonKind[];
-  /** A failed mock wants one practice format redone in this module. */
-  proofOwed?: boolean;
-  learned: boolean;
-  mastered: boolean;
+  /** The topic's mastery today (faded) and before fading, 0..1: a lesson builds on the unfaded one. */
+  mastery: number;
+  rawMastery: number;
 };
-
-/** Where the path goes after this module: the next module still to master, or the mock exam. */
-export type ExamLessonAfter =
-  | { type: "module"; topicId: string; title: string; kind: ExamLessonKind }
-  | { type: "mock" }
-  | null;
 
 /* A lesson load that is worth trying again rather than showing as failed straight away. */
 class LessonLoadHiccup extends Error {}
@@ -141,7 +122,6 @@ export function ExamLesson({
   module,
   kind,
   target,
-  after,
 }: {
   examId: string;
   examTitle: string;
@@ -149,7 +129,6 @@ export function ExamLesson({
   kind: ExamLessonKind;
   /** The exam's goal, 0..100. */
   target: number;
-  after: ExamLessonAfter;
 }) {
   const { t } = useTranslations();
   const { navigateWithFeedback } = useInstantNavigation();
@@ -261,24 +240,7 @@ export function ExamLesson({
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  /*
-   * Where the summary's button goes: the format the path suggests next (the first untried one in
-   * the default order, the tutor the first time), else a repeat, else a format to try. Its label
-   * names it, and when it is the tutor, which plans by a model call, the plan is started while the
-   * summary is read. The chips under the summary offer every other format instead: the learner
-   * picks how to practise, and whatever they pick counts (`MIN_PRACTICE_FORMATS`).
-   */
   const goal = target / 100;
-  const summaryAfter = moduleAfterLesson(module, "summary", 1, goal);
-  const afterSummary = summaryAfter.firstPass ?? summaryAfter.review[0] ?? practiceKindToOffer(module);
-  const summaryChoices = lessonFormatChoices(module, [afterSummary]);
-  const readingSummary = phase.name === "playing" && phase.lesson.kind === "summary";
-
-  useEffect(() => {
-    if (readingSummary && afterSummary === "tutor") {
-      prefetchLesson(examId, module.topicId, "tutor");
-    }
-  }, [afterSummary, examId, module.topicId, readingSummary]);
 
   /* While the material is being made, a poll every few seconds, each one scheduled after the last whatever it returned. */
   const generating = phase.name === "generating";
@@ -308,7 +270,7 @@ export function ExamLesson({
   }, [generating, load]);
 
   /** Saves the lesson; a summary then opens `then` (a format the learner picked) or the suggestion. */
-  async function save(correct: number, total: number, difficulty: number | null, then?: ExamLessonKind) {
+  async function save(correct: number, total: number, difficulty: number | null) {
     setSaveError(false);
     setPhase({ name: "saving" });
 
@@ -333,87 +295,36 @@ export function ExamLesson({
     }
 
     if (kind === "summary") {
-      navigateWithFeedback(lessonHref(examId, module.topicId, then ?? afterSummary), { refresh: true });
+      navigateWithFeedback(examHref, { refresh: true });
       return;
     }
 
     /*
-     * The same rules the path uses (`moduleAfterLesson`, after `moduleProgress`): until the module
-     * is learned its next suggested format, then any format under its pass mark, weakest first,
-     * and once nothing in this module is left, the path's next module or the mock exam.
+     * Astra's result: the lesson moves the topic's mastery a step towards its score
+     * (`masteryAfterLesson`, from the unfaded mastery: a lesson ends the fading), and the done
+     * screen says by how much. "Nadaljuj" goes back to the path, which has the next lesson.
      */
     const score = total > 0 ? Math.min(1, correct / total) : 1;
-    const isPractice = isPracticeKind(kind);
-    const state = moduleAfterLesson(module, kind, score, goal);
+    const after = masteryAfterLesson(module.rawMastery, kind, score);
+    const mark = passThreshold(goal);
     const missedNow = missedRef.current.size;
     const repeatedIds = lessonRef.current && "repeated" in lessonRef.current ? (lessonRef.current.repeated ?? []) : [];
     const gapsClosed = repeatedIds.filter((id) => !missedRef.current.has(id)).length;
-    /*
-     * Astra's next lesson goes after what was just missed: with the module otherwise on track, the
-     * misses are asked again straight away, the other way round when the learner has done that
-     * format (missed in the quiz, asked as true/false), as the path's `gapLessonKind` does.
-     */
-    const gapNext: PracticeLessonKind | null =
-      state.learned && missedNow > 0 && GAP_LESSON_KINDS.includes(kind as PracticeLessonKind)
-        ? kind === "quiz" && state.done.true_false
-          ? "true_false"
-          : kind === "true_false" && state.done.quiz
-            ? "quiz"
-            : (kind as PracticeLessonKind)
-        : null;
-    const nextHere = state.firstPass
-      ? { kind: state.firstPass, repeat: false, gap: false }
-      : state.review[0]
-        ? { kind: state.review[0], repeat: true, gap: false }
-        : gapNext
-          ? { kind: gapNext as ExamLessonKind, repeat: true, gap: true }
-          : null;
-    const following = nextHere
-      ? {
-          label: t(
-            nextHere.gap ? "exam.lesson.done.gaps" : nextHere.repeat ? "exam.lesson.done.repeat" : "exam.lesson.done.next",
-            { lesson: t(LESSON_KIND_KEY[nextHere.kind]) },
-          ),
-          href: lessonHref(examId, module.topicId, nextHere.kind),
-        }
-      : after?.type === "module"
-        ? { label: t("exam.lesson.done.nextModule", { title: after.title }), href: lessonHref(examId, after.topicId, after.kind) }
-        : after?.type === "mock"
-          ? { label: t("exam.lesson.done.mock"), href: `${examHref}/mock` }
-          : null;
-    // The tutor plans by a model call; start it now so the next lesson opens without the wait.
-    const followingLesson = nextHere
-      ? { topicId: module.topicId, kind: nextHere.kind }
-      : after?.type === "module"
-        ? { topicId: after.topicId, kind: after.kind }
-        : null;
+    const reached = meetsPassMark(after, mark) && !meetsPassMark(module.mastery, mark);
 
-    if (followingLesson?.kind === "tutor") {
-      prefetchLesson(examId, followingLesson.topicId, "tutor");
-    }
-
-    // `percent` floors: a score under the pass mark must never read as the mark (89.6 % is not "90 %").
-    const below =
-      isPractice && !lessonPassed(kind, score, goal)
-        ? { score: percent(score), need: percent(lessonPassThreshold(kind, goal)) }
-        : null;
-
-    react(below === null ? "cheer" : "happy");
+    react(after > module.mastery ? "cheer" : "happy");
     setPhase({
       name: "done",
       correct,
       total,
-      headline: state.mastered && !module.mastered ? "mastered" : state.learned && !module.learned ? "learned" : "lesson",
-      below,
-      following,
+      before: module.mastery,
+      after,
+      reached,
       gapsClosed,
       gapsOpen: GAP_LESSON_KINDS.includes(kind as PracticeLessonKind) ? missedNow : 0,
-      // Any other format of this topic, whichever comes next: the one just done and the suggestion aside.
-      choices: lessonFormatChoices(state, [kind, nextHere?.kind]),
     });
   }
 
-  const kindIndex = EXAM_LESSON_KINDS.indexOf(kind);
   const scoreLine = (correct: number, total: number) =>
     kind === "tutor"
       ? t("exam.tutor.score", { percent: percent(correct / Math.max(1, total)) })
@@ -454,7 +365,7 @@ export function ExamLesson({
       </div>
     ) : phase.name === "playing" && phase.lesson.kind === "summary" ? (
       <button type="button" className="memo-button-coral" onClick={() => void save(1, 1, null)}>
-        {t("exam.lesson.done.next", { lesson: t(LESSON_KIND_KEY[afterSummary]) })}
+        {t("exam.zone.continue")}
       </button>
     ) : phase.name === "zone" ? (
       <div className="memo-exam-cta-row">
@@ -466,12 +377,12 @@ export function ExamLesson({
         </button>
       </div>
     ) : phase.name === "done" ? (
-      <div className="memo-exam-cta-col">
-        {phase.following ? (
-          <NextStepButton step={phase.following} onGo={(href) => navigateWithFeedback(href, { refresh: true })} />
-        ) : null}
-        <button type="button" className="memo-button-ghost" onClick={() => navigateWithFeedback(examHref, { refresh: true })}>
-          {t("exam.lesson.done.back")}
+      <div className="memo-exam-cta-row">
+        <button type="button" className="memo-button-ghost" onClick={() => retryLoad(null)}>
+          {t("exam.lesson.repeatLesson")}
+        </button>
+        <button type="button" className="memo-button-coral" onClick={() => navigateWithFeedback(examHref, { refresh: true })}>
+          {t("exam.zone.continue")}
         </button>
       </div>
     ) : null;
@@ -479,11 +390,6 @@ export function ExamLesson({
   return (
     <ExamScreen backHref={examHref} backIcon="close" backLabel={examTitle} title={title} refreshOnBack cta={cta}>
       <div className="memo-exam-lesson-head">
-        <div className="memo-exam-lesson-steps" aria-label={t("exam.lesson.progress", { index: kindIndex + 1, total: EXAM_LESSON_KINDS.length })}>
-          {EXAM_LESSON_KINDS.map((entry, index) => (
-            <i key={entry} className={index === kindIndex ? "current" : module.done[entry] ? "on" : ""} />
-          ))}
-        </div>
         <span className="memo-exam-lesson-module">{module.title}</span>
       </div>
 
@@ -508,8 +414,7 @@ export function ExamLesson({
             lectureId={module.lectureId}
             onReact={react}
             onMissed={(itemId) => missedRef.current.add(itemId)}
-            choices={summaryChoices}
-            onChoose={(choice) => void save(1, 1, null, choice)}
+            onRecovered={(itemId) => missedRef.current.delete(itemId)}
             onFinish={(correct, total) =>
               phase.lesson.kind === "summary" ? void save(1, 1, null) : enterZone(correct, total)
             }
@@ -525,23 +430,26 @@ export function ExamLesson({
           />
         ) : (
           <div className="memo-exam-center memo-exam-done">
-            {/* Sparkles celebrate a lesson that reached the goal, not one that will come back. */}
-            <MemoBuddy mood={buddy.mood} moodKey={buddy.key} size="7rem" sparkles={phase.below === null} />
-            <h2>
-              {/* A lesson that comes back is never called finished, whatever the module reached. */}
-              {phase.below !== null
-                ? t("exam.lesson.done.titleBelow")
-                : phase.headline === "mastered"
-                  ? t("exam.lesson.done.module")
-                  : phase.headline === "learned"
-                    ? t("exam.lesson.done.learned", { target })
-                    : t("exam.lesson.done.title")}
+            <MemoBuddy mood={buddy.mood} moodKey={buddy.key} size="6rem" sparkles={phase.after > phase.before} />
+            {/* Astra's result: what the lesson added to the topic, and where the topic now stands. */}
+            <h2 className="memo-exam-gain">
+              {phase.reached
+                ? t("exam.lesson.done.reached")
+                : t("exam.lesson.done.gained", { percent: Math.max(0, percent(phase.after) - percent(phase.before)) })}
             </h2>
-            {phase.below !== null ? (
-              <p>{t("exam.lesson.done.below", { score: phase.below.score, target: phase.below.need })}</p>
-            ) : phase.total > 0 ? (
-              <p>{scoreLine(phase.correct, phase.total)}</p>
-            ) : null}
+            <div className="memo-exam-done-mastery">
+              <span>
+                {t("exam.lesson.done.topicMastery")}
+                <b>{t("exam.percent", { percent: percent(phase.after) })}</b>
+              </span>
+              <div className="memo-exam-mastery-bar">
+                <div className="memo-progress goal">
+                  <div style={{ width: `${percent(phase.after)}%` }} />
+                </div>
+                <i style={{ "--goal": `${target}%` } as CSSProperties} aria-hidden="true" />
+              </div>
+            </div>
+            {phase.total > 0 && kind !== "summary" ? <p>{scoreLine(phase.correct, phase.total)}</p> : null}
             {/* What comes back and until when: the misses, until they are answered right. */}
             {phase.gapsClosed > 0 || phase.gapsOpen > 0 ? (
               <div className="memo-exam-gap-facts">
@@ -559,77 +467,10 @@ export function ExamLesson({
                 ) : null}
               </div>
             ) : null}
-            <FormatChoices
-              choices={phase.choices}
-              onChoose={(choice) => navigateWithFeedback(lessonHref(examId, module.topicId, choice), { refresh: true })}
-            />
           </div>
         )}
       </div>
     </ExamScreen>
-  );
-}
-
-function NextStepButton({
-  step,
-  onGo,
-}: {
-  step: { label: string; href: string };
-  onGo: (href: string) => void;
-}) {
-  return (
-    <button type="button" className="memo-button-coral" onClick={() => onGo(step.href)}>
-      {step.label}
-    </button>
-  );
-}
-
-/*
- * Astra's "choose your lesson format": the module's other practice formats as chips under the
- * screen's one coral button, each with its picture, and a tick with the latest score once done.
- */
-function FormatChoices({
-  choices,
-  onChoose,
-}: {
-  choices: LessonFormatChoice[];
-  onChoose: (kind: ExamLessonKind) => void;
-}) {
-  const { t } = useTranslations();
-
-  if (choices.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="memo-exam-formats">
-      <span className="memo-eyebrow">{t("exam.lesson.choose.title")}</span>
-      <div className="memo-chip-row memo-exam-chips">
-        {choices.map((choice) => {
-          const name = t(LESSON_KIND_KEY[choice.kind]);
-          const score = choice.score === null ? null : percent(choice.score);
-
-          return (
-            <button
-              key={choice.kind}
-              type="button"
-              className={`memo-chip ${choice.done ? "done" : ""}`.trim()}
-              aria-label={score === null ? name : t("exam.lesson.choose.done", { lesson: name, percent: score })}
-              onClick={() => onChoose(choice.kind)}
-            >
-              <Emoji symbol={LESSON_KIND_EMOJI[choice.kind]} size="1.05rem" />
-              <span>{name}</span>
-              {score !== null ? (
-                <span className="memo-exam-format-score" aria-hidden="true">
-                  <Msym name="check" size="0.95rem" weight={700} />
-                  {t("exam.percent", { percent: score })}
-                </span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 
@@ -695,9 +536,8 @@ function LessonBody({
   lectureId,
   onFinish,
   onMissed,
+  onRecovered,
   onReact,
-  choices,
-  onChoose,
 }: {
   lesson: LessonPayload;
   examId: string;
@@ -706,10 +546,12 @@ function LessonBody({
   onFinish: (correct: number, total: number) => void;
   /** A question answered wrong: it stays open as a knowledge gap until a later lesson gets it right. */
   onMissed: (itemId: string) => void;
+  /**
+   * A miss answered right in the lesson's own retry round: Astra counts it as learned, so it does
+   * not stay open as a knowledge gap.
+   */
+  onRecovered: (itemId: string) => void;
   onReact: (mood: BuddyMood) => void;
-  /** The summary's other formats to pick from (see `FormatChoices`). */
-  choices: LessonFormatChoice[];
-  onChoose: (kind: ExamLessonKind) => void;
 }) {
   const { t } = useTranslations();
   const [index, setIndex] = useState(0);
@@ -731,21 +573,69 @@ function LessonBody({
    */
   const [showWhy, setShowWhy] = useState(false);
   const nextAfterWhy = useRef(false);
-  const nextRef = useRef<((gotIt: boolean) => void) | null>(null);
-  const closeWhy = useCallback(() => {
-    setShowWhy(false);
-
-    if (nextAfterWhy.current) {
-      nextAfterWhy.current = false;
-      nextRef.current?.(false);
-    }
-  }, []);
-  const whySheet = useSheet(closeWhy);
   /* The quiz's misses, by place, and once the last question is answered the round that asks them again. */
   const [missedAt, setMissedAt] = useState<number[]>([]);
   const [retry, setRetry] = useState<number[] | null>(null);
   /* A right quiz answer moves on by itself after a beat; leaving the lesson cancels it. */
   const advanceTimer = useRef<number | undefined>(undefined);
+  /*
+   * A quiz or true/false answer is done with: on to the next question. A miss is asked again in a
+   * retry round once the last question is answered (the score stays the first try's), and a miss
+   * answered right there is no longer a knowledge gap.
+   */
+  function advanceQuiz(gotIt: boolean) {
+    const ids =
+      lesson.kind === "quiz"
+        ? lesson.questions.map((entry) => entry.id)
+        : lesson.kind === "true_false"
+          ? lesson.statements.map((entry) => entry.id)
+          : [];
+    const total = ids.length;
+
+    window.clearTimeout(advanceTimer.current);
+    setSelection(null);
+    setShowWhy(false);
+
+    if (retry) {
+      const id = ids[retry[index] ?? -1];
+
+      if (gotIt && id) {
+        onRecovered(id);
+      }
+
+      if (index + 1 >= retry.length) {
+        onFinish(correct, total);
+      } else {
+        setIndex(index + 1);
+      }
+
+      return;
+    }
+
+    const nextCorrect = correct + (gotIt ? 1 : 0);
+    const misses = gotIt ? missedAt : [...missedAt, index];
+    setCorrect(nextCorrect);
+    setMissedAt(misses);
+
+    if (index + 1 < total) {
+      setIndex(index + 1);
+    } else if (misses.length > 0) {
+      setRetry(misses);
+      setIndex(0);
+    } else {
+      onFinish(nextCorrect, total);
+    }
+  }
+
+  /* `useSheet` reads its callback through a ref, so a new function each render is fine. */
+  const whySheet = useSheet(() => {
+    setShowWhy(false);
+
+    if (nextAfterWhy.current) {
+      nextAfterWhy.current = false;
+      advanceQuiz(false);
+    }
+  });
   /*
    * On a phone an answered question collapses to the answers worth reading, as the note's quiz
    * does; beside the desktop rail there is room to keep all four.
@@ -821,7 +711,6 @@ function LessonBody({
             <span>{t("exam.lesson.speedRead")}</span>
           </button>
         </div>
-        <FormatChoices choices={choices} onChoose={onChoose} />
       </div>
     );
   }
@@ -940,36 +829,7 @@ function LessonBody({
     const correctLetter = String.fromCharCode(65 + order.indexOf(question.correct_option_idx));
     const repeatedGap = !retry && Boolean(lesson.repeated?.includes(question.id));
 
-    const next = (gotIt: boolean) => {
-      window.clearTimeout(advanceTimer.current);
-      setSelection(null);
-      setShowWhy(false);
-
-      if (retry) {
-        if (index + 1 >= retry.length) {
-          onFinish(correct, total);
-        } else {
-          setIndex(index + 1);
-        }
-
-        return;
-      }
-
-      const nextCorrect = correct + (gotIt ? 1 : 0);
-      const misses = gotIt ? missedAt : [...missedAt, index];
-      setCorrect(nextCorrect);
-      setMissedAt(misses);
-
-      if (index + 1 < total) {
-        setIndex(index + 1);
-      } else if (misses.length > 0) {
-        setRetry(misses);
-        setIndex(0);
-      } else {
-        onFinish(nextCorrect, total);
-      }
-    };
-    nextRef.current = next;
+    const next = advanceQuiz;
 
     /*
      * The note's quiz, as the app has it: on the phone an answered question collapses to the

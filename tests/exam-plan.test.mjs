@@ -390,3 +390,21 @@ test("a learner who knows the material is told so before the exam, not held back
   assert.ok(knewIt >= 4);
   assert.equal(toldReady, knewIt);
 });
+
+test("the practices still owed are an estimate that never runs out before the goal: one more, until it is reached", () => {
+  for (const goal of [0.5, 0.75, 0.9, 1]) {
+    for (let mastery = 0; mastery < passThreshold(goal) - 1e-6; mastery += 0.01) {
+      assert.ok(lessonsToTarget(mastery, goal) >= 1, `${mastery.toFixed(2)} under ${goal} still owes a practice`);
+    }
+    assert.equal(lessonsToTarget(passThreshold(goal), goal), 0);
+  }
+
+  // A learner who keeps scoring under the mark: whatever was estimated, the module stays shut and
+  // owes "one more" after every single practice, until the knowledge itself is there.
+  const weak = simulate({ topics: 2, days: 10, perDay: 6, target: 0.9, score: () => 0.8 });
+  assert.equal(weak.states[1].unlocked, false);
+  for (let count = 1; count <= weak.results.length; count += 1) {
+    const state = examModuleStates(weak.modules.slice(0, 1), weak.results.slice(0, count), 0.9)[0];
+    assert.ok(state.learned || lessonsToTarget(state.mastery, 0.9) >= 1);
+  }
+});

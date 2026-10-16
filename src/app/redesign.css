@@ -28094,11 +28094,6 @@ button.memo-exam-card:hover {
   font-variant-numeric: tabular-nums;
 }
 
-.memo-exam-progress-topic-note {
-  color: var(--muted);
-  font-size: 0.86rem;
-}
-
 /* A topic's mastery on a bar, its goal a tick across it (the progress list and a lesson's result). */
 .memo-exam-mastery-bar {
   position: relative;

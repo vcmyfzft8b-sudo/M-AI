@@ -742,11 +742,6 @@ export function ExamDashboard({
                       </div>
                       <i style={{ "--goal": `${target}%` } as CSSProperties} aria-hidden="true" />
                     </div>
-                    <span className="memo-exam-progress-topic-note">
-                      {module.unlocked
-                        ? t("exam.progress.topicLessons", { count: module.lessons })
-                        : t("exam.progress.topicLocked", { target })}
-                    </span>
                   </li>
                 );
               })}

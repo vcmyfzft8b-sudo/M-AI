@@ -253,6 +253,38 @@ export function LibraryFolderMenu({
    * drag carries straight into the exit rather than springing back first.
    */
   const folderSheet = useSheet(closeFolderSheet);
+  /*
+   * The folder list fades where it runs on past the sheet's edge: at the bottom while more is
+   * below, at the top once it has been scrolled. A list that fits has neither.
+   */
+  const [folderScrollFade, setFolderScrollFade] = useState({ top: false, bottom: false });
+  const updateFolderScrollFade = useCallback((element: HTMLElement) => {
+    const top = element.scrollTop > 2;
+    const bottom = element.scrollTop + element.clientHeight < element.scrollHeight - 2;
+    setFolderScrollFade((current) => (current.top === top && current.bottom === bottom ? current : { top, bottom }));
+  }, []);
+  const folderScrollObserver = useRef<ResizeObserver | null>(null);
+  const attachFolderScroll = useCallback(
+    (element: HTMLDivElement | null) => {
+      folderScrollObserver.current?.disconnect();
+      folderScrollObserver.current = null;
+
+      if (!element) {
+        return;
+      }
+
+      updateFolderScrollFade(element);
+
+      if (typeof ResizeObserver !== "undefined") {
+        const observer = new ResizeObserver(() => updateFolderScrollFade(element));
+        observer.observe(element);
+        // The list's own content changes height too (a folder added or renamed).
+        Array.from(element.children).forEach((child) => observer.observe(child));
+        folderScrollObserver.current = observer;
+      }
+    },
+    [updateFolderScrollFade],
+  );
   const createModalSheet = useSheet(closeCreateModal, { locked: isCreatingFolder });
   const editModalSheet = useSheet(resetEditModal, {
     locked: isFolderEditBusy,
@@ -768,7 +800,13 @@ export function LibraryFolderMenu({
                   rather than the desktop dropdown's flat list. */}
               <div className="library-folder-mobile-sheet-body">
                 {/* Only the folders scroll; "Nova mapa" under them stays in view however many there are. */}
-                <div className="memo-folder-sheet-scroll">
+                <div
+                  className="memo-folder-sheet-scroll"
+                  ref={attachFolderScroll}
+                  onScroll={(event) => updateFolderScrollFade(event.currentTarget)}
+                  data-fade-top={folderScrollFade.top || undefined}
+                  data-fade-bottom={folderScrollFade.bottom || undefined}
+                >
                   <div className="memo-folder-card">
                     <div className="memo-folder-row">
                       <button

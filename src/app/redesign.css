@@ -14005,6 +14005,22 @@ html[data-paywall-closing] .memo-shell * {
     display: none;
   }
 
+  /* A soft edge where the list runs on, rather than rows cut off flat against "Nova mapa". */
+  .memo-folder-sheet-scroll[data-fade-bottom] {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2.75rem), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 2.75rem), transparent);
+  }
+
+  .memo-folder-sheet-scroll[data-fade-top] {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 2rem);
+    mask-image: linear-gradient(to bottom, transparent, #000 2rem);
+  }
+
+  .memo-folder-sheet-scroll[data-fade-top][data-fade-bottom] {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 2rem, #000 calc(100% - 2.75rem), transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 2rem, #000 calc(100% - 2.75rem), transparent);
+  }
+
   .memo-folder-sheet-cta {
     display: flex;
     flex: none;

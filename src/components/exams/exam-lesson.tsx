@@ -29,6 +29,7 @@ import {
 } from "@/lib/exams/exam-model";
 import type { LessonGenerator, LessonLoad, LessonPayload } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
+import { QUIZ_CORRECT_PAUSE_MS } from "@/lib/study/quiz";
 import { FLASHCARD_EXIT_ANIMATION_MS, type FlashcardBucket, type FlashcardExitStart } from "@/lib/study/flashcard-drag";
 import { paywallPath } from "@/lib/paywall-reasons";
 
@@ -670,6 +671,26 @@ function LessonBody({
   const [mark, setMark] = useState<WrittenMark | null>(null);
   const [writtenTotal, setWrittenTotal] = useState(0);
   const exitToken = useRef(0);
+  /* A quiz miss's explanation, opened by "Preglej zakaj". */
+  const [showWhy, setShowWhy] = useState(false);
+  /* A right quiz answer moves on by itself after a beat; leaving the lesson cancels it. */
+  const advanceTimer = useRef<number | undefined>(undefined);
+  /*
+   * On a phone an answered question collapses to the answers worth reading, as the note's quiz
+   * does; beside the desktop rail there is room to keep all four.
+   */
+  const [collapseAnswered, setCollapseAnswered] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 1099px)");
+    const sync = () => setCollapseAnswered(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => {
+      query.removeEventListener("change", sync);
+      window.clearTimeout(advanceTimer.current);
+    };
+  }, []);
 
   const flipHint = (
     <>
@@ -834,7 +855,14 @@ function LessonBody({
     }
 
     const wrong = selection !== null && selection !== question.correct_option_idx;
+    const correctLetter = String.fromCharCode(65 + question.correct_option_idx);
 
+    /*
+     * The note's quiz, as the app has it: on the phone an answered question collapses to the
+     * answers worth reading; a right answer reads for a beat and moves on by itself; a miss shows
+     * the app's result row, whose "Preglej zakaj" opens the explanation in place (a lesson has no
+     * chat to send it to).
+     */
     return (
       <div className="lecture-quiz-stage">
         <div className="memo-quiz-head">
@@ -851,26 +879,48 @@ function LessonBody({
             question={question}
             order={question.options.map((_, optionIndex) => optionIndex)}
             selection={selection}
+            collapseAnswered={collapseAnswered}
             onSelect={(choice) => {
+              if (selection !== null) {
+                return;
+              }
+
               setSelection(choice);
-              onReact(choice === question.correct_option_idx ? "happy" : "sad");
+              setShowWhy(false);
+
+              if (choice === question.correct_option_idx) {
+                onReact("happy");
+                window.clearTimeout(advanceTimer.current);
+                advanceTimer.current = window.setTimeout(() => advance(total, true), QUIZ_CORRECT_PAUSE_MS);
+              } else {
+                onReact("sad");
+              }
             }}
           />
-          {selection !== null ? (
-            <div className={`memo-exam-explain ${wrong ? "wrong" : "right"}`}>
-              <div className="memo-exam-explain-head">
-                <MemoBuddy mood={buddy.mood} moodKey={buddy.key} size="3rem" />
-                <b>{wrong ? t("quiz.wrongTitle") : t("exam.lesson.correct")}</b>
-              </div>
-              {lesson.kind === "true_false" ? (
-                <p>{t("exam.lesson.trueFalse.answer", { answer: question.answer })}</p>
-              ) : null}
-              {question.explanation ? <p>{question.explanation}</p> : null}
-              <div className="memo-test-actions">
-                <button type="button" className="memo-test-next" onClick={() => advance(total, !wrong)}>
-                  {wrong ? t("quiz.understood") : t("exam.lesson.next")}
+          {wrong ? (
+            <div className="memo-quiz-result">
+              <span className="memo-quiz-result-badge">
+                <Msym name="cancel" size="1.25rem" />
+              </span>
+              <span className="memo-quiz-result-copy">
+                <span className="memo-quiz-result-title">{t("quiz.wrongTitle")}</span>
+                <span>
+                  {lesson.kind === "true_false"
+                    ? t("exam.lesson.trueFalse.answer", { answer: question.answer })
+                    : t("quiz.correctAnswerIs", { letter: correctLetter })}
+                </span>
+              </span>
+              <div className="memo-quiz-result-actions">
+                {question.explanation && !showWhy ? (
+                  <button type="button" onClick={() => setShowWhy(true)} className="memo-quiz-result-ghost">
+                    {t("quiz.reviewWhy")}
+                  </button>
+                ) : null}
+                <button type="button" onClick={() => advance(total, false)} className="memo-quiz-result-primary">
+                  {t("quiz.understood")}
                 </button>
               </div>
+              {showWhy && question.explanation ? <p className="memo-exam-quiz-why">{question.explanation}</p> : null}
             </div>
           ) : null}
         </div>

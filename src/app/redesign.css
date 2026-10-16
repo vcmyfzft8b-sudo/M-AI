@@ -28367,6 +28367,15 @@ a.memo-exam-station-go {
   z-index: 130;
 }
 
+/* A quiz miss's explanation, opened in the result row ("Preglej zakaj"), across its full width. */
+.memo-exam-quiz-why {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.98rem;
+  line-height: 1.5;
+}
+
 .memo-panel.study.memo-exam-lesson {
   position: relative;
   margin-top: 0.4rem;
@@ -28407,42 +28416,6 @@ a.memo-exam-station-go {
   display: flex;
   justify-content: flex-end;
   margin-top: 0.4rem;
-}
-
-.memo-exam-explain {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  margin-top: 1rem;
-  padding: 0.85rem 1rem;
-  border-radius: 18px;
-}
-
-.memo-exam-explain.right {
-  background: var(--success-tint);
-}
-
-.memo-exam-explain.wrong {
-  background: var(--danger-tint);
-}
-
-.memo-exam-explain-head {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.memo-exam-explain.right .memo-exam-explain-head b {
-  color: var(--success);
-}
-
-.memo-exam-explain.wrong .memo-exam-explain-head b {
-  color: var(--danger);
-}
-
-.memo-exam-explain p {
-  margin: 0;
-  line-height: 1.5;
 }
 
 .memo-exam-zone-card {

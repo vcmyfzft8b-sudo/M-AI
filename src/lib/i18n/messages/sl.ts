@@ -2601,7 +2601,6 @@ export const sl = {
   "exam.tutor.finish": "Zaključi",
   "exam.tutor.score": "Pri tutorju: {percent} %",
   "exam.lesson.next": "Naprej",
-  "exam.lesson.correct": "Pravilno!",
   "exam.lesson.trueFalse.true": "Drži",
   "exam.lesson.trueFalse.false": "Ne drži",
   "exam.lesson.trueFalse.statement": "{prompt} Odgovor: »{claim}«. Drži?",

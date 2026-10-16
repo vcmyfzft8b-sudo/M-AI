@@ -2564,7 +2564,6 @@ export const en: Messages = {
   "exam.tutor.finish": "Finish",
   "exam.tutor.score": "With the tutor: {percent}%",
   "exam.lesson.next": "Next",
-  "exam.lesson.correct": "Correct!",
   "exam.lesson.trueFalse.true": "True",
   "exam.lesson.trueFalse.false": "False",
   "exam.lesson.trueFalse.statement": "{prompt} Answer: “{claim}”. True?",

@@ -2578,7 +2578,6 @@ export const sr: Messages = {
   "exam.tutor.finish": "Završi",
   "exam.tutor.score": "Kod tutora: {percent} %",
   "exam.lesson.next": "Dalje",
-  "exam.lesson.correct": "Tačno!",
   "exam.lesson.trueFalse.true": "Tačno",
   "exam.lesson.trueFalse.false": "Netačno",
   "exam.lesson.trueFalse.statement": "{prompt} Odgovor: „{claim}”. Tačno?",

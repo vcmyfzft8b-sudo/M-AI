@@ -28347,6 +28347,26 @@ a.memo-exam-station-go {
   font-weight: 650;
 }
 
+/*
+ * A flashcard thrown in a lesson leaves the screen, as it does in the note's deck: the clips
+ * between it and the window are released while a drag or its throw is under way, and the
+ * lesson is lifted over whatever sits beside it.
+ */
+.memo-exam-screen :is(.memo-screen-scroll, .memo-exam-page, .memo-panel, .lecture-study-shell, .lecture-flashcard-stage):has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card) {
+  overflow: visible;
+}
+
+/* The phone scroller's top fade is a mask, and a mask cuts whatever leaves its box too. */
+.memo-exam-screen .memo-screen-scroll:has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card) {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.memo-exam-screen :is(.memo-panel, .lecture-flashcard-stage, .lecture-flashcard-stage-card):has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card) {
+  position: relative;
+  z-index: 130;
+}
+
 .memo-panel.study.memo-exam-lesson {
   position: relative;
   margin-top: 0.4rem;

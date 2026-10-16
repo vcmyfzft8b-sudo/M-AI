@@ -29,7 +29,7 @@ import {
 } from "@/lib/exams/exam-model";
 import type { LessonGenerator, LessonLoad, LessonPayload } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
-import { FLASHCARD_EXIT_ANIMATION_MS, type FlashcardBucket } from "@/lib/study/flashcard-drag";
+import { FLASHCARD_EXIT_ANIMATION_MS, type FlashcardBucket, type FlashcardExitStart } from "@/lib/study/flashcard-drag";
 import { paywallPath } from "@/lib/paywall-reasons";
 
 const POLL_MS = 4000;
@@ -718,9 +718,17 @@ function LessonBody({
       return null;
     }
 
-    const grade = (bucket: FlashcardBucket) => {
+    // A thrown card carries on from where it was let go, as the note's deck does; a button press starts at rest.
+    const grade = (bucket: FlashcardBucket, exitStart?: FlashcardExitStart) => {
       exitToken.current += 1;
-      setExit({ bucket, flipped, token: exitToken.current, startXPercent: 0, startYPercent: 0, startRotationDeg: 0 });
+      setExit({
+        bucket,
+        flipped,
+        token: exitToken.current,
+        startXPercent: exitStart?.xPercent ?? 0,
+        startYPercent: exitStart?.yPercent ?? 0,
+        startRotationDeg: exitStart?.rotationDeg ?? 0,
+      });
       // Cards written for a topic outside the material are not in the note's deck.
       if (!lesson.generated) {
         void fetch(`/api/flashcards/${card.id}/progress`, {
@@ -760,7 +768,7 @@ function LessonBody({
           back={card.back}
           flipped={flipped}
           onFlip={() => setFlipped((current) => !current)}
-          onGrade={(bucket) => grade(bucket)}
+          onGrade={(bucket, exitStart) => grade(bucket, exitStart)}
           flipHint={flipHint}
           missedCount={missed}
           knownCount={correct}

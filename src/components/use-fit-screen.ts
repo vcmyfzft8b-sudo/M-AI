@@ -17,12 +17,25 @@ export function fitToScreen(element: HTMLElement | null, levels: number) {
     return;
   }
 
+  // Self-contained on purpose: `fitScreenScript` sends this very function to
+  // the page as text, so it may use nothing from outside itself.
+  element.style.removeProperty("--fit-squeeze");
+
   for (let level = 0; level <= levels; level += 1) {
     element.dataset.fit = String(level);
 
     if (element.scrollHeight <= element.clientHeight) {
       return;
     }
+  }
+
+  // Past the last level, everything on the screen shrinks together by just
+  // enough, so it is still one screen: the screen never scrolls.
+  let squeeze = 1;
+
+  for (let pass = 0; pass < 6 && element.scrollHeight > element.clientHeight; pass += 1) {
+    squeeze = Math.max(0.5, squeeze * (element.clientHeight / element.scrollHeight) - 0.005);
+    element.style.setProperty("--fit-squeeze", String(squeeze));
   }
 }
 
@@ -66,5 +79,5 @@ export function useFitScreen(ref: RefObject<HTMLElement | null>, levels: number)
  * page do; the app's own fitting takes over from there.
  */
 export function fitScreenScript(levels: number) {
-  return `(function(){var e=document.currentScript&&document.currentScript.previousElementSibling;if(!e)return;for(var l=0;l<=${levels};l++){e.setAttribute("data-fit",String(l));if(e.scrollHeight<=e.clientHeight)break}})()`;
+  return `(${fitToScreen.toString()})(document.currentScript && document.currentScript.previousElementSibling, ${levels})`;
 }

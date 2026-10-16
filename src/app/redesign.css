@@ -27943,7 +27943,10 @@ button.memo-exam-card:hover {
 }
 
 .memo-exam-mock-card-go {
+  display: flex;
   grid-column: 1 / -1;
+  align-items: center;
+  justify-content: center;
   text-decoration: none;
 }
 

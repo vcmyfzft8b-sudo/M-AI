@@ -11203,14 +11203,13 @@
 
 .memo-pw-brand-word {
   display: block;
-  /* From x 165 of 480, just past the drawn brain's outline. The white band
-     there ran on into the brain's, so the mask gives it the rounded corner
-     the sticker has everywhere else (viewBox in the image's own pixels). */
+  /* The wordmark of the logo as a vector (`/memo-wordmark.svg`, traced from
+     `memo-lockup.png` right of the drawn brain, 315 x 148), so it is sharp at
+     any size and screen. Its white outline starts on the sticker's own
+     rounded corner where it used to run on into the brain's. */
   width: calc(var(--lockup-h) * 2.13);
   height: var(--lockup-h);
-  background: url("/memo-lockup.png") right center / auto 100% no-repeat;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 315 148' preserveAspectRatio='none'%3E%3Cfilter id='f'%3E%3CfeGaussianBlur stdDeviation='0.8'/%3E%3C/filter%3E%3Cg filter='url(%23f)'%3E%3Crect x='1.5' y='38.5' width='330' height='79' rx='17'/%3E%3Crect x='26' y='0' width='300' height='148'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 315 148' preserveAspectRatio='none'%3E%3Cfilter id='f'%3E%3CfeGaussianBlur stdDeviation='0.8'/%3E%3C/filter%3E%3Cg filter='url(%23f)'%3E%3Crect x='1.5' y='38.5' width='330' height='79' rx='17'/%3E%3Crect x='26' y='0' width='300' height='148'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat;
+  background: url("/memo-wordmark.svg") center / 100% 100% no-repeat;
 }
 
 .memo-paywall-benefits .memo-paywall-benefit {

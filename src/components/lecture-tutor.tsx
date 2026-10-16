@@ -2143,6 +2143,8 @@ export function LectureTutor({
       />
       <div
         className={`memo-tutor phase-${phase}`}
+        // A live session: no browsing offer may cut it off.
+        data-offer-hold={phase === "idle" ? undefined : ""}
         style={{ "--orb-hue": voiceHue(previewVoice ?? voice) } as CSSProperties}
       >
         {/*

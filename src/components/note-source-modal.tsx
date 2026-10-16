@@ -2367,6 +2367,8 @@ export function NoteSourceModal({
         role="dialog"
         aria-modal="true"
         aria-label={t("library.newNote")}
+        // A recording or an upload under way: no browsing offer may cut it off.
+        data-offer-hold={isRecording || isStarting || busyLabel ? "" : undefined}
       >
         <div className="ios-sheet-stack note-source-modal-stack">
           <section

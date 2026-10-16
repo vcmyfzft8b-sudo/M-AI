@@ -11172,7 +11172,7 @@
 
 /*
  * After onboarding: the Memo AI logo as it always was, with Memo in it alive.
- * The wordmark is cut from the logo image itself (its right 64 %), so it is
+ * The wordmark is cut from the logo image itself (its right 66 %), so it is
  * exactly the brand's; Memo, at the same height, takes the drawn brain's place.
  */
 .memo-pw-brand {
@@ -11203,9 +11203,14 @@
 
 .memo-pw-brand-word {
   display: block;
-  width: calc(var(--lockup-h) * 2.08);
+  /* From x 165 of 480, just past the drawn brain's outline. The white band
+     there ran on into the brain's, so the mask gives it the rounded corner
+     the sticker has everywhere else (viewBox in the image's own pixels). */
+  width: calc(var(--lockup-h) * 2.13);
   height: var(--lockup-h);
   background: url("/memo-lockup.png") right center / auto 100% no-repeat;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 315 148' preserveAspectRatio='none'%3E%3Cfilter id='f'%3E%3CfeGaussianBlur stdDeviation='0.8'/%3E%3C/filter%3E%3Cg filter='url(%23f)'%3E%3Crect x='1.5' y='38.5' width='330' height='79' rx='17'/%3E%3Crect x='26' y='0' width='300' height='148'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 315 148' preserveAspectRatio='none'%3E%3Cfilter id='f'%3E%3CfeGaussianBlur stdDeviation='0.8'/%3E%3C/filter%3E%3Cg filter='url(%23f)'%3E%3Crect x='1.5' y='38.5' width='330' height='79' rx='17'/%3E%3Crect x='26' y='0' width='300' height='148'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat;
 }
 
 .memo-paywall-benefits .memo-paywall-benefit {
@@ -11247,7 +11252,7 @@
 }
 
 /* A paywall that has been fitted never scrolls, not even to bounce. */
-.memo-paywall-shell[data-fit] {
+.memo-paywall-shell[data-fit]:not([data-fit-scroll]) {
   overflow-y: hidden;
   overscroll-behavior: none;
 }

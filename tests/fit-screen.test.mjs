@@ -43,6 +43,19 @@ test("past the last level everything shrinks together until it fits: never a scr
   assert.ok(Number(el.squeeze()) > 0.7, "by just enough");
 });
 
+test("a screen too short even at half size scrolls rather than clip", () => {
+  const el = scroller({ content: 1200, height: 340, step: 40 });
+  fitToScreen(el, 4);
+  assert.equal(el.squeeze(), "0.5");
+  assert.equal(el.dataset.fitScroll, "", "flagged so the shell may scroll");
+  const roomy = scroller({ content: 1200, height: 800, step: 40 });
+  fitToScreen(roomy, 4);
+  assert.equal(roomy.dataset.fitScroll, undefined);
+  el.clientHeight = 2000;
+  fitToScreen(el, 4);
+  assert.equal(el.dataset.fitScroll, undefined, "and unflagged once it fits again");
+});
+
 test("not one pixel of scroll is accepted", () => {
   const el = scroller({ content: 801, height: 800, step: 1 });
   fitToScreen(el, 4);

@@ -143,9 +143,10 @@ moves on (`tutorStepPoints`). Results are stored in quarters and shown as a perc
 It looks and works like the app's own voice tutor on a note (`LectureTutor`), with the same markup
 and styles: the sphere riding the voice, the voice row and "Začni" before it starts, a one-word
 status with its dot, the topic row with its bar, and the round transport (go back over the
-point, pause, end). While the tutor speaks its words run as live captions, a sentence at a time
-with the one before fading above (`spokenSoFar` on the speech output, the read position over each
-piece's estimated character timings); while the learner talks, their own words are captioned.
+point, pause, end). While the tutor speaks its words run as live subtitles: phrases of up to nine
+words (ending early at a sentence end), each shown whole as its first word starts and replaced by
+the next, read a fifth of a second ahead of the sound (`spokenSoFar` on the speech output, over
+each piece's estimated character timings); while the learner talks, their own words are captioned.
 It is a conversation: the learner answers out loud and going quiet ends the answer. It runs on the
 voice tutor's own session and talking time (`useExamVoice`, shared with the oral mock).
 

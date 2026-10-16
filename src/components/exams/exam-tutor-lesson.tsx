@@ -34,11 +34,11 @@ type Stage = "idle" | "running" | "paused";
  */
 const NO_SPEECH_MS = 20_000;
 
-/* How many words a caption shows at once, at most. */
-const CAPTION_WORDS = 5;
+/* How many words a caption shows at once, at most: about two lines on a phone. */
+const CAPTION_WORDS = 9;
 
 /*
- * Live captions, as subtitles: the line cut into phrases of up to five words (a phrase also ends
+ * Live captions, as subtitles: the line cut into phrases of up to nine words (a phrase also ends
  * where a sentence does), and the phrase the voice is in is shown whole, replacing the one
  * before. One colour; nothing lingers.
  */

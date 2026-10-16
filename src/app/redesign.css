@@ -28458,11 +28458,27 @@ a.memo-exam-station-go {
 }
 
 /* A quiz miss's explanation, opened in the result row ("Preglej zakaj"), across its full width. */
+/* "Preglej zakaj" in an exam quiz: the right answer and its explanation, in a sheet. */
+.memo-exam-why-answer {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0 0 0.85rem;
+  color: var(--text);
+  font-size: 1.08rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.memo-exam-why-answer .msym {
+  flex-shrink: 0;
+  color: var(--success);
+}
+
 .memo-exam-quiz-why {
-  flex: 1 1 100%;
   margin: 0;
   color: var(--muted);
-  font-size: 0.98rem;
+  font-size: 1rem;
   line-height: 1.5;
 }
 

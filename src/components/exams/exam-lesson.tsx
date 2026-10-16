@@ -6,12 +6,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { StudyGenerationNotice } from "@/components/generation-notice";
 import { useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
+import { MemoPortal } from "@/components/memo-portal";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { NoteSpeedReader } from "@/components/note-speed-reader";
 import { StudyFlashcard, type StudyFlashcardExit } from "@/components/study-flashcard";
 import { StudyPracticeQuestion, StudyQuizQuestion } from "@/components/study-question";
 import { LESSON_KIND_EMOJI, LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
 import { ExamScreen } from "@/components/exams/exam-screen";
+import { sheetClass, useSheet } from "@/components/use-sheet";
 import { MemoBuddy, type BuddyMood } from "@/components/exams/memo-buddy";
 import { ExamTutorLesson } from "@/components/exams/exam-tutor-lesson";
 import { lessonUrl, prefetchLesson, takePrefetchedLesson } from "@/components/exams/lesson-prefetch";
@@ -723,8 +725,22 @@ function LessonBody({
   const [mark, setMark] = useState<WrittenMark | null>(null);
   const [writtenTotal, setWrittenTotal] = useState(0);
   const exitToken = useRef(0);
-  /* A quiz miss's explanation, opened by "Preglej zakaj". */
+  /*
+   * A quiz miss's explanation, opened by "Preglej zakaj" in a sheet (a dialog on desktop), so the
+   * question never grows past the screen. "Razumem" in the sheet closes it and moves on.
+   */
   const [showWhy, setShowWhy] = useState(false);
+  const nextAfterWhy = useRef(false);
+  const nextRef = useRef<((gotIt: boolean) => void) | null>(null);
+  const closeWhy = useCallback(() => {
+    setShowWhy(false);
+
+    if (nextAfterWhy.current) {
+      nextAfterWhy.current = false;
+      nextRef.current?.(false);
+    }
+  }, []);
+  const whySheet = useSheet(closeWhy);
   /* The quiz's misses, by place, and once the last question is answered the round that asks them again. */
   const [missedAt, setMissedAt] = useState<number[]>([]);
   const [retry, setRetry] = useState<number[] | null>(null);
@@ -953,6 +969,7 @@ function LessonBody({
         onFinish(nextCorrect, total);
       }
     };
+    nextRef.current = next;
 
     /*
      * The note's quiz, as the app has it: on the phone an answered question collapses to the
@@ -1023,7 +1040,7 @@ function LessonBody({
                 </span>
               </span>
               <div className="memo-quiz-result-actions">
-                {question.explanation && !showWhy ? (
+                {question.explanation ? (
                   <button type="button" onClick={() => setShowWhy(true)} className="memo-quiz-result-ghost">
                     {t("quiz.reviewWhy")}
                   </button>
@@ -1032,10 +1049,51 @@ function LessonBody({
                   {t("quiz.understood")}
                 </button>
               </div>
-              {showWhy && question.explanation ? <p className="memo-exam-quiz-why">{question.explanation}</p> : null}
             </div>
           ) : null}
         </div>
+        {wrong && showWhy && question.explanation ? (
+          <MemoPortal>
+            <button
+              type="button"
+              aria-label={t("common.close")}
+              className={sheetClass("memo-scrim", whySheet.closing)}
+              onClick={() => whySheet.dismiss()}
+            />
+            <div
+              className={sheetClass("memo-sheet memo-dialog memo-exam-why-sheet", whySheet.closing)}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="exam-quiz-why"
+              {...whySheet.dragProps}
+            >
+              <div className="memo-grab" data-drag-handle />
+              <div className="memo-sheet-title">
+                <span id="exam-quiz-why">{t("quiz.reviewWhy")}</span>
+                <button type="button" className="memo-sheet-close" aria-label={t("common.close")} onClick={() => whySheet.dismiss()}>
+                  <Msym name="close" size="1.45rem" fill={false} weight={500} />
+                </button>
+              </div>
+              <p className="memo-exam-why-answer">
+                <Msym name="check_circle" size="1.3rem" />
+                <span>{question.answer}</span>
+              </p>
+              <p className="memo-exam-quiz-why">{question.explanation}</p>
+              <div className="memo-sheet-actions">
+                <button
+                  type="button"
+                  className="memo-button-solid"
+                  onClick={() => {
+                    nextAfterWhy.current = true;
+                    whySheet.dismiss();
+                  }}
+                >
+                  {t("quiz.understood")}
+                </button>
+              </div>
+            </div>
+          </MemoPortal>
+        ) : null}
       </div>
     );
   }

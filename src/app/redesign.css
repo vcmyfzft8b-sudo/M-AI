@@ -11252,7 +11252,7 @@
 }
 
 /* A paywall that has been fitted never scrolls, not even to bounce. */
-.memo-paywall-shell[data-fit] {
+.memo-paywall-shell[data-fit]:not([data-fit-scroll]) {
   overflow-y: hidden;
   overscroll-behavior: none;
 }

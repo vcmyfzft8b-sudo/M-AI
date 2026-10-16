@@ -10,7 +10,8 @@ import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
  * The element must be the scroller whose overflow decides. It runs before paint
  * after every render, so no level is ever seen, and again when the element
  * changes size and once the fonts have loaded, which changes how tall text sets.
- * Past the last level it scrolls rather than clip anything.
+ * Past the last level everything shrinks together; only a screen too short even
+ * for half size (a phone on its side) is left to scroll (`data-fit-scroll`).
  */
 export function fitToScreen(element: HTMLElement | null, levels: number) {
   if (!element) {
@@ -20,6 +21,7 @@ export function fitToScreen(element: HTMLElement | null, levels: number) {
   // Self-contained on purpose: `fitScreenScript` sends this very function to
   // the page as text, so it may use nothing from outside itself.
   element.style.removeProperty("--fit-squeeze");
+  delete element.dataset.fitScroll;
 
   for (let level = 0; level <= levels; level += 1) {
     element.dataset.fit = String(level);
@@ -36,6 +38,12 @@ export function fitToScreen(element: HTMLElement | null, levels: number) {
   for (let pass = 0; pass < 6 && element.scrollHeight > element.clientHeight; pass += 1) {
     squeeze = Math.max(0.5, squeeze * (element.clientHeight / element.scrollHeight) - 0.005);
     element.style.setProperty("--fit-squeeze", String(squeeze));
+  }
+
+  // Never clip what cannot be reached: the shell scrolls again rather than hide
+  // the button below the edge.
+  if (element.scrollHeight > element.clientHeight) {
+    element.dataset.fitScroll = "";
   }
 }
 

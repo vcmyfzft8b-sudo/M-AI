@@ -12,6 +12,34 @@ function visibleTextLength(html: string) {
     .trim().length;
 }
 
+/**
+ * The whole element marked `role="main"`, nested tags of its own name included, or null. Moodle
+ * opens it with `<div role="main"><span id="maincontent"></span>`, and a match that stopped at the
+ * first closing tag read an Arnes Učilnice page as nothing and failed it as source_too_short
+ * (2026-10-16).
+ */
+export function pickRoleMainHtml(html: string): string | null {
+  const open = /<([a-z][a-z0-9-]*)\b[^>]*\brole=["']main["'][^>]*>/i.exec(html);
+
+  if (!open) {
+    return null;
+  }
+
+  const tags = new RegExp(`<(/?)${open[1]}\\b[^>]*>`, "gi");
+  tags.lastIndex = open.index + open[0].length;
+  let depth = 1;
+
+  for (let tag = tags.exec(html); tag; tag = tags.exec(html)) {
+    depth += tag[1] ? -1 : tag[0].endsWith("/>") ? 0 : 1;
+
+    if (depth === 0) {
+      return html.slice(open.index, tag.index + tag[0].length);
+    }
+  }
+
+  return html.slice(open.index);
+}
+
 /** The page's main article, else its `<main>`, else null. Pure, so it is unit-tested. */
 export function pickPageArticleHtml(html: string): string | null {
   const main = html.match(/<main\b[\s\S]*?<\/main>/i)?.[0] ?? null;

@@ -223,10 +223,11 @@ export function OnboardingPaywall({
   const checkoutState = searchParams.get("checkout");
   const hasNotice = checkoutState === "success" || Boolean(billingError) || (native && Boolean(apple.notice));
   const selectedPlan = native ? APPLE_PRODUCTS[apple.selected] : selectedPaywallPlan;
-  // A discounted first payment is charged straight away, not after a trial.
+  // The free trial comes with a ladder discount too; the discount is then the
+  // first payment after it (only the wheel's prize, on its own sheet, has none).
   const trialEligible = native
     ? apple.selectedProduct?.trialDays === 3
-    : subscriptionTrialEligible && !discounted;
+    : subscriptionTrialEligible;
   const checkingOut = native ? apple.busy : checkoutPlan !== null;
 
   /*
@@ -468,7 +469,7 @@ export function OnboardingPaywall({
             {subscription?.plan === selectedPlan && hasPaidAccess
               ? t("paywall.currentPlan")
               : discounted
-                ? t("paywall.offer.cta", { percent: offer.percentOff })
+                ? t(trialEligible ? "paywall.offer.ctaTrial" : "paywall.offer.cta", { percent: offer.percentOff })
                 : t(
                     trialEligible
                       ? "paywall.startTrial"

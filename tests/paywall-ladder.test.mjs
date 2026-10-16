@@ -94,12 +94,16 @@ test("prices: the discount to the cent, the year by the week rounded down", () =
   assert.equal(weeklyAmount(65), 1.25, "the wheel's own figure");
 });
 
-test("a discounted checkout has no trial and no promo-code field; the wheel wins", () => {
+test("a ladder discount comes with the trial, on a coupon that reaches the first payment; the wheel has no trial", () => {
   const route = readFileSync(new URL("../src/app/api/billing/checkout/route.ts", import.meta.url), "utf8");
   assert.match(route, /checkoutOffer\(parsed\.data\.step \?\? null, await readPaywallMoments\(appState\.user\.id\)\)/);
-  assert.match(route, /const coupon = wheelCoupon \?\? ladderOffer\.coupon;/);
-  assert.match(route, /!hasPriorStripeSubscription && !coupon;/);
+  assert.match(route, /appState\.subscriptionTrialEligible && !hasPriorStripeSubscription && !wheelCoupon;/);
+  assert.match(route, /wheelCoupon \?\? \(subscriptionTrialEligible \? ladderOffer\.trialCoupon : ladderOffer\.coupon\)/);
   assert.match(route, /\.\.\.\(coupon\s*\? \{ discounts: \[\{ coupon \}\] \}\s*: \{ allow_promotion_codes: true \}\)/);
+  for (const offer of PAYWALL_LADDER) {
+    assert.equal(offer.trialCoupon === null, offer.coupon === null);
+    if (offer.trialCoupon) assert.equal(offer.trialCoupon, `memo${offer.percentOff}-after-trial`);
+  }
 });
 
 test("the app never moves up the ladder", () => {

@@ -3,6 +3,7 @@ import {
   canCancelStream,
   createEmptyCharacterTimings,
   spokenTextBefore,
+  startedTextBefore,
   type SpeechCharacterTimings,
 } from "@/lib/tutor/turn-audio";
 
@@ -846,19 +847,21 @@ export class TutorSpeechOutput {
   }
 
   /**
-   * What of the current turn has been heard so far, in whole words: live captions follow it.
-   * Empty between turns and before the first audio (an empty map would otherwise read as "all").
+   * What of the current turn has started to be said, `leadSeconds` ahead of the audio: live
+   * captions follow it, and a word counts from its first sound so a phrase shows as it begins.
+   * Empty between turns and before the first audio.
    */
-  spokenSoFar() {
+  spokenSoFar(leadSeconds = 0) {
     const turn = this.turn;
     const context = this.context;
 
-    if (!turn || !context || turn.audioStartedAt === null || turn.timings.characters.length === 0) {
+    if (!turn || !context || turn.audioStartedAt === null) {
       return "";
     }
 
-    return spokenTextBefore(turn.timings, this.playedSeconds(turn, context), turn.text);
+    return startedTextBefore(turn.timings, this.playedSeconds(turn, context) + leadSeconds);
   }
+
 
   /** How much of this turn has been heard, in seconds of its own audio. */
   private playedSeconds(turn: ActiveTurn, context: AudioContext) {

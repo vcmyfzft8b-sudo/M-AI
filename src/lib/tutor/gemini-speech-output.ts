@@ -4,7 +4,7 @@ import {
   type SpeechOutputConfig,
   type SpeechTurnHandle,
 } from "@/lib/tutor/speech-output";
-import { createEmptyCharacterTimings, spokenTextBefore } from "@/lib/tutor/turn-audio";
+import { createEmptyCharacterTimings, spokenTextBefore, startedTextBefore } from "@/lib/tutor/turn-audio";
 
 /**
  * The tutor's voice on Gemini: the same audio graph and the same contract as `TutorSpeechOutput`,
@@ -640,7 +640,7 @@ export class GeminiTutorSpeechOutput {
   }
 
   /** See `TutorSpeechOutput.spokenSoFar`. Gemini's timings are spread over each piece's audio. */
-  spokenSoFar() {
+  spokenSoFar(leadSeconds = 0) {
     const turn = this.turn;
     const context = this.context;
 
@@ -648,9 +648,9 @@ export class GeminiTutorSpeechOutput {
       return "";
     }
 
-    const timings = this.timingsOf(turn);
-    return timings.characters.length === 0 ? "" : spokenTextBefore(timings, this.playedSeconds(turn, context), turn.text);
+    return startedTextBefore(this.timingsOf(turn), this.playedSeconds(turn, context) + leadSeconds);
   }
+
 
   /** See `TutorSpeechOutput.spokenIntoRoom`: what has left the speaker and can still echo. */
   spokenIntoRoom() {

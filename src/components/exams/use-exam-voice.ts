@@ -68,6 +68,9 @@ function primeAudio() {
   }
 }
 
+/* How far ahead of the voice the captions run, so a phrase never appears after it is heard. */
+const CAPTION_LEAD_SECONDS = 0.2;
+
 /* How long the voice may take to start playing before the lesson goes on in writing instead. */
 const AUDIO_START_MS = 6000;
 
@@ -518,12 +521,19 @@ export function useExamVoice({
       const speaking = outputRef.current?.getLevel() ?? 0;
       const listening = phaseRef.current === "listening" ? (inputRef.current?.getLevel() ?? 0) * 1.6 : 0;
       orbRef.current?.style.setProperty("--orb-level", envelopeRef.current.push(Math.max(speaking, listening)).toFixed(4));
-      // The captions move a word at a time, so a render only when a word has been added.
-      const spoken = phaseRef.current === "speaking" ? (outputRef.current?.spokenSoFar() ?? "") : captionRef.current;
+      // The captions move a word at a time, so a render only when the text has grown.
+      // A little ahead of the sound, as subtitles are: a phrase is up as its first word begins.
+      const spoken =
+        phaseRef.current === "speaking" ? (outputRef.current?.spokenSoFar(CAPTION_LEAD_SECONDS) ?? "") : captionRef.current;
 
       if (spoken !== captionRef.current) {
+        const words = (text: string) => (text.trim() ? text.trim().split(/\s+/u).length : 0);
+        const moved = words(spoken) !== words(captionRef.current);
         captionRef.current = spoken;
-        setCaption(spoken);
+
+        if (moved) {
+          setCaption(spoken);
+        }
       }
 
       frame = window.requestAnimationFrame(pump);

@@ -2539,8 +2539,6 @@ export const sr: Messages = {
   "exam.dash.target": "cilj {percent} %",
   "exam.dash.goal.label": "Tvoje znanje",
   "exam.dash.goal.valueText": "Znanje {percent} %, cilj {target} %",
-  "exam.dash.goal.left": "Još {percent} % do cilja",
-  "exam.dash.goal.reached": "Cilj je dostignut",
   "exam.dash.countdownToday": "Ispit je danas",
   "exam.dash.streak": { one: "{count} dan zaredom", few: "{count} dana zaredom", other: "{count} dana zaredom" },
   "exam.dash.module": "Modul {index}",

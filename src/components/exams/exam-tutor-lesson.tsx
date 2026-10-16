@@ -32,6 +32,15 @@ type Stage = "idle" | "running" | "paused";
  */
 const NO_SPEECH_MS = 20_000;
 
+/*
+ * Live captions, as subtitles: the sentence being said, word by word, with the one before it
+ * fading above. Never the whole explanation at once.
+ */
+function captionWindow(spoken: string) {
+  const sentences = spoken.trim().split(/(?<=[.!?…])\s+/u).filter(Boolean);
+  return { earlier: sentences.at(-2) ?? "", current: sentences.at(-1) ?? "" };
+}
+
 export function ExamTutorLesson({
   examId,
   topicId,
@@ -263,6 +272,7 @@ export function ExamTutorLesson({
   }
 
   const running = stage === "running" || stage === "paused";
+  const captionLines = captionWindow(session.caption);
   const preparing = running && phase === "preparing";
   const statusKey: MessageKey | null =
     stage === "paused"
@@ -313,17 +323,27 @@ export function ExamTutorLesson({
         </p>
       ) : null}
 
-      {/* The tutor speaks; only the learner's own words are captioned, as in the app's tutor. */}
-      {running && !preparing && !textMode ? (
+      {/* While the voice speaks: its words as live captions, a sentence at a time. */}
+      {running && !preparing && session.speaks && phase === "speaking" ? (
+        <div className="memo-tutor-caption memo-exam-tutor-captions" aria-live="off">
+          <p>
+            {captionLines.earlier ? <span className="earlier">{captionLines.earlier} </span> : null}
+            <span>{captionLines.current}</span>
+          </p>
+        </div>
+      ) : null}
+
+      {/* Talking back: the learner's own words, as in the app's tutor. */}
+      {running && !preparing && !textMode && phase !== "speaking" ? (
         <div className="memo-tutor-caption" aria-live="off">
           {heard ? <p className={`memo-tutor-heard ${phase === "listening" ? "draft" : ""}`.trim()}>{heard}</p> : null}
         </div>
       ) : null}
 
-      {/* In writing: the tutor's line, the question, and a box to answer in. */}
+      {/* In writing: the question and a box to answer in (and the line itself when there is no voice). */}
       {running && textMode && stage !== "paused" ? (
         <>
-          {line ? <p className="memo-exam-tutor-line">{line}</p> : null}
+          {line && !session.speaks ? <p className="memo-exam-tutor-line">{line}</p> : null}
           {phase === "listening" || phase === "thinking" ? (
             <p className="memo-exam-oral-question">{steps[index]?.question}</p>
           ) : null}

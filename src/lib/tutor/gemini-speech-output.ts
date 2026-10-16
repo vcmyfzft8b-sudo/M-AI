@@ -639,6 +639,19 @@ export class GeminiTutorSpeechOutput {
     return timings;
   }
 
+  /** See `TutorSpeechOutput.spokenSoFar`. Gemini's timings are spread over each piece's audio. */
+  spokenSoFar() {
+    const turn = this.turn;
+    const context = this.context;
+
+    if (!turn || !context || turn.audioStartedAt === null) {
+      return "";
+    }
+
+    const timings = this.timingsOf(turn);
+    return timings.characters.length === 0 ? "" : spokenTextBefore(timings, this.playedSeconds(turn, context), turn.text);
+  }
+
   /** See `TutorSpeechOutput.spokenIntoRoom`: what has left the speaker and can still echo. */
   spokenIntoRoom() {
     const previous = Date.now() <= this.roomTailUntil ? this.roomTail : "";

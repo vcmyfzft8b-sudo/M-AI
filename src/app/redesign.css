@@ -27448,7 +27448,7 @@ button.memo-exam-card:hover {
 /* The exam in three numbers, small enough to sit in one row above the path. */
 /*
  * The prep's headline: how much the learner knows against the goal. A bar with the target
- * marked on it (a notch that stands out of the track), the number big, and how far is left;
+ * marked on it (a notch that stands out of the track) and the number big;
  * the days and today's lessons sit under it as two quiet facts.
  */
 .memo-exam-goal {
@@ -27528,17 +27528,6 @@ button.memo-exam-card:hover {
 
 .memo-exam-goal-mark.hit {
   box-shadow: var(--shadow), inset 0 0 0 2px var(--success);
-}
-
-.memo-exam-goal-left {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.98rem;
-  font-weight: 650;
-}
-
-.memo-exam-goal-left.reached {
-  color: var(--success);
 }
 
 .memo-exam-goal-facts {
@@ -28735,6 +28724,28 @@ a.memo-exam-station-go {
   display: grid;
   gap: 0.6rem;
   padding: 0.8rem 0.2rem 0.2rem;
+}
+
+/* The tutor's live captions: the sentence being said, the one before it fading above. */
+.memo-exam-tutor-captions p {
+  max-width: 30rem;
+  margin: 0;
+  color: var(--text);
+  font-size: 1.08rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.memo-exam-tutor-captions .earlier {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* A presence, not a bead: the exam tutor's sphere keeps a larger floor than the flex share. */
+.memo-tutor.memo-exam-tutor .memo-orb {
+  min-height: 10rem;
 }
 
 .memo-exam-tutor-line {

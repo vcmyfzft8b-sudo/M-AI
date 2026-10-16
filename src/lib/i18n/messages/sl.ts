@@ -2562,8 +2562,6 @@ export const sl = {
   "exam.dash.target": "cilj {percent} %",
   "exam.dash.goal.label": "Tvoje znanje",
   "exam.dash.goal.valueText": "Znanje {percent} %, cilj {target} %",
-  "exam.dash.goal.left": "Še {percent} % do cilja",
-  "exam.dash.goal.reached": "Cilj je dosežen",
   "exam.dash.countdownToday": "Izpit je danes",
   "exam.dash.streak": { one: "{count} dan zapored", two: "{count} dneva zapored", few: "{count} dnevi zapored", other: "{count} dni zapored" },
   "exam.dash.module": "Modul {index}",

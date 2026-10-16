@@ -6,7 +6,7 @@ study path. It follows Astra AI's exam-prep flow, drawn in Memo's own components
 ## Where it lives
 
 - **"Novo"** (the phone dock button, formerly "Nov zapisek", and the desktop heading above the
-  quick actions) opens a sheet whose first item is the exam-prep card (Memo in a coral tile, a faint coral edge,
+  quick actions) opens a sheet whose first item is the exam-prep card (the folder's 🎓 in a coral tile, a faint coral edge,
   no arrow). Like every option
   there, it always starts something new (`/app/exams/new`). The four note sources follow it.
 - **The library:** a learner may have any number of preps, and they live in "Moji zapiski", in
@@ -142,11 +142,18 @@ moves on (`tutorStepPoints`). Results are stored in quarters and shown as a perc
 
 It looks and works like the app's own voice tutor on a note (`LectureTutor`), with the same markup
 and styles: the sphere riding the voice, the voice row and "Začni" before it starts, a one-word
-status with its dot, only the learner's own words captioned, the topic row with its bar, and the
-round transport (go back over the point, pause, end). It is a conversation: the learner answers
-out loud and going quiet ends the answer. It runs on the voice tutor's own session and talking
-time (`useExamVoice`, shared with the oral mock); with no microphone, no talking time or no Web
-Audio it runs in writing, Memo in place of the sphere and a box to type in.
+status with its dot, the topic row with its bar, and the round transport (go back over the
+point, pause, end). While the tutor speaks its words run as live captions, a sentence at a time
+with the one before fading above (`spokenSoFar` on the speech output, the read position over each
+piece's estimated character timings); while the learner talks, their own words are captioned.
+It is a conversation: the learner answers out loud and going quiet ends the answer. It runs on the
+voice tutor's own session and talking time (`useExamVoice`, shared with the oral mock).
+
+Without a microphone it still speaks and the learner types the answers ("Poskusi z mikrofonom"
+tries again). The tap on "Začni" plays a silent blip that unlocks Web Audio (a microphone capture
+used to be what did that), and a voice that cannot start within 6 s gives way to writing rather
+than "Pripravljam se" for good. With no talking time or no Web Audio it runs silent, in writing,
+with Memo in place of the sphere. The greeting is written by the plan in the note's language.
 
 ### Practice that does not repeat itself
 

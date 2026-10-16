@@ -227,7 +227,7 @@ export function ExamDashboard({
     </>
   );
 
-  /* What the learner knows, floored (89.6 % is not the 90 % goal), and how far is left to the goal. */
+  /* What the learner knows, floored (89.6 % is not the 90 % goal); at the goal the target rings green. */
   const known = percent(detail.mastery);
   const goalLeft = Math.max(0, exam.target_mastery - known);
 
@@ -237,7 +237,7 @@ export function ExamDashboard({
         <h1>{exam.title}</h1>
         {/*
          * The goal is the headline: how much of the material the learner knows, on a bar with the
-         * target marked, and how far is left. The days and today's lessons are the facts under it.
+         * target marked. The days and today's lessons are the facts under it.
          */}
         <section className="memo-exam-goal" aria-label={t("exam.dash.goal.label")}>
           <div className="memo-exam-goal-head">
@@ -267,9 +267,6 @@ export function ExamDashboard({
               <Emoji symbol="🎯" size="1.45rem" />
             </span>
           </div>
-          <p className={`memo-exam-goal-left ${goalLeft === 0 ? "reached" : ""}`.trim()}>
-            {goalLeft === 0 ? t("exam.dash.goal.reached") : t("exam.dash.goal.left", { percent: goalLeft })}
-          </p>
         </section>
         <div className="memo-exam-goal-facts">
           <span>

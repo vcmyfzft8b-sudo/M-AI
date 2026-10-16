@@ -118,6 +118,9 @@ export function useExamVoice({
   const [textNote, setTextNote] = useState<string | null>(null);
   /* Whether the tutor's voice is on: in writing it still speaks when only the microphone is missing. */
   const [speaks, setSpeaks] = useState(false);
+  /* What the voice has said of the current line so far, word by word: the live captions. */
+  const [caption, setCaption] = useState("");
+  const captionRef = useRef("");
 
   const phaseRef = useRef<VoicePhase>("preparing");
   const outputRef = useRef<TutorSpeechOutput | GeminiTutorSpeechOutput | null>(null);
@@ -220,6 +223,9 @@ export function useExamVoice({
       }
 
       setLine(shown);
+      // A new line starts its captions from nothing.
+      captionRef.current = "";
+      setCaption("");
       const output = outputRef.current;
 
       if (!output) {
@@ -509,6 +515,14 @@ export function useExamVoice({
       const speaking = outputRef.current?.getLevel() ?? 0;
       const listening = phaseRef.current === "listening" ? (inputRef.current?.getLevel() ?? 0) * 1.6 : 0;
       orbRef.current?.style.setProperty("--orb-level", envelopeRef.current.push(Math.max(speaking, listening)).toFixed(4));
+      // The captions move a word at a time, so a render only when a word has been added.
+      const spoken = phaseRef.current === "speaking" ? (outputRef.current?.spokenSoFar() ?? "") : captionRef.current;
+
+      if (spoken !== captionRef.current) {
+        captionRef.current = spoken;
+        setCaption(spoken);
+      }
+
       frame = window.requestAnimationFrame(pump);
     };
 
@@ -527,6 +541,7 @@ export function useExamVoice({
     textMode,
     textNote,
     speaks,
+    caption,
     orbRef,
     languageRef,
     startedAtRef,

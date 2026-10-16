@@ -2525,8 +2525,6 @@ export const en: Messages = {
   "exam.dash.target": "goal {percent}%",
   "exam.dash.goal.label": "Your knowledge",
   "exam.dash.goal.valueText": "Knowledge {percent}%, goal {target}%",
-  "exam.dash.goal.left": "{percent}% to go to your goal",
-  "exam.dash.goal.reached": "Goal reached",
   "exam.dash.countdownToday": "The exam is today",
   "exam.dash.streak": { one: "{count}-day streak", other: "{count}-day streak" },
   "exam.dash.module": "Module {index}",

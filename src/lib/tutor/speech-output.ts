@@ -845,6 +845,21 @@ export class TutorSpeechOutput {
     return `${previous} ${recent}`.trim();
   }
 
+  /**
+   * What of the current turn has been heard so far, in whole words: live captions follow it.
+   * Empty between turns and before the first audio (an empty map would otherwise read as "all").
+   */
+  spokenSoFar() {
+    const turn = this.turn;
+    const context = this.context;
+
+    if (!turn || !context || turn.audioStartedAt === null || turn.timings.characters.length === 0) {
+      return "";
+    }
+
+    return spokenTextBefore(turn.timings, this.playedSeconds(turn, context), turn.text);
+  }
+
   /** How much of this turn has been heard, in seconds of its own audio. */
   private playedSeconds(turn: ActiveTurn, context: AudioContext) {
     return turn.audioStartedAt === null

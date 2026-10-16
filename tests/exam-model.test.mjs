@@ -319,8 +319,11 @@ test("mastery moves a step towards what each lesson showed, guesses taken out", 
   assert.equal(masteryAfterLesson(0, "true_false", 0.5), 0);
   assert.equal(masteryAfterLesson(0, "quiz", 0.25), 0);
   assert.ok(Math.abs(masteryAfterLesson(0, "true_false", 0.8) - 0.2 * 0.6) < 1e-9);
-  // The summary tests nothing and moves nothing; flashcards move half as far.
-  assert.equal(masteryAfterLesson(0.5, "summary", 1), 0.5);
+  // A lesson read alone (no part to test) is saved with nothing to score and moves nothing; a lesson
+  // with its parts (flashcards, quiz, written) counts like any other.
+  assert.equal(topicMastery([{ ...result("a", "summary", 0), total: 0 }]).mastery, 0);
+  assert.ok(topicMastery([{ ...result("a", "summary", 0.9), total: 14 }]).mastery > 0.15);
+  // Flashcards move half as far.
   assert.ok(Math.abs(masteryAfterLesson(0, "flashcards", 1) - 0.1) < 1e-9);
 });
 

@@ -35,6 +35,16 @@ import { paywallPath } from "@/lib/paywall-reasons";
 
 const POLL_MS = 4000;
 
+/* Each part of a lesson in its header. */
+const LESSON_PART_EMOJI: Record<ExamLessonKind, string> = {
+  summary: "📖",
+  tutor: "🎙️",
+  flashcards: "🃏",
+  quiz: "❓",
+  true_false: "⚖️",
+  written: "✍️",
+};
+
 const GENERATOR_ROUTE: Record<LessonGenerator, string> = {
   study: "study",
   quiz: "quiz",
@@ -79,6 +89,8 @@ const TUTOR_QUARTERS = 4;
 /** The questions a lesson showed, recorded with its result so the next try draws others. */
 function shownItemIds(lesson: LessonPayload | null): string[] {
   switch (lesson?.kind) {
+    case "summary":
+      return (lesson.parts ?? []).flatMap((part) => shownItemIds(part));
     case "flashcards":
       return lesson.cards.map((card) => card.id);
     case "quiz":
@@ -141,6 +153,9 @@ export function ExamLesson({
   const lessonRef = useRef<LessonPayload | null>(null);
   /* The questions this try got wrong (knowledge gaps), saved with the result. */
   const missedRef = useRef(new Set<string>());
+  /* A lesson's parts: which one is on (-1 while reading) and what they scored so far. */
+  const [part, setPart] = useState(-1);
+  const tallyRef = useRef({ correct: 0, total: 0 });
   /* `navigateWithFeedback` is a new function every render; a load keyed on it would restart forever. */
   const navigateRef = useRef(navigateWithFeedback);
   const examHref = `/app/exams/${examId}`;
@@ -160,6 +175,7 @@ export function ExamLesson({
       const ready = early.body as Extract<LessonLoad, { status: "ready" }>;
       lessonRef.current = ready.lesson;
       missedRef.current = new Set();
+      setPart(-1);
       setPhase({ name: "playing", lesson: ready.lesson });
       return;
     }
@@ -182,6 +198,7 @@ export function ExamLesson({
     if (load.status === "ready") {
       lessonRef.current = load.lesson;
       missedRef.current = new Set();
+      setPart(-1);
       setPhase({ name: "playing", lesson: load.lesson });
       return;
     }
@@ -294,7 +311,8 @@ export function ExamLesson({
       return;
     }
 
-    if (kind === "summary") {
+    // A lesson read alone tested nothing: back to the path. One with parts shows its result.
+    if (kind === "summary" && total === 0) {
       navigateWithFeedback(examHref, { refresh: true });
       return;
     }
@@ -305,10 +323,17 @@ export function ExamLesson({
      * screen says by how much. "Nadaljuj" goes back to the path, which has the next lesson.
      */
     const score = total > 0 ? Math.min(1, correct / total) : 1;
-    const after = masteryAfterLesson(module.rawMastery, kind, score);
+    // A lesson that tested nothing (the reading alone) moves nothing.
+    const after = total > 0 ? masteryAfterLesson(module.rawMastery, kind, score) : module.mastery;
     const mark = passThreshold(goal);
     const missedNow = missedRef.current.size;
-    const repeatedIds = lessonRef.current && "repeated" in lessonRef.current ? (lessonRef.current.repeated ?? []) : [];
+    const repeatedOf = (lesson: LessonPayload | null): string[] =>
+      lesson?.kind === "summary"
+        ? (lesson.parts ?? []).flatMap(repeatedOf)
+        : lesson && "repeated" in lesson
+          ? (lesson.repeated ?? [])
+          : [];
+    const repeatedIds = repeatedOf(lessonRef.current);
     const gapsClosed = repeatedIds.filter((id) => !missedRef.current.has(id)).length;
     const reached = meetsPassMark(after, mark) && !meetsPassMark(module.mastery, mark);
 
@@ -349,6 +374,29 @@ export function ExamLesson({
     setPhase({ name: "zone", correct, total });
   }
 
+  /* The lesson's parts after the reading: start the first, or save the reading alone when there are none. */
+  function startParts(lesson: LessonPayload) {
+    tallyRef.current = { correct: 0, total: 0 };
+
+    if (lesson.kind === "summary" && (lesson.parts?.length ?? 0) > 0) {
+      setPart(0);
+    } else {
+      void save(0, 0, null);
+    }
+  }
+
+  function finishPart(lesson: LessonPayload, correct: number, total: number) {
+    const tally = { correct: tallyRef.current.correct + correct, total: tallyRef.current.total + total };
+    tallyRef.current = tally;
+    const count = lesson.kind === "summary" ? (lesson.parts?.length ?? 0) : 0;
+
+    if (part + 1 < count) {
+      setPart(part + 1);
+    } else {
+      enterZone(tally.correct, tally.total);
+    }
+  }
+
   /*
    * The screen's buttons, at the foot of the phone like every other exam screen's (and held at the
    * bottom of the window on desktop) rather than wherever the content happens to end.
@@ -363,8 +411,8 @@ export function ExamLesson({
           {t("exam.lesson.skip")}
         </button>
       </div>
-    ) : phase.name === "playing" && phase.lesson.kind === "summary" ? (
-      <button type="button" className="memo-button-coral" onClick={() => void save(1, 1, null)}>
+    ) : phase.name === "playing" && phase.lesson.kind === "summary" && part < 0 ? (
+      <button type="button" className="memo-button-coral" onClick={() => startParts(phase.lesson)}>
         {t("exam.zone.continue")}
       </button>
     ) : phase.name === "zone" ? (
@@ -391,6 +439,20 @@ export function ExamLesson({
     <ExamScreen backHref={examHref} backIcon="close" backLabel={examTitle} title={title} refreshOnBack cta={cta}>
       <div className="memo-exam-lesson-head">
         <span className="memo-exam-lesson-module">{module.title}</span>
+        {/* A lesson's parts, as Astra counts its steps: the reading, then each part in turn. */}
+        {phase.name === "playing" && phase.lesson.kind === "summary" && (phase.lesson.parts?.length ?? 0) > 0 ? (
+          <ol className="memo-exam-lesson-parts" aria-label={t("exam.lesson.parts")}>
+            {[{ kind: "summary" as const }, ...(phase.lesson.parts ?? [])].map((entry, index) => (
+              <li
+                key={`${entry.kind}:${index}`}
+                className={index - 1 === part ? "current" : index - 1 < part ? "done" : undefined}
+              >
+                <Emoji symbol={LESSON_PART_EMOJI[entry.kind]} size="0.95rem" />
+                {t(index === 0 ? "exam.lesson.part.read" : LESSON_KIND_KEY[entry.kind])}
+              </li>
+            ))}
+          </ol>
+        ) : null}
       </div>
 
       <div className="memo-panel study memo-exam-lesson">
@@ -406,6 +468,27 @@ export function ExamLesson({
             <MemoBuddy mood="sad" size="6rem" />
             <p className="memo-study-empty-title">{t("exam.lesson.failed")}</p>
           </div>
+        ) : phase.name === "playing" && phase.lesson.kind === "summary" && part >= 0 && phase.lesson.parts?.[part] ? (
+          /*
+           * The lesson's parts, one after another (Astra's lesson: read, check, quiz): each is the
+           * app's own lesson of that kind, and the scores add up into the lesson's one result.
+           */
+          <LessonBody
+            key={`part:${part}`}
+            lesson={phase.lesson.parts[part]}
+            examId={examId}
+            topicId={module.topicId}
+            lectureId={module.lectureId}
+            onReact={react}
+            onMissed={(itemId) => {
+              // A written answer missed here would never come back in a quiz: only quiz misses are gaps.
+              if (phase.lesson.kind === "summary" && phase.lesson.parts?.[part]?.kind !== "written") {
+                missedRef.current.add(itemId);
+              }
+            }}
+            onRecovered={(itemId) => missedRef.current.delete(itemId)}
+            onFinish={(correct, total) => finishPart(phase.lesson, correct, total)}
+          />
         ) : phase.name === "playing" ? (
           <LessonBody
             lesson={phase.lesson}
@@ -415,9 +498,7 @@ export function ExamLesson({
             onReact={react}
             onMissed={(itemId) => missedRef.current.add(itemId)}
             onRecovered={(itemId) => missedRef.current.delete(itemId)}
-            onFinish={(correct, total) =>
-              phase.lesson.kind === "summary" ? void save(1, 1, null) : enterZone(correct, total)
-            }
+            onFinish={(correct, total) => enterZone(correct, total)}
           />
         ) : phase.name === "zone" ? (
           <LearningZone
@@ -566,6 +647,12 @@ function LessonBody({
   const [marking, setMarking] = useState(false);
   const [mark, setMark] = useState<WrittenMark | null>(null);
   const [writtenTotal, setWrittenTotal] = useState(0);
+  /*
+   * Astra's exercise guides a learner to the full answer rather than only marking it: a written
+   * answer that fell short can be fixed once, with what it missed as the hint. The two tries count
+   * half each.
+   */
+  const [revision, setRevision] = useState<{ first: number; hint: string } | null>(null);
   const exitToken = useRef(0);
   /*
    * A quiz miss's explanation, opened by "Preglej zakaj" in a sheet (a dialog on desktop), so the
@@ -1025,6 +1112,12 @@ function LessonBody({
       <div className="memo-progress test">
         <div style={{ width: `${Math.round(((index + 1) / lesson.questions.length) * 100)}%` }} />
       </div>
+      {revision ? (
+        <p className="memo-exam-written-hint">
+          <Emoji symbol="💡" size="1rem" />
+          <span>{revision.hint}</span>
+        </p>
+      ) : null}
       <StudyPracticeQuestion
         prompt={question.prompt}
         answer={answer}
@@ -1067,12 +1160,26 @@ function LessonBody({
       ) : null}
 
       <div className="memo-test-actions">
+        {mark && mark.marked && !passed && !revision && (mark.missingPoints || mark.expectedAnswer) ? (
+          <button
+            type="button"
+            className="memo-test-prev"
+            onClick={() => {
+              setRevision({ first: mark.score ?? 0, hint: mark.missingPoints || mark.expectedAnswer });
+              setUnknown(false);
+              setMark(null);
+            }}
+          >
+            {t("exam.written.revise")}
+          </button>
+        ) : null}
         {mark ? (
           <button
             type="button"
             className="memo-test-next"
             onClick={() => {
-              const earned = mark.marked ? (mark.score ?? 0) : 0;
+              const second = mark.marked ? (mark.score ?? 0) : 0;
+              const earned = revision ? Math.round((revision.first + second) / 2) : second;
               const possible = mark.marked ? mark.maxScore : 0;
               const nextTotal = writtenTotal + possible;
               const nextCorrect = correct + earned;
@@ -1088,6 +1195,7 @@ function LessonBody({
               setAnswer("");
               setUnknown(false);
               setMark(null);
+              setRevision(null);
             }}
           >
             {t("exam.lesson.next")}

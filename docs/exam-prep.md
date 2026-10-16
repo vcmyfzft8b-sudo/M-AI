@@ -159,13 +159,34 @@ On the exam's eve and the day itself (`finalDay`), after repeats and gaps, each 
 flashcard refresher ("Osvežitev pred izpitom") before the mock or anything else, weakest topic first,
 as Astra's exam-day routine does.
 
+### The lesson ("Lekcija"): several parts, one station
+
+Astra's main lesson (Smart Text) is not one activity: it is the reading with a check after every
+section, a retry of what was missed, and a final quiz, and only all of it together moves the
+topic. Ours is the same idea with the app's own screens: **Lekcija** (`summary`) is the topic's
+reading, then a few flashcards (4), the quiz (5) and a written answer, one after another, each the
+app's own lesson of that kind (`LESSON_PARTS`; the header shows Branje · Kartice · Kviz · Pisni
+odgovor). Their scores add up into the lesson's one result (cards known + quiz right + written
+marks), which moves the topic's mastery like any lesson. A part whose material is not ready is left
+out; a lesson with no part at all is the reading alone, is saved with nothing to score (`total` 0)
+and moves nothing. Questions shown in a lesson count as seen for the quiz, true/false, written and
+flashcard lessons after it, and its quiz misses are knowledge gaps (its written misses are not: no
+later quiz could ask them). It is every topic's first station; the single-format lessons come after
+it, as Astra's practice lessons do.
+
+**Fixing a written answer, with a hint.** Astra's exercise is one applied problem the tutor walks the
+learner through, naming the trap when an answer goes wrong and asking the next step. Our written
+answer keeps its marking and adds the guided second try: an answer marked under 3 of 5 offers
+"Popravi z namigom", which shows what it missed as the hint and keeps the answer to fix; the second
+marking and the first count half each. The tutor lesson is the fully guided, step-by-step version.
+
 ### Choosing the lesson format
 
 The bottom bar of the path has Astra's two buttons: the round **swap** button and the coral
 **"Nadaljuj · <lesson>"**. Swap opens the **"Naslednja lekcija"** picker (a sheet on the phone, a
 dialog on desktop), in Astra's three tabs:
 
-- **Nauči se:** Povzetek, Tutor, Kartice, and **Vrzeli** (the topic's open gaps; locked while there
+- **Nauči se:** Lekcija, Tutor, Kartice, and **Vrzeli** (the topic's open gaps; locked while there
   are none).
 - **Vadi:** Kviz, Drži / ne drži, Pisni odgovor, and **Ponovitev** (the topic's weakest format again;
   locked until the topic has had `REPETITION_AFTER` (3) practice lessons).

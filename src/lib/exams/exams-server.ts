@@ -1095,6 +1095,12 @@ export type LessonPayload =
       summary: string;
       keyTopics: string[];
       notesMarkdown: string;
+      /**
+       * The lesson's other parts, done in this order after the reading, as Astra's lesson bundles
+       * reading with checks and a final quiz: a few flashcards, a quiz and a written answer. A part
+       * whose material is not ready yet is left out; with none, the lesson is the reading alone.
+       */
+      parts?: LessonPayload[];
     }
   | {
       kind: "flashcards";
@@ -1339,14 +1345,19 @@ function contentWritten(origin: "gen" | "x", topicId: string, written: StoredFre
 }
 
 /* The lessons that share a pool: a quiz question seen in true/false counts as seen for the quiz. */
+/* A lesson (`summary`) shows flashcards, quiz and written questions too, so it counts as seen for each. */
 const SEEN_GROUP: Record<ExamLessonKind, ExamLessonKind[]> = {
   summary: ["summary"],
   tutor: ["tutor"],
-  flashcards: ["flashcards"],
-  quiz: ["quiz", "true_false"],
-  true_false: ["quiz", "true_false"],
-  written: ["written"],
+  flashcards: ["flashcards", "summary"],
+  quiz: ["quiz", "true_false", "summary"],
+  true_false: ["quiz", "true_false", "summary"],
+  written: ["written", "summary"],
 };
+
+/* The parts of a lesson after its reading, in order (Astra's lesson: read, check, quiz). */
+const LESSON_PARTS = ["flashcards", "quiz", "written"] as const;
+const LESSON_PART_CARDS = 4;
 
 /* How many fresh questions a topic gets when it runs out, and how many it keeps in all. */
 const FRESH_BATCH = { quiz: 8, written: 2 } as const;
@@ -1504,6 +1515,32 @@ export async function loadLesson(
       summary = (data as { summary: string } | null)?.summary ?? "";
     }
 
+    // The lesson's parts, each loaded as its own lesson would be (seen questions, gaps first, fresh
+    // ones written when a topic runs out). One that cannot be built right now is simply left out.
+    const parts: LessonPayload[] = [];
+
+    for (const kind of LESSON_PARTS) {
+      const part = await loadLesson(supabase, userId, { ...input, kind }).catch((error) => {
+        if (error instanceof ExamModelCallRefused) {
+          return null;
+        }
+
+        throw error;
+      });
+
+      if (part?.status !== "ready") {
+        continue;
+      }
+
+      const lesson = part.lesson;
+
+      if (lesson.kind === "flashcards" && lesson.cards.length > 0) {
+        parts.push({ ...lesson, cards: lesson.cards.slice(0, LESSON_PART_CARDS) });
+      } else if ((lesson.kind === "quiz" || lesson.kind === "written") && lesson.questions.length > 0) {
+        parts.push(lesson);
+      }
+    }
+
     return {
       status: "ready",
       lesson: {
@@ -1511,6 +1548,7 @@ export async function loadLesson(
         summary,
         keyTopics: keyPoints,
         notesMarkdown: [summary, ...keyPoints.map((point) => `- ${point}`)].filter(Boolean).join("\n\n"),
+        parts,
       },
     };
   }

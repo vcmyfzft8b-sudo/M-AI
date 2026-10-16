@@ -253,6 +253,8 @@ export type LessonResultLike = {
   /** The questions the lesson showed, and of those the ones the learner got wrong (knowledge gaps). */
   item_ids?: readonly string[] | null;
   missed_ids?: readonly string[] | null;
+  /** What the lesson tested (questions, cards, marks); 0 when it tested nothing, which moves no mastery. */
+  total?: number | null;
 };
 
 /*
@@ -269,8 +271,13 @@ export type LessonResultLike = {
  */
 export const MASTERY_RATE = 0.2;
 
+/*
+ * The lesson (`summary`) is Astra's lesson: the reading, then a few flashcards, a quiz and a written
+ * answer, scored together. Read on its own (no part could be built) it tested nothing and is saved
+ * with nothing to score (`total` 0), which moves nothing.
+ */
 export const MASTERY_WEIGHT: Record<ExamLessonKind, number> = {
-  summary: 0,
+  summary: 1,
   tutor: 1,
   flashcards: 0.5,
   quiz: 1,
@@ -285,7 +292,8 @@ export const MASTERY_WEIGHT: Record<ExamLessonKind, number> = {
  * guessable lessons alone and fail the real exam.
  */
 export const GUESS_RATE: Record<ExamLessonKind, number> = {
-  summary: 0,
+  // A lesson's score mixes four-option questions with flashcards and a written answer.
+  summary: 0.1,
   tutor: 0,
   flashcards: 0,
   quiz: 0.25,
@@ -419,7 +427,7 @@ export type ModuleState = {
  * other. Flashcards are graded by the learner and come back by the note's own spaced repetition, and
  * the tutor and summary show no questions, so only these lessons open and close gaps.
  */
-export const GAP_LESSON_KINDS: readonly PracticeLessonKind[] = ["quiz", "true_false", "written"];
+export const GAP_LESSON_KINDS: readonly ExamLessonKind[] = ["quiz", "true_false", "written", "summary"];
 
 /*
  * A gap missed this many times keeps coming back in its topic's lessons but stops holding the path:
@@ -432,8 +440,8 @@ export const GAP_SHARE_OF_LESSON = 0.6;
 
 export type OpenGap = {
   id: string;
-  /** The lesson it was last missed in. */
-  kind: PracticeLessonKind;
+  /** The lesson it was last missed in (a lesson's own quiz and written answer count as `summary`). */
+  kind: ExamLessonKind;
   /** Times missed since it was last answered right. */
   misses: number;
 };
@@ -453,7 +461,7 @@ export function openGaps(results: readonly LessonResultLike[]): OpenGap[] {
       if (missed.has(id)) {
         const previous = open.get(id);
         open.delete(id);
-        open.set(id, { id, kind: result.lesson_kind as PracticeLessonKind, misses: (previous?.misses ?? 0) + 1 });
+        open.set(id, { id, kind: result.lesson_kind, misses: (previous?.misses ?? 0) + 1 });
       } else {
         open.delete(id);
       }
@@ -502,6 +510,10 @@ export function gapLessonKind(
 
   if (!latest) {
     return "written";
+  }
+
+  if (latest.kind !== "quiz" && latest.kind !== "true_false") {
+    return "quiz";
   }
 
   const other: PracticeLessonKind = latest.kind === "quiz" ? "true_false" : "quiz";
@@ -580,6 +592,10 @@ export function topicMastery(results: readonly LessonResultLike[]) {
     .sort((left, right) => left.time - right.time || left.order - right.order);
 
   for (const { result, time } of ordered) {
+    if (result.total === 0) {
+      continue;
+    }
+
     mastery = masteryAfterLesson(mastery, result.lesson_kind, result.score);
 
     if (time >= lastTime) {
@@ -635,11 +651,13 @@ export function moduleProgress(
   const { mastery: rawMastery, lastAt } = topicMastery(results);
   const mastery = lastAt ? fadedScore(rawMastery, lastAt, now) : rawMastery;
   const goal = passThreshold(target);
-  const practiceLessons = results.filter((result) => isPracticeKind(result.lesson_kind)).length;
+  const tested = (result: LessonResultLike) =>
+    isPracticeKind(result.lesson_kind) || (result.lesson_kind === "summary" && (result.total ?? 0) > 0);
+  const practiceLessons = results.filter(tested).length;
   const proveAfter = proveSince === null ? null : instantOf(proveSince);
   const proofOwed =
     proveAfter !== null &&
-    !results.some((result) => isPracticeKind(result.lesson_kind) && instantOf(result.completed_at) > proveAfter);
+    !results.some((result) => tested(result) && instantOf(result.completed_at) > proveAfter);
   const gaps = openGaps(results);
   const gapKind = practiceLessons > 0 ? gapLessonKind(gaps, done) : null;
   const onTarget = meetsPassMark(mastery, goal);

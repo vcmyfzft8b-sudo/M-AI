@@ -28079,6 +28079,52 @@ button.memo-exam-card:hover {
   opacity: 0.55;
 }
 
+/* A written answer being fixed: what the first try missed, as the hint. */
+.memo-exam-written-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0 0 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  background: var(--tile);
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+/* A lesson's parts in its header: reading, flashcards, quiz, written; the current one stands out. */
+.memo-exam-lesson-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-exam-lesson-parts li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.memo-exam-lesson-parts li.done {
+  color: var(--text);
+}
+
+.memo-exam-lesson-parts li.current {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--promo);
+  color: var(--text);
+}
+
 /* A lesson's result: what it added, and the topic's mastery after it. */
 .memo-exam-gain {
   font-variant-numeric: tabular-nums;

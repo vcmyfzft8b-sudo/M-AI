@@ -63,7 +63,7 @@ function simulate({ topics = 8, days = 21, perDay = 5, target = 0.9, score, mock
       }
 
       const tries = results.filter((entry) => entry.topic_id === next.topicId && entry.lesson_kind === next.kind).length;
-      const value = Math.fround(next.kind === "summary" ? 1 : score(next.kind, next.topicId, tries));
+      const value = Math.fround(score(next.kind, next.topicId, tries));
       results.push({
         lecture_id: next.lectureId,
         topic_id: next.topicId,
@@ -288,8 +288,9 @@ function seeded(seed) {
   return () => (state = (state * 1664525 + 1013904223) >>> 0) / 2 ** 32;
 }
 
-const GUESS = { quiz: 0.25, true_false: 0.5, written: 0, tutor: 0, flashcards: 0, summary: 0 };
-const ITEMS = { quiz: 5, true_false: 5, written: 1, tutor: 3, flashcards: 8, summary: 0 };
+// A lesson (`summary`) is its flashcards, quiz and written answer together.
+const GUESS = { quiz: 0.25, true_false: 0.5, written: 0, tutor: 0, flashcards: 0, summary: 0.1 };
+const ITEMS = { quiz: 5, true_false: 5, written: 1, tutor: 3, flashcards: 8, summary: 10 };
 
 function hiddenKnowledge({ topics, days, target, start, learn, seed, perDay = 8 }) {
   const random = seeded(seed);
@@ -330,19 +331,15 @@ function hiddenKnowledge({ topics, days, target, start, learn, seed, perDay = 8 
       }
 
       const index = modules.findIndex((module) => module.topicId === next.topicId);
-      let score = 1;
-
-      if (next.kind !== "summary") {
-        const chance = next.kind === "flashcards" ? Math.min(1, known[index] + 0.1) : known[index] + (1 - known[index]) * GUESS[next.kind];
-        let right = 0;
-        for (let item = 0; item < ITEMS[next.kind]; item += 1) {
-          if (random() < chance) right += 1;
-        }
-        score = right / ITEMS[next.kind];
+      const chance = next.kind === "flashcards" ? Math.min(1, known[index] + 0.1) : known[index] + (1 - known[index]) * GUESS[next.kind];
+      let right = 0;
+      for (let item = 0; item < ITEMS[next.kind]; item += 1) {
+        if (random() < chance) right += 1;
       }
+      const score = right / ITEMS[next.kind];
 
       results.push({ lecture_id: next.lectureId, topic_id: next.topicId, lesson_kind: next.kind, score: Math.fround(score), completed_at: now.toISOString() });
-      known[index] += (next.kind === "flashcards" ? learn * 0.7 : learn) * (1 - known[index]);
+      known[index] += (next.kind === "flashcards" ? learn * 0.7 : next.kind === "summary" ? learn * 1.5 : learn) * (1 - known[index]);
       studied[index] = now.getTime();
     }
   }

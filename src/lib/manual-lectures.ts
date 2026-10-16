@@ -77,6 +77,7 @@ import {
   looksLikeLoginPage,
 } from "@/lib/link-login-walls";
 import { stripHtmlForms } from "@/lib/link-html-forms";
+import { pickPageArticleHtml } from "@/lib/link-main-article";
 import {
   findRepositoryDocumentUrl,
   isRepositoryCatalogueUrl,
@@ -814,16 +815,10 @@ function extractPageMainHtml(html: string) {
     return rest.slice(0, end);
   }
 
-  const articleMatch = html.match(/<article\b[\s\S]*?<\/article>/i);
+  const article = pickPageArticleHtml(html);
 
-  if (articleMatch?.[0]) {
-    return articleMatch[0];
-  }
-
-  const mainMatch = html.match(/<main\b[\s\S]*?<\/main>/i);
-
-  if (mainMatch?.[0]) {
-    return mainMatch[0];
+  if (article) {
+    return article;
   }
 
   const roleMainMatch = html.match(/<[^>]+\brole=["']main["'][^>]*>[\s\S]*?<\/[^>]+>/i);

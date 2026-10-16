@@ -220,7 +220,7 @@ test("the target dial maps a drag to steps of five and never wraps through its g
 
 test("setup limits stay inside what the server accepts", () => {
   // The setup stops new uploads at the note routes' smallest burst (8 per 10 minutes).
-  assert.equal(MAX_SETUP_UPLOADS, 8);
+  assert.equal(MAX_SETUP_UPLOADS, 10);
   assert.ok(MAX_SETUP_UPLOADS <= MAX_EXAM_MODULES);
 });
 

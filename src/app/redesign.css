@@ -26576,7 +26576,68 @@ button.memo-exam-card:hover {
   gap: 0.85rem;
 }
 
-.memo-exam-step .memo-exam-pick-emoji {
+.memo-exam-step /* Material being read into the prep: a card per document, set of photos or recording. */
+.memo-exam-material {
+  cursor: default;
+}
+
+.memo-exam-material:hover {
+  box-shadow: var(--shadow);
+}
+
+.memo-exam-material.ready {
+  box-shadow: var(--shadow), inset 0 0 0 1.5px var(--ink);
+}
+
+.memo-exam-material.failed .memo-exam-pick-copy > span:not(.memo-eyebrow) {
+  color: var(--danger);
+}
+
+.memo-exam-material-track {
+  margin-top: 0.35rem;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.memo-exam-material-retry {
+  flex: 0 0 auto;
+  height: 2.2rem;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.memo-exam-material-remove {
+  display: grid;
+  flex: 0 0 auto;
+  width: 2.2rem;
+  height: 2.2rem;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.memo-exam-material-retry:hover,
+.memo-exam-material-remove:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-exam-material-retry:focus-visible,
+.memo-exam-material-remove:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-exam-pick-emoji {
   width: 2.4rem;
   height: 2.4rem;
 }
@@ -27940,6 +28001,14 @@ button.memo-exam-card:hover {
   margin: 0.15rem 0 0;
   color: var(--muted);
   font-size: 0.92rem;
+}
+
+.memo-exam-preparing {
+  margin: 0 0 1rem;
+}
+
+.memo-exam-preparing .memo-exam-material-track {
+  grid-column: 1 / -1;
 }
 
 .memo-exam-mock-card-go {

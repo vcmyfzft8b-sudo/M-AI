@@ -113,6 +113,7 @@ export function ExamDashboard({
 
   const planning = modules.some((module) => module.pending);
   const planningReady = modules.some((module) => module.pending && module.noteReady);
+  const pendingNotes = modules.filter((module) => module.pending).length;
 
   /*
    * A note that was still being made at setup has no topics yet. Once it is ready its topics are
@@ -124,7 +125,7 @@ export function ExamDashboard({
     }
 
     if (!planningReady) {
-      const timer = window.setTimeout(() => router.refresh(), 15_000);
+      const timer = window.setTimeout(() => router.refresh(), 8_000);
       return () => window.clearTimeout(timer);
     }
 
@@ -490,6 +491,19 @@ export function ExamDashboard({
           </div>
         ) : null}
           <div className="memo-exam-trail">
+            {/* Material still being read at setup: its topics join the path when the note is ready. */}
+            {pendingNotes > 0 ? (
+              <div className="memo-exam-card memo-exam-mock-card memo-exam-preparing" aria-live="polite">
+                <Emoji symbol="🧠" size="2rem" />
+                <div>
+                  <b>{t("exam.path.preparing.title")}</b>
+                  <p>{t("exam.path.preparing.body", { count: pendingNotes })}</p>
+                </div>
+                <span className="memo-gen-track memo-exam-material-track" aria-hidden="true">
+                  <span />
+                </span>
+              </div>
+            ) : null}
             {runs.map((run) => {
               const topic = byTopic.get(run.topicId);
 

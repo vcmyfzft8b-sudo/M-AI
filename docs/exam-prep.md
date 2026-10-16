@@ -281,80 +281,45 @@ least two topics per note and asks again when an answer has fewer (`planNoteTopi
 stored until "Start"; `createExam` stores the planned topics. A note that was still being made at
 setup has no topics yet; the exam screen plans them (`POST /api/exams/[id]/topics`) once it is ready.
 
-**Material leads with one upload field.** "Naloži gradivo" takes anything a note can be made from:
-tap to pick files, photos or the camera, or drop files on it. The picked files open the normal
-note-source modal (`initialFiles`), which takes them as it takes a drop: one audio file is a
-recording, anything else documents or photos. There is no separate record or link option here.
-`NoteSourceModal`'s `onCreated` hands the new note's id back instead of navigating to it, and the
-note joins the exam while it is still being made (`createExam` accepts any owned note that has not
-failed). Notes already in the app are the secondary choice, behind "Ali izberi iz svojih zapiskov".
-Without `canCreateNotes` the field sends the learner to the paywall.
+**Material is the prep's, not a note.** "Naloži gradivo" takes anything a note can be made from:
+tap to pick files, photos or the camera, or drop files on it. No sheet opens and nothing navigates
+away: each pick becomes a **material card** in the setup (📄 document, 🖼️ a set of photos, 🎙️ a
+recording) that shows its own progress ("V vrsti …", the pipeline's own busy label, "Dodano · Memo
+ga predela v ozadju", or the error with "Poskusi znova"), with ✕ to take it out again (which deletes
+the note made from it). Photos are grouped into sets of `MAX_SCAN_IMAGE_COUNT`, one note each.
 
-## The exam screen
+- The upload itself is the app's pipeline, unchanged: a `NoteSourceModal` rendered `headless` per
+  card, which starts on its `initialFiles` at once and reports through `onBusy`, `onFailed` and
+  `onCreated` instead of drawing a sheet. **Three run at once** (`PARALLEL_UPLOADS`); the rest wait.
+  Six files (five documents, three photos) were all in after 18 s on a local dev server.
+- The modal keeps those callbacks in a ref and reports only when its label or error changes. They
+  were in the effects' dependencies at first, and a caller's inline callback is new every render:
+  a stale "busy" re-sent after `onCreated` put a finished card back to "Nalagam …", and since the
+  queue waited on it, every card behind it sat in "V vrsti …" for good. The setup also ignores news
+  for a card that is no longer pending (`updatePendingUpload`).
+- **Limits:** 10 documents or recordings (`MAX_SETUP_UPLOADS`) and 50 photos (`MAX_SETUP_PHOTOS`)
+  per prep. Each note still passes the create routes' own `expensiveCreate` limit, raised for this
+  to 12 per 10 minutes, 30 per hour and 80 per day per user and route: a full prep (10 documents and
+  five photo sets) fits, a script uploading in a loop does not.
+- `createExam` stores the uploaded notes with `exam_modules.material = true` (`0071`), and the notes
+  library (`listLecturesForUser(..., { hideExamMaterial: true })` on `/app` and the setup's own
+  picker) leaves them out: they are the prep's material. Deleting the prep brings them back as
+  notes. Material uploaded at a setup that is then abandoned stays an ordinary note.
+- While a note is still being made, the exam screen shows "Memo bere tvoje gradivo …" with the count
+  in place of its topics and checks back every 8 s; its topics join the path once it is ready.
 
-`/app/exams/[id]` has Astra's two tabs, **Pot** and **Napredek**, under the exam's title and the goal
-card (readiness against the goal with a 🎯 on the bar, the forecast, the open gaps).
+Notes already in the app are the secondary choice, behind "Ali izberi iz svojih zapiskov". Without
+`canCreateNotes` the field sends the learner to the paywall.
 
-- **Pot** is one path down the screen: every lesson done is a coral station with its score, grouped
-  under a heading per topic (its mastery against the goal) wherever the path moves to another
-  topic; then **"Naslednja"** (Next up) with Memo beside it, then two locked stations ("Dokončaj
-  zgornje lekcije"). Astra's mock card follows ("Kako bi ti šlo na pravem izpitu? Preveri, kadar koli
-  želiš." · "Ustvari generalko"), then the exam day (🏁). Any done station can be tapped to do that
-  lesson again. The screen opens scrolled to Next up. The geometry is `src/lib/exams/exam-path.ts`
-  (tested in `tests/exam-path.test.mjs`); keep its row height in step with `.memo-exam-station`.
-- **Napredek**: topics on target, days left and lessons done; the forecast; the knowledge gaps; and
-  every topic with its mastery on a bar against the goal and its lessons ("Odklene se, …" while
-  locked).
-
-## Where a topic's lessons come from
-
-A **material topic** (`source = 'material'`) teaches from what the note already has: `flashcards`,
-`quiz_questions` and `practice_test_questions`, sorted into the note's topics the first time a
-lesson of that kind is opened (`ensureTopicItems`, one cheap model call per note and kind; the ids
-land on `exam_topics`, and a regenerated note is sorted again). A topic with too few items is topped
-up from the rest of its note. Its summary lesson is the topic's own summary and key points, to read
-or speed-read (the read-aloud "Poslušaj" was taken out at the owner's request; the tutor is the
-spoken lesson). True/false statements are made from quiz questions the quiz lesson did not use.
-
-A topic the learner **added**, or one the **AI added** (only with the switch on, at most two, things
-an exam on the subject usually asks that the material leaves out), has nothing to draw on: its
-summary, cards, quiz and two written questions are written for it the first time one of its lessons
-opens (`writeTopicContent`), grounded on the note where it says anything. Its written answers are
-marked through `POST /api/exams/[id]/written`. If a note has not had that material generated yet, the lesson route
-says which generator to start, and the client starts it through the note's own route
-(`POST /api/lectures/[id]/study|quiz|practice-test`) and polls. Written answers are marked by the
-practice-test grader through `/api/lectures/[id]/practice-test/check`, so they cost exactly what
-the palace's written questions cost.
-
-The **mock exam** ("Generalka") is written or oral, as in Astra. Its length is set on the same gauge
-(written 10–120 min, oral 5–30 min, in fives). The written one draws multiple-choice and written
-questions across the exam's notes, weakest note first, snapshots them in `exam_mock_attempts` (so a
-rebuilt question bank cannot rewrite a past result) and grades the written answers in parallel with
-`markAnswerWithRetry`.
-
-The **oral** one (`src/components/exams/exam-oral.tsx`) is a voice examiner built on the tutor's
-speech: the same session route, Soniox keys, recogniser, speech output, sphere and talking-time
-allowance (counted on one of the exam's notes). The learner picks the examiner's manner (strict,
-recommended; friendly; encouraging) and a voice, reads Astra's instructions and presses "Pripravljen
-sem". The examiner asks each question (the microphone is muted while it speaks), listens, and after
-each answer either asks one follow-up about what was missing or moves on
-(`POST /mock/[attemptId]/oral`, `examinerTurn`); it never says whether an answer was right. Oral
-questions are all open: the notes' written questions, then quiz questions asked openly and marked
-against their right answer. The transcribed answers are graded like a written mock.
-
-Results show the grade, the time spent, the review (strengths, weak points, a recommendation) and
-the answers; "Ponovi generalko" retries and "Nadaljuj" returns to the path. The mock exam is the
-one paid-only part: setup, path, lessons and readiness follow the notes' own access (a free account
-can prep from its free note).
-
-## Tables (`supabase/migrations/0068_exam_prep.sql`, `0069_exam_tutor_and_fresh_questions.sql`, `0070_exam_knowledge_gaps.sql`)
+## Tables (`supabase/migrations/0068_exam_prep.sql` to `0071_exam_material.sql`)
 
 `exams`, `exam_modules`, `exam_topics`, `exam_lesson_results`, `exam_mock_attempts`. All are
 owner-only by RLS and every route uses the client that verified the learner (`getRouteUser`); an
 update cannot move a module, topic or mock attempt onto another exam or note (`0069` recreates the
 update policies with the insert policies' checks). `0069` adds the `tutor` lesson kind,
 `exam_lesson_results.item_ids` and `exam_topics.extra`. `0070` adds `exam_lesson_results.missed_ids`
-(the knowledge gaps). None of the three is on production.
+(the knowledge gaps). `0071` adds `exam_modules.material`. None of the four is on production; all
+four are on staging.
 
 The numbers moved while the PR was open, because `supabase db push` refuses a local migration older
 than the newest one production has: 0061 → 0062 (PR #579 took 0061), 0062/0063 → 0065/0066 (main

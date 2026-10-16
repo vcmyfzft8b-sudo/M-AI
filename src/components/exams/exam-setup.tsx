@@ -13,12 +13,12 @@ import { formatExamDay, formatExamDayLong, formatMonth, formatWeekdayShort } fro
 import { MemoBuddy } from "@/components/exams/memo-buddy";
 import { MemoSays } from "@/components/exams/memo-says";
 import { TargetDial } from "@/components/exams/target-dial";
-import type { NoteSourceMode } from "@/components/note-source-modal";
 import { useOfflineGuard } from "@/components/offline/offline-notice";
 import { cameFromAppPath } from "@/lib/app-history";
 import {
   AUDIO_FILE_INPUT_ACCEPT,
   DOCUMENT_FILE_INPUT_ACCEPT,
+  MAX_SCAN_IMAGE_COUNT,
   SCAN_IMAGE_INPUT_ACCEPT,
   SUPPORTED_AUDIO_EXTENSIONS,
 } from "@/lib/constants";
@@ -30,6 +30,7 @@ import {
   LESSON_MINUTES,
   lessonsToTarget,
   MAX_EXAM_MODULES,
+  MAX_SETUP_PHOTOS,
   MAX_SETUP_UPLOADS,
   monthGrid,
 } from "@/lib/exams/exam-model";
@@ -75,30 +76,65 @@ const ROLE_FOR_LEVEL: Record<string, string> = {
   university: "university_student",
 };
 
-/* The app's own capture sheet, loaded only when material is being added. */
+/* The app's upload pipeline, run without its sheet: material is the prep's, never a note being made. */
+/* How many uploads run at once. */
+const PARALLEL_UPLOADS = 3;
+
 const NoteSourceModal = dynamic(() =>
   import("@/components/note-source-modal").then((module) => module.NoteSourceModal),
 );
 
-/* The capture sources, in the "Novo" sheet's order and with its labels. */
-const SOURCE_OPTIONS: { mode: NoteSourceMode; emoji: string; labelKey: MessageKey }[] = [
-  { mode: "text", emoji: "📚", labelKey: "library.create.text" },
-  { mode: "record", emoji: "🎙️", labelKey: "library.create.record" },
-  { mode: "upload", emoji: "🔊", labelKey: "library.quickAction.audio" },
-  { mode: "link", emoji: "🔗", labelKey: "library.create.link" },
-];
-
 /* The one upload field takes anything a note can be made from: documents, photos (or the camera), audio. */
 const ANY_MATERIAL_ACCEPT = [DOCUMENT_FILE_INPUT_ACCEPT, SCAN_IMAGE_INPUT_ACCEPT, AUDIO_FILE_INPUT_ACCEPT].join(",");
 
-/* What the note-source sheet will make of a pick: one audio file is a recording, anything else documents or photos. */
-function materialModeFor(files: File[]): NoteSourceMode {
-  const [first] = files;
-  const extension = first?.name.split(".").pop()?.toLowerCase() ?? "";
-  const audio =
-    files.length === 1 &&
-    (first.type.startsWith("audio/") || (SUPPORTED_AUDIO_EXTENSIONS as readonly string[]).includes(extension));
-  return audio ? "upload" : "text";
+type MaterialKind = "document" | "photos" | "audio";
+
+/* One piece of material on its way into the prep: a document, a set of photos, or a recording. */
+type MaterialUpload = {
+  key: string;
+  files: File[];
+  kind: MaterialKind;
+  name: string;
+  status: "waiting" | "uploading" | "ready" | "failed";
+  /* What the upload is doing now, in the pipeline's own words. */
+  busy: string | null;
+  message: string | null;
+  lectureId: string | null;
+  /* Bumped by "try again", so the upload starts afresh. */
+  attempt: number;
+};
+
+const MATERIAL_EMOJI: Record<MaterialKind, string> = { document: "📄", photos: "🖼️", audio: "🎧" };
+
+function isAudioFile(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return file.type.startsWith("audio/") || (SUPPORTED_AUDIO_EXTENSIONS as readonly string[]).includes(extension);
+}
+
+function isPhotoFile(file: File) {
+  return file.type.startsWith("image/") || /\.(heic|heif)$/i.test(file.name);
+}
+
+/*
+ * A pick split the way the pipeline takes it: each document and recording alone, photos in sets of
+ * MAX_SCAN_IMAGE_COUNT, within what the setup still has room for.
+ */
+function materialGroups(
+  files: File[],
+  room: { documents: number; photos: number },
+): { kind: MaterialKind; files: File[] }[] {
+  const photos = files.filter(isPhotoFile).slice(0, Math.max(0, room.photos));
+  const rest = files.filter((file) => !isPhotoFile(file)).slice(0, Math.max(0, room.documents));
+  const photoSets: File[][] = [];
+
+  for (let index = 0; index < photos.length; index += MAX_SCAN_IMAGE_COUNT) {
+    photoSets.push(photos.slice(index, index + MAX_SCAN_IMAGE_COUNT));
+  }
+
+  return [
+    ...rest.map((file) => ({ kind: isAudioFile(file) ? ("audio" as const) : ("document" as const), files: [file] })),
+    ...photoSets.map((set) => ({ kind: "photos" as const, files: set })),
+  ];
 }
 
 /*
@@ -261,14 +297,11 @@ export function ExamSetup({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /*
-   * Material added during setup, in the order it was added: notes still being made, already part
-   * of this exam. Adding one closes the capture sheet and stays on this step, so the learner can
-   * keep adding until they press "Next".
+   * Material uploaded in the setup, in the order it was picked. Each is read right here, one at a
+   * time, as a card on this step; the learner can keep adding or go on while it is read. It joins
+   * the prep as the prep's own material (`materialLectureIds`), not as a note in the library.
    */
-  const [added, setAdded] = useState<{ id: string; mode: NoteSourceMode }[]>([]);
-  const [sourceMode, setSourceMode] = useState<NoteSourceMode | null>(null);
-  /* Files picked in the upload field, handed to the note-source sheet as it opens. */
-  const [pickedFiles, setPickedFiles] = useState<File[] | null>(null);
+  const [uploads, setUploads] = useState<MaterialUpload[]>([]);
   const [dragging, setDragging] = useState(false);
   const materialInputRef = useRef<HTMLInputElement | null>(null);
   const [showExisting, setShowExisting] = useState(Boolean(initialFolder));
@@ -294,7 +327,19 @@ export function ExamSetup({
   const stepIndex = STEPS.indexOf(step);
   const notesById = useMemo(() => new Map(notes.map((note) => [note.id, note])), [notes]);
   const days = daysBetween(today, examDate);
-  const uploadsLeft = MAX_SETUP_UPLOADS - added.length;
+  const documentsLeft = MAX_SETUP_UPLOADS - uploads.filter((upload) => upload.kind !== "photos").length;
+  const photosLeft =
+    MAX_SETUP_PHOTOS -
+    uploads.filter((upload) => upload.kind === "photos").reduce((sum, upload) => sum + upload.files.length, 0);
+  const uploadsLeft = documentsLeft + photosLeft;
+  /*
+   * The uploads being read now: the first few not yet done. A few at a time is what makes ten files
+   * quick; more would only split the learner's uplink, and each still counts against the upload limit.
+   */
+  const activeUploads = uploads
+    .filter((upload) => upload.status === "uploading" || upload.status === "waiting")
+    .slice(0, PARALLEL_UPLOADS);
+  const activeKeys = new Set(activeUploads.map((upload) => upload.key));
   const examFull = selected.length >= MAX_EXAM_MODULES;
   const planKey = `${selected.join(",")}|${aiExpand ? 1 : 0}`;
   const keptTopics = planTopics.filter((topic) => topic.kept);
@@ -406,8 +451,9 @@ export function ExamSetup({
             ? keptTopics.length > 0 || (plan.status === "done" && plan.notes.some((note) => note.status === "pending"))
             : true;
 
-  function openSource(mode: NoteSourceMode) {
-    if (blockedOffline("create")) {
+  /* The upload field: whatever was picked or dropped becomes the prep's material, read right here. */
+  function openFiles(files: File[]) {
+    if (files.length === 0 || blockedOffline("create")) {
       return;
     }
 
@@ -416,34 +462,59 @@ export function ExamSetup({
       return;
     }
 
-    if (uploadsLeft <= 0 || examFull) {
-      return;
-    }
+    const groups = materialGroups(files, { documents: documentsLeft, photos: photosLeft }).slice(
+      0,
+      Math.max(0, MAX_EXAM_MODULES - selected.length),
+    );
 
-    setSourceMode(mode);
+    setUploads((current) => [
+      ...current,
+      ...groups.map((group, index) => ({
+        key: `${Date.now()}-${index}`,
+        files: group.files,
+        kind: group.kind,
+        name:
+          group.kind === "photos"
+            ? t("exam.setup.material.photos", { count: group.files.length })
+            : group.files[0].name.replace(/\.[a-z0-9]+$/i, ""),
+        status: "waiting" as const,
+        busy: null,
+        message: null,
+        lectureId: null,
+        attempt: 0,
+      })),
+    ]);
   }
 
-  /* The upload field: whatever was picked or dropped goes to the sheet that makes notes of it. */
-  function openFiles(files: File[]) {
-    if (files.length === 0) {
-      return;
-    }
-
-    const mode = materialModeFor(files);
-    openSource(mode);
-
-    if (canCreateNotes && uploadsLeft > 0 && !examFull) {
-      setPickedFiles(files);
-    }
+  function updateUpload(key: string, change: Partial<MaterialUpload>) {
+    setUploads((current) => current.map((upload) => (upload.key === key ? { ...upload, ...change } : upload)));
   }
 
-  function addCreated(lectureId: string) {
-    const mode = sourceMode ?? "text";
-    setSourceMode(null);
-    setAdded((current) => (current.some((entry) => entry.id === lectureId) ? current : [...current, { id: lectureId, mode }]));
+  /* Only an upload still on its way takes news from the pipeline; a finished or failed one keeps its state. */
+  function updatePendingUpload(key: string, change: Partial<MaterialUpload>) {
+    setUploads((current) =>
+      current.some((upload) => upload.key === key && (upload.status === "waiting" || upload.status === "uploading"))
+        ? current.map((upload) => (upload.key === key ? { ...upload, ...change } : upload))
+        : current,
+    );
+  }
+
+  function uploadReady(key: string, lectureId: string) {
+    updateUpload(key, { status: "ready", busy: null, message: null, lectureId });
     setSelected((current) =>
       current.includes(lectureId) || current.length >= MAX_EXAM_MODULES ? current : [...current, lectureId],
     );
+  }
+
+  /* Taken out of the prep: the note made from it goes too, since it was only ever this prep's material. */
+  function removeUpload(upload: MaterialUpload) {
+    setUploads((current) => current.filter((entry) => entry.key !== upload.key));
+
+    if (upload.lectureId) {
+      const lectureId = upload.lectureId;
+      setSelected((current) => current.filter((entry) => entry !== lectureId));
+      void fetch(`/api/lectures/${lectureId}`, { method: "DELETE" }).catch(() => null);
+    }
   }
 
   function toggleNote(id: string) {
@@ -543,6 +614,8 @@ export function ExamSetup({
           schoolLevel,
           schoolYear,
           aiExpand,
+          // Uploaded here: the prep's own material, kept out of the notes library.
+          materialLectureIds: uploads.flatMap((upload) => (upload.lectureId && selected.includes(upload.lectureId) ? [upload.lectureId] : [])),
           topics: keptTopics.map(({ lectureId, title: topicTitle, summary, keyPoints, source }) => ({
             lectureId,
             title: topicTitle.trim() || t("note.untitled"),
@@ -650,7 +723,7 @@ export function ExamSetup({
             {uploadsLeft <= 0 || examFull ? (
               <span className="memo-exam-upload-limit">
                 {uploadsLeft <= 0
-                  ? t("exam.setup.material.uploadLimit", { count: MAX_SETUP_UPLOADS })
+                  ? t("exam.setup.material.uploadLimit", { count: MAX_SETUP_UPLOADS, photos: MAX_SETUP_PHOTOS })
                   : t("exam.setup.material.examFull", { count: MAX_EXAM_MODULES })}
               </span>
             ) : null}
@@ -688,47 +761,66 @@ export function ExamSetup({
             >
               <Msym name="cloud_upload" className="memo-dropzone-icon" />
               <span className="memo-exam-dropzone-lead">
-                {t(added.length > 0 ? "exam.setup.material.addMore" : "exam.setup.material.pick")}
-                {added.length > 0 ? (
-                  <span className="memo-exam-upload-count">
-                    {added.length}/{MAX_SETUP_UPLOADS}
-                  </span>
-                ) : null}
+                {t(uploads.length > 0 ? "exam.setup.material.addMore" : "exam.setup.material.pick")}
+
               </span>
               <span className="memo-dropzone-title">{t("exam.setup.material.pickHint")}</span>
             </button>
           </div>
 
-          {added.length > 0 ? (
+          {uploads.length > 0 ? (
             <div className="memo-exam-list">
-              {added.map(({ id, mode }) => {
-                const isOn = selected.includes(id);
-                const source = SOURCE_OPTIONS.find((option) => option.mode === mode) ?? SOURCE_OPTIONS[0];
-
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    className={`memo-exam-pick ${isOn ? "on" : ""}`.trim()}
-                    aria-pressed={isOn}
-                    onClick={() => toggleNote(id)}
-                  >
-                    <span className="memo-exam-pick-emoji">
-                      <Emoji symbol={source.emoji} size="1.2rem" />
+              {uploads.map((upload) => (
+                <div
+                  key={upload.key}
+                  className={`memo-exam-pick memo-exam-material ${upload.status}`.trim()}
+                  aria-live="polite"
+                >
+                  <span className="memo-exam-pick-emoji">
+                    <Emoji symbol={MATERIAL_EMOJI[upload.kind]} size="1.2rem" />
+                  </span>
+                  <span className="memo-exam-pick-copy">
+                    <b>{upload.name}</b>
+                    <span>
+                      {upload.status === "ready"
+                        ? t("exam.setup.material.ready")
+                        : upload.status === "failed"
+                          ? (upload.message ?? t("exam.setup.material.failed"))
+                          : upload.status === "waiting" && !activeKeys.has(upload.key)
+                            ? t("exam.setup.material.waiting")
+                            : (upload.busy ?? t("exam.setup.material.uploading"))}
                     </span>
-                    <span className="memo-exam-pick-copy">
-                      <b>{t(source.labelKey)}</b>
-                      <span>{t("exam.setup.material.uploading")}</span>
-                    </span>
-                    <Msym
-                      name={isOn ? "check_circle" : "radio_button_unchecked"}
-                      size="1.5rem"
-                      fill={isOn}
-                      className="memo-exam-pick-mark"
-                    />
-                  </button>
-                );
-              })}
+                    {upload.status === "uploading" || upload.status === "waiting" ? (
+                      <span className="memo-gen-track memo-exam-material-track" aria-hidden="true">
+                        <span />
+                      </span>
+                    ) : null}
+                  </span>
+                  {upload.status === "failed" ? (
+                    <button
+                      type="button"
+                      className="memo-exam-material-retry"
+                      onClick={() =>
+                        updateUpload(upload.key, { status: "waiting", message: null, attempt: upload.attempt + 1 })
+                      }
+                    >
+                      {t("common.retry")}
+                    </button>
+                  ) : upload.status === "ready" ? (
+                    <Msym name="check_circle" size="1.5rem" fill className="memo-exam-pick-mark" />
+                  ) : null}
+                  {upload.status !== "uploading" ? (
+                    <button
+                      type="button"
+                      className="memo-exam-material-remove"
+                      aria-label={t("exam.setup.material.remove")}
+                      onClick={() => removeUpload(upload)}
+                    >
+                      <Msym name="close" size="1.1rem" fill={false} weight={600} />
+                    </button>
+                  ) : null}
+                </div>
+              ))}
             </div>
           ) : null}
 
@@ -1021,10 +1113,10 @@ export function ExamSetup({
           <ol className="memo-exam-plan">
             {selected.flatMap((lectureId) => {
               const note = notesById.get(lectureId);
-              const source = added.find((entry) => entry.id === lectureId);
+              const upload = uploads.find((entry) => entry.lectureId === lectureId);
               const noteLabel = note
                 ? note.title?.trim() || t("note.untitled")
-                : t(SOURCE_OPTIONS.find((option) => option.mode === source?.mode)?.labelKey ?? "exam.setup.material.newMaterial");
+                : (upload?.name ?? t("exam.setup.material.newMaterial"));
               const emoji = note?.emoji || noteEmoji({ id: lectureId, title: note?.title ?? null });
               const pending =
                 plan.status === "done" && plan.notes.find((entry) => entry.lectureId === lectureId)?.status === "pending";
@@ -1090,23 +1182,25 @@ export function ExamSetup({
         </section>
       )}
 
-      {sourceMode ? (
+      {/*
+       * The material being read: the app's own upload pipeline, without its sheet. It stays mounted
+       * whichever step the learner is on, so going on does not stop it.
+       */}
+      {activeUploads.map((upload) => (
         <NoteSourceModal
-          mode={sourceMode}
+          key={`${upload.key}:${upload.attempt}`}
+          mode={upload.kind === "audio" ? "upload" : "text"}
           open
+          headless
           canCreateNotes={canCreateNotes}
-          onClose={() => {
-            setSourceMode(null);
-            setPickedFiles(null);
-          }}
-          onCreated={(lectureId) => {
-            setPickedFiles(null);
-            addCreated(lectureId);
-          }}
+          onClose={() => undefined}
+          initialFiles={upload.files}
           paywallBack="/app/exams/new"
-          initialFiles={pickedFiles ?? undefined}
+          onBusy={(label) => updatePendingUpload(upload.key, { status: "uploading", busy: label })}
+          onFailed={(message) => updatePendingUpload(upload.key, { status: "failed", busy: null, message })}
+          onCreated={(lectureId) => uploadReady(upload.key, lectureId)}
         />
-      ) : null}
+      ))}
     </ExamScreen>
   );
 }

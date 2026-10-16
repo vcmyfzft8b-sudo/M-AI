@@ -131,11 +131,13 @@ export const MAX_EXAM_MODULES = 40;
 export const MAX_EXAM_TOPICS = 200;
 
 /*
- * The most new material one setup lets the learner start. It is the smallest burst the note
- * routes allow (8 documents or links per 10 minutes, see `rateLimitPresets`), so the setup stops
- * before the server would refuse an upload halfway through.
+ * The most material one setup takes, enough for a whole exam: 10 documents or recordings, and 50
+ * photos (read in sets of `MAX_SCAN_IMAGE_COUNT`, each set one piece of material). Documents and
+ * photos go to different upload routes, each allowed 12 a user per 10 minutes
+ * (`rateLimitPresets.expensiveCreate`), so a full setup fits inside the limits that stop abuse.
  */
-export const MAX_SETUP_UPLOADS = 8;
+export const MAX_SETUP_UPLOADS = 10;
+export const MAX_SETUP_PHOTOS = 50;
 
 /* The target mastery a learner can set, and the dial's step. The create route enforces the range. */
 export const TARGET_MIN = 50;

@@ -446,6 +446,7 @@ export type Database = {
           lecture_id: string;
           user_id: string;
           position: number;
+          material: boolean;
           created_at: string;
         };
         Insert: {
@@ -453,6 +454,7 @@ export type Database = {
           lecture_id: string;
           user_id: string;
           position: number;
+          material?: boolean;
           created_at?: string;
         };
         Update: {

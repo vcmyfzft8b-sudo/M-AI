@@ -35,7 +35,7 @@ export default async function NewExamPage({
     searchParams ?? Promise.resolve({ folder: undefined }),
   ]);
   const [lectures, folders] = await Promise.all([
-    listLecturesForUser(user.id),
+    listLecturesForUser(user.id, { hideExamMaterial: true }),
     listLibraryFoldersForUser(user.id),
   ]);
   const hasPaidAccess = Boolean(appState?.hasPaidAccess);

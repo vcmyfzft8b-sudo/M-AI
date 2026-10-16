@@ -27,6 +27,8 @@ export const examCreateSchema = z.object({
   schoolLevel: createSanitizedStringSchema({ trim: true, maxLength: 40 }).nullable().optional(),
   schoolYear: createSanitizedStringSchema({ trim: true, maxLength: 40 }).nullable().optional(),
   aiExpand: z.boolean().optional(),
+  /** Of `lectureIds`, the ones uploaded in the setup: the prep's own material, kept out of the library. */
+  materialLectureIds: z.array(z.string().uuid()).max(MAX_EXAM_MODULES).optional(),
   /** The plan as the learner left it on the review: the topics they kept, renamed or added. */
   topics: z
     .array(

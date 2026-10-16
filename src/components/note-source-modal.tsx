@@ -337,6 +337,9 @@ export function NoteSourceModal({
   onCreated,
   paywallBack = "/app",
   initialFiles,
+  headless = false,
+  onFailed,
+  onBusy,
 }: {
   mode: NoteSourceMode | null;
   open: boolean;
@@ -358,6 +361,16 @@ export function NoteSourceModal({
    * document or photos.
    */
   initialFiles?: File[];
+  /**
+   * No sheet at all: the `initialFiles` are uploaded and made into a note at once, and only the
+   * callbacks report how it goes. Exam setup uses it, so material added to a prep is the prep's
+   * material on its own screen, never a note being made in a sheet.
+   */
+  headless?: boolean;
+  /** Headless: the upload could not be made (the message is the sheet's own error line). */
+  onFailed?: (message: string) => void;
+  /** Headless: what the upload is doing now ("Nalagam…", "Pripravljam…"), or null when idle. */
+  onBusy?: (label: string | null) => void;
 }) {
   const t = useT();
   const router = useRouter();
@@ -842,7 +855,8 @@ export function NoteSourceModal({
   }, []);
 
   useEffect(() => {
-    if (!open) {
+    // Headless (exam setup) shows no sheet: the page keeps scrolling and Escape is its own.
+    if (!open || headless) {
       return;
     }
 
@@ -872,7 +886,7 @@ export function NoteSourceModal({
       window.scrollTo(0, scrollY);
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [open]);
+  }, [headless, open]);
 
   useEffect(() => {
     if (!open) {
@@ -2397,7 +2411,58 @@ export function NoteSourceModal({
     );
   }
 
+  /*
+   * Headless (exam setup): as soon as the picked files are staged, the note is made, as if the
+   * learner had pressed "Ustvari zapisek"; errors and progress go to the callbacks.
+   */
+  const autoStartedRef = useRef(false);
+  const stagedSource = headless && !busyLabel && !autoStartedRef.current && (pdfSource || hasPhotoSources || audioSource);
+
+  useEffect(() => {
+    if (!stagedSource || autoStartedRef.current) {
+      return;
+    }
+
+    autoStartedRef.current = true;
+
+    if (audioSource) {
+      void createAudioLecture();
+    } else if (pdfSource) {
+      void createPdfLecture();
+    } else {
+      void createPhotoLecture();
+    }
+    // The create functions are this render's; the staged source is what starts them, once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stagedSource]);
+
+  /*
+   * Reported when they change, not when the caller re-renders: a caller's inline callback is new
+   * every render, and re-sending a stale label after `onCreated` would mark a finished upload busy.
+   */
+  const headlessCallbacksRef = useRef({ onFailed, onBusy });
+
+  useEffect(() => {
+    headlessCallbacksRef.current = { onFailed, onBusy };
+  });
+
+  useEffect(() => {
+    if (headless && error) {
+      headlessCallbacksRef.current.onFailed?.(error);
+    }
+  }, [error, headless]);
+
+  useEffect(() => {
+    if (headless) {
+      headlessCallbacksRef.current.onBusy?.(busyLabel);
+    }
+  }, [busyLabel, headless]);
+
   if (!open || !mode) {
+    return null;
+  }
+
+  if (headless) {
     return null;
   }
 

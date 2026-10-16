@@ -37,7 +37,7 @@ export default async function AppHomePage({
    * slot they would fill does not exist for them.
    */
   const [lectures, folders, wheel, examPreps] = await Promise.all([
-    listLecturesForUser(user.id),
+    listLecturesForUser(user.id, { hideExamMaterial: true }),
     listLibraryFoldersForUser(user.id),
     appState?.hasPaidAccess
       ? Promise.resolve(null)

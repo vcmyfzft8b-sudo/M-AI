@@ -574,6 +574,8 @@ export type ExamInput = {
   schoolLevel?: string | null;
   schoolYear?: string | null;
   aiExpand?: boolean;
+  /** Notes made from material uploaded in the setup: the prep's own, kept out of the notes library. */
+  materialLectureIds?: string[];
   /** The plan the learner reviewed: topics per note, as kept, renamed or added on the review. */
   topics?: (PlannedTopic & { lectureId: string; source: ExamTopicRow["source"] })[];
 };
@@ -645,6 +647,7 @@ export async function createExam(supabase: ExamSupabase, userId: string, input: 
       lecture_id: lectureId,
       user_id: userId,
       position,
+      material: Boolean(input.materialLectureIds?.includes(lectureId)),
     })) as never,
   );
 

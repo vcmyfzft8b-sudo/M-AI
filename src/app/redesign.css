@@ -28809,7 +28809,7 @@ a.memo-exam-station-go {
   padding: 0.8rem 0.2rem 0.2rem;
 }
 
-/* The tutor's live captions: one short phrase at a time, each fading in over the last. */
+/* The tutor's live captions: each word appears as it is said, a phrase to a line. */
 .memo-exam-tutor-captions p {
   max-width: 30rem;
   margin: 0;
@@ -28819,8 +28819,8 @@ a.memo-exam-station-go {
   letter-spacing: -0.02em;
   line-height: 1.4;
   text-align: center;
-  text-wrap: balance;
-  animation: memo-fade-in 0.18s ease-out;
+  /* Not balanced: a line that rebalances as each word arrives makes the earlier words jump. */
+  text-wrap: pretty;
 }
 
 /* A presence, not a bead: the exam tutor's sphere keeps a larger floor than the flex share. */

@@ -34,13 +34,13 @@ type Stage = "idle" | "running" | "paused";
  */
 const NO_SPEECH_MS = 20_000;
 
-/* How many words a caption shows at once, at most: about two lines on a phone. */
+/* How many words a caption line holds, at most: about two lines on a phone. */
 const CAPTION_WORDS = 9;
 
 /*
- * Live captions, as subtitles: the line cut into phrases of up to nine words (a phrase also ends
- * where a sentence does), and the phrase the voice is in is shown whole, replacing the one
- * before. One colour; nothing lingers.
+ * Live captions: the line is cut into phrases of up to nine words (a phrase also ends where a
+ * sentence does), and each word appears as it is said. When a phrase is full the next one starts
+ * on an empty line, so what is on screen is always what was just heard, in one colour.
  */
 function captionPhrase(line: string, spoken: string) {
   const words = line.trim().split(/\s+/u).filter(Boolean);
@@ -60,13 +60,13 @@ function captionPhrase(line: string, spoken: string) {
     }
 
     if (heard <= index + 1) {
-      return words.slice(start, index + 1).join(" ");
+      return words.slice(start, heard).join(" ");
     }
 
     start = index + 1;
   }
 
-  return words.slice(start).join(" ");
+  return words.slice(start, heard).join(" ");
 }
 
 export function ExamTutorLesson({
@@ -364,7 +364,7 @@ export function ExamTutorLesson({
       {/* While the voice speaks: its words as live captions, a short phrase at a time. */}
       {running && !preparing && session.speaks && phase === "speaking" ? (
         <div className="memo-tutor-caption memo-exam-tutor-captions" aria-live="off">
-          <p key={captionText}>{captionText}</p>
+          <p>{captionText}</p>
         </div>
       ) : null}
 

@@ -127,12 +127,18 @@ export async function planNoteTopics(params: {
     return fallback;
   }
 
-  try {
+  /*
+   * The plan is the whole exam's backbone, so a note is never left as one big topic: an answer
+   * with fewer than two topics is asked for once more, firmly, before it is taken as it is.
+   */
+  const ask = async (insist: boolean) => {
     const result = await generateStructuredObject({
       schema: planSchema,
       stage: "study_items",
       maxOutputTokens: 5000,
-      instructions: `${PLAN_INSTRUCTIONS}\n\nMake ${count === 2 ? "2 or 3" : `about ${count}`} topics. Student level: ${params.school}.`,
+      instructions: `${PLAN_INSTRUCTIONS}\n\nMake ${count === 2 ? "2 or 3" : `about ${count}`} topics, never fewer than 2.${
+        insist ? " An earlier answer had only one topic: split the note into at least 2 topics this time." : ""
+      } Student level: ${params.school}.`,
       input: JSON.stringify({
         noteTitle: params.title ?? "",
         keyTopics: params.keyTopics,
@@ -140,7 +146,15 @@ export async function planNoteTopics(params: {
       }),
       usageContext: { stage: "exam_topic_plan", userId: params.userId, lectureId: params.lectureId },
     });
-    const topics = result.topics.map(cleanTopic).filter((topic): topic is PlannedTopic => topic !== null);
+    return result.topics.map(cleanTopic).filter((topic): topic is PlannedTopic => topic !== null);
+  };
+
+  try {
+    let topics = await ask(false);
+
+    if (topics.length < 2) {
+      topics = await ask(true).then((again) => (again.length > topics.length ? again : topics)).catch(() => topics);
+    }
 
     return topics.length > 0 ? topics.slice(0, MAX_TOPICS_PER_NOTE + 2) : fallback;
   } catch {

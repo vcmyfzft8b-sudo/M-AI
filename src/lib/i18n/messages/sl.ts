@@ -2507,8 +2507,6 @@ export const sl = {
   "exam.setup.nextWithDate": "Naprej · {date}",
   "exam.setup.error": "Izpita ni bilo mogoče ustvariti. Poskusi znova.",
   "exam.setup.creating": "Sestavljam učno pot …",
-  "exam.setup.material.uploadTitle": "Dodaj gradivo za izpit",
-  "exam.setup.material.uploadBody": "Prosojnice, skripta, slike table ali posnetek predavanja",
   "exam.setup.material.pick": "Naloži gradivo",
   "exam.setup.material.pickHint": "PDF, Word, PowerPoint, fotografije ali zvočni posnetek",
   "exam.setup.material.addMore": "Dodaj še gradivo",

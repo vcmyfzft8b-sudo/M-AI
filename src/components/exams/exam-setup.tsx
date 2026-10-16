@@ -645,23 +645,15 @@ export function ExamSetup({
         <section className="memo-exam-step">
           <MemoSays key="material" mood="happy" text={t("exam.setup.material.title")} />
 
-          {/* First: bring the material for this exam — files, photos, a recording, a link. */}
+          {/* First: the material for this exam, in one field. Only a reached limit adds a line. */}
           <div className="memo-exam-upload">
-            <span className="memo-exam-upload-head">
-              <b>{t(added.length > 0 ? "exam.setup.material.addMore" : "exam.setup.material.uploadTitle")}</b>
-              {added.length > 0 ? (
-                <span className="memo-exam-upload-count">
-                  {added.length}/{MAX_SETUP_UPLOADS}
-                </span>
-              ) : null}
-            </span>
-            <span>
-              {uploadsLeft <= 0
-                ? t("exam.setup.material.uploadLimit", { count: MAX_SETUP_UPLOADS })
-                : examFull
-                  ? t("exam.setup.material.examFull", { count: MAX_EXAM_MODULES })
-                  : t("exam.setup.material.uploadBody")}
-            </span>
+            {uploadsLeft <= 0 || examFull ? (
+              <span className="memo-exam-upload-limit">
+                {uploadsLeft <= 0
+                  ? t("exam.setup.material.uploadLimit", { count: MAX_SETUP_UPLOADS })
+                  : t("exam.setup.material.examFull", { count: MAX_EXAM_MODULES })}
+              </span>
+            ) : null}
             {/* One field for any material: tap to pick files, photos or the camera, or drop files on it. */}
             <input
               ref={materialInputRef}
@@ -695,7 +687,14 @@ export function ExamSetup({
               }}
             >
               <Msym name="cloud_upload" className="memo-dropzone-icon" />
-              <span className="memo-exam-dropzone-lead">{t("exam.setup.material.pick")}</span>
+              <span className="memo-exam-dropzone-lead">
+                {t(added.length > 0 ? "exam.setup.material.addMore" : "exam.setup.material.pick")}
+                {added.length > 0 ? (
+                  <span className="memo-exam-upload-count">
+                    {added.length}/{MAX_SETUP_UPLOADS}
+                  </span>
+                ) : null}
+              </span>
               <span className="memo-dropzone-title">{t("exam.setup.material.pickHint")}</span>
             </button>
           </div>

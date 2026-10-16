@@ -2484,8 +2484,6 @@ export const bs: Messages = {
   "exam.setup.nextWithDate": "Dalje · {date}",
   "exam.setup.error": "Ispit nije moguće kreirati. Pokušaj ponovo.",
   "exam.setup.creating": "Slažem plan učenja…",
-  "exam.setup.material.uploadTitle": "Dodaj gradivo za ispit",
-  "exam.setup.material.uploadBody": "Prezentacije, skripte, slike table ili snimak predavanja",
   "exam.setup.material.pick": "Učitaj materijal",
   "exam.setup.material.pickHint": "PDF, Word, PowerPoint, fotografije ili audio snimak",
   "exam.setup.material.addMore": "Dodaj još gradiva",

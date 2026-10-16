@@ -2470,8 +2470,6 @@ export const en: Messages = {
   "exam.setup.nextWithDate": "Next · {date}",
   "exam.setup.error": "The exam could not be created. Try again.",
   "exam.setup.creating": "Building your study path…",
-  "exam.setup.material.uploadTitle": "Add your exam material",
-  "exam.setup.material.uploadBody": "Slides, handouts, photos of the board or a lecture recording",
   "exam.setup.material.pick": "Upload material",
   "exam.setup.material.pickHint": "PDF, Word, PowerPoint, photos or an audio recording",
   "exam.setup.material.addMore": "Add more material",

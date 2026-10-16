@@ -2484,8 +2484,6 @@ export const hr: Messages = {
   "exam.setup.nextWithDate": "Dalje · {date}",
   "exam.setup.error": "Ispit nije moguće stvoriti. Pokušaj ponovno.",
   "exam.setup.creating": "Slažem plan učenja…",
-  "exam.setup.material.uploadTitle": "Dodaj gradivo za ispit",
-  "exam.setup.material.uploadBody": "Prezentacije, skripte, slike ploče ili snimka predavanja",
   "exam.setup.material.pick": "Učitaj gradivo",
   "exam.setup.material.pickHint": "PDF, Word, PowerPoint, fotografije ili audio snimka",
   "exam.setup.material.addMore": "Dodaj još gradiva",

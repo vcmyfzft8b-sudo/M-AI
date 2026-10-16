@@ -28005,70 +28005,56 @@ button.memo-exam-card:hover {
   text-decoration: none;
 }
 
-/* The Progress tab: Astra's readiness numbers, forecast, gaps and topics. */
+/*
+ * The Progress tab: the goal card above already carries the forecast and the gaps, so below it is
+ * no more cards. Three numbers on the page between hairlines, then the topics as a plain list.
+ */
 .memo-exam-progress {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  padding-bottom: 1.5rem;
+  gap: 1.4rem;
+  padding: 0.4rem 0 1.5rem;
 }
 
 .memo-exam-progress-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
 }
 
 .memo-exam-progress-stats > span {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.15rem;
-  padding: 0.8rem 0.4rem;
-  border-radius: 18px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
+  gap: 0.1rem;
+  padding: 0.15rem 0.4rem;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-weight: 650;
   text-align: center;
 }
 
+.memo-exam-progress-stats > span + span {
+  border-left: 1px solid var(--line);
+}
+
 .memo-exam-progress-stats b {
   color: var(--text);
-  font-size: 1.3rem;
+  font-size: 1.55rem;
   font-weight: 800;
+  letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
 
-.memo-exam-progress-card {
+.memo-exam-progress-list {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  text-align: left;
-}
-
-.memo-exam-progress-card > b {
-  font-size: 1.08rem;
-  font-weight: 750;
-}
-
-.memo-exam-progress-card > b.on-track {
-  color: var(--success);
-}
-
-.memo-exam-progress-card > p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.95rem;
-  line-height: 1.45;
+  gap: 0.2rem;
 }
 
 .memo-exam-progress-topics {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  margin: 0.2rem 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -28076,7 +28062,12 @@ button.memo-exam-card:hover {
 .memo-exam-progress-topics li {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.4rem;
+  padding: 0.9rem 0;
+}
+
+.memo-exam-progress-topics li + li {
+  border-top: 1px solid var(--line);
 }
 
 .memo-exam-progress-topics li.locked {
@@ -28085,7 +28076,7 @@ button.memo-exam-card:hover {
 
 .memo-exam-progress-topic-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
 }
@@ -28206,11 +28197,6 @@ button.memo-exam-card:hover {
 }
 
 /* Astra's "Next lesson" picker: learn, practise or exam, and the topic. */
-.memo-exam-picker {
-  /* The sheet's own side padding, which the topic row bleeds through. */
-  --memo-picker-gutter: 1.9rem;
-}
-
 /* Three equal tabs across the sheet: the page tabs' 7rem minimum does not fit three on a phone. */
 .memo-exam-picker .memo-exam-tabs {
   width: 100%;
@@ -28224,49 +28210,21 @@ button.memo-exam-card:hover {
 }
 
 /*
- * The topics scroll sideways edge to edge (a wheel scrolls them too, see the dashboard), and fade
- * at an edge that has more behind it.
+ * The open topics, all on show: they wrap rather than scroll sideways, since a module opens only
+ * once the one before it is on target and few are open at a time.
  */
 .memo-exam-picker-topics {
-  position: relative;
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
-  margin: 0 calc(var(--memo-picker-gutter) * -1) 0.85rem;
-  padding: 0.15rem var(--memo-picker-gutter);
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scroll-padding-inline: var(--memo-picker-gutter);
-  scrollbar-width: none;
-  touch-action: pan-x;
-}
-
-.memo-exam-picker-topics.fade-end {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
-}
-
-.memo-exam-picker-topics.fade-start {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 3rem);
-  mask-image: linear-gradient(to right, transparent, #000 3rem);
-}
-
-.memo-exam-picker-topics.fade-start.fade-end {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
-  mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
-}
-
-@media (max-width: 1099px) {
-  .memo-exam-picker {
-    --memo-picker-gutter: 1.15rem;
-  }
-}
-
-.memo-exam-picker-topics::-webkit-scrollbar {
-  display: none;
+  margin-bottom: 0.85rem;
 }
 
 .memo-exam-picker-topics .memo-chip {
-  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .memo-exam-picker-topics .memo-chip.active {
@@ -28729,6 +28687,14 @@ button.memo-exam-card:hover {
   .memo-exam-lesson .lecture-quiz-options {
     gap: 0.55rem;
   }
+}
+
+/*
+ * A missed question that would run past the bottom of its screen with all its answers keeps only
+ * the one picked and the right one (`StudyQuizQuestion` sets this; everywhere a quiz is shown).
+ */
+.lecture-quiz-options[data-crowded] > .lecture-quiz-option:not(.selected, .correct) {
+  display: none;
 }
 
 /* A lesson on its way: centred on the screen, a line on what is being done, the app's bar. */

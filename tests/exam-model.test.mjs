@@ -382,8 +382,20 @@ test("topics open in order, only on target: no number of lessons under it opens 
   assert.equal(onTarget[0].learned, true);
   assert.deepEqual(onTarget.map((state) => state.unlocked), [true, true, false]);
 
+  // A module studied before the one ahead of it reached the goal stays shut until it does.
   const started = examModuleStates(mods("a", "b", "c"), lessons("c", "quiz", 1, 1), 0.75);
-  assert.equal(started[2].unlocked, true);
+  assert.equal(started[2].unlocked, false);
+  assert.equal(examNextStep(started.map((state) => ({ ...state, ready: true })), examStage(started, null, 0.75))?.topicId, "a");
+
+  // Reaching the goal once keeps the next module open, even after a lesson that dips under it.
+  const dipped = examModuleStates(
+    mods("a", "b", "c"),
+    [...lessons("a", "quiz", 1, lessonsToTarget(0, 0.75)), ...lessons("a", "quiz", 0, 1, "2026-10-15T08:00:00Z")],
+    0.75,
+  );
+  assert.ok(dipped[0].rawMastery < 0.75);
+  assert.equal(dipped[0].learned, true);
+  assert.deepEqual(dipped.map((state) => state.unlocked), [true, true, false]);
   // Readiness counts every topic, started or not (Astra: 23 % on one of four topics is 6 %).
   assert.equal(Math.round(examMastery(started) * 100), 7);
   assert.equal(topicsOnTarget(started, 0.75), 0);

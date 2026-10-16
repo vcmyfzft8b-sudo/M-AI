@@ -98,8 +98,14 @@ As in Astra, the path is one lesson after another, and the path picks the next o
    draws what it still needs after "Naslednja" as locked stations (`lessonsToTarget` from the
    module's knowledge now, at most 12 drawn, "Še 9 lekcij do 90 %"), so a weak lesson visibly adds
    stations, and the next module sits under its own locked heading ("Odklene se, ko modul 1 doseže
-   90 %"). The lesson's done screen says the same under the bar. A module already started stays
-   open. Until 2026-10-17 four practice lessons opened the next module whatever the score; that is
+   90 %"). The lesson's done screen says the same under the bar. **Reaching the goal once is what
+   counts** (`topicMastery`'s `peak`): a later lesson that dips under it does not shut the next
+   module again; the dip is practised like a faded topic. A module studied before the one ahead of
+   it reached the goal (old data, or a link) is shut again until it does, and the lesson page sends
+   a link to a shut module back to the path. The path is drawn **module by module** in path order
+   (each open module's lessons done, "Naslednja" and what it still needs in its own module, then
+   the first shut module's heading), not in the order lessons were done, so a module's run never
+   looks finished while it is under the goal. Until 2026-10-17 four practice lessons opened the next module whatever the score; that is
    gone, and with it the guarantee that every topic is reached before the exam: a learner who cannot
    reach the goal in one module never sees the later ones.
 2. **Close gaps.** A topic's open knowledge gaps (below), the topic with the most first.
@@ -267,6 +273,16 @@ mock exam) and says when a score is under the target.
 
 - **Grades:** the setup only offers a target percentage (75/90/100 %); the model still maps
   university 5–10 and school 1–5 scales, which older rows or a future setting may use.
+
+### Lesson screens on the phone
+
+Every lesson screen fits one phone screen without scrolling (the reading part aside). A missed
+quiz question keeps all its answers, the right one marked, with the verdict pinned to the foot;
+only when that would make the screen scroll do the others go, leaving the picked answer and the
+right one. The rule lives in `StudyQuizQuestion` (`data-crowded`, measured after the verdict is
+on the page) and so applies to every quiz in the app: the note's quiz tab, the palace, chat sets
+and the landing's demo too. True or false shows the question small and the claimed answer as the
+statement; its verdict names the right answer only when the statement was false.
 
 ## Setup
 

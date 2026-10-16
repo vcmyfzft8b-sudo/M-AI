@@ -46,6 +46,11 @@ export default async function ExamLessonPage({
 
   const current = detail.modules[index];
 
+  // A module the path has not opened yet (the one before it is not on target) is not studied by link.
+  if (!current.unlocked) {
+    redirect(`/app/exams/${detail.exam.id}`);
+  }
+
   if (!appState?.hasPaidAccess && appState?.trialLectureId !== current.lectureId) {
     redirect(paywallPath("exam", `/app/exams/${detail.exam.id}`));
   }

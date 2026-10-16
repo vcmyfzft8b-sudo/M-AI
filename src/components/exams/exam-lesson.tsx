@@ -700,34 +700,6 @@ function LessonBody({
   const [index, setIndex] = useState(0);
   const [correct, setCorrect] = useState(0);
   const [selection, setSelection] = useState<number | null>(null);
-  /*
-   * An answered question keeps every answer on screen, the right one marked, unless that would push
-   * the verdict off a phone screen: only then does it collapse to the answers worth reading (the
-   * picked one and the right one), as the note's quiz does.
-   */
-  const [collapseAnswered, setCollapseAnswered] = useState(false);
-  const quizStageRef = useRef<HTMLDivElement>(null);
-  /* Whether the verdict (its rule, line and buttons, about 11rem) still fits under the answers. */
-  const verdictFits = () => {
-    const stage = quizStageRef.current;
-    const scroller = stage?.closest(".memo-screen-scroll");
-
-    if (!stage || !scroller) {
-      return true;
-    }
-
-    // Measured from the last answer, not the stage, which stretches to fill the screen.
-    const answers = stage.querySelectorAll(".lecture-quiz-option");
-    const last = answers[answers.length - 1];
-
-    if (!last) {
-      return true;
-    }
-
-    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-    const floor = scroller.getBoundingClientRect().bottom - (parseFloat(getComputedStyle(scroller).paddingBottom) || 0);
-    return floor - last.getBoundingClientRect().bottom >= 11 * rem;
-  };
 
   const [flipped, setFlipped] = useState(false);
   const [exit, setExit] = useState<StudyFlashcardExit | null>(null);
@@ -772,7 +744,6 @@ function LessonBody({
 
     window.clearTimeout(advanceTimer.current);
     setSelection(null);
-    setCollapseAnswered(false);
     setShowWhy(false);
 
     if (retry) {
@@ -835,7 +806,6 @@ function LessonBody({
 
     setIndex(index + 1);
     setSelection(null);
-    setCollapseAnswered(false);
     setFlipped(false);
   }
 
@@ -1003,7 +973,7 @@ function LessonBody({
      * chat to send it to).
      */
     return (
-      <div ref={quizStageRef} className="lecture-quiz-stage">
+      <div className="lecture-quiz-stage">
         <div className="memo-quiz-head">
           <span className="memo-quiz-count">
             {retry ? t("exam.lesson.retry.title") : t("quiz.questionN", { index: index + 1 })}
@@ -1025,13 +995,12 @@ function LessonBody({
             question={question}
             order={order}
             selection={selection}
-            collapseAnswered={collapseAnswered}
+            collapseAnswered
             onSelect={(choice) => {
               if (selection !== null) {
                 return;
               }
 
-              setCollapseAnswered(choice !== question.correct_option_idx && !verdictFits());
               setSelection(choice);
               setShowWhy(false);
 

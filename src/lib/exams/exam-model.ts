@@ -401,7 +401,7 @@ export type ModuleState = {
   practiceLessons: number;
   /** When the topic last had a lesson. */
   lastAt: string | null;
-  /** The topic has reached the target once (fading aside), which is what opens the next one. */
+  /** The topic has reached the target at some point (fading and later dips aside): the next one is open. */
   learned: boolean;
   /** Mastery today reaches the target, and no failed mock asks for proof. */
   mastered: boolean;
@@ -594,6 +594,8 @@ function latestByKind(results: LessonResultLike[]) {
 /** A topic's mastery from its results, replayed oldest first: the exponential average, unfaded. */
 export function topicMastery(results: readonly LessonResultLike[]) {
   let mastery = 0;
+  /* The highest the topic has stood after any lesson: once it has reached the goal, it opened the next. */
+  let peak = 0;
   let lastAt: string | null = null;
   let lastTime = Number.NEGATIVE_INFINITY;
 
@@ -607,6 +609,7 @@ export function topicMastery(results: readonly LessonResultLike[]) {
     }
 
     mastery = masteryAfterLesson(mastery, result.lesson_kind, result.score);
+    peak = Math.max(peak, mastery);
 
     if (time >= lastTime) {
       lastTime = time;
@@ -614,7 +617,7 @@ export function topicMastery(results: readonly LessonResultLike[]) {
     }
   }
 
-  return { mastery, lastAt };
+  return { mastery, peak, lastAt };
 }
 
 /**
@@ -659,7 +662,7 @@ export function moduleProgress(
     }
   }
 
-  const { mastery: rawMastery, lastAt } = topicMastery(results);
+  const { mastery: rawMastery, peak, lastAt } = topicMastery(results);
   const mastery = lastAt ? fadedScore(rawMastery, lastAt, now) : rawMastery;
   const goal = passThreshold(target);
   const tested = (result: LessonResultLike) =>
@@ -679,7 +682,8 @@ export function moduleProgress(
     lessons: results.length,
     practiceLessons,
     lastAt,
-    learned: meetsPassMark(rawMastery, goal),
+    /* Reached the goal once: the next module stays open even if a later lesson dips under it. */
+    learned: meetsPassMark(peak, goal),
     mastered: onTarget && !proofOwed,
     proofOwed,
     refreshDue: !onTarget && meetsPassMark(rawMastery, goal),
@@ -696,8 +700,8 @@ export function moduleProgress(
 
 /**
  * Every module's state, in path order. A module is one topic. The first is open; each next one
- * opens once the one before it is learned (has reached the target), or once the learner has
- * studied it already. `target` is the exam's goal as 0..1.
+ * opens once the one before it is learned (has reached the target). Having studied a module
+ * already does not open it: a module before it still under the goal keeps it shut. `target` is the exam's goal as 0..1.
  *
  * A module marked `available: false` (its note is still being made, its topics are not planned,
  * or the learner cannot open it) does not hold the path: the module after it opens as if it had
@@ -734,7 +738,7 @@ export function examModuleStates(
     const progress = moduleProgress(byTopic.get(topicId) ?? [], target, weakInMock ? failedMock.at : null, now, options);
     const previous = states[position - 1];
     const previousSkipped = modulesInOrder[position - 1]?.available === false && Boolean(previous?.unlocked);
-    const unlocked = position === 0 || Boolean(previous?.learned) || previousSkipped || progress.lessons > 0;
+    const unlocked = position === 0 || Boolean(previous?.learned) || previousSkipped;
 
     states.push({ topicId, lectureId, position, unlocked, ...progress });
   });

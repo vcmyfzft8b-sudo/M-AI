@@ -1471,16 +1471,25 @@ export async function loadLesson(
       throw new ExamModelCallRefused();
     }
 
-    const steps = await planTutorLesson({
-      userId,
-      lectureId,
-      topicTitle: topic.title,
-      summary: topic.summary,
-      keyPoints: keyPointsOf(topic),
-      notesMarkdown: await readNotesMarkdown(supabase, lectureId),
-      school: schoolLine(exam.school_level, exam.school_year),
-      avoid: [],
-    }).catch(() => []);
+    const notesMarkdown = await readNotesMarkdown(supabase, lectureId);
+    const plan = () =>
+      planTutorLesson({
+        userId,
+        lectureId,
+        topicTitle: topic.title,
+        summary: topic.summary,
+        keyPoints: keyPointsOf(topic),
+        notesMarkdown,
+        school: schoolLine(exam.school_level, exam.school_year),
+        avoid: [],
+      }).catch(() => [] as TutorStep[]);
+    // One failed model call (a dropped gateway connection, a malformed answer) is asked again
+    // before the learner is shown a failure.
+    let steps = await plan();
+
+    if (steps.length === 0) {
+      steps = await plan();
+    }
 
     return steps.length > 0
       ? { status: "ready", lesson: { kind: "tutor", lectureId, topicTitle: topic.title, steps } }

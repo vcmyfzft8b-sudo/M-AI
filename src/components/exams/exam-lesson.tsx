@@ -120,6 +120,12 @@ export type ExamLessonAfter =
   | { type: "mock" }
   | null;
 
+/* A lesson load that is worth trying again rather than showing as failed straight away. */
+class LessonLoadHiccup extends Error {}
+
+/* How many times a lesson load is tried again on its own before the learner is asked. */
+const LESSON_LOAD_RETRIES = 2;
+
 export function ExamLesson({
   examId,
   examTitle,
@@ -176,8 +182,8 @@ export function ExamLesson({
     }
 
     if (!response.ok) {
-      setPhase({ name: "failed", generator: null });
-      return;
+      // A busy or briefly failing server: worth another try before the learner sees it.
+      throw new LessonLoadHiccup();
     }
 
     const load = (await response.json()) as LessonLoad;
@@ -189,6 +195,11 @@ export function ExamLesson({
     }
 
     if (load.status === "failed") {
+      // The lesson itself (the tutor's plan) failed rather than the note's material: try again.
+      if (load.generator === null) {
+        throw new LessonLoadHiccup();
+      }
+
       setPhase({ name: "failed", generator: load.generator });
       return;
     }
@@ -204,16 +215,28 @@ export function ExamLesson({
   }, [examId, kind, module.lectureId, module.topicId]);
 
   /*
-   * A network failure on the first load is a failed lesson (with its retry); on a poll while the
-   * material is being made it is only a missed poll, and the next one follows.
+   * A network failure, a busy server or a failed plan is tried again twice on its own, a moment
+   * apart, while the lesson shows as loading; only then is it a failed lesson with its retry. On
+   * a poll while the material is being made a failure is only a missed poll, and the next one
+   * follows.
    */
   const load = useCallback(
     async ({ polling = false }: { polling?: boolean } = {}) => {
-      try {
-        await fetchLesson();
-      } catch {
-        if (!polling) {
-          setPhase({ name: "failed", generator: null });
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          await fetchLesson();
+          return;
+        } catch {
+          if (polling) {
+            return;
+          }
+
+          if (attempt >= LESSON_LOAD_RETRIES) {
+            setPhase({ name: "failed", generator: null });
+            return;
+          }
+
+          await new Promise((resolve) => window.setTimeout(resolve, 1500 * (attempt + 1)));
         }
       }
     },

@@ -98,20 +98,19 @@ export async function POST(request: Request) {
     // Otherwise the rung the paywall showed, never above what the recorded
     // paywall moments allow (`paywall-ladder.ts`). The wheel's 50 % beats it.
     const ladderOffer = checkoutOffer(parsed.data.step ?? null, await readPaywallMoments(appState.user.id));
-    const coupon = wheelCoupon ?? ladderOffer.coupon;
 
     /*
-     * A discounted purchase is not also a trial.
+     * The free trial comes with a ladder discount too; only the wheel's prize is
+     * charged straight away, since it is a ten-minute offer sold as "now".
      *
-     * The coupon is `duration: once`, so it halves the first invoice — and a
-     * trial pushes that invoice three days out, past the ten minutes the offer
-     * was sold on and past the moment the buyer agreed to it. Stripe then shows
-     * "3 days free, then €130,00 per year", which is the undiscounted price and
-     * the opposite of what the sheet promised. Charging the discounted period
-     * straight away is what the offer actually says.
+     * With a trial the discount must be the one-month coupon (`trialCoupon`): a
+     * `once` coupon is spent on the first invoice Stripe finalises, which with a
+     * trial is the €0 trial invoice, and the buyer would then pay full price.
      */
     const subscriptionTrialEligible =
-      appState.subscriptionTrialEligible && !hasPriorStripeSubscription && !coupon;
+      appState.subscriptionTrialEligible && !hasPriorStripeSubscription && !wheelCoupon;
+    const coupon =
+      wheelCoupon ?? (subscriptionTrialEligible ? ladderOffer.trialCoupon : ladderOffer.coupon);
     const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
       metadata: {
         userId: appState.user.id,

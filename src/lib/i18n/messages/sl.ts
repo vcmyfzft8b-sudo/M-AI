@@ -1122,6 +1122,7 @@ export const sl = {
   "paywall.offer.firstYear": "{amount} za prvo leto, nato {renewal}",
   "paywall.offer.firstMonth": "{amount} za prvi mesec, nato {renewal}",
   "paywall.offer.cta": "Izkoristi {percent} % popusta",
+  "paywall.offer.ctaTrial": "Preizkusi brezplačno, nato {percent} % popusta",
   "paywall.demo.chatQuestion": "Kaj naredi klorofil?",
   "paywall.demo.chatAnswer": "Vpija svetlobo, predvsem rdečo in modro.",
   "paywall.demo.listenLine": "Klorofil vpija svetlobo in iz vode sprosti kisik.",

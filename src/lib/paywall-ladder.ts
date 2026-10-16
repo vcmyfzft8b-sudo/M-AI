@@ -19,7 +19,8 @@ import { PAYWALL_REASONS, type PaywallReason } from "./paywall-reasons.ts";
  * A paywall shows the rung its own moment will reach before it is recorded,
  * then the server's answer. Checkout gives the rung the paywall showed, but
  * never more than the account's moments allow. Every discount covers the first payment
- * only and comes without a trial or a promo code.
+ * only, comes with the free trial while the account still has one (only the
+ * wheel's prize never does), and without a promo-code field.
  *
  * Web only for now: the app sells through Apple, whose prices come from App
  * Store Connect, so it always shows the first step.
@@ -28,15 +29,23 @@ export type PaywallOffer = {
   /** 1 is the plain price with the trial; 2, 3 and 4 are the discounts. */
   step: number;
   percentOff: number;
-  /** Stripe coupon, `duration: once`; null on the first step. */
+  /** Stripe coupon, `duration: once`, for a checkout without a trial; null on the first step. */
   coupon: string | null;
+  /**
+   * The same discount for a checkout with the free trial: `duration: repeating`
+   * for one month. A `once` coupon is spent on the first invoice Stripe
+   * finalises, which with a trial is the €0 one, so the buyer would pay full
+   * price after it; a month's coupon reaches the first real payment, three days
+   * in, and has lapsed before any renewal.
+   */
+  trialCoupon: string | null;
 };
 
 export const PAYWALL_LADDER: readonly PaywallOffer[] = [
-  { step: 1, percentOff: 0, coupon: null },
-  { step: 2, percentOff: 20, coupon: "memo20-first-cycle" },
-  { step: 3, percentOff: 30, coupon: "memo30-first-cycle" },
-  { step: 4, percentOff: 40, coupon: "memo40-first-cycle" },
+  { step: 1, percentOff: 0, coupon: null, trialCoupon: null },
+  { step: 2, percentOff: 20, coupon: "memo20-first-cycle", trialCoupon: "memo20-after-trial" },
+  { step: 3, percentOff: 30, coupon: "memo30-first-cycle", trialCoupon: "memo30-after-trial" },
+  { step: 4, percentOff: 40, coupon: "memo40-first-cycle", trialCoupon: "memo40-after-trial" },
 ];
 
 /**

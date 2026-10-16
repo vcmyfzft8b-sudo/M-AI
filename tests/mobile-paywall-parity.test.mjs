@@ -155,8 +155,12 @@ test("a later paywall on the web offers the ladder's discount, and the app never
   assert.match(web, /€91\.00 for the first year, then €130\.00/);
   assert.match(web, /€14\.00 for the first month, then €20\.00/);
   assert.match(web, /<s class="memo-paywall-plan-was">€20\.00<\/s>/);
-  assert.match(web, /Get 30% off/);
-  assert.doesNotMatch(web, /free trial|Nothing to pay today/);
+  // The trial comes with it while the account still has one.
+  assert.match(web, /Try free, then 30% off/);
+  assert.match(web, /Nothing to pay today/);
+  const noTrial = paywall(false, [], { reason: "chat", offerStep: 3, subscriptionTrialEligible: false });
+  assert.match(noTrial, /Get 30% off/);
+  assert.doesNotMatch(noTrial, /Nothing to pay today|Try free/);
   assert.match(web, /memo-pw-hero" data-reason="chat"/);
   assert.doesNotMatch(web, /memo-paywall-benefits/);
 

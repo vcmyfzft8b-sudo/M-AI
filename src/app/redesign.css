@@ -11176,7 +11176,7 @@
  * exactly the brand's; Memo, at the same height, takes the drawn brain's place.
  */
 .memo-pw-brand {
-  --lockup-h: 4.5rem;
+  --lockup-h: 5.2rem;
   --paywall-accent: var(--promo);
   --memo-shadow: var(--hover-ring);
   position: relative;
@@ -11236,51 +11236,62 @@
  */
 .memo-wheel :is(.memo-wheel-rays, .memo-wheel-glow, .memo-wheel-lights) { pointer-events: none; }
 
-.memo-wheel-body:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-wheel { zoom: 0.86; }
-.memo-wheel-body:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-wheel { zoom: 0.74; }
-.memo-wheel-body:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-wheel-title, .memo-wheel-sub, .memo-wheel-prize) { zoom: 0.88; }
-.memo-wheel-body:is([data-fit="3"], [data-fit="4"]) .memo-wheel { zoom: 0.62; }
+/*
+ * Every compact level sets a size (`--z`) on the screen's own parts rather than
+ * a zoom, and one rule applies it, times the last-resort squeeze
+ * (`--fit-squeeze`, `use-fit-screen.ts`) — so the two multiply instead of one
+ * overriding the other. The scenes and the logo give way least.
+ */
+:is(.memo-paywall-shell, .memo-wheel-body, .memo-offer-body) > :not(.app-start-dismiss-row, .memo-confetti, script) {
+  zoom: calc(var(--z, 1) * var(--fit-squeeze, 1));
+}
+
+/* A paywall that has been fitted never scrolls, not even to bounce. */
+.memo-paywall-shell[data-fit] {
+  overflow-y: hidden;
+  overscroll-behavior: none;
+}
+
+.memo-wheel-body:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-wheel { --z: 0.9; }
+.memo-wheel-body:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-wheel { --z: 0.82; }
+.memo-wheel-body:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-wheel-title, .memo-wheel-sub, .memo-wheel-prize) { --z: 0.88; }
+.memo-wheel-body:is([data-fit="3"], [data-fit="4"]) .memo-wheel { --z: 0.72; }
 .memo-wheel-body:is([data-fit="3"], [data-fit="4"]) .memo-wheel-sub { display: none; }
-.memo-wheel-body[data-fit="4"] .memo-wheel { zoom: 0.5; }
+.memo-wheel-body[data-fit="4"] .memo-wheel { --z: 0.62; }
 .memo-wheel-body:is([data-fit="3"], [data-fit="4"]),
 .memo-offer-body:is([data-fit="3"], [data-fit="4"]) { padding-block: 0.6rem; }
 
-.memo-offer-body:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-offer-mascot { zoom: 0.8; }
-.memo-offer-body:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-offer-mascot { zoom: 0.62; }
-.memo-offer-body:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-offer-headline, .memo-offer-timer) { zoom: 0.82; }
-.memo-offer-body:is([data-fit="3"], [data-fit="4"]) .memo-offer-mascot { display: none; }
+.memo-offer-body:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-offer-mascot { --z: 0.9; }
+.memo-offer-body:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-offer-mascot { --z: 0.8; }
+.memo-offer-body:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-offer-headline, .memo-offer-timer) { --z: 0.82; }
+.memo-offer-body:is([data-fit="3"], [data-fit="4"]) .memo-offer-mascot { --z: 0.7; }
 .memo-offer-body:is([data-fit="3"], [data-fit="4"]) .memo-offer-sub { display: none; }
-.memo-offer-body[data-fit="4"] :is(.memo-offer-headline, .memo-offer-timer) { zoom: 0.68; }
+.memo-offer-body[data-fit="4"] :is(.memo-offer-headline, .memo-offer-timer) { --z: 0.68; }
 
-/*
- * One screen, never a page to scroll. The paywall measures itself after each
- * render and steps down to the first of these levels at which it fits
- * (`fitPaywall` in onboarding-paywall.tsx): the scene and the discount shrink
- * first, then the plans tighten, then the secondary lines go. Zoom rather than
- * transform, so what shrinks also gives back its room.
- */
-.memo-paywall-shell:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-pw-hero, .memo-pw-brand) { zoom: 0.86; }
-.memo-paywall-shell:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-paywall-offer { zoom: 0.86; }
+.memo-paywall-shell:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-pw-hero, .memo-pw-brand) { --z: 0.95; }
+.memo-paywall-shell:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-paywall-offer { --z: 0.86; }
 .memo-paywall-shell:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-paywall-benefit p { display: none; }
 .memo-paywall-shell:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-paywall-benefit { min-height: 0; }
 .memo-paywall-shell:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-paywall-plan-grid { margin-top: 0.7rem; }
 
 .memo-paywall-shell:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) { row-gap: 0.4rem; }
-.memo-paywall-shell:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-pw-hero, .memo-pw-brand) { zoom: 0.76; }
-.memo-paywall-shell:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-paywall-offer { zoom: 0.74; }
-.memo-paywall-shell:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-paywall-title, .memo-paywall-sub, .memo-paywall-benefits) { zoom: 0.9; }
-.memo-paywall-shell:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-pw-compare, .memo-paywall-plan-grid) { zoom: 0.92; }
+.memo-paywall-shell:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-pw-hero, .memo-pw-brand) { --z: 0.9; }
+.memo-paywall-shell:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-paywall-offer { --z: 0.74; }
+.memo-paywall-shell:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-paywall-title, .memo-paywall-sub, .memo-paywall-benefits) { --z: 0.88; }
+.memo-paywall-shell:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-pw-compare, .memo-paywall-plan-grid) { --z: 0.92; }
 
-.memo-paywall-shell:is([data-fit="3"], [data-fit="4"]) :is(.memo-pw-hero, .memo-pw-brand) { zoom: 0.68; }
-.memo-paywall-shell:is([data-fit="3"], [data-fit="4"]) .memo-paywall-offer { zoom: 0.6; }
+.memo-paywall-shell:is([data-fit="3"], [data-fit="4"]) :is(.memo-pw-hero, .memo-pw-brand) { --z: 0.86; }
+.memo-paywall-shell:is([data-fit="3"], [data-fit="4"]) .memo-paywall-offer { --z: 0.62; }
 .memo-paywall-shell:is([data-fit="3"], [data-fit="4"]) :is(.memo-paywall-sub, .memo-paywall-foot) { display: none; }
-.memo-paywall-shell:is([data-fit="3"], [data-fit="4"]) .memo-pw-compare { zoom: 0.84; }
+.memo-paywall-shell:is([data-fit="3"], [data-fit="4"]) .memo-pw-compare { --z: 0.82; }
+.memo-paywall-shell:is([data-fit="3"], [data-fit="4"]) .memo-paywall-plan-grid { --z: 0.88; }
 
-.memo-paywall-shell[data-fit="4"] :is(.memo-pw-compare, .memo-paywall-benefits) { zoom: 0.72; }
+.memo-paywall-shell[data-fit="4"] :is(.memo-pw-compare, .memo-paywall-benefits) { --z: 0.72; }
 .memo-paywall-shell[data-fit="4"] .memo-paywall-due { display: none; }
 .memo-paywall-shell[data-fit="4"] { row-gap: 0.12rem; }
-.memo-paywall-shell[data-fit="4"] .memo-paywall-plan-grid { margin-top: 0.3rem; }
-.memo-paywall-shell[data-fit="4"] .memo-paywall-offer { zoom: 0.54; }
+.memo-paywall-shell[data-fit="4"] .memo-paywall-plan-grid { margin-top: 0.3rem; --z: 0.84; }
+.memo-paywall-shell[data-fit="4"] .memo-paywall-offer { --z: 0.54; }
+.memo-paywall-shell[data-fit="4"] .memo-paywall-title { --z: 0.8; }
 
 /*
  * Closing a paywall steps back to the screen under it, which should simply be
@@ -11421,7 +11432,7 @@ html[data-paywall-closing] .memo-shell * {
 
 /* Library: free and the plan side by side, with the real limits. */
 .memo-paywall-shell[data-reason]:has(.memo-paywall-offer) .memo-pw-hero {
-  height: 8.6rem;
+  height: 9.6rem;
 }
 
 .memo-paywall-shell[data-reason="library"] .memo-paywall-offer-percent {

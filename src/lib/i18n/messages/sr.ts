@@ -1106,6 +1106,7 @@ export const sr: Messages = {
   "paywall.offer.firstYear": "{amount} za prvu godinu, zatim {renewal}",
   "paywall.offer.firstMonth": "{amount} za prvi mesec, zatim {renewal}",
   "paywall.offer.cta": "Iskoristi {percent} % popusta",
+  "paywall.offer.ctaTrial": "Isprobaj besplatno, zatim {percent} % popusta",
   "paywall.demo.chatQuestion": "Šta radi hlorofil?",
   "paywall.demo.chatAnswer": "Upija svetlost, uglavnom crvenu i plavu.",
   "paywall.demo.listenLine": "Hlorofil upija svetlost i iz vode oslobađa kiseonik.",

@@ -1,17 +1,17 @@
 /**
- * When the browsing offer (`paywall-nudge.tsx`) opens: on every few clicks
- * that open something — a note, a page, a tab on a note — since the last
- * paywall. Any paywall, the offer included, starts the count again.
+ * When the browsing offer (`paywall-nudge.tsx`) opens: on every seventh tap on
+ * anything in the app (a note, a tab, settings, a button of any kind) since
+ * the last paywall. Any paywall, the offer included, starts the count again.
  *
  * The count is this tab's own (sessionStorage), a convenience rather than a
  * record: losing it only means the next offer comes a few screens later. What
  * the offer is worth lives on the account, never here.
  */
 
-/** The click that opens the offer: this many since the last paywall. */
-export const OFFER_EVERY_SCREENS = 4;
+/** The tap that opens the offer: this many since the last paywall. */
+export const OFFER_EVERY_SCREENS = 7;
 
-/** Clicks that opened something since the last paywall, in this tab. */
+/** Taps since the last paywall, in this tab. */
 export const OFFER_SCREENS_KEY = "memo-offer-screens";
 
 export function offerIsDue(screens: number) {
@@ -27,7 +27,7 @@ export function notePaywallShown() {
   }
 }
 
-/** Counts one more click; says whether this one opens the offer. */
+/** Counts one more tap; says whether this one opens the offer. */
 export function countOfferScreen() {
   try {
     const screens = (Number(window.sessionStorage.getItem(OFFER_SCREENS_KEY)) || 0) + 1;

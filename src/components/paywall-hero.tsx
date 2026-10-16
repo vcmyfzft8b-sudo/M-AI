@@ -178,28 +178,18 @@ function EarlierOffers({ step }: { step: number }) {
 }
 
 /**
- * The paywall nothing opened (after onboarding, the Upgrade button): Memo
- * waving between the things the subscription opens, each one bobbing.
+ * The paywall nothing opened (after onboarding, the Upgrade button) keeps the
+ * Memo AI logo it always had, with Memo in it alive: he blinks and waves
+ * beside the wordmark, sparkles round him. The wordmark is the logo's own.
  */
-export function PaywallWelcome() {
-  const chips = [
-    ["description", "left one"],
-    ["style", "left two"],
-    ["school", "right one"],
-    ["headphones", "right two"],
-  ] as const;
-
+export function PaywallBrand({ label }: { label: string }) {
   return (
-    <div className="memo-pw-hero welcome" aria-hidden="true">
-      <span className="memo-pw-scene welcome">
-        {chips.map(([icon, place], index) => (
-          <span key={icon} className={`memo-pw-chip ${place}`} style={{ "--i": index } as CSSProperties}>
-            <Msym name={icon} size="1.15rem" fill={false} weight={500} />
-          </span>
-        ))}
-        <Memo move="wave" badge="auto_awesome" />
+    <div className="memo-pw-brand" role="img" aria-label={label}>
+      <span className="memo-pw-brand-mascot" aria-hidden="true">
+        <Memo move="wave" />
         <MascotSparkles />
       </span>
+      <span className="memo-pw-brand-word" aria-hidden="true" />
     </div>
   );
 }

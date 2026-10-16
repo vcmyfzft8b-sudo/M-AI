@@ -1096,6 +1096,7 @@ export const en: Messages = {
   "paywall.offer.firstYear": "{amount} for the first year, then {renewal}",
   "paywall.offer.firstMonth": "{amount} for the first month, then {renewal}",
   "paywall.offer.cta": "Get {percent}% off",
+  "paywall.offer.ctaTrial": "Try free, then {percent}% off",
   "paywall.demo.chatQuestion": "What does chlorophyll do?",
   "paywall.demo.chatAnswer": "It absorbs light, mostly red and blue.",
   "paywall.demo.listenLine": "Chlorophyll absorbs light and splits water into oxygen.",

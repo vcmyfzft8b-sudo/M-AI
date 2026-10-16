@@ -4,8 +4,8 @@ import test from "node:test";
 
 import { OFFER_EVERY_SCREENS, offerIsDue } from "../src/lib/paywall-offer-timing.ts";
 
-test("a browsing offer opens on every fourth click without a paywall", () => {
-  assert.equal(OFFER_EVERY_SCREENS, 4);
+test("a browsing offer opens on every seventh tap without a paywall", () => {
+  assert.equal(OFFER_EVERY_SCREENS, 7);
   assert.equal(offerIsDue(OFFER_EVERY_SCREENS - 1), false);
   assert.equal(offerIsDue(OFFER_EVERY_SCREENS), true);
 });
@@ -26,7 +26,7 @@ test("every paywall restarts the count, and records its moment once before check
   assert.match(paywall, /body: JSON\.stringify\(\{ plan, reason, step: offer\.step \}\)/);
 });
 
-test("every tap on anything pressable counts, and the fourth opens the offer in its place", () => {
+test("every tap on anything pressable counts, and the seventh opens the offer in its place", () => {
   const nudge = readFileSync(new URL("../src/components/paywall-nudge.tsx", import.meta.url), "utf8");
   const tappable = nudge.match(/const TAPPABLE = \[([\s\S]*?)\]\.join/)[1];
   for (const selector of ["a[href]", "button", '[role="button"]', '[role="link"]', '[role="tab"]', '[role="switch"]', 'input[type="checkbox"]']) {
@@ -109,4 +109,25 @@ test("one tap opens one offer, however slowly it arrives", () => {
   const nudge = readFileSync(new URL("../src/components/paywall-nudge.tsx", import.meta.url), "utf8");
   assert.match(nudge, /if \(\s*opening \|\|/);
   assert.match(nudge, /opening = true;\s*router\.push\(/);
+});
+
+test("taps one to six go through, the seventh opens the offer, and a paywall starts the count again", async () => {
+  const store = new Map();
+  globalThis.window = {
+    sessionStorage: {
+      getItem: (k) => store.get(k) ?? null,
+      setItem: (k, v) => store.set(k, String(v)),
+      removeItem: (k) => store.delete(k),
+    },
+  };
+  const { countOfferScreen, notePaywallShown } = await import("../src/lib/paywall-offer-timing.ts?seventh");
+  const round = () => Array.from({ length: 7 }, () => countOfferScreen());
+  assert.deepEqual(round(), [false, false, false, false, false, false, true]);
+  notePaywallShown();
+  assert.deepEqual(round(), [false, false, false, false, false, false, true], "after the offer, seven more");
+  notePaywallShown();
+  countOfferScreen(); countOfferScreen();
+  notePaywallShown(); // a limit's paywall in between
+  assert.deepEqual(round(), [false, false, false, false, false, false, true], "any paywall starts it again");
+  delete globalThis.window;
 });

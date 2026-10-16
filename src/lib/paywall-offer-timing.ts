@@ -1,5 +1,5 @@
 /**
- * When the browsing offer (`paywall-nudge.tsx`) opens: on every fourth tap on
+ * When the browsing offer (`paywall-nudge.tsx`) opens: on every seventh tap on
  * anything in the app (a note, a tab, settings, a button of any kind) since
  * the last paywall. Any paywall, the offer included, starts the count again.
  *
@@ -9,7 +9,7 @@
  */
 
 /** The tap that opens the offer: this many since the last paywall. */
-export const OFFER_EVERY_SCREENS = 4;
+export const OFFER_EVERY_SCREENS = 7;
 
 /** Taps since the last paywall, in this tab. */
 export const OFFER_SCREENS_KEY = "memo-offer-screens";

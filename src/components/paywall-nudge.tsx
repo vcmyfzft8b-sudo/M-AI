@@ -10,7 +10,7 @@ import { paywallPath } from "@/lib/paywall-reasons";
  * The offer that finds a free learner while they use the app.
  *
  * A learner who never runs into a limit would meet no paywall after the one at
- * the end of onboarding. Instead every fourth tap on anything in the app (a
+ * the end of onboarding. Instead every seventh tap on anything in the app (a
  * note, a tab, the mind map, new note, settings, a button of any kind;
  * `paywall-offer-timing.ts`) opens the upgrade screen as an offer
  * (`?for=offer`) in place of what it would have done, exactly as a limit

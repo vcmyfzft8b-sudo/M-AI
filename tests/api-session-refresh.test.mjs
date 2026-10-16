@@ -39,6 +39,10 @@ function auth(answer) {
   return { seen, fetch };
 }
 
+// The survey claims the proxy makes (`onboarding-claim.ts`), and what the database answers.
+const claims = [];
+let claimAnswer = "claimed";
+
 function proxy(fetch) {
   const forwarded = [];
   const context = { exports: {}, Headers, require: (name) => {
@@ -50,6 +54,7 @@ function proxy(fetch) {
       } } },
       "@/lib/i18n/locales": locales,
       "@/lib/public-env": { getPublicEnv: () => ({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: "anon" }) },
+      "@/lib/onboarding-claim": { ONBOARDING_RESPONSE_COOKIE: "memo-onboarding", claimOnboardingResponse: async (id, user) => { claims.push([id, user.id]); return claimAnswer; } },
       "@/lib/supabase/auth-user": authUser,
       "@/lib/mobile/account-lifecycle": { accountDeletionRequested: () => false },
       "@/lib/verified-page-user": { VERIFIED_PAGE_USER_HEADER: "x-memo-user", serializeVerifiedPageUser: (user) => user.id },
@@ -137,3 +142,23 @@ function readdirSyncDeep(dir) {
     return entry.isDirectory() ? readdirSyncDeep(url) : [url];
   });
 }
+
+test("the survey answered before sign-in is claimed before the page renders, once", async () => {
+  const { fetch } = auth("renew");
+  const { updateSession } = proxy(fetch);
+  const page = async (cookies) => updateSession(new NextRequest("https://www.memoai.eu/app/start", { headers: { cookie: cookies } }));
+  const signedIn = `${COOKIE}=${encode(session(now() + 1800))}; memo-onboarding=response-1`;
+
+  claims.length = 0; claimAnswer = "claimed";
+  const first = await page(signedIn);
+  assert.deepEqual(claims, [["response-1", USER.id]], "claimed for the signed-in account, in the proxy");
+  assert.equal(first.cookies.get("memo-onboarding")?.value, "", "and the cookie is cleared, so it never runs again");
+
+  claims.length = 0; claimAnswer = "failed";
+  const unreachable = await page(signedIn);
+  assert.equal(unreachable.cookies.get("memo-onboarding"), undefined, "a database that could not be reached keeps it for the next request");
+
+  claims.length = 0;
+  await page("memo-onboarding=response-1");
+  assert.deepEqual(claims, [], "nothing is claimed without a signed-in account");
+});

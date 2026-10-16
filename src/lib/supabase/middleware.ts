@@ -9,6 +9,7 @@ import {
   localeForCountry,
   parseLocale,
 } from "@/lib/i18n/locales";
+import { ONBOARDING_RESPONSE_COOKIE, claimOnboardingResponse } from "@/lib/onboarding-claim";
 import { getPublicEnv } from "@/lib/public-env";
 import { isTransientAuthError } from "@/lib/supabase/auth-user";
 import { accountDeletionRequested } from "@/lib/mobile/account-lifecycle";
@@ -114,6 +115,20 @@ export async function updateSession(request: NextRequest) {
     requestHeaders.set(VERIFIED_PAGE_USER_HEADER, serializeVerifiedPageUser(user));
   }
 
+  /*
+   * The survey answered before signing in goes onto the account here, before
+   * any page or layout renders. Claimed in the app layout instead, it raced
+   * the page, which read the profile in the same instant and asked the whole
+   * survey again of someone who had just answered it. Once there is nothing
+   * left to claim the cookie goes, so this runs once per sign-in, not on
+   * every request for a month; a database that could not be reached leaves it
+   * for the next request.
+   */
+  const pendingOnboarding = request.cookies.get(ONBOARDING_RESPONSE_COOKIE)?.value;
+  const onboardingSettled =
+    Boolean(user && pendingOnboarding) &&
+    (await claimOnboardingResponse(pendingOnboarding!, user!)) !== "failed";
+
   const response = NextResponse.next({
     request: {
       headers: requestHeaders,
@@ -123,6 +138,10 @@ export async function updateSession(request: NextRequest) {
   cookiesToSet.forEach(({ name, value, options }) => {
     response.cookies.set(name, value, options);
   });
+
+  if (onboardingSettled) {
+    response.cookies.delete(ONBOARDING_RESPONSE_COOKIE);
+  }
 
   // Last, deliberately: locale and refreshed session cookies must share the
   // same final response.

@@ -3,6 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { ONBOARDING_RESPONSE_COOKIE, claimOnboardingResponse } from "@/lib/onboarding-claim";
 import type { OnboardingSubmission } from "@/lib/onboarding-submission";
 
 /**
@@ -22,7 +23,7 @@ import type { OnboardingSubmission } from "@/lib/onboarding-submission";
  * otherwise sit in a URL, in history and in every referrer, for no benefit.
  */
 
-export const ONBOARDING_RESPONSE_COOKIE = "memo-onboarding";
+export { ONBOARDING_RESPONSE_COOKIE };
 export const ONBOARDING_SEEN_COOKIE = "memo-onboarded";
 
 /** Long enough to survive "I'll sign up tomorrow", short enough to expire. */
@@ -60,16 +61,13 @@ export async function saveAnonymousOnboarding(
 }
 
 /**
- * Moves a stored response onto the signed-in account, once.
+ * The same claim for a page that only has the cookie to go on.
  *
- * Called from `/app/start`, which is the screen every sign-in lands on and the
- * one that decides between "ask the survey" and "show the paywall" — so the
- * claim has to have happened before it reads the profile, or someone who just
- * answered everything would be asked all of it again.
- *
- * Returns whether anything was claimed. Never throws: an account arriving
- * without its answers is a worse experience, not a broken one, and the sign-in
- * it just completed must not fail because of it.
+ * The proxy makes the claim first, before any page or layout renders
+ * (`supabase/middleware.ts`): done here, in a layout, it raced the page, which
+ * read the profile at the same moment and asked the survey again of someone
+ * who had just answered it. This stays as the fallback for a request on which
+ * the proxy could not reach the database; it returns whether it moved anything.
  */
 export async function claimPendingOnboarding(): Promise<boolean> {
   const store = await cookies();
@@ -80,24 +78,7 @@ export async function claimPendingOnboarding(): Promise<boolean> {
     const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return false;
-
-    // `as never` on the name is the repo's convention for a function the
-    // generated types do not carry; see `record_tutor_usage` and the rest.
-    const { data } = await createSupabaseServiceRoleClient().rpc("claim_onboarding_response" as never, {
-      response_id: responseId,
-      claimant: user.id,
-      claimant_email: user.email ?? null,
-      claimant_name:
-        typeof user.user_metadata?.full_name === "string"
-          ? user.user_metadata.full_name
-          : typeof user.user_metadata?.name === "string"
-            ? user.user_metadata.name
-            : null,
-    } as never);
-    // False every time after the first. The cookie outlives the claim — a
-    // Server Component cannot clear one — so this runs again on later visits
-    // and does nothing, which is the point of doing it in the database.
-    return data === true;
+    return (await claimOnboardingResponse(responseId, user)) === "claimed";
   } catch {
     return false;
   }

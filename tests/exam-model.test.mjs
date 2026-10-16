@@ -39,7 +39,6 @@ import {
   withGapsFirst,
   examForecast,
   GAP_MAX_MISSES,
-  LESSONS_TO_OPEN_NEXT,
   MASTERY_RATE,
   lessonsToTarget,
   masteryAfterLesson,
@@ -365,14 +364,23 @@ test("the next format rotates: every format once, then round the practice ones; 
   assert.equal(suggestedKind({ done: all, lessons: 7, failedToday: { ...zero, true_false: 2 }, gapKind: null }), "tutor");
 });
 
-test("topics open in order: on target or after four practice lessons, or once studied anyway", () => {
+test("topics open in order, only on target: no number of lessons under it opens the next", () => {
   const fresh = examModuleStates(mods("a", "b", "c"), [], 0.75);
   assert.deepEqual(fresh.map((state) => state.unlocked), [true, false, false]);
 
-  const four = examModuleStates(mods("a", "b", "c"), lessons("a", "quiz", 0.5, LESSONS_TO_OPEN_NEXT), 0.75);
-  assert.equal(four[0].learned, true);
-  assert.equal(four[0].mastered, false);
-  assert.deepEqual(four.map((state) => state.unlocked), [true, true, false]);
+  for (const score of [0, 0.5, 0.7]) {
+    const many = examModuleStates(mods("a", "b", "c"), lessons("a", "quiz", score, 30), 0.75);
+    assert.equal(many[0].learned, false, `30 quizzes at ${score}`);
+    assert.deepEqual(many.map((state) => state.unlocked), [true, false, false]);
+    // The path stays on it, still owing it lessons.
+    const stage = examStage(many, null, 0.75);
+    assert.equal(examNextStep(many.map((state) => ({ ...state, ready: true })), stage)?.topicId, "a");
+    assert.ok(lessonsToTarget(many[0].mastery, 0.75) > 0);
+  }
+
+  const onTarget = examModuleStates(mods("a", "b", "c"), lessons("a", "quiz", 1, lessonsToTarget(0, 0.75)), 0.75);
+  assert.equal(onTarget[0].learned, true);
+  assert.deepEqual(onTarget.map((state) => state.unlocked), [true, true, false]);
 
   const started = examModuleStates(mods("a", "b", "c"), lessons("c", "quiz", 1, 1), 0.75);
   assert.equal(started[2].unlocked, true);
@@ -381,21 +389,23 @@ test("topics open in order: on target or after four practice lessons, or once st
   assert.equal(topicsOnTarget(started, 0.75), 0);
 });
 
-test("the path learns every topic first, then practises the weakest, then offers the mock", () => {
+test("the path takes each topic to the target in order, then practises the weakest, then offers the mock", () => {
   const learning = examModuleStates(mods("a", "b"), [], 0.75);
   assert.deepEqual(examNextStep(learning, examStage(learning, null, 0.75)), {
     type: "lesson", topicId: "a", lectureId: "a", kind: "summary", review: false,
   });
 
-  // Topic a has had its four lessons: b is learned next, even though a is not on target.
+  // Topic a has had four lessons under the target: the path stays on a, and b stays locked.
   const results = [result("a", "summary", 1, "2026-10-14T07:00:00Z"), ...lessons("a", "quiz", 0.6, 4)];
   const second = examModuleStates(mods("a", "b"), results, 0.75);
   assert.equal(examStage(second, null, 0.75), "learn");
-  assert.equal(examNextStep(second, "learn")?.topicId, "b");
+  assert.equal(second[1].unlocked, false);
+  assert.equal(examNextStep(second, "learn")?.topicId, "a");
 
-  // Both learned, neither on target: the weaker one is practised.
-  const both = [...results, ...lessons("b", "quiz", 0.9, 4, "2026-10-15T08:00:00Z")];
-  const practising = examModuleStates(mods("a", "b"), both, 0.75);
+  // Both reached the target once, and both have faded under it since: the weaker one is practised.
+  const both = [...lessons("a", "quiz", 1, 14, "2026-10-01T08:00:00Z"), ...lessons("b", "quiz", 1, 14, "2026-10-03T08:00:00Z")];
+  const practising = examModuleStates(mods("a", "b"), both, 0.75, null, new Date("2026-10-14T12:00:00Z"));
+  assert.ok(practising.every((state) => state.learned && !state.mastered));
   assert.equal(examStage(practising, null, 0.75), "practise");
   assert.equal(examNextStep(practising, "practise")?.topicId, "a");
 

@@ -11,7 +11,7 @@ import { useInstantNavigation } from "@/components/navigation-loading";
 import { NoteSpeedReader } from "@/components/note-speed-reader";
 import { StudyFlashcard, type StudyFlashcardExit } from "@/components/study-flashcard";
 import { StudyPracticeQuestion, StudyQuizQuestion } from "@/components/study-question";
-import { LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
+import { LESSON_KIND_EMOJI, LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
 import { ExamScreen } from "@/components/exams/exam-screen";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { MemoBuddy, type BuddyMood } from "@/components/exams/memo-buddy";
@@ -19,6 +19,7 @@ import { ExamTutorLesson } from "@/components/exams/exam-tutor-lesson";
 import { lessonUrl, takePrefetchedLesson } from "@/components/exams/lesson-prefetch";
 import {
   GAP_LESSON_KINDS,
+  lessonsToTarget,
   masteryAfterLesson,
   meetsPassMark,
   passThreshold,
@@ -458,10 +459,9 @@ export function ExamLesson({
 
   return (
     <ExamScreen backHref={examHref} backIcon="close" backLabel={examTitle} title={title} refreshOnBack cta={cta}>
-      <div className="memo-exam-lesson-head">
-        <span className="memo-exam-lesson-module">{module.title}</span>
-        {/* A lesson's parts, as Astra counts its steps: the reading, then each part in turn. */}
-        {phase.name === "playing" && phase.lesson.kind === "summary" && (phase.lesson.parts?.length ?? 0) > 0 ? (
+      {/* A lesson's parts, as Astra counts its steps: the reading, then each part in turn. */}
+      {phase.name === "playing" && phase.lesson.kind === "summary" && (phase.lesson.parts?.length ?? 0) > 0 ? (
+        <div className="memo-exam-lesson-head">
           <ol className="memo-exam-lesson-parts" aria-label={t("exam.lesson.parts")}>
             {[{ kind: "summary" as const }, ...(phase.lesson.parts ?? [])].map((entry, index) => (
               <li
@@ -473,15 +473,12 @@ export function ExamLesson({
               </li>
             ))}
           </ol>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <div className="memo-panel study memo-exam-lesson">
         {phase.name === "loading" || phase.name === "saving" ? (
-          <div className="memo-exam-center">
-            <MemoBuddy mood="think" size="6rem" thought="💭" />
-            <Loader2 className="h-5 w-5 animate-spin" aria-label={t("common.loading")} />
-          </div>
+          <LessonLoading kind={kind} saving={phase.name === "saving"} />
         ) : phase.name === "generating" ? (
           <StudyGenerationNotice preview={GENERATOR_PREVIEW[phase.generator]} stageCopy={t(GENERATOR_STAGE[phase.generator])} />
         ) : phase.name === "failed" ? (
@@ -553,6 +550,12 @@ export function ExamLesson({
               </div>
             </div>
             {phase.total > 0 && kind !== "summary" ? <p>{scoreLine(phase.correct, phase.total)}</p> : null}
+            {/* Under the goal the module goes on: the lessons it still needs, and only then the next. */}
+            {phase.reached || meetsPassMark(phase.after, passThreshold(target / 100)) ? null : (
+              <p className="memo-exam-lessons-left">
+                {t("exam.lesson.done.lessonsLeft", { count: lessonsToTarget(phase.after, target / 100), target })}
+              </p>
+            )}
             {/* What comes back and until when: the misses, until they are answered right. */}
             {phase.gapsClosed > 0 || phase.gapsOpen > 0 ? (
               <div className="memo-exam-gap-facts">
@@ -574,6 +577,40 @@ export function ExamLesson({
         )}
       </div>
     </ExamScreen>
+  );
+}
+
+/* What a lesson load is doing, said a line at a time while it waits: all three are what it does. */
+const LOADING_LINES = ["exam.lesson.loading.fresh", "exam.lesson.loading.gaps", "exam.lesson.loading.level"] as const;
+
+/*
+ * Waiting for a lesson (or for its result to be saved): Memo thinking about the lesson in hand, the
+ * lesson's name, a line on what is being done, and the app's sweeping bar, centred on the screen.
+ */
+function LessonLoading({ kind, saving }: { kind: ExamLessonKind; saving: boolean }) {
+  const { t } = useTranslations();
+  const [line, setLine] = useState(0);
+
+  useEffect(() => {
+    if (saving) {
+      return;
+    }
+
+    const timer = window.setInterval(() => setLine((current) => (current + 1) % LOADING_LINES.length), 2400);
+    return () => window.clearInterval(timer);
+  }, [saving]);
+
+  return (
+    <div className="memo-exam-center memo-exam-loading" role="status" aria-live="polite">
+      <MemoBuddy mood="think" size="6.5rem" thought={saving ? "📊" : LESSON_KIND_EMOJI[kind]} />
+      <h2>{saving ? t("exam.lesson.loading.saving") : t("exam.lesson.loading.title", { lesson: t(LESSON_KIND_KEY[kind]) })}</h2>
+      <p key={saving ? "saving" : line} className="memo-exam-loading-line">
+        {saving ? t("exam.lesson.loading.savingLine") : t(LOADING_LINES[line])}
+      </p>
+      <span className="memo-gen-track memo-exam-loading-track" aria-hidden="true">
+        <span />
+      </span>
+    </div>
   );
 }
 
@@ -663,6 +700,35 @@ function LessonBody({
   const [index, setIndex] = useState(0);
   const [correct, setCorrect] = useState(0);
   const [selection, setSelection] = useState<number | null>(null);
+  /*
+   * An answered question keeps every answer on screen, the right one marked, unless that would push
+   * the verdict off a phone screen: only then does it collapse to the answers worth reading (the
+   * picked one and the right one), as the note's quiz does.
+   */
+  const [collapseAnswered, setCollapseAnswered] = useState(false);
+  const quizStageRef = useRef<HTMLDivElement>(null);
+  /* Whether the verdict (its rule, line and buttons, about 11rem) still fits under the answers. */
+  const verdictFits = () => {
+    const stage = quizStageRef.current;
+    const scroller = stage?.closest(".memo-screen-scroll");
+
+    if (!stage || !scroller) {
+      return true;
+    }
+
+    // Measured from the last answer, not the stage, which stretches to fill the screen.
+    const answers = stage.querySelectorAll(".lecture-quiz-option");
+    const last = answers[answers.length - 1];
+
+    if (!last) {
+      return true;
+    }
+
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const floor = scroller.getBoundingClientRect().bottom - (parseFloat(getComputedStyle(scroller).paddingBottom) || 0);
+    return floor - last.getBoundingClientRect().bottom >= 11 * rem;
+  };
+
   const [flipped, setFlipped] = useState(false);
   const [exit, setExit] = useState<StudyFlashcardExit | null>(null);
   const [missed, setMissed] = useState(0);
@@ -706,6 +772,7 @@ function LessonBody({
 
     window.clearTimeout(advanceTimer.current);
     setSelection(null);
+    setCollapseAnswered(false);
     setShowWhy(false);
 
     if (retry) {
@@ -748,22 +815,7 @@ function LessonBody({
       advanceQuiz(false);
     }
   });
-  /*
-   * On a phone an answered question collapses to the answers worth reading, as the note's quiz
-   * does; beside the desktop rail there is room to keep all four.
-   */
-  const [collapseAnswered, setCollapseAnswered] = useState(false);
-
-  useEffect(() => {
-    const query = window.matchMedia("(max-width: 1099px)");
-    const sync = () => setCollapseAnswered(query.matches);
-    sync();
-    query.addEventListener("change", sync);
-    return () => {
-      query.removeEventListener("change", sync);
-      window.clearTimeout(advanceTimer.current);
-    };
-  }, []);
+  useEffect(() => () => window.clearTimeout(advanceTimer.current), []);
 
   const flipHint = (
     <>
@@ -783,6 +835,7 @@ function LessonBody({
 
     setIndex(index + 1);
     setSelection(null);
+    setCollapseAnswered(false);
     setFlipped(false);
   }
 
@@ -911,7 +964,7 @@ function LessonBody({
         ? (() => {
             const entry = lesson.questions[at];
             return entry
-              ? { id: entry.id, prompt: entry.prompt, options: entry.options, correct_option_idx: entry.correctIndex, explanation: entry.explanation, answer: entry.options[entry.correctIndex] }
+              ? { id: entry.id, context: null, prompt: entry.prompt, options: entry.options, correct_option_idx: entry.correctIndex, explanation: entry.explanation, answer: entry.options[entry.correctIndex] }
               : null;
           })()
         : (() => {
@@ -920,7 +973,9 @@ function LessonBody({
             return entry
               ? {
                   id: entry.id,
-                  prompt: t("exam.lesson.trueFalse.statement", { prompt: entry.prompt, claim: entry.claim }),
+                  /* The question asked, small; the answer claimed for it is the statement judged. */
+                  context: entry.prompt,
+                  prompt: entry.claim,
                   options: [t("exam.lesson.trueFalse.true"), t("exam.lesson.trueFalse.false")],
                   correct_option_idx: entry.isTrue ? 0 : 1,
                   explanation: entry.explanation,
@@ -938,8 +993,6 @@ function LessonBody({
         ? question.options.map((_, optionIndex) => optionIndex).reverse()
         : question.options.map((_, optionIndex) => optionIndex);
     const wrong = selection !== null && selection !== question.correct_option_idx;
-    const correctLetter = String.fromCharCode(65 + order.indexOf(question.correct_option_idx));
-    const repeatedGap = !retry && Boolean(lesson.repeated?.includes(question.id));
 
     const next = advanceQuiz;
 
@@ -950,7 +1003,7 @@ function LessonBody({
      * chat to send it to).
      */
     return (
-      <div className="lecture-quiz-stage">
+      <div ref={quizStageRef} className="lecture-quiz-stage">
         <div className="memo-quiz-head">
           <span className="memo-quiz-count">
             {retry ? t("exam.lesson.retry.title") : t("quiz.questionN", { index: index + 1 })}
@@ -964,13 +1017,9 @@ function LessonBody({
         </div>
         {retry && index === 0 && selection === null ? (
           <p className="memo-exam-retry-note">{t("exam.lesson.retry.body")}</p>
-        ) : repeatedGap ? (
-          <span className="memo-exam-gap-tag">
-            <Msym name="replay" size="0.95rem" weight={700} />
-            {t("exam.lesson.repeatTag")}
-          </span>
         ) : null}
         <div className="lecture-quiz-card">
+          {question.context ? <p className="memo-exam-tf-context">{question.context}</p> : null}
           <StudyQuizQuestion
             key={`${question.id}:${retry ? "retry" : "first"}`}
             question={question}
@@ -982,6 +1031,7 @@ function LessonBody({
                 return;
               }
 
+              setCollapseAnswered(choice !== question.correct_option_idx && !verdictFits());
               setSelection(choice);
               setShowWhy(false);
 
@@ -1005,11 +1055,13 @@ function LessonBody({
               </span>
               <span className="memo-quiz-result-copy">
                 <span className="memo-quiz-result-title">{t("quiz.wrongTitle")}</span>
-                <span>
-                  {lesson.kind === "true_false"
-                    ? t("exam.lesson.trueFalse.answer", { answer: question.answer })
-                    : t("quiz.correctAnswerIs", { letter: correctLetter })}
-                </span>
+                {/*
+                 * The right answer is marked above. A false statement also says what is right
+                 * instead, the one thing the screen does not show.
+                 */}
+                {lesson.kind === "true_false" && question.correct_option_idx === 1 ? (
+                  <span>{t("exam.lesson.trueFalse.answer", { answer: question.answer })}</span>
+                ) : null}
               </span>
               <div className="memo-quiz-result-actions">
                 {question.explanation ? (

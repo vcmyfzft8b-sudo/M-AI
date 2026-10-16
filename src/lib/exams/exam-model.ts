@@ -105,9 +105,9 @@ export function mockPassed(percentage: number, target: number) {
 }
 
 /*
- * A lesson the learner keeps failing is not offered again the same day after this many tries:
- * the path moves on to other work (the next module, other repeats, refreshes) and comes back to it
- * the next day, so one hard lesson cannot hold the whole plan.
+ * A lesson format the learner keeps failing is not offered again the same day after this many
+ * tries: the module goes on in its other formats (`suggestedKind`) and the format comes back the
+ * next day. The module itself is never skipped; the next one opens only on target.
  */
 export const MAX_FAILED_TRIES_PER_DAY = 2;
 
@@ -333,11 +333,11 @@ export function lessonsToTarget(mastery: number, target: number) {
   return Math.max(1, Math.ceil(lessons - 1e-9));
 }
 
-/**
- * The next topic opens once the one before it is on target or has had this many practice lessons,
- * so every topic is reached before the exam even when one is hard; the path then comes back to it.
+/*
+ * A module opens the next one only on target. There is no "enough lessons" way through: a learner
+ * scoring 0 % in a module stays in it, and the path keeps adding its lessons (`lessonsToTarget`
+ * from where its knowledge is now) until it reaches the exam's goal. The owner's rule (2026-10-17).
  */
-export const LESSONS_TO_OPEN_NEXT = 4;
 
 /*
  * The format the path suggests next for a topic (Astra's "Next up" rotates by itself: intro, smart
@@ -401,7 +401,7 @@ export type ModuleState = {
   practiceLessons: number;
   /** When the topic last had a lesson. */
   lastAt: string | null;
-  /** The topic is far enough along to open the next one (on target, or `LESSONS_TO_OPEN_NEXT` lessons). */
+  /** The topic has reached the target once (fading aside), which is what opens the next one. */
   learned: boolean;
   /** Mastery today reaches the target, and no failed mock asks for proof. */
   mastered: boolean;
@@ -679,7 +679,7 @@ export function moduleProgress(
     lessons: results.length,
     practiceLessons,
     lastAt,
-    learned: meetsPassMark(rawMastery, goal) || practiceLessons >= LESSONS_TO_OPEN_NEXT,
+    learned: meetsPassMark(rawMastery, goal),
     mastered: onTarget && !proofOwed,
     proofOwed,
     refreshDue: !onTarget && meetsPassMark(rawMastery, goal),
@@ -696,8 +696,8 @@ export function moduleProgress(
 
 /**
  * Every module's state, in path order. A module is one topic. The first is open; each next one
- * opens once the one before it is learned (on target, or `LESSONS_TO_OPEN_NEXT` practice lessons),
- * or once the learner has studied it anyway. `target` is the exam's goal as 0..1.
+ * opens once the one before it is learned (has reached the target), or once the learner has
+ * studied it already. `target` is the exam's goal as 0..1.
  *
  * A module marked `available: false` (its note is still being made, its topics are not planned,
  * or the learner cannot open it) does not hold the path: the module after it opens as if it had
@@ -784,7 +784,8 @@ export type ExamNextStepModule = Pick<
 /**
  * The path's "Next up", Astra's way: one lesson at a time, its format chosen by `suggestedKind`.
  *
- * 1. **Learn.** The first open topic that is not learned yet, so every topic is reached.
+ * 1. **Learn.** The first open topic that has not reached the target yet. Only reaching it opens
+ *    the next topic, so the path stays on a topic, adding lessons, until it gets there.
  * 2. **Close gaps.** A topic's knowledge gaps, the topic with the most first.
  * 3. **Practise.** The open topic furthest under the target (a faded one included, as a refresh).
  * 4. **Exam day.** On the exam's eve and the day itself (`finalDay`), a flashcard refresher for each

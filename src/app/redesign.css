@@ -27641,6 +27641,13 @@ button.memo-exam-card:hover {
   opacity: 1;
 }
 
+.memo-exam-lessons-left {
+  max-width: 22rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  text-wrap: balance;
+}
+
 .memo-exam-trail-banner.locked {
   opacity: 0.75;
 }
@@ -27803,27 +27810,6 @@ button.memo-exam-card:hover {
   background: var(--promo);
   box-shadow: 0 0 0 3px var(--bg);
   color: var(--on-photo);
-}
-
-/* A lesson still under the target, back on the path until it reaches it. */
-
-/* A format the learner did not pick for a learned module: optional, so quieter, never locked. */
-
-/* A topic's knowledge gaps: the badge counts the questions it will ask again. */
-
-/* A question missed in an earlier lesson, asked again (Astra's "repeat" tag). */
-.memo-exam-gap-tag {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  width: fit-content;
-  gap: 0.35rem;
-  padding: 0.3rem 0.75rem;
-  border-radius: 999px;
-  background: var(--tile);
-  color: var(--promo);
-  font-size: 0.78rem;
-  font-weight: 700;
 }
 
 .memo-exam-retry-note {
@@ -28220,16 +28206,59 @@ button.memo-exam-card:hover {
 }
 
 /* Astra's "Next lesson" picker: learn, practise or exam, and the topic. */
-.memo-exam-picker .memo-exam-tabs {
-  margin: 0 auto 0.85rem;
+.memo-exam-picker {
+  /* The sheet's own side padding, which the topic row bleeds through. */
+  --memo-picker-gutter: 1.9rem;
 }
 
+/* Three equal tabs across the sheet: the page tabs' 7rem minimum does not fit three on a phone. */
+.memo-exam-picker .memo-exam-tabs {
+  width: 100%;
+  margin: 0 0 0.85rem;
+}
+
+.memo-exam-picker .memo-exam-tabs button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 0.5rem;
+}
+
+/*
+ * The topics scroll sideways edge to edge (a wheel scrolls them too, see the dashboard), and fade
+ * at an edge that has more behind it.
+ */
 .memo-exam-picker-topics {
+  position: relative;
   display: flex;
   gap: 0.5rem;
-  margin-bottom: 0.85rem;
+  margin: 0 calc(var(--memo-picker-gutter) * -1) 0.85rem;
+  padding: 0.15rem var(--memo-picker-gutter);
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: var(--memo-picker-gutter);
   scrollbar-width: none;
+  touch-action: pan-x;
+}
+
+.memo-exam-picker-topics.fade-end {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
+}
+
+.memo-exam-picker-topics.fade-start {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 3rem);
+  mask-image: linear-gradient(to right, transparent, #000 3rem);
+}
+
+.memo-exam-picker-topics.fade-start.fade-end {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
+}
+
+@media (max-width: 1099px) {
+  .memo-exam-picker {
+    --memo-picker-gutter: 1.15rem;
+  }
 }
 
 .memo-exam-picker-topics::-webkit-scrollbar {
@@ -28249,7 +28278,7 @@ button.memo-exam-card:hover {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.85rem 0.6rem;
-  padding-top: 0.55rem;
+  padding-top: 0.75rem;
 }
 
 .memo-exam-picker-grid.wide {
@@ -28624,14 +28653,6 @@ button.memo-exam-card:hover {
   gap: 0.5rem;
 }
 
-/* The app's coral, as its progress bars have it: done in full, the lesson at hand half-lit. */
-
-.memo-exam-lesson-module {
-  color: var(--muted);
-  font-size: 0.92rem;
-  font-weight: 650;
-}
-
 /*
  * A flashcard thrown in a lesson leaves the screen, as it does in the note's deck: the clips
  * between it and the window are released while a drag or its throw is under way, and the
@@ -28675,6 +28696,113 @@ button.memo-exam-card:hover {
   color: var(--muted);
   font-size: 1rem;
   line-height: 1.5;
+}
+
+/*
+ * The lesson's quiz is the question and its answers on the page, as the note's quiz tab has it on
+ * the phone: no card around the answer cards. (The extra ancestor outweighs the theme gradient the
+ * note screen's rule also has to beat.)
+ */
+.memo-exam-screen .memo-panel.memo-exam-lesson .lecture-quiz-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+@media (max-width: 1099px) {
+  /* The note quiz tab's phone type, so a question and four answers fit one screen. */
+  .memo-exam-lesson .lecture-quiz-prompt {
+    margin-bottom: 0.8rem;
+    font-size: 1.12rem;
+    line-height: 1.28;
+  }
+
+  .memo-exam-lesson .lecture-quiz-option {
+    min-height: 3.4rem;
+    padding-block: 0.7rem;
+    font-size: 1rem;
+  }
+
+  .memo-exam-lesson .lecture-quiz-options {
+    gap: 0.55rem;
+  }
+}
+
+/* A lesson on its way: centred on the screen, a line on what is being done, the app's bar. */
+.memo-exam-loading {
+  justify-content: center;
+  min-height: min(34rem, 70svh);
+}
+
+.memo-exam-loading-line {
+  min-height: 2.7em;
+  max-width: 18rem;
+  text-wrap: balance;
+  animation: memo-pop-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.memo-exam-loading-track {
+  width: min(14rem, 70%);
+  margin-top: 0.3rem;
+}
+
+/*
+ * The quiz fills the screen, so a missed question's verdict sits at its foot, under the thumb, with
+ * the answers left where they were.
+ */
+.memo-panel.study.memo-exam-lesson:has(> .lecture-quiz-stage),
+.memo-exam-lesson .lecture-quiz-stage,
+.memo-exam-lesson .lecture-quiz-card {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
+.memo-exam-lesson .lecture-quiz-options {
+  margin-bottom: 1.4rem;
+}
+
+.memo-exam-lesson .memo-quiz-result {
+  margin-top: auto;
+}
+
+/* The verdict under a missed question: the badge and the line, then its two choices side by side. */
+.memo-exam-lesson .memo-quiz-result {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.9rem;
+}
+
+.memo-exam-lesson .memo-quiz-result-copy {
+  align-self: center;
+}
+
+.memo-exam-lesson .memo-quiz-result-actions {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-left: 0;
+}
+
+.memo-exam-lesson .memo-quiz-result-actions > * {
+  width: 100%;
+}
+
+.memo-exam-lesson .memo-quiz-result-actions > :only-child {
+  grid-column: 1 / -1;
+}
+
+/* True or false: the question it answers, quietly above the statement being judged. */
+.memo-exam-tf-context {
+  margin: 0 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .memo-panel.study.memo-exam-lesson {
@@ -29357,10 +29485,6 @@ button.memo-exam-card:hover {
     color: var(--muted);
     font-size: 0.98rem;
     font-weight: 650;
-  }
-
-  .memo-exam-lesson .lecture-quiz-card {
-    padding: 1.15rem 1.5rem 1.3rem;
   }
 
   .memo-exam-lesson .lecture-quiz-option {

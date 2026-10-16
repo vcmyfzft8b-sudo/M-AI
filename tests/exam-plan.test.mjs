@@ -4,7 +4,6 @@ import test from "node:test";
 import {
   EXAM_LESSON_KINDS,
   LESSON_PASS_CAP,
-  LESSONS_TO_OPEN_NEXT,
   MAX_FAILED_TRIES_PER_DAY,
   lessonsToTarget,
   dayKey,
@@ -89,24 +88,29 @@ test("a perfect learner with 4 topics in 14 days learns every topic, brings each
   assert.ok(run.states.every((state) => state.learned), "every topic learned");
   assert.equal(run.stage, "ready");
 
-  // Every topic is started before any topic is practised past its first four lessons.
-  const lastStart = run.log.findIndex((entry) => entry.topicId === "t4");
-  assert.ok(lastStart > 0);
-  const before = run.log.slice(0, lastStart).filter((entry) => entry.topicId === "t1").length;
-  assert.ok(before <= 1 + LESSONS_TO_OPEN_NEXT + 1, `t1 had ${before} lessons before t4 started`);
+  // Topics in order, each one to the goal before the next starts.
+  for (const [index, topic] of ["t1", "t2", "t3"].entries()) {
+    const nextStart = run.log.findIndex((entry) => entry.topicId === `t${index + 2}`);
+    const before = run.results.slice(0, nextStart).filter((entry) => entry.topic_id === topic);
+    const state = examModuleStates(run.modules.slice(index, index + 1), before, 0.75)[0];
+    assert.ok(state.learned, `${topic} was on target before t${index + 2} started`);
+  }
 
   // About what the plan promised: every topic from 0 to 75 %, a lesson at a time.
   const mockAt = run.log.findIndex((entry) => entry.type === "mock");
   assert.ok(mockAt > 4 * 6 && mockAt < 4 * (lessonsToTarget(0, 0.75) + 6), `mock after ${mockAt} lessons`);
 });
 
-test("a learner who gets 70 % right never reaches a 75 % goal, but reaches every topic and is not drilled", () => {
+test("a learner who gets 70 % right never reaches a 75 % goal, so the first topic keeps adding lessons and the next never opens", () => {
   const run = simulate({ topics: 6, days: 14, perDay: 6, target: 0.75, score: () => 0.7 });
 
-  assert.ok(run.states.every((state) => state.unlocked && state.learned), "every topic reached");
-  assert.ok(run.states.every((state) => !state.mastered));
-  assert.equal(run.stage, "practise");
+  assert.deepEqual(run.states.map((state) => state.unlocked), [true, false, false, false, false, false]);
+  assert.ok(run.states.every((state) => !state.learned && !state.mastered));
+  assert.equal(run.stage, "learn");
   assert.ok(run.log.every((entry) => entry.type !== "mock"));
+  assert.ok(run.log.every((entry) => entry.topicId === "t1"), "every lesson was the first topic's");
+  assert.ok(run.log.length > 60, `${run.log.length} lessons, all in the first topic`);
+  assert.ok(lessonsToTarget(run.states[0].mastery, 0.75) > 0, "the path still owes the topic lessons");
 
   // No format is failed more than the daily cap on one topic and day while other work exists.
   const perDay = new Map();
@@ -198,10 +202,10 @@ const result = (topic, lesson_kind, score, completed_at = "2026-10-14T10:00:00Z"
   score,
   completed_at,
 });
-/* A topic far enough along to open the next one: its summary and `LESSONS_TO_OPEN_NEXT` quizzes. */
+/* A topic studied at `score`: its summary and twelve quizzes (at 1, enough to reach a 90 % goal). */
 const learned = (topic, score = 1, at = "2026-10-14T10:00:00Z") => [
   result(topic, "summary", 1, at),
-  ...Array.from({ length: LESSONS_TO_OPEN_NEXT }, () => result(topic, "quiz", score, at)),
+  ...Array.from({ length: 12 }, () => result(topic, "quiz", score, at)),
 ];
 const mods = (...ids) => ids.map((id) => ({ topicId: id, lectureId: id }));
 

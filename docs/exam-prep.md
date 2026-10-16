@@ -92,10 +92,16 @@ learners through weeks of lessons). Put new rules there, not in a component.
 As in Astra, the path is one lesson after another, and the path picks the next one
 (`examNextStep`):
 
-1. **Learn.** The first open topic that is not yet *learned*: on target, or `LESSONS_TO_OPEN_NEXT`
-   (4) practice lessons in. Topics open in order; each next one opens once the one before is
-   learned, or once the learner studies it anyway, so every topic is reached before the exam even
-   when one is hard.
+1. **Learn.** The first open topic that has not reached the goal yet. Topics open in order, and
+   **only reaching the goal opens the next one** (the owner's rule, 2026-10-17): no number of lessons
+   under it does, so a learner at 0 % stays in the module and its lessons keep coming. The path
+   draws what it still needs after "Naslednja" as locked stations (`lessonsToTarget` from the
+   module's knowledge now, at most 12 drawn, "Še 9 lekcij do 90 %"), so a weak lesson visibly adds
+   stations, and the next module sits under its own locked heading ("Odklene se, ko modul 1 doseže
+   90 %"). The lesson's done screen says the same under the bar. A module already started stays
+   open. Until 2026-10-17 four practice lessons opened the next module whatever the score; that is
+   gone, and with it the guarantee that every topic is reached before the exam: a learner who cannot
+   reach the goal in one module never sees the later ones.
 2. **Close gaps.** A topic's open knowledge gaps (below), the topic with the most first.
 3. **Practise.** The open topic furthest under the goal (faded ones included).
 4. **Exam day.** On the exam's eve and the day itself, a flashcard refresher for each topic.

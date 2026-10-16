@@ -16,6 +16,7 @@ import { prefetchLesson } from "@/components/exams/lesson-prefetch";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
 import {
   examNextStep,
+  lessonsToTarget,
   percent,
   type ExamLessonKind,
   type PracticeLessonKind,
@@ -25,8 +26,12 @@ import type { ExamDetail, ExamModuleView } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { currentPaywallBack, paywallPath } from "@/lib/paywall-reasons";
 
-/* Locked stations drawn after "Next up", as Astra draws the levels still to come. */
-const LOCKED_AHEAD = 2;
+/*
+ * After "Next up", the lessons its topic still needs to reach the goal, locked, as Astra draws the
+ * levels still to come. Counted from where the topic's knowledge is now, so a lesson under the mark
+ * adds stations instead of moving the learner on. At most this many are drawn.
+ */
+const MAX_LOCKED_SHOWN = 12;
 
 /* Practice lessons a topic needs before "Ponovitev" (repeat the weakest format) opens. */
 const REPETITION_AFTER = 3;
@@ -202,6 +207,45 @@ export function ExamDashboard({
     setPickerOpen(true);
   }
 
+  /*
+   * The picker's topic row scrolls sideways. A mouse wheel only scrolls down, so it is turned into
+   * sideways scrolling here; the row fades at an edge with more behind it, and opens with the chosen
+   * topic in view.
+   */
+  const topicRowRef = useCallback((row: HTMLDivElement | null) => {
+    if (!row) {
+      return;
+    }
+
+    const fade = () => {
+      const end = row.scrollWidth - row.clientWidth;
+      row.classList.toggle("fade-start", row.scrollLeft > 2);
+      row.classList.toggle("fade-end", row.scrollLeft < end - 2);
+    };
+    const wheel = (event: WheelEvent) => {
+      if (row.scrollWidth <= row.clientWidth || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) {
+        return;
+      }
+
+      event.preventDefault();
+      row.scrollLeft += event.deltaY * (event.deltaMode === 1 ? 16 : 1);
+    };
+    const chosen = row.querySelector<HTMLElement>(".memo-chip.active");
+
+    if (chosen) {
+      row.scrollLeft = Math.max(0, chosen.offsetLeft - (row.clientWidth - chosen.offsetWidth) / 2);
+    }
+
+    fade();
+    row.addEventListener("scroll", fade, { passive: true });
+    row.addEventListener("wheel", wheel, { passive: false });
+
+    return () => {
+      row.removeEventListener("scroll", fade);
+      row.removeEventListener("wheel", wheel);
+    };
+  }, []);
+
   /* What the swap picker offers for the topic it has chosen. */
   const pickerModule = (pickerTopic ? byTopic.get(pickerTopic) : null) ?? nextModule ?? openTopics[0] ?? null;
   const weakestDone = (module: ExamModuleView): PracticeLessonKind =>
@@ -287,7 +331,16 @@ export function ExamDashboard({
   type Station =
     | { type: "done"; id: string; topicId: string; kind: ExamLessonKind; score: number }
     | { type: "next"; topicId: string; kind: ExamLessonKind }
-    | { type: "locked"; index: number };
+    | { type: "locked"; index: number; left: number }
+    | { type: "gate"; topicId: string };
+  const showsNext = next?.type === "lesson" && !examPassed && nextModule !== null;
+  const lessonsLeft = nextModule
+    ? Math.max(1, lessonsToTarget(nextModule.learned ? nextModule.mastery : nextModule.rawMastery, target / 100))
+    : 0;
+  /* The module the current one opens once it reaches the goal, shown locked under its own heading. */
+  const gate = nextModule
+    ? (modules.find((module) => module.position > nextModule.position && !module.unlocked) ?? null)
+    : null;
   const stations: Station[] = [
     ...detail.history.map((entry) => ({
       type: "done" as const,
@@ -296,10 +349,15 @@ export function ExamDashboard({
       kind: entry.kind,
       score: entry.score,
     })),
-    ...(next?.type === "lesson" && !examPassed ? [{ type: "next" as const, topicId: next.topicId, kind: next.kind }] : []),
-    ...(next?.type === "lesson" && !examPassed
-      ? Array.from({ length: LOCKED_AHEAD }, (_, index) => ({ type: "locked" as const, index }))
+    ...(showsNext && next?.type === "lesson" ? [{ type: "next" as const, topicId: next.topicId, kind: next.kind }] : []),
+    ...(showsNext
+      ? Array.from({ length: Math.min(MAX_LOCKED_SHOWN, lessonsLeft - 1) }, (_, index) => ({
+          type: "locked" as const,
+          index,
+          left: lessonsLeft - 1,
+        }))
       : []),
+    ...(showsNext && gate ? [{ type: "gate" as const, topicId: gate.topicId }] : []),
   ];
 
   /* The stations in runs of one topic each, every run under its topic's heading. */
@@ -510,12 +568,24 @@ export function ExamDashboard({
               return (
                 <section key={`run:${run.start}`} className="memo-exam-trail-unit">
                   <div
-                    className={`memo-exam-trail-banner ${run.stations.some((station) => station.type === "next") ? "current" : ""}`.trim()}
+                    className={`memo-exam-trail-banner ${
+                      run.stations.some((station) => station.type === "next")
+                        ? "current"
+                        : run.stations.some((station) => station.type === "gate")
+                          ? "locked"
+                          : ""
+                    }`.trim()}
                   >
                     <span className="memo-exam-trail-banner-copy">
                       <i>{t("exam.dash.module", { index: (topic?.position ?? 0) + 1 })}</i>
                       <b>{topic?.title?.trim() || t("note.untitled")}</b>
-                      {topic ? <span>{t("exam.path.topicMastery", { percent: percent(topic.mastery), target })}</span> : null}
+                      {run.stations.some((station) => station.type === "gate") && nextModule ? (
+                        <span>
+                          {t("exam.path.gate", { target, index: nextModule.position + 1 })}
+                        </span>
+                      ) : topic ? (
+                        <span>{t("exam.path.topicMastery", { percent: percent(topic.mastery), target })}</span>
+                      ) : null}
                     </span>
                     {topic?.mastered ? <Msym name="check_circle" size="1.6rem" className="memo-exam-trail-banner-mark" /> : null}
                   </div>
@@ -538,6 +608,21 @@ export function ExamDashboard({
                         />
                       ) : null;
 
+                      if (station.type === "gate") {
+                        return (
+                          <li
+                            key="gate"
+                            className="memo-exam-station locked"
+                            style={{ "--memo-station-x": `${offset}rem` } as CSSProperties}
+                          >
+                            {line}
+                            <span className="memo-exam-station-node" aria-label={t("exam.path.locked")}>
+                              <Msym name="lock" size="1.5rem" fill={false} />
+                            </span>
+                          </li>
+                        );
+                      }
+
                       if (station.type === "locked") {
                         return (
                           <li
@@ -549,7 +634,11 @@ export function ExamDashboard({
                             <span className="memo-exam-station-node" aria-label={t("exam.path.locked")}>
                               <Msym name="lock" size="1.5rem" fill={false} />
                             </span>
-                            {station.index === 0 ? <span className="memo-exam-station-label">{t("exam.path.locked")}</span> : null}
+                            {station.index === 0 ? (
+                              <span className="memo-exam-station-label">
+                                {t("exam.path.lessonsLeft", { count: station.left, target })}
+                              </span>
+                            ) : null}
                           </li>
                         );
                       }
@@ -693,7 +782,7 @@ export function ExamDashboard({
                     <span className="memo-exam-progress-topic-note">
                       {module.unlocked
                         ? t("exam.progress.topicLessons", { count: module.lessons })
-                        : t("exam.progress.topicLocked")}
+                        : t("exam.progress.topicLocked", { target })}
                     </span>
                   </li>
                 );
@@ -740,7 +829,7 @@ export function ExamDashboard({
               ))}
             </div>
             {pickerTab !== "exam" && openTopics.length > 1 ? (
-              <div className="memo-exam-picker-topics" aria-label={t("exam.picker.topic")}>
+              <div ref={topicRowRef} className="memo-exam-picker-topics" aria-label={t("exam.picker.topic")}>
                 {openTopics.map((module) => (
                   <button
                     key={module.topicId}

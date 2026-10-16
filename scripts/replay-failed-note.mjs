@@ -11,8 +11,8 @@
  *
  * It reads what production kept of the upload -- generation_failure_captures, which survives the
  * learner deleting the note, and the copies of their files under failure-captures/ -- then runs
- * the same reading steps production runs (photos: verbatim read, rescue read, restatement; scanned
- * PDFs: extraction, restatement), and finally the note pipeline with topic notes. Writes the
+ * the same reading steps production runs (photos: verbatim read, rescue read, restatement; PDFs:
+ * the text layer when legible, else extraction, restatement), and finally the note pipeline with topic notes. Writes the
  * material and the resulting note to --out (default /tmp/note-replay/<id>), never into the repo:
  * it is a learner's own material.
  *
@@ -39,6 +39,7 @@ import {
   PDF_RESTATE_INSTRUCTIONS,
 } from "../src/lib/ocr-prompts.ts";
 import { pickPageArticleHtml, pickRoleMainHtml } from "../src/lib/link-main-article.ts";
+import { isLegiblePdfTextLayer } from "../src/lib/pdf-text-layer.ts";
 import { hasEnoughSourceTextToTeach } from "../src/lib/source-text-gate.ts";
 import { runCase } from "./lib/note-replay.mjs";
 import { countWords, ledger, loadEnv } from "./lib/eval-runtime.mjs";
@@ -130,8 +131,35 @@ async function readPhoto(bytes) {
   return { text: shortText, attempts };
 }
 
+/** The embedded text, read and joined the way extractTextFromPdf does. */
+async function readPdfTextLayer(bytes) {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(bytes), useWorkerFetch: false, isEvalSupported: false, verbosity: pdfjs.VerbosityLevel.ERRORS });
+  try {
+    const document = await loadingTask.promise;
+    const pages = [];
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const content = await (await document.getPage(pageNumber)).getTextContent();
+      const parts = content.items.flatMap((item) => (typeof item.str === "string" && item.str.trim() ? [item.hasEOL ? `${item.str.trim()}\n` : item.str.trim()] : []));
+      pages.push(parts.join(" ").replace(/[ \t]+/g, " ").trim());
+    }
+    return pages.filter(Boolean).join("\n\n").trim();
+  } catch {
+    return "";
+  } finally {
+    await loadingTask.destroy();
+  }
+}
+
+/** Production's order: the text layer when it is legible, then extraction, then restatement. */
 async function readPdf(bytes) {
   const attempts = [];
+  const layer = await readPdfTextLayer(bytes);
+  if (layer.split(/\s+/).filter(Boolean).length >= 40) {
+    const legible = isLegiblePdfTextLayer(layer);
+    attempts.push({ stage: "pdf_text_layer", legible, chars: layer.length });
+    if (legible) return { text: layer, attempts };
+  }
   for (const [stage, model, instructions] of [
     ["pdf_extract", OCR_LITE_MODEL, PDF_EXTRACT_INSTRUCTIONS],
     ["pdf_restate", OCR_STRONG_MODEL, PDF_RESTATE_INSTRUCTIONS],

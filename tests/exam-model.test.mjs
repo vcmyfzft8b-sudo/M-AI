@@ -493,3 +493,23 @@ test("the forecast is Astra's: gain per lesson, lessons still needed, a day, and
 
   assert.equal(examForecast({ ...input, today: "2026-10-27", mastery: 0.5, lessonDays: ["2026-10-16", "2026-10-16"] }), null);
 });
+
+test("without talking time the path never suggests the tutor, and picks another exercise", () => {
+  const none = { summary: false, tutor: false, flashcards: false, quiz: false, true_false: false, written: false };
+  const zero = { summary: 0, tutor: 0, flashcards: 0, quiz: 0, true_false: 0, written: 0 };
+  const read = { ...none, summary: true };
+
+  // With time, the tutor is the second lesson of a topic; without it, the quiz is.
+  assert.equal(suggestedKind({ done: read, lessons: 1, failedToday: zero, gapKind: null }), "tutor");
+  assert.equal(suggestedKind({ done: read, lessons: 1, failedToday: zero, gapKind: null, tutor: false }), "quiz");
+
+  // Round the practice formats, the tutor's turn goes to the next format.
+  const all = { summary: true, tutor: true, flashcards: true, quiz: true, true_false: true, written: true };
+  for (let lessons = 0; lessons < 20; lessons += 1) {
+    assert.notEqual(suggestedKind({ done: all, lessons, failedToday: zero, gapKind: null, tutor: false }), "tutor");
+  }
+
+  // The same through the path: no topic's next lesson is the tutor.
+  const states = examModuleStates(mods("a", "b"), [result("a", "summary", 0.8)], 0.75, null, null, { tutor: false });
+  assert.ok(states.every((state) => state.nextKind !== "tutor"));
+});

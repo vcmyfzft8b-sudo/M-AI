@@ -203,6 +203,14 @@ to the path too.
 
 ### The tutor lesson
 
+**Talking time.** The tutor spends the account's voice allowance (`tutor-allowance.ts`: a free
+account's one lifetime minute, a subscription's half hour a day, then bought hours). A tutor lesson
+needs at least `TUTOR_LESSON_MIN_SECONDS` (2 minutes) left (`canStartTutorLesson`). Without it:
+the path never suggests the tutor (`suggestedKind` with `tutor: false` gives its turn to the next
+format), the picker shows it locked with the reason, opening a tutor lesson redirects to the topic's
+next exercise, and the lesson route refuses to plan one (409 `tutor_time`), so no model call or
+speech is spent. A lesson that runs out of time part-way finishes in writing, as before.
+
 Suggested right after the summary (the first format in the default order), the voice tutor teaches
 the topic (`exam-tutor-server.ts`,
 `ExamTutorLesson`): it plans three steps from the topic and its note (`planTutorLesson`, the fast

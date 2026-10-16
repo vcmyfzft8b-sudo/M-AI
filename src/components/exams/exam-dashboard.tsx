@@ -210,7 +210,14 @@ export function ExamDashboard({
   const pickerItems: Record<PickerTab, PickerItem[]> = {
     learn: [
       { key: "summary", emoji: LESSON_KIND_EMOJI.summary, label: LESSON_KIND_KEY.summary, kind: "summary" },
-      { key: "tutor", emoji: LESSON_KIND_EMOJI.tutor, label: LESSON_KIND_KEY.tutor, kind: "tutor" },
+      {
+        key: "tutor",
+        emoji: LESSON_KIND_EMOJI.tutor,
+        label: LESSON_KIND_KEY.tutor,
+        kind: "tutor",
+        // No talking time left: the tutor waits until there is (the path already suggests others).
+        locked: detail.tutorAvailable ? undefined : "exam.picker.tutor.locked",
+      },
       { key: "flashcards", emoji: LESSON_KIND_EMOJI.flashcards, label: LESSON_KIND_KEY.flashcards, kind: "flashcards" },
       {
         key: "gaps",

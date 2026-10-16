@@ -351,14 +351,21 @@ export function suggestedKind(input: {
   lessons: number;
   failedToday: Record<ExamLessonKind, number>;
   gapKind: PracticeLessonKind | null;
+  /**
+   * Whether the voice tutor can be suggested: false once the account's talking time is spent
+   * (`canStartTutorLesson`), and the path then picks another exercise.
+   */
+  tutor?: boolean;
 }): ExamLessonKind {
-  const rested = (kind: ExamLessonKind) => (input.failedToday[kind] ?? 0) < MAX_FAILED_TRIES_PER_DAY;
+  const allowed = (kind: ExamLessonKind) => input.tutor !== false || kind !== "tutor";
+  const rested = (kind: ExamLessonKind) =>
+    allowed(kind) && (input.failedToday[kind] ?? 0) < MAX_FAILED_TRIES_PER_DAY;
 
   if (input.gapKind && rested(input.gapKind)) {
     return input.gapKind;
   }
 
-  const untried = FIRST_PASS_ORDER.find((kind) => !input.done[kind]);
+  const untried = FIRST_PASS_ORDER.find((kind) => !input.done[kind] && allowed(kind));
 
   if (untried) {
     return untried;
@@ -372,7 +379,8 @@ export function suggestedKind(input: {
     }
   }
 
-  return PRACTICE_ROTATION[input.lessons % PRACTICE_ROTATION.length];
+  const fallback = PRACTICE_ROTATION.filter(allowed);
+  return fallback[input.lessons % fallback.length];
 }
 
 export type ModuleState = {
@@ -618,6 +626,7 @@ export function moduleProgress(
   target = 1,
   proveSince: string | null = null,
   now: Date | null = null,
+  options: { tutor?: boolean } = {},
 ) {
   const latest = latestByKind(results);
   const done = {} as Record<ExamLessonKind, boolean>;
@@ -672,7 +681,7 @@ export function moduleProgress(
     mastered: onTarget && !proofOwed,
     proofOwed,
     refreshDue: !onTarget && meetsPassMark(rawMastery, goal),
-    nextKind: suggestedKind({ done, lessons: results.length, failedToday, gapKind }),
+    nextKind: suggestedKind({ done, lessons: results.length, failedToday, gapKind, tutor: options.tutor }),
     done,
     latest: scores,
     failedToday,
@@ -698,6 +707,7 @@ export function examModuleStates(
   target = 1,
   mock: MockOutcome | null = null,
   now: Date | null = null,
+  options: { tutor?: boolean } = {},
 ): ModuleState[] {
   const byTopic = new Map<string, LessonResultLike[]>();
 
@@ -719,7 +729,7 @@ export function examModuleStates(
       failedMock !== null &&
       lectureId in failedMock.byLecture &&
       !meetsPassMark(failedMock.byLecture[lectureId], passThreshold(target));
-    const progress = moduleProgress(byTopic.get(topicId) ?? [], target, weakInMock ? failedMock.at : null, now);
+    const progress = moduleProgress(byTopic.get(topicId) ?? [], target, weakInMock ? failedMock.at : null, now, options);
     const previous = states[position - 1];
     const previousSkipped = modulesInOrder[position - 1]?.available === false && Boolean(previous?.unlocked);
     const unlocked = position === 0 || Boolean(previous?.learned) || previousSkipped || progress.lessons > 0;

@@ -62,6 +62,8 @@ import { planTutorLesson, type TutorStep } from "@/lib/exams/exam-tutor-server";
 
 export { ExamModelCallRefused };
 import { markAnswerWithRetry } from "@/lib/practice-test";
+import { canStartTutorLesson } from "@/lib/tutor-allowance";
+import { getTutorAllowance } from "@/lib/tutor-usage";
 import {
   isBlankAnswer,
   isSurrenderAnswer,
@@ -123,6 +125,11 @@ export type ExamDetail = {
   gaps: number;
   /** Topics whose mastery reaches the target, of `modules.length`. */
   onTarget: number;
+  /**
+   * The account has the talking time a tutor lesson needs (`canStartTutorLesson`). Without it the
+   * path suggests other exercises and the picker shows the tutor locked.
+   */
+  tutorAvailable: boolean;
   /** Every lesson done, oldest first: the path's stations. */
   history: ExamLessonEntry[];
   streak: number;
@@ -282,6 +289,18 @@ export async function listExamsForUser(
       goal: plan.goal,
     };
   });
+}
+
+/**
+ * Whether the account can start a tutor lesson now. A failure to read the allowance does not lock
+ * the tutor: the session route checks the allowance again before any speech is made.
+ */
+export async function tutorTimeLeft(userId: string) {
+  try {
+    return canStartTutorLesson(await getTutorAllowance(userId, "tutor"));
+  } catch {
+    return true;
+  }
 }
 
 /** The nearest exam that has not been sat yet, for the home card. */
@@ -453,7 +472,7 @@ export async function getExamDetail(
   }
 
   const today = dayKey(now);
-  const [{ lectureIds, lectures }, results, activeDays, mock, topics] = await Promise.all([
+  const [{ lectureIds, lectures }, results, activeDays, mock, topics, tutorAvailable] = await Promise.all([
     readModules(supabase, userId, examId),
     readResults(supabase, userId, [examId]),
     readActiveDays(supabase, userId),
@@ -467,6 +486,7 @@ export async function getExamDetail(
       .limit(1)
       .maybeSingle(),
     readTopicLines(supabase, userId, [examId]),
+    tutorTimeLeft(userId),
   ]);
 
   const mockRow = mock.data as Pick<
@@ -481,7 +501,7 @@ export async function getExamDetail(
     ...module,
     available: lectures.get(module.lectureId)?.status === "ready" && module.topic !== null,
   }));
-  const states = examModuleStates(ordered, results, target, mockOutcome, now);
+  const states = examModuleStates(ordered, results, target, mockOutcome, now, { tutor: tutorAvailable });
   const plan = planFor(exam, ordered, states, results, mockOutcome, now);
   const modules = states.map((state, index) => {
     const lecture = lectures.get(state.lectureId);
@@ -516,6 +536,7 @@ export async function getExamDetail(
     /** Questions answered wrong and not right since, across the exam (`openGaps`). */
     gaps: states.reduce((sum, state) => sum + state.gaps, 0),
     onTarget: topicsOnTarget(states, target),
+    tutorAvailable,
     history: results
       .filter((row) => row.topic_id && states.some((state) => state.topicId === row.topic_id))
       .map((row) => ({

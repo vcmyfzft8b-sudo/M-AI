@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { ExamLesson } from "@/components/exams/exam-lesson";
+import { lessonHref } from "@/components/exams/exam-links";
 import { requireUser } from "@/lib/auth";
 import { getViewerAppState } from "@/lib/billing";
 import { isExamLessonKind } from "@/lib/exams/exam-model";
@@ -47,6 +48,11 @@ export default async function ExamLessonPage({
 
   if (!appState?.hasPaidAccess && appState?.trialLectureId !== current.lectureId) {
     redirect(paywallPath("exam", `/app/exams/${detail.exam.id}`));
+  }
+
+  // Out of talking time: the topic's next exercise instead of a tutor that cannot speak.
+  if (query.kind === "tutor" && !detail.tutorAvailable) {
+    redirect(lessonHref(detail.exam.id, current.topicId, current.nextKind === "tutor" ? "quiz" : current.nextKind));
   }
 
   return (

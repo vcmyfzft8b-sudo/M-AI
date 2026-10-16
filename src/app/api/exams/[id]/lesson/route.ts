@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
-import { ExamModelCallRefused, loadLesson, readOwnedExam, readOwnedTopic } from "@/lib/exams/exams-server";
+import { ExamModelCallRefused, loadLesson, readOwnedExam, readOwnedTopic, tutorTimeLeft } from "@/lib/exams/exams-server";
 import { examIdParamsSchema, lessonQuerySchema } from "@/lib/exams/exam-validation";
 import { captureRouteError } from "@/lib/monitoring";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -83,6 +83,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
     if (!access.allowed) {
       return createBillingRequiredResponse(await tr("api.trialOnly.study"), access.code);
+    }
+
+    // No talking time left: the tutor's plan (a model call) is not made for a lesson that cannot speak.
+    if (query.data.kind === "tutor" && !(await tutorTimeLeft(userId))) {
+      return NextResponse.json({ error: await tr("api.exam.tutorTime"), code: "tutor_time" }, { status: 409 });
     }
 
     const load = await loadLesson(auth.supabase, userId, {

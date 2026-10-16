@@ -38,6 +38,7 @@ import {
   PDF_EXTRACT_INSTRUCTIONS,
   PDF_RESTATE_INSTRUCTIONS,
 } from "../src/lib/ocr-prompts.ts";
+import { pickPageArticleHtml, pickRoleMainHtml } from "../src/lib/link-main-article.ts";
 import { isLegiblePdfTextLayer } from "../src/lib/pdf-text-layer.ts";
 import { hasEnoughSourceTextToTeach } from "../src/lib/source-text-gate.ts";
 import { runCase } from "./lib/note-replay.mjs";
@@ -171,6 +172,23 @@ async function readPdf(bytes) {
   return { text: "", attempts };
 }
 
+// A saved web page. Production's htmlToText (manual-lectures.ts) is server-only; this takes the
+// same region (article, else role="main", else the page) and drops the same chrome, which is
+// enough to tell an empty read from a page with something to teach.
+function readHtml(bytes) {
+  const html = bytes.toString("utf8");
+  const region = pickPageArticleHtml(html) ?? pickRoleMainHtml(html) ?? html;
+  const text = region
+    .replace(/<(script|style|noscript|svg|header|footer|nav|aside|form|button|select)\b[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<\/(p|div|section|article|li|h[1-6]|tr)>|<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s*\n\s*/g, "\n")
+    .trim();
+  return { text, attempts: [{ stage: "html_main_region", chars: text.length }] };
+}
+
 // --from=<dir>: replay a folder an earlier (online) run downloaded, with no database access at
 // all. The note-triage workflow downloads everything first and hands the agent only this.
 const fromDir = argValue("from");
@@ -201,7 +219,8 @@ let sourceText = capture?.source_text ?? "";
 // Photos and documents are re-read: the capture's text is what the OLD readers produced.
 const files = (capture?.captured_files ?? []).map((file) => file.capturedPath);
 const pendingDocument = metadata?.pendingDocument?.path;
-if (pendingDocument) files.push(pendingDocument);
+// The capture keeps its own copy of the pending document ("0-source.html" for "source.html").
+if (pendingDocument && !files.some((file) => file.endsWith(path.basename(pendingDocument)))) files.push(pendingDocument);
 const pendingPhotos = Array.isArray(metadata?.pendingScanImages) ? metadata.pendingScanImages.map((image) => image.path) : [];
 for (const photo of pendingPhotos) if (!files.some((file) => file.endsWith(path.basename(photo)))) files.push(photo);
 
@@ -228,6 +247,10 @@ for (const objectPath of files) {
     if (read.text) readTexts.push(read.text);
   } else if (/\.pdf$/i.test(name)) {
     const read = await readPdf(bytes);
+    report.reads.push({ file: name, ...read, text: undefined });
+    if (read.text) readTexts.push(read.text);
+  } else if (/\.html?$/i.test(name)) {
+    const read = readHtml(bytes);
     report.reads.push({ file: name, ...read, text: undefined });
     if (read.text) readTexts.push(read.text);
   } else {

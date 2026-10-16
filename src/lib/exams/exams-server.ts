@@ -13,12 +13,16 @@ import {
   dailyPlan,
   dayKey,
   daysBetween,
+  examForecast,
   examMastery,
   examModuleStates,
   examStage,
   gradeForPercentage,
   mockQuestionCounts,
   needsFreshItems,
+  openGaps,
+  gapsForLesson,
+  withGapsFirst,
   pickFlashcards,
   preferUnseen,
   pickQuiz,
@@ -29,6 +33,7 @@ import {
   streakDays,
   summarizeMock,
   type DailyPlan,
+  type ExamForecast,
   type ExamLessonKind,
   type ExamStage,
   oralQuestionCount,
@@ -101,6 +106,10 @@ export type ExamDetail = {
   /** Learn, practise, prove with the mock exam, then ready: see `examStage`. */
   stage: ExamStage;
   plan: DailyPlan;
+  /** Where the learner lands on the exam day at their pace (`examForecast`); null until there is a pace. */
+  forecast: ExamForecast | null;
+  /** Open knowledge gaps across the exam: questions answered wrong and not right since. */
+  gaps: number;
   streak: number;
   latestMock: ExamMockSummary | null;
 };
@@ -465,6 +474,7 @@ export async function getExamDetail(
     available: lectures.get(module.lectureId)?.status === "ready" && module.topic !== null,
   }));
   const states = examModuleStates(ordered, results, target, mockOutcome, now);
+  const plan = planFor(exam, ordered, states, results, mockOutcome, now);
   const modules = states.map((state, index) => {
     const lecture = lectures.get(state.lectureId);
     const topic = ordered[index].topic;
@@ -487,7 +497,16 @@ export async function getExamDetail(
     mastery: examMastery(states),
     modules,
     stage: examStage(states, mockOutcome, target),
-    plan: planFor(exam, ordered, states, results, mockOutcome, now),
+    plan,
+    forecast: examForecast({
+      mastery: examMastery(states),
+      target,
+      lessonDays: results.filter((row) => row.lesson_kind !== "summary").map((row) => dayKey(row.completed_at)),
+      today,
+      examDate: exam.exam_date,
+    }),
+    /** Questions answered wrong and not right since, across the exam (`openGaps`). */
+    gaps: states.reduce((sum, state) => sum + state.gaps, 0),
     streak: streakDays(activeDays, today),
     latestMock:
       mockRow && mockRow.percentage !== null && mockRow.graded_at
@@ -1013,6 +1032,8 @@ export async function recordLessonResult(
     total: number;
     difficulty: number | null;
     itemIds?: string[];
+    /** Of the questions shown, the ones the learner got wrong: they stay open as knowledge gaps. */
+    missedIds?: string[];
   },
 ) {
   const topic = await readOwnedTopic(supabase, userId, input.examId, input.topicId);
@@ -1021,6 +1042,7 @@ export async function recordLessonResult(
     return false;
   }
 
+  const itemIds = [...new Set(input.itemIds ?? [])].slice(0, 40);
   // A lesson with nothing to score (one skipped because it would not load) is done, but at 0.
   const score = input.total > 0 ? Math.min(1, input.correct / input.total) : 0;
   const { error } = await supabase.from("exam_lesson_results").insert({
@@ -1033,7 +1055,8 @@ export async function recordLessonResult(
     total: input.total,
     score,
     difficulty: input.difficulty,
-    item_ids: [...new Set(input.itemIds ?? [])].slice(0, 40),
+    item_ids: itemIds,
+    missed_ids: [...new Set(input.missedIds ?? [])].filter((id) => itemIds.includes(id)),
   } as never);
 
   if (error) {
@@ -1070,11 +1093,14 @@ export type LessonPayload =
         correctIndex: number;
         explanation: string;
       }[];
+      /** Knowledge gaps asked again (`withGapsFirst`): questions the learner got wrong before. */
+      repeated?: string[];
     }
-  | { kind: "true_false"; statements: TrueFalseStatement[] }
+  | { kind: "true_false"; statements: TrueFalseStatement[]; repeated?: string[] }
   | {
       kind: "written";
       questions: { id: string; prompt: string }[];
+      repeated?: string[];
       /** Written by the AI (for the topic, or fresh for a repeat): graded through the exam, not the note's test. */
       generated: boolean;
     }
@@ -1428,7 +1454,7 @@ export async function loadLesson(
 
   const { data: priorRows, error: priorError } = await supabase
     .from("exam_lesson_results")
-    .select("lesson_kind, item_ids")
+    .select("lesson_kind, item_ids, missed_ids, completed_at, score, lecture_id")
     .eq("user_id", userId)
     .eq("exam_id", input.examId)
     .eq("topic_id", input.topicId)
@@ -1438,9 +1464,14 @@ export async function loadLesson(
     throw priorError;
   }
 
-  const prior = (priorRows ?? []) as Pick<ExamLessonResultRow, "lesson_kind" | "item_ids">[];
+  const prior = (priorRows ?? []) as Pick<
+    ExamLessonResultRow,
+    "lesson_kind" | "item_ids" | "missed_ids" | "completed_at" | "score" | "lecture_id"
+  >[];
   const attempts = prior.filter((row) => row.lesson_kind === input.kind).length;
   const seen = new Set(prior.flatMap((row) => row.item_ids ?? []));
+  // Questions missed before and not answered right since come back first (Astra's knowledge gaps).
+  const gaps = gapsForLesson(openGaps(prior), input.kind);
   const seed = `${input.examId}:${input.topicId}:${input.kind}:${attempts}`;
   const topic = await ensureWrittenTopic(supabase, userId, found, exam, mayCallModel);
   const generated = topic.source === "material" ? null : (topic.generated as unknown as GeneratedTopicContent | null);
@@ -1615,11 +1646,13 @@ export async function loadLesson(
       pool = [...base, ...contentQuiz("x", topic.id, fresh.quiz)];
     }
 
-    const questions = preferUnseen(pool, seen, size, seed);
+    const withGaps = withGapsFirst(pool, gaps, seen, size, seed);
+    const questions = withGaps.items.length > 0 ? withGaps.items : preferUnseen(pool, seen, size, seed);
+    const repeated = withGaps.repeated;
 
     return input.kind === "quiz"
-      ? { status: "ready", lesson: { kind: "quiz", questions: pickQuiz(questions, size, seed) } }
-      : { status: "ready", lesson: { kind: "true_false", statements: buildTrueFalse(questions, size, seed) } };
+      ? { status: "ready", lesson: { kind: "quiz", questions: pickQuiz(questions, size, seed), repeated } }
+      : { status: "ready", lesson: { kind: "true_false", statements: buildTrueFalse(questions, size, seed), repeated } };
   }
 
   let base: { id: string; prompt: string; importance: number | null }[];
@@ -1661,7 +1694,10 @@ export async function loadLesson(
     pool = [...base, ...contentWritten("x", topic.id, fresh.written)];
   }
 
-  const [question] = pickWritten(preferUnseen(pool, seen, LESSON_SIZE.written, seed), LESSON_SIZE.written, seed);
+  const gapQuestion = withGapsFirst(pool, gaps, seen, LESSON_SIZE.written, seed).items[0];
+  const [question] = gapQuestion
+    ? [gapQuestion]
+    : pickWritten(preferUnseen(pool, seen, LESSON_SIZE.written, seed), LESSON_SIZE.written, seed);
 
   return {
     status: "ready",
@@ -1669,6 +1705,7 @@ export async function loadLesson(
       kind: "written",
       questions: question ? [{ id: question.id, prompt: question.prompt }] : [],
       generated: Boolean(question && parseContentId(question.id)),
+      repeated: gapQuestion ? [gapQuestion.id] : [],
     },
   };
 }

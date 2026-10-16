@@ -65,7 +65,7 @@ export default async function ExamLessonPage({
       : null,
     detail.exam.target_mastery / 100,
   );
-  const step = examNextStep(others, stageAfter, canOpen);
+  const step = examNextStep(others, stageAfter, canOpen, { finalDay: detail.daysLeft === 0 || detail.daysLeft === 1 });
   const following = step?.type === "lesson" ? others.find((entry) => entry.topicId === step.topicId) ?? null : null;
   const after = following && step?.type === "lesson"
     ? {

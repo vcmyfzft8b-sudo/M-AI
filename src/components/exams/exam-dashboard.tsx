@@ -79,7 +79,9 @@ export function ExamDashboard({
 
   const canOpen = (lectureId: string) => hasPaidAccess || trialLectureId === lectureId;
   const stage = detail.stage;
-  const next = examNextStep(modules, stage, canOpen);
+  /* The exam's eve and the day itself: Astra's exam-day refresher comes before anything new. */
+  const finalDay = detail.daysLeft === 0 || detail.daysLeft === 1;
+  const next = examNextStep(modules, stage, canOpen, { finalDay });
   const nextTutorTopic = next?.type === "lesson" && next.kind === "tutor" ? next.topicId : null;
 
   /* The tutor plans by a model call; when it is the next step, start it before the learner taps. */
@@ -89,9 +91,21 @@ export function ExamDashboard({
     }
   }, [exam.id, nextTutorTopic]);
   const target = exam.target_mastery;
-  /* A module's stations: its six lessons, then a repeat for each lesson still under the target. */
-  const stationCount = (module: ExamModuleView) =>
-    module.pending ? 0 : EXAM_LESSON_KINDS.length + module.review.length;
+  /*
+   * A module's stations: its six lessons, a repeat for each lesson still under the target, and one
+   * that asks its knowledge gaps again (questions answered wrong and not right since).
+   */
+  const gapStation = (module: ExamModuleView) =>
+    module.pressingGaps > 0 && module.gapKind && !module.review.includes(module.gapKind) ? module.gapKind : null;
+  const moduleStations = (module: ExamModuleView) =>
+    module.pending
+      ? []
+      : [
+          ...EXAM_LESSON_KINDS.map((kind) => ({ kind, repeat: false, gap: false })),
+          ...module.review.map((kind) => ({ kind, repeat: true, gap: false })),
+          ...(gapStation(module) ? [{ kind: gapStation(module) as ExamLessonKind, repeat: true, gap: true }] : []),
+        ];
+  const stationCount = (module: ExamModuleView) => moduleStations(module).length;
   /* Where each module's stations start on the whole path, so the line swings on across modules. */
   const stationStarts: number[] = [];
   modules.forEach((module, index) =>
@@ -267,6 +281,26 @@ export function ExamDashboard({
               <Emoji symbol="🎯" size="1.45rem" />
             </span>
           </div>
+          {/*
+           * Astra's forecast (where this pace lands on the exam day) and the knowledge gaps still
+           * open: the two things that say what reaching the goal takes.
+           */}
+          {(detail.forecast && !examPassed && stage !== "ready") || detail.gaps > 0 ? (
+            <div className="memo-exam-goal-notes">
+              {detail.forecast && !examPassed && stage !== "ready" ? (
+                <p className={detail.forecast.onTrack ? "on-track" : undefined}>
+                  <Emoji symbol={detail.forecast.onTrack ? "📈" : "⏱️"} size="1rem" />
+                  {t("exam.dash.forecast", { percent: percent(detail.forecast.atExam) })}
+                </p>
+              ) : null}
+              {detail.gaps > 0 ? (
+                <p>
+                  <Emoji symbol="🧩" size="1rem" />
+                  {t("exam.dash.gaps", { count: detail.gaps })}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </section>
         <div className="memo-exam-goal-facts">
           <span>
@@ -356,12 +390,7 @@ export function ExamDashboard({
         {modules.map((module, moduleIndex) => {
           const isCurrentModule = next?.type === "lesson" && next.topicId === module.topicId;
           const locked = !module.unlocked && !module.pending;
-          const stations = module.pending
-            ? []
-            : [
-                ...EXAM_LESSON_KINDS.map((kind) => ({ kind, repeat: false })),
-                ...module.review.map((kind) => ({ kind, repeat: true })),
-              ];
+          const stations = moduleStations(module);
 
           return (
             <section key={module.topicId} className="memo-exam-trail-unit">
@@ -408,7 +437,7 @@ export function ExamDashboard({
               </div>
 
               <ol className="memo-exam-trail-stations">
-                {stations.map(({ kind, repeat }, stationIndex) => {
+                {stations.map(({ kind, repeat, gap }, stationIndex) => {
                   const index = stationStarts[moduleIndex] + stationIndex;
                   const offset = pathOffset(index);
                   const segment = pathSegment(index);
@@ -421,7 +450,11 @@ export function ExamDashboard({
                     isCurrentModule &&
                     next?.type === "lesson" &&
                     next.kind === kind &&
-                    (repeat ? next.review : !next.review || !module.review.includes(kind));
+                    (repeat
+                      ? next.review && (gap || module.review.includes(kind))
+                      : !next.review || (!module.review.includes(kind) && gapStation(module) !== kind));
+                  /* The exam-day flashcard refresher (`examNextStep`'s `finalDay`). */
+                  const lastRefresh = isCurrent && !repeat && Boolean(next?.type === "lesson" && next.review) && finalDay;
                   const isDone = repeat ? false : module.done[kind];
                   /* A format the learner did not pick, once the module is learned without it: theirs to try. */
                   const optional = !repeat && module.learned && isPracticeKind(kind) && !module.done[kind];
@@ -431,12 +464,13 @@ export function ExamDashboard({
 
                   return (
                     <li
-                      key={`${kind}:${repeat ? "repeat" : "first"}`}
+                      key={`${kind}:${gap ? "gap" : repeat ? "repeat" : "first"}`}
                       ref={isCurrent ? markCurrent : undefined}
                       className={[
                         "memo-exam-station",
                         isDone ? "done" : "",
                         repeat ? "repeat" : "",
+                        gap ? "gap" : "",
                         optional ? "optional" : "",
                         isCurrent ? "current" : "",
                         locked || blocked ? "locked" : "",
@@ -473,6 +507,10 @@ export function ExamDashboard({
                           <span className="memo-exam-station-check" aria-hidden="true">
                             <Msym name="check" size="0.9rem" weight={700} />
                           </span>
+                        ) : gap ? (
+                          <span className="memo-exam-station-check repeat" aria-hidden="true">
+                            {module.pressingGaps}
+                          </span>
                         ) : repeat ? (
                           <span className="memo-exam-station-check repeat" aria-hidden="true">
                             <Msym name="replay" size="0.9rem" weight={700} />
@@ -487,7 +525,11 @@ export function ExamDashboard({
                             onClick={() => openModule(module, kind)}
                           >
                             {t(
-                              stage === "ready"
+                              gap
+                                ? "exam.path.gaps"
+                                : lastRefresh
+                                  ? "exam.path.lastRefresh"
+                                  : stage === "ready"
                                 ? "exam.path.keepSharp"
                                 : repeat
                                   ? module.refresh.includes(kind)
@@ -503,7 +545,9 @@ export function ExamDashboard({
                         </>
                       ) : (
                         <span className="memo-exam-station-label">
-                          {repeat
+                          {gap
+                            ? `${t("exam.path.gaps")} · ${t("exam.path.gapCount", { count: module.pressingGaps })}`
+                            : repeat
                             ? `${t(module.refresh.includes(kind) ? "exam.path.refresh" : "exam.path.repeat")} · ${t(LESSON_KIND_KEY[kind])} · ${t("exam.percent", { percent: percent(score ?? 0) })}`
                             : optional
                               ? `${t(LESSON_KIND_KEY[kind])} · ${t("exam.path.optional")}`

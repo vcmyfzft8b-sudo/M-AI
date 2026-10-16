@@ -30,10 +30,23 @@ study path. It follows Astra AI's exam-prep flow, drawn in Memo's own components
 - Routes: `/app?view=preps` (the folder; `/app/exams` redirects there), `/app/exams/new` (setup), `/app/exams/[id]` (dashboard),
   `/app/exams/[id]/lesson?topic=&kind=` (one lesson), `/app/exams/[id]/mock` (mock exam).
 
-What Astra has and how it is known: the research behind this feature read Astra's App Store pages,
-astra-ai.co and a paid screen teardown (screensdesign.com); nobody here has used the Croatian or
-Slovenian app itself. The screens and the flow follow that. Astra does not publish how it scores
-mastery or decides a student is ready, so the learn/practise/prove loop below is ours.
+What Astra has and how it is known: the first research read Astra's App Store pages, astra-ai.co
+and a paid screen teardown (screensdesign.com). On 2026-10-16 an exam prep was then made and
+studied in Astra's web app itself (Economics, ten days, 75 % goal). What it does to get a student to
+the goal, and what we took from it:
+
+- **What is repeated, and until when.** Every check a student misses is a knowledge gap that comes
+  back until it is answered right; a lesson ends by retrying its misses "asked a different way";
+  the next lesson goes after the weak sub-topic. → our knowledge gaps (below).
+- **A forecast.** Readiness against the goal, and "at this pace you'll be at about 3 % on exam
+  day", from the gain per lesson and the lessons of the last 14 days. → `examForecast`.
+- **The plan's phases:** start (intro lesson, diagnostic quiz), learn and practise (podcast, tutor,
+  quizzes, true/false, oral mock), spaced repetition, close knowledge gaps, written mock without AI
+  help, exam day (flashcard refresher, final weak-spot check). → our learn / practise / close gaps /
+  prove stages, fading for spaced review, and the exam-day refresher.
+- Not taken: the familiarity and mood questions before the first lesson, the learning-style
+  question at setup (our learner picks the format per lesson instead), podcasts and videos, the
+  per-week topic heatmap, duels and sharing.
 
 ## The model
 
@@ -97,7 +110,8 @@ planned yet, is skipped and does not hold back the ones after it), so the whole 
 before anything is repeated; formats beyond the two are never suggested, only offered; then
 lessons under their mark, weakest first across modules, except one that has already failed twice
 today (`MAX_FAILED_TRIES_PER_DAY`), which rests until tomorrow so one hard lesson cannot hold up the
-plan; in the prove stage, the mock; then the most faded lesson (once ready, the weakest format the
+plan; then a topic's open knowledge gaps (see below); on the exam's eve and day, a flashcard
+refresher per topic; in the prove stage, the mock; then the most faded lesson (once ready, the weakest format the
 learner has done; never one they did not choose). A learner who plateaus under a mark keeps
 practising and does not get the mock. The lesson screen's "next" button takes the same step.
 3. **Prove**: with every module mastered, the mock exam is the next step. Passing it at the target
@@ -107,6 +121,49 @@ practising and does not get the mock. The lesson screen's "next" button takes th
    and then the mock is next again.
 4. **Ready**: the path still offers the weakest lesson each day ("Osveži") until the exam, and a
    score that slips below the target puts that module back into practice.
+
+### Knowledge gaps: what comes back, and until when
+
+A lesson's result records which of the questions it showed the learner got wrong
+(`exam_lesson_results.missed_ids`, migration `0070`): a wrong quiz answer or true/false call, or a
+written answer marked under 3 of 5. A question missed and not answered right since is an open
+**knowledge gap** (`openGaps`, replaying the topic's results in order). Only the quiz, true/false and
+written lessons open and close gaps: flashcards are graded by the learner and return by the note's
+own spaced repetition, and the summary and tutor show no stored questions.
+
+- **Asked again first.** The next quiz, true/false or written lesson of the topic starts with its
+  open gaps, up to 60 % of the lesson (`withGapsFirst`, `GAP_SHARE_OF_LESSON`), and fills the rest
+  with questions the learner has not seen. Quiz and true/false share questions, so a gap comes back
+  "another way": missed in the quiz, asked as a true/false statement, and the reverse
+  (`gapLessonKind`). Those questions carry a "Ponovitev · prej ni šlo" tag.
+- **Retried before the lesson ends.** A quiz or true/false lesson asks its misses once more before
+  it finishes ("Še enkrat"), the quiz with its answers in reverse order and a false statement with
+  the right answer as the claim. The score is the first try's, and the gap stays open: it closes
+  in a later lesson, not seconds after the answer was shown.
+- **On the path.** After the lessons under their mark, a topic's gaps are the next step, the topic
+  with the most first, **before the mock exam** (Astra closes gaps before its written mock). A gap
+  missed `GAP_MAX_MISSES` (3) times still comes back in lessons but no longer holds the path, so
+  one question cannot keep the mock away for good, and a gap lesson failed twice today rests like
+  any other. A learned topic with gaps that no repeat station already covers gets a "Zapolni
+  vrzeli" station with the count. The daily plan counts a topic's gaps as one lesson more.
+- **Said out loud.** The done screen says how many gaps the lesson closed and how many questions
+  will come back until they are answered right, and its button goes after the misses straight away
+  (the other format) once the module is otherwise on track. The exam screen's goal card shows the
+  open gaps.
+
+### The forecast
+
+Under the goal bar, once two practice lessons are done: "Po tem tempu ~X % na dan izpita"
+(`examForecast`): the mastery gained per lesson so far, times the lessons of the last 14 days
+spread over all 14 (one busy first day is not a pace), carried over the days left. Green with 📈
+when it reaches the goal, muted with ⏱️ when it does not. It is not shown once ready or after the
+exam.
+
+### The exam day
+
+On the exam's eve and the day itself (`finalDay`), after repeats and gaps, each learned topic gets a
+flashcard refresher ("Osvežitev pred izpitom") before the mock or anything else, weakest topic first,
+as Astra's exam-day routine does.
 
 ### Choosing the lesson format
 
@@ -273,13 +330,14 @@ the answers; "Ponovi generalko" retries and "Nadaljuj" returns to the path. The 
 one paid-only part: setup, path, lessons and readiness follow the notes' own access (a free account
 can prep from its free note).
 
-## Tables (`supabase/migrations/0068_exam_prep.sql`, `0069_exam_tutor_and_fresh_questions.sql`)
+## Tables (`supabase/migrations/0068_exam_prep.sql`, `0069_exam_tutor_and_fresh_questions.sql`, `0070_exam_knowledge_gaps.sql`)
 
 `exams`, `exam_modules`, `exam_topics`, `exam_lesson_results`, `exam_mock_attempts`. All are
 owner-only by RLS and every route uses the client that verified the learner (`getRouteUser`); an
 update cannot move a module, topic or mock attempt onto another exam or note (`0069` recreates the
 update policies with the insert policies' checks). `0069` adds the `tutor` lesson kind,
-`exam_lesson_results.item_ids` and `exam_topics.extra`. Neither is on production.
+`exam_lesson_results.item_ids` and `exam_topics.extra`. `0070` adds `exam_lesson_results.missed_ids`
+(the knowledge gaps). None of the three is on production.
 
 The numbers moved while the PR was open, because `supabase db push` refuses a local migration older
 than the newest one production has: 0061 → 0062 (PR #579 took 0061), 0062/0063 → 0065/0066 (main

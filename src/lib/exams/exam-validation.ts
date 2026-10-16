@@ -80,6 +80,8 @@ export const lessonResultSchema = z.object({
   difficulty: z.number().int().min(1).max(5).nullable(),
   /** The questions the lesson showed, so the next try of it draws others. */
   itemIds: z.array(z.string().regex(/^[A-Za-z0-9:_-]{1,100}$/)).max(40).optional(),
+  /** Of those, the ones answered wrong: they stay open as knowledge gaps until answered right. */
+  missedIds: z.array(z.string().regex(/^[A-Za-z0-9:_-]{1,100}$/)).max(40).optional(),
 });
 
 export const mockStartSchema = z

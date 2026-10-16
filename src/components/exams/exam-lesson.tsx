@@ -24,8 +24,11 @@ import {
   moduleAfterLesson,
   percent,
   practiceKindToOffer,
+  GAP_LESSON_KINDS,
   type ExamLessonKind,
   type LessonFormatChoice,
+  type PracticeLessonKind,
+  type TrueFalseStatement,
 } from "@/lib/exams/exam-model";
 import type { LessonGenerator, LessonLoad, LessonPayload } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -64,6 +67,9 @@ type Phase =
       /** The score and the lesson's pass mark, both in whole percent, when it fell short. */
       below: { score: number; need: number } | null;
       following: { label: string; href: string } | null;
+      /** Knowledge gaps: earlier misses answered right this time, and this lesson's misses (they come back). */
+      gapsClosed: number;
+      gapsOpen: number;
       /** The module's other practice formats, which the learner may pick instead of `following`. */
       choices: LessonFormatChoice[];
     };
@@ -152,6 +158,8 @@ export function ExamLesson({
   const [difficulty, setDifficulty] = useState(3);
   const startedGeneration = useRef(false);
   const lessonRef = useRef<LessonPayload | null>(null);
+  /* The questions this try got wrong (knowledge gaps), saved with the result. */
+  const missedRef = useRef(new Set<string>());
   /* `navigateWithFeedback` is a new function every render; a load keyed on it would restart forever. */
   const navigateRef = useRef(navigateWithFeedback);
   const examHref = `/app/exams/${examId}`;
@@ -170,6 +178,7 @@ export function ExamLesson({
     if (early) {
       const ready = early.body as Extract<LessonLoad, { status: "ready" }>;
       lessonRef.current = ready.lesson;
+      missedRef.current = new Set();
       setPhase({ name: "playing", lesson: ready.lesson });
       return;
     }
@@ -191,6 +200,7 @@ export function ExamLesson({
 
     if (load.status === "ready") {
       lessonRef.current = load.lesson;
+      missedRef.current = new Set();
       setPhase({ name: "playing", lesson: load.lesson });
       return;
     }
@@ -310,6 +320,7 @@ export function ExamLesson({
         total,
         difficulty,
         itemIds: shownItemIds(lessonRef.current),
+        missedIds: [...missedRef.current],
       }),
     }).catch(() => null);
 
@@ -332,14 +343,35 @@ export function ExamLesson({
     const score = total > 0 ? Math.min(1, correct / total) : 1;
     const isPractice = isPracticeKind(kind);
     const state = moduleAfterLesson(module, kind, score, goal);
-    const nextHere = state.firstPass
-      ? { kind: state.firstPass, repeat: false }
-      : state.review[0]
-        ? { kind: state.review[0], repeat: true }
+    const missedNow = missedRef.current.size;
+    const repeatedIds = lessonRef.current && "repeated" in lessonRef.current ? (lessonRef.current.repeated ?? []) : [];
+    const gapsClosed = repeatedIds.filter((id) => !missedRef.current.has(id)).length;
+    /*
+     * Astra's next lesson goes after what was just missed: with the module otherwise on track, the
+     * misses are asked again straight away, the other way round when the learner has done that
+     * format (missed in the quiz, asked as true/false), as the path's `gapLessonKind` does.
+     */
+    const gapNext: PracticeLessonKind | null =
+      state.learned && missedNow > 0 && GAP_LESSON_KINDS.includes(kind as PracticeLessonKind)
+        ? kind === "quiz" && state.done.true_false
+          ? "true_false"
+          : kind === "true_false" && state.done.quiz
+            ? "quiz"
+            : (kind as PracticeLessonKind)
         : null;
+    const nextHere = state.firstPass
+      ? { kind: state.firstPass, repeat: false, gap: false }
+      : state.review[0]
+        ? { kind: state.review[0], repeat: true, gap: false }
+        : gapNext
+          ? { kind: gapNext as ExamLessonKind, repeat: true, gap: true }
+          : null;
     const following = nextHere
       ? {
-          label: t(nextHere.repeat ? "exam.lesson.done.repeat" : "exam.lesson.done.next", { lesson: t(LESSON_KIND_KEY[nextHere.kind]) }),
+          label: t(
+            nextHere.gap ? "exam.lesson.done.gaps" : nextHere.repeat ? "exam.lesson.done.repeat" : "exam.lesson.done.next",
+            { lesson: t(LESSON_KIND_KEY[nextHere.kind]) },
+          ),
           href: lessonHref(examId, module.topicId, nextHere.kind),
         }
       : after?.type === "module"
@@ -372,6 +404,8 @@ export function ExamLesson({
       headline: state.mastered && !module.mastered ? "mastered" : state.learned && !module.learned ? "learned" : "lesson",
       below,
       following,
+      gapsClosed,
+      gapsOpen: GAP_LESSON_KINDS.includes(kind as PracticeLessonKind) ? missedNow : 0,
       // Any other format of this topic, whichever comes next: the one just done and the suggestion aside.
       choices: lessonFormatChoices(state, [kind, nextHere?.kind]),
     });
@@ -471,6 +505,7 @@ export function ExamLesson({
             topicId={module.topicId}
             lectureId={module.lectureId}
             onReact={react}
+            onMissed={(itemId) => missedRef.current.add(itemId)}
             choices={summaryChoices}
             onChoose={(choice) => void save(1, 1, null, choice)}
             onFinish={(correct, total) =>
@@ -504,6 +539,23 @@ export function ExamLesson({
               <p>{t("exam.lesson.done.below", { score: phase.below.score, target: phase.below.need })}</p>
             ) : phase.total > 0 ? (
               <p>{scoreLine(phase.correct, phase.total)}</p>
+            ) : null}
+            {/* What comes back and until when: the misses, until they are answered right. */}
+            {phase.gapsClosed > 0 || phase.gapsOpen > 0 ? (
+              <div className="memo-exam-gap-facts">
+                {phase.gapsClosed > 0 ? (
+                  <span className="closed">
+                    <Emoji symbol="✅" size="1rem" />
+                    {t("exam.lesson.done.gapsClosed", { count: phase.gapsClosed })}
+                  </span>
+                ) : null}
+                {phase.gapsOpen > 0 ? (
+                  <span>
+                    <Emoji symbol="🧩" size="1rem" />
+                    {t("exam.lesson.done.gapsOpen", { count: phase.gapsOpen })}
+                  </span>
+                ) : null}
+              </div>
             ) : null}
             <FormatChoices
               choices={phase.choices}
@@ -640,6 +692,7 @@ function LessonBody({
   topicId,
   lectureId,
   onFinish,
+  onMissed,
   onReact,
   choices,
   onChoose,
@@ -649,6 +702,8 @@ function LessonBody({
   topicId: string;
   lectureId: string;
   onFinish: (correct: number, total: number) => void;
+  /** A question answered wrong: it stays open as a knowledge gap until a later lesson gets it right. */
+  onMissed: (itemId: string) => void;
   onReact: (mood: BuddyMood) => void;
   /** The summary's other formats to pick from (see `FormatChoices`). */
   choices: LessonFormatChoice[];
@@ -670,6 +725,9 @@ function LessonBody({
   const exitToken = useRef(0);
   /* A quiz miss's explanation, opened by "Preglej zakaj". */
   const [showWhy, setShowWhy] = useState(false);
+  /* The quiz's misses, by place, and once the last question is answered the round that asks them again. */
+  const [missedAt, setMissedAt] = useState<number[]>([]);
+  const [retry, setRetry] = useState<number[] | null>(null);
   /* A right quiz answer moves on by itself after a beat; leaving the lesson cancels it. */
   const advanceTimer = useRef<number | undefined>(undefined);
   /*
@@ -822,16 +880,26 @@ function LessonBody({
 
   if (lesson.kind === "quiz" || lesson.kind === "true_false") {
     const total = lesson.kind === "quiz" ? lesson.questions.length : lesson.statements.length;
+    /* In the retry round `index` walks the misses; the score stays the first try's. */
+    const at = retry ? (retry[index] ?? -1) : index;
+    /*
+     * Astra's "quick review before the finish": the questions missed come back once, asked another
+     * way. A quiz question shows its answers in reverse; a false statement comes back with the right
+     * answer as the claim.
+     */
+    const flipClaim = (entry: TrueFalseStatement) =>
+      retry && !entry.isTrue ? { ...entry, claim: entry.correctAnswer, isTrue: true } : entry;
     const question =
       lesson.kind === "quiz"
         ? (() => {
-            const entry = lesson.questions[index];
+            const entry = lesson.questions[at];
             return entry
               ? { id: entry.id, prompt: entry.prompt, options: entry.options, correct_option_idx: entry.correctIndex, explanation: entry.explanation, answer: entry.options[entry.correctIndex] }
               : null;
           })()
         : (() => {
-            const entry = lesson.statements[index];
+            const found = lesson.statements[at];
+            const entry = found ? flipClaim(found) : undefined;
             return entry
               ? {
                   id: entry.id,
@@ -848,8 +916,43 @@ function LessonBody({
       return null;
     }
 
+    const order =
+      retry && lesson.kind === "quiz"
+        ? question.options.map((_, optionIndex) => optionIndex).reverse()
+        : question.options.map((_, optionIndex) => optionIndex);
     const wrong = selection !== null && selection !== question.correct_option_idx;
-    const correctLetter = String.fromCharCode(65 + question.correct_option_idx);
+    const correctLetter = String.fromCharCode(65 + order.indexOf(question.correct_option_idx));
+    const repeatedGap = !retry && Boolean(lesson.repeated?.includes(question.id));
+
+    const next = (gotIt: boolean) => {
+      window.clearTimeout(advanceTimer.current);
+      setSelection(null);
+      setShowWhy(false);
+
+      if (retry) {
+        if (index + 1 >= retry.length) {
+          onFinish(correct, total);
+        } else {
+          setIndex(index + 1);
+        }
+
+        return;
+      }
+
+      const nextCorrect = correct + (gotIt ? 1 : 0);
+      const misses = gotIt ? missedAt : [...missedAt, index];
+      setCorrect(nextCorrect);
+      setMissedAt(misses);
+
+      if (index + 1 < total) {
+        setIndex(index + 1);
+      } else if (misses.length > 0) {
+        setRetry(misses);
+        setIndex(0);
+      } else {
+        onFinish(nextCorrect, total);
+      }
+    };
 
     /*
      * The note's quiz, as the app has it: on the phone an answered question collapses to the
@@ -860,18 +963,29 @@ function LessonBody({
     return (
       <div className="lecture-quiz-stage">
         <div className="memo-quiz-head">
-          <span className="memo-quiz-count">{t("quiz.questionN", { index: index + 1 })}</span>
+          <span className="memo-quiz-count">
+            {retry ? t("exam.lesson.retry.title") : t("quiz.questionN", { index: index + 1 })}
+          </span>
           <span className="memo-quiz-total">
-            {index + 1} / {total}
+            {index + 1} / {retry ? retry.length : total}
           </span>
         </div>
         <div className="memo-progress quiz">
-          <div style={{ width: `${Math.round(((index + 1) / total) * 100)}%` }} />
+          <div style={{ width: `${Math.round(((index + 1) / (retry ? retry.length : total)) * 100)}%` }} />
         </div>
+        {retry && index === 0 && selection === null ? (
+          <p className="memo-exam-retry-note">{t("exam.lesson.retry.body")}</p>
+        ) : repeatedGap ? (
+          <span className="memo-exam-gap-tag">
+            <Msym name="replay" size="0.95rem" weight={700} />
+            {t("exam.lesson.repeatTag")}
+          </span>
+        ) : null}
         <div className="lecture-quiz-card">
           <StudyQuizQuestion
+            key={`${question.id}:${retry ? "retry" : "first"}`}
             question={question}
-            order={question.options.map((_, optionIndex) => optionIndex)}
+            order={order}
             selection={selection}
             collapseAnswered={collapseAnswered}
             onSelect={(choice) => {
@@ -885,9 +999,13 @@ function LessonBody({
               if (choice === question.correct_option_idx) {
                 onReact("happy");
                 window.clearTimeout(advanceTimer.current);
-                advanceTimer.current = window.setTimeout(() => advance(total, true), QUIZ_CORRECT_PAUSE_MS);
+                advanceTimer.current = window.setTimeout(() => next(true), QUIZ_CORRECT_PAUSE_MS);
               } else {
                 onReact("sad");
+
+                if (!retry) {
+                  onMissed(question.id);
+                }
               }
             }}
           />
@@ -910,7 +1028,7 @@ function LessonBody({
                     {t("quiz.reviewWhy")}
                   </button>
                 ) : null}
-                <button type="button" onClick={() => advance(total, false)} className="memo-quiz-result-primary">
+                <button type="button" onClick={() => next(false)} className="memo-quiz-result-primary">
                   {t("quiz.understood")}
                 </button>
               </div>
@@ -970,6 +1088,10 @@ function LessonBody({
 
     if (payload?.marked) {
       onReact((payload.score ?? 0) >= 3 ? "cheer" : "sad");
+
+      if ((payload.score ?? 0) < 3) {
+        onMissed(question.id);
+      }
     }
   }
 

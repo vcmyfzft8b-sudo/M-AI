@@ -27615,6 +27615,27 @@ button.memo-exam-card:hover {
   box-shadow: var(--shadow), inset 0 0 0 2px var(--success);
 }
 
+/* Astra's forecast and the open knowledge gaps, one short line each under the bar. */
+.memo-exam-goal-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.memo-exam-goal-notes p {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.memo-exam-goal-notes p.on-track {
+  color: var(--success);
+}
+
 .memo-exam-goal-facts {
   display: flex;
   flex-wrap: wrap;
@@ -27893,6 +27914,61 @@ button.memo-exam-card:hover {
   background: var(--surface);
   box-shadow: 0 0 0 3px var(--bg), inset 0 0 0 2px var(--promo);
   color: var(--promo);
+}
+
+/* A topic's knowledge gaps: the badge counts the questions it will ask again. */
+.memo-exam-station.gap .memo-exam-station-check {
+  font-size: 0.78rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A question missed in an earlier lesson, asked again (Astra's "repeat" tag). */
+.memo-exam-gap-tag {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  width: fit-content;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--promo);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.memo-exam-retry-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+/* The done screen's gaps: what was closed, and what comes back until it is answered right. */
+.memo-exam-gap-facts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.memo-exam-gap-facts > span {
+  display: block;
+  max-width: 22rem;
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.92rem;
+  font-weight: 650;
+  text-wrap: balance;
+}
+
+.memo-exam-gap-facts > span.closed {
+  color: var(--success);
+}
+
+.memo-exam-gap-facts > span > :first-child {
+  margin-right: 0.4rem;
+  vertical-align: -0.15em;
 }
 
 .memo-exam-station-label {

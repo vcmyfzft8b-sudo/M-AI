@@ -522,6 +522,7 @@ export type Database = {
           score: number;
           difficulty: number | null;
           item_ids: string[];
+          missed_ids: string[];
           completed_at: string;
         };
         Insert: {
@@ -536,6 +537,7 @@ export type Database = {
           score?: number;
           difficulty?: number | null;
           item_ids?: string[];
+          missed_ids?: string[];
           completed_at?: string;
         };
         Update: Record<string, never>;

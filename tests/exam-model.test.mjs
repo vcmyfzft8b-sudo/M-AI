@@ -39,6 +39,12 @@ import {
   needsFreshItems,
   preferUnseen,
   tutorStepPoints,
+  openGaps,
+  gapLessonKind,
+  gapsForLesson,
+  withGapsFirst,
+  examForecast,
+  GAP_MAX_MISSES,
 } from "../src/lib/exams/exam-model.ts";
 
 // In these tests each note has one topic, named after it.
@@ -639,4 +645,127 @@ test("the format chips list the module's other practice formats, with a score on
   // The summary is never a chip, and the lesson just done and the suggestion are left out.
   assert.deepEqual(lessonFormatChoices(state, ["quiz", "tutor", null]).map((choice) => choice.kind), ["flashcards", "true_false", "written"]);
   assert.equal(lessonFormatChoices(state).length, 5);
+});
+
+/* ---------------------------------------------------------------- knowledge gaps */
+
+const shown = (lecture_id, lesson_kind, score, completed_at, item_ids, missed_ids = []) => ({
+  ...result(lecture_id, lesson_kind, score, completed_at),
+  item_ids,
+  missed_ids,
+});
+
+test("a missed question stays an open gap until a later lesson gets it right", () => {
+  const missed = shown("a", "quiz", 0.6, "2026-10-14T10:00:00Z", ["q1", "q2", "q3"], ["q2", "q3"]);
+  assert.deepEqual(openGaps([missed]).map((gap) => gap.id), ["q2", "q3"]);
+
+  // Asked again as a true/false statement and answered right: closed. q3 missed again: still open.
+  const again = shown("a", "true_false", 0.5, "2026-10-15T10:00:00Z", ["q2", "q3"], ["q3"]);
+  const gaps = openGaps([again, missed]);
+  assert.deepEqual(gaps, [{ id: "q3", kind: "true_false", misses: 2 }]);
+
+  // Flashcards and the tutor neither open nor close gaps.
+  assert.deepEqual(openGaps([shown("a", "flashcards", 0.5, "2026-10-14T10:00:00Z", ["c1"], ["c1"])]), []);
+});
+
+test("a gap comes back the other way round, in a format the learner has done", () => {
+  const done = { summary: true, tutor: false, flashcards: false, quiz: true, true_false: true, written: false };
+  assert.equal(gapLessonKind([{ id: "q1", kind: "quiz", misses: 1 }], done), "true_false");
+  assert.equal(gapLessonKind([{ id: "q1", kind: "true_false", misses: 1 }], done), "quiz");
+  assert.equal(gapLessonKind([{ id: "q1", kind: "quiz", misses: 1 }], { ...done, true_false: false }), "quiz");
+  assert.equal(gapLessonKind([{ id: "w1", kind: "written", misses: 1 }], done), "written");
+  // One the learner keeps missing still comes back in lessons but no longer holds the path.
+  assert.equal(gapLessonKind([{ id: "q1", kind: "quiz", misses: GAP_MAX_MISSES }], done), null);
+  assert.deepEqual(gapsForLesson([{ id: "w1", kind: "written", misses: 1 }], "quiz"), []);
+});
+
+test("a lesson asks the gaps first and fills the rest with new questions", () => {
+  const pool = ["q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8"].map((id) => ({ id }));
+  const gaps = ["q2", "q5", "q7", "q8"].map((id) => ({ id, kind: "quiz", misses: 1 }));
+  const seen = new Set(["q1", "q2", "q5", "q7", "q8"]);
+  const { items, repeated } = withGapsFirst(pool, gaps, seen, 5, "seed");
+
+  // At most three of five are repeats; the rest are unseen.
+  assert.deepEqual(repeated, ["q2", "q5", "q7"]);
+  assert.equal(items.length, 5);
+  assert.deepEqual(items.slice(0, 3).map((item) => item.id), ["q2", "q5", "q7"]);
+  assert.ok(items.slice(3).every((item) => !seen.has(item.id)));
+  assert.deepEqual(withGapsFirst(pool, [], seen, 5, "seed"), { items: [], repeated: [] });
+});
+
+test("open gaps are closed before the mock exam is offered", () => {
+  const all = { flashcards: 1, quiz: 1, true_false: 1, written: 1 };
+  const results = [
+    ...learnedModule("a", all),
+    ...learnedModule("b", all),
+    shown("b", "quiz", 0.9, "2026-10-14T11:00:00Z", ["q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "q10"], ["q2"]),
+  ];
+  const states = examModuleStates(mods("a", "b"), results, 0.8);
+
+  // The last quiz passed its mark, so the module stays mastered; its one miss is still an open gap.
+  assert.equal(examStage(states, null, 0.8), "prove");
+  assert.equal(states[1].pressingGaps, 1);
+  assert.deepEqual(examNextStep(states, "prove"), { type: "lesson", topicId: "b", lectureId: "b", kind: "true_false", review: true });
+
+  const closed = examModuleStates(
+    mods("a", "b"),
+    [...results, shown("b", "true_false", 1, "2026-10-15T11:00:00Z", ["q2"], [])],
+    0.8,
+  );
+  assert.deepEqual(examNextStep(closed, "prove"), { type: "mock" });
+});
+
+test("on the exam's eve each topic gets a flashcard refresher before the mock", () => {
+  const all = { flashcards: 1, quiz: 1, true_false: 1, written: 1 };
+  const now = new Date("2026-10-20T08:00:00Z");
+  const states = examModuleStates(mods("a", "b"), [...learnedModule("a", all), ...learnedModule("b", all)], 0.8, null, now);
+
+  assert.deepEqual(examNextStep(states, "prove"), { type: "mock" });
+  assert.equal(examNextStep(states, "prove", undefined, { finalDay: true })?.kind, "flashcards");
+
+  const refreshed = examModuleStates(
+    mods("a", "b"),
+    [
+      ...learnedModule("a", all),
+      ...learnedModule("b", all),
+      result("a", "flashcards", 1, "2026-10-20T07:00:00Z"),
+      result("b", "flashcards", 1, "2026-10-20T07:30:00Z"),
+    ],
+    0.8,
+    null,
+    now,
+  );
+  assert.deepEqual(examNextStep(refreshed, "prove", undefined, { finalDay: true }), { type: "mock" });
+});
+
+test("the daily plan counts a topic's gaps as one more lesson", () => {
+  const base = { examDate: "2026-10-20", today: "2026-10-19", dailyMinutes: 6, resultsToday: 0, untriedDoneToday: 0 };
+  assert.equal(dailyPlan({ ...base, states: [{ lessonsLeft: 0, review: [] }] }).remaining, 0);
+  assert.equal(dailyPlan({ ...base, states: [{ lessonsLeft: 0, review: [], pressingGaps: 4 }] }).remaining, 1);
+});
+
+test("the forecast carries the pace of the last days to the exam day", () => {
+  const input = {
+    target: 0.75,
+    today: "2026-10-16",
+    examDate: "2026-10-26",
+  };
+
+  // One lesson is not a pace yet.
+  assert.equal(examForecast({ ...input, mastery: 0.05, lessonDays: ["2026-10-16"] }), null);
+
+  // The pace is the last two weeks, however busy today was: 2 lessons worth 4 % → 2 % a lesson at
+  // 1/7 a day over ten days adds about 3 %, far under the goal (Astra: "about 3 % on exam day").
+  const slow = examForecast({ ...input, mastery: 0.04, lessonDays: ["2026-10-16", "2026-10-16"] });
+  assert.ok(Math.abs(slow.atExam - (0.04 + 0.02 * (2 / 14) * 10)) < 1e-9);
+  assert.equal(slow.onTrack, false);
+
+  // Two weeks at three lessons a day, 1 % a lesson, 42 % now: +30 % lands on the 75 % goal.
+  const days = Array.from({ length: 42 }, (_, index) => addDays("2026-10-16", -Math.floor(index / 3)));
+  const steady = examForecast({ ...input, mastery: 0.42, lessonDays: days });
+  assert.ok(steady.atExam >= 0.72 - 1e-9);
+  assert.equal(examForecast({ ...input, mastery: 0.5, lessonDays: days }).onTrack, true);
+
+  // Once the exam has been sat there is nothing to forecast.
+  assert.equal(examForecast({ ...input, today: "2026-10-27", mastery: 0.5, lessonDays: ["2026-10-16", "2026-10-16"] }), null);
 });

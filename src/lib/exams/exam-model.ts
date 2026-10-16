@@ -307,6 +307,9 @@ export type LessonResultLike = {
   lesson_kind: ExamLessonKind;
   score: number;
   completed_at: string;
+  /** The questions the lesson showed, and of those the ones the learner got wrong (knowledge gaps). */
+  item_ids?: readonly string[] | null;
+  missed_ids?: readonly string[] | null;
 };
 
 export type ModuleState = {
@@ -353,7 +356,145 @@ export type ModuleState = {
   latest: Record<ExamLessonKind, number | null>;
   /** Tries of each lesson on `now`'s Ljubljana day that fell short of its pass mark (0 without `now`). */
   failedToday: Record<ExamLessonKind, number>;
+  /** Tries of each lesson on `now`'s Ljubljana day, passed or not (0 without `now`). */
+  triedToday: Record<ExamLessonKind, number>;
+  /** Questions of this topic the learner got wrong and has not answered right since (`openGaps`). */
+  gaps: number;
+  /** Of those, the ones still holding the path (missed fewer than `GAP_MAX_MISSES` times). */
+  pressingGaps: number;
+  /** The format that asks the gaps again (`gapLessonKind`), or null without pressing gaps. */
+  gapKind: PracticeLessonKind | null;
 };
+
+/* ---------------------------------------------------------------- knowledge gaps */
+
+/*
+ * Astra's knowledge gaps, per question: a question the learner got wrong stays open until a later
+ * lesson asks it again and they get it right. Quiz and true/false share questions (a statement is a
+ * quiz question with one claimed answer), so a gap opened in one is asked "another way" in the
+ * other. Flashcards are graded by the learner and come back by the note's own spaced repetition, and
+ * the tutor and summary show no questions, so only these lessons open and close gaps.
+ */
+export const GAP_LESSON_KINDS: readonly PracticeLessonKind[] = ["quiz", "true_false", "written"];
+
+/*
+ * A gap missed this many times keeps coming back in its topic's lessons but stops holding the path:
+ * one question the learner cannot get must not keep the mock exam away for good.
+ */
+export const GAP_MAX_MISSES = 3;
+
+/** How many of a lesson's questions may be gaps asked again; the rest are new. */
+export const GAP_SHARE_OF_LESSON = 0.6;
+
+export type OpenGap = {
+  id: string;
+  /** The lesson it was last missed in. */
+  kind: PracticeLessonKind;
+  /** Times missed since it was last answered right. */
+  misses: number;
+};
+
+/** The topic's open gaps, oldest miss first, replaying its results in the order they were saved. */
+export function openGaps(results: readonly LessonResultLike[]): OpenGap[] {
+  const open = new Map<string, OpenGap>();
+  const ordered = results
+    .filter((result) => (GAP_LESSON_KINDS as readonly string[]).includes(result.lesson_kind))
+    .map((result, order) => ({ result, order, time: instantOf(result.completed_at) }))
+    .sort((left, right) => left.time - right.time || left.order - right.order);
+
+  for (const { result } of ordered) {
+    const missed = new Set(result.missed_ids ?? []);
+
+    for (const id of new Set([...(result.item_ids ?? []), ...missed])) {
+      if (missed.has(id)) {
+        const previous = open.get(id);
+        open.delete(id);
+        open.set(id, { id, kind: result.lesson_kind as PracticeLessonKind, misses: (previous?.misses ?? 0) + 1 });
+      } else {
+        open.delete(id);
+      }
+    }
+  }
+
+  return [...open.values()];
+}
+
+/** Whether a gap still holds the path (see `GAP_MAX_MISSES`). */
+export function isPressingGap(gap: OpenGap) {
+  return gap.misses < GAP_MAX_MISSES;
+}
+
+/** The questions a lesson of `kind` asks again: the topic's open gaps it can show. */
+export function gapsForLesson(gaps: readonly OpenGap[], kind: ExamLessonKind): OpenGap[] {
+  if (kind === "written") {
+    return gaps.filter((gap) => gap.kind === "written");
+  }
+
+  return kind === "quiz" || kind === "true_false" ? gaps.filter((gap) => gap.kind !== "written") : [];
+}
+
+/**
+ * The format to close a topic's pressing gaps with. A written answer is asked again in writing; a
+ * multiple-choice one comes back the other way round (missed in the quiz, asked as true/false, and
+ * the reverse) when the learner has done that format, else the same way.
+ */
+export function gapLessonKind(
+  gaps: readonly OpenGap[],
+  done: Record<ExamLessonKind, boolean>,
+): PracticeLessonKind | null {
+  const pressing = gaps.filter(isPressingGap);
+
+  if (pressing.length === 0) {
+    return null;
+  }
+
+  const written = pressing.filter((gap) => gap.kind === "written").length;
+
+  if (written * 2 > pressing.length) {
+    return "written";
+  }
+
+  const latest = pressing.filter((gap) => gap.kind !== "written").at(-1);
+
+  if (!latest) {
+    return "written";
+  }
+
+  const other: PracticeLessonKind = latest.kind === "quiz" ? "true_false" : "quiz";
+  return done[other] ? other : latest.kind;
+}
+
+/**
+ * A lesson's questions with the topic's gaps asked first: up to `GAP_SHARE_OF_LESSON` of `count`
+ * are open gaps (the oldest misses first), and the rest are drawn as `preferUnseen` draws them.
+ */
+export function withGapsFirst<T extends { id: string }>(
+  pool: readonly T[],
+  gaps: readonly OpenGap[],
+  seen: ReadonlySet<string>,
+  count: number,
+  seed: string,
+): { items: T[]; repeated: string[] } {
+  const byId = new Map(pool.map((item) => [item.id, item]));
+  const cap = Math.max(1, Math.floor(count * GAP_SHARE_OF_LESSON));
+  const repeats = gaps
+    .map((gap) => byId.get(gap.id))
+    .filter((item): item is T => item !== undefined)
+    .slice(0, cap);
+
+  if (repeats.length === 0) {
+    return { items: [], repeated: [] };
+  }
+
+  const repeated = new Set(repeats.map((item) => item.id));
+  const rest = pool.filter((item) => !repeated.has(item.id));
+  const fill = seededShuffle(preferUnseen(rest, seen, count - repeats.length, seed), `${seed}:fill`).slice(
+    0,
+    count - repeats.length,
+  );
+
+  return { items: [...repeats, ...fill], repeated: [...repeated] };
+}
 
 /*
  * A failed mock exam asks for proof again: a module the mock found weak counts as mastered only
@@ -408,6 +549,7 @@ export function moduleProgress(
   const scores = {} as Record<ExamLessonKind, number | null>;
   const raw = {} as Record<ExamLessonKind, number | null>;
   const failedToday = {} as Record<ExamLessonKind, number>;
+  const triedToday = {} as Record<ExamLessonKind, number>;
   const today = now && Number.isFinite(now.getTime()) ? dayKey(now) : null;
 
   for (const kind of EXAM_LESSON_KINDS) {
@@ -416,10 +558,15 @@ export function moduleProgress(
     raw[kind] = entry ? clamp01(entry.score) : null;
     scores[kind] = entry ? fadedScore(entry.score, entry.at, now) : null;
     failedToday[kind] = 0;
+    triedToday[kind] = 0;
   }
 
   if (today) {
     for (const result of results) {
+      if (Number.isFinite(instantOf(result.completed_at)) && dayKey(result.completed_at) === today) {
+        triedToday[result.lesson_kind] += 1;
+      }
+
       if (
         result.lesson_kind !== "summary" &&
         Number.isFinite(instantOf(result.completed_at)) &&
@@ -459,6 +606,7 @@ export function moduleProgress(
   const owed = review.filter((kind) => owedKinds.includes(kind));
   const weakest = [...tried].sort(byScore)[0] ?? PRACTICE_LESSON_KINDS[0];
   const rested = (kind: ExamLessonKind) => failedToday[kind] < MAX_FAILED_TRIES_PER_DAY;
+  const gaps = openGaps(results);
 
   return {
     mastery,
@@ -474,6 +622,10 @@ export function moduleProgress(
     done,
     latest: scores,
     failedToday,
+    triedToday,
+    gaps: gaps.length,
+    pressingGaps: gaps.filter(isPressingGap).length,
+    gapKind: learned ? gapLessonKind(gaps, done) : null,
   };
 }
 
@@ -569,7 +721,10 @@ export type ExamNextStepModule = Pick<
   ModuleState,
   "topicId" | "lectureId" | "learned" | "mastered" | "unlocked" | "review" | "nextKind" | "done" | "latest"
 > &
-  Partial<Pick<ModuleState, "refresh" | "failedToday">> & { ready?: boolean; pending?: boolean };
+  Partial<Pick<ModuleState, "refresh" | "failedToday" | "triedToday" | "pressingGaps" | "gapKind" | "mastery">> & {
+    ready?: boolean;
+    pending?: boolean;
+  };
 
 /**
  * What the path points at.
@@ -582,9 +737,14 @@ export type ExamNextStepModule = Pick<
  * 2. **Practise.** Then lessons that fell short of their pass mark, weakest first across modules;
  *    one that has failed `MAX_FAILED_TRIES_PER_DAY` times today waits until tomorrow while other
  *    work exists.
- * 3. **Prove.** With every module mastered the mock exam is next. Faded lessons do not hold it
+ * 3. **Close the gaps.** Then a topic's knowledge gaps (questions missed and not answered right
+ *    since; `openGaps`), the topic with the most first, in the format that asks them another way
+ *    (`gapLessonKind`). A gap missed `GAP_MAX_MISSES` times stops holding the path.
+ * 4. **Exam day.** On the last day (`finalDay`: the exam's eve or the day itself), a flashcard
+ *    refresher of each topic not refreshed yet that day, weakest first (Astra's exam-day routine).
+ * 5. **Prove.** With every module mastered the mock exam is next. Faded lessons do not hold it
  *    back: the mock is the check that they are still known.
- * 4. **Refresh.** Otherwise the most faded passed lesson (practise and ready), or once ready the
+ * 6. **Refresh.** Otherwise the most faded passed lesson (practise and ready), or once ready the
  *    weakest format the learner has done anywhere, keeps the knowledge fresh until the exam.
  *
  * Modules the learner cannot open (`canOpen`), whose note is not ready, or that are placeholders
@@ -594,6 +754,7 @@ export function examNextStep(
   states: ExamNextStepModule[],
   stage: ExamStage,
   canOpen: (lectureId: string) => boolean = () => true,
+  options: { finalDay?: boolean } = {},
 ): ExamNextStep {
   if (states.length === 0) {
     return null;
@@ -653,6 +814,30 @@ export function examNextStep(
 
   if (firstOwed) {
     return lesson(firstOwed.state, firstOwed.kind, true);
+  }
+
+  const gapped = open
+    .filter(
+      (state) =>
+        state.learned &&
+        (state.pressingGaps ?? 0) > 0 &&
+        state.gapKind &&
+        (state.failedToday?.[state.gapKind] ?? 0) < MAX_FAILED_TRIES_PER_DAY,
+    )
+    .sort((left, right) => (right.pressingGaps ?? 0) - (left.pressingGaps ?? 0))[0];
+
+  if (gapped?.gapKind) {
+    return lesson(gapped, gapped.gapKind, true);
+  }
+
+  if (options.finalDay && stage !== "learn") {
+    const unrefreshed = open
+      .filter((state) => state.learned && (state.triedToday?.flashcards ?? 0) === 0)
+      .sort((left, right) => (left.mastery ?? 0) - (right.mastery ?? 0))[0];
+
+    if (unrefreshed) {
+      return lesson(unrefreshed, "flashcards", true);
+    }
   }
 
   if (stage === "prove") {
@@ -847,13 +1032,17 @@ export function dailyPlan(input: {
   examDate: string;
   today: string;
   dailyMinutes: number;
-  states: Pick<ModuleState, "lessonsLeft" | "review">[];
+  states: (Pick<ModuleState, "lessonsLeft" | "review"> & Partial<Pick<ModuleState, "pressingGaps">>)[];
   resultsToday: number;
   untriedDoneToday: number;
 }): DailyPlan {
   // The lessons each module still needs to be learned (`LESSONS_TO_LEARN`), not every format.
   const toLearn = input.states.reduce((sum, state) => sum + Math.max(0, state.lessonsLeft), 0);
-  const repeats = input.states.reduce((sum, state) => sum + state.review.length, 0);
+  // A topic's open gaps are one lesson more: it asks up to three of them again at a time.
+  const repeats = input.states.reduce(
+    (sum, state) => sum + state.review.length + ((state.pressingGaps ?? 0) > 0 ? 1 : 0),
+    0,
+  );
   const remaining = toLearn + repeats;
   const remainingAtStartOfDay = remaining + input.untriedDoneToday;
   const untilExam = daysBetween(input.today, input.examDate);
@@ -863,6 +1052,52 @@ export function dailyPlan(input: {
   const goal = Math.max(1, byPlan, remainingAtStartOfDay > 0 ? Math.min(byTime, remainingAtStartOfDay) : byTime);
 
   return { goal, doneToday: input.resultsToday, daysLeft, remaining };
+}
+
+/* ---------------------------------------------------------------- forecast */
+
+/** Lessons it takes before the pace is worth a forecast (Astra shows one after the first two). */
+export const FORECAST_MIN_LESSONS = 2;
+/**
+ * The days the pace is measured over, always the whole window as Astra does ("last 14 days"): one
+ * busy first day is not a pace, and a forecast that flatters says nothing.
+ */
+export const FORECAST_WINDOW_DAYS = 14;
+
+export type ExamForecast = {
+  /** 0..1: where the learner's mastery lands on the exam day at the pace of the last days. */
+  atExam: number;
+  /** Whether that reaches the target. */
+  onTrack: boolean;
+};
+
+/**
+ * Astra's "at this pace you'll be at about X % on exam day": mastery gained per lesson so far times
+ * the lessons a day of the last two weeks, carried over the days left. Null until there is a pace
+ * (`FORECAST_MIN_LESSONS`), and once the exam day has passed.
+ */
+export function examForecast(input: {
+  mastery: number;
+  target: number;
+  /** Ljubljana days of every lesson done for this exam, one entry per lesson. */
+  lessonDays: readonly string[];
+  today: string;
+  examDate: string;
+}): ExamForecast | null {
+  const lessons = input.lessonDays.length;
+  const untilExam = daysBetween(input.today, input.examDate);
+
+  if (lessons < FORECAST_MIN_LESSONS || untilExam < 0) {
+    return null;
+  }
+
+  const windowStart = addDays(input.today, -(FORECAST_WINDOW_DAYS - 1));
+  const recent = input.lessonDays.filter((day) => day >= windowStart && day <= input.today).length;
+  const pace = recent / FORECAST_WINDOW_DAYS;
+  const gain = clamp01(input.mastery) / lessons;
+  const atExam = clamp01(input.mastery + gain * pace * untilExam);
+
+  return { atExam, onTrack: meetsPassMark(atExam, input.target) };
 }
 
 /** Consecutive Ljubljana days with at least one lesson, ending today (or yesterday, until today counts). */

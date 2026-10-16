@@ -8,7 +8,7 @@ import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { getRouteUser } from "@/lib/supabase/server";
 import { tr } from "@/lib/i18n/server";
 
-const RESULT_MAX_BYTES = 2 * 1024;
+const RESULT_MAX_BYTES = 4 * 1024;
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await getRouteUser({ route: "api:exams:results:post", request });
@@ -49,6 +49,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       total: parsed.data.total,
       difficulty: parsed.data.difficulty,
       itemIds: parsed.data.itemIds,
+      missedIds: parsed.data.missedIds,
     });
 
     if (!recorded) {

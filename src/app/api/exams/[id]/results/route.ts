@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { recordLessonResult } from "@/lib/exams/exams-server";
+import { readOwnedExam, recordLessonResult } from "@/lib/exams/exams-server";
 import { examIdParamsSchema, lessonResultSchema } from "@/lib/exams/exam-validation";
 import { captureRouteError } from "@/lib/monitoring";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -41,6 +41,17 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
 
   try {
+    // An archived exam takes no lessons, so it takes no results either (its screen offers to bring it back).
+    const exam = await readOwnedExam(auth.supabase, auth.user.id, params.data.id);
+
+    if (!exam) {
+      return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
+    }
+
+    if (exam.archived_at) {
+      return NextResponse.json({ error: await tr("api.exam.archived") }, { status: 409 });
+    }
+
     const recorded = await recordLessonResult(auth.supabase, auth.user.id, {
       examId: params.data.id,
       topicId: parsed.data.topicId,

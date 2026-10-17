@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
-import { gradeTopicWritten, readOwnedTopic } from "@/lib/exams/exams-server";
+import { gradeTopicWritten, readOwnedExam, readOwnedTopic } from "@/lib/exams/exams-server";
 import { examIdParamsSchema, topicWrittenCheckSchema } from "@/lib/exams/exam-validation";
 import { captureRouteError } from "@/lib/monitoring";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -46,10 +46,18 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
 
   try {
-    const topic = await readOwnedTopic(auth.supabase, auth.user.id, params.data.id, parsed.data.topicId);
+    const [exam, topic] = await Promise.all([
+      readOwnedExam(auth.supabase, auth.user.id, params.data.id),
+      readOwnedTopic(auth.supabase, auth.user.id, params.data.id, parsed.data.topicId),
+    ]);
 
-    if (!topic) {
+    if (!exam || !topic) {
       return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
+    }
+
+    // An archived exam takes no lessons; marking one of its answers would spend a model call for nothing.
+    if (exam.archived_at) {
+      return NextResponse.json({ error: await tr("api.exam.archived") }, { status: 409 });
     }
 
     const access = await canUseLectureFeatures(auth.user.id, topic.lecture_id, "study");

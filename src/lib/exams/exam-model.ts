@@ -76,7 +76,9 @@ export const PASS_EPSILON = 1e-4;
 
 /** The pass mark for the exam as a whole (the mock exam), 0..1, from the learner's target. */
 export function passThreshold(target: number) {
-  return Math.min(Number.isFinite(target) ? clamp01(target) : 1, LESSON_PASS_CAP);
+  // Within the goals the setup offers (TARGET_MIN..100 %), whatever reaches here.
+  const goal = Number.isFinite(target) ? Math.max(TARGET_MIN / 100, clamp01(target)) : 1;
+  return Math.min(goal, LESSON_PASS_CAP);
 }
 
 /*
@@ -1118,10 +1120,20 @@ export function lessonsRemaining(
   );
 }
 
+/*
+ * The most a day's goal asks: this many times what the learner's daily minutes buy. Close to the
+ * exam, what is left spread over the days left can come to fifty practices for the day; a goal no
+ * one can do only discourages, and the forecast already says the pace falls short.
+ */
+export const DAILY_STRETCH = 3;
+/* …but never less than this many (about 45 minutes), so a learner who set a few minutes a day is not held under what the plan needs. */
+export const DAILY_STRETCH_FLOOR = 8;
+
 /**
  * Today's goal: what is left spread over the days before the exam, but never less than the
- * learner's minutes buy, so a long runway still has a real day's work in it. Computed against
- * what was left at the start of today, so finishing a lesson moves "done", not the goal.
+ * learner's minutes buy, so a long runway still has a real day's work in it, and never more than
+ * `DAILY_STRETCH` times that. Computed against what was left at the start of today, so finishing a
+ * lesson moves "done", not the goal.
  */
 export function dailyPlan(input: {
   examDate: string;
@@ -1136,7 +1148,8 @@ export function dailyPlan(input: {
   const daysLeft = untilExam < 0 ? 0 : Math.max(1, untilExam);
   const byTime = Math.max(1, Math.round(input.dailyMinutes / LESSON_MINUTES));
   const byPlan = daysLeft > 0 ? Math.ceil(remaining / daysLeft) : 0;
-  const goal = Math.max(1, byPlan, remaining > 0 ? Math.min(byTime, remaining) : byTime);
+  const most = Math.max(byTime * DAILY_STRETCH, DAILY_STRETCH_FLOOR);
+  const goal = Math.min(most, Math.max(1, byPlan, remaining > 0 ? Math.min(byTime, remaining) : byTime));
 
   return { goal, doneToday: input.resultsToday, daysLeft, remaining };
 }

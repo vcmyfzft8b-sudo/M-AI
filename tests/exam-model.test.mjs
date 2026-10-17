@@ -510,6 +510,10 @@ test("the daily plan spreads the lessons every topic still needs over the days l
   // A topic's open gaps are one lesson more; a topic on target needs none.
   assert.equal(dailyPlan({ ...base, states: [{ mastery: 0.8, pressingGaps: 2 }] }).remaining, 1);
   assert.equal(dailyPlan({ ...base, states: [{ mastery: 0.8 }] }).remaining, 0);
+  // The exam's eve with everything still to do: a day's goal stays one a learner can do.
+  const eve = dailyPlan({ ...base, today: "2026-10-25", dailyMinutes: 15, states: Array.from({ length: 6 }, () => ({ mastery: 0 })) });
+  assert.equal(eve.remaining, 54);
+  assert.equal(eve.goal, 9);
 });
 
 test("the forecast is Astra's: gain per lesson, lessons still needed, a day, and where the pace lands", () => {

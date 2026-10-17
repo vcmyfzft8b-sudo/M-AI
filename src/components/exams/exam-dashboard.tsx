@@ -549,6 +549,17 @@ export function ExamDashboard({
           </div>
         ) : null}
           <div className="memo-exam-trail">
+            {/* No material left (every note failed to be made, or was deleted): say so, and the way on. */}
+            {modules.length === 0 && pendingNotes === 0 ? (
+              <div className="memo-exam-empty">
+                <MemoBuddy mood="sad" size="6rem" />
+                <h2>{t("exam.dash.empty.title")}</h2>
+                <p>{t("exam.dash.empty.body")}</p>
+                <InstantLink href="/app/exams/new" className="memo-button-coral">
+                  {t("exam.dash.empty.cta")}
+                </InstantLink>
+              </div>
+            ) : null}
             {/* Material still being read at setup: its topics join the path when the note is ready. */}
             {pendingNotes > 0 ? (
               <div className="memo-exam-card memo-exam-mock-card memo-exam-preparing" aria-live="polite">

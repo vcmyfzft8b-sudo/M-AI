@@ -1070,17 +1070,22 @@ function LessonBody({
                   <span>{t("exam.lesson.trueFalse.answer", { answer: question.answer })}</span>
                 ) : null}
               </span>
-              <div className="memo-quiz-result-actions">
+            </div>
+          ) : null}
+          {/* Its choices are in the screen's bottom bar, where every lesson's next step is. */}
+          {wrong ? (
+            <ExamCta>
+              <div className="memo-exam-cta-row">
                 {question.explanation ? (
-                  <button type="button" onClick={() => setShowWhy(true)} className="memo-quiz-result-ghost">
+                  <button type="button" onClick={() => setShowWhy(true)} className="memo-button-ghost">
                     {t("quiz.reviewWhy")}
                   </button>
                 ) : null}
-                <button type="button" onClick={() => next(false)} className="memo-quiz-result-primary">
+                <button type="button" onClick={() => next(false)} className="memo-primary-pill memo-exam-next">
                   {t("quiz.understood")}
                 </button>
               </div>
-            </div>
+            </ExamCta>
           ) : null}
         </div>
         {wrong && showWhy && question.explanation ? (

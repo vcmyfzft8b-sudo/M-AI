@@ -1010,7 +1010,8 @@ export function ExamSetup({
               <span>{t("exam.setup.motivate.modules", { count: selected.length })}</span>
             </div>
             <div>
-              <b>{lessons}</b>
+              {/* An estimate, marked as every count of lessons to come is ("~11"). */}
+              <b>{t("exam.setup.motivate.lessonsCount", { count: lessons })}</b>
               <span>{t("exam.setup.motivate.lessons", { count: lessons })}</span>
             </div>
           </div>

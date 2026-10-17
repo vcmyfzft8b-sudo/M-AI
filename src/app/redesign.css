@@ -28813,11 +28813,22 @@ button.memo-exam-card:hover {
   margin-bottom: 1.4rem;
 }
 
-.memo-exam-lesson .memo-quiz-result {
-  margin-top: auto;
+/*
+ * A miss keeps every answer whenever they fit with the verdict (StudyQuizQuestion measures it), so
+ * the verdict spends no room it does not need: no rule or padding over it, a tighter gap under the
+ * answers, its buttons in the bar.
+ */
+.memo-exam-lesson .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-options {
+  margin-bottom: 0.9rem;
 }
 
-/* The verdict under a missed question: the badge and the line, then its two choices side by side. */
+.memo-exam-lesson .memo-quiz-result {
+  margin-top: auto;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* The verdict under a missed question: the badge and the line; its two choices are in the bar. */
 .memo-exam-lesson .memo-quiz-result {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -28827,21 +28838,6 @@ button.memo-exam-card:hover {
 
 .memo-exam-lesson .memo-quiz-result-copy {
   align-self: center;
-}
-
-.memo-exam-lesson .memo-quiz-result-actions {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-left: 0;
-}
-
-.memo-exam-lesson .memo-quiz-result-actions > * {
-  width: 100%;
-}
-
-.memo-exam-lesson .memo-quiz-result-actions > :only-child {
-  grid-column: 1 / -1;
 }
 
 /* True or false: the question it answers, quietly above the statement being judged. */
@@ -29359,7 +29355,9 @@ button.memo-exam-card:hover {
 
   .memo-exam-page.has-cta,
   .memo-exam-screen:has(.memo-exam-cta-slot:not(:empty)) .memo-exam-page {
-    padding-bottom: calc(7rem + var(--memo-safe-bottom));
+    /* The bar's own height (its fade, a 3.4rem button, its foot), so nothing hides under it and no
+       room is held back that a screen meant to fit could use. */
+    padding-bottom: calc(5.9rem + var(--memo-safe-bottom));
   }
 
   /* An empty or locked screen sits in the middle of the phone, not under the bar. */
@@ -29423,9 +29421,13 @@ button.memo-exam-card:hover {
    * sits either side of it.
    */
   .memo-exam-topbar {
+    margin-bottom: 1.2rem;
+  }
+
+  /* Setup draws its own bar (back and its progress), which stays a row. */
+  .memo-exam-topbar:not(.memo-exam-topbar-custom) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    margin-bottom: 1.2rem;
   }
 
   .memo-exam-topbar > .memo-exam-crumb {
@@ -29434,7 +29436,7 @@ button.memo-exam-card:hover {
   }
 
   .memo-exam-topbar > .memo-exam-topbar-title,
-  .memo-exam-topbar > span:empty {
+  .memo-exam-topbar > span:empty:not(.memo-exam-topbar-trailing) {
     grid-column: 2;
     max-width: 22rem;
   }

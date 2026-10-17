@@ -346,8 +346,17 @@ pins to the bottom (`cta`). A part of the screen that owns its buttons (a writte
 "Preveri odgovor" / "Popravi" / "Naprej", the tutor's "Začni", the empty prep's "Nova priprava",
 setup's retry) renders them there through `<ExamCta>`, a portal into the frame's slot, rather
 than wherever its content ends. Ghost for the quiet choice, coral for the action, as the other bars.
-The quiz verdict stays at the content's foot, under the answers it explains; flashcard grading and
-the tutor's playback controls stay with what they control.
+A missed quiz question's verdict line stays at the content's foot, under the answers it explains,
+and its two choices ("Preglej zakaj", "Razumem") are in the bar; flashcard grading and the tutor's
+playback controls stay with what they control. `ExamCta` draws nothing until the bar has mounted,
+so a server-drawn screen never shows its button inline and then moves it; a server-drawn screen
+(the empty prep) passes its button as `cta` instead.
+
+**All answers, unless they cannot fit.** A miss keeps every answer whenever they fit above the bar
+with the verdict, and only otherwise keeps the picked and the right one (`data-crowded`). The page
+reserves exactly the bar's height and the verdict carries no rule or padding, so on a 375×812
+phone three of five long questions in the QA prep keep all four answers; the two that show two
+overflow by 14 and 51 px with all four. True or false always has its two.
 
 **The path folds what is done.** Each module draws only its last four finished lessons
 (`DONE_SHOWN`); the rest wait behind "Pokaži še N prejšnjih vaj" under the module's banner. A

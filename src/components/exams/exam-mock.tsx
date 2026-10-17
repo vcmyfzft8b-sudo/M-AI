@@ -56,7 +56,15 @@ type Phase =
    * `failed` keeps the learner here, with a retry, whenever going back to the questions would not
    * help (an oral mock, or a written one whose clock has already run out).
    */
-  | { name: "grading"; attempt: Attempt; answers: Record<string, Answer>; failed?: boolean; closed?: string }
+  | {
+      name: "grading";
+      attempt: Attempt;
+      answers: Record<string, Answer>;
+      failed?: boolean;
+      closed?: string;
+      /* Refused because the prep is archived: back to it, not a new mock it would refuse too. */
+      archived?: boolean;
+    }
   | { name: "result"; result: MockResult };
 
 function answered(question: MockQuestionForLearner, answer: Answer | undefined) {
@@ -257,12 +265,17 @@ export function ExamMock({
       // Too long past its clock (or the prep was archived): this attempt is closed for good, so its
       // saved answers go and the learner starts a new one rather than retrying.
       if (response?.status === 409) {
-        const refusal = (await response.json().catch(() => null)) as { error?: string } | null;
+        const refusal = (await response.json().catch(() => null)) as { error?: string; code?: string } | null;
+        const expired = refusal?.code === "expired";
 
-        try {
-          window.localStorage.removeItem(`memo-exam-mock:${attempt.id}`);
-        } catch {
-          /* Nothing to clean up. */
+        // Only an attempt past its clock is gone for good; an archived prep's keeps its answers, for
+        // when the prep is restored while the clock still runs.
+        if (expired) {
+          try {
+            window.localStorage.removeItem(`memo-exam-mock:${attempt.id}`);
+          } catch {
+            /* Nothing to clean up. */
+          }
         }
 
         setPhase({
@@ -271,6 +284,7 @@ export function ExamMock({
           answers: current,
           failed: true,
           closed: refusal?.error ?? t("api.exam.mockExpired"),
+          archived: !expired,
         });
         return;
       }
@@ -582,7 +596,15 @@ export function ExamMock({
           backIcon="close"
           title={t("exam.mock.title")}
           cta={
-            phase.closed ? (
+            phase.closed && phase.archived ? (
+              <button
+                type="button"
+                className="memo-button-coral"
+                onClick={() => navigateWithFeedback(examHref, { refresh: true })}
+              >
+                {t("exam.zone.continue")}
+              </button>
+            ) : phase.closed ? (
               <button type="button" className="memo-button-coral" onClick={() => setPhase({ name: "setup" })}>
                 {t("exam.mock.start")}
               </button>
@@ -659,7 +681,7 @@ export function ExamMock({
               {result.grade.trim().endsWith("%")
                 ? null
                 : `${t("exam.percent", { percent: wholePercent(result.percentage) })} · `}
-              {t("exam.mock.result.points", { score: Math.round(result.totalScore * 10) / 10, total: result.maxScore })}
+              {t("exam.mock.result.points", { score: Math.round(result.totalScore * 10) / 10, count: result.maxScore })}
             </p>
           </div>
         </div>
@@ -737,7 +759,7 @@ export function ExamMock({
                     <span>{t("exam.mock.question", { index: itemIndex + 1, total: result.items.length })}</span>
                     <b>
                       {item.answer.marked
-                        ? t("exam.mock.result.points", { score: item.answer.score, total: item.answer.maxScore })
+                        ? t("exam.mock.result.points", { score: item.answer.score, count: item.answer.maxScore })
                         : t("test.notMarked")}
                     </b>
                   </div>

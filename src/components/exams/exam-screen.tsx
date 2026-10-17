@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { Msym } from "@/components/msym";
@@ -14,13 +14,21 @@ import { cameFromAppPath } from "@/lib/app-history";
  * "Preveri", the tutor's "Začni"): they render there, where every other screen's "Nadaljuj" sits,
  * rather than wherever the content happens to end.
  */
-const ExamCtaSlot = createContext<HTMLElement | null>(null);
+const ExamCtaSlot = createContext<{ slot: HTMLElement | null; open: boolean }>({ slot: null, open: false });
 
-/** Puts `children` in the screen's bottom bar; inline where the screen has a bar of its own. */
+/**
+ * Puts `children` in the screen's bottom bar. Until the bar has mounted (the first, server-drawn
+ * frame) it draws nothing rather than drawing them inline and moving them a frame later; on a
+ * screen whose bar holds its own buttons it draws them inline.
+ */
 export function ExamCta({ children }: { children: ReactNode }) {
-  const slot = useContext(ExamCtaSlot);
+  const { slot, open } = useContext(ExamCtaSlot);
 
-  return slot ? createPortal(children, slot) : <div className="memo-exam-cta-inline">{children}</div>;
+  if (!open) {
+    return <div className="memo-exam-cta-inline">{children}</div>;
+  }
+
+  return slot ? createPortal(children, slot) : null;
 }
 
 /**
@@ -77,6 +85,8 @@ export function ExamScreen({
   const router = useRouter();
   const { navigateWithFeedback, overlay, isNavigating } = useInstantNavigation();
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
+  const slotOpen = !cta;
+  const ctaSlot = useMemo(() => ({ slot, open: slotOpen }), [slot, slotOpen]);
 
   function goBack() {
     if (historyBack && cameFromAppPath(backHref)) {
@@ -117,7 +127,7 @@ export function ExamScreen({
 
         <div className="memo-screen-scroll">
           <div className={`memo-page memo-exam-page ${cta ? "has-cta" : ""}`.trim()}>
-            <ExamCtaSlot.Provider value={cta ? null : slot}>{children}</ExamCtaSlot.Provider>
+            <ExamCtaSlot.Provider value={ctaSlot}>{children}</ExamCtaSlot.Provider>
           </div>
         </div>
 

@@ -2114,7 +2114,9 @@ export function NoteSourceModal({
 
   /* Files from a drop, or picked before the sheet opened: whatever the sheet can handle. */
   function takeFiles(files: File[]) {
-    if (files.length === 0) {
+    // Nothing is taken while a note is being made: the drop would only be refused, and clearing
+    // the busy label after it would end the upload's loading view while the upload goes on.
+    if (files.length === 0 || busyLabel || submitInFlightRef.current) {
       return;
     }
 

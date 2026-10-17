@@ -9,7 +9,7 @@ import { MemoPortal } from "@/components/memo-portal";
 import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { sheetClass, useSheet } from "@/components/use-sheet";
-import { ExamCta, ExamScreen } from "@/components/exams/exam-screen";
+import { ExamScreen } from "@/components/exams/exam-screen";
 import { formatExamDay } from "@/components/exams/exam-format";
 import { EXAM_PREPS_HREF, LESSON_KIND_EMOJI, LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
 import { prefetchLesson } from "@/components/exams/lesson-prefetch";
@@ -145,7 +145,8 @@ export function ExamDashboard({
    * planned here; until then the screen checks back now and then.
    */
   useEffect(() => {
-    if (!planning) {
+    // An archived prep plans nothing (the route refuses it), so it does not ask every 15 s for good.
+    if (!planning || exam.archived_at) {
       return;
     }
 
@@ -192,7 +193,7 @@ export function ExamDashboard({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [exam.id, planning, planningReady, router]);
+  }, [exam.archived_at, exam.id, planning, planningReady, router]);
 
   /* Each tab starts at its top; the path then brings "Next up" into view (below). */
   function showTab(from: HTMLElement, next: "path" | "progress") {
@@ -420,6 +421,11 @@ export function ExamDashboard({
           {t("exam.path.continue", { lesson: t("exam.mock.title") })}
         </button>
       </div>
+    ) : modules.length === 0 && pendingNotes === 0 ? (
+      // A prep left with no material: its one way on, in the bar every screen has it in.
+      <InstantLink href="/app/exams/new" className="memo-button-coral">
+        {t("exam.dash.empty.cta")}
+      </InstantLink>
     ) : null;
 
   return (
@@ -588,11 +594,6 @@ export function ExamDashboard({
                 <MemoBuddy mood="sad" size="6rem" />
                 <h2>{t("exam.dash.empty.title")}</h2>
                 <p>{t("exam.dash.empty.body")}</p>
-                <ExamCta>
-                  <InstantLink href="/app/exams/new" className="memo-button-coral">
-                    {t("exam.dash.empty.cta")}
-                  </InstantLink>
-                </ExamCta>
               </div>
             ) : null}
             {/* Material still being read at setup: its topics join the path when the note is ready. */}

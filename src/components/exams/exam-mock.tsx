@@ -340,11 +340,6 @@ export function ExamMock({
                 ? t("exam.oral.questions", { count: oralQuestionCount(oralMinutes) })
                 : t("exam.mock.questions", { count: counts.choice + counts.written })
             }
-            ends={
-              mode === "oral"
-                ? [t("exam.minutes", { minutes: ORAL_MINUTES.min }), t("exam.minutes", { minutes: ORAL_MINUTES.max })]
-                : [t("exam.minutes", { minutes: MOCK_MINUTES.min }), t("exam.minutes", { minutes: MOCK_MINUTES.max })]
-            }
           />
         </div>
 

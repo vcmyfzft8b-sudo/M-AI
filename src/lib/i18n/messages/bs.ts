@@ -2507,7 +2507,6 @@ export const bs: Messages = {
   "exam.setup.date.previousMonth": "Prethodni mjesec",
   "exam.setup.date.nextMonth": "Sljedeći mjesec",
   "exam.setup.target.title": "Koliko dobro želiš znati?",
-  "exam.setup.target.drag": "Povuci krug",
   "exam.setup.target.level.pass": "Samo da prođem",
   "exam.setup.target.level.good": "Dobro znanje",
   "exam.setup.target.level.great": "Odlično znanje",

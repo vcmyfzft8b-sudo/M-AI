@@ -661,12 +661,16 @@ export function ExamSetup({
     <>
       <button
         type="button"
-        className="memo-close-button memo-exam-step-back"
+        className="memo-exam-step-back"
         aria-label={stepIndex === 0 ? t("common.close") : t("common.back")}
         disabled={creating}
         onClick={goBack}
       >
-        <Msym name={stepIndex === 0 ? "close" : "arrow_back"} size="1.45rem" fill={false} weight={500} />
+        {stepIndex === 0 ? (
+          <Msym name="close" size="1.2rem" fill={false} weight={600} />
+        ) : (
+          <span className="memo-exam-step-back-chevron" aria-hidden="true" />
+        )}
       </button>
       <div
         className="memo-progress memo-exam-steps"

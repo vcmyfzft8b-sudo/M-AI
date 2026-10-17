@@ -15,7 +15,6 @@ import {
 /* The gauge, in the SVG's own units: a 270° arc open at the bottom. */
 const CENTER = 100;
 const RADIUS = 80;
-const TICK_COUNT = 6;
 
 function point(angle: number, radius = RADIUS) {
   const radians = (angle * Math.PI) / 180;
@@ -29,7 +28,8 @@ const ARC = `M ${START.x} ${START.y} A ${RADIUS} ${RADIUS} 0 1 1 ${END.x} ${END.
 /**
  * A value set by dragging a knob round a gauge (or with the arrow keys), in the range's steps: the
  * setup's target and the mock exam's length (Astra's circular timer). The maths is
- * `dialValueFromPoint`; the centre shows the value and a word about it.
+ * `dialValueFromPoint`; the centre shows the value and a word about it, and nothing else: no ticks,
+ * no end labels, no "drag" hint (the knob says it).
  */
 export function GaugeDial({
   value,
@@ -39,7 +39,6 @@ export function GaugeDial({
   valueText,
   unit,
   caption,
-  ends,
 }: {
   value: number;
   onChange: (value: number) => void;
@@ -50,15 +49,11 @@ export function GaugeDial({
   valueText: string;
   unit: string;
   caption: string;
-  ends: [string, string];
 }) {
-  const t = useT();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [touched, setTouched] = useState(false);
   const share = (value - range.min) / (range.max - range.min);
   const knob = point(dialAngle(value, range));
-  const ticks = Array.from({ length: TICK_COUNT }, (_, index) => range.min + ((range.max - range.min) * index) / (TICK_COUNT - 1));
 
   function follow(event: PointerEvent<HTMLDivElement>) {
     const box = rootRef.current?.getBoundingClientRect();
@@ -94,7 +89,6 @@ export function GaugeDial({
     }
 
     event.preventDefault();
-    setTouched(true);
     onChange(Math.min(range.max, Math.max(range.min, value + moves[event.key])));
   }
 
@@ -114,7 +108,6 @@ export function GaugeDial({
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId);
           setDragging(true);
-          setTouched(true);
           follow(event);
         }}
         onPointerMove={(event) => {
@@ -127,19 +120,6 @@ export function GaugeDial({
       >
         <svg viewBox="0 0 200 200" aria-hidden="true">
           <path className="memo-exam-dial-track" d={ARC} pathLength={100} />
-          {ticks.map((tick) => {
-            const at = point(dialAngle(tick, range), RADIUS - 19);
-
-            return (
-              <circle
-                key={tick}
-                className={`memo-exam-dial-tick ${tick <= value ? "on" : ""}`.trim()}
-                cx={at.x}
-                cy={at.y}
-                r={1.6}
-              />
-            );
-          })}
           <path className="memo-exam-dial-fill" d={ARC} pathLength={100} strokeDasharray={`${share * 100} 100`} />
           <circle className="memo-exam-dial-knob" cx={knob.x} cy={knob.y} r={12} />
         </svg>
@@ -150,10 +130,7 @@ export function GaugeDial({
           </b>
           <span>{caption}</span>
         </span>
-        <span className="memo-exam-dial-end start">{ends[0]}</span>
-        <span className="memo-exam-dial-end end">{ends[1]}</span>
       </div>
-      <span className={`memo-exam-dial-hint ${touched ? "gone" : ""}`.trim()}>{t("exam.setup.target.drag")}</span>
     </div>
   );
 }
@@ -187,7 +164,6 @@ export function TargetDial({ value, onChange }: { value: number; onChange: (valu
       valueText={`${value} %, ${t(levelKey(value))}`}
       unit="%"
       caption={t(levelKey(value))}
-      ends={[`${TARGET_RANGE.min} %`, `${TARGET_RANGE.max} %`]}
     />
   );
 }

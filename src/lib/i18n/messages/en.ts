@@ -2493,7 +2493,6 @@ export const en: Messages = {
   "exam.setup.date.previousMonth": "Previous month",
   "exam.setup.date.nextMonth": "Next month",
   "exam.setup.target.title": "How well do you want to know it?",
-  "exam.setup.target.drag": "Drag the ring",
   "exam.setup.target.level.pass": "Just pass",
   "exam.setup.target.level.good": "Solid",
   "exam.setup.target.level.great": "Excellent",

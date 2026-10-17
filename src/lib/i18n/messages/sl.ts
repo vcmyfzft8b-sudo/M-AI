@@ -2530,7 +2530,6 @@ export const sl = {
   "exam.setup.date.previousMonth": "Prejšnji mesec",
   "exam.setup.date.nextMonth": "Naslednji mesec",
   "exam.setup.target.title": "Kako dobro hočeš znati?",
-  "exam.setup.target.drag": "Povleci krog",
   "exam.setup.target.level.pass": "Da opravim",
   "exam.setup.target.level.good": "Dobro znanje",
   "exam.setup.target.level.great": "Odlično znanje",

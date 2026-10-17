@@ -299,6 +299,7 @@ export function ExamSetup({
     ),
   );
   const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   /*
    * Material uploaded in the setup, in the order it was picked. Each is read right here, one at a
@@ -601,10 +602,12 @@ export function ExamSetup({
   }
 
   async function create() {
-    if (creating || !reviewArmed.current || blockedOffline("create")) {
+    // A ref as well as the state: two taps in one frame both see `creating` still false.
+    if (creating || creatingRef.current || !reviewArmed.current || blockedOffline("create")) {
       return;
     }
 
+    creatingRef.current = true;
     setCreating(true);
     setError(null);
 
@@ -647,6 +650,7 @@ export function ExamSetup({
 
       if (!response.ok || !payload?.exam) {
         setError(payload?.error ?? t("exam.setup.error"));
+        creatingRef.current = false;
         setCreating(false);
         return;
       }
@@ -654,6 +658,7 @@ export function ExamSetup({
       navigateWithFeedback(`/app/exams/${payload.exam.id}`);
     } catch {
       setError(t("exam.setup.error"));
+      creatingRef.current = false;
       setCreating(false);
     }
   }

@@ -4,7 +4,7 @@ import { ExamMock } from "@/components/exams/exam-mock";
 import { requireUser } from "@/lib/auth";
 import { getViewerAppState } from "@/lib/billing";
 import type { ExamMockAttemptRow } from "@/lib/database.types";
-import { getExamDetail, mockResultFromAttempt } from "@/lib/exams/exams-server";
+import { getExamDetail, mockAttemptExpired, mockResultFromAttempt, openWrittenMockAttempt } from "@/lib/exams/exams-server";
 import { getTranslations } from "@/lib/i18n/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
@@ -39,8 +39,22 @@ export default async function ExamMockPage({ params }: { params: Promise<{ id: s
     .limit(1)
     .maybeSingle();
 
+  /* A written mock left mid-way (a reload, a closed tab) is carried on with, if its time is not up. */
+  const { data: openRow } = await supabase
+    .from("exam_mock_attempts")
+    .select("*")
+    .eq("exam_id", detail.exam.id)
+    .eq("user_id", user.id)
+    .eq("status", "in_progress")
+    .eq("mode", "written")
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const open = openRow as ExamMockAttemptRow | null;
+
   return (
     <ExamMock
+      openAttempt={open && !mockAttemptExpired(open) ? openWrittenMockAttempt(open) : null}
       examId={detail.exam.id}
       examTitle={detail.exam.title}
       // The mock draws from the exam's notes, so it counts and names notes, not topics.

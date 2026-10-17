@@ -85,6 +85,7 @@ export function ExamMock({
   hasPaidAccess,
   moduleTitles,
   lastResult,
+  openAttempt = null,
 }: {
   examId: string;
   examTitle: string;
@@ -93,10 +94,12 @@ export function ExamMock({
   hasPaidAccess: boolean;
   moduleTitles: Record<string, string>;
   lastResult: MockResult | null;
+  /** A written mock left mid-way, carried on with; its answers come back from this browser. */
+  openAttempt?: Attempt | null;
 }) {
   const { t, locale } = useTranslations();
   const { navigateWithFeedback } = useInstantNavigation();
-  const [phase, setPhase] = useState<Phase>({ name: "setup" });
+  const [phase, setPhase] = useState<Phase>(openAttempt ? { name: "sitting", attempt: openAttempt } : { name: "setup" });
   const [mode, setMode] = useState<"written" | "oral">("written");
   const [duration, setDuration] = useState<number>(MOCK_MINUTES.initial);
   const [oralMinutes, setOralMinutes] = useState<number>(ORAL_MINUTES.initial);
@@ -125,6 +128,43 @@ export function ExamMock({
   useEffect(() => {
     answersRef.current = answers;
   }, [answers]);
+
+  /*
+   * A written mock's answers are kept in this browser while it is sat, so a reload carries on with
+   * them (the page reopens the attempt). Restored once, after mount: the server cannot know them.
+   */
+  const storageKey = phase.name === "sitting" ? `memo-exam-mock:${phase.attempt.id}` : null;
+
+  useEffect(() => {
+    if (!openAttempt) {
+      return;
+    }
+
+    let saved: Record<string, Answer> | null = null;
+
+    try {
+      saved = JSON.parse(window.localStorage.getItem(`memo-exam-mock:${openAttempt.id}`) ?? "null");
+    } catch {
+      saved = null;
+    }
+
+    if (saved) {
+      const restored = saved;
+      void Promise.resolve().then(() => setAnswers((current) => ({ ...restored, ...current })));
+    }
+  }, [openAttempt]);
+
+  useEffect(() => {
+    if (!storageKey) {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(answers));
+    } catch {
+      /* Private mode or a full disk: the answers are still held in memory. */
+    }
+  }, [answers, storageKey]);
 
 
 
@@ -205,6 +245,12 @@ export function ExamMock({
         setError(t("exam.mock.error.submit"));
         setPhase({ name: "sitting", attempt });
         return;
+      }
+
+      try {
+        window.localStorage.removeItem(`memo-exam-mock:${attempt.id}`);
+      } catch {
+        /* Nothing to clean up. */
       }
 
       setTab("ai");

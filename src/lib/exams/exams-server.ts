@@ -768,11 +768,19 @@ async function inBatches<T, R>(items: T[], limit: number, work: (item: T) => Pro
  * allowed it) up to two topics the material leaves out. Nothing is stored; the learner reviews the
  * plan first and `createExam` stores what they keep.
  */
+/*
+ * Planning calls a model per note, four at a time, inside a request with 120 s to live. Notes not
+ * yet started when this much time is spent come back "pending" instead of starting late and being
+ * cut off (paid for, never stored): the exam screen plans pending notes itself, every 15 s.
+ */
+const PLAN_BUDGET_MS = 75_000;
+
 export async function planExamTopics(
   supabase: ExamSupabase,
   userId: string,
   input: { lectureIds: string[]; aiExpand: boolean; schoolLevel: string | null; schoolYear: string | null },
 ): Promise<NotePlan[]> {
+  const deadline = Date.now() + PLAN_BUDGET_MS;
   const lectureIds = await ownedUsableLectureIds(supabase, userId, input.lectureIds);
   const { lectures, artifacts } = await readPlanningNotes(supabase, userId, lectureIds);
   const school = schoolLine(input.schoolLevel, input.schoolYear);
@@ -781,7 +789,7 @@ export async function planExamTopics(
     const lecture = lectures.get(lectureId);
     const artifact = artifacts.get(lectureId);
 
-    if (!lecture || lecture.status !== "ready" || !artifact) {
+    if (!lecture || lecture.status !== "ready" || !artifact || Date.now() > deadline) {
       return { lectureId, title: lecture?.title ?? null, status: "pending", topics: [] };
     }
 
@@ -803,7 +811,7 @@ export async function planExamTopics(
     };
   });
 
-  if (input.aiExpand) {
+  if (input.aiExpand && Date.now() <= deadline) {
     const planned = plans.filter((plan) => plan.status === "planned");
     const extra = await planExpansionTopics({
       userId,
@@ -2187,6 +2195,21 @@ export async function startMockExam(
   };
 }
 
+/**
+ * A written mock still open (handed in neither by the learner nor by its clock): what its screen
+ * needs to carry on with it after a reload, the questions as the learner sees them.
+ */
+export function openWrittenMockAttempt(row: ExamMockAttemptRow) {
+  return {
+    id: row.id,
+    startedAt: row.started_at,
+    durationMinutes: row.duration_minutes,
+    mode: "written" as const,
+    questions: ((row.questions ?? []) as unknown as MockQuestion[]).map(forLearner),
+    lectureId: "",
+  };
+}
+
 /*
  * How long after its clock runs out a mock still takes examiner turns and a hand-in: the oral
  * examiner's clock starts when the learner is ready, not when the attempt was made, and a hand-in
@@ -2437,6 +2460,20 @@ export async function submitMockExam(
 
   const saved = data as ExamMockAttemptRow | null;
 
-  return saved ? mockResultFromAttempt(input.exam, saved) : null;
+  if (saved) {
+    return mockResultFromAttempt(input.exam, saved);
+  }
+
+  // A second hand-in of the same attempt (a double tap, a retry) lost the race: the first one's
+  // grade is the answer, not an error.
+  const { data: firstGrade } = await supabase
+    .from("exam_mock_attempts")
+    .select("*")
+    .eq("id", input.attempt.id)
+    .eq("user_id", userId)
+    .eq("status", "graded")
+    .maybeSingle();
+
+  return firstGrade ? mockResultFromAttempt(input.exam, firstGrade as ExamMockAttemptRow) : null;
 }
 

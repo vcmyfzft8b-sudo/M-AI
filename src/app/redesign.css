@@ -12179,9 +12179,11 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
 .memo-nb-cal > .memo-nb-tape { position: absolute; left: 50%; top: -0.6rem; translate: -50% 0; rotate: 4deg; z-index: 2; }
 .memo-nb-cal-head { grid-column: 1 / -1; height: 1.7rem; margin: 0 -0.7rem 0.3rem; border-radius: 14px 14px 0 0; background: var(--paywall-accent, var(--promo)); }
 .memo-nb-cal-day { position: relative; height: 2.5rem; display: grid; place-items: center; border-radius: 12px; font-size: 1rem; font-weight: 800; background: var(--nb-cal-cell); }
-.memo-nb-cal-day > .memo-nb-pen { position: absolute; inset: 0.3rem; width: auto; height: auto; overflow: visible; }
+.memo-nb-cal-day.done { color: var(--nb-note-muted); }
+.memo-nb-cal-day > .memo-nb-pen { position: absolute; right: -0.25rem; bottom: -0.2rem; width: 1.3rem; height: 1.3rem; overflow: visible; }
 .memo-nb-cal-day.exam { color: var(--promo); }
-.memo-nb-cal-ring { position: absolute; inset: -0.45rem -0.5rem; width: auto; height: auto; overflow: visible; }
+.memo-nb-cal-day > .memo-nb-cal-ring { inset: -0.5rem -0.55rem; right: -0.55rem; bottom: -0.5rem; width: auto; height: auto; }
+.memo-nb-cal-ring path { vector-effect: non-scaling-stroke; stroke-width: 2.6; }
 .memo-nb-cal-flag { width: 2.6rem; height: 2.6rem; border-radius: 999px; font-size: 1.3rem; rotate: 10deg; animation: memo-nb-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both 2.9s, memo-nb-wobble 2.4s ease-in-out infinite 3.4s; }
 .memo-nb-cal-note { font-size: 1.6rem; color: var(--promo); rotate: -6deg; animation: memo-nb-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both 3.1s; }
 .memo-nb-answer { left: 3.1rem; top: 9.4rem; width: 18rem; height: 3.9rem; padding: 0 0.9rem 0 0.6rem; border-radius: 20px; display: flex; align-items: center; gap: 0.75rem; background: var(--surface); box-shadow: 0 14px 28px -8px rgba(0, 0, 0, 0.22), inset 0 0 0 1px var(--line); }

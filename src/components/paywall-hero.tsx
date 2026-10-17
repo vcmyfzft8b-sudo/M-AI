@@ -337,7 +337,7 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
             <Tape tone="pink" />
             <span className="memo-nb-cal-head" />
             {[12, 13, 14, 15, 16, 17, 18, 19].map((day, index) => (
-              <span key={day} className={`memo-nb-cal-day ${index === 6 ? "exam" : ""}`.trim()}>
+              <span key={day} className={`memo-nb-cal-day ${index < 6 ? "done" : index === 6 ? "exam" : ""}`.trim()}>
                 {day}
                 {index < 6 ? (
                   <svg className="memo-nb-pen" viewBox="0 0 20 20" style={{ "--dl": `${0.6 + index * 0.28}s`, "--dur": "0.3s", "--nb-pen": "var(--nb-good)" } as CSSProperties}>

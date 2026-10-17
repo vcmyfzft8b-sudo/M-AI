@@ -3,7 +3,7 @@ import { nativeRequest, useNativeIOS } from "@/lib/mobile/client";
 import { nativeBillingFailureKey } from "@/lib/mobile/billing-notice";
 
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { useAppHref } from "@/components/creator-demo/creator-demo-context";
@@ -12,6 +12,7 @@ import { InstantLink } from "@/components/instant-link";
 import { useT } from "@/components/i18n-provider";
 import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
+import { HAND_FONT, Marked } from "@/components/paywall-notebook";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 
 /**
@@ -247,6 +248,14 @@ export function VoiceUsageSheet({
         : "tutor.paywall.trialBody",
   );
 
+  /*
+   * A free account that has run out is shown the notebook's version of the
+   * offer — an empty battery beside one charging up — in place of a meter that
+   * would only say zero. Subscribers keep the meter and the top-up.
+   */
+  const freeSpent = Boolean(usage && !usage.hasPaidAccess && isSpent);
+  const paperClass = freeSpent ? ` memo-nb-paper ${HAND_FONT.variable}` : "";
+
   const content = usage ? (
     <>
       {/* `data-drag-handle` is what lets a drag start here: useSheet ignores pointers that land
@@ -257,6 +266,36 @@ export function VoiceUsageSheet({
         className="mobile-sheet-drag-handle note-read-usage-drag-handle"
         aria-label={t("folders.dragToClose")}
       />
+      {freeSpent ? (
+        <div className="memo-nb-minutes">
+          <h2 className="memo-nb-title"><Marked text={t("tutor.paywall.outTitle")} /></h2>
+          <p className="memo-nb-minutes-sub">
+            <Msym name="bolt" size="1.05rem" fill weight={600} />
+            {t("tutor.paywall.proEveryDay")}
+          </p>
+          <div className="memo-nb-batteries" aria-hidden="true">
+            <span className="memo-nb-battery-col">
+              <span className="memo-nb-battery empty"><span /></span>
+              <span className="memo-nb-hand">{t("tutor.paywall.batteryFree")}</span>
+            </span>
+            <svg className="memo-nb-pen loop" width="62" height="34" viewBox="0 0 62 34" style={{ overflow: "visible", flex: "none", "--cyc": "2.6s" } as CSSProperties}>
+              <path pathLength={1} d="M4 22 C 18 6, 38 4, 54 16 M46 8 L 55 17 L 44 22" />
+            </svg>
+            <span className="memo-nb-battery-col">
+              <span className="memo-nb-battery full">
+                <span />
+                <span className="memo-nb-icon"><Msym name="bolt" size="1em" fill weight={600} /></span>
+              </span>
+              <span className="memo-nb-hand" style={{ color: "var(--promo)" }}>{t("tutor.paywall.batteryPro")}</span>
+            </span>
+          </div>
+          {/* Closing on the way out is what makes the tap visible; see the note on the link below. */}
+          <InstantLink className="memo-tutor-start memo-nb-cta" href={paywallHref} onClick={() => sheet.dismiss()}>
+            {t("tutor.paywall.moreTimeCta")}
+          </InstantLink>
+        </div>
+      ) : (
+      <>
       <div className="memo-tutor-usage-heading">{usageTitle}</div>
       <UsageBar percent={remainingPercent} label={barLabel} ariaLabel={usageTitle} />
       <div className="note-read-usage-reset">
@@ -285,6 +324,9 @@ export function VoiceUsageSheet({
         </>
       ) : null}
 
+      </>
+      )}
+
       {extra ? (
         <>
           <div className="note-read-settings-divider" />
@@ -297,7 +339,7 @@ export function VoiceUsageSheet({
         * shown once there is nothing left, whether they arrived by running out or by opening the
         * meter to see how much was gone — and, for a subscriber, as a top-up at any time.
         */}
-      {(isSpent || canTopUp) && !(native && usage.hasPaidAccess && !appleHour) ? (
+      {!freeSpent && (isSpent || canTopUp) && !(native && usage.hasPaidAccess && !appleHour) ? (
         <>
           <div className="note-read-settings-divider" />
           <div className="memo-tutor-offer">
@@ -365,7 +407,7 @@ export function VoiceUsageSheet({
           <Msym name="schedule" size="1.05rem" fill={false} weight={500} />
           <span>{triggerLabel}</span>
         </summary>
-        <div className="note-read-usage-popover note-read-usage-inline-popover">{content}</div>
+        <div className={`note-read-usage-popover note-read-usage-inline-popover${paperClass}`}>{content}</div>
       </details>
 
       {isOpen ? (
@@ -377,7 +419,7 @@ export function VoiceUsageSheet({
             aria-label={t("common.close")}
           />
           <div
-            className={sheetClass("note-read-usage-popover note-read-usage-mobile-sheet", sheet.closing)}
+            className={sheetClass(`note-read-usage-popover note-read-usage-mobile-sheet${paperClass}`, sheet.closing)}
             role="dialog"
             aria-modal="true"
             aria-label={usageTitle}

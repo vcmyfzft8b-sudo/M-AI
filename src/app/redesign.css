@@ -434,6 +434,47 @@
   --upgrade-tint: rgba(130, 148, 218, 0.16);
   --upgrade-line: rgba(130, 148, 218, 0.34);
   --upgrade-ink: #4a4f8f;
+  /*
+   * The notebook the paywalls are drawn on (`paywall-notebook.tsx`): ruled
+   * paper with a red margin, sticky notes, washi tape and a highlighter. The
+   * notes, tape and stickers are physical things, so they keep their colours
+   * in the dark; only the paper and its lines change.
+   */
+  --nb-paper: #fffdf6;
+  --nb-rule: rgba(60, 110, 210, 0.15);
+  --nb-margin: rgba(244, 95, 90, 0.5);
+  --nb-hole: #e9e4d8;
+  --nb-marker: rgba(255, 216, 77, 0.75);
+  --nb-sticker: #ffffff;
+  --nb-good: #12804a;
+  --nb-good-tint: rgba(31, 157, 87, 0.12);
+  --nb-note-yellow: #fff1a6;
+  --nb-note-pink: #ffd8e2;
+  --nb-note-mint: #c3f0c8;
+  --nb-note-grey: #eeeae0;
+  --nb-note-ink: #1b1b1e;
+  --nb-note-muted: #5d5a52;
+  --nb-tape-yellow: rgba(246, 195, 91, 0.7);
+  --nb-tape-pink: rgba(255, 179, 209, 0.75);
+  --nb-tape-mint: rgba(166, 227, 192, 0.8);
+  --nb-tape-lilac: rgba(214, 190, 255, 0.8);
+  --nb-index-card: #ffffff;
+  --nb-cal-cell: rgba(0, 0, 0, 0.05);
+  --nb-gold-light: #ffe9a3;
+  --nb-gold: #f7bf3c;
+  --nb-gold-deep: #c99a1e;
+  --nb-gold-dark: #8f6a08;
+  --nb-steel-light: #f4f5f8;
+  --nb-steel: #9aa0ab;
+  --nb-ink-dark: #1d1d21;
+  --nb-ink-metal: #3d3d44;
+  --nb-led: #ff3b30;
+  --nb-led-glass: #160505;
+  --nb-dynamite: #e5332f;
+  --nb-dynamite-dark: #7a1712;
+  --nb-paper-end: #fff1d2;
+  --nb-violet: oklch(0.64 0.19 315);
+  --nb-sky: oklch(0.66 0.15 145);
   --promo: #f45f5a;
   /* Text on a `--promo` fill. White in both appearances, so only declared here. */
   --on-promo: #ffffff;
@@ -511,6 +552,14 @@
   --upgrade-tint: rgba(130, 148, 218, 0.22);
   --upgrade-line: rgba(130, 148, 218, 0.4);
   --upgrade-ink: #b9c2f0;
+  --nb-paper: #17171a;
+  --nb-rule: rgba(140, 170, 255, 0.11);
+  --nb-margin: rgba(255, 109, 104, 0.4);
+  --nb-hole: #0b0b0c;
+  --nb-marker: rgba(255, 216, 77, 0.4);
+  --nb-sticker: #2a2a2f;
+  --nb-good: #4cd98a;
+  --nb-good-tint: rgba(76, 217, 138, 0.14);
   --promo: #ff6d68;
   --danger: #ff453a;
   --danger-tint: rgba(255, 69, 58, 0.15);
@@ -546,6 +595,14 @@
   --upgrade-tint: rgba(130, 148, 218, 0.22);
   --upgrade-line: rgba(130, 148, 218, 0.4);
   --upgrade-ink: #b9c2f0;
+  --nb-paper: #17171a;
+  --nb-rule: rgba(140, 170, 255, 0.11);
+  --nb-margin: rgba(255, 109, 104, 0.4);
+  --nb-hole: #0b0b0c;
+  --nb-marker: rgba(255, 216, 77, 0.4);
+  --nb-sticker: #2a2a2f;
+  --nb-good: #4cd98a;
+  --nb-good-tint: rgba(76, 217, 138, 0.14);
     --promo: #ff6d68;
     --danger: #ff453a;
     --danger-tint: rgba(255, 69, 58, 0.15);
@@ -11305,7 +11362,7 @@
  * (`--fit-squeeze`, `use-fit-screen.ts`) — so the two multiply instead of one
  * overriding the other. The scenes and the logo give way least.
  */
-:is(.memo-paywall-shell, .memo-wheel-body, .memo-offer-body) > :not(.app-start-dismiss-row, .memo-confetti, script) {
+:is(.memo-paywall-shell, .memo-wheel-body, .memo-offer-body) > :not(.app-start-dismiss-row, .memo-confetti, .memo-nb-spiral, script) {
   zoom: calc(var(--z, 1) * var(--fit-squeeze, 1));
 }
 
@@ -11427,36 +11484,6 @@ html[data-paywall-closing] .memo-shell * {
  * `data-reason`. One rule for all of them — the coral button stays the one
  * primary action, and the page still lands on one phone screen.
  */
-
-/* Read-aloud: the lights go down — a dark "now playing" screen in either appearance. */
-.memo-paywall-shell[data-reason="listen"] {
-  --memo-paywall-title-text: var(--on-photo);
-  --memo-paywall-plan-bg: var(--on-photo-chip);
-  --memo-paywall-plan-text: var(--on-photo);
-  --memo-paywall-plan-border: var(--on-photo-chip);
-  --memo-paywall-plan-selected-bg: color-mix(in oklch, var(--paywall-accent) 38%, transparent);
-  --memo-paywall-plan-selected-text: var(--on-photo);
-  --memo-paywall-price-muted: var(--on-photo);
-  --memo-paywall-purple: var(--paywall-accent);
-  background:
-    radial-gradient(120% 60% at 50% 0%, color-mix(in oklch, var(--paywall-accent) 55%, transparent), transparent 70%),
-    var(--photo-stage);
-  color: var(--on-photo);
-}
-
-.memo-paywall-shell[data-reason="listen"] :is(.memo-paywall-sub, .memo-paywall-sub strong, .memo-paywall-due, .memo-paywall-foot, .memo-paywall-plan-detail, .memo-paywall-plan-was) {
-  color: var(--on-photo);
-}
-
-
-
-.memo-paywall-shell[data-reason="listen"] :is(.memo-paywall-offer-percent, .memo-paywall-fine) {
-  color: var(--on-promo);
-}
-
-.memo-paywall-shell[data-reason="listen"] .memo-pw-hero {
-  margin-top: 1.2rem;
-}
 
 /*
  * Tutor: a warm glow of the tutor's orange rising behind Memo and fading into
@@ -11615,6 +11642,822 @@ html[data-paywall-closing] .memo-shell * {
 @keyframes memo-pw-spin { to { rotate: 360deg; } }
 @keyframes memo-pw-note-up { 0% { opacity: 0; translate: 0 0; } 20% { opacity: 1; } 100% { opacity: 0; translate: 0.6rem -3rem; rotate: 15deg; } }
 @keyframes memo-pw-fly-in { 0%, 100% { opacity: 0; translate: -3rem 0.5rem; scale: 0.6; } 25%, 75% { opacity: 1; translate: 0 0; scale: 1; } }
+
+/* ===========================================================================
+   The notebook paywalls
+   ---------------------------------------------------------------------------
+   Every paywall, the wheel, its prize and the minutes sheet are drawn on the
+   same page of a notebook: ruled paper with a red margin and a spiral along
+   the top, plans on sticky notes that get circled in pen when chosen, the
+   discount on a taped coupon, a highlighter swiped across the headline and a
+   checklist ticked by hand. The markup is `paywall-notebook.tsx` and
+   `paywall-hero.tsx`; every colour is one of the `--nb-*` tokens.
+
+   The handwriting is Caveat (`--font-hand`, next/font in the root layout). It
+   only ever draws annotations — a label on a card, a ticked item — never the
+   text a decision rests on: prices, plans and buttons stay in the system font.
+   ========================================================================= */
+
+.memo-nb-paper {
+  background:
+    linear-gradient(to right, transparent 2.15rem, var(--nb-margin) 2.15rem 2.25rem, transparent 2.25rem),
+    repeating-linear-gradient(to bottom, transparent 0 1.95rem, var(--nb-rule) 1.95rem 2rem),
+    var(--nb-paper);
+}
+
+.memo-paywall-shell.memo-nb-paper {
+  --memo-paywall-bg: var(--nb-paper);
+  background:
+    radial-gradient(130% 42% at 50% 0%, color-mix(in oklch, var(--paywall-accent, var(--promo)) 18%, transparent), transparent 72%),
+    linear-gradient(to right, transparent 2.15rem, var(--nb-margin) 2.15rem 2.25rem, transparent 2.25rem),
+    repeating-linear-gradient(to bottom, transparent 0 1.95rem, var(--nb-rule) 1.95rem 2rem),
+    var(--nb-paper);
+  justify-items: center;
+  /* Spare height is shared out down the page, so the button sits at its foot. */
+  align-content: space-between;
+}
+
+/* A spiral binding across the top. Not in the app, where the status bar is. */
+.memo-nb-spiral {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1.9rem;
+  display: flex;
+  justify-content: space-around;
+  padding: 0 0.6rem;
+  pointer-events: none;
+}
+
+.memo-nb-spiral span {
+  position: relative;
+  width: 0.9rem;
+}
+
+.memo-nb-spiral span::before {
+  content: "";
+  position: absolute;
+  left: 0.12rem;
+  top: 1rem;
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 999px;
+  background: var(--nb-hole);
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.35);
+}
+
+.memo-nb-spiral span::after {
+  content: "";
+  position: absolute;
+  left: 0.25rem;
+  top: -0.4rem;
+  width: 0.38rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--nb-steel), var(--nb-steel-light) 45%, var(--nb-steel) 75%);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.25);
+}
+
+html[data-native] .memo-nb-spiral { display: none; }
+
+/* The close button is the app's round one, top right like everywhere else in the app. */
+.memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
+  justify-content: flex-end;
+  padding-inline: 1.1rem;
+  top: calc(2.4rem + var(--memo-safe-top, 0px));
+}
+
+html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
+  top: calc(0.6rem + var(--memo-safe-top, 0px));
+}
+
+.memo-paywall-shell.memo-nb-paper .app-start-close-button {
+  width: var(--btn-round);
+  height: var(--btn-round);
+  background: color-mix(in oklch, var(--nb-paper) 80%, transparent);
+  color: var(--text);
+}
+
+.memo-paywall-shell.memo-nb-paper > :not(.app-start-dismiss-row, .memo-nb-spiral, script) {
+  width: min(100%, 24rem);
+}
+
+/* --- shared pieces -------------------------------------------------------- */
+
+.memo-nb-hand {
+  font-family: var(--font-hand), "Bradley Hand", cursive;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+/* The highlighter swiped across a phrase of the headline. */
+.memo-nb-hl {
+  padding: 0 0.22rem;
+  margin: 0 -0.22rem;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  background: linear-gradient(100deg, transparent 0 2%, var(--nb-hl, var(--nb-marker)) 4% 96%, transparent 98%) no-repeat 0 62% / 0% 52%;
+  animation: memo-nb-marker 0.75s cubic-bezier(0.6, 0, 0.3, 1) forwards 0.85s;
+}
+
+.memo-nb-title {
+  margin: 0;
+  text-align: center;
+  font-size: 1.85rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+  color: var(--text);
+}
+
+/* Pen strokes that draw themselves; every path carries pathLength="1". */
+.memo-nb-pen path {
+  fill: none;
+  stroke: var(--nb-pen, var(--promo));
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: memo-nb-draw var(--dur, 0.9s) cubic-bezier(0.6, 0, 0.3, 1) forwards var(--dl, 1s);
+}
+
+.memo-nb-pen.loop path {
+  animation: memo-nb-draw-loop var(--cyc, 5s) ease-in-out infinite var(--dl, 0s);
+}
+
+.memo-nb-tape {
+  position: absolute;
+  width: 4.6rem;
+  height: 1.35rem;
+  z-index: 3;
+  opacity: 0.92;
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.55) 0 6px, rgba(255, 255, 255, 0.3) 6px 12px),
+    var(--tape, var(--nb-tape-yellow));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* The handwritten checklist under a headline, ticked in pen. */
+.memo-nb-checks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.2rem 1.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-nb-checks li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 1.42rem;
+  line-height: 1;
+  color: var(--text);
+}
+
+.memo-nb-checks svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex: none;
+  overflow: visible;
+  --nb-pen: var(--nb-good);
+}
+
+/* The discount, on a coupon taped to the page. */
+.memo-nb-ticket-wrap {
+  position: relative;
+  justify-self: center;
+  width: auto !important;
+  filter: drop-shadow(0 14px 20px color-mix(in oklch, var(--promo) 38%, transparent));
+  animation: memo-nb-ticket 0.85s cubic-bezier(0.2, 1.35, 0.4, 1) both 0.45s;
+}
+
+.memo-nb-ticket {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: auto 2px auto;
+  align-items: center;
+  gap: 1rem;
+  height: 5.4rem;
+  padding: 0 1.6rem;
+  border-radius: 18px;
+  color: var(--on-promo);
+  background: radial-gradient(120% 140% at 0% 0%, color-mix(in oklch, var(--promo) 55%, white) 0%, transparent 55%), var(--coral);
+  -webkit-mask:
+    radial-gradient(circle 12px at 0 50%, transparent 11.5px, #000 12px) left / 51% 100% no-repeat,
+    radial-gradient(circle 12px at 100% 50%, transparent 11.5px, #000 12px) right / 51% 100% no-repeat;
+  mask:
+    radial-gradient(circle 12px at 0 50%, transparent 11.5px, #000 12px) left / 51% 100% no-repeat,
+    radial-gradient(circle 12px at 100% 50%, transparent 11.5px, #000 12px) right / 51% 100% no-repeat;
+}
+
+.memo-nb-ticket::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.45) 50%, transparent 65%);
+  transform: translateX(-130%);
+  animation: memo-nb-sheen 3.6s ease-in-out infinite 1.6s;
+}
+
+.memo-nb-ticket-num { font-size: 3.2rem; font-weight: 900; letter-spacing: -0.05em; line-height: 1; }
+.memo-nb-ticket-cut { width: 2px; height: 3.6rem; background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.7) 0 6px, transparent 6px 11px); }
+.memo-nb-ticket-off { display: grid; line-height: 1.05; }
+.memo-nb-ticket-off b { font-size: 1.35rem; font-weight: 900; letter-spacing: 0.04em; }
+.memo-nb-ticket-off span { font-size: 0.78rem; font-weight: 700; opacity: 0.9; }
+.memo-nb-ticket-wrap > .memo-nb-tape { left: -0.9rem; top: -0.5rem; rotate: -32deg; width: 3.8rem; }
+
+/* --- plans on sticky notes --------------------------------------------------- */
+
+.memo-nb-plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  padding-top: 1.1rem;
+}
+
+.memo-nb-plan {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 0.12rem;
+  min-height: 8rem;
+  padding: 1.35rem 0.9rem 0.85rem;
+  border: 0;
+  border-radius: 12px 12px 12px 22px;
+  text-align: left;
+  color: var(--nb-note-ink);
+  background: var(--note, var(--nb-note-yellow));
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.06), 0 12px 20px -6px rgba(60, 40, 0, 0.28), inset 0 -18px 22px -18px rgba(120, 80, 0, 0.18);
+  transform: rotate(var(--tilt, -2deg));
+  transition: transform 0.35s cubic-bezier(0.3, 1.5, 0.5, 1), box-shadow 0.3s ease;
+  cursor: pointer;
+}
+
+.memo-nb-plan:nth-child(2) { --note: var(--nb-note-pink); --tilt: 2deg; }
+.memo-nb-plan:hover { box-shadow: 0 1px 1px rgba(0, 0, 0, 0.06), 0 12px 20px -6px rgba(60, 40, 0, 0.28), inset 0 0 0 1px var(--hover-ring); }
+.memo-nb-plan:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+.memo-nb-plan.selected { transform: rotate(0deg) scale(1.04); box-shadow: 0 1px 1px rgba(0, 0, 0, 0.06), 0 18px 28px -8px rgba(60, 40, 0, 0.34), inset 0 -18px 22px -18px rgba(120, 80, 0, 0.18); }
+.memo-nb-plan:disabled { cursor: default; }
+.memo-nb-plan > .memo-nb-tape { left: 50%; top: -0.6rem; translate: -50% 0; rotate: -3deg; }
+.memo-nb-plan:has(.memo-nb-badge) > .memo-nb-tape { left: 0.5rem; top: -0.25rem; translate: 0 0; rotate: -34deg; width: 3.6rem; }
+
+.memo-nb-badge {
+  position: absolute;
+  right: -0.6rem;
+  top: -0.9rem;
+  z-index: 6;
+  rotate: 5deg;
+  height: 1.4rem;
+  padding: 0 0.62rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--on-promo);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: linear-gradient(110deg, var(--promo) 0%, var(--promo) 40%, color-mix(in oklch, var(--promo) 45%, white) 50%, var(--promo) 60%, var(--promo) 100%);
+  background-size: 250% 100%;
+  animation: memo-nb-shimmer 3.2s linear infinite;
+  box-shadow: 0 4px 10px color-mix(in oklch, var(--promo) 35%, transparent);
+}
+
+.memo-nb-plan-name { font-size: 0.95rem; font-weight: 800; }
+.memo-nb-plan-name > .memo-nb-pen { width: 1rem; height: 1rem; margin-right: 0.25rem; vertical-align: -0.1rem; overflow: visible; --nb-pen: var(--nb-good); }
+.memo-nb-save { display: inline-flex; margin-left: 0.35rem; height: 1.25rem; align-items: center; padding: 0 0.45rem; border-radius: 999px; background: var(--nb-good-tint); color: var(--nb-good); font-size: 0.7rem; font-weight: 800; vertical-align: 1px; }
+.memo-nb-plan-was { position: relative; justify-self: start; margin-top: 0.3rem; font-size: 0.82rem; font-weight: 600; color: var(--nb-note-muted); text-decoration: none; }
+.memo-nb-plan-was::after { content: ""; position: absolute; left: -2px; right: -2px; top: 52%; height: 2px; border-radius: 2px; background: var(--promo); transform-origin: 0 50%; animation: memo-nb-strike 0.5s ease-out both 1.1s; }
+.memo-nb-plan-price { margin-top: 0.3rem; font-size: 1.62rem; font-weight: 850; letter-spacing: -0.04em; line-height: 1.05; }
+.memo-nb-plan-price small { font-size: 0.75rem; font-weight: 600; letter-spacing: 0; color: var(--nb-note-muted); }
+.memo-nb-plan-detail { font-size: 0.75rem; line-height: 1.3; color: var(--nb-note-muted); text-wrap: balance; }
+
+/* The pen circle round the chosen note: drawn in, slightly lopsided. */
+.memo-nb-circle {
+  position: absolute;
+  left: -0.8rem;
+  top: -0.8rem;
+  width: calc(100% + 1.6rem);
+  height: calc(100% + 1.75rem);
+  display: none;
+  pointer-events: none;
+  overflow: visible;
+  rotate: -1.5deg;
+  z-index: 5;
+}
+
+.memo-nb-plan.selected .memo-nb-circle { display: block; }
+.memo-nb-circle path { stroke-width: 3; --dl: 0s; --dur: 0.6s; }
+
+/* --- reassurance, the button, the timeline ------------------------------------ */
+
+.memo-nb-due {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--nb-good);
+}
+
+/* The app's paywall button (.memo-paywall-cta), breathing, with a sheen across it. */
+.memo-paywall-shell.memo-nb-paper .memo-paywall-cta,
+.memo-nb-cta {
+  position: relative;
+  overflow: hidden;
+  animation: memo-nb-breathe 2.8s ease-in-out infinite;
+}
+
+.memo-paywall-shell.memo-nb-paper .memo-paywall-cta::after,
+.memo-nb-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.45) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: memo-nb-sheen 3.4s ease-in-out infinite 1.2s;
+  pointer-events: none;
+}
+
+.memo-nb-timeline {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 0.25rem 0 0;
+  list-style: none;
+}
+
+.memo-nb-timeline::before,
+.memo-nb-timeline::after {
+  content: "";
+  position: absolute;
+  left: 16.6%;
+  right: 16.6%;
+  top: 1.05rem;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--track);
+}
+
+.memo-nb-timeline::after {
+  background: linear-gradient(90deg, var(--promo), color-mix(in oklch, var(--promo) 30%, transparent));
+  transform-origin: 0 50%;
+  animation: memo-nb-fill 1.6s cubic-bezier(0.3, 0.7, 0.3, 1) both 0.9s;
+}
+
+.memo-nb-timeline li { position: relative; z-index: 1; display: grid; justify-items: center; text-align: center; gap: 0.3rem; }
+.memo-nb-timeline .msym { width: 1.9rem; height: 1.9rem; border-radius: 999px; display: grid; place-items: center; background: var(--sunken); color: var(--muted); box-shadow: 0 0 0 4px var(--nb-paper); }
+.memo-nb-timeline li:first-child .msym { background: var(--promo); color: var(--on-promo); animation: memo-nb-ping 2.2s ease-out infinite 1.6s; }
+.memo-nb-timeline b { font-size: 0.78rem; font-weight: 800; }
+.memo-nb-timeline span:last-child { font-size: 0.72rem; color: var(--muted); }
+
+/* --- the plain paywall's deck of cards ------------------------------------------- */
+
+.memo-nb-deck {
+  position: relative;
+  height: 13.2rem;
+}
+
+.memo-nb-deck > * { position: absolute; }
+
+.memo-nb-deck-stage {
+  position: absolute;
+  left: 50%;
+  top: 1.4rem;
+  width: 15.6rem;
+  height: 10.2rem;
+  margin-left: -7.8rem;
+}
+
+.memo-nb-card {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  display: grid;
+  grid-template-columns: 3.6rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.9rem;
+  padding: 2rem 1.25rem 1rem;
+  overflow: hidden;
+  color: var(--nb-note-ink);
+  background-color: var(--nb-index-card);
+  background-image:
+    linear-gradient(to bottom, transparent 1.4rem, var(--nb-margin) 1.4rem 1.5rem, transparent 1.5rem),
+    repeating-linear-gradient(to bottom, transparent 0 2.95rem, rgba(0, 0, 0, 0.07) 2.95rem 3rem, transparent 3rem 4.5rem);
+  box-shadow: 0 18px 30px -10px rgba(60, 40, 10, 0.38), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.memo-nb-card.base { transform: rotate(var(--r)) translate(var(--x), var(--y)); }
+.memo-nb-card.deal { opacity: 0; animation: memo-nb-deal 10s cubic-bezier(0.3, 1.2, 0.4, 1) infinite calc(var(--i) * 2.5s); }
+.memo-nb-card .memo-nb-icon { width: 3.6rem; height: 3.6rem; border-radius: 18px; font-size: 2rem; }
+.memo-nb-card .memo-nb-hand { min-width: 0; font-size: 1.5rem; line-height: 1.05; text-wrap: balance; overflow-wrap: anywhere; }
+.memo-nb-deck-stage > .memo-nb-tape { left: 50%; top: -0.6rem; translate: -50% 0; rotate: -3deg; z-index: 5; }
+.memo-nb-deck .memo-nb-memo { left: auto; right: -0.5rem; top: 7.6rem; width: 6rem; z-index: 6; }
+.memo-nb-dots { position: absolute; left: 50%; top: 12.4rem; display: flex; gap: 7px; translate: -50% 0; }
+.memo-nb-dots span { width: 7px; height: 7px; border-radius: 999px; background: color-mix(in oklch, var(--text) 18%, transparent); animation: memo-nb-dot 10s steps(1) infinite calc(var(--i) * 2.5s); }
+
+/* An icon on a glossy tile in a feature's colour. */
+.memo-nb-icon {
+  display: grid;
+  place-items: center;
+  color: var(--on-promo);
+  background: radial-gradient(circle at 30% 25%, color-mix(in oklch, var(--t) 60%, white), var(--t) 70%);
+  box-shadow: 0 10px 20px color-mix(in oklch, var(--t) 45%, transparent);
+}
+
+/* --- the feature scenes (paywall-hero.tsx) ---------------------------------------- */
+
+.memo-nb-hero {
+  position: relative;
+  height: 15rem;
+  width: min(100%, 24rem);
+  pointer-events: none;
+}
+
+.memo-nb-hero > * { position: absolute; }
+
+/* Memo, the mascot, in any scene: bobbing on his own shadow. */
+.memo-nb-memo { width: 6rem; }
+.memo-nb-memo img { display: block; width: 100%; height: auto; animation: memo-nb-bob 3.4s ease-in-out infinite; filter: drop-shadow(0 12px 18px rgba(80, 20, 50, 0.16)); }
+.memo-nb-memo::after { content: ""; position: absolute; left: 22%; right: 22%; bottom: -0.55rem; height: 0.7rem; border-radius: 999px; background: rgba(0, 0, 0, 0.12); filter: blur(4px); animation: memo-nb-shadow 3.4s ease-in-out infinite; }
+.memo-nb-memo.wave img { animation: memo-nb-wave 2.6s ease-in-out infinite; transform-origin: 50% 90%; }
+
+/* A round sticker beside Memo saying what he is doing. */
+.memo-nb-badge-round {
+  z-index: 7;
+  width: 2.7rem;
+  height: 2.7rem;
+  border-radius: 999px;
+  font-size: 1.5rem;
+  rotate: 12deg;
+  box-shadow: 0 0 0 4px var(--nb-sticker), 0 10px 18px -4px rgba(0, 0, 0, 0.28);
+  animation: memo-nb-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both 0.6s, memo-nb-float 3.2s ease-in-out infinite 1.1s;
+}
+
+.memo-nb-spark { width: 0.85rem; height: 0.85rem; color: var(--paywall-accent, var(--promo)); animation: memo-nb-twinkle 2.4s ease-in-out infinite calc(var(--d, 0) * -0.6s); }
+.memo-nb-spark::before, .memo-nb-spark::after { content: ""; position: absolute; left: 50%; top: 50%; background: currentColor; border-radius: 2px; translate: -50% -50%; }
+.memo-nb-spark::before { width: 100%; height: 3px; }
+.memo-nb-spark::after { width: 3px; height: 100%; }
+
+/* New note: sources fly into a page that writes itself, the study tools pop out. */
+.memo-nb-src { width: 2.9rem; height: 2.9rem; border-radius: 16px; font-size: 1.5rem; animation: memo-nb-src 6s ease-in-out infinite calc(var(--i) * 0.35s); }
+.memo-nb-packet { width: 10px; height: 10px; border-radius: 999px; background: var(--t); box-shadow: 0 0 10px var(--t); opacity: 0; animation: memo-nb-packet 6s cubic-bezier(0.5, 0, 0.3, 1) infinite calc(var(--i) * 0.35s); }
+.memo-nb-write-title { font-size: 2.6rem; line-height: 1; color: var(--text); clip-path: inset(0 100% 0 0); animation: memo-nb-handwrite 6s steps(14) infinite; }
+.memo-nb-bar { height: 9px; border-radius: 9px; background: color-mix(in oklch, var(--text) 18%, transparent); transform-origin: 0 50%; transform: scaleX(0); animation: memo-nb-write 6s cubic-bezier(0.5, 0, 0.3, 1) infinite calc(var(--i) * 0.28s); }
+.memo-nb-bar.mark { height: 12px; background: var(--nb-marker); }
+.memo-nb-bar.ink { background: color-mix(in oklch, var(--promo) 55%, transparent); }
+.memo-nb-out { width: 2.75rem; height: 2.75rem; border-radius: 15px; font-size: 1.4rem; opacity: 0; animation: memo-nb-out 6s cubic-bezier(0.3, 1.5, 0.5, 1) infinite calc(var(--i) * 0.18s); }
+
+/* An older note: shake the lock, open it, the notes fan out of the blur. */
+.memo-nb-halo { left: 50%; top: 52%; width: 18rem; height: 18rem; translate: -50% -50%; border-radius: 999px; background: radial-gradient(closest-side, color-mix(in oklch, var(--nb-gold) 75%, transparent), color-mix(in oklch, var(--nb-gold) 18%, transparent) 55%, transparent 75%); animation: memo-nb-halo 5s ease-in-out infinite; }
+.memo-nb-lockcard { left: 50%; top: 2.1rem; width: 7rem; height: 9rem; margin-left: -3.5rem; border-radius: 18px; padding: 0.9rem 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; background: var(--surface); box-shadow: 0 16px 30px rgba(0, 0, 0, 0.14), inset 0 0 0 1px var(--line); transform-origin: 50% 140%; animation: memo-nb-lockcard 5s cubic-bezier(0.3, 1.25, 0.4, 1) infinite; }
+.memo-nb-lockcard .memo-nb-icon { width: 2rem; height: 2rem; border-radius: 12px; font-size: 1.2rem; }
+.memo-nb-line { display: block; height: 7px; border-radius: 7px; background: var(--track); }
+.memo-nb-line.tinted { background: color-mix(in oklch, var(--t) 45%, var(--track)); }
+.memo-nb-lock { left: 50%; top: 6.5rem; width: 7.4rem; height: 8.75rem; margin-left: -3.7rem; overflow: visible; filter: drop-shadow(0 16px 22px color-mix(in oklch, var(--nb-gold-dark) 45%, transparent)); animation: memo-nb-lock 5s ease-in-out infinite; transform-origin: 50% 60%; }
+.memo-nb-shackle { transform-box: fill-box; transform-origin: 100% 100%; animation: memo-nb-shackle 5s cubic-bezier(0.3, 1.5, 0.5, 1) infinite; }
+.memo-nb-keyhole { animation: memo-nb-keyhole 5s ease-in-out infinite; }
+
+.memo-nb-burst { left: 50%; top: 50%; width: 0; height: 0; }
+.memo-nb-burst i { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 2px; background: var(--c, var(--nb-gold)); transform: rotate(var(--a)) translateY(0) scale(0); animation: memo-nb-burst var(--cyc, 5s) ease-out infinite var(--dl, 0s); }
+
+/* Chat: a question, Memo typing, the answer. */
+.memo-nb-bubble { max-width: 14rem; padding: 0.68rem 0.95rem; border-radius: 18px; font-size: 0.92rem; line-height: 1.3; font-weight: 600; }
+.memo-nb-bubble.mine { right: 1.6rem; top: 0.9rem; background: var(--paywall-accent, var(--promo)); color: var(--on-promo); border-bottom-right-radius: 12px; animation: memo-nb-seq-q 6s ease infinite; }
+.memo-nb-bubble.theirs { left: 7rem; top: 4.9rem; background: var(--surface); color: var(--text); border-bottom-left-radius: 12px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08); animation: memo-nb-seq-a 6s ease infinite; }
+.memo-nb-bubble.theirs mark { background: var(--nb-marker); color: inherit; border-radius: 4px; padding: 0 3px; }
+.memo-nb-typing { left: 7rem; top: 4.9rem; display: flex; gap: 4px; padding: 0.75rem 0.9rem; border-radius: 18px; border-bottom-left-radius: 12px; background: var(--surface); animation: memo-nb-seq-typing 6s ease infinite; }
+.memo-nb-typing span { width: 7px; height: 7px; border-radius: 999px; background: var(--muted); animation: memo-nb-typing 1s ease-in-out infinite calc(var(--i) * 0.15s); }
+
+/* Read-aloud: a card read line by line, the sound reaching Memo. */
+.memo-nb-readcard { left: 1.4rem; top: 1.4rem; width: 14rem; height: 11.6rem; padding: 1.5rem 1.1rem 0.9rem; border-radius: 12px; display: grid; align-content: start; gap: 0.8rem; color: var(--nb-note-ink); background: var(--nb-index-card); rotate: -3deg; box-shadow: 0 18px 30px -10px rgba(60, 40, 10, 0.38); }
+.memo-nb-readcard .memo-nb-hand { font-size: 2rem; line-height: 1; }
+.memo-nb-readline { position: relative; height: 11px; border-radius: 11px; background: rgba(0, 0, 0, 0.08); overflow: hidden; }
+.memo-nb-readline::after { content: ""; position: absolute; inset: 0; border-radius: 11px; background: color-mix(in oklch, var(--paywall-accent, var(--promo)) 45%, var(--nb-index-card)); transform-origin: 0 50%; transform: scaleX(0); animation: memo-nb-read 7s linear infinite calc(var(--i) * 1.2s); }
+
+/* Tutor: Memo speaking in a drawn bubble, the learner's turn at the mic. */
+.memo-nb-wave { display: flex; align-items: center; gap: 4px; height: 2.9rem; }
+.memo-nb-wave span { width: 4px; height: 100%; border-radius: 4px; background: var(--paywall-accent, var(--promo)); animation: memo-nb-bar 1.1s ease-in-out infinite calc(var(--i) * -0.13s); }
+.memo-nb-mic { width: 3.9rem; height: 3.9rem; border-radius: 999px; font-size: 1.9rem; color: var(--on-promo); background: var(--coral); box-shadow: 0 12px 24px color-mix(in oklch, var(--promo) 40%, transparent); animation: memo-nb-orb 2.4s ease-in-out infinite; }
+.memo-nb-ring { width: 3.9rem; height: 3.9rem; border-radius: 999px; border: 2px solid var(--promo); opacity: 0; animation: memo-nb-ring 2.4s ease-out infinite calc(var(--i) * 0.8s); }
+
+/* Podcast: a cassette, its reels turning. */
+.memo-nb-cassette { left: 4.4rem; top: 1.9rem; width: 15.6rem; height: 10rem; border-radius: 18px; rotate: -4deg; background: linear-gradient(160deg, color-mix(in oklch, var(--nb-dynamite) 70%, white), var(--nb-dynamite) 70%, color-mix(in oklch, var(--nb-dynamite) 80%, black)); box-shadow: 0 22px 36px -10px color-mix(in oklch, var(--nb-dynamite) 50%, transparent), inset 0 2px 0 rgba(255, 255, 255, 0.3); animation: memo-nb-pop 0.6s cubic-bezier(0.3, 1.5, 0.5, 1) both 0.2s, memo-nb-float 4.4s ease-in-out infinite; }
+.memo-nb-cassette::before { content: ""; position: absolute; inset: 8px; border-radius: 12px; border: 1.5px dashed rgba(255, 255, 255, 0.35); }
+.memo-nb-cassette-label { position: absolute; left: 1.1rem; right: 1.1rem; top: 1rem; height: 2.75rem; border-radius: 12px; display: grid; place-items: center; color: var(--nb-note-ink); font-size: 1.5rem; background: linear-gradient(to bottom, transparent 1.9rem, var(--nb-margin) 1.9rem 2rem, transparent 2rem), var(--nb-paper-end); }
+.memo-nb-cassette-window { position: absolute; left: 2.5rem; right: 2.5rem; top: 4.4rem; height: 3.1rem; border-radius: 999px; display: flex; align-items: center; justify-content: space-between; padding: 0 0.5rem; background: var(--nb-ink-dark); box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.5); }
+.memo-nb-reel { position: relative; z-index: 1; width: 2.4rem; height: 2.4rem; border-radius: 999px; background: radial-gradient(circle, var(--nb-ink-dark) 0 18%, transparent 19%), repeating-conic-gradient(var(--nb-paper-end) 0 30deg, var(--nb-steel) 30deg 60deg); box-shadow: 0 0 0 3px var(--nb-ink-metal); animation: memo-nb-spin 1.8s linear infinite; }
+.memo-nb-band { position: absolute; left: 30px; right: 30px; top: 50%; height: 16px; margin-top: -8px; border-radius: 12px; background: var(--nb-ink-metal); }
+.memo-nb-note-glyph { font-size: 1.8rem; color: var(--paywall-accent, var(--promo)); animation: memo-nb-float 3s ease-in-out infinite calc(var(--i) * -1s); }
+.memo-nb-eq { display: flex; align-items: center; gap: 4px; height: 3.5rem; }
+.memo-nb-eq span { width: 5px; height: 100%; border-radius: 5px; background: linear-gradient(to top, color-mix(in oklch, var(--paywall-accent, var(--promo)) 60%, white), var(--paywall-accent, var(--promo))); transform: scaleY(0.15); animation: memo-nb-eq 1.3s ease-in-out infinite calc(var(--i) * -0.09s); }
+
+/* New practice: an index card flips, the next is dealt. */
+.memo-nb-index { width: 12.5rem; height: 8rem; left: 50%; margin-left: -6.25rem; border-radius: 12px; color: var(--nb-note-ink); background-color: var(--nb-index-card); background-image: linear-gradient(to bottom, transparent 1.9rem, var(--nb-margin) 1.9rem 2rem, transparent 2rem), repeating-linear-gradient(to bottom, transparent 0 3.2rem, rgba(0, 0, 0, 0.07) 3.2rem 3.25rem, transparent 3.25rem 4.5rem); box-shadow: 0 14px 26px -6px rgba(40, 30, 10, 0.3); }
+.memo-nb-index.flip { animation: memo-nb-flip 4.8s cubic-bezier(0.5, 0, 0.3, 1) infinite; }
+.memo-nb-face { position: absolute; inset: 0; display: grid; place-items: center; padding: 2.2rem 1rem 0.75rem; text-align: center; }
+.memo-nb-face.front { font-size: 2.1rem; animation: memo-nb-face-a 4.8s steps(1) infinite; }
+.memo-nb-face.back { font-size: 0.92rem; font-weight: 750; color: color-mix(in oklch, var(--paywall-accent, var(--promo)) 70%, black); animation: memo-nb-face-b 4.8s steps(1) infinite; }
+.memo-nb-renew { width: 2.9rem; height: 2.9rem; border-radius: 999px; font-size: 1.6rem; animation: memo-nb-spin 2.6s linear infinite; }
+
+/* Asking across notes: three subjects feed one answer. */
+.memo-nb-subject { width: 6.5rem; height: 4.75rem; padding: 0.9rem 0.75rem 0.6rem; border-radius: 12px 12px 12px 22px; display: grid; align-content: start; gap: 0.38rem; color: var(--nb-note-ink); background: var(--note); box-shadow: 0 12px 18px -6px rgba(60, 40, 0, 0.28); animation: memo-nb-pop 0.5s cubic-bezier(0.3, 1.5, 0.5, 1) both calc(var(--d) * 120ms + 200ms), memo-nb-float 4.2s ease-in-out infinite calc(var(--d) * -1.2s); }
+.memo-nb-subject .memo-nb-hand { font-size: 1.38rem; line-height: 1; }
+.memo-nb-subject i { display: block; height: 5px; border-radius: 5px; background: rgba(0, 0, 0, 0.12); }
+.memo-nb-subject > .memo-nb-tape { left: 50%; top: -0.55rem; translate: -50% 0; width: 2.9rem; height: 1rem; rotate: -4deg; }
+/* Exam prep: a week on a calendar page, study days ticked, the exam day circled. */
+.memo-nb-cal { width: 12.5rem; padding: 0 0.7rem 0.8rem; border-radius: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; color: var(--nb-note-ink); background: var(--nb-index-card); box-shadow: 0 14px 26px -6px rgba(40, 30, 10, 0.3); rotate: -3deg; animation: memo-nb-pop 0.5s cubic-bezier(0.3, 1.5, 0.5, 1) both 0.15s; }
+.memo-nb-cal > .memo-nb-tape { position: absolute; left: 50%; top: -0.6rem; translate: -50% 0; rotate: 4deg; z-index: 2; }
+.memo-nb-cal-head { grid-column: 1 / -1; height: 1.7rem; margin: 0 -0.7rem 0.3rem; border-radius: 14px 14px 0 0; background: var(--paywall-accent, var(--promo)); }
+.memo-nb-cal-day { position: relative; height: 2.5rem; display: grid; place-items: center; border-radius: 12px; font-size: 1rem; font-weight: 800; background: var(--nb-cal-cell); }
+.memo-nb-cal-day.done { color: var(--nb-note-muted); }
+.memo-nb-cal-day > .memo-nb-pen { position: absolute; right: -0.25rem; bottom: -0.2rem; width: 1.3rem; height: 1.3rem; overflow: visible; }
+.memo-nb-cal-day.exam { color: var(--promo); }
+.memo-nb-cal-day > .memo-nb-cal-ring { inset: -0.5rem -0.55rem; right: -0.55rem; bottom: -0.5rem; width: auto; height: auto; }
+.memo-nb-cal-ring path { vector-effect: non-scaling-stroke; stroke-width: 2.6; }
+.memo-nb-cal-flag { width: 2.6rem; height: 2.6rem; border-radius: 999px; font-size: 1.3rem; rotate: 10deg; animation: memo-nb-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both 2.9s, memo-nb-wobble 2.4s ease-in-out infinite 3.4s; }
+.memo-nb-cal-note { font-size: 1.6rem; color: var(--promo); rotate: -6deg; animation: memo-nb-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both 3.1s; }
+.memo-nb-answer { left: 3.1rem; top: 9.4rem; width: 18rem; height: 3.9rem; padding: 0 0.9rem 0 0.6rem; border-radius: 20px; display: flex; align-items: center; gap: 0.75rem; background: var(--surface); box-shadow: 0 14px 28px -8px rgba(0, 0, 0, 0.22), inset 0 0 0 1px var(--line); }
+.memo-nb-answer img { width: 2.25rem; height: auto; }
+.memo-nb-answer .memo-nb-bar { position: static; }
+.memo-nb-cite { width: 12px; height: 12px; border-radius: 999px; background: var(--c); animation: memo-nb-node 3s ease-in-out infinite calc(var(--i) * 0.4s); }
+
+/* The browsing offer: the earlier prices, taped up and struck out in turn. */
+.memo-nb-tag { display: block; padding: 0.75rem 1.1rem; border-radius: 12px; background: var(--surface); box-shadow: 0 10px 18px -6px rgba(40, 30, 10, 0.3); font-size: 1.25rem; font-weight: 850; color: var(--muted); animation: memo-nb-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) both calc(var(--i) * 0.2s + 0.15s); }
+.memo-nb-tag > span { position: relative; display: inline-block; }
+.memo-nb-tag svg { position: absolute; left: -6px; top: 50%; width: calc(100% + 12px); height: 12px; margin-top: -5px; overflow: visible; }
+.memo-nb-tag svg path { stroke-width: 3; }
+.memo-nb-tag > .memo-nb-tape { left: 1.4rem; top: -0.7rem; width: 2.9rem; height: 1.1rem; }
+
+/* --- the wheel (discount-offer.tsx) ----------------------------------------------- */
+
+/* The sheets' own grounds are declared twice over elsewhere; the paper wins over both. */
+.memo-sheet-full.memo-nb-paper.memo-nb-paper {
+  background:
+    radial-gradient(120% 40% at 50% 0%, color-mix(in oklch, var(--promo) 14%, transparent), transparent 70%),
+    linear-gradient(to right, transparent 2.15rem, var(--nb-margin) 2.15rem 2.25rem, transparent 2.25rem),
+    repeating-linear-gradient(to bottom, transparent 0 1.95rem, var(--nb-rule) 1.95rem 2rem),
+    var(--nb-paper);
+}
+
+.memo-offer-body .memo-nb-ticket-wrap { margin-top: 1.5rem; }
+.memo-offer-sheet.memo-nb-paper .memo-offer-plans { margin-top: 0; padding-top: 1.6rem; }
+.memo-offer-body .memo-nb-title { margin-top: 0.9rem; }
+
+.memo-wheel-sheet.memo-nb-paper .memo-wheel-body,
+.memo-offer-sheet.memo-nb-paper .memo-offer-body { -webkit-mask-image: none; mask-image: none; }
+
+.memo-wheel-sheet .memo-wheel-disc {
+  background:
+    radial-gradient(closest-side, transparent 55%, rgba(0, 0, 0, 0.07) 100%),
+    conic-gradient(var(--promo) 0 60deg, var(--nb-paper-end) 60deg 120deg, var(--nb-tape-pink) 120deg 180deg, var(--nb-gold) 180deg 240deg, var(--nb-dynamite) 240deg 300deg, var(--nb-paper-end) 300deg 360deg);
+  box-shadow:
+    inset 0 0 0 0.55rem var(--nb-gold),
+    inset 0 0 0 0.7rem var(--nb-gold-dark),
+    0 0 0 4px var(--nb-gold-light),
+    0 18px 38px rgba(0, 0, 0, 0.26);
+}
+
+.memo-wheel-sheet .memo-wheel-slice { font-size: 1.15rem; font-weight: 900; color: var(--nb-note-ink); }
+.memo-wheel-sheet .memo-wheel-hub { background: var(--nb-index-card); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25), 0 0 0 5px var(--nb-gold), 0 0 0 7px var(--nb-gold-dark); }
+.memo-wheel-sheet .memo-wheel-pointer { border-top-color: var(--nb-gold); filter: drop-shadow(0 3px 0 var(--nb-gold-dark)) drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3)); }
+.memo-wheel-sheet .memo-wheel-rays { background: repeating-conic-gradient(color-mix(in oklch, var(--promo) 30%, transparent) 0deg 8deg, color-mix(in oklch, var(--nb-gold) 28%, transparent) 8deg 16deg, transparent 16deg 24deg); }
+
+/*
+ * The wheel is a whole page of the notebook, as drawn: spiral on top, the close
+ * button where every paywall has it, the title, a larger wheel, the button at
+ * the foot. The prize sheet is a sheet the height of what is on it.
+ */
+.memo-sheet-full.memo-wheel-sheet.memo-nb-paper { top: 0; border-radius: 0; }
+.memo-wheel-sheet.memo-nb-paper .memo-grab-wide { display: none; }
+.memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { padding: calc(2.4rem + var(--memo-safe-top, 0px)) 1.1rem 0; }
+html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { padding-top: calc(0.6rem + var(--memo-safe-top, 0px)); }
+.memo-wheel-sheet.memo-nb-paper .memo-wheel-body { padding: 0.6rem 1.25rem calc(1.15rem + var(--memo-safe-bottom, 0px)); }
+.memo-wheel-sheet.memo-nb-paper .memo-wheel-title { margin-top: 1.4rem; font-size: 2.25rem; line-height: 1.12; }
+:where(.memo-wheel-sheet.memo-nb-paper) .memo-wheel { --z: 1.24; }
+.memo-wheel-sheet.memo-nb-paper .memo-nb-tap { margin-top: auto; align-self: stretch; }
+.memo-wheel-sheet.memo-nb-paper .memo-wheel-cta { width: 100%; }
+.memo-wheel-prize.memo-nb-off { display: none; }
+/* The coupon is taller than the title it replaces; it hangs into the gap above the wheel so the wheel does not move as it lands. */
+.memo-wheel-sheet.memo-nb-paper .memo-nb-ticket-wrap { margin: 0.2rem 0 -1.7rem; }
+/* Once won, the coupon says it; the "up to" sticker would only crowd it. */
+.memo-wheel.won .memo-nb-starburst { filter: opacity(0); scale: 0.6; transition: filter 0.3s ease, scale 0.3s ease; }
+/* Every notebook button is the paywall's: 4rem, 20px corners, the heavy label. */
+:is(.memo-wheel-sheet, .memo-offer-sheet).memo-nb-paper :is(.memo-wheel-cta, .memo-offer-cta),
+.memo-nb-minutes .memo-tutor-start { height: 4rem; border-radius: 20px; font-size: 1.15rem; font-weight: 900; letter-spacing: -0.01em; }
+.memo-wheel-sheet.memo-nb-paper .memo-wheel-cta { margin-top: auto; }
+.memo-wheel-sheet.memo-nb-paper .memo-nb-tap + .memo-wheel-cta { margin-top: 0.4rem; }
+.memo-sheet-full.memo-offer-sheet.memo-nb-paper { top: auto; max-height: calc(var(--memo-vv, 100vh) - 3.5rem - var(--memo-safe-top, 0px)); }
+
+/* The wheel stands on a gold base, its shadow on the page. */
+.memo-nb-stand {
+  position: absolute;
+  left: 50%;
+  bottom: -2.4rem;
+  z-index: -1;
+  width: 7.5rem;
+  height: 3.4rem;
+  margin-left: -3.75rem;
+  clip-path: polygon(30% 0, 70% 0, 100% 100%, 0 100%);
+  background: linear-gradient(90deg, var(--nb-gold-dark), var(--nb-gold-light) 45%, var(--nb-gold-deep) 70%, var(--nb-gold-dark));
+  filter: drop-shadow(0 10px 8px rgba(60, 30, 0, 0.2));
+}
+
+/* The web's wheel says what it is in its title; the app keeps its line about Apple's offer. */
+html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibility: hidden; height: 0.6rem; margin: 0; }
+.memo-wheel-sheet.memo-nb-paper .memo-wheel { margin: 1.8rem 0 2.6rem; isolation: isolate; }
+
+.memo-nb-starburst {
+  position: absolute;
+  right: -1.6rem;
+  top: -1.4rem;
+  z-index: 4;
+  width: 5.6rem;
+  height: 5.6rem;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: var(--nb-gold-dark);
+  background: radial-gradient(circle at 35% 30%, var(--nb-gold-light), var(--nb-gold) 45%, var(--nb-gold-deep));
+  clip-path: polygon(50% 0%, 57.8% 10.8%, 69.1% 3.8%, 72.2% 16.7%, 85.4% 14.6%, 83.3% 27.8%, 96.2% 30.9%, 89.2% 42.2%, 100% 50%, 89.2% 57.8%, 96.2% 69.1%, 83.3% 72.2%, 85.4% 85.4%, 72.2% 83.3%, 69.1% 96.2%, 57.8% 89.2%, 50% 100%, 42.2% 89.2%, 30.9% 96.2%, 27.8% 83.3%, 14.6% 85.4%, 16.7% 72.2%, 3.8% 69.1%, 10.8% 57.8%, 0% 50%, 10.8% 42.2%, 3.8% 30.9%, 16.7% 27.8%, 14.6% 14.6%, 27.8% 16.7%, 30.9% 3.8%, 42.2% 10.8%);
+  animation: memo-nb-pop 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) both 0.6s, memo-nb-wobble 2.4s ease-in-out infinite 1.2s;
+  pointer-events: none;
+}
+
+.memo-nb-starburst span { display: grid; line-height: 0.95; }
+.memo-nb-starburst small { font-size: 0.62rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.memo-nb-starburst b { font-size: 1.5rem; font-weight: 900; letter-spacing: -0.04em; }
+
+/* Memo beside the wheel, with something to say: hops, leans while it spins, jumps for joy. */
+.memo-nb-cheer {
+  position: absolute;
+  left: -2.4rem;
+  bottom: -1.2rem;
+  z-index: 5;
+  width: 5.6rem;
+  pointer-events: none;
+  animation: memo-nb-sway 2.4s ease-in-out infinite;
+}
+
+.memo-nb-cheer img { display: block; width: 100%; height: auto; transform-origin: 50% 100%; animation: memo-nb-hop 1.1s cubic-bezier(0.3, 0, 0.3, 1) infinite; }
+.memo-wheel.spinning ~ .memo-nb-cheer img,
+.memo-nb-cheer.spinning img { animation: memo-nb-lean 0.45s ease-in-out infinite; }
+.memo-nb-cheer.won img { animation-duration: 0.6s; }
+
+.memo-nb-say {
+  position: absolute;
+  left: 0.3rem;
+  top: -2.6rem;
+  white-space: nowrap;
+  padding: 0.35rem 0.8rem 0.5rem;
+  border-radius: 18px;
+  color: var(--nb-note-ink);
+  background: var(--nb-index-card);
+  box-shadow: 0 10px 18px -6px rgba(40, 30, 10, 0.3);
+  font-size: 1.32rem;
+  animation: memo-nb-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both 1s, memo-nb-hop-follow 1.1s cubic-bezier(0.3, 0, 0.3, 1) infinite;
+}
+
+.memo-nb-say::after { content: ""; position: absolute; left: 1.3rem; bottom: -0.45rem; width: 1rem; height: 1rem; rotate: 45deg; border-radius: 3px; background: inherit; }
+.memo-nb-cheer.spinning .memo-nb-say { animation: memo-nb-lean-follow 0.45s ease-in-out infinite; }
+.memo-nb-cheer.won .memo-nb-say { animation-duration: 0.5s, 0.6s; }
+
+.memo-nb-tap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  margin: 0.4rem 0 -0.2rem;
+  font-size: 1.55rem;
+  color: var(--promo);
+  rotate: -4deg;
+  animation: memo-nb-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both 1.8s;
+}
+
+/* --- the prize sheet's countdown: an LED timer strapped to dynamite ------------- */
+
+.memo-nb-tnt { position: relative; width: 18.75rem; height: 8rem; margin: 0.6rem auto 0; }
+.memo-nb-stick { position: absolute; left: 0; right: 0; height: 2.4rem; border-radius: 12px; background: linear-gradient(to bottom, var(--nb-dynamite-dark), color-mix(in oklch, var(--nb-dynamite) 65%, white) 20%, var(--nb-dynamite) 48%, color-mix(in oklch, var(--nb-dynamite) 80%, black) 78%, var(--nb-dynamite-dark)); box-shadow: 0 6px 10px -4px rgba(80, 10, 0, 0.45); }
+.memo-nb-stick::before, .memo-nb-stick::after { content: ""; position: absolute; top: 0; bottom: 0; width: 14px; background: linear-gradient(to bottom, var(--nb-gold-deep), var(--nb-paper-end) 35%, var(--nb-gold-light) 60%, var(--nb-gold-dark)); }
+.memo-nb-stick::before { left: 0; border-radius: 12px 3px 3px 12px; }
+.memo-nb-stick::after { right: 0; border-radius: 3px 12px 12px 3px; }
+.memo-nb-strap { position: absolute; top: 2px; bottom: 0; width: 1.75rem; border-radius: 4px; background: linear-gradient(90deg, var(--nb-ink-dark), var(--nb-ink-metal) 45%, var(--nb-ink-dark)); box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35); }
+.memo-nb-wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; z-index: 2; }
+.memo-nb-wires path { fill: none; stroke-width: 4.5; stroke-linecap: round; }
+.memo-nb-fuse { position: absolute; left: -0.9rem; top: -2.5rem; width: 3.75rem; height: 3.1rem; overflow: visible; }
+.memo-nb-fuse path { fill: none; stroke: var(--nb-gold-dark); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 3 2; }
+.memo-nb-spark-fuse { position: absolute; left: -0.5rem; top: -2.6rem; width: 18px; height: 18px; border-radius: 999px; background: radial-gradient(circle, var(--nb-steel-light) 0 20%, var(--nb-gold-light) 35%, var(--nb-gold) 60%, transparent 72%); animation: memo-nb-fizz 0.18s steps(2) infinite; }
+.memo-nb-box { position: absolute; left: 50%; top: 50%; translate: -50% -50%; z-index: 3; display: flex; align-items: center; gap: 0.9rem; padding: 0.85rem 1rem; border-radius: 18px; background: linear-gradient(160deg, var(--nb-ink-metal), var(--nb-ink-dark)); box-shadow: 0 16px 28px -8px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.18); animation: memo-nb-jolt 1s ease-out infinite; }
+.memo-nb-screen { position: relative; padding: 0.4rem 0.85rem 0.3rem; border-radius: 12px; background: var(--nb-led-glass); box-shadow: inset 0 3px 10px rgba(0, 0, 0, 0.9), 0 0 0 3px var(--nb-ink-dark); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 3.2rem; font-weight: 700; line-height: 1; letter-spacing: 2px; font-variant-numeric: tabular-nums; animation: memo-nb-flash 1s steps(1) infinite; }
+.memo-nb-screen .ghost { position: absolute; left: 0.85rem; top: 0.4rem; color: color-mix(in oklch, var(--nb-led) 10%, transparent); }
+.memo-nb-screen .digits { position: relative; color: var(--nb-led); text-shadow: 0 0 4px var(--nb-led), 0 0 14px color-mix(in oklch, var(--nb-led) 80%, transparent); }
+.memo-nb-screen .colon { animation: memo-nb-blink 1s steps(1) infinite; }
+.memo-nb-leds { display: grid; gap: 0.5rem; }
+.memo-nb-leds i { width: 12px; height: 12px; border-radius: 999px; background: var(--nb-dynamite-dark); }
+.memo-nb-leds i:first-child { background: var(--nb-led); box-shadow: 0 0 10px var(--nb-led); animation: memo-nb-blink 0.5s steps(1) infinite; }
+.memo-nb-leds i:nth-child(2) { background: var(--nb-good); box-shadow: 0 0 8px var(--nb-good); }
+
+/* --- the minutes sheet: an empty battery, and one that charges -------------------- */
+
+.memo-nb-batteries { position: relative; display: flex; align-items: center; justify-content: center; gap: 1rem; margin: 1.2rem 0 0.4rem; }
+.memo-nb-battery-col { display: grid; justify-items: center; gap: 0.5rem; }
+.memo-nb-battery-col .memo-nb-hand { font-size: 1.5rem; line-height: 1; }
+.memo-nb-battery { position: relative; width: 7.75rem; height: 4rem; padding: 5px; border: 4px solid var(--text); border-radius: 16px; background: var(--surface); }
+.memo-nb-battery::after { content: ""; position: absolute; right: -11px; top: 50%; width: 7px; height: 20px; margin-top: -10px; border-radius: 0 5px 5px 0; background: var(--text); }
+.memo-nb-battery > span:first-child { display: block; height: 100%; border-radius: 12px; }
+.memo-nb-battery.empty { rotate: -3deg; }
+.memo-nb-battery.empty > span:first-child { width: 12%; background: var(--danger); animation: memo-nb-blink 1s steps(1) infinite; }
+.memo-nb-battery.full { rotate: 2deg; box-shadow: 0 10px 24px -6px color-mix(in oklch, var(--promo) 45%, transparent); }
+.memo-nb-battery.full > span:first-child { width: 100%; background: var(--coral); transform-origin: 0 50%; animation: memo-nb-charge 2.6s cubic-bezier(0.5, 0, 0.3, 1) infinite; }
+.memo-nb-battery .memo-nb-icon { position: absolute; right: -1rem; top: -1rem; width: 2rem; height: 2rem; border-radius: 999px; font-size: 1.25rem; --t: var(--promo); box-shadow: 0 0 0 3px var(--surface); animation: memo-nb-orb 1.3s ease-in-out infinite; }
+
+.memo-nb-minutes { display: grid; gap: 0.6rem; padding-top: 0.2rem; }
+.memo-nb-minutes .memo-nb-title { text-align: left; font-size: 1.55rem; }
+.memo-nb-minutes-sub { margin: 0; display: flex; align-items: center; gap: 0.35rem; color: var(--muted); font-size: 0.92rem; font-weight: 650; }
+.memo-nb-minutes-sub .msym { color: var(--nb-gold-deep); }
+.memo-nb-minutes .memo-tutor-start { margin-top: 0.9rem; background: var(--coral); color: var(--on-promo); border-color: var(--btn-border-filled); box-shadow: var(--memo-coral-glow); }
+
+/* --- compact levels (use-fit-screen.ts) -------------------------------------------- */
+
+.memo-paywall-shell.memo-nb-paper:is([data-fit="1"], [data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-nb-hero, .memo-nb-deck) { --z: 0.9; }
+.memo-paywall-shell.memo-nb-paper:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(.memo-nb-hero, .memo-nb-deck) { --z: 0.8; }
+.memo-paywall-shell.memo-nb-paper:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-nb-ticket-wrap { --z: 0.86; }
+.memo-paywall-shell.memo-nb-paper:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-nb-checks { --z: 0.9; }
+.memo-paywall-shell.memo-nb-paper:is([data-fit="3"], [data-fit="4"]) :is(.memo-nb-hero, .memo-nb-deck) { --z: 0.68; }
+.memo-paywall-shell.memo-nb-paper:is([data-fit="3"], [data-fit="4"]) .memo-nb-ticket-wrap { --z: 0.74; }
+.memo-nb-due.with-timeline { display: none; }
+.memo-paywall-shell.memo-nb-paper:is([data-fit="3"], [data-fit="4"]) :is(.memo-nb-checks, .memo-nb-timeline) { display: none; }
+.memo-paywall-shell.memo-nb-paper:is([data-fit="3"], [data-fit="4"]) .memo-nb-due.with-timeline { display: flex; }
+.memo-paywall-shell.memo-nb-paper[data-fit="4"] :is(.memo-nb-hero, .memo-nb-deck) { --z: 0.56; }
+.memo-paywall-shell.memo-nb-paper[data-fit="4"] .memo-nb-plans { --z: 0.88; }
+.memo-offer-body:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-nb-tnt { --z: 0.82; }
+.memo-offer-body:is([data-fit="3"], [data-fit="4"]) .memo-nb-ticket-wrap { --z: 0.8; }
+
+/* --- motion ------------------------------------------------------------------------- */
+
+@keyframes memo-nb-marker { to { background-size: 100% 52%; } }
+@keyframes memo-nb-draw { to { stroke-dashoffset: 0; } }
+@keyframes memo-nb-draw-loop { 0%, 8% { stroke-dashoffset: 1; } 35%, 85% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -1; } }
+@keyframes memo-nb-ticket { 0% { opacity: 0; transform: translateY(-40px) rotate(-14deg) scale(1.25); } 60% { opacity: 1; transform: translateY(4px) rotate(-1deg) scale(0.98); } 100% { opacity: 1; transform: rotate(-3deg); } }
+@keyframes memo-nb-sheen { 0% { transform: translateX(-130%); } 40%, 100% { transform: translateX(130%); } }
+@keyframes memo-nb-shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+@keyframes memo-nb-strike { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes memo-nb-breathe { 0%, 100% { scale: 1; } 50% { scale: 1.018; } }
+@keyframes memo-nb-fill { from { transform: scaleX(0); } to { transform: scaleX(0.5); } }
+@keyframes memo-nb-ping { 0% { box-shadow: 0 0 0 4px var(--nb-paper), 0 0 0 4px color-mix(in oklch, var(--promo) 50%, transparent); } 70%, 100% { box-shadow: 0 0 0 4px var(--nb-paper), 0 0 0 14px transparent; } }
+@keyframes memo-nb-deal { 0% { opacity: 0; transform: translate(9rem, -0.6rem) rotate(16deg); } 4%, 22% { opacity: 1; transform: rotate(-2deg); } 27%, 100% { opacity: 0; transform: translate(-10rem, 1.2rem) rotate(-18deg); } }
+@keyframes memo-nb-dot { 0% { width: 20px; background: var(--promo); } 25%, 100% { width: 7px; background: color-mix(in oklch, var(--text) 18%, transparent); } }
+@keyframes memo-nb-bob { 0%, 100% { transform: translateY(0) rotate(-1.5deg); } 50% { transform: translateY(-9px) rotate(1.5deg); } }
+@keyframes memo-nb-wave { 0%, 100% { transform: rotate(-3deg) translateY(0); } 25% { transform: rotate(4deg) translateY(-6px); } 50% { transform: rotate(-2deg) translateY(-9px); } 75% { transform: rotate(3deg) translateY(-4px); } }
+@keyframes memo-nb-shadow { 0%, 100% { transform: scaleX(1); opacity: 1; } 50% { transform: scaleX(0.8); opacity: 0.6; } }
+@keyframes memo-nb-pop { 0% { opacity: 0; transform: scale(0.6); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes memo-nb-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -7px; } }
+@keyframes memo-nb-twinkle { 0%, 100% { transform: scale(0.3) rotate(0deg); opacity: 0; } 50% { transform: scale(1) rotate(45deg); opacity: 1; } }
+@keyframes memo-nb-spin { to { rotate: 360deg; } }
+@keyframes memo-nb-src { 0%, 100% { transform: scale(1); } 4% { transform: scale(1.14); } 10% { transform: scale(1); } }
+@keyframes memo-nb-packet { 0% { opacity: 0; transform: translate(0, 0) scale(0.5); } 4% { opacity: 1; } 24% { opacity: 1; transform: translate(var(--dx), var(--dy)) scale(1); } 28%, 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.2); } }
+@keyframes memo-nb-handwrite { 0%, 22% { clip-path: inset(0 100% 0 0); opacity: 1; } 40%, 92% { clip-path: inset(0 0 0 0); opacity: 1; } 100% { clip-path: inset(0 0 0 0); opacity: 0; } }
+@keyframes memo-nb-write { 0%, 38% { transform: scaleX(0); opacity: 1; } 52%, 92% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(1); opacity: 0; } }
+@keyframes memo-nb-out { 0%, 64% { opacity: 0; transform: translateX(-40px) scale(0.4) rotate(-20deg); } 72%, 92% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-8px); } }
+@keyframes memo-nb-halo { 0%, 30% { opacity: 0.25; transform: scale(0.7); } 42%, 82% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.25; transform: scale(0.7); } }
+@keyframes memo-nb-lockcard { 0%, 34% { transform: rotate(var(--r0)) translate(0, 14px) scale(0.9); filter: blur(3px) saturate(0.4); opacity: 0.75; } 48%, 84% { transform: rotate(var(--r1)) translate(var(--x1), var(--y1)) scale(1); filter: blur(0) saturate(1); opacity: 1; } 96%, 100% { transform: rotate(var(--r0)) translate(0, 14px) scale(0.9); filter: blur(3px) saturate(0.4); opacity: 0.75; } }
+@keyframes memo-nb-lock { 0%, 14% { transform: rotate(0) scale(1); } 17% { transform: rotate(-7deg); } 20% { transform: rotate(6deg); } 23% { transform: rotate(-5deg); } 26% { transform: rotate(3deg); } 29%, 33% { transform: rotate(0) scale(1); } 38% { transform: scale(1.08) translateY(-4px); } 44%, 84% { transform: scale(1) translateY(10px); } 92%, 100% { transform: rotate(0) scale(1); } }
+@keyframes memo-nb-shackle { 0%, 33% { transform: translateY(0) rotate(0); } 40%, 84% { transform: translateY(-20px) rotate(22deg); } 92%, 100% { transform: translateY(0) rotate(0); } }
+@keyframes memo-nb-keyhole { 0%, 33% { fill: var(--nb-gold-dark); } 40%, 84% { fill: var(--nb-gold-light); } 92%, 100% { fill: var(--nb-gold-dark); } }
+@keyframes memo-nb-burst { 0%, 34% { transform: rotate(var(--a)) translateY(0) scale(0); opacity: 1; } 50% { transform: rotate(var(--a)) translateY(-90px) scale(1); opacity: 1; } 62%, 100% { transform: rotate(var(--a)) translateY(-120px) scale(0); opacity: 0; } }
+@keyframes memo-nb-seq-q { 0% { opacity: 0; transform: translateY(10px) scale(0.95); } 7%, 92% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@keyframes memo-nb-seq-typing { 0%, 14% { opacity: 0; transform: scale(0.8); } 19%, 40% { opacity: 1; transform: none; } 44%, 100% { opacity: 0; } }
+@keyframes memo-nb-seq-a { 0%, 42% { opacity: 0; transform: translateY(10px) scale(0.95); } 50%, 92% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@keyframes memo-nb-typing { 0%, 100% { transform: translateY(0); opacity: 0.5; } 50% { transform: translateY(-4px); opacity: 1; } }
+@keyframes memo-nb-read { 0% { transform: scaleX(0); opacity: 1; } 16%, 80% { transform: scaleX(1); opacity: 1; } 92%, 100% { transform: scaleX(1); opacity: 0; } }
+@keyframes memo-nb-bar { 0%, 100% { transform: scaleY(0.25); } 50% { transform: scaleY(1); } }
+@keyframes memo-nb-orb { 0%, 100% { scale: 1; } 50% { scale: 1.07; } }
+@keyframes memo-nb-ring { 0% { opacity: 0.7; transform: scale(1); } 100% { opacity: 0; transform: scale(1.9); } }
+@keyframes memo-nb-eq { 0%, 100% { transform: scaleY(0.15); } 50% { transform: scaleY(var(--h, 1)); } }
+@keyframes memo-nb-flip { 0%, 25% { transform: scaleX(1); opacity: 1; } 32% { transform: scaleX(0); opacity: 1; } 39%, 70% { transform: scaleX(1); opacity: 1; } 80% { transform: translateX(10rem) rotate(14deg); opacity: 0; } 81% { transform: translateY(14px) scale(0.92); opacity: 0; } 92%, 100% { transform: none; opacity: 1; } }
+@keyframes memo-nb-face-a { 0% { opacity: 1; } 32% { opacity: 0; } 81% { opacity: 1; } }
+@keyframes memo-nb-face-b { 0% { opacity: 0; } 32% { opacity: 1; } 81% { opacity: 0; } }
+@keyframes memo-nb-node { 0%, 100% { transform: scale(1); } 15% { transform: scale(1.3); } 30% { transform: scale(1); } }
+@keyframes memo-nb-wobble { 0%, 100% { transform: rotate(-8deg) scale(1); } 50% { transform: rotate(8deg) scale(1.06); } }
+@keyframes memo-nb-sway { 0%, 100% { translate: 0 0; } 50% { translate: 6px 0; } }
+@keyframes memo-nb-hop { 0%, 100% { transform: translateY(0) scale(1.1, 0.88) rotate(0); } 18% { transform: translateY(0) scale(0.92, 1.1) rotate(-4deg); } 45% { transform: translateY(-30px) scale(1, 1) rotate(-10deg); } 62% { transform: translateY(-30px) rotate(8deg); } 82% { transform: translateY(0) scale(1.1, 0.88) rotate(0); } }
+@keyframes memo-nb-hop-follow { 0%, 18%, 82%, 100% { translate: 0 0; } 45%, 62% { translate: 0 -30px; } }
+@keyframes memo-nb-lean { 0%, 100% { transform: rotate(-10deg) translateX(-3px); } 50% { transform: rotate(10deg) translateX(4px); } }
+@keyframes memo-nb-lean-follow { 0%, 100% { translate: -3px 0; } 50% { translate: 4px 0; } }
+@keyframes memo-nb-fizz { 0% { transform: scale(0.85) rotate(0deg); } 50% { transform: scale(1.2) rotate(45deg); } }
+@keyframes memo-nb-jolt { 0% { transform: translateX(0) scale(1.012); } 6% { transform: translateX(-1.5px) scale(1.012); } 12% { transform: translateX(1.5px); } 18%, 100% { transform: none; } }
+@keyframes memo-nb-flash { 0% { box-shadow: inset 0 3px 10px rgba(0, 0, 0, 0.9), 0 0 0 3px var(--nb-ink-dark), 0 0 34px color-mix(in oklch, var(--nb-led) 60%, transparent); } 12% { box-shadow: inset 0 3px 10px rgba(0, 0, 0, 0.9), 0 0 0 3px var(--nb-ink-dark), 0 0 18px color-mix(in oklch, var(--nb-led) 20%, transparent); } }
+@keyframes memo-nb-blink { 0% { opacity: 1; } 50% { opacity: 0.2; } }
+@keyframes memo-nb-charge { 0% { transform: scaleX(0.12); } 55%, 100% { transform: scaleX(1); } }
 
 /* The prize from the home-screen wheel, confirmed above the plan grid. */
 .memo-discount-note {
@@ -18180,7 +19023,7 @@ html[data-paywall-closing] .memo-shell * {
  * left a screen of nothing beneath it. Matched with `:has()` rather than a class of its own
  * because the sheet element itself is read-aloud's — only its contents are the tutor's.
  */
-.note-read-usage-mobile-sheet:has(.memo-tutor-usage-heading) {
+.note-read-usage-mobile-sheet:has(.memo-tutor-usage-heading, .memo-nb-minutes) {
   min-height: 0;
 }
 

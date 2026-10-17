@@ -47,13 +47,21 @@ function load(component, native, products = []) {
     "@/lib/paywall-ladder": paywallLadder,
     "@/lib/paywall-offer-timing": { notePaywallShown() {}, paywallVisitCounted: () => false },
     "@/components/paywall-hero": {
-      PaywallHero: ({ reason }) => React.createElement("div", { className: "memo-pw-hero", "data-reason": reason }),
-      PaywallBrand: () => React.createElement("div", { className: "memo-pw-brand" }),
-      PaywallMascot: () => React.createElement("span", { className: "memo-pw-memo" }),
-      paywallLayout: reason => (reason ? "rows" : "cards"),
+      PaywallHero: ({ reason }) => React.createElement("div", { className: "memo-nb-hero", "data-reason": reason }),
+      PaywallDeck: () => React.createElement("div", { className: "memo-nb-deck" }),
       paywallAccentStyle: () => undefined,
     },
-    "@/components/onboarding-mascot": { MascotSparkles: () => null },
+    // The notebook's pieces, as their text: what a buyer reads is what is checked.
+    "@/components/paywall-notebook": {
+      HAND_FONT: { variable: "hand" },
+      Marked: ({ text }) => text.replaceAll("*", ""),
+      NotebookSpiral: () => null,
+      PenCircle: () => null,
+      Tape: () => null,
+      Ticket: ({ percent, off, note }) => React.createElement("div", { className: "memo-nb-ticket" }, `−${percent}% ${off} ${note}`),
+      Checklist: ({ items }) => React.createElement("ul", { className: "memo-nb-checks" }, items.join(" · ")),
+      TrialTimeline: ({ steps }) => React.createElement("ol", { className: "memo-nb-timeline" }, steps.map(step => `${step.title} ${step.body}`).join(" · ")),
+    },
     "@/components/use-fit-screen": { useFitScreen() {}, fitScreenScript: () => "" },
     "@/lib/brand": { BRAND_LOCKUP_SRC: "/brand.png", BRAND_LOCKUP_WIDTH: 480, BRAND_LOCKUP_HEIGHT: 148, SEO_BRAND_NAME: "Memo" },
   };
@@ -76,16 +84,17 @@ const trial = [
 test("iOS and PWA render the same paywall structure, benefits, cards and CTA", () => {
   const web = paywall(false, []);
   const ios = paywall(true, trial);
-  for (const className of ["memo-pw-brand", "memo-paywall-title", "memo-paywall-benefits", "memo-paywall-plan-grid", "memo-paywall-plan-header", "memo-paywall-plan-price", "memo-paywall-cta", "memo-paywall-foot"]) {
+  for (const className of ["memo-nb-deck", "memo-nb-title", "memo-nb-checks", "memo-nb-plans", "memo-nb-plan-name", "memo-nb-plan-price", "memo-nb-timeline", "memo-paywall-cta"]) {
     assert.ok(web.includes(className), className);
     assert.ok(ios.includes(className), className);
   }
   assert.doesNotMatch(ios, /memo-native-paywall|€130/);
   // The yearly card leads with its monthly equivalent and says underneath
   // what is billed each year.
-  assert.match(ios, /memo-paywall-plan-price">£10.42<small>/);
+  assert.match(ios, /memo-nb-plan-price">£10.42<small>/);
   assert.match(ios, /3 days free, then billed yearly: £124.99/);
-  assert.match(ios, /Nothing to pay today/);
+  // The trial, day by day, in place of the "nothing to pay today" line.
+  assert.match(ios, /Today Free/);
 });
 test("an ineligible Apple account sees no promised trial or free checkout", () => {
   const html = paywall(true, trial.map(({ trialDays, ...product }) => product));
@@ -113,21 +122,21 @@ test("Apple wheel offer keeps the PWA sheet and uses actual first-period prices"
     }));
   };
   const ios = render(true); const web = render(false);
-  for (const className of ["memo-offer-sheet", "memo-offer-mascot", "memo-offer-headline", "memo-offer-plan-copy", "memo-offer-price", "memo-offer-cta"]) {
+  for (const className of ["memo-offer-sheet", "memo-nb-tnt", "memo-nb-ticket", "memo-nb-title", "memo-nb-plan-price", "memo-offer-cta"]) {
     assert.ok(ios.includes(className), className); assert.ok(web.includes(className), className);
   }
   assert.match(ios, /€64.99, then €129.99/);
   assert.match(ios, /€9.99/);
   // The yearly headline is weekly; the line beside it says what is billed yearly.
-  assert.match(ios, /memo-offer-price">€1.25\/week</);
+  assert.match(ios, /memo-nb-plan-price">€1.25\/week</);
   assert.match(ios, /Billed yearly: €64.99, then €129.99/);
   assert.doesNotMatch(ios, /memo-native-paywall/);
   // The same sheet on both, countdown included: the app records its spin on
   // the same profile column, so the deadline it shows is the server's.
   assert.match(ios, /role="timer"/);
   assert.match(web, /role="timer"/);
-  assert.match(ios, /Close the offer and it is gone/);
-  assert.match(web, /Close the offer and it is gone/);
+  assert.match(ios, /Your one-off prize/);
+  assert.match(web, /Your one-off prize/);
 });
 
 test("the code form's yearly card leads with the weekly price and says what is billed yearly", () => {
@@ -139,33 +148,31 @@ test("the code form's yearly card leads with the weekly price and says what is b
 
 test("the paywall after onboarding shows the year as a month, the discounted ones as a week", () => {
   const first = paywall(false, []);
-  assert.match(first, /€10\.83<small>\/ month<\/small>/);
+  assert.match(first, /€10\.83<small> \/ month<\/small>/);
   assert.match(first, /Billed yearly: €130\.00/);
   assert.doesNotMatch(first, /\/ week/);
 
   const later = paywall(false, [], { reason: "chat", offerStep: 3 });
-  assert.match(later, /€1\.75<small>\/ week<\/small>/);
+  assert.match(later, /€1\.75<small> \/ week<\/small>/);
 });
 
 test("a later paywall on the web offers the ladder's discount, and the app never does", () => {
   const web = paywall(false, [], { reason: "chat", offerStep: 3 });
-  // The discount is the headline; first-payment-only is the small print.
-  assert.match(web, /−30%<small>OFF<\/small>/);
-  assert.match(web, /You save €39\.00/);
-  assert.match(web, /class="memo-paywall-fine">The discount applies to your first payment only\./);
+  // The discount is a coupon, and it says it covers the first payment only.
+  assert.match(web, /class="memo-nb-ticket">−30% OFF first payment/);
   assert.match(web, /€91\.00 for the first year, then €130\.00/);
   assert.match(web, /€14\.00 for the first month, then €20\.00/);
-  assert.match(web, /<s class="memo-paywall-plan-was">€20\.00<\/s>/);
+  assert.match(web, /<s class="memo-nb-plan-was">€20\.00<\/s>/);
   // The trial comes with it while the account still has one.
   assert.match(web, /Try free, then 30% off/);
   assert.match(web, /Nothing to pay today/);
   const noTrial = paywall(false, [], { reason: "chat", offerStep: 3, subscriptionTrialEligible: false });
   assert.match(noTrial, /Get 30% off/);
   assert.doesNotMatch(noTrial, /Nothing to pay today|Try free/);
-  assert.match(web, /memo-pw-hero" data-reason="chat"/);
-  assert.doesNotMatch(web, /memo-paywall-benefits/);
+  assert.match(web, /memo-nb-hero" data-reason="chat"/);
+  assert.doesNotMatch(web, /memo-nb-deck|memo-nb-timeline/);
 
   const ios = paywall(true, trial, { reason: "chat", offerStep: 3 });
-  assert.doesNotMatch(ios, /% off|memo-paywall-plan-was|€/);
-  assert.match(ios, /memo-pw-hero" data-reason="chat"/);
+  assert.doesNotMatch(ios, /% off|memo-nb-plan-was|memo-nb-ticket|€/);
+  assert.match(ios, /memo-nb-hero" data-reason="chat"/);
 });

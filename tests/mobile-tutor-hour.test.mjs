@@ -84,7 +84,7 @@ test("a subscriber can find the top-up before their day runs out, on the web and
   // spends the whole daily half hour just to look for it.
   const sheet = readFileSync(new URL("../src/components/voice-usage-sheet.tsx", import.meta.url), "utf8");
   assert.match(sheet, /const canTopUp = Boolean\(usage\?\.hasPaidAccess && !usage\.hasUnlimitedUsage\)/);
-  assert.match(sheet, /\{\(isSpent \|\| canTopUp\) && !\(native && usage\.hasPaidAccess && !appleHour\)/);
+  assert.match(sheet, /\{!freeSpent && \(isSpent \|\| canTopUp\) && !\(native && usage\.hasPaidAccess && !appleHour\)/);
   assert.match(sheet, /const wantsAppleHour = Boolean\(native && usage\?\.hasPaidAccess && \(!usage\.hasUnlimitedUsage \|\| blocked\)\)/);
   // Before the day is spent the offer says so, rather than "that's it for today".
   assert.match(sheet, /usage\?\.hasPaidAccess && !isSpent\s*\?\s*"tutor\.paywall\.moreTitle"/);

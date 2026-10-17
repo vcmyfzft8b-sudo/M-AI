@@ -12213,7 +12213,7 @@ html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { paddin
 .memo-nb-minutes .memo-tutor-start { height: 4rem; border-radius: 20px; font-size: 1.15rem; font-weight: 900; letter-spacing: -0.01em; }
 .memo-wheel-sheet.memo-nb-paper .memo-wheel-cta { margin-top: auto; }
 .memo-wheel-sheet.memo-nb-paper .memo-nb-tap + .memo-wheel-cta { margin-top: 0.4rem; }
-.memo-sheet-full.memo-offer-sheet.memo-nb-paper { top: auto; max-height: calc(100dvh - 3.5rem); }
+.memo-sheet-full.memo-offer-sheet.memo-nb-paper { top: auto; max-height: calc(var(--memo-vv, 100vh) - 3.5rem); }
 
 /* The wheel stands on a gold base, its shadow on the page. */
 .memo-nb-stand {

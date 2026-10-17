@@ -11,8 +11,8 @@
  *
  * It reads what production kept of the upload -- generation_failure_captures, which survives the
  * learner deleting the note, and the copies of their files under failure-captures/ -- then runs
- * the same reading steps production runs (photos: verbatim read, rescue read, restatement; scanned
- * PDFs: extraction, restatement), and finally the note pipeline with topic notes. Writes the
+ * the same reading steps production runs (photos: verbatim read, rescue read, restatement; PDFs:
+ * the text layer when legible, else extraction, restatement), and finally the note pipeline with topic notes. Writes the
  * material and the resulting note to --out (default /tmp/note-replay/<id>), never into the repo:
  * it is a learner's own material.
  *
@@ -38,6 +38,8 @@ import {
   PDF_EXTRACT_INSTRUCTIONS,
   PDF_RESTATE_INSTRUCTIONS,
 } from "../src/lib/ocr-prompts.ts";
+import { pickPageArticleHtml, pickRoleMainHtml } from "../src/lib/link-main-article.ts";
+import { isLegiblePdfTextLayer } from "../src/lib/pdf-text-layer.ts";
 import { hasEnoughSourceTextToTeach } from "../src/lib/source-text-gate.ts";
 import { runCase } from "./lib/note-replay.mjs";
 import { countWords, ledger, loadEnv } from "./lib/eval-runtime.mjs";
@@ -129,8 +131,35 @@ async function readPhoto(bytes) {
   return { text: shortText, attempts };
 }
 
+/** The embedded text, read and joined the way extractTextFromPdf does. */
+async function readPdfTextLayer(bytes) {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(bytes), useWorkerFetch: false, isEvalSupported: false, verbosity: pdfjs.VerbosityLevel.ERRORS });
+  try {
+    const document = await loadingTask.promise;
+    const pages = [];
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const content = await (await document.getPage(pageNumber)).getTextContent();
+      const parts = content.items.flatMap((item) => (typeof item.str === "string" && item.str.trim() ? [item.hasEOL ? `${item.str.trim()}\n` : item.str.trim()] : []));
+      pages.push(parts.join(" ").replace(/[ \t]+/g, " ").trim());
+    }
+    return pages.filter(Boolean).join("\n\n").trim();
+  } catch {
+    return "";
+  } finally {
+    await loadingTask.destroy();
+  }
+}
+
+/** Production's order: the text layer when it is legible, then extraction, then restatement. */
 async function readPdf(bytes) {
   const attempts = [];
+  const layer = await readPdfTextLayer(bytes);
+  if (layer.split(/\s+/).filter(Boolean).length >= 40) {
+    const legible = isLegiblePdfTextLayer(layer);
+    attempts.push({ stage: "pdf_text_layer", legible, chars: layer.length });
+    if (legible) return { text: layer, attempts };
+  }
   for (const [stage, model, instructions] of [
     ["pdf_extract", OCR_LITE_MODEL, PDF_EXTRACT_INSTRUCTIONS],
     ["pdf_restate", OCR_STRONG_MODEL, PDF_RESTATE_INSTRUCTIONS],
@@ -141,6 +170,23 @@ async function readPdf(bytes) {
     if (result.text.trim()) return { text: result.text, attempts };
   }
   return { text: "", attempts };
+}
+
+// A saved web page. Production's htmlToText (manual-lectures.ts) is server-only; this takes the
+// same region (article, else role="main", else the page) and drops the same chrome, which is
+// enough to tell an empty read from a page with something to teach.
+function readHtml(bytes) {
+  const html = bytes.toString("utf8");
+  const region = pickPageArticleHtml(html) ?? pickRoleMainHtml(html) ?? html;
+  const text = region
+    .replace(/<(script|style|noscript|svg|header|footer|nav|aside|form|button|select)\b[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<\/(p|div|section|article|li|h[1-6]|tr)>|<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s*\n\s*/g, "\n")
+    .trim();
+  return { text, attempts: [{ stage: "html_main_region", chars: text.length }] };
 }
 
 // --from=<dir>: replay a folder an earlier (online) run downloaded, with no database access at
@@ -173,7 +219,8 @@ let sourceText = capture?.source_text ?? "";
 // Photos and documents are re-read: the capture's text is what the OLD readers produced.
 const files = (capture?.captured_files ?? []).map((file) => file.capturedPath);
 const pendingDocument = metadata?.pendingDocument?.path;
-if (pendingDocument) files.push(pendingDocument);
+// The capture keeps its own copy of the pending document ("0-source.html" for "source.html").
+if (pendingDocument && !files.some((file) => file.endsWith(path.basename(pendingDocument)))) files.push(pendingDocument);
 const pendingPhotos = Array.isArray(metadata?.pendingScanImages) ? metadata.pendingScanImages.map((image) => image.path) : [];
 for (const photo of pendingPhotos) if (!files.some((file) => file.endsWith(path.basename(photo)))) files.push(photo);
 
@@ -200,6 +247,10 @@ for (const objectPath of files) {
     if (read.text) readTexts.push(read.text);
   } else if (/\.pdf$/i.test(name)) {
     const read = await readPdf(bytes);
+    report.reads.push({ file: name, ...read, text: undefined });
+    if (read.text) readTexts.push(read.text);
+  } else if (/\.html?$/i.test(name)) {
+    const read = readHtml(bytes);
     report.reads.push({ file: name, ...read, text: undefined });
     if (read.text) readTexts.push(read.text);
   } else {

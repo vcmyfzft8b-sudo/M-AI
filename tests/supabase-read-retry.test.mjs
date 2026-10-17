@@ -48,6 +48,50 @@ test("a read that fails twice gives up with the second error", async () => {
   assert.equal(calls.length, 2);
 });
 
+// What Supabase's Cloudflare edge answers when it cannot reach the database for a moment
+// (POST /api/lectures/[id]/tts/chunks, 2026-10-16T11:19:42Z, MEMOAI-WEB-5Y).
+function cloudflareBadGateway() {
+  return new Response(
+    "<html>\r\n<head><title>502 Bad Gateway</title></head>\r\n<body>\r\n<center><h1>502 Bad Gateway</h1></center>\r\n<hr><center>cloudflare</center>\r\n</body>\r\n</html>\r\n",
+    { status: 502, statusText: "Bad Gateway", headers: { "content-type": "text/html" } },
+  );
+}
+
+test("a read the gateway could not deliver is tried once more", async () => {
+  for (const status of [502, 503, 504]) {
+    const gateway = status === 502 ? cloudflareBadGateway : () => new Response("unavailable", { status });
+    const { fetchImpl, calls } = scripted(gateway, () => Response.json([{ id: 1 }]));
+    const response = await withSupabaseReadRetry(fetchImpl)(REST, { method: "GET" });
+    assert.equal(calls.length, 2, String(status));
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), [{ id: 1 }]);
+  }
+});
+
+test("a gateway error twice in a row is handed back as the answer", async () => {
+  const { fetchImpl, calls } = scripted(cloudflareBadGateway, cloudflareBadGateway);
+  const response = await withSupabaseReadRetry(fetchImpl)(REST);
+  assert.equal(calls.length, 2);
+  assert.equal(response.status, 502);
+  assert.match(await response.text(), /502 Bad Gateway/);
+});
+
+test("an answer from PostgREST itself is not a gateway error and is not retried", async () => {
+  for (const status of [400, 401, 404, 406, 500]) {
+    const { fetchImpl, calls } = scripted(() => Response.json({ code: "PGRST116" }, { status }));
+    const response = await withSupabaseReadRetry(fetchImpl)(REST);
+    assert.equal(calls.length, 1, String(status));
+    assert.equal(response.status, status);
+  }
+});
+
+test("a write is never repeated on a gateway error either", async () => {
+  const { fetchImpl, calls } = scripted(cloudflareBadGateway, () => Response.json({}));
+  const response = await withSupabaseReadRetry(fetchImpl)(REST, { method: "POST", body: "{}" });
+  assert.equal(calls.length, 1);
+  assert.equal(response.status, 502);
+});
+
 test("a write is never repeated, even on a transport failure", async () => {
   for (const method of ["POST", "PATCH", "DELETE", "PUT"]) {
     const { fetchImpl, calls } = scripted(new TypeError("fetch failed"), () => Response.json({}));

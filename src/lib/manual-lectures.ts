@@ -77,7 +77,7 @@ import {
   looksLikeLoginPage,
 } from "@/lib/link-login-walls";
 import { stripHtmlForms } from "@/lib/link-html-forms";
-import { pickPageArticleHtml } from "@/lib/link-main-article";
+import { pickPageArticleHtml, pickRoleMainHtml } from "@/lib/link-main-article";
 import {
   findRepositoryDocumentUrl,
   isRepositoryCatalogueUrl,
@@ -87,6 +87,7 @@ import {
 import { mergeCookieHeaders, shareLinkDownloadUrl } from "@/lib/link-share-downloads";
 import { serializeVector } from "@/lib/utils";
 import { looksLikeBotChallenge } from "@/lib/link-bot-challenge";
+import { isLegiblePdfTextLayer } from "@/lib/pdf-text-layer";
 import {
   IMAGE_OCR_INSTRUCTIONS,
   IMAGE_RESTATE_INSTRUCTIONS,
@@ -821,9 +822,7 @@ function extractPageMainHtml(html: string) {
     return article;
   }
 
-  const roleMainMatch = html.match(/<[^>]+\brole=["']main["'][^>]*>[\s\S]*?<\/[^>]+>/i);
-
-  return roleMainMatch?.[0] ?? html;
+  return pickRoleMainHtml(html) ?? html;
 }
 
 function stripNoisyHtml(html: string) {
@@ -1698,7 +1697,10 @@ export async function extractTextFromPdf(file: File) {
             : "") ||
           file.name.replace(/\.pdf$/i, "");
 
-        if (parsedText.split(/\s+/).filter(Boolean).length >= 40) {
+        if (
+          parsedText.split(/\s+/).filter(Boolean).length >= 40 &&
+          isLegiblePdfTextLayer(parsedText)
+        ) {
           return {
             title: metadataTitle || "PDF document",
             text: parsedText,

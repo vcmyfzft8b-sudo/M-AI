@@ -44,6 +44,7 @@ function loadStudyItems({ store, answers }) {
     "@/lib/notes/study-prompts": {
       buildFlashcardInstructions: () => "instructions",
       chunkStudyItems: (items) => [items],
+      fitsFlashcardFace: () => true,
       formatItemsForStudyGeneration: (items) => items,
     },
     "@/lib/practice-test-scoring": {},

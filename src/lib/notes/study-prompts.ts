@@ -24,20 +24,32 @@ export const STUDY_COVERAGE_IMPORTANCE_FLOOR = 3;
 
 const citedItemId = z.number().int().nonnegative();
 
+/**
+ * What one side of the card face holds. The rules below make a front stand alone and carry the
+ * context that separates confusable answers, and in an inflected language that runs past 160
+ * characters — that cap rejected a whole production batch, which fails the deck.
+ */
+export const FLASHCARD_FACE_MAX_LENGTH = 260;
+
+/**
+ * A card too long for the face is dropped by the caller, not rejected here. A `.max()` in the
+ * schema fails the whole batch over one card — every model tier wrote one Slovene back past 260
+ * on the same item, and the deck failed with it (Sentry MEMOAI-WEB-5Z). Dropped, the item counts
+ * as uncovered and gets the batch retry like any skipped item.
+ */
+export function fitsFlashcardFace(card: { front: string; back: string }) {
+  return card.front.length <= FLASHCARD_FACE_MAX_LENGTH && card.back.length <= FLASHCARD_FACE_MAX_LENGTH;
+}
+
 export const generatedFlashcardSchema = z.object({
   itemId: citedItemId,
-  /**
-   * The rules below make a front stand alone and carry the context that separates confusable
-   * answers, and in an inflected language that runs past 160 characters — the old cap rejected a
-   * whole production batch, which fails the deck. The back's 260 already fits the same card face.
-   */
-  front: z.string().min(6).max(260),
+  front: z.string().min(6),
   /**
    * One character is a whole answer in mathematics — e, 0, 1, x. A two-character floor is a prose
    * assumption, and it rejected entire flashcard batches from a production logarithms lecture.
    * Same mistake as the two-character floor that was on knowledge-item terms.
    */
-  back: z.string().min(1).max(260),
+  back: z.string().min(1),
   difficulty: z.enum(["easy", "medium", "hard"]),
 });
 
@@ -110,7 +122,7 @@ The learner must produce the answer from memory, not recognise it: never put the
 
 Fronts ask for something specific: what a term means, which term matches a definition, what a value is, what a step does, what distinguishes two things, what follows from a cause. Match the question form to the item — a definition item becomes a "what is X" card, a comparison item becomes a "how does X differ from Y" card, a procedure item becomes a "what happens when" card. Do not force every item into the same shape.
 
-Backs are as short as the answer honestly is: a term, a value, a phrase, one sentence. A back that runs to several sentences means the front asked for too much.
+Backs are as short as the answer honestly is: a term, a value, a phrase, one sentence. A back that runs to several sentences means the front asked for too much. Neither side may run past ${FLASHCARD_FACE_MAX_LENGTH} characters; a card that does is thrown away.
 
 Never ask for a list. "Name the five principles of X" is a card a learner fails forever — if an item is a set, test the one member that matters, the count, or what distinguishes one member from another, and let the other members be other items' cards.
 

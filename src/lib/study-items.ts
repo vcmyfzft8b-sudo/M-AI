@@ -47,6 +47,7 @@ import {
   buildPracticeTestInstructions,
   buildQuizInstructions,
   chunkStudyItems,
+  fitsFlashcardFace,
   flashcardBatchSchema,
   formatItemsForStudyGeneration,
   practiceBatchSchema,
@@ -563,7 +564,8 @@ export async function generateItemCardDrafts(params: {
         usageContext: params.usageContext,
       });
       const requested = new Set(batch.map((item) => item.id));
-      const cards = result.flashcards.filter((card) => requested.has(card.itemId));
+      // An overlong card leaves its item uncovered, so the retry round asks for it again.
+      const cards = result.flashcards.filter((card) => requested.has(card.itemId) && fitsFlashcardFace(card));
 
       return {
         drafts: cards.flatMap<CoverageCardDraft>((card) => {

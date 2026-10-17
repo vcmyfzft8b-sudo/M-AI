@@ -8,6 +8,9 @@ import {
   selectDeckWorthyItems,
 } from "../src/lib/notes/study-item-mapping.ts";
 import {
+  FLASHCARD_FACE_MAX_LENGTH,
+  fitsFlashcardFace,
+  flashcardBatchSchema,
   generatedFlashcardSchema,
   generatedPracticeQuestionSchema,
 } from "../src/lib/notes/study-prompts.ts";
@@ -165,6 +168,25 @@ test("a flashcard front that carries its own context is valid", () => {
       back: "1",
       difficulty: "medium",
     }),
+  );
+});
+
+test("one overlong flashcard back drops that card, not the batch", () => {
+  // Every model tier wrote the same Slovene back past 260 characters, the schema rejected the
+  // whole batch, and the deck failed with it (Sentry MEMOAI-WEB-5Z).
+  const longBack = "Elastičnost povpraševanja pove, za koliko odstotkov se spremeni povpraševana količina, ".repeat(4);
+  const batch = flashcardBatchSchema.parse({
+    flashcards: [
+      { itemId: 0, front: "Kaj meri cenovna elastičnost povpraševanja?", back: longBack, difficulty: "medium" },
+      { itemId: 1, front: "Kolikšna je vrednost ln(e)?", back: "1", difficulty: "easy" },
+    ],
+    skippedItemIds: [],
+  });
+
+  assert.ok(longBack.length > FLASHCARD_FACE_MAX_LENGTH);
+  assert.deepEqual(
+    batch.flashcards.filter(fitsFlashcardFace).map((card) => card.itemId),
+    [1],
   );
 });
 

@@ -62,7 +62,15 @@ import {
 import { planTutorLesson, type TutorStep } from "@/lib/exams/exam-tutor-server";
 
 export { ExamModelCallRefused };
-import { markAnswerWithRetry } from "@/lib/practice-test";
+import { markAnswerWithRetry, queueLecturePracticeTestGeneration } from "@/lib/practice-test";
+import {
+  enqueueLecturePracticeTestGeneration,
+  enqueueLectureQuizGeneration,
+  enqueueLectureStudyGeneration,
+} from "@/lib/jobs";
+import { captureBackgroundError } from "@/lib/monitoring";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { queueLectureQuizGeneration } from "@/lib/quiz";
 import { canStartTutorLesson } from "@/lib/tutor-allowance";
 import { getTutorAllowance } from "@/lib/tutor-usage";
 import {
@@ -392,6 +400,11 @@ export async function readOwnedExam(supabase: ExamSupabase, userId: string, exam
   }
 
   return data as ExamRow | null;
+}
+
+/** The notes an exam studies (its modules' notes that still exist and did not fail). */
+export async function readExamLectureIds(supabase: ExamSupabase, userId: string, examId: string) {
+  return (await readModules(supabase, userId, examId)).lectureIds;
 }
 
 async function readModules(supabase: ExamSupabase, userId: string, examId: string) {
@@ -1193,6 +1206,55 @@ const ASSET_TABLE: Record<LessonGenerator, string> = {
   practice_test: "lecture_practice_test_assets",
 };
 
+/**
+ * Starts the note material a prep's lessons are made from (flashcards, quiz, written questions) for
+ * every ready note that has none yet. Without it a note gets them only when a lesson first asks,
+ * and the learner's first lessons wait on them one after another. Called after a prep is created
+ * and after a pending note's topics are planned, in the background (`after`).
+ */
+export async function warmExamMaterial(supabase: ExamSupabase, userId: string, lectureIds: string[]) {
+  const ids = [...new Set(lectureIds)];
+
+  if (ids.length === 0) {
+    return;
+  }
+
+  const { data: lectures } = await supabase.from("lectures").select("id, status").in("id", ids).eq("user_id", userId);
+  const ready = ((lectures ?? []) as { id: string; status: string }[])
+    .filter((lecture) => lecture.status === "ready")
+    .map((lecture) => lecture.id);
+
+  for (const generator of Object.keys(ASSET_TABLE) as LessonGenerator[]) {
+    const { data: rows } = await supabase
+      .from(ASSET_TABLE[generator] as "lecture_quiz_assets")
+      .select("lecture_id")
+      .in("lecture_id", ready);
+    const started = new Set(((rows ?? []) as { lecture_id: string }[]).map((row) => row.lecture_id));
+
+    for (const lectureId of ready.filter((id) => !started.has(id))) {
+      try {
+        if (generator === "study") {
+          await createSupabaseServiceRoleClient()
+            .from("lecture_study_assets")
+            .upsert({ lecture_id: lectureId, status: "queued", error_message: null, model_metadata: {} } as never, {
+              onConflict: "lecture_id",
+            });
+          await enqueueLectureStudyGeneration(lectureId);
+        } else if (generator === "quiz") {
+          await queueLectureQuizGeneration(lectureId);
+          await enqueueLectureQuizGeneration(lectureId);
+        } else {
+          await queueLecturePracticeTestGeneration(lectureId);
+          await enqueueLecturePracticeTestGeneration(lectureId);
+        }
+      } catch (error) {
+        // A lesson that needs it starts it itself (status "missing"), so a failed warm-up costs a wait only.
+        captureBackgroundError(error, { operation: "exam:warm-material", tags: { generator }, extra: { lectureId } });
+      }
+    }
+  }
+}
+
 async function assetState(
   supabase: ExamSupabase,
   lectureId: string,
@@ -1569,6 +1631,13 @@ export async function loadLesson(
 
         throw error;
       });
+
+      // A part whose material is still being made (or not yet started, which the screen starts): the
+      // whole lesson waits for it, shown as being prepared, rather than opening as a reading that
+      // tests nothing. A part that cannot be built at all is left out.
+      if (part && (part.status === "generating" || part.status === "missing")) {
+        return part;
+      }
 
       if (part?.status !== "ready") {
         continue;

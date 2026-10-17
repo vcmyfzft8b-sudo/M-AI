@@ -168,7 +168,8 @@ export function ExamLesson({
   const [saveError, setSaveError] = useState(false);
   /* The learning-zone answer, 1 (too easy) to 5 (too hard). */
   const [difficulty, setDifficulty] = useState(3);
-  const startedGeneration = useRef(false);
+  /* The note material this lesson has asked to be made, each once (a lesson can wait on several). */
+  const startedGeneration = useRef(new Set<LessonGenerator>());
   const lessonRef = useRef<LessonPayload | null>(null);
   /* The questions this try got wrong (knowledge gaps), saved with the result. */
   const missedRef = useRef(new Set<string>());
@@ -242,8 +243,8 @@ export function ExamLesson({
       return;
     }
 
-    if (load.status === "missing" && !startedGeneration.current) {
-      startedGeneration.current = true;
+    if (load.status === "missing" && !startedGeneration.current.has(load.generator)) {
+      startedGeneration.current.add(load.generator);
       await fetch(`/api/lectures/${module.lectureId}/${GENERATOR_ROUTE[load.generator]}`, {
         method: "POST",
       }).catch(() => null);
@@ -394,7 +395,7 @@ export function ExamLesson({
   const title = `${t("exam.dash.module", { index: module.position + 1 })} · ${check ? t("exam.lesson.check") : t(LESSON_KIND_KEY[kind])}`;
 
   function retryLoad(generator: LessonGenerator | null) {
-    startedGeneration.current = false;
+    startedGeneration.current = new Set();
     setPhase({ name: "loading" });
 
     if (generator) {

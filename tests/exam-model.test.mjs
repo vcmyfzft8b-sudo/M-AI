@@ -369,6 +369,11 @@ test("the next format rotates: every format once, then round the practice ones; 
   assert.equal(suggestedKind({ done: all, lessons: 7, failedToday: zero, gapKind: "quiz" }), "quiz");
   // A format failed twice today rests: the rotation moves on.
   assert.equal(suggestedKind({ done: all, lessons: 7, failedToday: { ...zero, true_false: 2 }, gapKind: null }), "tutor");
+  // The tutor swapped for a quiz on its turn is not offered again next: the next format is.
+  assert.equal(
+    suggestedKind({ done: { ...none, summary: true, quiz: true }, lessons: 2, failedToday: zero, gapKind: null }),
+    "written",
+  );
 });
 
 test("topics open in order, only on target: no number of lessons under it opens the next", () => {

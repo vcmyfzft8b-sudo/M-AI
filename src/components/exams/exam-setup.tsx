@@ -1127,7 +1127,13 @@ export function ExamSetup({
           <div className="memo-exam-route-head">
             <span>
               <b>{t("exam.setup.review.pathTitle")}</b>
-              <span>{t("exam.setup.review.topicsTitle", { count: keptTopics.length })}</span>
+              <span>
+                {keptTopics.length === 0 && plan.status === "done" && plan.notes.some((note) => note.status === "pending")
+                  ? t("exam.setup.review.notesPending", {
+                      count: plan.notes.filter((note) => note.status === "pending").length,
+                    })
+                  : t("exam.setup.review.topicsTitle", { count: keptTopics.length })}
+              </span>
             </span>
           </div>
           <ol className="memo-exam-plan">

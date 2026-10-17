@@ -379,7 +379,10 @@ export function lessonsToTarget(mastery: number, target: number) {
 /*
  * The format the path suggests next for a topic (Astra's "Next up" rotates by itself: intro, smart
  * text, quiz, exercise, …). First every format once, in this order, then round the practice ones.
- * The learner may swap it for any other on the path; the suggestion is only the default.
+ * The learner may swap it for any other on the path; the suggestion is only the default. Each
+ * format gets one turn in the first pass: the n-th lesson offers the first untried format from the
+ * n-th place on, so a format swapped away on its turn (the voice tutor without a microphone) is not
+ * offered again and again; it comes back in the rotation.
  */
 export const FIRST_PASS_ORDER: readonly ExamLessonKind[] = ["summary", "tutor", "quiz", "written", "true_false", "flashcards"];
 export const PRACTICE_ROTATION: readonly PracticeLessonKind[] = ["quiz", "written", "true_false", "tutor", "flashcards"];
@@ -404,7 +407,9 @@ export function suggestedKind(input: {
     return input.gapKind;
   }
 
-  const untried = FIRST_PASS_ORDER.find((kind) => !input.done[kind] && allowed(kind));
+  const untried = FIRST_PASS_ORDER.slice(Math.min(input.lessons, FIRST_PASS_ORDER.length)).find(
+    (kind) => !input.done[kind] && allowed(kind),
+  );
 
   if (untried) {
     return untried;

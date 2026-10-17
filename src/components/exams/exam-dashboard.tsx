@@ -123,6 +123,8 @@ export function ExamDashboard({
   const planning = modules.some((module) => module.pending);
   const planningReady = modules.some((module) => module.pending && module.noteReady);
   const pendingNotes = modules.filter((module) => module.pending).length;
+  /* Any module with material to study; until then there is nothing a mock could ask either. */
+  const studiable = modules.some((module) => module.ready && !module.pending);
 
   /*
    * A note that was still being made at setup has no topics yet. Once it is ready its topics are
@@ -690,7 +692,8 @@ export function ExamDashboard({
               );
             })}
 
-            {/* Astra's mock card: the real exam, tried whenever the learner wants. */}
+            {/* Astra's mock card: the real exam, tried whenever the learner wants (once there is material to ask from). */}
+            {studiable ? (
             <div
               ref={next?.type === "mock" ? markCurrent : undefined}
               className={`memo-exam-card memo-exam-mock-card ${next?.type === "mock" ? "current" : ""}`.trim()}
@@ -710,6 +713,7 @@ export function ExamDashboard({
                 {t("exam.path.mockCard.cta")}
               </InstantLink>
             </div>
+            ) : null}
 
             <div className="memo-exam-trail-finish">
               <Emoji symbol="🏁" size="1.3rem" />

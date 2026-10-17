@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
-import { createExam, listExamsForUser } from "@/lib/exams/exams-server";
+import { createExam, listExamsForUser, warmExamMaterial } from "@/lib/exams/exams-server";
 import { examCreateSchema } from "@/lib/exams/exam-validation";
 import { captureRouteError } from "@/lib/monitoring";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -88,6 +88,9 @@ export async function POST(request: Request) {
     }
 
     const created = await createExam(auth.supabase, auth.user.id, { ...parsed.data, lectureIds });
+    const userId = auth.user.id;
+    // The notes' lesson material, started now rather than when the first lessons ask for it.
+    after(() => warmExamMaterial(auth.supabase, userId, lectureIds));
 
     if ("error" in created) {
       return NextResponse.json({ error: await tr("api.exam.noNotes") }, { status: 422 });

@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
-import { planPendingTopics } from "@/lib/exams/exams-server";
+import { planPendingTopics, readExamLectureIds, warmExamMaterial } from "@/lib/exams/exams-server";
 import { examIdParamsSchema } from "@/lib/exams/exam-validation";
 import { captureRouteError } from "@/lib/monitoring";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -51,6 +51,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     if (result.refused) {
       return createBillingRequiredResponse(await tr("api.trialOnly.study"), "trial_exhausted");
+    }
+
+    if (result.planned > 0) {
+      // A note just planned is ready: its lesson material starts now, in the background.
+      after(async () => warmExamMaterial(auth.supabase, userId, await readExamLectureIds(auth.supabase, userId, params.data.id)));
     }
 
     return NextResponse.json({ planned: result.planned });

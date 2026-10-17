@@ -55,6 +55,16 @@ export const PAID_PODCAST_DAILY_SECONDS = 30 * 60;
 /** A minute of the podcast, once, for the same reason the tutor gets one. */
 export const FREE_PODCAST_LIFETIME_SECONDS = 60;
 
+/**
+ * What an exam-prep tutor lesson needs to start: a whole lesson's talking (a few minutes), so one
+ * never runs dry half-way. With less left, the path quietly offers another exercise instead.
+ */
+export const TUTOR_LESSON_MIN_SECONDS = 300;
+
+export function canStartTutorLesson(allowance: Pick<TutorAllowance, "hasUnlimitedUsage" | "remainingSeconds">) {
+  return allowance.hasUnlimitedUsage || allowance.remainingSeconds >= TUTOR_LESSON_MIN_SECONDS;
+}
+
 export function dailySecondsFor(feature: VoiceFeature) {
   return feature === "podcast" ? PAID_PODCAST_DAILY_SECONDS : PAID_TUTOR_DAILY_SECONDS;
 }

@@ -2,6 +2,7 @@
 
 import { Loader2 } from "lucide-react";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -135,13 +136,27 @@ export function LibraryFolderMenu({
   onFoldersChange,
   selectedFolderId,
   onSelectFolder,
+  examPreps,
 }: {
   lectures: AppLectureListItem[];
   userId: string;
   folders: AppLibraryFolder[];
   onFoldersChange: (folders: AppLibraryFolder[]) => void;
   selectedFolderId: string | null;
-  onSelectFolder: (folderId: string | null, lectureIds: string[] | null) => void;
+  /** `chosen` when the learner picked the folder, rather than one restored or kept in sync. */
+  onSelectFolder: (folderId: string | null, lectureIds: string[] | null, chosen?: boolean) => void;
+  /**
+   * The exam-prep folder, pinned under "Vsi zapiski": not a folder of notes but the library's
+   * place for preps. The library decides what it shows; the picker only offers and marks it.
+   */
+  examPreps?: {
+    count: number;
+    selected: boolean;
+    /** The library was opened on the folder (leaving a prep): the chip pulses once to show it. */
+    announce: boolean;
+    onSelect: () => void;
+    onSelectAll: () => void;
+  } | null;
 }) {
   const { locale, t } = useTranslations();
   const isCreatorDemo = useIsCreatorDemo();
@@ -239,6 +254,38 @@ export function LibraryFolderMenu({
    * drag carries straight into the exit rather than springing back first.
    */
   const folderSheet = useSheet(closeFolderSheet);
+  /*
+   * The folder list fades where it runs on past the sheet's edge: at the bottom while more is
+   * below, at the top once it has been scrolled. A list that fits has neither.
+   */
+  const [folderScrollFade, setFolderScrollFade] = useState({ top: false, bottom: false });
+  const updateFolderScrollFade = useCallback((element: HTMLElement) => {
+    const top = element.scrollTop > 2;
+    const bottom = element.scrollTop + element.clientHeight < element.scrollHeight - 2;
+    setFolderScrollFade((current) => (current.top === top && current.bottom === bottom ? current : { top, bottom }));
+  }, []);
+  const folderScrollObserver = useRef<ResizeObserver | null>(null);
+  const attachFolderScroll = useCallback(
+    (element: HTMLDivElement | null) => {
+      folderScrollObserver.current?.disconnect();
+      folderScrollObserver.current = null;
+
+      if (!element) {
+        return;
+      }
+
+      updateFolderScrollFade(element);
+
+      if (typeof ResizeObserver !== "undefined") {
+        const observer = new ResizeObserver(() => updateFolderScrollFade(element));
+        observer.observe(element);
+        // The list's own content changes height too (a folder added or renamed).
+        Array.from(element.children).forEach((child) => observer.observe(child));
+        folderScrollObserver.current = observer;
+      }
+    },
+    [updateFolderScrollFade],
+  );
   const createModalSheet = useSheet(closeCreateModal, { locked: isCreatingFolder });
   const editModalSheet = useSheet(resetEditModal, {
     locked: isFolderEditBusy,
@@ -446,12 +493,26 @@ export function LibraryFolderMenu({
   function handleSelectAllNotes() {
     writeStoredSelectedFolderId(userId, null);
     onSelectFolder(null, null);
+    examPreps?.onSelectAll();
     animateCloseFolderSheet();
   }
 
+  function handleSelectExamPreps() {
+    writeStoredSelectedFolderId(userId, null);
+    onSelectFolder(null, null);
+    examPreps?.onSelect();
+    animateCloseFolderSheet();
+  }
+
+  const showingExamPreps = Boolean(examPreps?.selected);
+  const chipEmoji = showingExamPreps ? "🎓" : "📁";
+  const chipLabel = showingExamPreps
+    ? t("exam.library.title")
+    : (selectedFolder?.name ?? t("folders.allNotes"));
+
   function handleSelectFolder(folder: LibraryFolder) {
     writeStoredSelectedFolderId(userId, folder.id);
-    onSelectFolder(folder.id, folder.lectureIds);
+    onSelectFolder(folder.id, folder.lectureIds, true);
     animateCloseFolderSheet();
   }
 
@@ -486,7 +547,7 @@ export function LibraryFolderMenu({
 
       onFoldersChange(nextFolders);
       writeStoredSelectedFolderId(userId, nextFolder.id);
-      onSelectFolder(nextFolder.id, nextFolder.lectureIds);
+      onSelectFolder(nextFolder.id, nextFolder.lectureIds, true);
       setFolderName("");
       setDraftLectureIds([]);
       setIsCreateModalOpen(false);
@@ -623,20 +684,32 @@ export function LibraryFolderMenu({
     return (
       <>
         {options.map((option) => (
-          <button
-            key={option.id ?? "all"}
-            type="button"
-            className="memo-menu-item"
-            onClick={option.onSelect}
-          >
-            <Emoji symbol="📁" size="1.05rem" />
-            <span className="memo-menu-item-label">{option.name}</span>
-            {selectedFolderId === option.id ? (
-              <span className="memo-menu-check">
-                <Msym name="check" size="0.9rem" />
-              </span>
+          <Fragment key={option.id ?? "all"}>
+            <button type="button" className="memo-menu-item" onClick={option.onSelect}>
+              <Emoji symbol="📁" size="1.05rem" />
+              <span className="memo-menu-item-label">{option.name}</span>
+              {selectedFolderId === option.id && !showingExamPreps ? (
+                <span className="memo-menu-check">
+                  <Msym name="check" size="0.9rem" />
+                </span>
+              ) : null}
+            </button>
+            {option.id === null && examPreps ? (
+              <button type="button" className="memo-menu-item memo-menu-item-preps" onClick={handleSelectExamPreps}>
+                <Emoji symbol="🎓" size="1.05rem" />
+                <span className="memo-menu-item-label">{t("exam.library.title")}</span>
+                {showingExamPreps ? (
+                  <span className="memo-menu-check">
+                    <Msym name="check" size="0.9rem" />
+                  </span>
+                ) : examPreps.count > 0 ? (
+                  <span className="memo-library-count">{examPreps.count}</span>
+                ) : null}
+              </button>
             ) : null}
-          </button>
+            {/* The app's own (all notes, exam preps) apart from the learner's folders. */}
+            {option.id === null && liveFolders.length > 0 ? <div className="memo-menu-sep" /> : null}
+          </Fragment>
         ))}
 
         <div className="memo-menu-sep" />
@@ -667,26 +740,24 @@ export function LibraryFolderMenu({
       {/* Desktop chip: 📁 · name · caret, as the redesign draws it. */}
       <button
         type="button"
-        className="memo-folder-chip memo-only-desktop"
+        className={`memo-folder-chip memo-only-desktop ${showingExamPreps && examPreps?.announce ? "announce" : ""}`.trim()}
         onClick={handleToggleMenu}
         aria-expanded={isOpen}
       >
-        <Emoji symbol="📁" size="1.2rem" />
-        <span className="memo-folder-chip-label">
-          {selectedFolder?.name ?? t("folders.allNotes")}
-        </span>
+        <Emoji symbol={chipEmoji} size="1.2rem" />
+        <span className="memo-folder-chip-label">{chipLabel}</span>
         <Msym name="arrow_drop_down" size="1.2rem" />
       </button>
 
       {/* Phone chip: shorter, with the expand caret the sheet opens from. */}
       <button
         type="button"
-        className="memo-m-folder-chip memo-only-mobile"
+        className={`memo-m-folder-chip memo-only-mobile ${showingExamPreps && examPreps?.announce ? "announce" : ""}`.trim()}
         onClick={handleToggleMenu}
         aria-expanded={isOpen}
       >
-        <Emoji symbol="📁" size="1.1rem" />
-        <span>{selectedFolder?.name ?? t("folders.allNotes")}</span>
+        <Emoji symbol={chipEmoji} size="1.1rem" />
+        <span>{chipLabel}</span>
         <Msym name="expand_more" size="1.2rem" fill={false} weight={500} />
       </button>
 
@@ -729,47 +800,75 @@ export function LibraryFolderMenu({
                   dividers and puts the per-folder menu at the end of each row,
                   rather than the desktop dropdown's flat list. */}
               <div className="library-folder-mobile-sheet-body">
-                <div className="memo-folder-card">
-                  <div className="memo-folder-row">
-                    <button
-                      type="button"
-                      className="memo-folder-row-main"
-                      onClick={handleSelectAllNotes}
-                    >
-                      <Emoji symbol="📁" size="1.2rem" />
-                      <span className="memo-folder-row-label">{t("folders.allNotes")}</span>
-                      {selectedFolderId === null ? (
-                        <Msym name="check" size="1.35rem" fill={false} weight={500} />
-                      ) : null}
-                    </button>
-                  </div>
-
-                  {liveFolders.map((folder) => (
-                    <div key={folder.id} className="memo-folder-row">
+                {/* Only the folders scroll; "Nova mapa" under them stays in view however many there are. */}
+                <div
+                  className="memo-folder-sheet-scroll"
+                  ref={attachFolderScroll}
+                  onScroll={(event) => updateFolderScrollFade(event.currentTarget)}
+                  data-fade-top={folderScrollFade.top || undefined}
+                  data-fade-bottom={folderScrollFade.bottom || undefined}
+                >
+                  <div className="memo-folder-card">
+                    <div className="memo-folder-row">
                       <button
                         type="button"
                         className="memo-folder-row-main"
-                        onClick={() => handleSelectFolder(folder)}
+                        onClick={handleSelectAllNotes}
                       >
                         <Emoji symbol="📁" size="1.2rem" />
-                        <span className="memo-folder-row-label">{folder.name}</span>
-                        {selectedFolderId === folder.id ? (
+                        <span className="memo-folder-row-label">{t("folders.allNotes")}</span>
+                        {selectedFolderId === null && !showingExamPreps ? (
                           <Msym name="check" size="1.35rem" fill={false} weight={500} />
                         ) : null}
                       </button>
-                      <button
-                        type="button"
-                        className="memo-folder-row-menu"
-                        onClick={() => {
-                          setIsOpen(false);
-                          setFolderActionTarget(folder);
-                        }}
-                        aria-label={t("folders.options", { name: folder.name })}
-                      >
-                        <Msym name="more_horiz" size="1.5rem" fill={false} weight={500} />
-                      </button>
                     </div>
-                  ))}
+
+                    {examPreps ? (
+                      <div className="memo-folder-row">
+                        <button type="button" className="memo-folder-row-main" onClick={handleSelectExamPreps}>
+                          <Emoji symbol="🎓" size="1.2rem" />
+                          <span className="memo-folder-row-label">{t("exam.library.title")}</span>
+                          {showingExamPreps ? (
+                            <Msym name="check" size="1.35rem" fill={false} weight={500} />
+                          ) : examPreps.count > 0 ? (
+                            <span className="memo-library-count">{examPreps.count}</span>
+                          ) : null}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* The learner's own folders, a card of their own a little apart from the app's two. */}
+                  {liveFolders.length > 0 ? (
+                    <div className="memo-folder-card">
+                      {liveFolders.map((folder) => (
+                        <div key={folder.id} className="memo-folder-row">
+                          <button
+                            type="button"
+                            className="memo-folder-row-main"
+                            onClick={() => handleSelectFolder(folder)}
+                          >
+                            <Emoji symbol="📁" size="1.2rem" />
+                            <span className="memo-folder-row-label">{folder.name}</span>
+                            {selectedFolderId === folder.id ? (
+                              <Msym name="check" size="1.35rem" fill={false} weight={500} />
+                            ) : null}
+                          </button>
+                          <button
+                            type="button"
+                            className="memo-folder-row-menu"
+                            onClick={() => {
+                              setIsOpen(false);
+                              setFolderActionTarget(folder);
+                            }}
+                            aria-label={t("folders.options", { name: folder.name })}
+                          >
+                            <Msym name="more_horiz" size="1.5rem" fill={false} weight={500} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="memo-folder-sheet-cta">

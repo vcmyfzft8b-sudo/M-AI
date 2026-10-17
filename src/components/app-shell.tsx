@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
+import { AnimatedLockup } from "@/components/animated-lockup";
 import { AppLayoutProvider } from "@/components/app-layout-context";
 import { useCreatorDemoBasePath } from "@/components/creator-demo/creator-demo-context";
 import { useT } from "@/components/i18n-provider";
@@ -15,12 +15,7 @@ import { useIsOffline } from "@/components/offline/offline-provider";
 import { useChipRowWheelScroll } from "@/components/use-wheel-to-horizontal";
 import { useShellPathname } from "@/components/use-shell-pathname";
 import { noteAppPath } from "@/lib/app-history";
-import {
-  BRAND_LOCKUP_HEIGHT,
-  BRAND_LOCKUP_SRC,
-  BRAND_LOCKUP_WIDTH,
-  SEO_BRAND_NAME,
-} from "@/lib/brand";
+import { SEO_BRAND_NAME } from "@/lib/brand";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { unmapDemoPathname } from "@/lib/creator-demo/paths";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
@@ -77,6 +72,8 @@ export function AppShell({
   // unmaps to, the demo mount of the survey. Both own the whole viewport.
   const isOnboarding = pathname === "/app/start" || pathname === "/app/onboarding";
   const isNote = pathname.startsWith("/app/lectures/");
+  // Exam preps live in the library, so Home is where the learner is while in one.
+  const isExam = pathname === "/app/exams" || pathname.startsWith("/app/exams/");
   const isHome = pathname === "/app";
 
   // Where a click is headed while its skeleton is on screen. The overlay paints the
@@ -126,10 +123,10 @@ export function AppShell({
         label: t(item.labelKey),
         active:
           item.href === "/app"
-            ? pathname === "/app" || isNote
+            ? pathname === "/app" || isNote || isExam
             : pathname === item.href || pathname.startsWith(`${item.href}/`),
       })),
-    [isNote, pathname, t],
+    [isExam, isNote, pathname, t],
   );
 
   // Onboarding and checkout own the whole viewport; the app chrome would only
@@ -177,13 +174,7 @@ export function AppShell({
                 className="memo-header-brand"
                 aria-label={t("nav.homeBrand", { brand: SEO_BRAND_NAME })}
               >
-                <Image
-                  src={BRAND_LOCKUP_SRC}
-                  alt={SEO_BRAND_NAME}
-                  width={BRAND_LOCKUP_WIDTH}
-                  height={BRAND_LOCKUP_HEIGHT}
-                  priority
-                />
+                <AnimatedLockup priority />
               </InstantLink>
 
               <div className="memo-header-actions">

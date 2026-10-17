@@ -1,12 +1,6 @@
 import type { ReactNode } from "react";
-import Image from "next/image";
 
-import {
-  BRAND_LOCKUP_HEIGHT,
-  BRAND_LOCKUP_SRC,
-  BRAND_LOCKUP_WIDTH,
-  SEO_BRAND_NAME,
-} from "@/lib/brand";
+import { AnimatedLockup } from "@/components/animated-lockup";
 
 /**
  * Shared shell for the 404 and error boundaries. Kept free of client hooks so
@@ -28,13 +22,7 @@ export function ErrorScreen({
     <main className="error-screen">
       <div className="error-screen-inner">
         <span className="error-screen-brand" aria-hidden="true">
-          <Image
-            src={BRAND_LOCKUP_SRC}
-            alt={SEO_BRAND_NAME}
-            width={BRAND_LOCKUP_WIDTH}
-            height={BRAND_LOCKUP_HEIGHT}
-            priority
-          />
+          <AnimatedLockup fill priority />
         </span>
 
         <p className="error-screen-code">{code}</p>

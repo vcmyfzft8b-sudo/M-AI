@@ -334,11 +334,43 @@ export function NoteSourceModal({
   open,
   onClose,
   canCreateNotes,
+  onCreated,
+  paywallBack = "/app",
+  initialFiles,
+  headless = false,
+  onFailed,
+  onBusy,
 }: {
   mode: NoteSourceMode | null;
   open: boolean;
   onClose: () => void;
   canCreateNotes?: boolean;
+  /**
+   * Hands the new note back instead of opening it. Exam setup uses this: material added there
+   * joins the exam being set up, and the learner stays in the setup.
+   */
+  onCreated?: (lectureId: string) => void;
+  /**
+   * Where the paywall's close returns to: home by default, never this sheet's own address, which
+   * would reopen the sheet. Exam setup passes its own page, so closing the paywall goes back there.
+   */
+  paywallBack?: string;
+  /**
+   * Files the learner already picked before the sheet opened (exam setup's one upload field).
+   * They are taken as a drop would be: one audio file becomes a recording, anything else a
+   * document or photos.
+   */
+  initialFiles?: File[];
+  /**
+   * No sheet at all: the `initialFiles` are uploaded and made into a note at once, and only the
+   * callbacks report how it goes. Exam setup uses it, so material added to a prep is the prep's
+   * material on its own screen, never a note being made in a sheet.
+   */
+  headless?: boolean;
+  /** Headless: the upload could not be made (the message is the sheet's own error line). */
+  onFailed?: (message: string) => void;
+  /** Headless: what the upload is doing now ("Nalagam…", "Pripravljam…"), or null when idle. */
+  onBusy?: (label: string | null) => void;
 }) {
   const t = useT();
   const router = useRouter();
@@ -346,6 +378,8 @@ export function NoteSourceModal({
   const isCreatorDemo = demoBasePath != null;
   const isCollegeCreatorDemo = useIsCollegeCreatorDemo();
   const { navigateWithFeedback, overlay: navigationOverlay } = useInstantNavigation();
+  const takeFilesRef = useRef<(files: File[]) => void>(() => undefined);
+  const tookInitialFilesRef = useRef(false);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
@@ -438,6 +472,20 @@ export function NoteSourceModal({
   }, [mode]);
 
   useEffect(() => {
+    takeFilesRef.current = takeFiles;
+  });
+
+  /* Files picked before the sheet opened are taken once, as soon as it is open. */
+  useEffect(() => {
+    if (!open || tookInitialFilesRef.current || !initialFiles?.length) {
+      return;
+    }
+
+    tookInitialFilesRef.current = true;
+    takeFilesRef.current(initialFiles);
+  }, [initialFiles, open]);
+
+  useEffect(() => {
     if (!open || canCreateNotes !== false) {
       return;
     }
@@ -446,8 +494,8 @@ export function NoteSourceModal({
     // Home itself, never this sheet's own address, which would reopen the sheet
     // and send the learner straight back here.
     replacingNextPage();
-    router.replace(paywallPath("note", "/app"));
-  }, [canCreateNotes, onClose, open, router]);
+    router.replace(paywallPath("note", paywallBack));
+  }, [canCreateNotes, onClose, open, paywallBack, router]);
 
   // Creator demo: stage a file for the visible source, so the creator can hit
   // "Ustvari" immediately. Picking their own file — or recording for real —
@@ -592,7 +640,7 @@ export function NoteSourceModal({
 
   function redirectToPaywall() {
     onClose();
-    navigateWithFeedback(paywallPath("note", "/app"));
+    navigateWithFeedback(paywallPath("note", paywallBack));
   }
 
   const replaceAudioSource = useCallback(async (nextSource: AudioSource) => {
@@ -807,7 +855,8 @@ export function NoteSourceModal({
   }, []);
 
   useEffect(() => {
-    if (!open) {
+    // Headless (exam setup) shows no sheet: the page keeps scrolling and Escape is its own.
+    if (!open || headless) {
       return;
     }
 
@@ -837,7 +886,7 @@ export function NoteSourceModal({
       window.scrollTo(0, scrollY);
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [open]);
+  }, [headless, open]);
 
   useEffect(() => {
     if (!open) {
@@ -1376,8 +1425,12 @@ export function NoteSourceModal({
       processingStarted = true;
       createdLectureIdRef.current = null;
       onClose();
-      navigateWithFeedback(`/app/lectures/${result.lectureId}`);
-      router.refresh();
+      if (onCreated) {
+        onCreated(result.lectureId);
+      } else {
+        navigateWithFeedback(`/app/lectures/${result.lectureId}`);
+        router.refresh();
+      }
     } catch (submitError) {
       if (redirectToBillingIfNeeded({ error: submitError, router })) {
         onClose();
@@ -1618,8 +1671,12 @@ export function NoteSourceModal({
       // Kept either way: queued now, or finished from storage by the server shortly.
       createdLectureIdRef.current = null;
       onClose();
-      navigateWithFeedback(`/app/lectures/${lectureId}`);
-      router.refresh();
+      if (onCreated) {
+        onCreated(lectureId);
+      } else {
+        navigateWithFeedback(`/app/lectures/${lectureId}`);
+        router.refresh();
+      }
     } catch (submitError) {
       await deleteCreatedLecture();
       if (redirectToBillingIfNeeded({ error: submitError, router })) {
@@ -1693,8 +1750,12 @@ export function NoteSourceModal({
 
       onClose();
       createdLectureIdRef.current = null;
-      navigateWithFeedback(`/app/lectures/${lectureId}`);
-      router.refresh();
+      if (onCreated) {
+        onCreated(lectureId);
+      } else {
+        navigateWithFeedback(`/app/lectures/${lectureId}`);
+        router.refresh();
+      }
     } catch (submitError) {
       await deleteCreatedLecture();
       if (redirectToBillingIfNeeded({ error: submitError, router })) {
@@ -2048,10 +2109,14 @@ export function NoteSourceModal({
 
   function handleSheetDrop(event: React.DragEvent<HTMLElement>) {
     event.preventDefault();
+    takeFiles(Array.from(event.dataTransfer.files ?? []));
+  }
 
-    const files = Array.from(event.dataTransfer.files ?? []);
-
-    if (files.length === 0) {
+  /* Files from a drop, or picked before the sheet opened: whatever the sheet can handle. */
+  function takeFiles(files: File[]) {
+    // Nothing is taken while a note is being made: the drop would only be refused, and clearing
+    // the busy label after it would end the upload's loading view while the upload goes on.
+    if (files.length === 0 || busyLabel || submitInFlightRef.current) {
       return;
     }
 
@@ -2074,7 +2139,9 @@ export function NoteSourceModal({
     }
 
     setSelectedMode("text");
-    void acceptDocumentOrPhotoFiles(files);
+    // Compressing a large file sets the busy label; clear it as the picker does, or the sheet (and
+    // the exam setup, which creates the note once nothing is busy) waits on it for good.
+    void acceptDocumentOrPhotoFiles(files).finally(() => setBusyLabel(null));
   }
 
   async function handlePdfPick(event: React.ChangeEvent<HTMLInputElement>) {
@@ -2149,8 +2216,12 @@ export function NoteSourceModal({
 
       onClose();
       createdLectureIdRef.current = null;
-      navigateWithFeedback(`/app/lectures/${lectureId}`);
-      router.refresh();
+      if (onCreated) {
+        onCreated(lectureId);
+      } else {
+        navigateWithFeedback(`/app/lectures/${lectureId}`);
+        router.refresh();
+      }
     } catch (submitError) {
       await deleteCreatedLecture();
       if (redirectToBillingIfNeeded({ error: submitError, router })) {
@@ -2344,7 +2415,58 @@ export function NoteSourceModal({
     );
   }
 
+  /*
+   * Headless (exam setup): as soon as the picked files are staged, the note is made, as if the
+   * learner had pressed "Ustvari zapisek"; errors and progress go to the callbacks.
+   */
+  const autoStartedRef = useRef(false);
+  const stagedSource = headless && !busyLabel && !autoStartedRef.current && (pdfSource || hasPhotoSources || audioSource);
+
+  useEffect(() => {
+    if (!stagedSource || autoStartedRef.current) {
+      return;
+    }
+
+    autoStartedRef.current = true;
+
+    if (audioSource) {
+      void createAudioLecture();
+    } else if (pdfSource) {
+      void createPdfLecture();
+    } else {
+      void createPhotoLecture();
+    }
+    // The create functions are this render's; the staged source is what starts them, once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stagedSource]);
+
+  /*
+   * Reported when they change, not when the caller re-renders: a caller's inline callback is new
+   * every render, and re-sending a stale label after `onCreated` would mark a finished upload busy.
+   */
+  const headlessCallbacksRef = useRef({ onFailed, onBusy });
+
+  useEffect(() => {
+    headlessCallbacksRef.current = { onFailed, onBusy };
+  });
+
+  useEffect(() => {
+    if (headless && error) {
+      headlessCallbacksRef.current.onFailed?.(error);
+    }
+  }, [error, headless]);
+
+  useEffect(() => {
+    if (headless) {
+      headlessCallbacksRef.current.onBusy?.(busyLabel);
+    }
+  }, [busyLabel, headless]);
+
   if (!open || !mode) {
+    return null;
+  }
+
+  if (headless) {
     return null;
   }
 

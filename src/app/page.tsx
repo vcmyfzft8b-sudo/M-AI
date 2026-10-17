@@ -3,6 +3,7 @@ import { Inter_Tight } from "next/font/google";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 
+import { AnimatedLockup } from "@/components/animated-lockup";
 import { LandingFaq } from "@/components/landing/landing-faq";
 import { LandingFeatureShowcase } from "@/components/landing/landing-feature-showcase";
 import { LandingFlowDemo } from "@/components/landing/landing-flow-demo";
@@ -15,15 +16,7 @@ import { InstantLink } from "@/components/instant-link";
 import { LandingLoadingLink } from "@/components/landing-loading-link";
 import { LandingScrollReveal } from "@/components/landing-scroll-reveal";
 import { getOptionalUser } from "@/lib/auth";
-import {
-  BRAND_LOCKUP_HEIGHT,
-  BRAND_LOCKUP_SRC,
-  BRAND_LOCKUP_WIDTH,
-  BRAND_NAME,
-  BRAND_SUPPORT_EMAIL,
-  SEO_BRAND_NAME,
-  SEO_SITE_URL,
-} from "@/lib/brand";
+import { BRAND_NAME, BRAND_SUPPORT_EMAIL, SEO_BRAND_NAME, SEO_SITE_URL } from "@/lib/brand";
 import { getTranslations } from "@/lib/i18n/server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { hasPublicSupabaseEnv } from "@/lib/public-env";
@@ -211,12 +204,7 @@ export default async function HomePage() {
         <div className="landing-v2-footer-top">
           <div className="landing-v2-footer-brand">
             <span className="landing-v2-lockup">
-              <Image
-                src={BRAND_LOCKUP_SRC}
-                alt={SEO_BRAND_NAME}
-                width={BRAND_LOCKUP_WIDTH}
-                height={BRAND_LOCKUP_HEIGHT}
-              />
+              <AnimatedLockup fill />
             </span>
             <p>{t("meta.tagline")}</p>
           </div>

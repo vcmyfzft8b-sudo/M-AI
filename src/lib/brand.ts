@@ -5,6 +5,8 @@ export const SEO_BRAND_NAME = "Memo AI";
 export const BRAND_LOCKUP_SRC = "/memo-lockup.png";
 export const BRAND_LOCKUP_WIDTH = 480;
 export const BRAND_LOCKUP_HEIGHT = 148;
+/** The lockup's lettering alone, on the same 480×148 canvas, for the header's animated lockup. */
+export const BRAND_WORDMARK_SRC = "/memo-wordmark.png";
 export const BRAND_SUPPORT_EMAIL = "info@memoai.eu";
 export const SEO_SITE_URL = "https://memoai.eu";
 

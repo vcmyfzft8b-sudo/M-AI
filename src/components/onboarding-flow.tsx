@@ -1,16 +1,16 @@
 "use client";
 
 /*
- * Memo himself is drawn by `onboarding-mascot.tsx`; the one image left here is
- * the brand lockup in the desktop aside, a small PNG sized by its box.
+ * Memo himself is drawn by `onboarding-mascot.tsx`; the brand lockup in the
+ * desktop aside is the animated one (`AnimatedLockup`), Memo alive in it too.
  */
-/* eslint-disable @next/next/no-img-element */
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { Nunito } from "next/font/google";
 import { useRouter } from "next/navigation";
 
+import { AnimatedLockup } from "@/components/animated-lockup";
 import { mapAppHrefForClient } from "@/lib/creator-demo/paths";
 
 import { useTranslations } from "@/components/i18n-provider";
@@ -2117,7 +2117,7 @@ export function OnboardingFlow({
       <div style={{ position: "relative", zIndex: "2", gridRow: "2", minHeight: "0", overflow: "visible", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: "clamp(1.5rem, 5vw, 4rem)", padding: "clamp(0.4rem, 1.4vh, 1.6rem) clamp(1rem, 4vw, 2rem) clamp(5.6rem, 14vh, 6.8rem)" }}>
       {v.wide ? (<>
       <aside style={{ flex: "0 1 22rem", alignSelf: "stretch", display: "flex", flexDirection: "column", justifyContent: "center", gap: "1.6rem", paddingRight: "1rem" }}>
-      <img src="/memo-lockup.png" alt="Memo AI" style={{ width: "8.5rem", height: "auto", display: "block" }} />
+      <AnimatedLockup style={{ width: "8.5rem", height: "auto", display: "block" }} />
       <p style={{ margin: "0", fontSize: "clamp(1.6rem, 2.4vw, 2.15rem)", fontWeight: "800", lineHeight: "1.1", letterSpacing: "-0.02em", textWrap: "pretty" }}>{v.c.asideTitle}</p>
       <div style={{ display: "grid", gap: "0.55rem" }}>
       {v.summary.map((row) => (<Fragment key={row.key}>

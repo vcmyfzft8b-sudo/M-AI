@@ -6,11 +6,14 @@ import { getPricingCountry, getViewerAppState } from "@/lib/billing";
 import { planPricesFor } from "@/lib/billing-regions";
 import { getDiscountWheelState } from "@/lib/discount-wheel";
 import { requireUser } from "@/lib/auth";
+import { listLibraryExamPreps } from "@/lib/exams/exams-server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { listLibraryFoldersForUser } from "@/lib/library-folders";
 import { listLecturesForUser } from "@/lib/lectures";
 
 type SearchParams = Promise<{
   mode?: string;
+  view?: string;
 }>;
 
 export default async function AppHomePage({
@@ -33,8 +36,8 @@ export default async function AppHomePage({
    * mount, exactly as it used to. Paid accounts skip the query entirely — the
    * slot they would fill does not exist for them.
    */
-  const [lectures, folders, wheel] = await Promise.all([
-    listLecturesForUser(user.id),
+  const [lectures, folders, wheel, examPreps] = await Promise.all([
+    listLecturesForUser(user.id, { hideExamMaterial: true }),
     listLibraryFoldersForUser(user.id),
     appState?.hasPaidAccess
       ? Promise.resolve(null)
@@ -42,6 +45,13 @@ export default async function AppHomePage({
           console.error("[app] discount wheel state failed", error);
           return null;
         }),
+    // The library's exam-prep folder. Like the wheel, never worth the home screen.
+    createSupabaseServerClient()
+      .then((supabase) => listLibraryExamPreps(supabase, user.id))
+      .catch((error) => {
+        console.error("[app] exam preps failed", error);
+        return [];
+      }),
   ]);
   // Whether the settings gear wears the "add to home screen" dot. Read off the
   // profile the entitlement state already loaded — null means this account has
@@ -56,7 +66,7 @@ export default async function AppHomePage({
     (host.startsWith("localhost:") ||
       host.startsWith("127.0.0.1:") ||
       host.startsWith("[::1]:"));
-  await searchParams;
+  const params = await searchParams;
 
   return (
     <>
@@ -81,6 +91,8 @@ export default async function AppHomePage({
         installGuideSeen={installGuideSeen}
         showDevDashboard={showDevDashboard}
         planPrices={planPricesFor(await getPricingCountry())}
+        examPreps={examPreps}
+        initialLibraryView={params?.view === "preps" ? "preps" : "all"}
       />
     </>
   );

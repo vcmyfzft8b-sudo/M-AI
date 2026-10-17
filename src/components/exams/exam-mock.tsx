@@ -150,7 +150,12 @@ export function ExamMock({
 
     if (saved) {
       const restored = saved;
-      void Promise.resolve().then(() => setAnswers((current) => ({ ...restored, ...current })));
+      // Back where the learner was: the first question not yet answered.
+      const resumeAt = openAttempt.questions.findIndex((question) => !answered(question, restored[question.id]));
+      void Promise.resolve().then(() => {
+        setAnswers((current) => ({ ...restored, ...current }));
+        setIndex(resumeAt >= 0 ? resumeAt : openAttempt.questions.length - 1);
+      });
     }
   }, [openAttempt]);
 
@@ -594,8 +599,14 @@ export function ExamMock({
             <span className="memo-eyebrow">{t("exam.mock.title")}</span>
             <h1>{t("exam.mock.result.grade", { grade: result.grade })}</h1>
             <p>
-              {/* Floored, as every score shown beside a pass mark is: 89.6 % must not read as 90 %. */}
-              {t("exam.percent", { percent: wholePercent(result.percentage) })} · {t("exam.mock.result.points", { score: Math.round(result.totalScore * 10) / 10, total: result.maxScore })}
+              {/*
+               * Floored, as every score shown beside a pass mark is: 89.6 % must not read as 90 %. On a
+               * percent grading scale the grade above already is the percentage: the points alone here.
+               */}
+              {result.grade.trim().endsWith("%")
+                ? null
+                : `${t("exam.percent", { percent: wholePercent(result.percentage) })} · `}
+              {t("exam.mock.result.points", { score: Math.round(result.totalScore * 10) / 10, total: result.maxScore })}
             </p>
           </div>
         </div>
@@ -748,23 +759,16 @@ export function ExamMock({
         </div>
       }
     >
-      <div className="memo-exam-dots" role="list">
-        {attempt.questions.map((entry, entryIndex) => (
-          <button
-            key={entry.id}
-            type="button"
-            role="listitem"
-            aria-label={t("exam.mock.question", { index: entryIndex + 1, total: attempt.questions.length })}
-            className={[
-              answered(entry, answers[entry.id]) ? "answered" : "",
-              flags[entry.id] ? "flagged" : "",
-              entryIndex === index ? "current" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            onClick={() => setIndex(entryIndex)}
-          />
-        ))}
+      {/* Where the learner is in the mock, as the lessons show it: one bar, not a step per question. */}
+      <div
+        className="memo-progress quiz memo-exam-mock-progress"
+        role="progressbar"
+        aria-valuemin={1}
+        aria-valuemax={attempt.questions.length}
+        aria-valuenow={index + 1}
+        aria-label={t("exam.mock.question", { index: index + 1, total: attempt.questions.length })}
+      >
+        <div style={{ width: `${Math.round(((index + 1) / attempt.questions.length) * 100)}%` }} />
       </div>
 
       <div className="memo-panel study memo-exam-lesson">

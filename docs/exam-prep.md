@@ -168,6 +168,22 @@ the next review goes to the one practised longest ago, so reviews rotate instead
 first. Simulated learners who learn fast all reached "ready" at a 100 % goal (by day 9 on average,
 each topic truly at 95 %+); slower ones do not in two weeks, which is the honest answer.
 
+### Found clicking through a fresh prep (2026-10-17)
+
+- **Lesson material starts at setup** (`warmExamMaterial`): a note's flashcards, quiz and written
+  questions are queued right after the prep is created and after a pending note is planned. Before,
+  they were made only when a lesson first asked, one generator at a time.
+- **A Lekcija waits for its parts**: a part still being made (or not started, which the screen
+  starts, each generator once) makes the whole lesson show "being prepared" instead of opening as a
+  reading that tests nothing.
+- **Each format gets one turn in the first pass** (`suggestedKind`): the n-th lesson offers the first
+  untried format from the n-th place on, so a tutor swapped away (no microphone) is not offered every
+  time; it comes back in the rotation.
+- **The mock**: a written mock left mid-way reopens with its answers and at the first unanswered
+  question; the chosen answer shows the ink ring; position is one progress bar, not a step per
+  question; a second hand-in returns the first grade.
+- Planning stops starting notes after 75 s (`PLAN_BUDGET_MS`), the rest come back pending.
+
 ### Knowledge gaps: what comes back, and until when
 
 A lesson's result records which of the questions it showed the learner got wrong

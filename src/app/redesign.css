@@ -27197,7 +27197,7 @@ button.memo-exam-card:hover {
  */
 @media (max-width: 1099px) {
   .memo-exam-mock-main .memo-exam-dial {
-    width: min(12.5rem, 60vw);
+    width: min(10.5rem, 52vw);
   }
 }
 
@@ -28821,6 +28821,12 @@ button.memo-exam-card:hover {
 
 /* --- mock exam ------------------------------------------------------------ */
 
+/* A mock's chosen answer, shown until it is handed in (no right or wrong yet): the chip's ink ring. */
+.memo-exam-screen .lecture-quiz-option.selected:not(.correct, .incorrect) {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
 .memo-exam-upsell {
   background: var(--upgrade-tint);
   box-shadow: inset 0 0 0 1px var(--upgrade-line);
@@ -28997,37 +29003,6 @@ button.memo-exam-card:hover {
 .memo-exam-answers-q {
   font-weight: 700;
   letter-spacing: -0.01em;
-}
-
-.memo-exam-dots {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.memo-exam-dots button {
-  width: 1.15rem;
-  height: 0.55rem;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: var(--track);
-  cursor: pointer;
-}
-
-.memo-exam-dots button.answered {
-  background: var(--ink);
-}
-
-.memo-exam-dots button.flagged {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--promo);
-}
-
-.memo-exam-dots button.current {
-  width: 1.8rem;
-  background: var(--coral);
-  box-shadow: none;
 }
 
 .memo-exam-flagged {

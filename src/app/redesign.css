@@ -28779,6 +28779,20 @@ button.memo-exam-card:hover {
   display: none;
 }
 
+/*
+ * In a lesson the two that are left take the room the others gave up, as the note's quiz tab's
+ * answers fill its column, rather than leaving a gap between them and the verdict.
+ */
+.memo-exam-lesson .lecture-quiz-options[data-crowded] {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
+.memo-exam-lesson .lecture-quiz-options[data-crowded] > .lecture-quiz-option {
+  flex: 1 0 auto;
+}
+
 /* A lesson on its way: centred on the screen, a line on what is being done, the app's bar. */
 .memo-exam-loading {
   justify-content: center;

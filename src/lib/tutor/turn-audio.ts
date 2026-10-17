@@ -126,6 +126,29 @@ export function spokenTextBefore(
 }
 
 /**
+ * What has started to be said by `playedSeconds`, character by character: unlike
+ * `spokenTextBefore`, a word that has begun counts, so captions can show a phrase the moment its
+ * first word starts rather than once it has ended. Empty until there are timings.
+ */
+export function startedTextBefore(timings: SpeechCharacterTimings | null, playedSeconds: number) {
+  if (!timings || timings.characters.length === 0) {
+    return "";
+  }
+
+  let started = "";
+
+  for (let index = 0; index < timings.characters.length; index += 1) {
+    if (timings.startSeconds[index] > playedSeconds) {
+      break;
+    }
+
+    started += timings.characters[index];
+  }
+
+  return stripAudioTags(started);
+}
+
+/**
  * Removes the synthesizer's audio tags from a record of what was said.
  *
  * `[laughs]` and its siblings are performed as sounds and never spoken, but they do come

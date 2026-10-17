@@ -459,6 +459,7 @@
   --nb-tape-mint: rgba(166, 227, 192, 0.8);
   --nb-tape-lilac: rgba(214, 190, 255, 0.8);
   --nb-index-card: #ffffff;
+  --nb-cal-cell: rgba(0, 0, 0, 0.05);
   --nb-gold-light: #ffe9a3;
   --nb-gold: #f7bf3c;
   --nb-gold-deep: #c99a1e;
@@ -495,6 +496,9 @@
      showing the light-mode red. */
   --danger: #ff3b30;
   --danger-tint: rgba(255, 59, 48, 0.12);
+  /* A right answer, a mastered module. The palace marks typed these greens by hand. */
+  --success: #15803d;
+  --success-tint: rgba(22, 163, 74, 0.12);
   /* Focus is shown on the field's container, not as the UA's blue box. */
   --focus-ring: rgba(0, 0, 0, 0.22);
   /* Cards mark hover with an edge rather than a lift. */
@@ -559,6 +563,8 @@
   --promo: #ff6d68;
   --danger: #ff453a;
   --danger-tint: rgba(255, 69, 58, 0.15);
+  --success: #4ade80;
+  --success-tint: rgba(74, 222, 128, 0.14);
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.75);
   --scrim: rgba(0, 0, 0, 0.5);
@@ -600,6 +606,8 @@
     --promo: #ff6d68;
     --danger: #ff453a;
     --danger-tint: rgba(255, 69, 58, 0.15);
+    --success: #4ade80;
+    --success-tint: rgba(74, 222, 128, 0.14);
     --shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
     --shadow-lg: 0 -12px 40px rgba(0, 0, 0, 0.75);
     --scrim: rgba(0, 0, 0, 0.5);
@@ -1297,6 +1305,12 @@
   transition:
     opacity 0.26s ease 0.16s,
     transform 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.08s;
+}
+
+/* The open folder menu hangs over the library and must clear the chat bar fixed at the bottom
+   (80), which would otherwise cover its lower rows on a short window. */
+.memo-folder-wrap:has(.memo-menu) {
+  z-index: 85;
 }
 
 .memo-folder-wrap.hidden {
@@ -2007,6 +2021,44 @@
 
 .memo-dialog .memo-grab {
   display: none;
+}
+
+/*
+ * A sheet's titled header (title centred, round close at the end) as it reads in the desktop
+ * dialog. The phone styles it in the sheet rules below; these keep the title clear of the close.
+ * Desktop only: on the phone `.memo-dialog` sheets are ordinary sheets.
+ */
+@media (min-width: 1100px) {
+  .memo-dialog .memo-sheet-title {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.9rem;
+    margin-bottom: 1.1rem;
+    padding: 0 3.4rem;
+    text-align: center;
+  }
+
+  .memo-dialog .memo-sheet-title > span {
+    font-size: 1.25rem;
+    font-weight: 750;
+    letter-spacing: -0.03em;
+  }
+
+  .memo-dialog .memo-sheet-title .memo-sheet-close {
+    position: absolute;
+    right: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.9rem;
+    height: 2.9rem;
+    padding: 0;
+    border-radius: 999px;
+    color: var(--text);
+    cursor: pointer;
+  }
 }
 
 .memo-sheet-heading {
@@ -6187,6 +6239,14 @@
   letter-spacing: -0.03em;
   line-height: 1.32;
   text-wrap: pretty;
+}
+
+/* "Ne vem": the app's checkbox, in ink, not the browser's blue. */
+.memo-panel .lecture-practice-unknown input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  accent-color: var(--text);
 }
 
 .memo-panel .lecture-practice-textarea {
@@ -12114,6 +12174,16 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
 .memo-nb-subject .memo-nb-hand { font-size: 1.38rem; line-height: 1; }
 .memo-nb-subject i { display: block; height: 5px; border-radius: 5px; background: rgba(0, 0, 0, 0.12); }
 .memo-nb-subject > .memo-nb-tape { left: 50%; top: -0.55rem; translate: -50% 0; width: 2.9rem; height: 1rem; rotate: -4deg; }
+/* Exam prep: a week on a calendar page, study days ticked, the exam day circled. */
+.memo-nb-cal { width: 12.5rem; padding: 0 0.7rem 0.8rem; border-radius: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; color: var(--nb-note-ink); background: var(--nb-index-card); box-shadow: 0 14px 26px -6px rgba(40, 30, 10, 0.3); rotate: -3deg; animation: memo-nb-pop 0.5s cubic-bezier(0.3, 1.5, 0.5, 1) both 0.15s; }
+.memo-nb-cal > .memo-nb-tape { position: absolute; left: 50%; top: -0.6rem; translate: -50% 0; rotate: 4deg; z-index: 2; }
+.memo-nb-cal-head { grid-column: 1 / -1; height: 1.7rem; margin: 0 -0.7rem 0.3rem; border-radius: 14px 14px 0 0; background: var(--paywall-accent, var(--promo)); }
+.memo-nb-cal-day { position: relative; height: 2.5rem; display: grid; place-items: center; border-radius: 12px; font-size: 1rem; font-weight: 800; background: var(--nb-cal-cell); }
+.memo-nb-cal-day > .memo-nb-pen { position: absolute; inset: 0.3rem; width: auto; height: auto; overflow: visible; }
+.memo-nb-cal-day.exam { color: var(--promo); }
+.memo-nb-cal-ring { position: absolute; inset: -0.45rem -0.5rem; width: auto; height: auto; overflow: visible; }
+.memo-nb-cal-flag { width: 2.6rem; height: 2.6rem; border-radius: 999px; font-size: 1.3rem; rotate: 10deg; animation: memo-nb-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both 2.9s, memo-nb-wobble 2.4s ease-in-out infinite 3.4s; }
+.memo-nb-cal-note { font-size: 1.6rem; color: var(--promo); rotate: -6deg; animation: memo-nb-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both 3.1s; }
 .memo-nb-answer { left: 3.1rem; top: 9.4rem; width: 18rem; height: 3.9rem; padding: 0 0.9rem 0 0.6rem; border-radius: 20px; display: flex; align-items: center; gap: 0.75rem; background: var(--surface); box-shadow: 0 14px 28px -8px rgba(0, 0, 0, 0.22), inset 0 0 0 1px var(--line); }
 .memo-nb-answer img { width: 2.25rem; height: auto; }
 .memo-nb-answer .memo-nb-bar { position: static; }
@@ -12752,7 +12822,8 @@ html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibi
     pointer-events: none;
   }
 
-  .memo-m-topbar img {
+  /* The still lockup, where one is a direct child; never the images inside the animated one. */
+  .memo-m-topbar > img {
     position: relative;
     z-index: 1;
     height: 3.1rem;
@@ -14707,6 +14778,11 @@ html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibi
     border-top: 1px solid var(--line);
   }
 
+  /* The app's two rows and the learner's folders are two cards, a little apart. */
+  .memo-folder-card + .memo-folder-card {
+    margin-top: 0.75rem;
+  }
+
   .memo-folder-row-main {
     display: flex;
     align-items: center;
@@ -14748,19 +14824,59 @@ html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibi
     cursor: pointer;
   }
 
+  .library-folder-mobile-sheet .library-folder-mobile-sheet-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  /*
+   * The folder list is the sheet's only scroller: a long list scrolls here while the title above
+   * and "Nova mapa" below stay in view. The side padding (taken back by the margin) leaves the
+   * cards' shadow room inside the scrollport.
+   */
+  .memo-folder-sheet-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0 -0.6rem;
+    padding: 0.1rem 0.6rem 0.6rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    scrollbar-width: none;
+  }
+
+  .memo-folder-sheet-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* A soft edge where the list runs on, rather than rows cut off flat against "Nova mapa". */
+  .memo-folder-sheet-scroll[data-fade-bottom] {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2.75rem), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 2.75rem), transparent);
+  }
+
+  .memo-folder-sheet-scroll[data-fade-top] {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 2rem);
+    mask-image: linear-gradient(to bottom, transparent, #000 2rem);
+  }
+
+  .memo-folder-sheet-scroll[data-fade-top][data-fade-bottom] {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 2rem, #000 calc(100% - 2.75rem), transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 2rem, #000 calc(100% - 2.75rem), transparent);
+  }
+
   .memo-folder-sheet-cta {
     display: flex;
+    flex: none;
     justify-content: center;
-    margin-top: 1.4rem;
+    margin-top: 0.8rem;
     /*
-     * Room for the button's glow inside the scroller.
-     *
-     * A shadow cannot escape an ancestor that clips, and the sheet around this
-     * scrolls — so with the button flush against the end of the content the
-     * glow was sliced off square at the scrollport's edge instead of fading
-     * out. Padding here is part of what scrolls, so the glow always has
-     * somewhere to land. Margin would not do: a last child's bottom margin is
-     * not reliably part of the scrollable extent.
+     * Room for the button's glow. It sits below the scrolling list now, always in
+     * view, but the sheet around it clips: with the button flush against the
+     * sheet's padding edge the glow would be sliced off square.
      */
     padding-bottom: 1.25rem;
   }
@@ -14874,11 +14990,14 @@ html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibi
     inset: auto 0 0 0;
     z-index: 126;
     /* Production lays this out as a gapped grid; the design stacks it with
-       its own margins, and the gap was adding 16px above the header. */
-    display: block;
+       its own margins, and the gap was adding 16px above the header. A column:
+       the folders scroll inside it (.memo-folder-sheet-scroll) and the header
+       and "Nova mapa" stay put. */
+    display: flex;
+    flex-direction: column;
     gap: 0;
     max-height: var(--memo-sheet-max);
-    overflow-y: auto;
+    overflow: hidden;
     scroll-padding: 1.1rem 0 var(--memo-kb-scroll);
     padding: 0.6rem 1.15rem
       calc(
@@ -26961,4 +27080,3647 @@ select.memo-cp-input {
   color: var(--cp-muted);
   font-size: 0.78rem;
   line-height: 1.45;
+}
+
+/* ===========================================================================
+   Exam prep ("Priprava na izpit")
+   ---------------------------------------------------------------------------
+   The exam screens under /app/exams and the way into them in the "Novo" sheet.
+   Phone first: every screen is a `.memo-screen` frame with a floating top bar,
+   one scroller and an optional bottom CTA. From 1100px the same markup is a page
+   in the shell's main column. Lessons reuse the note screen's study markup inside
+   `.memo-panel.study`, so a quiz here is the quiz there.
+   ========================================================================= */
+
+/* --- Memo, the animated brain -------------------------------------------- */
+
+/* MascotFigure's drop shadow reads --memo-shadow. Inside the app it is the hover ring; elsewhere (the
+   lockup on the landing, legal and admin pages) the page's own value or none, never an unset ring. */
+:is(.memo, .memo-portal) .memo-buddy {
+  --memo-shadow: var(--hover-ring);
+}
+
+.memo-buddy {
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--memo-buddy-size, 6rem);
+  aspect-ratio: 320 / 288;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* A slow float under everything else he does, so he is never quite still. */
+/*
+ * The thought cloud's frame: a point on Memo's top-right corner that the onboarding's cloud and
+ * beads are laid out from and scaled about (see thoughtLayout in memo-buddy.tsx).
+ */
+.memo-buddy-think {
+  position: absolute;
+  z-index: 5;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+/* A Memo standing alone with a thought keeps the cloud's height clear above him, as the onboarding does. */
+:is(.memo-exam-center, .memo-exam-empty) > .memo-buddy:has(> .memo-buddy-think) {
+  margin-top: 2.2rem;
+}
+
+.memo-buddy-bob {
+  position: absolute;
+  inset: 0;
+  animation: memo-buddy-bob 3.4s ease-in-out infinite;
+}
+
+@keyframes memo-buddy-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1.5deg);
+  }
+
+  50% {
+    transform: translateY(-5%) rotate(1.5deg);
+  }
+}
+
+.memo-buddy-body {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 92%;
+}
+
+.memo-buddy-breathe {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 94%;
+  animation: memo-breathe 3.4s ease-in-out infinite;
+}
+
+.memo-buddy-burst {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  z-index: 3;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/* --- the frame ------------------------------------------------------------ */
+
+.memo-exam-screen {
+  animation: memo-fade-in 0.18s ease-out;
+}
+
+.memo-exam-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 1.6rem;
+}
+
+.memo-exam-topbar-title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-exam-topbar-trailing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.memo-exam-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  max-width: 46rem;
+}
+
+.memo-exam-page h1,
+.memo-exam-step-title {
+  margin: 0;
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.memo-exam-cta {
+  max-width: 46rem;
+  margin-top: 1.6rem;
+}
+
+/* The bottom bar a screen's content fills (a written answer's buttons); gone while nothing is in it. */
+.memo-exam-cta-slot:empty {
+  display: none;
+}
+
+.memo-exam-cta > .memo-button-coral,
+.memo-exam-cta-row > .memo-button-coral {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0 1.2rem;
+}
+
+.memo-exam-cta-row {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.memo-exam-cta-row > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* "Back" is the quiet half of the row; the action gets the room. */
+.memo-exam-cta-row > .memo-button-ghost {
+  flex: 0 0 auto;
+  min-width: 7rem;
+  padding: 0 1.2rem;
+}
+
+.memo-exam-cta-row > .memo-button-coral,
+.memo-exam-cta-row > .memo-primary-pill {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-exam-next {
+  justify-content: center;
+  height: 3.4rem;
+}
+
+.memo-exam-fine {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.memo-exam-label {
+  margin-top: 0.6rem;
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.memo-exam-link {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 0.35rem;
+  padding: 0.4rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
+.memo-exam-link:hover {
+  color: var(--text);
+}
+
+.memo-exam-segment {
+  width: 100%;
+}
+
+.memo-exam-segment button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 0.5rem;
+}
+
+.memo-exam-steps {
+  margin-bottom: 0.4rem;
+}
+
+/* Setup's bar, as the onboarding's: the way back, then the progress bar beside it. */
+.memo-exam-topbar.memo-exam-topbar-custom {
+  justify-content: flex-start;
+  gap: 0.85rem;
+}
+
+/* The onboarding's way back: a small soft disc with a drawn chevron, pressed in when tapped. */
+.memo-exam-step-back {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 160ms ease;
+}
+
+.memo-exam-step-back:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-exam-step-back:active {
+  transform: scale(0.9);
+}
+
+.memo-exam-step-back:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-exam-step-back:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.memo-exam-step-back-chevron {
+  display: block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-left: 0.16rem;
+  border-bottom: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  border-radius: 1px;
+  transform: rotate(45deg);
+}
+
+.memo-exam-topbar-custom .memo-exam-steps {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 1rem;
+  margin: 0;
+  overflow: hidden;
+}
+
+/* The onboarding's bar: coral, never narrower than its own round end; its gloss is the shared one. */
+.memo-exam-topbar-custom .memo-exam-steps > div {
+  position: relative;
+  min-width: 1rem;
+  background: var(--coral);
+  transition: width 0.62s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.memo-exam-topbar[hidden] {
+  display: none;
+}
+
+/* The same bar the study tabs count you through with: progress here is coral, too. */
+.memo-exam-page .memo-progress {
+  height: 1rem;
+}
+
+.memo-exam-page .memo-progress > div {
+  background: var(--coral);
+}
+
+.memo-exam-card {
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 1.1rem 1.25rem;
+}
+
+a.memo-exam-card,
+button.memo-exam-card {
+  color: inherit;
+  text-decoration: none;
+  transition: box-shadow 0.16s ease;
+}
+
+a.memo-exam-card:hover,
+button.memo-exam-card:hover {
+  box-shadow: var(--shadow), inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-exam-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1.2rem 0;
+  text-align: center;
+}
+
+.memo-exam-center h2 {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.memo-exam-center p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.memo-exam-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 2rem 0.5rem;
+  text-align: center;
+}
+
+.memo-exam-empty h2 {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.memo-exam-empty p {
+  max-width: 28rem;
+  margin: 0;
+  color: var(--muted);
+}
+
+/* --- setup ---------------------------------------------------------------- */
+
+/* Every setup step fits one phone screen without scrolling. */
+.memo-exam-step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.memo-exam-step .memo-exam-pick {
+  min-height: 3.6rem;
+  padding: 0.45rem 1rem;
+  gap: 0.85rem;
+}
+
+.memo-exam-step /* Material being read into the prep: a card per document, set of photos or recording. */
+.memo-exam-material {
+  cursor: default;
+}
+
+.memo-exam-material:hover {
+  box-shadow: var(--shadow);
+}
+
+.memo-exam-material.ready {
+  box-shadow: var(--shadow), inset 0 0 0 1.5px var(--ink);
+}
+
+.memo-exam-material.failed .memo-exam-pick-copy > span:not(.memo-eyebrow) {
+  color: var(--danger);
+}
+
+.memo-exam-material-track {
+  margin-top: 0.35rem;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.memo-exam-material-retry {
+  flex: 0 0 auto;
+  height: 2.6rem;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.memo-exam-material-remove {
+  display: grid;
+  flex: 0 0 auto;
+  width: 2.2rem;
+  height: 2.2rem;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.memo-exam-material-retry:hover,
+.memo-exam-material-remove:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-exam-material-retry:focus-visible,
+.memo-exam-material-remove:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-exam-step .memo-exam-pick-emoji {
+  width: 2.4rem;
+  height: 2.4rem;
+}
+
+.memo-exam-step .memo-eyebrow {
+  margin-top: 0.3rem;
+}
+
+/*
+ * Memo asking the question, as the onboarding has him: the character beside a speech bubble
+ * (`.hero`: big, under the bubble, for the screens where he is the whole picture).
+ */
+.memo-exam-says {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 1.4rem 0 0.4rem;
+}
+
+.memo-exam-says.hero {
+  flex-direction: column-reverse;
+  gap: 1.1rem;
+  margin: 0 0 0.6rem;
+}
+
+/* When he hops he goes over his own speech bubble, never behind it. */
+.memo-exam-says .memo-buddy {
+  z-index: 1;
+}
+
+.memo-exam-bubble {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0.85rem 1.1rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow), inset 0 0 0 1.5px var(--line);
+  font-size: 1.3rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+}
+
+/* The tail, pointing at Memo: to the left beside him, down when he stands under the bubble. */
+.memo-exam-bubble::before {
+  content: "";
+  position: absolute;
+  left: -0.45rem;
+  top: 50%;
+  width: 0.9rem;
+  height: 0.9rem;
+  margin-top: -0.45rem;
+  border-radius: 0 0 0 3px;
+  background: var(--surface);
+  box-shadow: inset 1.5px -1.5px 0 var(--line);
+  transform: rotate(45deg);
+}
+
+.memo-exam-says.hero .memo-exam-bubble {
+  flex: 0 0 auto;
+  max-width: 22rem;
+  text-align: center;
+}
+
+.memo-exam-says.hero .memo-exam-bubble::before {
+  left: 50%;
+  top: auto;
+  bottom: -0.45rem;
+  margin: 0 0 0 -0.45rem;
+  border-radius: 0 0 3px 0;
+  box-shadow: inset -1.5px -1.5px 0 var(--line);
+}
+
+.memo-exam-bubble-rest {
+  opacity: 0;
+}
+
+/*
+ * The material step's primary: bring the material for this exam. A coral edge marks it as the
+ * main way in; the four sources are the "Novo" sheet's, two by two.
+ */
+.memo-exam-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Only when a limit is reached: why the field no longer takes files. */
+.memo-exam-upload-limit {
+  color: var(--muted);
+  font-size: 0.92rem;
+  text-align: center;
+}
+
+/* How many of this setup's new files are used, e.g. "2/8". */
+/*
+ * The one upload field: the app's dropzone, tinted for exam prep. Files, photos, the camera or
+ * audio, picked or dropped; the sheet that makes the note works out which.
+ */
+.memo-exam-dropzone {
+  height: auto;
+  min-height: 11rem;
+  padding: 1.2rem;
+  gap: 0.35rem;
+  border-color: color-mix(in srgb, var(--promo) 45%, var(--line));
+  background: color-mix(in srgb, var(--promo) 6%, var(--sunken));
+}
+
+.memo-exam-dropzone .memo-dropzone-icon {
+  color: var(--promo);
+}
+
+.memo-exam-dropzone.dragging,
+.memo-exam-dropzone:hover:not(:disabled) {
+  border-color: var(--promo);
+  background: color-mix(in srgb, var(--promo) 12%, var(--sunken));
+}
+
+.memo-exam-dropzone:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-exam-dropzone-lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.memo-exam-dropzone .memo-dropzone-title {
+  font-size: 0.92rem;
+}
+
+/* The secondary: notes already in the app, folded until asked for. */
+.memo-exam-existing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.9rem;
+  padding: 0 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
+.memo-exam-existing:hover {
+  color: var(--text);
+}
+
+/* The encouraging screen's real numbers: days, modules, lessons. */
+.memo-exam-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.memo-exam-stats > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.9rem 0.4rem;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-align: center;
+  animation: memo-pop-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.memo-exam-stats > div:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.memo-exam-stats > div:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+.memo-exam-stats b {
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-stats span {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+/* The building screen's checklist, each line ticking in after the one before. */
+.memo-exam-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-exam-checks li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 650;
+  animation: memo-pop-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.memo-exam-checks .msym {
+  color: var(--success);
+}
+
+/* A line still being worked on while the plan is made: its mark spins until the plan is ready. */
+.memo-exam-checks li.waiting {
+  color: var(--muted);
+}
+
+.memo-exam-checks li.waiting .msym {
+  color: var(--muted);
+  animation: memo-spin 1s linear infinite;
+}
+
+
+/* The AI-topics switch's warning, as Astra marks it: not recommended. */
+.memo-exam-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 18px;
+  background: var(--upgrade-tint);
+  color: var(--upgrade-ink);
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+/*
+ * The plan review: the path the AI made, read-only. Numbered stops joined by a line, one card per
+ * module (its note, its topic, what it holds), then the mock exam and the goal. The stops come in
+ * one after another, so the plan unrolls as it appears.
+ */
+.memo-exam-plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The line the stops hang on, behind the nodes. */
+.memo-exam-plan::before {
+  content: "";
+  position: absolute;
+  top: 1.2rem;
+  bottom: 1.2rem;
+  left: 1.2rem;
+  width: 0.2rem;
+  margin-left: -0.1rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--promo) 30%, var(--line));
+}
+
+.memo-exam-plan-step {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  animation: memo-pop-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.memo-exam-plan-step:nth-child(2) { animation-delay: 0.06s; }
+.memo-exam-plan-step:nth-child(3) { animation-delay: 0.12s; }
+.memo-exam-plan-step:nth-child(4) { animation-delay: 0.18s; }
+.memo-exam-plan-step:nth-child(5) { animation-delay: 0.24s; }
+.memo-exam-plan-step:nth-child(6) { animation-delay: 0.3s; }
+.memo-exam-plan-step:nth-child(n + 7) { animation-delay: 0.36s; }
+
+.memo-exam-plan-node {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  flex: 0 0 auto;
+  width: 2.4rem;
+  height: 2.4rem;
+  margin-top: 0.45rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--coral);
+  box-shadow: var(--memo-coral-glow);
+  color: var(--on-photo);
+  font-size: 0.98rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-plan-step.pending .memo-exam-plan-node,
+.memo-exam-plan-step.finale .memo-exam-plan-node {
+  background: var(--surface);
+  box-shadow: var(--shadow), inset 0 0 0 1.5px var(--line);
+}
+
+.memo-exam-plan-card {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.75rem 0.95rem 0.8rem;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-align: left;
+}
+
+.memo-exam-plan-card > b {
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+/* Which note the module comes from, small, above its topic. */
+.memo-exam-plan-note {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-exam-plan-meta {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.memo-exam-plan-step.goal .memo-exam-plan-card {
+  box-shadow: var(--shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--promo) 45%, transparent);
+}
+
+/* "Your topic" / "Added by AI" beside a topic's title. */
+/* "Priporočeno", the picker's badge (its coral edge and ink) where it sits inline beside a title
+   (the examiner's manner); in sentence case there, so it fits beside the name on a phone. */
+.memo-exam-recommended {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1.5px var(--promo);
+  color: var(--promo);
+  font-size: 0.78rem;
+  font-weight: 700;
+  vertical-align: 0.1em;
+  white-space: nowrap;
+}
+
+.memo-exam-trail-source {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--upgrade-tint);
+  color: var(--upgrade-ink);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  vertical-align: 0.1em;
+}
+
+/* Each step is centred: the question and its few controls sit in the middle of the screen. */
+.memo-exam-step > .memo-exam-step-title {
+  margin-bottom: 0.4rem;
+  text-align: center;
+}
+
+.memo-exam-step > .memo-exam-chips {
+  justify-content: center;
+}
+
+.memo-exam-step > .memo-exam-link {
+  align-self: center;
+}
+
+.memo-exam-chips {
+  flex-wrap: wrap;
+}
+
+.memo-exam-chips .memo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.memo-exam-chips .memo-chip.active {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+.memo-exam-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.memo-exam-pick {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  min-height: 4.4rem;
+  padding: 0.7rem 1.1rem;
+  border: 0;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: box-shadow 0.16s ease;
+}
+
+.memo-exam-pick:hover {
+  box-shadow: var(--shadow), inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-exam-pick:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.memo-exam-pick.on {
+  box-shadow: var(--shadow), inset 0 0 0 1.5px var(--ink);
+}
+
+.memo-exam-pick-emoji {
+  display: grid;
+  flex: 0 0 auto;
+  width: 2.9rem;
+  height: 2.9rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--tile);
+}
+
+.memo-exam-pick-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.memo-exam-pick-copy b {
+  overflow: hidden;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-exam-pick-copy > span:not(.memo-eyebrow) {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.memo-exam-pick-mark {
+  flex: 0 0 auto;
+  color: var(--muted-2);
+}
+
+.memo-exam-material.ready .memo-exam-pick-mark,
+.memo-exam-pick.on .memo-exam-pick-mark {
+  color: var(--ink);
+}
+
+.memo-exam-input {
+  font-size: 1.2rem;
+  font-weight: 650;
+}
+
+
+/*
+ * The Generalka's setup fits one phone screen: its dial a little smaller than the setup's, and Memo beside the title.
+ */
+@media (max-width: 1099px) {
+  .memo-exam-mock-main .memo-exam-dial {
+    width: min(12.5rem, 60vw);
+  }
+
+  /* Memo beside the title, as on desktop: the setup fits with a last result under it too. */
+  .memo-exam-mock-main .memo-exam-center {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 0.9rem;
+    row-gap: 0.2rem;
+    align-items: center;
+    justify-items: start;
+    padding: 1.8rem 0 0.2rem;
+    text-align: left;
+  }
+
+  .memo-exam-mock-main .memo-exam-center > .memo-buddy {
+    grid-row: 1 / span 2;
+    margin-top: 0;
+  }
+
+  .memo-exam-mock-main .memo-exam-center > .memo-exam-step-title {
+    align-self: end;
+  }
+
+  .memo-exam-mock-main .memo-exam-center > .memo-exam-fine {
+    align-self: start;
+  }
+}
+
+/* A mock question's worth, quieter than its number beside it. */
+.memo-exam-mock-points {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.memo-exam-dial-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* The target: a 270° gauge with a knob the learner drags round it. */
+.memo-exam-dial {
+  position: relative;
+  width: min(15rem, 72vw);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.memo-exam-dial.dragging {
+  cursor: grabbing;
+}
+
+.memo-exam-dial:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-exam-dial svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.memo-exam-dial-track,
+.memo-exam-dial-fill {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 16;
+}
+
+.memo-exam-dial-track {
+  stroke: var(--track);
+}
+
+.memo-exam-dial-fill {
+  stroke: var(--promo);
+  transition: stroke-dasharray 0.12s ease-out;
+}
+
+.memo-exam-dial-gloss {
+  fill: none;
+  stroke: none;
+  pointer-events: none;
+}
+
+.memo-exam-dial.dragging :is(.memo-exam-dial-fill, .memo-exam-dial-gloss) {
+  transition: none;
+}
+
+.memo-exam-dial-knob {
+  fill: var(--surface);
+  stroke: var(--promo);
+  stroke-width: 5;
+  transition: r 0.16s ease;
+}
+
+.memo-exam-dial.dragging .memo-exam-dial-knob {
+  r: 14px;
+}
+
+.memo-exam-dial-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  pointer-events: none;
+}
+
+.memo-exam-dial-center b {
+  font-size: 3.2rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.memo-exam-dial-center b small {
+  font-size: 1.6rem;
+  font-weight: 750;
+}
+
+/* Inside the ring, never across it: a longer caption ("4 ustna vprašanja") wraps instead. */
+.memo-exam-dial-center span {
+  max-width: 62%;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.memo-exam-review-sub {
+  margin: -0.4rem 0 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-exam-review-sub b {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.memo-exam-route-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+.memo-exam-route-head > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.memo-exam-route-head b {
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.memo-exam-route-head > span > span {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.3;
+}
+
+/* The setup's calendar: one month, nothing else on it. */
+.memo-exam-cal {
+  padding: 0.9rem 0.9rem 1rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-exam-cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.memo-exam-cal-head b {
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: capitalize;
+}
+
+.memo-exam-cal-head .memo-icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.memo-exam-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.memo-exam-cal-weekday {
+  padding: 0.2rem 0 0.4rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.memo-exam-cal-day {
+  display: grid;
+  height: 2.6rem;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.16s ease;
+}
+
+.memo-exam-cal-day:hover:not(:disabled) {
+  background: var(--tile);
+}
+
+.memo-exam-cal-day:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-exam-cal-day.out {
+  visibility: hidden;
+}
+
+.memo-exam-cal-day:disabled {
+  color: var(--muted-2);
+  cursor: default;
+}
+
+.memo-exam-cal-day.today {
+  box-shadow: inset 0 0 0 1.5px var(--line);
+}
+
+.memo-exam-cal-day.selected {
+  background: var(--coral);
+  box-shadow: var(--memo-coral-glow);
+  color: var(--on-promo);
+}
+
+/* --- dashboard ------------------------------------------------------------ */
+
+/*
+ * The exam's study path, drawn the way Astra and Duolingo draw a course: a heading per module,
+ * then its lessons as round stations on a line that swings left and right down the screen. The
+ * geometry (row height, swing, segment angles) comes from src/lib/exams/exam-path.ts.
+ */
+.memo-exam-trail-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  text-align: center;
+}
+
+.memo-exam-page .memo-exam-trail-head h1 {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  text-wrap: balance;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/*
+ * The prep's headline: how much the learner knows against the goal. A bar with the target
+ * marked on it (a notch that stands out of the track) and the number big;
+ * the days and today's lessons sit under it as two quiet facts.
+ */
+.memo-exam-goal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  align-self: stretch;
+  padding: 1.1rem 1.2rem 1rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-align: left;
+}
+
+.memo-exam-goal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.memo-exam-goal-label {
+  color: var(--muted);
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.memo-exam-goal-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.memo-exam-goal-value b {
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-goal-value span {
+  color: var(--muted);
+  font-size: 0.98rem;
+  font-weight: 650;
+}
+
+.memo-exam-goal-bar {
+  position: relative;
+  padding: 0.75rem 0;
+}
+
+.memo-exam-goal .memo-progress.goal {
+  height: 1rem;
+}
+
+.memo-exam-goal .memo-progress.goal > div {
+  background: var(--coral);
+}
+
+/*
+ * The goal on the bar: a target in a round badge centred on the goal, kept inside the track at
+ * the ends (a 100 % goal sits at the right edge, not half off it). Reached, it rings green.
+ */
+.memo-exam-goal-mark {
+  position: absolute;
+  top: 50%;
+  left: clamp(1.25rem, var(--goal), calc(100% - 1.25rem));
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow), inset 0 0 0 1.5px var(--line);
+  transform: translate(-50%, -50%);
+}
+
+.memo-exam-goal-mark.hit {
+  box-shadow: var(--shadow), inset 0 0 0 2px var(--success);
+}
+
+/* Astra's forecast and the open knowledge gaps, one short line each under the bar. */
+.memo-exam-goal-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.memo-exam-goal-notes p {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.memo-exam-goal-notes p.on-track {
+  color: var(--success);
+}
+
+.memo-exam-goal-facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+/* The two facts share the row evenly; a language too long for one row gives each a row of its own. */
+.memo-exam-goal-facts > span {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 2.4rem;
+  padding: 0 0.75rem;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.memo-exam-goal-facts b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-trail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+  margin-top: 1.2rem;
+  padding-bottom: 1.5rem;
+  /* The swinging path and Memo must never make the screen scroll sideways. */
+  overflow-x: clip;
+}
+
+.memo-exam-trail-unit {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+
+.memo-exam-lessons-left {
+  max-width: 22rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  text-wrap: balance;
+}
+
+/*
+ * A module, as a chapter: its name, and the app's progress bar towards its goal with the goal
+ * marked on it. Edged in coral while it is the one being studied; its numbers turn green once it
+ * is on its goal.
+ */
+.memo-path-chapter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem 1.15rem 1.05rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-path-chapter.current {
+  box-shadow: var(--shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--promo) 55%, transparent);
+}
+
+.memo-path-chapter.locked {
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.memo-path-chapter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 1.5rem;
+}
+
+.memo-path-chapter-head i {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.memo-path-chapter.current .memo-path-chapter-head i {
+  color: var(--promo);
+}
+
+.memo-path-chapter-mark {
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--success);
+  color: var(--on-promo);
+}
+
+.memo-path-chapter-title {
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.memo-path-chapter-gate {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.memo-path-chapter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.4rem;
+}
+
+.memo-path-chapter-track {
+  position: relative;
+  flex: 1;
+}
+
+.memo-path-chapter-track .memo-progress {
+  margin: 0;
+}
+
+.memo-path-goal {
+  position: absolute;
+  top: -0.3rem;
+  width: 3px;
+  height: calc(100% + 0.6rem);
+  border-radius: 999px;
+  background: var(--ink);
+  transform: translateX(-50%);
+}
+
+.memo-path-chapter-bar > b {
+  flex: 0 0 auto;
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.memo-path-chapter-bar > b span {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.memo-path-chapter.on-target .memo-path-chapter-bar > b {
+  color: var(--success);
+}
+
+/* "Na cilju", first among the goal card's notes once the prep is on its goal. */
+.memo-path-ontarget {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 0.25rem;
+  height: 1.65rem;
+  padding: 0 0.6rem 0 0.45rem;
+  border-radius: 999px;
+  background: var(--success-tint);
+  color: var(--success);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+/*
+ * The path: one smooth line through the stops (exam-path.ts draws it), coral as far as the learner
+ * has come and dotted after. Each stop is placed on it by its centre.
+ */
+.memo-path {
+  position: relative;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  container-type: inline-size;
+}
+
+.memo-path-svg {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 16rem;
+  overflow: visible;
+  transform: translateX(-50%);
+}
+
+.memo-path-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 0.56;
+}
+
+.memo-path-line.walked {
+  stroke: color-mix(in srgb, var(--promo) 45%, transparent);
+}
+
+.memo-path-line.ahead {
+  stroke: var(--line);
+  stroke-dasharray: 0.125 1;
+}
+
+.memo-path-stop {
+  position: absolute;
+  left: calc(50% + var(--x, 0rem));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  transform: translate(-50%, -2.25rem);
+}
+
+.memo-path-node {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 4.5rem;
+  height: 4.5rem;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.memo-path-node:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+/*
+ * A stop's pills (its score, "Naslednja", what is left) are centred under it, but never past the
+ * path's edge: one on a wide swing slides in by exactly what would stick out (50% is the pill's own
+ * half-width, 50cqw the path's).
+ */
+:is(.memo-path-label, .memo-path-next, .memo-path-left) {
+  translate: clamp(calc(50% - 50cqw - var(--x, 0rem)), 0px, calc(50cqw - var(--x, 0rem) - 50%)) 0;
+}
+
+/* Walked: a soft coral stop on a ledge. */
+.memo-path-node.done {
+  background: color-mix(in srgb, var(--promo) 16%, var(--surface));
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 35%, var(--surface)), inset 0 0 0 2px color-mix(in srgb, var(--promo) 40%, transparent);
+}
+
+@media (hover: hover) {
+  .memo-path-node.done:hover {
+    box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 35%, var(--surface)), inset 0 0 0 2px color-mix(in srgb, var(--promo) 60%, transparent);
+  }
+}
+
+.memo-path-node:is(.done, .next):active {
+  transform: translateY(4px);
+}
+
+.memo-path-tick {
+  position: absolute;
+  right: -0.15rem;
+  bottom: -0.15rem;
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--success);
+  box-shadow: 0 0 0 3px var(--bg);
+  color: var(--on-promo);
+}
+
+.memo-path-label {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.memo-path-label b {
+  color: var(--text);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.memo-path-label b.good {
+  color: var(--success);
+}
+
+/* Next: the one stop in colour, larger, glowing, with Memo beside it. */
+.memo-path-halo {
+  position: absolute;
+  top: -0.85rem;
+  left: 50%;
+  width: 7.1rem;
+  height: 7.1rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--promo) 16%, transparent);
+  transform: translateX(-50%);
+  animation: memo-path-glow 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes memo-path-glow {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+
+  50% {
+    opacity: 0.7;
+    transform: translateX(-50%) scale(1.08);
+  }
+}
+
+.memo-path-node.next {
+  width: 5.4rem;
+  height: 5.4rem;
+  margin-top: -0.45rem;
+  background: var(--coral);
+  box-shadow: 0 6px 0 color-mix(in srgb, var(--promo) 72%, var(--photo-stage));
+}
+
+.memo-path-next {
+  position: relative;
+  z-index: 1;
+}
+
+.memo-path-buddy {
+  position: absolute;
+  top: -0.2rem;
+  z-index: 1;
+}
+
+.memo-path-buddy.right {
+  left: calc(50% + 3.6rem);
+}
+
+.memo-path-buddy.left {
+  right: calc(50% + 3.6rem);
+}
+
+/* Ahead: a quiet stop, and how many are left as a pill under the first. */
+.memo-path-node.locked {
+  width: 4rem;
+  height: 4rem;
+  margin-top: 0.25rem;
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 2px var(--line);
+  color: var(--muted-2);
+  cursor: default;
+}
+
+.memo-path-left {
+  position: relative;
+  z-index: 1;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  /* The tile's tint laid on the page, so the dotted line passes under it, not through it. */
+  background: linear-gradient(var(--tile), var(--tile)), var(--bg);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* A module's earlier lessons, folded: a quiet chip under its chapter card that opens them. */
+.memo-exam-trail-earlier {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.35rem;
+  height: 2.7rem;
+  margin: 0.2rem auto 0;
+  padding: 0 1.05rem 0 0.85rem;
+  border: var(--btn-border-width) solid var(--btn-border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+@media (hover: hover) {
+  .memo-exam-trail-earlier:hover {
+    box-shadow: var(--shadow), inset 0 0 0 1px var(--hover-ring);
+  }
+}
+
+.memo-exam-trail-earlier:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow), 0 0 0 3px var(--focus-ring);
+}
+
+.memo-exam-retry-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+/* The done screen's gaps: what was closed, and what comes back until it is answered right. */
+.memo-exam-gap-facts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.memo-exam-gap-facts > span {
+  display: block;
+  max-width: 22rem;
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.92rem;
+  font-weight: 650;
+  text-wrap: balance;
+}
+
+.memo-exam-gap-facts > span.closed {
+  color: var(--success);
+}
+
+.memo-exam-gap-facts > span > :first-child {
+  margin-right: 0.4rem;
+  vertical-align: -0.15em;
+}
+
+@keyframes memo-station-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+/* The prep's two tabs, Astra's "Study path" and "Progress". */
+.memo-exam-tabs {
+  align-self: center;
+}
+
+.memo-exam-tabs button {
+  min-width: 7rem;
+}
+
+/* "Next up": the label under the station to do next, as Astra marks it. */
+.memo-exam-station-next {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 0.92rem;
+  font-weight: 800;
+  white-space: nowrap;
+  animation: memo-station-bob 1.8s ease-in-out infinite;
+}
+
+.memo-exam-station-next i {
+  font-style: normal;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+/* The bottom bar: swap the lesson (Astra's left button) beside the one coral "Nadaljuj". */
+.memo-exam-next-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.memo-exam-next-bar > .memo-button-coral {
+  flex: 1;
+}
+
+.memo-exam-swap {
+  display: grid;
+  flex: 0 0 auto;
+  width: var(--btn-round);
+  height: var(--btn-round);
+  place-items: center;
+  border: var(--btn-border-width) solid var(--btn-border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.memo-exam-swap:hover {
+  box-shadow: var(--shadow), inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-exam-swap:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow), 0 0 0 3px var(--focus-ring);
+}
+
+/* Astra's mock card on the path: try the real exam whenever you like. */
+.memo-exam-mock-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+  margin-top: 0.6rem;
+  text-align: left;
+}
+
+.memo-exam-mock-card.current {
+  box-shadow: var(--shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--promo) 55%, transparent);
+}
+
+/* Every card on the path (mock, preparing, ready, after the exam) heads the same way. */
+.memo-exam-mock-card b {
+  display: block;
+  font-size: 1.08rem;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+.memo-exam-mock-card p {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.memo-exam-preparing {
+  margin: 0 0 1rem;
+}
+
+.memo-exam-preparing .memo-exam-material-track {
+  grid-column: 1 / -1;
+}
+
+.memo-exam-mock-card-go {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+/*
+ * The Progress tab: the goal card above already carries the forecast and the gaps, so below it is
+ * no more cards. Three numbers on the page between hairlines, then the topics as a plain list.
+ */
+.memo-exam-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  padding: 0.4rem 0 1.5rem;
+}
+
+.memo-exam-progress-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.memo-exam-progress-stats > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.15rem 0.4rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 650;
+  text-align: center;
+}
+
+.memo-exam-progress-stats > span + span {
+  border-left: 1px solid var(--line);
+}
+
+.memo-exam-progress-stats b {
+  color: var(--text);
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-progress-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.memo-exam-progress-topics {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-exam-progress-topics li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.9rem 0;
+}
+
+.memo-exam-progress-topics li + li {
+  border-top: 1px solid var(--line);
+}
+
+.memo-exam-progress-topics li.locked {
+  opacity: 0.55;
+}
+
+.memo-exam-progress-topic-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.memo-exam-progress-topic-head b {
+  min-width: 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.memo-exam-progress-topic-head span {
+  flex-shrink: 0;
+  font-size: 0.92rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A topic's mastery on a bar, its goal a tick across it (the progress list and a lesson's result). */
+.memo-exam-mastery-bar {
+  position: relative;
+}
+
+.memo-exam-mastery-bar .memo-progress.goal {
+  height: 1rem;
+  border-radius: 999px;
+}
+
+.memo-exam-mastery-bar .memo-progress.goal > div {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.memo-exam-mastery-bar > i {
+  position: absolute;
+  top: -0.2rem;
+  bottom: -0.2rem;
+  left: clamp(0px, var(--goal), 100%);
+  width: 2px;
+  border-radius: 999px;
+  background: var(--text);
+  opacity: 0.55;
+}
+
+/* A written answer being fixed: what the first try missed, as the hint. */
+.memo-exam-written-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0 0 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  background: var(--tile);
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+/* A lesson's parts in its header: reading, flashcards, quiz, written; centred, the current one stands out. */
+.memo-exam-lesson-parts {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-exam-lesson-parts li {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.memo-exam-lesson-parts li.done {
+  color: var(--text);
+}
+
+.memo-exam-lesson-parts li.current {
+  padding: 0 0.75rem 0 0.6rem;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--promo);
+  color: var(--text);
+}
+
+/* A lesson's result: what it added, and the topic's mastery after it. */
+.memo-exam-gain {
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-done-mastery {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: min(100%, 20rem);
+}
+
+.memo-exam-done-mastery > span:first-child {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.memo-exam-done-mastery b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Astra's "Next lesson" picker: learn, practise or exam, and the topic. */
+/* Three equal tabs across the sheet: the page tabs' 7rem minimum does not fit three on a phone. */
+.memo-exam-picker .memo-exam-tabs {
+  width: 100%;
+  margin: 0 0 0.85rem;
+}
+
+.memo-exam-picker .memo-exam-tabs button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 0.5rem;
+}
+
+/*
+ * The open topics, all on show: they wrap rather than scroll sideways, since a module opens only
+ * once the one before it is on target and few are open at a time.
+ */
+.memo-exam-picker-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.memo-exam-picker-topics .memo-chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-exam-picker-topics .memo-chip.active {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.memo-exam-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem 0.6rem;
+  padding-top: 0.75rem;
+}
+
+.memo-exam-picker-grid.wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.memo-exam-picker-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 6.2rem;
+  padding: 1rem 0.75rem;
+  border: 0;
+  border-radius: 18px;
+  background: var(--tile);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: center;
+}
+
+.memo-exam-picker-item b {
+  font-size: 0.98rem;
+  font-weight: 750;
+}
+
+.memo-exam-picker-item > span:not(.memo-emoji):not(.memo-exam-picker-badge) {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.memo-exam-picker-item:hover {
+  box-shadow: inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-exam-picker-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.memo-exam-picker-item.locked {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.memo-exam-picker-item.locked:hover {
+  box-shadow: none;
+}
+
+.memo-exam-picker-badge {
+  position: absolute;
+  top: -0.55rem;
+  left: 50%;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--promo);
+  color: var(--promo);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.memo-exam-trail-finish {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 0.8rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.memo-exam-flame {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: var(--btn-round);
+  padding: 0 0.95rem;
+  border: var(--btn-border-width) solid var(--btn-border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-buddy-line {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.memo-exam-buddy-line p {
+  position: relative;
+  flex: 1;
+  margin: 0;
+  padding: 0.85rem 1.1rem;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.memo-exam-after {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.memo-exam-after b {
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+
+.memo-exam-after p {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.memo-exam-after-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+.memo-exam-after-form .memo-field {
+  height: 3.2rem;
+}
+
+/* --- entry ---------------------------------------------------------------- */
+
+/*
+ * Exam prep's row in the "Novo" sheet: one of the options (`.memo-sheet-option`), with the same
+ * height, padding, tile and type, sitting first in the same list. It is the primary by a touch of
+ * coral only: the tinted tile Memo sits in and a faint coral edge, which firms up on hover.
+ */
+.memo-exam-entry {
+  display: flex;
+  align-items: center;
+  gap: 1.05rem;
+  width: 100%;
+  min-height: 4.6rem;
+  padding: 0.5rem 1.2rem;
+  border: 0;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--promo) 3%, var(--surface));
+  box-shadow: var(--shadow), inset 0 0 0 1px color-mix(in srgb, var(--promo) 24%, transparent);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition:
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.16s ease;
+}
+
+.memo-exam-entry:hover {
+  box-shadow: var(--shadow), inset 0 0 0 1px color-mix(in srgb, var(--promo) 55%, transparent);
+}
+
+.memo-exam-entry:active {
+  transform: scale(0.972);
+}
+
+.memo-exam-entry:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow), inset 0 0 0 1px color-mix(in srgb, var(--promo) 55%, transparent), 0 0 0 3px var(--focus-ring);
+}
+
+.memo-exam-entry-tile {
+  display: grid;
+  flex: 0 0 auto;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--promo) 18%, var(--surface));
+}
+
+.memo-exam-entry-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.memo-exam-entry-title {
+  overflow: hidden;
+  font-size: 1.12rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-exam-entry-desktop {
+  margin: 1.2rem 0 0.85rem;
+}
+
+/*
+ * The library's exam-prep folder. Its rows are note rows; an exam emoji in the tile, ringed by how much
+ * of the goal is mastered, is what says "prep" rather than "note". An eyebrow heads its past ones.
+ */
+.memo-library-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2rem;
+  margin: 1.35rem 0 0;
+  padding: 0 0.3rem;
+}
+
+.memo-library-count {
+  display: inline-grid;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.35rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--tile);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-prep-ring {
+  display: grid;
+  flex: 0 0 auto;
+  width: 3rem;
+  height: 3rem;
+  padding: 3px;
+  place-items: center;
+  border-radius: 999px;
+  background: conic-gradient(var(--promo) var(--prep-mastery, 0%), var(--tile) 0);
+}
+
+.memo-prep-ring-face {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--promo) 12%, var(--surface));
+}
+
+/* A past prep: the same row, quieter, its ring in the track's colour. */
+.memo-prep-row.past {
+  opacity: 0.72;
+}
+
+/*
+ * The exam-prep folder: every prep, then the row that starts a new one, cut like the rest so the
+ * folder reads as a list of preps with room for one more (the coral "Novo" stays the screen's
+ * one primary), then the past ones under their own heading.
+ */
+.memo-prep-folder {
+  display: grid;
+}
+
+.memo-prep-folder > .memo-note-list:first-child,
+.memo-prep-folder > .memo-prep-empty + .memo-note-list {
+  margin-top: 0.4rem;
+}
+
+.memo-prep-folder > .memo-library-head + .memo-note-list {
+  margin-top: 0.6rem;
+}
+
+.memo-prep-empty {
+  padding: 1.6rem 1rem 0.8rem;
+}
+
+.memo-prep-empty h2 {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+
+/* The exam-prep folder's count, at the end of its row in the folder picker. */
+:is(.memo-menu-item, .memo-folder-row-main) > .memo-library-count {
+  margin-left: auto;
+}
+
+/*
+ * Arriving on the exam-prep folder from a prep (a new one above all), the folder chip, which now
+ * names the folder, pulses twice in coral so the learner sees where their preps are.
+ */
+:is(.memo-folder-chip, .memo-m-folder-chip).announce {
+  animation: memo-folder-announce 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.35s 2;
+}
+
+@keyframes memo-folder-announce {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--promo) 55%, transparent);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0.75rem color-mix(in srgb, var(--promo) 0%, transparent);
+  }
+}
+
+@media (max-width: 1099px) {
+  /* The phone's note rows are the swipe surface; a prep row is cut to the same size. */
+  .memo-note-row.memo-prep-row {
+    gap: 0.9rem;
+    min-height: 0;
+    padding: 0.95rem 1.2rem;
+  }
+
+  .memo-library-head {
+    margin-top: 1.25rem;
+  }
+}
+
+/* --- navigation ----------------------------------------------------------- */
+
+/* Desktop's labelled way back: where it goes, in words, above the title. */
+.memo-exam-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.7rem;
+  padding: 0 1.05rem 0 0.85rem;
+  border: var(--btn-border-width) solid var(--btn-border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  max-width: 22rem;
+  transition: box-shadow 0.16s ease;
+}
+
+.memo-exam-crumb span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-exam-crumb:hover {
+  box-shadow: var(--shadow), inset 0 0 0 1px var(--hover-ring);
+}
+
+.memo-exam-crumb:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+/* --- lesson --------------------------------------------------------------- */
+
+.memo-exam-lesson-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/*
+ * A flashcard thrown in a lesson leaves the screen, as it does in the note's deck: the clips
+ * between it and the window are released while a drag or its throw is under way, and the
+ * lesson is lifted over whatever sits beside it.
+ */
+.memo-exam-screen :is(.memo-screen-scroll, .memo-exam-page, .memo-panel, .lecture-study-shell, .lecture-flashcard-stage):has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card) {
+  overflow: visible;
+}
+
+/* The phone scroller's top fade is a mask, and a mask cuts whatever leaves its box too. */
+.memo-exam-screen .memo-screen-scroll:has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card) {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.memo-exam-screen :is(.memo-panel, .lecture-flashcard-stage, .lecture-flashcard-stage-card):has(.lecture-flashcard.dragging, .lecture-flashcard-exit-card) {
+  position: relative;
+  z-index: 130;
+}
+
+/* A quiz miss's explanation, opened in the result row ("Preglej zakaj"), across its full width. */
+/* "Preglej zakaj" in an exam quiz: the right answer and its explanation, in a sheet. */
+.memo-exam-why-answer {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0 0 0.85rem;
+  color: var(--text);
+  font-size: 1.08rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.memo-exam-why-answer .msym {
+  flex-shrink: 0;
+  color: var(--success);
+}
+
+.memo-exam-quiz-why {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+/*
+ * The lesson's quiz is the question and its answers on the page, as the note's quiz tab has it on
+ * the phone: no card around the answer cards. (The extra ancestor outweighs the theme gradient the
+ * note screen's rule also has to beat.)
+ */
+.memo-exam-screen .memo-panel.memo-exam-lesson .lecture-quiz-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+@media (max-width: 1099px) {
+  /* The note quiz tab's phone type, so a question and four answers fit one screen. */
+  .memo-exam-lesson .lecture-quiz-prompt {
+    margin-bottom: 0.8rem;
+    font-size: 1.12rem;
+    line-height: 1.28;
+  }
+
+  .memo-exam-lesson .lecture-quiz-option {
+    min-height: 3.4rem;
+    padding-block: 0.7rem;
+    font-size: 1rem;
+  }
+
+  .memo-exam-lesson .lecture-quiz-options {
+    gap: 0.55rem;
+  }
+}
+
+/*
+ * A missed question that would run past the bottom of its screen with all its answers keeps only
+ * the one picked and the right one (`StudyQuizQuestion` sets this; everywhere a quiz is shown).
+ */
+.lecture-quiz-options[data-crowded] > .lecture-quiz-option:not(.selected, .correct) {
+  display: none;
+}
+
+/*
+ * In a lesson the two that are left take the room the others gave up, as the note's quiz tab's
+ * answers fill its column, rather than leaving a gap between them and the verdict.
+ */
+.memo-exam-lesson .lecture-quiz-options[data-crowded] {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
+.memo-exam-lesson .lecture-quiz-options[data-crowded] > .lecture-quiz-option {
+  flex: 1 0 auto;
+}
+
+/* A lesson on its way: centred on the screen, a line on what is being done, the app's bar. */
+.memo-exam-loading {
+  justify-content: center;
+  min-height: min(34rem, 70svh);
+}
+
+.memo-exam-loading-line {
+  min-height: 2.7em;
+  max-width: 18rem;
+  text-wrap: balance;
+  animation: memo-pop-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.memo-exam-loading-track {
+  width: min(14rem, 70%);
+  margin-top: 0.3rem;
+}
+
+/*
+ * The quiz fills the screen, so a missed question's verdict sits at its foot, under the thumb, with
+ * the answers left where they were.
+ */
+.memo-panel.study.memo-exam-lesson:has(> .lecture-quiz-stage),
+.memo-exam-lesson .lecture-quiz-stage,
+.memo-exam-lesson .lecture-quiz-card {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
+.memo-exam-lesson .lecture-quiz-options {
+  margin-bottom: 1.4rem;
+}
+
+/*
+ * A miss keeps every answer whenever they fit with the verdict (StudyQuizQuestion measures it), so
+ * the verdict spends no room it does not need: no rule or padding over it, a tighter gap under the
+ * answers, its buttons in the bar.
+ */
+.memo-exam-lesson .lecture-quiz-card:has(.memo-quiz-result) .lecture-quiz-options {
+  margin-bottom: 0.9rem;
+}
+
+.memo-exam-lesson .memo-quiz-result {
+  margin-top: auto;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* The verdict under a missed question: the badge and the line; its two choices are in the bar. */
+.memo-exam-lesson .memo-quiz-result {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.9rem;
+}
+
+.memo-exam-lesson .memo-quiz-result-copy {
+  align-self: center;
+}
+
+/* True or false: the question it answers, quietly above the statement being judged. */
+.memo-exam-tf-context {
+  margin: 0 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.memo-panel.study.memo-exam-lesson {
+  position: relative;
+  margin-top: 0.4rem;
+  min-height: 0;
+}
+
+.memo-exam-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  /* Room for Memo's thought cloud. */
+  padding-top: 1.4rem;
+}
+
+.memo-exam-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.memo-exam-summary-card p {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.memo-exam-summary-card .memo-chip-row {
+  flex-wrap: wrap;
+}
+
+.memo-exam-summary .memo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.memo-exam-zone-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: 100%;
+  max-width: 26rem;
+  padding: 1rem 1.25rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.memo-exam-zone-faces {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.6rem;
+}
+
+.memo-exam-zone-range {
+  width: 100%;
+  accent-color: var(--promo);
+}
+
+.memo-exam-zone-labels {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+/* --- mock exam ------------------------------------------------------------ */
+
+/* A mock's chosen answer, shown until it is handed in (no right or wrong yet): the chip's ink ring. */
+.memo-exam-screen .lecture-quiz-option.selected:not(.correct, .incorrect) {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.memo-exam-upsell {
+  background: var(--upgrade-tint);
+  box-shadow: inset 0 0 0 1px var(--upgrade-line);
+}
+
+.memo-exam-upsell b {
+  color: var(--upgrade-ink);
+  font-weight: 750;
+}
+
+.memo-exam-upsell p {
+  margin: 0.3rem 0 0;
+}
+
+.memo-exam-facts {
+  display: flex;
+  flex-direction: column;
+  padding: 0.3rem 1.25rem;
+}
+
+.memo-exam-facts > div {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 3.2rem;
+  border-top: 1px solid var(--line);
+}
+
+.memo-exam-facts > div:first-child {
+  border-top: 0;
+}
+
+.memo-exam-facts span:not(.msym) {
+  flex: 1;
+}
+
+/* A row's second line: how long one question of that kind takes. */
+.memo-exam-facts span small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.memo-exam-facts .msym {
+  color: var(--muted);
+}
+
+.memo-exam-facts b {
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-sheet .memo-exam-facts {
+  margin: 0.4rem 0 1rem;
+  background: var(--sunken);
+  box-shadow: none;
+}
+
+.memo-exam-result-head {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+}
+
+.memo-exam-result-head p {
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.memo-exam-feedback-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.95rem 1.1rem;
+  border-radius: 22px;
+}
+
+.memo-exam-feedback-block b {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.memo-exam-feedback-block p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.memo-exam-feedback-block.good {
+  background: var(--success-tint);
+}
+
+.memo-exam-feedback-block.good b {
+  color: var(--success);
+}
+
+.memo-exam-feedback-block.weak {
+  background: var(--danger-tint);
+}
+
+.memo-exam-feedback-block.weak b {
+  color: var(--danger);
+}
+
+.memo-exam-feedback-block.tip {
+  background: var(--upgrade-tint);
+}
+
+.memo-exam-feedback-block.tip b {
+  color: var(--upgrade-ink);
+}
+
+.memo-exam-answers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-exam-answers li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.95rem 1.1rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow), inset 3px 0 0 var(--danger);
+}
+
+.memo-exam-answers li.right {
+  box-shadow: var(--shadow), inset 3px 0 0 var(--success);
+}
+
+.memo-exam-answers li p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.memo-exam-answers-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.memo-exam-answers-head b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-answers .memo-palace-model-label {
+  margin-right: 0.35rem;
+}
+
+.memo-exam-answers-q {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.memo-exam-flagged {
+  color: var(--promo);
+}
+
+.memo-exam-sitting-note {
+  margin-top: 0.4rem;
+}
+
+/* A topic summary's key points. */
+.memo-exam-points {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.memo-exam-points li {
+  line-height: 1.4;
+}
+
+.memo-exam-points li::marker {
+  color: var(--promo);
+}
+
+/* --- oral mock exam ------------------------------------------------------- */
+
+/* The voice examiner: the tutor's sphere, with the question under it and the answer as it is heard. */
+.memo-exam-oral {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  min-height: 100%;
+  text-align: center;
+}
+
+.memo-exam-oral-top {
+  display: flex;
+  align-self: stretch;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.memo-exam-oral-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.memo-exam-oral-question {
+  max-width: 30rem;
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+.memo-exam-oral-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-top: auto;
+  padding-bottom: 0.6rem;
+}
+
+/* The answer's ink pill stands as tall as the quiet buttons beside it. */
+.memo-exam-oral-actions .memo-primary-pill {
+  height: 3.4rem;
+  padding: 0 1.6rem;
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+
+/* The tutor's answer buttons sit in a row that is always there, only hidden while he speaks. */
+.memo-exam-tutor-answer {
+  flex-wrap: nowrap;
+  margin-top: 0;
+  padding-bottom: 0;
+}
+
+.memo-exam-tutor-answer[data-hidden] {
+  visibility: hidden;
+}
+
+.memo-exam-tutor-answer .memo-button-ghost {
+  flex: 1 1 0;
+  max-width: 11rem;
+}
+
+.memo-exam-oral-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/*
+ * The app's tutor fills the height its screen leaves and lets the sphere take the spare room
+ * (see `.memo-tutor` in the desktop and phone blocks). A tutor lesson's panel gives it that
+ * height: the rest of the column on the phone, the rest of the window on desktop (less the app's
+ * header, the lesson's bar and the page's foot).
+ */
+.memo-panel.study.memo-exam-lesson:has(> .memo-exam-tutor) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+@media (min-width: 1100px) {
+  .memo-panel.study.memo-exam-lesson:has(> .memo-exam-tutor) {
+    min-height: calc(100dvh - 21rem);
+  }
+}
+
+/*
+ * The tutor lesson is the app's voice tutor (`.memo-tutor`) on a topic. Its voice row opens the
+ * voice chips in place, and in writing (no voice) the tutor's line and an answer box sit under Memo.
+ */
+/* The tutor's live captions: each word appears as it is said, a phrase to a line. */
+.memo-exam-tutor-captions p {
+  max-width: 30rem;
+  margin: 0;
+  color: var(--text);
+  font-size: 1.25rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.4;
+  text-align: center;
+  /* Not balanced: a line that rebalances as each word arrives makes the earlier words jump. */
+  text-wrap: pretty;
+}
+
+/* A presence, not a bead: the exam tutor's sphere keeps a larger floor than the flex share. */
+.memo-tutor.memo-exam-tutor .memo-orb {
+  min-height: 10rem;
+}
+
+.memo-exam-tutor-line {
+  max-width: 32rem;
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.memo-exam-tutor-type {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 32rem;
+  margin: 0 auto;
+}
+
+.memo-exam-tutor-type .memo-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.memo-exam-tutor-type .memo-close-button {
+  flex: 0 0 auto;
+}
+
+.memo-exam-tutor-type .memo-close-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/*
+ * The examiner's voices, as the tutor offers them, in three equal columns so the grid is
+ * symmetric; the last, shorter row is centred.
+ */
+.memo-exam-voices {
+  justify-content: center;
+}
+
+/* The Generalka setup's two columns are desktop's; on the phone their contents are one column. */
+.memo-exam-mock-main,
+.memo-exam-mock-side {
+  display: contents;
+}
+
+.memo-exam-voices .memo-tutor-voice {
+  flex: 0 0 calc((100% - 1rem) / 3);
+  min-width: 0;
+  padding-right: 0.6rem;
+}
+
+.memo-exam-voices .memo-tutor-voice span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The instructions before an oral exam. */
+.memo-exam-briefing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-exam-briefing li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.memo-exam-briefing .msym {
+  flex: 0 0 auto;
+  color: var(--promo);
+}
+
+/* --- phone ---------------------------------------------------------------- */
+
+@media (max-width: 1099px) {
+  .memo-exam-topbar {
+    position: absolute;
+    top: 0.5rem;
+    left: 1.15rem;
+    right: 1.15rem;
+    z-index: 5;
+    margin: 0;
+    pointer-events: none;
+  }
+
+  .memo-exam-topbar > * {
+    pointer-events: auto;
+  }
+
+  .memo-exam-topbar-title {
+    position: absolute;
+    left: 50%;
+    max-width: calc(100% - 9rem);
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  .memo-exam-page {
+    max-width: none;
+    padding: 0 1.15rem calc(2.5rem + var(--memo-safe-bottom));
+  }
+
+  .memo-exam-page.has-cta,
+  .memo-exam-screen:has(.memo-exam-cta-slot:not(:empty)) .memo-exam-page {
+    /* The bar's own height (its fade, a 3.4rem button, its foot), so nothing hides under it and no
+       room is held back that a screen meant to fit could use. */
+    padding-bottom: calc(5.9rem + var(--memo-safe-bottom));
+  }
+
+  /* An empty or locked screen sits in the middle of the phone, not under the bar. */
+  .memo-exam-page {
+    min-height: 100%;
+  }
+
+  .memo-exam-page > .memo-exam-empty {
+    flex: 1 0 auto;
+    justify-content: center;
+    padding-bottom: 4rem;
+  }
+
+  .memo-exam-page > .memo-exam-step {
+    flex: 1 0 auto;
+    justify-content: center;
+    padding-bottom: 2rem;
+  }
+
+  .memo-exam-page h1,
+  .memo-exam-step-title {
+    font-size: 1.75rem;
+  }
+
+  .memo-exam-cta {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 6;
+    max-width: none;
+    margin: 0;
+    padding: 1.6rem 1.15rem calc(0.9rem + var(--memo-safe-bottom));
+    background: linear-gradient(to bottom, transparent, var(--bg) 1.4rem);
+  }
+
+  .memo-exam-entry-desktop {
+    display: none;
+  }
+
+  /* The last result's link is in the content on the phone; its bar has room for the title only. */
+  .memo-exam-topbar-trailing > .memo-exam-link {
+    display: none;
+  }
+
+  /* The phone has its floating round button; the labelled link is desktop's. */
+  .memo-exam-crumb {
+    display: none;
+  }
+}
+
+@media (min-width: 1100px) {
+  .memo-exam-back-round,
+  .memo-exam-cta.phone-only {
+    display: none;
+  }
+
+  /*
+   * The way back on the left, the screen's name in the middle (a lesson's module and kind, the
+   * mock's clock), its actions on the right: three columns, so the name stays centred whatever
+   * sits either side of it.
+   */
+  .memo-exam-topbar {
+    margin-bottom: 1.2rem;
+  }
+
+  /* Setup draws its own bar (back and its progress), which stays a row. */
+  .memo-exam-topbar:not(.memo-exam-topbar-custom) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
+  .memo-exam-topbar > .memo-exam-crumb {
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .memo-exam-topbar > .memo-exam-topbar-title,
+  .memo-exam-topbar > span:empty:not(.memo-exam-topbar-trailing) {
+    grid-column: 2;
+    max-width: 22rem;
+  }
+
+  .memo-exam-topbar > .memo-exam-topbar-trailing {
+    grid-column: 3;
+    justify-self: end;
+  }
+
+  /*
+   * Desktop width. Every exam screen is one column, centred in the main column as the onboarding
+   * and the app's dialogs are, at the width of the note screen's study panels the lessons reuse
+   * (40rem), so its bar, its content and its button share one pair of edges.
+   */
+  .memo-exam-screen :is(.memo-exam-topbar, .memo-exam-page, .memo-exam-cta) {
+    width: 100%;
+    max-width: 40rem;
+    margin-inline: auto;
+  }
+
+  /*
+   * A setup step stands in the middle of the window, with its button at the bottom, as on the
+   * phone: the step takes the height between the bar and the button (the window less the app's
+   * header, the bar, the button's band and the page's foot) and centres in it.
+   */
+  .memo-exam-screen:has(.memo-exam-topbar-custom) .memo-exam-page {
+    min-height: calc(100dvh - 23rem);
+  }
+
+  .memo-exam-page > .memo-exam-step {
+    flex: 1 0 auto;
+    justify-content: center;
+  }
+
+  /* A screen the rail opens needs no way back, so its bar goes unless it carries actions. */
+  .memo-exam-topbar.no-desktop-back:not(:has(.memo-exam-topbar-trailing > *)) {
+    display: none;
+  }
+
+  .memo-exam-topbar.no-desktop-back {
+    justify-content: flex-end;
+  }
+
+  .memo-exam-page {
+    padding-bottom: 1rem;
+  }
+
+  /*
+   * The button under the content, centred like it, at its own width, and held at the bottom of
+   * the window while a long screen scrolls. It stands on a band of the page's own ground that
+   * fades in above it, as the phone's does, so rows scroll away under it instead of through it.
+   */
+  .memo-exam-cta {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    justify-content: center;
+    margin-top: 0.4rem;
+    padding: 1.1rem 0 1.25rem;
+    background: linear-gradient(to bottom, transparent, var(--bg) 1rem);
+  }
+
+  /* The button spans the column, as the onboarding's does: a full-width pill under the
+     full-width cards and options above it, not a short one floating in the middle. A row of
+     two (the Generalka's back and next) splits it in equal halves, like the sheets' rows. */
+
+  .memo-exam-cta-row > .memo-button-ghost {
+    flex: 1 1 0;
+  }
+
+  /*
+   * Every screen fits a laptop window (1440×820). A lesson's quiz head is one row, as the
+   * flashcards' is (it had only the phone's rules), its answers are the height of a row rather
+   * than a tile, and Memo watches the flashcards from the end of the grading row instead of
+   * from a row of his own.
+   */
+  .memo-exam-lesson .memo-quiz-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .memo-exam-lesson .memo-quiz-count {
+    font-size: 1.08rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .memo-exam-lesson .memo-quiz-total {
+    color: var(--muted);
+    font-size: 0.98rem;
+    font-weight: 650;
+  }
+
+  .memo-exam-lesson .lecture-quiz-option {
+    min-height: 3.3rem;
+  }
+
+  .memo-exam-lesson .lecture-quiz-options {
+    gap: 0.55rem;
+  }
+
+  .memo-exam-lesson .lecture-quiz-prompt {
+    margin-bottom: 0.9rem;
+  }
+
+  .memo-exam-lesson .lecture-flashcard-stage {
+    margin-top: 1.6rem;
+  }
+
+  .memo-exam-lesson :is(.lecture-flashcard, .lecture-flashcard-rotator) {
+    min-height: 19rem;
+  }
+
+  /* "Choose one answer" over every question says what four answer rows already say. */
+  .memo-exam-screen .memo-quiz-eyebrow {
+    display: none;
+  }
+
+  .memo-exam-lesson .memo-progress.quiz {
+    margin: 0.6rem 0 1rem;
+  }
+
+  /*
+   * The Generalka's setup, in two columns: the exam and its length on the left (Memo beside the
+   * title rather than over it), what it holds on the right (the question counts, or the
+   * examiner's manner and voice). The dial's ring and handle say how to use it here, so the
+   * phone's "drag the ring" line is left off.
+   */
+  .memo-exam-screen.memo-exam-mock-setup :is(.memo-exam-topbar, .memo-exam-page, .memo-exam-cta) {
+    max-width: 56rem;
+  }
+
+  .memo-exam-mock-setup .memo-exam-page {
+    display: grid;
+    grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+    column-gap: 2.75rem;
+    align-items: start;
+  }
+
+  .memo-exam-mock-main,
+  .memo-exam-mock-side {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    min-width: 0;
+  }
+
+  /* The question counts start level with Memo, under the room his thought cloud needs; the
+     examiner's settings are taller and use that room for their heading. */
+  .memo-exam-mock-side:has(> .memo-exam-facts) {
+    padding-top: 2.2rem;
+  }
+
+  .memo-exam-mock-side {
+    gap: 0.7rem;
+  }
+
+  .memo-exam-mock-side .memo-exam-label {
+    margin: 0;
+  }
+
+  .memo-exam-mock-side .memo-exam-pick {
+    min-height: 3.4rem;
+    padding-block: 0.45rem;
+  }
+
+  .memo-exam-mock-main .memo-exam-center {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 1rem;
+    row-gap: 0.3rem;
+    align-items: center;
+    justify-items: start;
+    padding: 2.2rem 0 0.3rem;
+    text-align: left;
+  }
+
+  .memo-exam-mock-main .memo-exam-center > .memo-buddy {
+    grid-row: 1 / span 2;
+    margin-top: 0;
+  }
+
+  .memo-exam-mock-main .memo-exam-center > .memo-exam-step-title {
+    align-self: end;
+  }
+
+  .memo-exam-mock-main .memo-exam-center > .memo-exam-fine {
+    align-self: start;
+  }
+
+  .memo-exam-mock-side > .memo-exam-link {
+    display: none;
+  }
+
+  .memo-exam-mock-side .memo-exam-voices .memo-tutor-voice {
+    flex-basis: calc((100% - 1.5rem) / 4);
+  }
+}
+
+/* --- the animated lockup -------------------------------------------------- */
+
+/*
+ * The lockup with Memo standing in for its still brain (src/components/animated-lockup.tsx).
+ * The wordmark is the lockup's lettering alone (memo-wordmark.png, outline closed round the M);
+ * the brain is laid over the left third, where the image's own brain was. Sized by height, like the images it replaces.
+ */
+.memo-lockup-animated {
+  position: relative;
+  display: inline-block;
+  aspect-ratio: 480 / 148;
+  vertical-align: middle;
+}
+
+/* The header's size, at no specificity, so a caller's own sizing class (offer, creator pages) wins. */
+:where(.memo-lockup-animated) {
+  height: 2.9rem;
+}
+
+/* In a box the caller sizes, as the still image filled it. */
+.memo-lockup-animated.fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.memo-lockup-animated img.memo-lockup-wordmark {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.memo-lockup-brain {
+  position: absolute;
+  left: 3.2%;
+  top: 1%;
+  width: 32%;
+  /* The whole lockup takes the tap (animated-lockup.tsx), so Memo's own tap must not hop him twice. */
+  pointer-events: none;
+}
+
+/*
+ * At the lockup's size (about 45px) the onboarding's eyelids, sized for a big Memo, leave the
+ * bottom of each pupil showing, so a blink read as a droop. Here they are a little wider and
+ * deeper and the lash line sits lower, so a blink closes his eyes. The sizes are inline styles
+ * (MascotFigure), hence !important.
+ */
+.memo-lockup-brain [data-memo-lid] {
+  width: 10.6% !important;
+  height: 13% !important;
+  margin: -0.4% 0 0 -0.9%;
+}
+
+.memo-lockup-brain [data-memo-lash] {
+  width: 10.6% !important;
+  margin: 1.9% 0 0 -0.9%;
+}
+
+/*
+ * Memo's eyelids and lashes always paint over his picture, wherever he is drawn: a rule that
+ * lifts images (position + z-index, like a header's for its still logo) would otherwise put his
+ * picture over them, and he would blink unseen.
+ */
+.memo-buddy [data-memo-lid],
+.memo-buddy [data-memo-lash] {
+  z-index: 2;
+}
+
+.memo-lockup-brain .memo-buddy img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.memo-m-topbar .memo-lockup-animated {
+  position: relative;
+  z-index: 1;
+  height: 3.1rem;
+  /* The bar lets taps through to the page; Memo is the one thing in it that answers one. */
+  pointer-events: auto;
+}
+
+/*
+ * A sheen across the lettering every few seconds. It is masked by the lockup itself, so it
+ * lights only the letters and their outline and never paints over the page, and the lettering
+ * underneath is the untouched image, as crisp as before.
+ */
+.memo-lockup-animated::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  -webkit-mask: url("/memo-wordmark.png") center / 100% 100% no-repeat;
+  mask: url("/memo-wordmark.png") center / 100% 100% no-repeat;
+  background: linear-gradient(
+    105deg,
+    transparent 0 42%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 58% 100%
+  );
+  background-size: 300% 100%;
+  background-position: 120% 0;
+  animation: memo-lockup-shine 4.5s ease-in-out 1.2s infinite;
+}
+
+/* A tap runs one sweep straight away, whatever the idle shine is doing. */
+.memo-lockup-animated.is-shining::after {
+  animation: memo-lockup-shine-tap 1.4s ease-in-out;
+}
+
+@keyframes memo-lockup-shine-tap {
+  0% {
+    background-position: 120% 0;
+  }
+
+  100% {
+    background-position: -20% 0;
+  }
+}
+
+@keyframes memo-lockup-shine {
+  0% {
+    background-position: 120% 0;
+  }
+
+  /* The sweep itself stays ~1.4 s; only the pause between sweeps is shorter. */
+  32%,
+  100% {
+    background-position: -20% 0;
+  }
 }

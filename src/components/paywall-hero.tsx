@@ -36,6 +36,7 @@ const ACCENTS: Record<PaywallReason, string> = {
   podcast: tint("podcast"),
   regenerate: tint("flashcards"),
   library: "var(--nb-sky)",
+  exam: tint("test"),
   offer: "var(--promo)",
 };
 
@@ -322,6 +323,38 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
               <b key={color} className="memo-nb-cite" style={{ "--c": color, "--i": index } as CSSProperties} />
             ))}
           </span>
+        </>
+      );
+      break;
+
+    case "exam":
+      height = 14.5;
+      // A week on a calendar page: the study days ticked off in turn, the
+      // exam day circled in pen.
+      scene = (
+        <>
+          <span className="memo-nb-cal" style={at(92, 10)}>
+            <Tape tone="pink" />
+            <span className="memo-nb-cal-head" />
+            {[12, 13, 14, 15, 16, 17, 18, 19].map((day, index) => (
+              <span key={day} className={`memo-nb-cal-day ${index === 6 ? "exam" : ""}`.trim()}>
+                {day}
+                {index < 6 ? (
+                  <svg className="memo-nb-pen" viewBox="0 0 20 20" style={{ "--dl": `${0.6 + index * 0.28}s`, "--dur": "0.3s", "--nb-pen": "var(--nb-good)" } as CSSProperties}>
+                    <path pathLength={1} d="M3 11 L 8 16 L 17 4" />
+                  </svg>
+                ) : null}
+                {index === 6 ? (
+                  <svg className="memo-nb-pen memo-nb-cal-ring" viewBox="0 0 200 160" preserveAspectRatio="none" style={{ "--dl": "2.4s", "--dur": "0.7s" } as CSSProperties}>
+                    <path pathLength={1} d="M152 13 C 112 2, 52 4, 23 28 C 3 46, 2 112, 30 136 C 60 160, 146 159, 176 133 C 198 113, 200 54, 179 31 C 166 17, 140 9, 112 10" />
+                  </svg>
+                ) : null}
+              </span>
+            ))}
+          </span>
+          <Icon name="flag" color="var(--promo)" className="memo-nb-cal-flag" style={at(300, 150)} />
+          <span className="memo-nb-cal-note memo-nb-hand" style={at(214, 196)}>{t("paywall.scene.examDay")}</span>
+          <NotebookMemo wave style={{ ...at(6, 128), width: "5.8rem" }} />
         </>
       );
       break;

@@ -82,6 +82,7 @@ query would let one rule serve both a phone viewport and the landing's phone-siz
 | --- | --- | --- | --- |
 | Home, note list, folders, settings, help | `home-dashboard.tsx`, `settings-screen.tsx` | `memo-app-preview.tsx` | Hero phone |
 | New note / capture sheet | `note-source-modal.tsx` | `memo-app-preview.tsx`, `landing-flow-demo.tsx` | Hero, How it works (step 1) |
+| "Novo" sheet's exam-prep row | `exams/exam-entry-card.tsx` (in `home-dashboard.tsx`'s sheet) | the same component, in `memo-app-preview.tsx`'s create sheet | Hero phone |
 | Note (notes tab), read aloud | `lecture-workspace.tsx`, `note-read-aloud.tsx` | `memo-app-preview.tsx`, `landing-flow-demo.tsx`, showcase (note only) | Hero, How it works (step 2), Features (note only) |
 | Note pill row | `NOTE_TABS` in `src/lib/note-tabs.ts` | the same list, imported | Hero, How it works (step 3) |
 | Tutor | `lecture-tutor.tsx` | `landing-tutor-demo.tsx` | Tutor section, hero, How it works |

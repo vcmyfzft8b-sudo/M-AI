@@ -1,10 +1,10 @@
-import Image from "next/image";
 import type { ReactNode } from "react";
 
+import { AnimatedLockup } from "@/components/animated-lockup";
 import { InstantLink } from "@/components/instant-link";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { creatorFont } from "@/components/ugc/creator-font";
-import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, SEO_BRAND_NAME } from "@/lib/brand";
+import { SEO_BRAND_NAME } from "@/lib/brand";
 
 /**
  * The creator terms on the program's own chrome: the bar from the campaign page, the document in
@@ -28,14 +28,7 @@ export function CreatorTermsView({
     <div className={`memo-cp memo-cp-terms-page ${creatorFont.className}`}>
       <header className="memo-cp-nav">
         <InstantLink href={homeHref} className="memo-cp-brand" aria-label={SEO_BRAND_NAME}>
-          <Image
-            src={BRAND_LOCKUP_SRC}
-            alt={SEO_BRAND_NAME}
-            width={BRAND_LOCKUP_WIDTH}
-            height={BRAND_LOCKUP_HEIGHT}
-            className="memo-cp-lockup"
-            priority
-          />
+          <AnimatedLockup className="memo-cp-lockup" priority />
           <span className="memo-cp-brand-label">{label}</span>
         </InstantLink>
       </header>

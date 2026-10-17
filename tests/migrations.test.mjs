@@ -1172,6 +1172,169 @@ test("account erasure blocks stale storage tokens and survives auth deletion", o
   } finally { await db.close(); }
 });
 
+test("an exam keeps its notes, topics and results, and takes them with it when deleted", options, async () => {
+  const { db, query } = await migratedDatabase();
+  const [user] = await query(`insert into auth.users (email) values ('exam@example.com') returning id`);
+  const [lecture] = await query(
+    `insert into public.lectures (user_id, source_type, status) values ($1,'text','ready') returning id`,
+    [user.id],
+  );
+  const [exam] = await query(
+    `insert into public.exams (user_id, title, exam_date) values ($1,'Mikroekonomija','2026-10-26') returning *`,
+    [user.id],
+  );
+
+  // The defaults are the setup screen's: written, 5–10, 90 % target, half to pass.
+  assert.equal(exam.exam_format, "written");
+  assert.equal(exam.grading_scale, "uni_5_10");
+  assert.equal(exam.target_mastery, 90);
+  assert.equal(exam.pass_percentage, 50);
+  // Letting the AI add topics beyond the material is opt-in, as Astra recommends.
+  assert.equal(exam.ai_expand, false);
+
+  await query(
+    `insert into public.exam_modules (exam_id, lecture_id, user_id, position) values ($1,$2,$3,0)`,
+    [exam.id, lecture.id, user.id],
+  );
+  const [topic] = await query(
+    `insert into public.exam_topics (exam_id, lecture_id, user_id, position, title)
+     values ($1,$2,$3,0,'Ponudba in povpraševanje') returning *`,
+    [exam.id, lecture.id, user.id],
+  );
+  assert.equal(topic.source, "material");
+  assert.deepEqual(topic.assigned_kinds, []);
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into public.exam_topics (exam_id, lecture_id, user_id, position, title, source)
+         values ($1,$2,$3,1,'Elastičnost','guessed')`,
+        [exam.id, lecture.id, user.id],
+      ),
+    /check constraint/,
+  );
+  await query(
+    `insert into public.exam_lesson_results (exam_id, lecture_id, topic_id, user_id, lesson_kind, correct, total, score)
+     values ($1,$2,$3,$4,'quiz',4,5,0.8)`,
+    [exam.id, lecture.id, topic.id, user.id],
+  );
+  const [mock] = await query(
+    `insert into public.exam_mock_attempts (exam_id, user_id, duration_minutes, mode, vibe)
+     values ($1,$2,20,'oral','strict') returning *`,
+    [exam.id, user.id],
+  );
+  assert.equal(mock.mode, "oral");
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into public.exam_mock_attempts (exam_id, user_id, duration_minutes, mode) values ($1,$2,20,'video')`,
+        [exam.id, user.id],
+      ),
+    /check constraint/,
+  );
+
+  // The tutor is a lesson like the others, and a lesson keeps which questions it showed.
+  const [tutorResult] = await query(
+    `insert into public.exam_lesson_results (exam_id, lecture_id, topic_id, user_id, lesson_kind, correct, total, score, item_ids)
+     values ($1,$2,$3,$4,'tutor',2,3,0.67,'{q1,q2}') returning *`,
+    [exam.id, lecture.id, topic.id, user.id],
+  );
+  assert.deepEqual(tutorResult.item_ids, ["q1", "q2"]);
+  const [plain] = await query(
+    `insert into public.exam_lesson_results (exam_id, lecture_id, topic_id, user_id, lesson_kind) values ($1,$2,$3,$4,'summary') returning *`,
+    [exam.id, lecture.id, topic.id, user.id],
+  );
+  assert.deepEqual(plain.item_ids, []);
+  const [withExtra] = await query(`update public.exam_topics set extra = '{"quiz":[]}' where id = $1 returning extra`, [topic.id]);
+  assert.deepEqual(withExtra.extra, { quiz: [] });
+
+  // A lesson kind the app does not have, and a score outside 0..1, are refused.
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into public.exam_lesson_results (exam_id, lecture_id, user_id, lesson_kind, score)
+         values ($1,$2,$3,'essay',0.5)`,
+        [exam.id, lecture.id, user.id],
+      ),
+    /check constraint/,
+  );
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into public.exam_lesson_results (exam_id, lecture_id, user_id, lesson_kind, score)
+         values ($1,$2,$3,'quiz',1.5)`,
+        [exam.id, lecture.id, user.id],
+      ),
+    /check constraint/,
+  );
+
+  await query(`delete from public.exams where id = $1`, [exam.id]);
+
+  const [{ modules }] = await query(`select count(*)::int as modules from public.exam_modules`);
+  const [{ results }] = await query(`select count(*)::int as results from public.exam_lesson_results`);
+  const [{ topics }] = await query(`select count(*)::int as topics from public.exam_topics`);
+  const [{ mocks }] = await query(`select count(*)::int as mocks from public.exam_mock_attempts`);
+  const [{ lectures }] = await query(`select count(*)::int as lectures from public.lectures`);
+
+  assert.equal(modules, 0);
+  assert.equal(results, 0);
+  assert.equal(topics, 0);
+  assert.equal(mocks, 0);
+  // The note itself is the learner's, not the exam's.
+  assert.equal(lectures, 1);
+});
+
+test("an exam's rows can be updated by their learner but never moved to another exam or note", options, async () => {
+  const { db, query } = await migratedDatabase();
+  try {
+    const owner = "33333333-3333-4333-8333-333333333333";
+    const other = "44444444-4444-4444-8444-444444444444";
+    await query("insert into auth.users (id) values ($1), ($2)", [owner, other]);
+    const [inExam, outside, theirs] = await query(
+      `insert into public.lectures (user_id, source_type, status)
+       values ($1,'text','ready'), ($1,'text','ready'), ($2,'text','ready') returning id`,
+      [owner, other],
+    );
+    const [exam] = await query(`insert into public.exams (user_id, title, exam_date) values ($1,'Kemija','2026-11-02') returning id`, [owner]);
+    const [theirExam] = await query(`insert into public.exams (user_id, title, exam_date) values ($1,'Fizika','2026-11-02') returning id`, [other]);
+    await query(`insert into public.exam_modules (exam_id, lecture_id, user_id, position) values ($1,$2,$3,0)`, [exam.id, inExam.id, owner]);
+    const [topic] = await query(
+      `insert into public.exam_topics (exam_id, lecture_id, user_id, position, title) values ($1,$2,$3,0,'Kisline') returning id`,
+      [exam.id, inExam.id, owner],
+    );
+    const [mock] = await query(
+      `insert into public.exam_mock_attempts (exam_id, user_id, duration_minutes) values ($1,$2,20) returning id`,
+      [exam.id, owner],
+    );
+
+    await db.exec(`
+      create or replace function auth.uid() returns uuid language sql stable as $$
+        select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+      $$;
+      grant usage on schema auth to authenticated;
+      grant all on public.exams, public.exam_modules, public.exam_topics, public.exam_mock_attempts,
+        public.lectures to authenticated;
+    `);
+    await query("select set_config('request.jwt.claim.sub', $1, false)", [owner]);
+    await db.exec("set role authenticated");
+
+    // What the app writes: a topic's fresh questions, and a graded mock.
+    const updated = await query(`update public.exam_topics set extra = '{"quiz":[],"written":[],"next":0}' where id = $1 returning id`, [topic.id]);
+    assert.equal(updated.length, 1);
+    const graded = await query(`update public.exam_mock_attempts set status = 'graded', percentage = 80 where id = $1 returning id`, [mock.id]);
+    assert.equal(graded.length, 1);
+
+    // Moving a topic to a note outside the exam, or a module or mock onto someone else's, is refused.
+    await assert.rejects(query(`update public.exam_topics set lecture_id = $1 where id = $2`, [outside.id, topic.id]), /row-level security/);
+    await assert.rejects(
+      query(`update public.exam_modules set lecture_id = $1 where exam_id = $2`, [theirs.id, exam.id]),
+      /row-level security/,
+    );
+    await assert.rejects(query(`update public.exam_mock_attempts set exam_id = $1 where id = $2`, [theirExam.id, mock.id]), /row-level security/);
+  } finally {
+    await db.close();
+  }
+});
+
 test("a chat answer can carry the study set it made, and older rows carry none", options, async () => {
   const { query } = await migratedDatabase();
 

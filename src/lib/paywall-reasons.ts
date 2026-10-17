@@ -28,6 +28,8 @@ export const PAYWALL_REASONS = [
   "regenerate",
   /** Asking across every note is paid only. */
   "library",
+  /** Exam prep (its plan, lessons and mock exam) is paid only. */
+  "exam",
   /**
    * No limit at all: an offer that finds a free learner while they browse
    * (`paywall-nudge.tsx`), each one better than the last.

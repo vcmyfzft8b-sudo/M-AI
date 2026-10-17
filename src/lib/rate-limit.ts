@@ -86,9 +86,15 @@ export const rateLimitPresets = {
     { windowSeconds: 60, maxRequests: 90, scope: "user_or_ip", storage: "memory" },
   ] satisfies RateLimitRule[],
   create: [{ windowSeconds: 600, maxRequests: 24, scope: "user" }] satisfies RateLimitRule[],
+  /*
+   * Notes from documents, photos and text (each a model pipeline), and mock exams. Room for a whole
+   * exam prep's material at once (10 documents, 50 photos in sets of 10, MAX_SETUP_UPLOADS) on each
+   * route, while a day's cap stops anyone running the pipelines as a service.
+   */
   expensiveCreate: [
-    { windowSeconds: 600, maxRequests: 8, scope: "user" },
-    { windowSeconds: 3600, maxRequests: 24, scope: "user" },
+    { windowSeconds: 600, maxRequests: 12, scope: "user" },
+    { windowSeconds: 3600, maxRequests: 30, scope: "user" },
+    { windowSeconds: 86400, maxRequests: 80, scope: "user" },
   ] satisfies RateLimitRule[],
   linkImport: [
     { windowSeconds: 300, maxRequests: 8, scope: "user" },

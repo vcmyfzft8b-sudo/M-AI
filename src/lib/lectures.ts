@@ -864,7 +864,15 @@ async function previewBypassLectureDetail(lectureId: string): Promise<LectureDet
   };
 }
 
-export async function listLecturesForUser(userId: string): Promise<AppLectureListItem[]> {
+/**
+ * The learner's notes, newest first. `hideExamMaterial` leaves out the notes made from material
+ * uploaded for an exam prep (`exam_modules.material`): to the learner those are the prep's
+ * material, shown in the prep, not notes. Deleting the prep brings them back here.
+ */
+export async function listLecturesForUser(
+  userId: string,
+  options: { hideExamMaterial?: boolean } = {},
+): Promise<AppLectureListItem[]> {
   if (isPreviewBypassUser(userId)) {
     const detail = await previewBypassLectureDetail(PREVIEW_BYPASS_LECTURE_ID);
 
@@ -872,19 +880,29 @@ export async function listLecturesForUser(userId: string): Promise<AppLectureLis
   }
 
   const supabase = createSupabaseServiceRoleClient();
-  const { data, error } = await supabase
-    .from("lectures")
-    .select(
-      "id, user_id, title, source_type, duration_seconds, status, language_hint, error_message, created_at, updated_at, access_tier, processing_metadata",
-    )
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+  const [{ data, error }, material] = await Promise.all([
+    supabase
+      .from("lectures")
+      .select(
+        "id, user_id, title, source_type, duration_seconds, status, language_hint, error_message, created_at, updated_at, access_tier, processing_metadata",
+      )
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false }),
+    options.hideExamMaterial
+      ? supabase.from("exam_modules").select("lecture_id").eq("user_id", userId).eq("material", true)
+      : Promise.resolve({ data: [] as { lecture_id: string }[], error: null }),
+  ]);
 
   if (error) {
     throw error;
   }
 
-  return reconcileLecturesWithArtifacts((data ?? []) as LectureRow[]);
+  // The material list is a convenience: if it cannot be read, the notes still show.
+  const hidden = new Set(((material.error ? [] : material.data) ?? []).map((row) => (row as { lecture_id: string }).lecture_id));
+  // Material that failed to be made is not the prep's any more (it left it): it shows here, failed.
+  const rows = ((data ?? []) as LectureRow[]).filter((row) => !hidden.has(row.id) || row.status === "failed");
+
+  return reconcileLecturesWithArtifacts(rows);
 }
 
 export async function getLectureDetailForUser(params: {

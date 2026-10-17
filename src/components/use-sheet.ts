@@ -44,6 +44,11 @@ type SheetOptions = {
    * because the request finished passes `{ force: true }` to `dismiss`; see there.
    */
   locked?: boolean;
+  /**
+   * The sheet's open flag, for Escape to close it the way the app's other dialogs close (through
+   * `dismiss`, so a locked sheet stays). Opt-in: sheets that wire Escape themselves leave it out.
+   */
+  closeOnEscape?: boolean;
 };
 
 /**
@@ -72,6 +77,7 @@ export function useSheet(onClosed: () => void, options?: SheetOptions) {
 
   const scrollable = options?.scrollable ?? false;
   const locked = options?.locked ?? false;
+  const closeOnEscape = options?.closeOnEscape ?? false;
 
   // Read through refs so `dismiss` keeps a stable identity: it is wired to
   // Escape handlers and scrim buttons that should not re-subscribe per render.
@@ -136,6 +142,21 @@ export function useSheet(onClosed: () => void, options?: SheetOptions) {
       after?.();
     }, SHEET_CLOSE_MS);
   }, []);
+
+  useEffect(() => {
+    if (!closeOnEscape) {
+      return;
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        dismiss();
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [closeOnEscape, dismiss]);
 
   const onPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {

@@ -3,13 +3,14 @@
 import Image from "next/image";
 import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 
+import { AnimatedLockup } from "@/components/animated-lockup";
 import { useTranslations } from "@/components/i18n-provider";
 import { InstantLink } from "@/components/instant-link";
 import { MemoPortal } from "@/components/memo-portal";
 import { Msym } from "@/components/msym";
 import { CreatorApplyDialog } from "@/components/ugc/creator-apply-dialog";
 import { creatorFont } from "@/components/ugc/creator-font";
-import { BRAND_LOCKUP_HEIGHT, BRAND_LOCKUP_SRC, BRAND_LOCKUP_WIDTH, BRAND_SUPPORT_EMAIL, SEO_BRAND_NAME } from "@/lib/brand";
+import { BRAND_SUPPORT_EMAIL, SEO_BRAND_NAME } from "@/lib/brand";
 import { LOCALE_INTL_TAG, type Locale } from "@/lib/i18n/locales";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import {
@@ -198,14 +199,7 @@ export function CreatorProgram({
       <div className="memo-cp-gradient">
         <header className="memo-cp-nav">
           <InstantLink href="/" className="memo-cp-brand" aria-label={SEO_BRAND_NAME}>
-            <Image
-              src={BRAND_LOCKUP_SRC}
-              alt={SEO_BRAND_NAME}
-              width={BRAND_LOCKUP_WIDTH}
-              height={BRAND_LOCKUP_HEIGHT}
-              className="memo-cp-lockup"
-              priority
-            />
+            <AnimatedLockup className="memo-cp-lockup" priority />
           </InstantLink>
           <nav className="memo-cp-nav-links" aria-label={t("ugcApply.navLabel")}>
             <a href="#benefits">

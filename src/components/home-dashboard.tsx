@@ -2,8 +2,8 @@
 import { nativeRequest, useNativeIOS } from "@/lib/mobile/client";
 import { halfOffProducts } from "@/lib/mobile/products";
 import type { PlanPrices } from "@/lib/billing-regions";
+import type { LibraryExamPrep } from "@/lib/exams/exams-server";
 
-import Image from "next/image";
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 import {
@@ -30,6 +30,10 @@ import {
   INSTALL_GUIDE_SEEN_EVENT,
   shouldOfferInstallGuide,
 } from "@/lib/install-guide";
+import { AnimatedLockup } from "@/components/animated-lockup";
+import { ExamEntryCard } from "@/components/exams/exam-entry-card";
+import { EXAM_PREPS_HREF } from "@/components/exams/exam-links";
+import { ExamLibraryList } from "@/components/exams/exam-library-list";
 import { LibraryChat } from "@/components/library-chat";
 import type { NoteSourceMode } from "@/components/note-source-modal";
 import { Emoji, Msym } from "@/components/msym";
@@ -44,12 +48,6 @@ import { useOfflineGuard } from "@/components/offline/offline-notice";
 import { useIsHydrated } from "@/components/viewport-portal";
 import { useCollapsingHeader } from "@/components/use-collapsing-header";
 import { sheetClass, useSheet } from "@/components/use-sheet";
-import {
-  BRAND_LOCKUP_HEIGHT,
-  BRAND_LOCKUP_SRC,
-  BRAND_LOCKUP_WIDTH,
-  SEO_BRAND_NAME,
-} from "@/lib/brand";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
 import { rememberHomePromo } from "@/lib/home-promo-hint";
 import { canRetryLectureFailure, lectureFailureMessage } from "@/lib/lecture-failure-codes";
@@ -929,6 +927,8 @@ export function HomeDashboard({
   installGuideSeen = false,
   showDevDashboard,
   planPrices,
+  examPreps = [],
+  initialLibraryView = "all",
 }: {
   lectures: AppLectureListItem[];
   folders: AppLibraryFolder[];
@@ -947,6 +947,10 @@ export function HomeDashboard({
   showDevDashboard: boolean;
   /** What the wheel's offer is priced at for this buyer's country. */
   planPrices?: PlanPrices;
+  /** Every exam prep, for the library's exam-prep folder (upcoming first, then past). */
+  examPreps?: LibraryExamPrep[];
+  /** "preps" opens the library on its exam-prep folder (`/app?view=preps`), where leaving a prep goes. */
+  initialLibraryView?: "all" | "preps";
 }) {
   const t = useT();
   const native = useNativeIOS();
@@ -1053,6 +1057,9 @@ export function HomeDashboard({
   const [useDashboardSwipeActions, setUseDashboardSwipeActions] = useState(false);
   const [busyLectureId, setBusyLectureId] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [libraryView, setLibraryView] = useState<"all" | "preps">(initialLibraryView);
+  // The folder chip's pulse is for arriving on the folder from a prep, once, not for every visit.
+  const [announcePreps, setAnnouncePreps] = useState(initialLibraryView === "preps");
   const [selectedFolderLectureIds, setSelectedFolderLectureIds] = useState<string[] | null>(null);
   const [openMenuLectureId, setOpenMenuLectureId] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<AppLectureListItem | null>(null);
@@ -1286,6 +1293,16 @@ export function HomeDashboard({
     }
 
     setManualModal(mode);
+  }
+
+  /* Exam prep, from the "Novo" sheet or the desktop heading. */
+  function openExamPrep(href: string) {
+    if (blockedOffline("create")) {
+      return;
+    }
+
+    closeMobileCreateMenu();
+    navigateDashboardWithFeedback(href);
   }
 
   function openRenameModal(lecture: AppLectureListItem) {
@@ -1616,7 +1633,49 @@ export function HomeDashboard({
     router.refresh();
   }, [hasClaimedDiscount, router]);
 
-  const inLibraryView = !selectedFolderId && !deferredQuery.trim();
+  /*
+   * The exam-prep folder: the library showing its preps instead of its notes. Not on the creator
+   * demo, which has no account to prepare with. The address follows it, so a reload or the way
+   * back from a prep lands on it again.
+   */
+  const showingPreps = libraryView === "preps" && !isCreatorDemo;
+  const selectLibraryView = useCallback((view: "all" | "preps") => {
+    setLibraryView(view);
+    setAnnouncePreps(false);
+    window.history.replaceState(window.history.state, "", view === "preps" ? EXAM_PREPS_HREF : "/app");
+  }, []);
+  const handleSelectFolder = useCallback(
+    (folderId: string | null, lectureIds: string[] | null, chosen?: boolean) => {
+      setSelectedFolderId(folderId);
+      setSelectedFolderLectureIds(lectureIds);
+
+      // Only a folder the learner picks leaves the preps: the one restored on arrival must not, or
+      // the way back from a prep would land on the last folder instead of the preps.
+      if (folderId && chosen) {
+        selectLibraryView("all");
+      }
+    },
+    [selectLibraryView],
+  );
+  /*
+   * The folder is in Mape once there is a prep to put in it (or while it is open). Arriving on it
+   * from a prep, a new one above all, the folder chip says so with a short pulse, so the learner
+   * sees where preps went.
+   */
+  const folderMenuPreps =
+    isCreatorDemo || (examPreps.length === 0 && !showingPreps)
+      ? null
+      : {
+          count: examPreps.filter((prep) => !prep.past).length,
+          selected: showingPreps,
+          announce: announcePreps,
+          onSelect: () => selectLibraryView("preps"),
+          onSelectAll: () => selectLibraryView("all"),
+        };
+
+  const inLibraryView = !selectedFolderId && !deferredQuery.trim() && !showingPreps;
+  // In their folder a search matches the preps' titles, as it matches the notes' elsewhere.
+  const visibleExamPreps = examPreps.filter((prep) => !search || prep.title.toLowerCase().includes(search));
   /*
    * The wheel is on offer while the server says there is a spin left and this
    * session has not already used it. `hasClaimedDiscount` is what covers the
@@ -1682,13 +1741,7 @@ export function HomeDashboard({
       <div className="memo-home-screen" ref={attachScreen}>
         {/* Phone chrome: the lockup and the gear that opens Nastavitve. */}
         <div className="memo-m-topbar memo-only-mobile flex">
-          <Image
-            src={BRAND_LOCKUP_SRC}
-            alt={SEO_BRAND_NAME}
-            width={BRAND_LOCKUP_WIDTH}
-            height={BRAND_LOCKUP_HEIGHT}
-            priority
-          />
+          <AnimatedLockup priority />
           {/* The dot is the only hint that there is something new in there;
               it clears the first time the guide is opened. */}
           <InstantLink
@@ -1720,8 +1773,12 @@ export function HomeDashboard({
               two prompts to buy stacked above the library read as nagging. */}
 
           <div className="memo-only-desktop">
-            <h1 className="memo-home-h1">{t("library.newNote")}</h1>
+            <h1 className="memo-home-h1">{t("library.new")}</h1>
             <p className="memo-home-sub">{t("library.newNoteSub")}</p>
+
+            {!isCreatorDemo ? (
+              <ExamEntryCard onOpen={openExamPrep} className="memo-exam-entry-desktop" />
+            ) : null}
 
             <div className="memo-quick-grid">
               {QUICK_ACTIONS.map((action) => (
@@ -1775,10 +1832,8 @@ export function HomeDashboard({
                 folders={libraryFolders}
                 onFoldersChange={setLibraryFolders}
                 selectedFolderId={selectedFolderId}
-                onSelectFolder={(folderId, lectureIds) => {
-                  setSelectedFolderId(folderId);
-                  setSelectedFolderLectureIds(lectureIds);
-                }}
+                onSelectFolder={handleSelectFolder}
+                examPreps={folderMenuPreps}
               />
             </div>
 
@@ -1806,10 +1861,8 @@ export function HomeDashboard({
               folders={libraryFolders}
               onFoldersChange={setLibraryFolders}
               selectedFolderId={selectedFolderId}
-              onSelectFolder={(folderId, lectureIds) => {
-                setSelectedFolderId(folderId);
-                setSelectedFolderLectureIds(lectureIds);
-              }}
+              onSelectFolder={handleSelectFolder}
+              examPreps={folderMenuPreps}
             />
           </div>
 
@@ -1845,90 +1898,96 @@ export function HomeDashboard({
               <p className="memo-inline-error">{dashboardActionError}</p>
             ) : null}
 
-            {failedLectures.length > 0 ? (
-              <div className="memo-note-list memo-failed-list">
-                {failedLectures.map((lecture) => (
-                  <div key={lecture.id} className="memo-failed-row">
-                    <span className="memo-note-emoji failed">
-                      <Msym name="warning" size="1.25rem" />
-                    </span>
-                    <span className="memo-note-copy">
-                      <span className="memo-note-title">
-                        {lecture.title ?? t("note.untitled")}
+            {showingPreps ? (
+              <ExamLibraryList preps={visibleExamPreps} searching={Boolean(search)} />
+            ) : (
+              <>
+              {failedLectures.length > 0 ? (
+                <div className="memo-note-list memo-failed-list">
+                  {failedLectures.map((lecture) => (
+                    <div key={lecture.id} className="memo-failed-row">
+                      <span className="memo-note-emoji failed">
+                        <Msym name="warning" size="1.25rem" />
                       </span>
-                      <span className="memo-note-meta">
-                        {/* The code first: the stored message was written in
-                            whatever language the pipeline ran in, which is not
-                            necessarily this reader's. */}
-                        {lectureFailureMessage(lecture.processing_metadata, t) ??
-                          lecture.error_message ??
-                          t("note.processingFailedSentence")}
+                      <span className="memo-note-copy">
+                        <span className="memo-note-title">
+                          {lecture.title ?? t("note.untitled")}
+                        </span>
+                        <span className="memo-note-meta">
+                          {/* The code first: the stored message was written in
+                              whatever language the pipeline ran in, which is not
+                              necessarily this reader's. */}
+                          {lectureFailureMessage(lecture.processing_metadata, t) ??
+                            lecture.error_message ??
+                            t("note.processingFailedSentence")}
+                        </span>
                       </span>
-                    </span>
-                    <span className="memo-failed-actions">
-                      {canRetryLectureFailure(lecture) ? (
+                      <span className="memo-failed-actions">
+                        {canRetryLectureFailure(lecture) ? (
+                          <button
+                            type="button"
+                            className="memo-button-outline small"
+                            onClick={() => void handleRetryLecture(lecture.id)}
+                            disabled={busyLectureId === lecture.id}
+                          >
+                            {busyLectureId === lecture.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : null}
+                            {t("common.retry")}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
-                          className="memo-button-outline small"
-                          onClick={() => void handleRetryLecture(lecture.id)}
+                          className="memo-button-outline small danger"
+                          onClick={() => openDeleteModal(lecture)}
                           disabled={busyLectureId === lecture.id}
                         >
-                          {busyLectureId === lecture.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : null}
-                          {t("common.retry")}
+                          {t("common.delete")}
                         </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="memo-button-outline small danger"
-                        onClick={() => openDeleteModal(lecture)}
-                        disabled={busyLectureId === lecture.id}
-                      >
-                        {t("common.delete")}
-                      </button>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
 
-            {regularLectures.length > 0 ? (
-              <div className="memo-note-list">
-                {regularLectures.map((lecture) => (
-                  <NoteRow
-                    key={lecture.id}
-                    lecture={lecture}
-                    // Without a subscription only the trial note opens; the rest
-                    // route to checkout.
-                    href={
-                      hasPaidAccess || trialLectureId === lecture.id
-                        ? `/app/lectures/${lecture.id}`
-                        : lockedNotePaywallHref
-                    }
-                    isMenuOpen={openMenuLectureId === lecture.id}
-                    isBusy={busyLectureId === lecture.id}
-                    useSwipeActions={useDashboardSwipeActions}
-                    onToggleMenu={toggleLectureMenu}
-                    onOpenRename={openRenameModal}
-                    onOpenDelete={openDeleteModal}
-                    attachMenuRef={attachMenuRef}
-                  />
-                ))}
-              </div>
-            ) : null}
+              {regularLectures.length > 0 ? (
+                <div className="memo-note-list">
+                  {regularLectures.map((lecture) => (
+                    <NoteRow
+                      key={lecture.id}
+                      lecture={lecture}
+                      // Without a subscription only the trial note opens; the rest
+                      // route to checkout.
+                      href={
+                        hasPaidAccess || trialLectureId === lecture.id
+                          ? `/app/lectures/${lecture.id}`
+                          : lockedNotePaywallHref
+                      }
+                      isMenuOpen={openMenuLectureId === lecture.id}
+                      isBusy={busyLectureId === lecture.id}
+                      useSwipeActions={useDashboardSwipeActions}
+                      onToggleMenu={toggleLectureMenu}
+                      onOpenRename={openRenameModal}
+                      onOpenDelete={openDeleteModal}
+                      attachMenuRef={attachMenuRef}
+                    />
+                  ))}
+                </div>
+              ) : null}
 
-            {filteredLectures.length === 0 ? (
-              <div className="memo-empty">
-                <Emoji symbol="📝" size="2rem" />
-                <p>
-                  {t(search ? "library.empty.noMatchTitle" : "library.empty.noNotesTitle")}
-                </p>
-                <p>
-                  {t(search ? "library.empty.noMatchBody" : "library.empty.noNotesBody")}
-                </p>
-              </div>
-            ) : null}
+              {filteredLectures.length === 0 ? (
+                <div className="memo-empty">
+                  <Emoji symbol="📝" size="2rem" />
+                  <p>
+                    {t(search ? "library.empty.noMatchTitle" : "library.empty.noNotesTitle")}
+                  </p>
+                  <p>
+                    {t(search ? "library.empty.noMatchBody" : "library.empty.noNotesBody")}
+                  </p>
+                </div>
+              ) : null}
+              </>
+            )}
           </div>
         </div>
 
@@ -1961,7 +2020,11 @@ export function HomeDashboard({
                 return;
               }
 
-              if (!canCreateNotes) {
+              /*
+               * Exam prep lives in this sheet too, and it does not need a new note, so the sheet
+               * opens either way; the note sources in it still go to the paywall on their own.
+               */
+              if (!canCreateNotes && isCreatorDemo) {
                 navigateDashboardWithFeedback(newNotePaywallHref);
                 return;
               }
@@ -1970,7 +2033,7 @@ export function HomeDashboard({
             }}
           >
             <Msym name="edit_square" size="1.4rem" fill={false} weight={500} />
-            <span>{t("library.newNote")}</span>
+            <span>{t("library.new")}</span>
           </button>
         </div>
       </div>
@@ -2144,7 +2207,7 @@ export function HomeDashboard({
         </MemoPortal>
       ) : null}
 
-      {/* Phone: "Nov zapisek" opens the capture picker as a bottom sheet. */}
+      {/* Phone: "Novo" opens exam prep and the capture picker as a bottom sheet. */}
       {isMobileCreateMenuOpen ? (
         <MemoPortal>
           <button
@@ -2162,7 +2225,7 @@ export function HomeDashboard({
           >
             <div className="memo-grab memo-create-drag-handle" data-drag-handle />
             <div className="memo-sheet-title">
-              <span id="mobile-create-menu-title">{t("library.newNote")}</span>
+              <span id="mobile-create-menu-title">{t("library.new")}</span>
               <button
                 type="button"
                 className="memo-sheet-close"
@@ -2173,6 +2236,8 @@ export function HomeDashboard({
               </button>
             </div>
             <div className="memo-sheet-list">
+              {/* Exam prep leads the list as one of its options, marked out only by its coral. */}
+              {!isCreatorDemo ? <ExamEntryCard onOpen={openExamPrep} /> : null}
               {CREATE_OPTIONS.map((option) => (
                 <button
                   key={option.id}

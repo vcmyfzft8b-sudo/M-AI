@@ -49,6 +49,7 @@ const CHECKLISTS: Record<PaywallReason | "plain", MessageKey[]> = {
   podcast: ["paywall.check.everyNote", "paywall.check.everyDay", "paywall.check.anywhere"],
   regenerate: ["paywall.check.flashcards", "paywall.check.mindMaps", "paywall.check.tests"],
   library: ["paywall.check.everySubject", "paywall.check.oneChat"],
+  exam: ["paywall.check.studyPlan", "paywall.check.mockExams", "paywall.check.tutor"],
   offer: ["paywall.check.notes", "paywall.check.chat", "paywall.check.tutor"],
 };
 

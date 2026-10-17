@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
-import { readOwnedExam, readOwnedTopic } from "@/lib/exams/exams-server";
+import { readOwnedExam, readOwnedTopic, tutorTimeLeft } from "@/lib/exams/exams-server";
 import { tutorTurn } from "@/lib/exams/exam-tutor-server";
 import { captureRouteError } from "@/lib/monitoring";
 import { parseJsonRequest } from "@/lib/request-validation";
@@ -72,6 +72,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     if (!access.allowed) {
       return createBillingRequiredResponse(await tr("api.trialOnly.study"), access.code);
+    }
+
+    // Marking a turn spends the tutor's model; without talking time there is no tutor lesson to mark.
+    if (!(await tutorTimeLeft(auth.user.id))) {
+      return NextResponse.json({ error: await tr("api.exam.tutorTime"), code: "tutor_time" }, { status: 409 });
     }
 
     const turn = await tutorTurn({

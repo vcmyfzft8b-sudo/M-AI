@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  reachableModules,
   CHECK_QUIZ_SIZE,
   EXAM_LESSON_KINDS,
   LESSON_PASS_CAP,
@@ -14,6 +15,7 @@ import {
   gradeForPercentage,
   lessonPassThreshold,
   lessonPassed,
+  masteryGoal,
   mockPassed,
   passThreshold,
   percent,
@@ -70,6 +72,8 @@ function simulate({ topics = 8, days = 21, perDay = 5, target = 0.9, score, mock
         lesson_kind: next.kind,
         score: value,
         completed_at: now.toISOString(),
+        // A check quiz has its ten questions; a practice quiz its five.
+        total: next.check && next.kind === "quiz" ? CHECK_QUIZ_SIZE : 5,
       });
       log.push({ day, stage, ...next, score: value });
     }
@@ -196,12 +200,13 @@ test("pass marks: capped at 95 %, the tutor at what one slip leaves", () => {
   assert.equal(mockPassed(Number.NaN, 0.5), false);
 });
 
-const result = (topic, lesson_kind, score, completed_at = "2026-10-14T10:00:00Z") => ({
+const result = (topic, lesson_kind, score, completed_at = "2026-10-14T10:00:00Z", total = 10) => ({
   lecture_id: topic,
   topic_id: topic,
   lesson_kind,
   score,
   completed_at,
+  total,
 });
 /* A topic studied at `score`: its summary and twelve quizzes (at 1, enough to reach a 90 % goal). */
 const learned = (topic, score = 1, at = "2026-10-14T10:00:00Z") => [
@@ -345,7 +350,7 @@ function hiddenKnowledge({ topics, days, target, start, learn, seed, perDay = 8 
       }
       const score = right / items;
 
-      results.push({ lecture_id: next.lectureId, topic_id: next.topicId, lesson_kind: next.kind, score: Math.fround(score), completed_at: now.toISOString() });
+      results.push({ lecture_id: next.lectureId, topic_id: next.topicId, lesson_kind: next.kind, score: Math.fround(score), completed_at: now.toISOString(), total: items });
       known[index] += (next.kind === "flashcards" ? learn * 0.7 : next.kind === "summary" ? learn * 1.5 : learn) * (1 - known[index]);
       studied[index] = now.getTime();
     }
@@ -396,10 +401,10 @@ test("a learner who knows the material is told so before the exam, not held back
 
 test("the practices still owed are an estimate that never runs out before the goal: one more, until it is reached", () => {
   for (const goal of [0.5, 0.75, 0.9, 1]) {
-    for (let mastery = 0; mastery < passThreshold(goal) - 1e-6; mastery += 0.01) {
+    for (let mastery = 0; mastery < masteryGoal(goal) - 1e-6; mastery += 0.01) {
       assert.ok(lessonsToTarget(mastery, goal) >= 1, `${mastery.toFixed(2)} under ${goal} still owes a practice`);
     }
-    assert.equal(lessonsToTarget(passThreshold(goal), goal), 0);
+    assert.equal(lessonsToTarget(masteryGoal(goal), goal), 0);
   }
 
   // A learner who keeps scoring under the mark: whatever was estimated, the module stays shut and
@@ -434,4 +439,21 @@ test("a learner the prep calls ready has no topic far under the goal: each was c
 
   assert.ok(topics >= 60, `${topics} topics of ready learners`);
   assert.ok(farUnder <= 1, `${farUnder} of ${topics} topics more than ten points under`);
+});
+
+test("the next step is always a module the lesson page opens, also past notes the account cannot open", () => {
+  // Trial account: only note b can be opened; a1 and a2 belong to a note it cannot.
+  const modules = [
+    { topicId: "a1", lectureId: "a" },
+    { topicId: "a2", lectureId: "a" },
+    { topicId: "b1", lectureId: "b" },
+  ];
+  const canOpen = (lectureId) => lectureId === "b";
+  const states = examModuleStates(modules, [], 0.75);
+  const view = states.map((state) => ({ ...state, ready: true, pending: false }));
+  const next = examNextStep(view, examStage(states, null, 0.75), canOpen);
+  const reached = reachableModules(view, canOpen);
+
+  assert.equal(next?.topicId, "b1");
+  assert.equal(reached[view.findIndex((state) => state.topicId === next.topicId)], true);
 });

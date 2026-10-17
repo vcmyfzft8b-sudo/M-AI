@@ -150,7 +150,7 @@ function pickRecorderMimeType() {
   return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
 }
 
-export function isAudioSourceFile(file: File) {
+function isAudioSourceFile(file: File) {
   if (file.type.startsWith("audio/")) {
     return true;
   }

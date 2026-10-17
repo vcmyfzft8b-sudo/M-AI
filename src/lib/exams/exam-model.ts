@@ -79,6 +79,15 @@ export function passThreshold(target: number) {
   return Math.min(Number.isFinite(target) ? clamp01(target) : 1, LESSON_PASS_CAP);
 }
 
+/*
+ * The knowledge a topic is held to, 0..1. A 100 % goal means 100 %: knowledge can reach it (a run of
+ * fully right tests, `masteryAfterPractice`), so it is not capped the way a single lesson's or the
+ * mock exam's pass mark is.
+ */
+export function masteryGoal(target: number) {
+  return Number.isFinite(target) && clamp01(target) >= 1 ? 1 : passThreshold(target);
+}
+
 /** The pass mark one lesson is held to, 0..1. The summary is read, so it has none. */
 export function lessonPassThreshold(kind: ExamLessonKind, target: number) {
   if (kind === "summary") {
@@ -343,11 +352,17 @@ export function masteryAfterPractice(mastery: number, perfectRun: number, kind: 
 export const ASSUMED_ACCURACY = 0.9;
 
 export function lessonsToTarget(mastery: number, target: number) {
-  const goal = passThreshold(target);
+  const goal = masteryGoal(target);
   const current = clamp01(mastery);
 
   if (meetsPassMark(current, goal)) {
     return 0;
+  }
+
+  // 100 %: fully right tests up to `FULL_FROM`, the last `FULL_RUN` of them in a row.
+  if (goal >= 1) {
+    const toFull = Math.ceil(Math.log((1 - FULL_FROM) / (1 - current)) / Math.log(1 - MASTERY_RATE) - 1e-9);
+    return Math.max(FULL_RUN, toFull);
   }
 
   const accuracy = Math.max(ASSUMED_ACCURACY, Math.min(1, goal + 0.1));
@@ -642,6 +657,26 @@ function latestByKind(results: LessonResultLike[]) {
 export const CHECK_KINDS: readonly ExamLessonKind[] = ["quiz", "written", "tutor"];
 /* The check is a quiz of this many questions (a practice quiz has 5), so luck carries less of it. */
 export const CHECK_QUIZ_SIZE = 10;
+/*
+ * A quiz counts as a check only with at least this many questions: a 5-question practice quiz is
+ * too much luck to prove a topic. 8 is the least a topic's quiz pool is kept at, so a topic whose
+ * check could not be filled to 10 can still be checked.
+ */
+export const CHECK_QUIZ_MIN = 8;
+
+/* A check's pass mark: the goal, by the test's own score with guessing out; the tutor's at most what one slip leaves. */
+export function checkScorePasses(kind: ExamLessonKind, score: number, goal: number) {
+  const mark = kind === "tutor" ? Math.min(goal, TUTOR_PASS_CAP) : goal;
+  return meetsPassMark(knownShare(kind, score), mark);
+}
+
+function passesCheck(result: LessonResultLike, goal: number) {
+  return checkScorePasses(result.lesson_kind, result.score, goal);
+}
+
+function countsAsCheck(result: LessonResultLike) {
+  return CHECK_KINDS.includes(result.lesson_kind) && (result.lesson_kind !== "quiz" || (result.total ?? 0) >= CHECK_QUIZ_MIN);
+}
 
 /**
  * A topic's mastery from its results, replayed oldest first: the exponential average, unfaded. Also
@@ -666,7 +701,7 @@ export function topicMastery(results: readonly LessonResultLike[], goal = Number
     }
 
 
-    if (CHECK_KINDS.includes(result.lesson_kind) && meetsPassMark(knownShare(result.lesson_kind, result.score), goal)) {
+    if (countsAsCheck(result) && passesCheck(result, goal)) {
       lastPassAt = result.completed_at;
     }
 
@@ -699,6 +734,8 @@ export function moduleProgress(
   const done = {} as Record<ExamLessonKind, boolean>;
   const scores = {} as Record<ExamLessonKind, number | null>;
   const failedToday = {} as Record<ExamLessonKind, number>;
+  /* Checks failed today by format: two in one format and the check moves to the next (`checkKind`). */
+  const checksFailedToday = {} as Record<ExamLessonKind, number>;
   const triedToday = {} as Record<ExamLessonKind, number>;
   const today = now && Number.isFinite(now.getTime()) ? dayKey(now) : null;
 
@@ -707,6 +744,7 @@ export function moduleProgress(
     done[kind] = entry !== undefined;
     scores[kind] = entry ? clamp01(entry.score) : null;
     failedToday[kind] = 0;
+    checksFailedToday[kind] = 0;
     triedToday[kind] = 0;
   }
 
@@ -721,10 +759,14 @@ export function moduleProgress(
       if (result.lesson_kind !== "summary" && !lessonPassed(result.lesson_kind, clamp01(result.score), target)) {
         failedToday[result.lesson_kind] += 1;
       }
+
+      if (countsAsCheck(result) && !passesCheck(result, masteryGoal(target))) {
+        checksFailedToday[result.lesson_kind] += 1;
+      }
     }
   }
 
-  const goal = passThreshold(target);
+  const goal = masteryGoal(target);
   const { mastery: rawMastery, peak, perfectRun, lastPassAt, lastAt } = topicMastery(results, goal);
   /*
    * Ready means every topic re-checked lately, not once weeks ago: a check passed within the days
@@ -762,7 +804,7 @@ export function moduleProgress(
     checkDue,
     refreshDue: !onTarget && meetsPassMark(rawMastery, goal),
     nextKind: checkDue
-      ? checkKind(failedToday, options.tutor)
+      ? checkKind(checksFailedToday, options.tutor)
       : suggestedKind({ done, lessons: results.length, failedToday, gapKind, tutor: options.tutor }),
     done,
     latest: scores,
@@ -869,6 +911,37 @@ export type ExamNextStepModule = Pick<
     pending?: boolean;
   };
 
+/* A module that can be studied now: its note made, its topics planned, and the learner allowed it. */
+function usableModule(
+  state: Pick<ExamNextStepModule, "ready" | "pending" | "lectureId">,
+  canOpen: (lectureId: string) => boolean,
+) {
+  return state.ready !== false && state.pending !== true && canOpen(state.lectureId);
+}
+
+/**
+ * Which modules the path has reached, in order: opened by the one before reaching the goal, or by
+ * the one before being out of the learner's reach (a note still being made, or one the account
+ * cannot open), which does not hold the rest shut. The path, its "Next up" and the lesson page all
+ * go by this, so none of them sends the learner somewhere another refuses.
+ */
+export function reachableModules(
+  states: Pick<ExamNextStepModule, "unlocked" | "learned" | "ready" | "pending" | "lectureId">[],
+  canOpen: (lectureId: string) => boolean = () => true,
+) {
+  const reachable: boolean[] = [];
+
+  states.forEach((state, index) => {
+    const previous = states[index - 1];
+    reachable.push(
+      state.unlocked ||
+        (index > 0 && reachable[index - 1] && (previous.learned || !usableModule(previous, canOpen))),
+    );
+  });
+
+  return reachable;
+}
+
 /**
  * The path's "Next up", Astra's way: one lesson at a time, its format chosen by `suggestedKind`.
  *
@@ -895,17 +968,8 @@ export function examNextStep(
     return null;
   }
 
-  const usable = (state: ExamNextStepModule) =>
-    state.ready !== false && state.pending !== true && canOpen(state.lectureId);
-  const reachable: boolean[] = [];
-
-  states.forEach((state, index) => {
-    const previous = states[index - 1];
-    reachable.push(
-      state.unlocked || (index > 0 && reachable[index - 1] && (previous.learned || !usable(previous))),
-    );
-  });
-
+  const usable = (state: ExamNextStepModule) => usableModule(state, canOpen);
+  const reachable = reachableModules(states, canOpen);
   const open = states.filter((state, index) => reachable[index] && usable(state));
   const lesson = (state: ExamNextStepModule, kind: ExamLessonKind): ExamNextStep => ({
     type: "lesson",
@@ -978,7 +1042,7 @@ export function examMastery(states: Pick<ModuleState, "mastery">[]): number {
 
 /** Topics whose mastery today reaches the target. */
 export function topicsOnTarget(states: Pick<ModuleState, "mastery">[], target: number) {
-  return states.filter((state) => meetsPassMark(state.mastery, passThreshold(target))).length;
+  return states.filter((state) => meetsPassMark(state.mastery, masteryGoal(target))).length;
 }
 
 export function clamp01(value: number) {
@@ -1024,14 +1088,26 @@ export type DailyPlan = {
 };
 
 /** The lessons the exam still needs: every topic to its target, a lesson per topic's gaps, and owed proofs. */
+/**
+ * The practices a topic still owes: one when all it needs is its check (a faded topic among them:
+ * passing the check brings it back), else what its unfaded knowledge needs to reach the goal.
+ */
+export function practicesOwed(
+  state: Pick<ModuleState, "mastery"> & Partial<Pick<ModuleState, "rawMastery" | "checkDue">>,
+  target: number,
+) {
+  return state.checkDue ? 1 : lessonsToTarget(state.rawMastery ?? state.mastery, target);
+}
+
 export function lessonsRemaining(
-  states: (Pick<ModuleState, "mastery"> & Partial<Pick<ModuleState, "pressingGaps" | "proofOwed">>)[],
+  states: (Pick<ModuleState, "mastery"> &
+    Partial<Pick<ModuleState, "rawMastery" | "checkDue" | "pressingGaps" | "proofOwed">>)[],
   target: number,
 ) {
   return states.reduce(
     (sum, state) =>
       sum +
-      Math.max(lessonsToTarget(state.mastery, target), state.proofOwed ? 1 : 0) +
+      Math.max(practicesOwed(state, target), state.proofOwed ? 1 : 0) +
       ((state.pressingGaps ?? 0) > 0 ? 1 : 0),
     0,
   );
@@ -1109,12 +1185,12 @@ export function examForecast(input: {
   const pace = recent / FORECAST_WINDOW_DAYS;
   const perLesson = clamp01(input.mastery) / lessons;
   const atExam = clamp01(input.mastery + perLesson * pace * untilExam);
-  const missing = Math.max(0, passThreshold(input.target) - clamp01(input.mastery));
+  const missing = Math.max(0, masteryGoal(input.target) - clamp01(input.mastery));
   const lessonsNeeded = missing <= PASS_EPSILON ? 0 : perLesson > 0 ? Math.ceil(missing / perLesson) : 0;
 
   return {
     atExam,
-    onTrack: meetsPassMark(atExam, passThreshold(input.target)),
+    onTrack: meetsPassMark(atExam, masteryGoal(input.target)),
     perLesson,
     lessonsNeeded,
     perDay: lessonsNeeded > 0 ? Math.ceil(lessonsNeeded / Math.max(1, untilExam)) : 0,

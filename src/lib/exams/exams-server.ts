@@ -427,8 +427,13 @@ async function readModules(supabase: ExamSupabase, userId: string, examId: strin
     ((lectureRows ?? []) as ModuleLecture[]).map((lecture) => [lecture.id, lecture]),
   );
 
-  // A note deleted from the library leaves the exam with it.
-  return { lectureIds: lectureIds.filter((id) => lectures.has(id)), lectures };
+  // A note deleted from the library leaves the exam with it, and so does one that failed to be made:
+  // it has nothing to learn from, and kept as a placeholder it would hold the path and the average
+  // down for good. It shows in the library as a failed upload instead (`listLecturesForUser`).
+  return {
+    lectureIds: lectureIds.filter((id) => lectures.has(id) && lectures.get(id)?.status !== "failed"),
+    lectures,
+  };
 }
 
 /** A graded mock exam's score per note, from the questions it snapshotted and how they were marked. */
@@ -1490,6 +1495,8 @@ export async function loadLesson(
     kind: ExamLessonKind;
     /** The topic's check ("Preverjanje"): a quiz of `CHECK_QUIZ_SIZE` questions instead of a practice's. */
     check?: boolean;
+    /** A part of a lesson ("Lekcija"): its written answer asks no gap, since its misses are not saved as gaps. */
+    inLesson?: boolean;
     /**
      * Asked before each model call the lesson needs (its rate limit). When it says no, a lesson
      * that cannot be built without the call throws `ExamModelCallRefused`; a repeat that only
@@ -1547,7 +1554,7 @@ export async function loadLesson(
     const parts: LessonPayload[] = [];
 
     for (const kind of LESSON_PARTS) {
-      const part = await loadLesson(supabase, userId, { ...input, kind, check: false }).catch((error) => {
+      const part = await loadLesson(supabase, userId, { ...input, kind, check: false, inLesson: true }).catch((error) => {
         if (error instanceof ExamModelCallRefused) {
           return null;
         }
@@ -1710,7 +1717,12 @@ export async function loadLesson(
         return assetState(supabase, lectureId, GENERATOR_FOR[input.kind]);
       }
 
-      base = topUp(all, assigned.quiz_ids, TOPIC_POOL_MIN.quiz, seed);
+      // The topic's open gaps always come with it: the top-up from the note's other questions is
+      // drawn anew each time, and a missed question left out of it could never be answered right.
+      const gapIds = new Set(gaps.map((gap) => gap.id));
+      const topped = topUp(all, assigned.quiz_ids, TOPIC_POOL_MIN.quiz, seed);
+      const inPool = new Set(topped.map((question) => question.id));
+      base = [...topped, ...all.filter((question) => gapIds.has(question.id) && !inPool.has(question.id))];
     }
 
     const size = input.kind === "quiz" && input.check ? CHECK_QUIZ_SIZE : LESSON_SIZE[input.kind];
@@ -1777,7 +1789,9 @@ export async function loadLesson(
     pool = [...base, ...contentWritten("x", topic.id, fresh.written)];
   }
 
-  const gapQuestion = withGapsFirst(pool, gaps, seen, LESSON_SIZE.written, seed).items[0];
+  // Inside a lesson the written part leaves gaps alone: they come back in a written lesson of their
+  // own, where a miss is saved and keeps the gap open.
+  const gapQuestion = input.inLesson ? undefined : withGapsFirst(pool, gaps, seen, LESSON_SIZE.written, seed).items[0];
   const [question] = gapQuestion
     ? [gapQuestion]
     : pickWritten(preferUnseen(pool, seen, LESSON_SIZE.written, seed), LESSON_SIZE.written, seed);

@@ -344,7 +344,9 @@ export function ExamSetup({
     .filter((upload) => upload.status === "uploading" || upload.status === "waiting")
     .slice(0, PARALLEL_UPLOADS);
   const activeKeys = new Set(activeUploads.map((upload) => upload.key));
-  const examFull = selected.length >= MAX_EXAM_MODULES;
+  /* Uploads still on their way hold their place: a note ticked meanwhile cannot take it from them. */
+  const uploadsPending = uploads.filter((upload) => upload.status === "uploading" || upload.status === "waiting").length;
+  const examFull = selected.length + uploadsPending >= MAX_EXAM_MODULES;
   const planKey = `${selected.join(",")}|${aiExpand ? 1 : 0}`;
   const keptTopics = planTopics.filter((topic) => topic.kept);
   const moduleCount = plan.status === "done" ? Math.max(1, keptTopics.length) : selected.length;
@@ -473,7 +475,7 @@ export function ExamSetup({
 
     const groups = materialGroups(files, { documents: documentsLeft, photos: photosLeft }).slice(
       0,
-      Math.max(0, MAX_EXAM_MODULES - selected.length),
+      Math.max(0, MAX_EXAM_MODULES - selected.length - uploadsPending),
     );
 
     setUploads((current) => [
@@ -531,7 +533,7 @@ export function ExamSetup({
     setSelected((current) =>
       current.includes(id)
         ? current.filter((entry) => entry !== id)
-        : current.length >= MAX_EXAM_MODULES
+        : current.length + uploadsPending >= MAX_EXAM_MODULES
           ? current
           : [...current, id],
     );

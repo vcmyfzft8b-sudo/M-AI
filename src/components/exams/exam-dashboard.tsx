@@ -16,8 +16,9 @@ import { prefetchLesson } from "@/components/exams/lesson-prefetch";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
 import {
   examNextStep,
-  lessonsToTarget,
+  practicesOwed,
   percent,
+  reachableModules,
   type ExamLessonKind,
   type PracticeLessonKind,
 } from "@/lib/exams/exam-model";
@@ -106,8 +107,11 @@ export function ExamDashboard({
   const examPassed = detail.daysLeft < 0;
   const examToday = detail.daysLeft === 0;
   const byTopic = useMemo(() => new Map(modules.map((module) => [module.topicId, module])), [modules]);
-  /* Topics the picker may open: the ones the path has reached, ready and allowed. */
-  const openTopics = modules.filter((module) => module.unlocked && module.ready && !module.pending);
+  /* The modules the path has reached, as the model and the lesson page count them; the picker offers these. */
+  const reachedTopics = new Set(
+    reachableModules(modules, canOpen).flatMap((reached, index) => (reached ? [modules[index].topicId] : [])),
+  );
+  const openTopics = modules.filter((module) => reachedTopics.has(module.topicId) && module.ready && !module.pending);
 
   /* The tutor plans by a model call; when it is the next step, start it before the learner taps. */
   useEffect(() => {
@@ -129,24 +133,39 @@ export function ExamDashboard({
       return;
     }
 
+    // Every 8 s while the note is being made: a refresh that finds it unchanged leaves this effect's
+    // inputs as they were, so a one-off timer would have checked only once.
     if (!planningReady) {
-      const timer = window.setTimeout(() => router.refresh(), 8_000);
-      return () => window.clearTimeout(timer);
+      const timer = window.setInterval(() => router.refresh(), 8_000);
+      return () => window.clearInterval(timer);
     }
 
+    // Planned now, and asked again every 15 s if that did not land (an error, a rate limit), so a
+    // failed attempt never leaves the screen on "planning"; a refusal for access is the paywall.
     let cancelled = false;
-    void fetch(`/api/exams/${exam.id}/topics`, { method: "POST" })
-      .then((response) => {
-        if (!cancelled && response.ok) {
-          router.refresh();
-        }
-      })
-      .catch(() => null);
+    const plan = () =>
+      fetch(`/api/exams/${exam.id}/topics`, { method: "POST" })
+        .then((response) => {
+          if (cancelled) {
+            return;
+          }
+
+          if (response.status === 402) {
+            navigateWithFeedback(paywallPath("exam", currentPaywallBack()));
+          } else if (response.ok) {
+            router.refresh();
+          }
+        })
+        .catch(() => null);
+
+    void plan();
+    const timer = window.setInterval(() => void plan(), 15_000);
 
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
     };
-  }, [exam.id, planning, planningReady, router]);
+  }, [exam.id, navigateWithFeedback, planning, planningReady, router]);
 
   /* Each tab starts at its top; the path then brings "Next up" into view (below). */
   function showTab(from: HTMLElement, next: "path" | "progress") {
@@ -302,13 +321,11 @@ export function ExamDashboard({
     | { type: "locked"; index: number; left: number }
     | { type: "gate"; topicId: string };
   const showsNext = next?.type === "lesson" && !examPassed && nextModule !== null;
-  const lessonsLeft = nextModule
-    ? Math.max(1, lessonsToTarget(nextModule.learned ? nextModule.mastery : nextModule.rawMastery, target / 100))
-    : 0;
+  const lessonsLeft = nextModule ? Math.max(1, practicesOwed(nextModule, target / 100)) : 0;
   const stations: Station[] = [];
 
   for (const pathModule of [...modules].sort((left, right) => left.position - right.position)) {
-    if (!pathModule.unlocked) {
+    if (!reachedTopics.has(pathModule.topicId)) {
       if (showsNext) {
         stations.push({ type: "gate", topicId: pathModule.topicId });
       }

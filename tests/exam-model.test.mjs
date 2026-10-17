@@ -52,12 +52,13 @@ import {
 } from "../src/lib/exams/exam-model.ts";
 
 // In these tests each note has one topic, named after it.
-const result = (lecture_id, lesson_kind, score, completed_at = "2026-10-14T10:00:00Z") => ({
+const result = (lecture_id, lesson_kind, score, completed_at = "2026-10-14T10:00:00Z", total = 10) => ({
   lecture_id,
   topic_id: lecture_id,
   lesson_kind,
   score,
   completed_at,
+  total,
 });
 
 const mods = (...ids) => ids.map((id) => ({ topicId: id, lectureId: id }));
@@ -347,8 +348,10 @@ test("lessons to the target count the steps a good learner still needs", () => {
   assert.equal(lessonsToTarget(0, 0.75), 9);
   assert.equal(lessonsToTarget(0.8, 0.75), 0);
   assert.equal(lessonsToTarget(0.7, 0.75), 2);
-  // A 100 % goal is held to the 95 % cap, and needs near-perfect lessons.
-  assert.ok(lessonsToTarget(0, 1) > lessonsToTarget(0, 0.9));
+  // A 100 % goal means 100 %: fully right tests all the way, the last three in a row.
+  assert.ok(lessonsToTarget(0, 1) >= lessonsToTarget(0, 0.9));
+  assert.equal(lessonsToTarget(0.95, 1), 3);
+  assert.equal(lessonsToTarget(1, 1), 0);
 });
 
 test("the next format rotates: every format once, then round the practice ones; gaps come first", () => {
@@ -556,6 +559,10 @@ test("ready means every topic passed a check at the goal lately, by its own scor
   // A check that scores under the goal once guessing is out does not count (8/10 is 73 % known).
   const missed = on([...lessons("a", "flashcards", 1, 20, "2026-10-20T08:00:00Z"), result("a", "quiz", 0.8, "2026-10-20T11:00:00Z")]);
   assert.equal(missed.mastered, false);
+
+  // A 5-question quiz at the goal is a practice, not a check: too much luck in it.
+  const short = on([...lessons("a", "flashcards", 1, 20, "2026-10-20T08:00:00Z"), result("a", "quiz", 1, "2026-10-20T11:00:00Z", 5)]);
+  assert.equal(short.mastered, false);
 
   // A check passed at the goal: ready.
   const passed = on([...lessons("a", "flashcards", 1, 20, "2026-10-20T08:00:00Z"), result("a", "quiz", 0.9, "2026-10-20T11:00:00Z")]);

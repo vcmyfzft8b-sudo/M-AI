@@ -524,13 +524,16 @@ export function useExamVoice({
             await inputRef.current?.useKey(session.realtime.stt.apiKey);
           })
           .catch((caught) => {
+            // The old keys are spent: dropped, so the clock does not ask again every second.
+            grantRef.current = null;
+
             // Out of talking time part-way: a lesson that can go on in writing does, quietly.
             if (caught instanceof TutorTimeError && allowText) {
               switchToText(null);
               return;
             }
 
-            setError(t("exam.oral.error.time"));
+            setError(t(caught instanceof TutorTimeError ? "exam.oral.error.time" : "exam.oral.error.start"));
           })
           .finally(() => {
             renewingRef.current = false;

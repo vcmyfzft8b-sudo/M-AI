@@ -4,7 +4,7 @@ import { ExamLesson } from "@/components/exams/exam-lesson";
 import { lessonHref } from "@/components/exams/exam-links";
 import { requireUser } from "@/lib/auth";
 import { getViewerAppState } from "@/lib/billing";
-import { isExamLessonKind, suggestedKind } from "@/lib/exams/exam-model";
+import { isExamLessonKind, reachableModules, suggestedKind } from "@/lib/exams/exam-model";
 import { getExamDetail } from "@/lib/exams/exams-server";
 import { getTranslations } from "@/lib/i18n/server";
 import { paywallPath } from "@/lib/paywall-reasons";
@@ -46,8 +46,11 @@ export default async function ExamLessonPage({
 
   const current = detail.modules[index];
 
-  // A module the path has not opened yet (the one before it is not on target) is not studied by link.
-  if (!current.unlocked) {
+  // A module the path has not reached yet (the one before it is not on target) is not studied by link.
+  // Reached as the path reaches it, so a module past one the account cannot open is not refused.
+  const canOpen = (lectureId: string) => Boolean(appState?.hasPaidAccess) || appState?.trialLectureId === lectureId;
+
+  if (!reachableModules(detail.modules, canOpen)[index]) {
     redirect(`/app/exams/${detail.exam.id}`);
   }
 

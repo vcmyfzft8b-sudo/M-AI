@@ -122,23 +122,10 @@ export function ExamMock({
   const minutes = mode === "oral" ? oralMinutes : duration;
   const minutesFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
 
-  const storageKey = phase.name === "sitting" ? `memo-exam-mock:${phase.attempt.id}` : null;
-
   useEffect(() => {
     answersRef.current = answers;
   }, [answers]);
 
-  useEffect(() => {
-    if (!storageKey) {
-      return;
-    }
-
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(answers));
-    } catch {
-      /* Private mode or a full disk: the answers are still held in memory. */
-    }
-  }, [answers, storageKey]);
 
 
   async function start() {
@@ -218,12 +205,6 @@ export function ExamMock({
         setError(t("exam.mock.error.submit"));
         setPhase({ name: "sitting", attempt });
         return;
-      }
-
-      try {
-        window.localStorage.removeItem(`memo-exam-mock:${attempt.id}`);
-      } catch {
-        /* Nothing to clean up. */
       }
 
       setTab("ai");

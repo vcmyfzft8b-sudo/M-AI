@@ -22,8 +22,8 @@ import {
   lessonsToTarget,
   masteryAfterPractice,
   meetsPassMark,
-  knownShare,
-  passThreshold,
+  checkScorePasses,
+  masteryGoal,
   percent,
   type ExamLessonKind,
   type PracticeLessonKind,
@@ -159,6 +159,11 @@ export function ExamLesson({
   const { t } = useTranslations();
   const { navigateWithFeedback } = useInstantNavigation();
   const [phase, setPhase] = useState<Phase>({ name: "loading" });
+  /*
+   * Where the topic stands, for the result screen: the page's values at first, then each result's,
+   * so a "Ponovi" builds on the lesson just done rather than on the page as it was opened.
+   */
+  const progressRef = useRef({ mastery: module.mastery, rawMastery: module.rawMastery, perfectRun: module.perfectRun });
   const [buddy, setBuddy] = useState<{ mood: BuddyMood; key: number }>({ mood: "wave", key: 0 });
   const [saveError, setSaveError] = useState(false);
   /* The learning-zone answer, 1 (too easy) to 5 (too hard). */
@@ -347,10 +352,16 @@ export function ExamLesson({
      * screen says by how much. "Nadaljuj" goes back to the path, which has the next lesson.
      */
     const score = total > 0 ? Math.min(1, correct / total) : 1;
+    // From where the topic stands now: the page's values, or the last result's after "Ponovi".
+    const now = progressRef.current;
     // A lesson that tested nothing (the reading alone) moves nothing.
-    const after =
-      total > 0 ? masteryAfterPractice(module.rawMastery, module.perfectRun, kind, score).mastery : module.mastery;
-    const mark = passThreshold(goal);
+    const moved = total > 0 ? masteryAfterPractice(now.rawMastery, now.perfectRun, kind, score) : null;
+    const after = moved ? moved.mastery : now.mastery;
+
+    if (moved) {
+      progressRef.current = { mastery: moved.mastery, rawMastery: moved.mastery, perfectRun: moved.perfectRun };
+    }
+    const mark = masteryGoal(goal);
     const missedNow = missedRef.current.size;
     const repeatedOf = (lesson: LessonPayload | null): string[] =>
       lesson?.kind === "summary"
@@ -360,17 +371,17 @@ export function ExamLesson({
           : [];
     const repeatedIds = repeatedOf(lessonRef.current);
     const gapsClosed = repeatedIds.filter((id) => !missedRef.current.has(id)).length;
-    const reached = meetsPassMark(after, mark) && !meetsPassMark(module.mastery, mark);
+    const reached = meetsPassMark(after, mark) && !meetsPassMark(now.mastery, mark);
 
-    react(after > module.mastery ? "cheer" : "happy");
+    react(after > now.mastery ? "cheer" : "happy");
     setPhase({
       name: "done",
       correct,
       total,
-      before: module.mastery,
+      before: now.mastery,
       after,
       reached,
-      checkPassed: check && total > 0 ? meetsPassMark(knownShare(kind, correct / total), mark) : null,
+      checkPassed: check && total > 0 ? checkScorePasses(kind, correct / total, mark) : null,
       gapsClosed,
       gapsOpen: GAP_LESSON_KINDS.includes(kind as PracticeLessonKind) ? missedNow : 0,
     });
@@ -564,7 +575,7 @@ export function ExamLesson({
             </div>
             {phase.total > 0 && kind !== "summary" ? <p>{scoreLine(phase.correct, phase.total)}</p> : null}
             {/* Under the goal the module goes on: the lessons it still needs, and only then the next. */}
-            {phase.reached || meetsPassMark(phase.after, passThreshold(target / 100)) ? null : (
+            {phase.reached || meetsPassMark(phase.after, masteryGoal(target / 100)) ? null : (
               <p className="memo-exam-lessons-left">
                 {t("exam.lesson.done.lessonsLeft", { count: lessonsToTarget(phase.after, target / 100), target })}
               </p>

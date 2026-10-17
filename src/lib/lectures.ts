@@ -899,7 +899,8 @@ export async function listLecturesForUser(
 
   // The material list is a convenience: if it cannot be read, the notes still show.
   const hidden = new Set(((material.error ? [] : material.data) ?? []).map((row) => (row as { lecture_id: string }).lecture_id));
-  const rows = ((data ?? []) as LectureRow[]).filter((row) => !hidden.has(row.id));
+  // Material that failed to be made is not the prep's any more (it left it): it shows here, failed.
+  const rows = ((data ?? []) as LectureRow[]).filter((row) => !hidden.has(row.id) || row.status === "failed");
 
   return reconcileLecturesWithArtifacts(rows);
 }

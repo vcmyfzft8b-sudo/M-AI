@@ -16,6 +16,8 @@ const PREP_EMOJI = ["📝", "📚", "🎓", "✏️", "📖", "🗓️"];
 function PrepRow({ prep, emoji }: { prep: LibraryExamPrep; emoji: string }) {
   const { t } = useTranslations();
   const mastered = percent(prep.mastery);
+  /* Only an exam whose day has gone is done; one archived ahead of it is just put away. */
+  const pastLabel = prep.archived && prep.daysLeft >= 0 ? t("exam.list.archived") : t("exam.list.past");
 
   return (
     <InstantLink
@@ -33,8 +35,8 @@ function PrepRow({ prep, emoji }: { prep: LibraryExamPrep; emoji: string }) {
         <span className="memo-note-meta">
           {prep.past
             ? prep.grade
-              ? `${t("exam.list.past")} · ${t("exam.list.grade", { grade: prep.grade })}`
-              : `${t("exam.list.past")} · ${t("exam.list.mastery", { percent: mastered })}`
+              ? `${pastLabel} · ${t("exam.list.grade", { grade: prep.grade })}`
+              : `${pastLabel} · ${t("exam.list.mastery", { percent: mastered })}`
             : `${
                 prep.daysLeft === 0 ? t("exam.dash.countdownToday") : t("exam.list.inDays", { count: prep.daysLeft })
               } · ${t("exam.list.mastery", { percent: mastered })}`}

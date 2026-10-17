@@ -10,6 +10,7 @@ import type {
 } from "@/lib/database.types";
 import {
   buildTrueFalse,
+  CHECK_QUIZ_MIN,
   CHECK_QUIZ_SIZE,
   dailyPlan,
   dayKey,
@@ -21,6 +22,8 @@ import {
   examModuleStates,
   examStage,
   gradeForPercentage,
+  isSkippedLesson,
+  mockPassed,
   mockQuestionCounts,
   MOCK_MINUTES,
   needsFreshItems,
@@ -140,7 +143,7 @@ export type ExamDetail = {
    * path suggests other exercises and the picker shows the tutor locked.
    */
   tutorAvailable: boolean;
-  /** Every lesson done, oldest first: the path's stations. */
+  /** Every lesson done, oldest first, skipped practices left out (`isSkippedLesson`): the path's stations. */
   history: ExamLessonEntry[];
   streak: number;
   latestMock: ExamMockSummary | null;
@@ -329,6 +332,8 @@ export type LibraryExamPrep = {
   daysLeft: number;
   mastery: number;
   past: boolean;
+  /** Archived by the learner; with `daysLeft` ≥ 0 its exam is still ahead, so it is not "done". */
+  archived: boolean;
   grade: string | null;
 };
 
@@ -344,6 +349,7 @@ export async function listLibraryExamPreps(
     daysLeft: item.daysLeft,
     mastery: item.mastery,
     past: Boolean(item.exam.archived_at) || item.daysLeft < 0,
+    archived: Boolean(item.exam.archived_at),
     grade: item.exam.actual_grade,
   }));
 
@@ -553,7 +559,9 @@ export async function getExamDetail(
     forecast: examForecast({
       mastery: examMastery(states),
       target,
-      lessonDays: results.filter((row) => row.lesson_kind !== "summary").map((row) => dayKey(row.completed_at)),
+      lessonDays: results
+        .filter((row) => row.lesson_kind !== "summary" && !isSkippedLesson(row))
+        .map((row) => dayKey(row.completed_at)),
       today,
       examDate: exam.exam_date,
     }),
@@ -561,8 +569,10 @@ export async function getExamDetail(
     gaps: states.reduce((sum, state) => sum + state.gaps, 0),
     onTarget: topicsOnTarget(states, target),
     tutorAvailable,
+    // A skipped practice tested nothing: no station for it ("Kviz · 0 %" would read as a real try).
     history: results
       .filter((row) => row.topic_id && states.some((state) => state.topicId === row.topic_id))
+      .filter((row) => !isSkippedLesson(row))
       .map((row) => ({
         id: row.id,
         topicId: row.topic_id as string,
@@ -1230,10 +1240,17 @@ export async function warmExamMaterial(supabase: ExamSupabase, userId: string, l
     .map((lecture) => lecture.id);
 
   for (const generator of Object.keys(ASSET_TABLE) as LessonGenerator[]) {
-    const { data: rows } = await supabase
+    const { data: rows, error: rowsError } = await supabase
       .from(ASSET_TABLE[generator] as "lecture_quiz_assets")
       .select("lecture_id")
       .in("lecture_id", ready);
+
+    // A read that failed says nothing about what exists: starting from it would reset material a
+    // note already has (the study upsert queues a ready row again). A lesson starts it if needed.
+    if (rowsError) {
+      continue;
+    }
+
     const started = new Set(((rows ?? []) as { lecture_id: string }[]).map((row) => row.lecture_id));
 
     for (const lectureId of ready.filter((id) => !started.has(id))) {
@@ -1828,9 +1845,16 @@ export async function loadLesson(
     const withGaps = withGapsFirst(pool, gaps, seen, size, seed);
     const questions = withGaps.items.length > 0 ? withGaps.items : preferUnseen(pool, seen, size, seed);
     const repeated = withGaps.repeated;
+    const picked = input.kind === "quiz" ? pickQuiz(questions, size, seed) : [];
+
+    // A check quiz too short to count (`countsAsCheck`) would be cheered and then ignored by the
+    // path, which would ask for it again: the topic is checked by a written answer instead.
+    if (input.kind === "quiz" && input.check && picked.length < CHECK_QUIZ_MIN) {
+      return loadLesson(supabase, userId, { ...input, kind: "written" });
+    }
 
     return input.kind === "quiz"
-      ? { status: "ready", lesson: { kind: "quiz", questions: pickQuiz(questions, size, seed), repeated } }
+      ? { status: "ready", lesson: { kind: "quiz", questions: picked, repeated } }
       : { status: "ready", lesson: { kind: "true_false", statements: buildTrueFalse(questions, size, seed), repeated } };
   }
 
@@ -2348,7 +2372,13 @@ export type MockResult = {
   totalScore: number;
   maxScore: number;
   grade: string;
+  /**
+   * Whether the mock reached the learner's goal (`mockPassed`), as the path judges it. The exam's
+   * own pass mark (`pass_percentage`) only sets the grade.
+   */
   passed: boolean;
+  /** The goal it was judged against, 0..100 (the exam's target). */
+  target: number;
   minutesUsed: number;
   mode: ExamMockAttemptRow["mode"];
   durationMinutes: number;
@@ -2414,7 +2444,8 @@ export function mockResultFromAttempt(exam: ExamRow, attempt: ExamMockAttemptRow
     totalScore: attempt.total_score ?? summary.totalScore,
     maxScore: attempt.max_score ?? summary.maxScore,
     grade: gradeForPercentage(exam.grading_scale, attempt.percentage, exam.pass_percentage),
-    passed: attempt.percentage >= exam.pass_percentage,
+    passed: mockPassed(attempt.percentage, exam.target_mastery / 100),
+    target: exam.target_mastery,
     minutesUsed: Math.min(minutesUsed, attempt.duration_minutes),
     mode: attempt.mode,
     durationMinutes: attempt.duration_minutes,

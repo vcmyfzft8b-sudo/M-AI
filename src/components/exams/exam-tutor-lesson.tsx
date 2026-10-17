@@ -85,10 +85,13 @@ export function ExamTutorLesson({
   lectureId: string;
   topicTitle: string;
   steps: TutorStep[];
-  /** Points scored (each step 0..1) out of the number of steps. */
+  /** Points scored (each step 0..1) out of the steps answered: ended early, the rest are not scored. */
   onFinish: (points: number, total: number) => void;
   onReact: (mood: "happy" | "sad") => void;
-  /** No talking time left to start with: the lesson screen opens another exercise instead. */
+  /**
+   * No talking time left before anything was answered: the lesson screen opens another exercise
+   * instead. Once a step has been answered the lesson stays and goes on in writing.
+   */
   onOutOfTime?: () => void;
 }) {
   const { t } = useTranslations();
@@ -106,7 +109,7 @@ export function ExamTutorLesson({
       pickerRef.current.open = false;
     }
   }, []);
-  const voiceSheet = useSheet(closeVoicePicker);
+  const voiceSheet = useSheet(closeVoicePicker, { closeOnEscape: pickingVoice });
   /* In writing, the tutor's reply waits to be read: the next point comes when the learner goes on. */
   const [awaitingContinue, setAwaitingContinue] = useState(false);
   const continueRef = useRef<(() => void) | null>(null);
@@ -120,16 +123,31 @@ export function ExamTutorLesson({
     voice,
     allowText: true,
     onAnswerEnd: () => void endAnswerRef.current(),
-    onOutOfTime,
+    // Leaving for another exercise would lose the steps already answered, so then it is writing.
+    onOutOfTime: onOutOfTime
+      ? () => {
+          if (verdictsRef.current.some((attempts) => attempts && attempts.length > 0)) {
+            return false;
+          }
+
+          onOutOfTime();
+          return true;
+        }
+      : undefined,
   });
   const { phase, heard, line, error, textMode, orbRef, say, listen, stopListening, setPhase, hush } = session;
 
-  /* The lesson is over (or ended): its score goes to the lesson's own result screen, as every lesson's does. */
+  /*
+   * The lesson is over (or ended): its score goes to the lesson's own result screen, as every
+   * lesson's does. Only the steps answered are scored; ended early, the ones not reached are not
+   * zeros (none answered saves nothing to score, which counts as no practice).
+   */
   const wrapUp = useCallback(() => {
     flowRef.current += 1;
     session.finish();
-    const points = steps.reduce((sum, _, stepIndex) => sum + tutorStepPoints(verdictsRef.current[stepIndex] ?? []), 0);
-    onFinish(points, steps.length);
+    const answered = steps.flatMap((_, stepIndex) => ((verdictsRef.current[stepIndex]?.length ?? 0) > 0 ? [stepIndex] : []));
+    const points = answered.reduce((sum, stepIndex) => sum + tutorStepPoints(verdictsRef.current[stepIndex] ?? []), 0);
+    onFinish(points, answered.length);
   }, [onFinish, session, steps]);
 
   const teach = useCallback(
@@ -413,12 +431,17 @@ export function ExamTutorLesson({
               <Msym name="arrow_forward" size="1.2rem" fill={false} weight={500} />
             </button>
           ) : null}
-          {/* Why it is in writing, and the way back to talking. */}
+          {/*
+           * Why it is in writing, and the way back to talking. With the talking time spent there is
+           * no way back: the microphone would only be refused again.
+           */}
           <p className="memo-tutor-hint">{session.textNote ?? t("exam.tutor.textHint")}</p>
-          <button type="button" className="memo-tutor-second" onClick={() => void tryVoice()}>
-            <Msym name="mic" size="1.2rem" fill={false} weight={500} />
-            <span>{t("exam.tutor.tryVoice")}</span>
-          </button>
+          {session.outOfTime ? null : (
+            <button type="button" className="memo-tutor-second" onClick={() => void tryVoice()}>
+              <Msym name="mic" size="1.2rem" fill={false} weight={500} />
+              <span>{t("exam.tutor.tryVoice")}</span>
+            </button>
+          )}
         </>
       ) : null}
 

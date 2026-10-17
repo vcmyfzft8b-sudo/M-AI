@@ -114,10 +114,11 @@ export function useExamVoice({
   /** The learner has gone quiet after speaking: their answer is over. */
   onAnswerEnd: () => void;
   /**
-   * The talking time is spent before the voice could start. The lesson hands over to another
-   * exercise without a word about it; without this, the time-out is said like any other error.
+   * The talking time is spent before the voice could start. Returns true when the caller handled it
+   * by leaving (the lesson hands over to another exercise without a word); false goes on in writing
+   * with the time-out said (`allowText`). Without this, the time-out is said like any other error.
    */
-  onOutOfTime?: () => void;
+  onOutOfTime?: () => boolean;
 }) {
   const { t } = useTranslations();
   const [phase, setPhase] = useState<VoicePhase>("preparing");
@@ -128,6 +129,8 @@ export function useExamVoice({
   const [textMode, setTextMode] = useState(false);
   /* Why the lesson went on in writing (no microphone, no talking time, the voice dropped), as said to the learner. */
   const [textNote, setTextNote] = useState<string | null>(null);
+  /* The talking time is spent: the rest is in writing, and asking for the voice again is pointless. */
+  const [outOfTime, setOutOfTime] = useState(false);
   /* Whether the tutor's voice is on: in writing it still speaks when only the microphone is missing. */
   const [speaks, setSpeaks] = useState(false);
   /* What the voice has said of the current line so far, word by word: the live captions. */
@@ -471,9 +474,16 @@ export function useExamVoice({
     } catch (caught) {
       abandon();
 
-      if (caught instanceof TutorTimeError && onOutOfTime && !stale()) {
-        onOutOfTime();
-        return false;
+      if (caught instanceof TutorTimeError && !stale()) {
+        setOutOfTime(true);
+
+        if (onOutOfTime?.()) {
+          return false;
+        }
+
+        if (allowText) {
+          return fallBack(t("exam.tutor.outOfTime"));
+        }
       }
 
       return fallBack(caught instanceof Error ? caught.message : t("exam.oral.error.start"));
@@ -527,9 +537,10 @@ export function useExamVoice({
             // The old keys are spent: dropped, so the clock does not ask again every second.
             grantRef.current = null;
 
-            // Out of talking time part-way: a lesson that can go on in writing does, quietly.
+            // Out of talking time part-way: a lesson that can go on in writing does, and says why.
             if (caught instanceof TutorTimeError && allowText) {
-              switchToText(null);
+              setOutOfTime(true);
+              switchToText(t("exam.tutor.outOfTime"));
               return;
             }
 
@@ -583,6 +594,7 @@ export function useExamVoice({
     elapsed,
     textMode,
     textNote,
+    outOfTime,
     speaks,
     caption,
     speech,

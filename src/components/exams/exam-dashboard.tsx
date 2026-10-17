@@ -103,14 +103,16 @@ export function ExamDashboard({
     setConfirmDelete(false);
     setFailed(false);
   }, []);
-  const menuSheet = useSheet(closeMenu, { locked: busy });
+  const menuSheet = useSheet(closeMenu, { locked: busy, closeOnEscape: menuOpen });
   const closePicker = useCallback(() => setPickerOpen(false), []);
-  const pickerSheet = useSheet(closePicker);
+  const pickerSheet = useSheet(closePicker, { closeOnEscape: pickerOpen });
   const markCurrent = useCallback((node: HTMLElement | null) => {
     currentRef.current = node;
   }, []);
 
   const canOpen = (lectureId: string) => hasPaidAccess || trialLectureId === lectureId;
+  /* An archived prep takes no lessons (the lesson page sends them back here): it offers to come back. */
+  const archived = Boolean(exam.archived_at);
   const stage = detail.stage;
   /* The exam's eve and the day itself: Astra's exam-day refresher comes before anything new. */
   const finalDay = detail.daysLeft === 0 || detail.daysLeft === 1;
@@ -139,6 +141,12 @@ export function ExamDashboard({
   const pendingNotes = modules.filter((module) => module.pending).length;
   /* Any module with material to study; until then there is nothing a mock could ask either. */
   const studiable = modules.some((module) => module.ready && !module.pending);
+  /*
+   * Material to study, none of it open to this account (a plan that lapsed, the free note used
+   * elsewhere): the path has no next step, so the bar's way on is the paywall rather than nothing.
+   */
+  const accessLocked =
+    next === null && studiable && !modules.some((module) => module.ready && !module.pending && canOpen(module.lectureId));
 
   /*
    * A note that was still being made at setup has no topics yet. Once it is ready its topics are
@@ -242,6 +250,10 @@ export function ExamDashboard({
   }
 
   function openLesson(module: ExamModuleView, kind: ExamLessonKind, check = false) {
+    if (archived) {
+      return;
+    }
+
     if (!canOpen(module.lectureId)) {
       navigateWithFeedback(paywallPath("exam", currentPaywallBack()));
       return;
@@ -250,8 +262,13 @@ export function ExamDashboard({
     navigateWithFeedback(lessonHref(exam.id, module.topicId, kind, check));
   }
 
-  function openMock() {
-    navigateWithFeedback(`/app/exams/${exam.id}/mock`);
+  /* The mock exam; the picker's oral one opens its setup on the oral kind. */
+  function openMock(mode: "written" | "oral" = "written") {
+    navigateWithFeedback(`/app/exams/${exam.id}/mock${mode === "oral" ? "?mode=oral" : ""}`);
+  }
+
+  function openPaywall() {
+    navigateWithFeedback(paywallPath("exam", currentPaywallBack()));
   }
 
   function openPicker() {
@@ -309,7 +326,7 @@ export function ExamDashboard({
     pickerSheet.dismiss();
 
     if (item.kind === "mock") {
-      openMock();
+      openMock(item.key === "mock-oral" ? "oral" : "written");
     } else if (pickerModule) {
       openLesson(pickerModule, item.kind);
     }
@@ -348,7 +365,7 @@ export function ExamDashboard({
     | { type: "next"; topicId: string; kind: ExamLessonKind; check: boolean }
     | { type: "locked"; index: number; left: number }
     | { type: "gate"; topicId: string };
-  const showsNext = next?.type === "lesson" && !examPassed && nextModule !== null;
+  const showsNext = next?.type === "lesson" && !examPassed && !archived && nextModule !== null;
   const lessonsLeft = nextModule ? Math.max(1, practicesOwed(nextModule, target / 100)) : 0;
   const stations: Station[] = [];
   /* How many of each module's earlier lessons are folded away, by topic. */
@@ -398,7 +415,19 @@ export function ExamDashboard({
   });
 
   const cta =
-    examPassed || tab !== "path" ? null : next?.type === "lesson" && nextModule ? (
+    examPassed || tab !== "path" ? null : archived ? (
+      // Brought back where it is: the path then has its next step again.
+      <button
+        type="button"
+        className="memo-button-coral"
+        disabled={busy}
+        onClick={() =>
+          void mutate({ method: "PATCH", body: JSON.stringify({ archived: false }) }, () => router.refresh())
+        }
+      >
+        {t("exam.dash.unarchive")}
+      </button>
+    ) : next?.type === "lesson" && nextModule ? (
       <div className="memo-exam-next-bar">
         <button
           type="button"
@@ -417,10 +446,15 @@ export function ExamDashboard({
         <button type="button" className="memo-exam-swap" aria-label={t("exam.path.swap")} onClick={openPicker}>
           <Msym name="swap_horiz" size="1.45rem" fill={false} weight={500} />
         </button>
-        <button type="button" className="memo-button-coral" onClick={openMock}>
+        <button type="button" className="memo-button-coral" onClick={() => openMock()}>
           {t("exam.path.continue", { lesson: t("exam.mock.title") })}
         </button>
       </div>
+    ) : accessLocked ? (
+      // The shared paywall, which knows whether this is the browser or the app.
+      <button type="button" className="memo-button-coral" onClick={openPaywall}>
+        {t("paywall.choosePlan")}
+      </button>
     ) : modules.length === 0 && pendingNotes === 0 ? (
       // A prep left with no material: its one way on, in the bar every screen has it in.
       <InstantLink href="/app/exams/new" className="memo-button-coral">
@@ -583,6 +617,18 @@ export function ExamDashboard({
                   </button>
                 </div>
               ) : null}
+              {failed && !menuOpen ? <p className="memo-inline-error">{t("exam.dash.actionFailed")}</p> : null}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Archived: why the path has no next step, over the bar's way back. */}
+        {archived && !examPassed ? (
+          <div className="memo-exam-card memo-exam-after" role="status">
+            <MemoBuddy mood="idle" size="4rem" />
+            <div>
+              <b>{t("exam.dash.archived.title")}</b>
+              <p>{t("exam.dash.archived.body")}</p>
               {failed && !menuOpen ? <p className="memo-inline-error">{t("exam.dash.actionFailed")}</p> : null}
             </div>
           </div>
@@ -750,7 +796,7 @@ export function ExamDashboard({
             })}
 
             {/* Astra's mock card: the real exam, tried whenever the learner wants (once there is material to ask from). */}
-            {studiable ? (
+            {studiable && !archived ? (
             <div
               ref={next?.type === "mock" ? markCurrent : undefined}
               className={`memo-exam-card memo-exam-mock-card ${next?.type === "mock" ? "current" : ""}`.trim()}
@@ -962,12 +1008,16 @@ export function ExamDashboard({
                   disabled={busy}
                   onClick={() =>
                     void mutate(
-                      { method: "PATCH", body: JSON.stringify({ archived: !exam.archived_at }) },
-                      () => navigateWithFeedback(EXAM_PREPS_HREF),
+                      { method: "PATCH", body: JSON.stringify({ archived: !archived }) },
+                      // Archived, it goes where the preps are; brought back, it stays here, open again.
+                      () =>
+                        archived
+                          ? menuSheet.dismiss(() => router.refresh(), { force: true })
+                          : navigateWithFeedback(EXAM_PREPS_HREF),
                     )
                   }
                 >
-                  {exam.archived_at ? t("exam.dash.unarchive") : t("exam.dash.archive")}
+                  {archived ? t("exam.dash.unarchive") : t("exam.dash.archive")}
                 </button>
                 <button type="button" className="memo-sheet-danger" onClick={() => setConfirmDelete(true)}>
                   {t("exam.dash.delete.title")}

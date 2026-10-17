@@ -18,6 +18,7 @@ import { MemoBuddy, type BuddyMood } from "@/components/exams/memo-buddy";
 import { ExamTutorLesson } from "@/components/exams/exam-tutor-lesson";
 import { lessonUrl, takePrefetchedLesson } from "@/components/exams/lesson-prefetch";
 import {
+  countsAsCheck,
   GAP_LESSON_KINDS,
   lessonsToTarget,
   masteryAfterPractice,
@@ -125,6 +126,10 @@ export type ExamLessonModule = {
   mastery: number;
   rawMastery: number;
   perfectRun: number;
+  /** The last module on the path: reaching the goal here opens nothing after it. */
+  isLast: boolean;
+  /** Reached the goal before (`ModuleState.learned`): the module after it is already open. */
+  learned: boolean;
 };
 
 /* A lesson load that is worth trying again rather than showing as failed straight away. */
@@ -166,6 +171,11 @@ export function ExamLesson({
   const progressRef = useRef({ mastery: module.mastery, rawMastery: module.rawMastery, perfectRun: module.perfectRun });
   const [buddy, setBuddy] = useState<{ mood: BuddyMood; key: number }>({ mood: "wave", key: 0 });
   const [saveError, setSaveError] = useState(false);
+  /*
+   * The kind of lesson the server served, saved and scored as that: a check quiz the topic cannot
+   * fill to `CHECK_QUIZ_MIN` questions comes back as the written check instead.
+   */
+  const [servedKind, setServedKind] = useState<ExamLessonKind>(kind);
   /* The learning-zone answer, 1 (too easy) to 5 (too hard). */
   const [difficulty, setDifficulty] = useState(3);
   /* The note material this lesson has asked to be made, each once (a lesson can wait on several). */
@@ -196,6 +206,7 @@ export function ExamLesson({
       lessonRef.current = ready.lesson;
       missedRef.current = new Set();
       setPart(-1);
+      setServedKind(ready.lesson.kind);
       setPhase({ name: "playing", lesson: ready.lesson });
       return;
     }
@@ -229,6 +240,7 @@ export function ExamLesson({
       lessonRef.current = load.lesson;
       missedRef.current = new Set();
       setPart(-1);
+      setServedKind(load.lesson.kind);
       setPhase({ name: "playing", lesson: load.lesson });
       return;
     }
@@ -336,7 +348,7 @@ export function ExamLesson({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         topicId: module.topicId,
-        kind,
+        kind: servedKind,
         correct,
         total,
         difficulty,
@@ -352,7 +364,7 @@ export function ExamLesson({
     }
 
     // A lesson read alone tested nothing: back to the path. One with parts shows its result.
-    if (kind === "summary" && total === 0) {
+    if (servedKind === "summary" && total === 0) {
       navigateWithFeedback(examHref, { refresh: true });
       return;
     }
@@ -366,7 +378,7 @@ export function ExamLesson({
     // From where the topic stands now: the page's values, or the last result's after "Ponovi".
     const now = progressRef.current;
     // A lesson that tested nothing (the reading alone) moves nothing.
-    const moved = total > 0 ? masteryAfterPractice(now.rawMastery, now.perfectRun, kind, score) : null;
+    const moved = total > 0 ? masteryAfterPractice(now.rawMastery, now.perfectRun, servedKind, score) : null;
     const after = moved ? moved.mastery : now.mastery;
 
     if (moved) {
@@ -392,14 +404,18 @@ export function ExamLesson({
       before: now.mastery,
       after,
       reached,
-      checkPassed: check && total > 0 ? checkScorePasses(kind, correct / total, mark) : null,
+      // Only a check the path counts says passed or not; a quiz too short to count is a practice.
+      checkPassed:
+        check && total > 0 && countsAsCheck({ lesson_kind: servedKind, total })
+          ? checkScorePasses(servedKind, correct / total, mark)
+          : null,
       gapsClosed,
-      gapsOpen: GAP_LESSON_KINDS.includes(kind as PracticeLessonKind) ? missedNow : 0,
+      gapsOpen: GAP_LESSON_KINDS.includes(servedKind as PracticeLessonKind) ? missedNow : 0,
     });
   }
 
   const scoreLine = (correct: number, total: number) =>
-    kind === "tutor"
+    servedKind === "tutor"
       ? t("exam.tutor.score", { percent: percent(correct / Math.max(1, total)) })
       : t("exam.zone.score", { correct, total });
   const title = `${t("exam.dash.module", { index: module.position + 1 })} · ${check ? t("exam.lesson.check") : t(LESSON_KIND_KEY[kind])}`;
@@ -470,9 +486,12 @@ export function ExamLesson({
       </button>
     ) : phase.name === "zone" ? (
       <div className="memo-exam-cta-row">
-        <button type="button" className="memo-button-ghost" onClick={() => retryLoad(null)}>
-          {t("exam.zone.retry")}
-        </button>
+        {/* The lesson is finished but not saved (saving is "Nadaljuj"): a repeat would throw it away. */}
+        {saveError ? null : (
+          <button type="button" className="memo-button-ghost" onClick={() => retryLoad(null)}>
+            {t("exam.zone.retry")}
+          </button>
+        )}
         <button type="button" className="memo-button-coral" onClick={() => void save(phase.correct, phase.total, difficulty)}>
           {t("exam.zone.continue")}
         </button>
@@ -587,11 +606,21 @@ export function ExamLesson({
                 <i style={{ "--goal": `${target}%` } as CSSProperties} aria-hidden="true" />
               </div>
             </div>
-            {phase.total > 0 && kind !== "summary" ? <p>{scoreLine(phase.correct, phase.total)}</p> : null}
-            {/* Under the goal the module goes on: the lessons it still needs, and only then the next. */}
+            {phase.total > 0 && servedKind !== "summary" ? <p>{scoreLine(phase.correct, phase.total)}</p> : null}
+            {/*
+             * Under the goal the module goes on: the lessons it still needs, and only then the next.
+             * The last module opens nothing, and a module on target before has the next one open.
+             */}
             {phase.reached || meetsPassMark(phase.after, masteryGoal(target / 100)) ? null : (
               <p className="memo-exam-lessons-left">
-                {t("exam.lesson.done.lessonsLeft", { count: lessonsToTarget(phase.after, target / 100), target })}
+                {t(
+                  module.learned
+                    ? "exam.lesson.done.lessonsLeftLearned"
+                    : module.isLast
+                      ? "exam.lesson.done.lessonsLeftLast"
+                      : "exam.lesson.done.lessonsLeft",
+                  { count: lessonsToTarget(phase.after, target / 100), target },
+                )}
               </p>
             )}
             {/* What comes back and until when: the misses, until they are answered right. */}
@@ -816,14 +845,17 @@ function LessonBody({
   }
 
   /* `useSheet` reads its callback through a ref, so a new function each render is fine. */
-  const whySheet = useSheet(() => {
-    setShowWhy(false);
+  const whySheet = useSheet(
+    () => {
+      setShowWhy(false);
 
-    if (nextAfterWhy.current) {
-      nextAfterWhy.current = false;
-      advanceQuiz(false);
-    }
-  });
+      if (nextAfterWhy.current) {
+        nextAfterWhy.current = false;
+        advanceQuiz(false);
+      }
+    },
+    { closeOnEscape: showWhy },
+  );
   useEffect(() => () => window.clearTimeout(advanceTimer.current), []);
 
   const flipHint = (

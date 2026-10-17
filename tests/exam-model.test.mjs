@@ -48,6 +48,10 @@ import {
   suggestedKind,
   topicMastery,
   topicsOnTarget,
+  countsAsCheck,
+  isSkippedLesson,
+  moduleProgress,
+  CHECK_QUIZ_MIN,
 } from "../src/lib/exams/exam-model.ts";
 
 // In these tests each note has one topic, named after it.
@@ -452,6 +456,40 @@ test("a mock under the target asks its weak topics for a lesson after it", () =>
 
   const proved = examModuleStates(mods("a", "b"), [...strong, result("b", "quiz", 1, "2026-10-15T11:00:00Z")], 0.75, failed);
   assert.equal(proved[1].proofOwed, false);
+});
+
+test("a skipped practice (nothing scored) is no practice", () => {
+  const skip = result("a", "quiz", 0, "2026-10-15T11:00:00Z", 0);
+  assert.equal(isSkippedLesson(skip), true);
+  // A summary read alone also scores nothing, but it is the reading, not a skipped practice.
+  assert.equal(isSkippedLesson(result("a", "summary", 0, "2026-10-15T11:00:00Z", 0)), false);
+  assert.equal(isSkippedLesson(result("a", "quiz", 0)), false);
+
+  // It counts towards no repetition ("Ponovitev" opens after practice lessons) and moves nothing.
+  const skipped = moduleProgress([skip, { ...skip, completed_at: "2026-10-15T12:00:00Z" }], 0.75);
+  assert.equal(skipped.practiceLessons, 0);
+  assert.equal(skipped.mastery, 0);
+
+  // Nor does it pay off a lesson a failed mock asked for.
+  const strong = [...lessons("a", "quiz", 1, 14), ...lessons("b", "quiz", 1, 14, "2026-10-14T09:00:00Z")];
+  const failed = { at: "2026-10-15T10:00:00Z", percentage: 50, byLecture: { a: 0.9, b: 0.3 } };
+  const afterSkip = examModuleStates(mods("a", "b"), [...strong, result("b", "quiz", 0, "2026-10-15T11:00:00Z", 0)], 0.75, failed);
+  assert.equal(afterSkip[1].proofOwed, true);
+});
+
+test("a check quiz counts only with enough questions, and the done screen asks the same", () => {
+  assert.equal(countsAsCheck({ lesson_kind: "quiz", total: CHECK_QUIZ_MIN - 1 }), false);
+  assert.equal(countsAsCheck({ lesson_kind: "quiz", total: CHECK_QUIZ_MIN }), true);
+  assert.equal(countsAsCheck({ lesson_kind: "written", total: 5 }), true);
+  assert.equal(countsAsCheck({ lesson_kind: "true_false", total: 10 }), false);
+
+  // A short "check" at full marks leaves the check still due, as the done screen now says.
+  const learned = lessons("a", "quiz", 1, 14, "2026-10-10T08:00:00Z");
+  const now = new Date("2026-10-15T12:00:00Z");
+  const short = [...learned, result("a", "quiz", 1, "2026-10-15T09:00:00Z", CHECK_QUIZ_MIN - 1)];
+  assert.equal(examModuleStates(mods("a"), short, 0.75, null, now)[0].checkDue, true);
+  const full = [...learned, result("a", "quiz", 1, "2026-10-15T09:00:00Z", CHECK_QUIZ_MIN)];
+  assert.equal(examModuleStates(mods("a"), full, 0.75, null, now)[0].checkDue, false);
 });
 
 test("mastery fades after a few quiet days, and one lesson brings the topic back", () => {

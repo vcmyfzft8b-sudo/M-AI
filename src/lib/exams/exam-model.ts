@@ -681,8 +681,22 @@ function passesCheck(result: LessonResultLike, goal: number) {
   return checkScorePasses(result.lesson_kind, result.score, goal);
 }
 
-function countsAsCheck(result: LessonResultLike) {
+/**
+ * Whether a result counts as the topic's check: a quiz only with `CHECK_QUIZ_MIN` questions or more.
+ * The lesson's done screen asks this too, so it never cheers a check the path then ignores.
+ */
+export function countsAsCheck(result: Pick<LessonResultLike, "lesson_kind" | "total">) {
   return CHECK_KINDS.includes(result.lesson_kind) && (result.lesson_kind !== "quiz" || (result.total ?? 0) >= CHECK_QUIZ_MIN);
+}
+
+/*
+ * A practice saved with nothing to score: skipped because it would not load ("Preskoči vajo"), a
+ * tutor ended before any answer, a written answer that could not be marked. It tested nothing, so
+ * it is no practice: it moves no mastery, owes nothing off, counts towards no repetition and draws
+ * no station on the path. It still counts as a try of its format, so the path moves on from it.
+ */
+export function isSkippedLesson(result: Pick<LessonResultLike, "lesson_kind" | "total">) {
+  return isPracticeKind(result.lesson_kind) && result.total === 0;
 }
 
 /**
@@ -784,7 +798,8 @@ export function moduleProgress(
     (lastPassAt !== null && (now.getTime() - instantOf(lastPassAt)) / 86_400_000 <= REVIEW_GRACE_DAYS);
   const mastery = lastAt ? fadedScore(rawMastery, lastAt, now) : rawMastery;
   const tested = (result: LessonResultLike) =>
-    isPracticeKind(result.lesson_kind) || (result.lesson_kind === "summary" && (result.total ?? 0) > 0);
+    (isPracticeKind(result.lesson_kind) && !isSkippedLesson(result)) ||
+    (result.lesson_kind === "summary" && (result.total ?? 0) > 0);
   const practiceLessons = results.filter(tested).length;
   const proveAfter = proveSince === null ? null : instantOf(proveSince);
   const proofOwed =

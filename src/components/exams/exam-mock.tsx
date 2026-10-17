@@ -93,21 +93,25 @@ export function ExamMock({
   examId,
   examTitle,
   moduleCount,
-  passPercentage,
+  target,
   hasPaidAccess,
   moduleTitles,
   lastResult,
   openAttempt = null,
+  initialMode = "written",
 }: {
   examId: string;
   examTitle: string;
   moduleCount: number;
-  passPercentage: number;
+  /** The learner's goal, 0..100: a mock is judged against it, as the path judges it. */
+  target: number;
   hasPaidAccess: boolean;
   moduleTitles: Record<string, string>;
   lastResult: MockResult | null;
   /** A written mock left mid-way, carried on with; its answers come back from this browser. */
   openAttempt?: Attempt | null;
+  /** The kind the setup starts on: the path's picker opens the oral one directly. */
+  initialMode?: "written" | "oral";
 }) {
   const { t, locale } = useTranslations();
   const { navigateWithFeedback } = useInstantNavigation();
@@ -118,7 +122,7 @@ export function ExamMock({
     navigateRef.current = navigateWithFeedback;
   });
   const [phase, setPhase] = useState<Phase>(openAttempt ? { name: "sitting", attempt: openAttempt } : { name: "setup" });
-  const [mode, setMode] = useState<"written" | "oral">("written");
+  const [mode, setMode] = useState<"written" | "oral">(initialMode);
   const [duration, setDuration] = useState<number>(MOCK_MINUTES.initial);
   const [oralMinutes, setOralMinutes] = useState<number>(ORAL_MINUTES.initial);
   const [voice, setVoice] = useState<NoteTtsVoice>(DEFAULT_NOTE_TTS_VOICE);
@@ -137,9 +141,9 @@ export function ExamMock({
   const answersRef = useRef(answers);
   const examHref = `/app/exams/${examId}`;
   const closeConfirm = useCallback(() => setConfirmOpen(false), []);
-  const confirmSheet = useSheet(closeConfirm);
+  const confirmSheet = useSheet(closeConfirm, { closeOnEscape: confirmOpen });
   const closeBriefing = useCallback(() => setBriefingOpen(false), []);
-  const briefingSheet = useSheet(closeBriefing);
+  const briefingSheet = useSheet(closeBriefing, { closeOnEscape: briefingOpen });
   const counts = mockQuestionCounts(duration);
   const minutes = mode === "oral" ? oralMinutes : duration;
   const minutesFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
@@ -169,6 +173,9 @@ export function ExamMock({
 
     if (saved) {
       const restored = saved;
+      // Into the ref at once, before the clock's first tick: a mock reopened with its time just up
+      // hands in on that tick, and must hand in these answers, not the empty ones it opened with.
+      answersRef.current = { ...restored, ...answersRef.current };
       // Back where the learner was: the first question not yet answered.
       const resumeAt = openAttempt.questions.findIndex((question) => !answered(question, restored[question.id]));
       void Promise.resolve().then(() => {
@@ -184,12 +191,20 @@ export function ExamMock({
     }
 
     try {
-      window.localStorage.setItem(storageKey, JSON.stringify(answers));
+      // The ref, not the state: on the first render the state is still empty while the ref already
+      // holds the answers restored above, which writing `{}` here would wipe from the browser.
+      window.localStorage.setItem(storageKey, JSON.stringify(answersRef.current));
     } catch {
       /* Private mode or a full disk: the answers are still held in memory. */
     }
   }, [answers, storageKey]);
 
+  /* The oral mock, opened from the path's picker: its examiner starts from the tutor's voice, as choosing it does. */
+  useEffect(() => {
+    if (initialMode === "oral") {
+      void Promise.resolve().then(() => setVoice(storedTutorVoice()));
+    }
+  }, [initialMode]);
 
 
   async function start() {
@@ -236,12 +251,23 @@ export function ExamMock({
   }
 
   const submit = useCallback(
-    async (attempt: Attempt, current: Record<string, Answer>) => {
+    async (attempt: Attempt, given: Record<string, Answer>) => {
       if (submitting.current) {
         return;
       }
 
       submitting.current = true;
+      // Answers this browser kept for the attempt go under the ones handed in, so a hand-in that
+      // races the restore after a reload still carries them.
+      let kept: Record<string, Answer> = {};
+
+      try {
+        kept = JSON.parse(window.localStorage.getItem(`memo-exam-mock:${attempt.id}`) ?? "null") ?? {};
+      } catch {
+        kept = {};
+      }
+
+      const current = { ...kept, ...given };
       setConfirmOpen(false);
       setError(null);
       setPhase({ name: "grading", attempt, answers: current });
@@ -493,10 +519,11 @@ export function ExamMock({
                 </span>
                 <b>{counts.written}</b>
               </div>
+              {/* The goal, which the path judges the mock by; the exam's pass mark only sets the grade. */}
               <div>
                 <Msym name="flag" size="1.3rem" fill={false} />
-                <span>{t("exam.mock.pass")}</span>
-                <b>{t("exam.percent", { percent: passPercentage })}</b>
+                <span>{t("exam.mock.goal")}</span>
+                <b>{t("exam.percent", { percent: target })}</b>
               </div>
             </div>
           )}
@@ -694,11 +721,11 @@ export function ExamMock({
           </div>
           <div>
             <Msym name="flag" size="1.3rem" fill={false} />
-            <span>{t("exam.mock.pass")}</span>
-            {/* The mark itself, and whether this mock reached it ("50 % · še ne"). */}
+            <span>{t("exam.mock.goal")}</span>
+            {/* The goal, and whether this mock reached it ("90 % · še ne"), as the path judges it. */}
             <b>
               {t(result.passed ? "exam.mock.result.passed" : "exam.mock.result.failed", {
-                percent: wholePercent(passPercentage),
+                percent: wholePercent(result.target),
               })}
             </b>
           </div>

@@ -9,11 +9,18 @@ import { getTranslations } from "@/lib/i18n/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { routeIdParamSchema } from "@/lib/validation";
 
-export default async function ExamMockPage({ params }: { params: Promise<{ id: string }> }) {
-  const [user, appState, resolved, { t }] = await Promise.all([
+export default async function ExamMockPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ mode?: string }>;
+}) {
+  const [user, appState, resolved, query, { t }] = await Promise.all([
     requireUser(),
     getViewerAppState(),
     params,
+    searchParams ?? Promise.resolve({ mode: undefined }),
     getTranslations(),
   ]);
   const parsed = routeIdParamSchema.safeParse(resolved);
@@ -59,7 +66,9 @@ export default async function ExamMockPage({ params }: { params: Promise<{ id: s
       examTitle={detail.exam.title}
       // The mock draws from the exam's notes, so it counts and names notes, not topics.
       moduleCount={new Set(detail.modules.map((module) => module.lectureId)).size}
-      passPercentage={detail.exam.pass_percentage}
+      target={detail.exam.target_mastery}
+      // The path's picker opens the oral mock with `?mode=oral`; anything else is the written one.
+      initialMode={query.mode === "oral" ? "oral" : "written"}
       hasPaidAccess={Boolean(appState?.hasPaidAccess)}
       moduleTitles={Object.fromEntries(
         detail.modules.map((module) => [module.lectureId, module.noteTitle?.trim() || t("note.untitled")]),

@@ -88,6 +88,8 @@ export default async function ExamLessonPage({
         mastery: current.mastery,
         rawMastery: current.rawMastery,
         perfectRun: current.perfectRun,
+        isLast: index === detail.modules.length - 1,
+        learned: current.learned,
       }}
       target={detail.exam.target_mastery}
       instead={instead}

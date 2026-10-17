@@ -27193,11 +27193,36 @@ button.memo-exam-card:hover {
 }
 
 /*
- * The Generalka's setup fits one phone screen: its dial a little smaller than the setup's.
+ * The Generalka's setup fits one phone screen: its dial a little smaller than the setup's, and Memo beside the title.
  */
 @media (max-width: 1099px) {
   .memo-exam-mock-main .memo-exam-dial {
-    width: min(10.5rem, 52vw);
+    width: min(12.5rem, 60vw);
+  }
+
+  /* Memo beside the title, as on desktop: the setup fits with a last result under it too. */
+  .memo-exam-mock-main .memo-exam-center {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 0.9rem;
+    row-gap: 0.2rem;
+    align-items: center;
+    justify-items: start;
+    padding: 1.8rem 0 0.2rem;
+    text-align: left;
+  }
+
+  .memo-exam-mock-main .memo-exam-center > .memo-buddy {
+    grid-row: 1 / span 2;
+    margin-top: 0;
+  }
+
+  .memo-exam-mock-main .memo-exam-center > .memo-exam-step-title {
+    align-self: end;
+  }
+
+  .memo-exam-mock-main .memo-exam-center > .memo-exam-fine {
+    align-self: start;
   }
 }
 

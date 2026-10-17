@@ -2566,6 +2566,7 @@ export const en: Messages = {
   "exam.path.examDay": "Exam · {date}",
   "exam.path.today": { one: "exercise today", other: "exercises today" },
   "exam.dash.menu": "Prep options",
+  "exam.dash.onTarget": "On target",
   "exam.dash.target": "goal {percent}%",
   "exam.dash.goal.label": "Your knowledge",
   "exam.dash.goal.valueText": "Knowledge {percent}%, goal {target}%",

@@ -7,7 +7,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
-import { EXAM_PREPS_HREF, LESSON_KIND_EMOJI } from "@/components/exams/exam-links";
+import { EXAM_PREPS_HREF } from "@/components/exams/exam-links";
 import { ExamCta, ExamScreen } from "@/components/exams/exam-screen";
 import { formatExamDay, formatExamDayLong, formatMonth, formatWeekdayShort } from "@/components/exams/exam-format";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
@@ -25,7 +25,6 @@ import {
 import {
   addDays,
   daysBetween,
-  EXAM_LESSON_KINDS,
   isValidDay,
   LESSON_MINUTES,
   lessonsToTarget,
@@ -1205,12 +1204,6 @@ export function ExamSetup({
                         {topic.title}
                         {topic.source === "ai" ? <span className="memo-exam-trail-source">{t("exam.path.source.ai")}</span> : null}
                       </b>
-                      {/* What the module holds: the summary, then the practice formats to choose from. */}
-                      <span className="memo-exam-plan-kinds" aria-hidden="true">
-                        {EXAM_LESSON_KINDS.map((kind) => (
-                          <Emoji key={kind} symbol={LESSON_KIND_EMOJI[kind]} size="0.95rem" />
-                        ))}
-                      </span>
                     </span>
                   </li>
                 ));

@@ -2605,6 +2605,7 @@ export const sl = {
   "exam.path.examDay": "Izpit · {date}",
   "exam.path.today": { one: "vaja danes", two: "vaji danes", few: "vaje danes", other: "vaj danes" },
   "exam.dash.menu": "Možnosti priprave",
+  "exam.dash.onTarget": "Na cilju",
   "exam.dash.target": "cilj {percent} %",
   "exam.dash.goal.label": "Tvoje znanje",
   "exam.dash.goal.valueText": "Znanje {percent} %, cilj {target} %",

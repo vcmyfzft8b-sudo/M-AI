@@ -153,7 +153,18 @@
   100% { transform: translateX(220%); }
 }
 
-/* The setup's dials draw their ring on the same track as every bar. */
+/* The setup's dials draw their ring as every bar: the same track, solid fill and light strip. */
 .memo-exam-dial-track {
   stroke: var(--bar-track);
+}
+
+.memo-exam-dial-fill {
+  stroke: var(--coral-solid);
+}
+
+.memo-exam-dial-gloss {
+  stroke: rgba(255, 255, 255, 0.38);
+  stroke-linecap: round;
+  stroke-width: 3.5;
+  transition: stroke-dasharray 0.12s ease-out;
 }

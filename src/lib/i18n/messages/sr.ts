@@ -2581,6 +2581,7 @@ export const sr: Messages = {
   "exam.path.examDay": "Ispit · {date}",
   "exam.path.today": { one: "vežba danas", few: "vežbe danas", other: "vežbi danas" },
   "exam.dash.menu": "Opcije pripreme",
+  "exam.dash.onTarget": "Na cilju",
   "exam.dash.target": "cilj {percent} %",
   "exam.dash.goal.label": "Tvoje znanje",
   "exam.dash.goal.valueText": "Znanje {percent} %, cilj {target} %",

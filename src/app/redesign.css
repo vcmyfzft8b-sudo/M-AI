@@ -27046,14 +27046,6 @@ button.memo-exam-card:hover {
   font-weight: 600;
 }
 
-/* What a module holds: the summary and the practice formats, as their emojis. */
-.memo-exam-plan-kinds {
-  display: flex;
-  gap: 0.3rem;
-  margin-top: 0.15rem;
-  opacity: 0.85;
-}
-
 .memo-exam-plan-step.goal .memo-exam-plan-card {
   box-shadow: var(--shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--promo) 45%, transparent);
 }
@@ -27115,15 +27107,6 @@ button.memo-exam-card:hover {
   border-color: transparent;
   box-shadow: inset 0 0 0 1.5px var(--ink);
 }
-
-/*
- * "Ali izberi drugače": a lesson's other practice formats, as chips under its one coral button
- * (the summary and the done screen). A format already done carries a tick and its latest score.
- */
-
-/* The other formats as an even grid, two to a row, each chip the same width. */
-
-/* An odd one out takes the whole row, so the grid stays symmetrical. */
 
 .memo-exam-list {
   display: flex;
@@ -27302,7 +27285,13 @@ button.memo-exam-card:hover {
   transition: stroke-dasharray 0.12s ease-out;
 }
 
-.memo-exam-dial.dragging .memo-exam-dial-fill {
+.memo-exam-dial-gloss {
+  fill: none;
+  stroke: none;
+  pointer-events: none;
+}
+
+.memo-exam-dial.dragging :is(.memo-exam-dial-fill, .memo-exam-dial-gloss) {
   transition: none;
 }
 
@@ -27509,9 +27498,6 @@ button.memo-exam-card:hover {
   -webkit-line-clamp: 2;
 }
 
-/* Where the learner is on the way to the exam: learn, practise, prove. */
-
-/* The exam in three numbers, small enough to sit in one row above the path. */
 /*
  * The prep's headline: how much the learner knows against the goal. A bar with the target
  * marked on it (a notch that stands out of the track) and the number big;
@@ -27624,12 +27610,15 @@ button.memo-exam-card:hover {
   gap: 0.5rem;
 }
 
+/* The two facts share the row evenly; a language too long for one row gives each a row of its own. */
 .memo-exam-goal-facts > span {
   display: inline-flex;
+  flex: 1 1 auto;
   align-items: center;
-  gap: 0.45rem;
+  justify-content: center;
+  gap: 0.4rem;
   height: 2.4rem;
-  padding: 0 0.9rem;
+  padding: 0 0.75rem;
   border-radius: 999px;
   background: var(--tile);
   color: var(--muted);
@@ -27650,7 +27639,7 @@ button.memo-exam-card:hover {
   gap: 0.6rem;
   margin-top: 1.2rem;
   padding-bottom: 1.5rem;
-  /* The rotated segments and Memo must never make the screen scroll sideways. */
+  /* The swinging path and Memo must never make the screen scroll sideways. */
   overflow-x: clip;
 }
 
@@ -27660,27 +27649,6 @@ button.memo-exam-card:hover {
   gap: 1.4rem;
 }
 
-/* A module's heading, like a course unit: edged in coral while it is the one being studied. */
-.memo-exam-trail-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.9rem 1rem 0.95rem 1.15rem;
-  border-radius: 22px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-
-.memo-exam-trail-banner.current {
-  background: color-mix(in srgb, var(--promo) 14%, var(--surface));
-  box-shadow: var(--shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--promo) 55%, transparent);
-}
-
-.memo-exam-trail-banner.current .memo-exam-trail-banner-copy i {
-  color: var(--promo);
-  opacity: 1;
-}
-
 .memo-exam-lessons-left {
   max-width: 22rem;
   color: var(--muted);
@@ -27688,44 +27656,341 @@ button.memo-exam-card:hover {
   text-wrap: balance;
 }
 
-.memo-exam-trail-banner.locked {
-  opacity: 0.75;
-}
-
-/* A note whose topics are still being planned: a sweep where the progress would be. */
-
-.memo-exam-trail-banner-copy {
+/*
+ * A module, as a chapter: its name, and the app's progress bar towards its goal with the goal
+ * marked on it. Edged in coral while it is the one being studied; its numbers turn green once it
+ * is on its goal.
+ */
+.memo-path-chapter {
   display: flex;
-  flex: 1;
   flex-direction: column;
-  gap: 0.1rem;
-  min-width: 0;
+  gap: 0.35rem;
+  padding: 1rem 1.15rem 1.05rem;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
-.memo-exam-trail-banner-copy i {
-  overflow: hidden;
+.memo-path-chapter.current {
+  box-shadow: var(--shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--promo) 55%, transparent);
+}
+
+.memo-path-chapter.locked {
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.memo-path-chapter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 1.5rem;
+}
+
+.memo-path-chapter-head i {
   color: var(--muted);
   font-size: 0.78rem;
   font-style: normal;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-overflow: ellipsis;
   text-transform: uppercase;
+}
+
+.memo-path-chapter.current .memo-path-chapter-head i {
+  color: var(--promo);
+}
+
+.memo-path-chapter-mark {
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--success);
+  color: var(--on-promo);
+}
+
+.memo-path-chapter-title {
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.memo-path-chapter-gate {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.memo-path-chapter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.4rem;
+}
+
+.memo-path-chapter-track {
+  position: relative;
+  flex: 1;
+}
+
+.memo-path-chapter-track .memo-progress {
+  margin: 0;
+}
+
+.memo-path-goal {
+  position: absolute;
+  top: -0.3rem;
+  width: 3px;
+  height: calc(100% + 0.6rem);
+  border-radius: 999px;
+  background: var(--ink);
+  transform: translateX(-50%);
+}
+
+.memo-path-chapter-bar > b {
+  flex: 0 0 auto;
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.memo-path-chapter-bar > b span {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.memo-path-chapter.on-target .memo-path-chapter-bar > b {
+  color: var(--success);
+}
+
+/* "Na cilju", first among the goal card's notes once the prep is on its goal. */
+.memo-path-ontarget {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 0.25rem;
+  height: 1.65rem;
+  padding: 0 0.6rem 0 0.45rem;
+  border-radius: 999px;
+  background: var(--success-tint);
+  color: var(--success);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+/*
+ * The path: one smooth line through the stops (exam-path.ts draws it), coral as far as the learner
+ * has come and dotted after. Each stop is placed on it by its centre.
+ */
+.memo-path {
+  position: relative;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  container-type: inline-size;
+}
+
+.memo-path-svg {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 16rem;
+  overflow: visible;
+  transform: translateX(-50%);
+}
+
+.memo-path-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 0.56;
+}
+
+.memo-path-line.walked {
+  stroke: color-mix(in srgb, var(--promo) 45%, transparent);
+}
+
+.memo-path-line.ahead {
+  stroke: var(--line);
+  stroke-dasharray: 0.125 1;
+}
+
+.memo-path-stop {
+  position: absolute;
+  left: calc(50% + var(--x, 0rem));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  transform: translate(-50%, -2.25rem);
+}
+
+.memo-path-node {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 4.5rem;
+  height: 4.5rem;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.memo-path-node:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+/*
+ * A stop's pills (its score, "Naslednja", what is left) are centred under it, but never past the
+ * path's edge: one on a wide swing slides in by exactly what would stick out (50% is the pill's own
+ * half-width, 50cqw the path's).
+ */
+:is(.memo-path-label, .memo-path-next, .memo-path-left) {
+  translate: clamp(calc(50% - 50cqw - var(--x, 0rem)), 0px, calc(50cqw - var(--x, 0rem) - 50%)) 0;
+}
+
+/* Walked: a soft coral stop on a ledge. */
+.memo-path-node.done {
+  background: color-mix(in srgb, var(--promo) 16%, var(--surface));
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 35%, var(--surface)), inset 0 0 0 2px color-mix(in srgb, var(--promo) 40%, transparent);
+}
+
+@media (hover: hover) {
+  .memo-path-node.done:hover {
+    box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 35%, var(--surface)), inset 0 0 0 2px color-mix(in srgb, var(--promo) 60%, transparent);
+  }
+}
+
+.memo-path-node:is(.done, .next):active {
+  transform: translateY(4px);
+}
+
+.memo-path-tick {
+  position: absolute;
+  right: -0.15rem;
+  bottom: -0.15rem;
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--success);
+  box-shadow: 0 0 0 3px var(--bg);
+  color: var(--on-promo);
+}
+
+.memo-path-label {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
   white-space: nowrap;
 }
 
-.memo-exam-trail-banner-copy b {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: 1.08rem;
-  font-weight: 750;
-  letter-spacing: -0.02em;
-  line-height: 1.25;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+.memo-path-label b {
+  color: var(--text);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
 }
 
-/* A module's earlier lessons, folded: a quiet chip under its banner that opens them. */
+.memo-path-label b.good {
+  color: var(--success);
+}
+
+/* Next: the one stop in colour, larger, glowing, with Memo beside it. */
+.memo-path-halo {
+  position: absolute;
+  top: -0.85rem;
+  left: 50%;
+  width: 7.1rem;
+  height: 7.1rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--promo) 16%, transparent);
+  transform: translateX(-50%);
+  animation: memo-path-glow 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes memo-path-glow {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+
+  50% {
+    opacity: 0.7;
+    transform: translateX(-50%) scale(1.08);
+  }
+}
+
+.memo-path-node.next {
+  width: 5.4rem;
+  height: 5.4rem;
+  margin-top: -0.45rem;
+  background: var(--coral);
+  box-shadow: 0 6px 0 color-mix(in srgb, var(--promo) 72%, var(--photo-stage));
+}
+
+.memo-path-next {
+  position: relative;
+  z-index: 1;
+}
+
+.memo-path-buddy {
+  position: absolute;
+  top: -0.2rem;
+  z-index: 1;
+}
+
+.memo-path-buddy.right {
+  left: calc(50% + 3.6rem);
+}
+
+.memo-path-buddy.left {
+  right: calc(50% + 3.6rem);
+}
+
+/* Ahead: a quiet stop, and how many are left as a pill under the first. */
+.memo-path-node.locked {
+  width: 4rem;
+  height: 4rem;
+  margin-top: 0.25rem;
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 2px var(--line);
+  color: var(--muted-2);
+  cursor: default;
+}
+
+.memo-path-left {
+  position: relative;
+  z-index: 1;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  /* The tile's tint laid on the page, so the dotted line passes under it, not through it. */
+  background: linear-gradient(var(--tile), var(--tile)), var(--bg);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* A module's earlier lessons, folded: a quiet chip under its chapter card that opens them. */
 .memo-exam-trail-earlier {
   display: flex;
   width: fit-content;
@@ -27754,140 +28019,6 @@ button.memo-exam-card:hover {
 .memo-exam-trail-earlier:focus-visible {
   outline: none;
   box-shadow: var(--shadow), 0 0 0 3px var(--focus-ring);
-}
-
-.memo-exam-trail-banner-copy span {
-  color: var(--muted);
-  font-size: 0.92rem;
-  font-weight: 600;
-}
-
-.memo-exam-trail-banner-mark {
-  flex: 0 0 auto;
-  color: var(--success);
-}
-
-.memo-exam-trail-stations {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* One row per station; --memo-station-x swings it off the middle. */
-.memo-exam-station {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.45rem;
-  /* PATH_ROW_REM in src/lib/exams/exam-path.ts. */
-  height: 8rem;
-  transform: translateX(var(--memo-station-x, 0));
-}
-
-/* The line to the next station, drawn from this station's centre at the segment's angle. */
-.memo-exam-station-line {
-  position: absolute;
-  top: 2.25rem;
-  left: 50%;
-  z-index: 0;
-  width: var(--memo-line-length);
-  height: 0.5rem;
-  border-radius: 999px;
-  background: var(--line);
-  transform: translateY(-50%) rotate(var(--memo-line-angle));
-  transform-origin: 0 50%;
-  pointer-events: none;
-}
-
-.memo-exam-station-line.done {
-  background: color-mix(in srgb, var(--promo) 70%, var(--surface));
-}
-
-.memo-exam-station-node {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  flex: 0 0 auto;
-  width: 4.5rem;
-  height: 4.5rem;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: var(--surface);
-  box-shadow: 0 5px 0 var(--line), inset 0 0 0 2px var(--line);
-  color: var(--muted);
-  cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-
-@media (hover: hover) {
-  .memo-exam-station:not(.locked) .memo-exam-station-node:hover {
-    outline: 1px solid var(--hover-ring);
-    outline-offset: -1px;
-  }
-}
-
-.memo-exam-station-node:active:not(:disabled) {
-  transform: translateY(4px);
-  box-shadow: 0 1px 0 var(--line), inset 0 0 0 2px var(--line);
-}
-
-.memo-exam-station-node:focus-visible {
-  outline: none;
-  box-shadow: 0 5px 0 var(--line), 0 0 0 3px var(--focus-ring);
-}
-
-.memo-exam-station.done .memo-exam-station-node {
-  background: color-mix(in srgb, var(--promo) 18%, var(--surface));
-  box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 40%, var(--surface)), inset 0 0 0 2px color-mix(in srgb, var(--promo) 45%, transparent);
-}
-
-.memo-exam-station.current .memo-exam-station-node {
-  width: 5rem;
-  height: 5rem;
-  margin-top: -0.25rem;
-  background: var(--coral);
-  box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 72%, var(--photo-stage)), 0 0 0 6px color-mix(in srgb, var(--promo) 22%, transparent);
-  animation: memo-station-pulse 2.2s ease-in-out infinite;
-}
-
-.memo-exam-station.locked .memo-exam-station-node {
-  background: var(--sunken);
-  box-shadow: 0 5px 0 var(--line);
-  cursor: default;
-}
-
-.memo-exam-station.locked .memo-exam-station-node:not(:disabled) {
-  cursor: pointer;
-}
-
-@keyframes memo-station-pulse {
-  0%,
-  100% {
-    box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 72%, var(--photo-stage)), 0 0 0 6px color-mix(in srgb, var(--promo) 22%, transparent);
-  }
-
-  50% {
-    box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 72%, var(--photo-stage)), 0 0 0 12px color-mix(in srgb, var(--promo) 8%, transparent);
-  }
-}
-
-.memo-exam-station-check {
-  position: absolute;
-  right: -0.15rem;
-  bottom: -0.15rem;
-  display: grid;
-  width: 1.5rem;
-  height: 1.5rem;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--promo);
-  box-shadow: 0 0 0 3px var(--bg);
-  color: var(--on-photo);
 }
 
 .memo-exam-retry-note {
@@ -27923,24 +28054,6 @@ button.memo-exam-card:hover {
   vertical-align: -0.15em;
 }
 
-.memo-exam-station-label {
-  position: relative;
-  z-index: 1;
-  padding: 0.1rem 0.45rem;
-  border-radius: 999px;
-  background: var(--bg);
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.memo-exam-station.done .memo-exam-station-label {
-  color: var(--text);
-}
-
-/* The station to do next carries the screen's primary action. */
-
 @keyframes memo-station-bob {
   0%,
   100% {
@@ -27951,24 +28064,6 @@ button.memo-exam-card:hover {
     transform: translateY(-3px);
   }
 }
-
-.memo-exam-station-buddy {
-  position: absolute;
-  top: -0.2rem;
-  z-index: 1;
-}
-
-.memo-exam-station-buddy.left {
-  right: calc(50% + 3.6rem);
-}
-
-.memo-exam-station-buddy.right {
-  left: calc(50% + 3.6rem);
-}
-
-/* The end of the path: the mock exam that proves it, then the exam itself. */
-
-/* Not yet: every module has to be mastered first. It still opens, for anyone who wants a try. */
 
 /* The prep's two tabs, Astra's "Study path" and "Progress". */
 .memo-exam-tabs {
@@ -28213,7 +28308,7 @@ button.memo-exam-card:hover {
   line-height: 1.45;
 }
 
-/* A lesson's parts in its header: reading, flashcards, quiz, written; the current one stands out. */
+/* A lesson's parts in its header: reading, flashcards, quiz, written; centred, the current one stands out. */
 .memo-exam-lesson-parts {
   display: flex;
   flex-wrap: nowrap;
@@ -28690,6 +28785,7 @@ button.memo-exam-card:hover {
 .memo-exam-lesson-head {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 0.5rem;
 }
 

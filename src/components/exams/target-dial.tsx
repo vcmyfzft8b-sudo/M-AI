@@ -24,6 +24,11 @@ function point(angle: number, radius = RADIUS) {
 const START = point(-DIAL_SWEEP);
 const END = point(DIAL_SWEEP);
 const ARC = `M ${START.x} ${START.y} A ${RADIUS} ${RADIUS} 0 1 1 ${END.x} ${END.y}`;
+/* The bars' light strip, at the ring's scale: along the fill, just inside its outer edge. */
+const GLOSS_RADIUS = 83.7;
+const GLOSS_START = point(-DIAL_SWEEP, GLOSS_RADIUS);
+const GLOSS_END = point(DIAL_SWEEP, GLOSS_RADIUS);
+const GLOSS = `M ${GLOSS_START.x} ${GLOSS_START.y} A ${GLOSS_RADIUS} ${GLOSS_RADIUS} 0 1 1 ${GLOSS_END.x} ${GLOSS_END.y}`;
 
 /**
  * A value set by dragging a knob round a gauge (or with the arrow keys), in the range's steps: the
@@ -121,6 +126,15 @@ export function GaugeDial({
         <svg viewBox="0 0 200 200" aria-hidden="true">
           <path className="memo-exam-dial-track" d={ARC} pathLength={100} />
           <path className="memo-exam-dial-fill" d={ARC} pathLength={100} strokeDasharray={`${share * 100} 100`} />
+          {share * 100 > 8 ? (
+            <path
+              className="memo-exam-dial-gloss"
+              d={GLOSS}
+              pathLength={100}
+              strokeDasharray={`${share * 100 - 5} 100`}
+              strokeDashoffset={-2.5}
+            />
+          ) : null}
           <circle className="memo-exam-dial-knob" cx={knob.x} cy={knob.y} r={12} />
         </svg>
         <span className="memo-exam-dial-center">

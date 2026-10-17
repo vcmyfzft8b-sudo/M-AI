@@ -359,9 +359,22 @@ phone three of five long questions in the QA prep keep all four answers; the two
 overflow by 14 and 51 px with all four. True or false always has its two.
 
 **The path folds what is done.** Each module draws only its last four finished lessons
-(`DONE_SHOWN`); the rest wait behind "Pokaži še N prejšnjih vaj" under the module's banner. A
-learner who worked one module for weeks scrolled past a hundred identical circles (22,000 px on
+(`DONE_SHOWN`); the rest wait behind "Pokaži še N prejšnjih vaj" under the module's chapter card.
+A learner who worked one module for weeks scrolled past a hundred identical circles (22,000 px on
 the QA prep, 4,900 px folded).
+
+**How the path is drawn** (`src/lib/exams/exam-path.ts`, pure and tested). Each module opens with a
+**chapter card**: its number, its name and the app's own progress bar (`.memo-progress.goal`) with
+the goal marked on it; it turns green on the goal, and a module not open yet says what opens it
+instead. Under it the stops sit one per row (`PATH_ROW_REM`, 8.6 rem) on a sine swing of
+`PATH_SWING_REM` (6 rem) either side of the middle, joined by one smooth line (`pathCurve`, a
+Catmull-Rom curve through every stop's centre, drawn in rem so the SVG and the stops share one
+scale). The line is coral as far as the learner has come and dotted after. Done stops are soft
+coral with their score in a pill under them (green, with a tick, when it reached the goal); the
+next stop is the one coral button, larger and glowing, with Memo on the side the path is not
+swinging to (`pathBuddySide`); what is still needed are quiet locked stops, the first with
+"Še ~N vaj". The goal card shows "Na cilju" once every module is on its goal. The swing plus the
+largest stop leaves the 16 px gutters free on a 375 px phone (the test checks it).
 
 **Desktop shows the screen's name.** The bar's title (a lesson's "Modul 1 · Kviz", the mock's
 clock) is centred between the way back and the actions on desktop too; it was phone-only, which
@@ -381,7 +394,7 @@ learner's onboarding answer) → daily minutes → "Creating your study path" �
 the switch are settled, the way Astra reviews the uploads while the learner answers the rest; the
 building screen only waits for it. The **review** is the AI's plan, read-only (the owner wanted the
 plan made for the learner, not edited by them): a numbered path of modules, one card per topic with
-its note and the emojis of what it holds, then the mock exam and the goal. The planner asks for at
+its note, then the mock exam and the goal. The planner asks for at
 least two topics per note and asks again when an answer has fewer (`planNoteTopics`). Nothing is
 stored until "Start"; `createExam` stores the planned topics. A note that was still being made at
 setup has no topics yet; the exam screen plans them (`POST /api/exams/[id]/topics`) once it is ready.

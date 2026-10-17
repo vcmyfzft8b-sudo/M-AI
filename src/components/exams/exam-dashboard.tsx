@@ -22,7 +22,7 @@ import {
   type ExamLessonKind,
   type PracticeLessonKind,
 } from "@/lib/exams/exam-model";
-import { pathBuddySide, pathOffset, pathSegment } from "@/lib/exams/exam-path";
+import { pathBuddySide, pathCurve, pathPoint } from "@/lib/exams/exam-path";
 import type { ExamDetail, ExamModuleView } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { currentPaywallBack, paywallPath } from "@/lib/paywall-reasons";
@@ -518,8 +518,15 @@ export function ExamDashboard({
            * Astra's forecast (where this pace lands on the exam day) and the knowledge gaps still
            * open: the two things that say what reaching the goal takes.
            */}
-          {(detail.forecast && !examPassed && stage !== "ready") || detail.gaps > 0 ? (
+          {goalLeft === 0 || (detail.forecast && !examPassed && stage !== "ready") || detail.gaps > 0 ? (
             <div className="memo-exam-goal-notes">
+              {/* Reaching the goal is worth saying, first and in green. */}
+              {goalLeft === 0 ? (
+                <span className="memo-path-ontarget">
+                  <Msym name="check" size="0.95rem" weight={700} />
+                  {t("exam.dash.onTarget")}
+                </span>
+              ) : null}
               {detail.forecast && !examPassed && stage !== "ready" ? (
                 <p className={detail.forecast.onTrack ? "on-track" : undefined}>
                   <Emoji symbol={detail.forecast.onTrack ? "📈" : "⏱️"} size="1rem" />
@@ -657,31 +664,51 @@ export function ExamDashboard({
             ) : null}
             {runs.map((run) => {
               const topic = byTopic.get(run.topicId);
+              const gated = run.stations.some((station) => station.type === "gate");
+              const current = run.stations.some((station) => station.type === "next");
+              const mastery = topic ? percent(topic.mastery) : 0;
+              // Where each stop sits on the line, and how far the learner has walked along it.
+              const points = run.stations.map((_, row) => pathPoint(run.start + row, row));
+              const walkedTo = run.stations.reduce((last, station, row) => (station.type === "done" || station.type === "next" ? row : last), 0);
+              const height = run.stations.length > 0 ? points[points.length - 1].y + 4.6 : 0;
 
               return (
                 <section key={`run:${run.start}`} className="memo-exam-trail-unit">
+                  {/* The module as a chapter: its name, and the app's bar towards its goal with the goal marked. */}
                   <div
-                    className={`memo-exam-trail-banner ${
-                      run.stations.some((station) => station.type === "next")
-                        ? "current"
-                        : run.stations.some((station) => station.type === "gate")
-                          ? "locked"
-                          : ""
+                    className={`memo-path-chapter ${current ? "current" : ""} ${gated ? "locked" : ""} ${
+                      !gated && mastery >= target ? "on-target" : ""
                     }`.trim()}
                   >
-                    <span className="memo-exam-trail-banner-copy">
+                    <div className="memo-path-chapter-head">
                       <i>{t("exam.dash.module", { index: (topic?.position ?? 0) + 1 })}</i>
-                      <b>{topic?.title?.trim() || t("note.untitled")}</b>
-                      {/* Shut until the module before it (the gate's position, counted from 1) is on target. */}
-                      {run.stations.some((station) => station.type === "gate") && topic ? (
-                        <span>
-                          {t("exam.path.gate", { target, index: topic.position })}
+                      {topic?.mastered ? (
+                        <span className="memo-path-chapter-mark" aria-hidden="true">
+                          <Msym name="check" size="1rem" weight={700} />
                         </span>
-                      ) : topic ? (
-                        <span>{t("exam.path.topicMastery", { percent: percent(topic.mastery), target })}</span>
                       ) : null}
-                    </span>
-                    {topic?.mastered ? <Msym name="check_circle" size="1.6rem" className="memo-exam-trail-banner-mark" /> : null}
+                    </div>
+                    <b className="memo-path-chapter-title">{topic?.title?.trim() || t("note.untitled")}</b>
+                    {/* Shut until the module before it (the gate's position, counted from 1) is on target. */}
+                    {gated && topic ? (
+                      <span className="memo-path-chapter-gate">{t("exam.path.gate", { target, index: topic.position })}</span>
+                    ) : topic ? (
+                      <div
+                        className="memo-path-chapter-bar"
+                        role="img"
+                        aria-label={t("exam.path.topicMastery", { percent: mastery, target })}
+                      >
+                        <div className="memo-path-chapter-track">
+                          <div className="memo-progress goal">
+                            <div style={{ width: `${Math.max(mastery, 3)}%` }} />
+                          </div>
+                          <span className="memo-path-goal" style={{ left: `${target}%` }} />
+                        </div>
+                        <b>
+                          {t("exam.percent", { percent: mastery })} <span>· {t("exam.dash.target", { percent: target })}</span>
+                        </b>
+                      </div>
+                    ) : null}
                   </div>
                   {folded.get(run.topicId) && run.stations[0]?.type === "done" ? (
                     <button
@@ -693,104 +720,86 @@ export function ExamDashboard({
                       {t("exam.path.earlier", { count: folded.get(run.topicId) ?? 0 })}
                     </button>
                   ) : null}
-                  <ol className="memo-exam-trail-stations">
-                    {run.stations.map((station, offsetInRun) => {
-                      const index = run.start + offsetInRun;
-                      const offset = pathOffset(index);
-                      const segment = pathSegment(index);
-                      const last = offsetInRun === run.stations.length - 1;
-                      const line = !last ? (
-                        <span
+                  {run.stations.length > 0 ? (
+                    <ol className="memo-path" style={{ height: `${height}rem` }}>
+                      {/* One smooth line through the stops: coral as far as the learner has come, dotted after. */}
+                      {points.length > 1 ? (
+                        <svg
+                          className="memo-path-svg"
+                          viewBox={`-8 0 16 ${height}`}
+                          style={{ height: `${height}rem` }}
                           aria-hidden="true"
-                          className={`memo-exam-station-line ${station.type === "done" ? "done" : ""}`.trim()}
-                          style={
-                            {
-                              "--memo-line-length": `${segment.length}rem`,
-                              "--memo-line-angle": `${segment.angle}deg`,
-                            } as CSSProperties
-                          }
-                        />
-                      ) : null;
-
-                      if (station.type === "gate") {
-                        return (
-                          <li
-                            key="gate"
-                            className="memo-exam-station locked"
-                            style={{ "--memo-station-x": `${offset}rem` } as CSSProperties}
-                          >
-                            {line}
-                            <span className="memo-exam-station-node" aria-label={t("exam.path.locked")}>
-                              <Msym name="lock" size="1.5rem" fill={false} />
-                            </span>
-                          </li>
-                        );
-                      }
-
-                      if (station.type === "locked") {
-                        return (
-                          <li
-                            key={`locked:${station.index}`}
-                            className="memo-exam-station locked"
-                            style={{ "--memo-station-x": `${offset}rem` } as CSSProperties}
-                          >
-                            {line}
-                            <span className="memo-exam-station-node" aria-label={t("exam.path.locked")}>
-                              <Msym name="lock" size="1.5rem" fill={false} />
-                            </span>
-                            {station.index === 0 ? (
-                              <span className="memo-exam-station-label">
-                                {t("exam.path.lessonsLeft", { count: station.left, target })}
-                              </span>
-                            ) : null}
-                          </li>
-                        );
-                      }
-
-                      const isNext = station.type === "next";
-
-                      return (
-                        <li
-                          key={isNext ? "next" : station.id}
-                          ref={isNext ? markCurrent : undefined}
-                          className={`memo-exam-station ${isNext ? "current" : "done"}`}
-                          style={{ "--memo-station-x": `${offset}rem` } as CSSProperties}
                         >
-                          {line}
-                          <button
-                            type="button"
-                            className="memo-exam-station-node"
-                            aria-label={`${t(LESSON_KIND_KEY[station.kind])} · ${topic?.title?.trim() || t("note.untitled")}`}
-                            onClick={() => (topic ? openLesson(topic, station.kind, isNext && station.check) : undefined)}
-                          >
-                            <Emoji symbol={isNext && station.check ? "🎯" : LESSON_KIND_EMOJI[station.kind]} size="1.75rem" />
-                            {isNext ? null : (
-                              <span className="memo-exam-station-check" aria-hidden="true">
-                                <Msym name="check" size="0.9rem" weight={700} />
+                          {walkedTo < points.length - 1 ? (
+                            <path className="memo-path-line ahead" d={pathCurve(points.slice(walkedTo))} />
+                          ) : null}
+                          {walkedTo > 0 ? <path className="memo-path-line walked" d={pathCurve(points.slice(0, walkedTo + 1))} /> : null}
+                        </svg>
+                      ) : null}
+                      {run.stations.map((station, row) => {
+                        const index = run.start + row;
+                        const place = { "--x": `${points[row].x}rem`, top: `${points[row].y}rem` } as CSSProperties;
+
+                        if (station.type === "gate" || station.type === "locked") {
+                          return (
+                            <li key={station.type === "gate" ? "gate" : `locked:${station.index}`} className="memo-path-stop" style={place}>
+                              <span className="memo-path-node locked" aria-label={t("exam.path.locked")}>
+                                <Msym name="lock" size="1.4rem" fill={false} />
                               </span>
-                            )}
-                          </button>
-                          {isNext ? (
-                            <>
-                              <span className="memo-exam-station-next">
+                              {station.type === "locked" && station.index === 0 ? (
+                                <span className="memo-path-left">{t("exam.path.lessonsLeft", { count: station.left, target })}</span>
+                              ) : null}
+                            </li>
+                          );
+                        }
+
+                        const isNext = station.type === "next";
+                        const name = `${t(LESSON_KIND_KEY[station.kind])} · ${topic?.title?.trim() || t("note.untitled")}`;
+                        const open = () => (topic ? openLesson(topic, station.kind, isNext && station.check) : undefined);
+
+                        if (isNext) {
+                          return (
+                            <li key="next" ref={markCurrent} className="memo-path-stop" style={place}>
+                              <span className="memo-path-halo" aria-hidden="true" />
+                              <button type="button" className="memo-path-node next" aria-label={name} onClick={open}>
+                                <Emoji symbol={station.check ? "🎯" : LESSON_KIND_EMOJI[station.kind]} size="2rem" />
+                              </button>
+                              <span className="memo-exam-station-next memo-path-next">
                                 <i>{t("exam.path.nextUp")}</i>
                                 {station.check ? t("exam.lesson.check") : t(LESSON_KIND_KEY[station.kind])}
                               </span>
-                              <span className={`memo-exam-station-buddy ${pathBuddySide(index)}`}>
+                              <span className={`memo-path-buddy ${pathBuddySide(index)}`}>
                                 <MemoBuddy mood="wave" size="4.6rem" />
                               </span>
-                            </>
-                          ) : (
-                            <span className="memo-exam-station-label">
-                              {station.kind === "summary"
-                                ? t(LESSON_KIND_KEY[station.kind])
-                                : `${t(LESSON_KIND_KEY[station.kind])} · ${t("exam.percent", { percent: percent(station.score) })}`}
+                            </li>
+                          );
+                        }
+
+                        // A tick, and the score in green, only where the lesson reached the goal.
+                        const scored = station.kind !== "summary";
+                        const reached = scored && percent(station.score) >= target;
+
+                        return (
+                          <li key={station.id} className="memo-path-stop" style={place}>
+                            <button type="button" className="memo-path-node done" aria-label={name} onClick={open}>
+                              <Emoji symbol={LESSON_KIND_EMOJI[station.kind]} size="1.75rem" />
+                              {reached ? (
+                                <span className="memo-path-tick" aria-hidden="true">
+                                  <Msym name="check" size="0.85rem" weight={700} />
+                                </span>
+                              ) : null}
+                            </button>
+                            <span className="memo-path-label">
+                              <span>{t(LESSON_KIND_KEY[station.kind])}</span>
+                              {scored ? (
+                                <b className={reached ? "good" : undefined}>{t("exam.percent", { percent: percent(station.score) })}</b>
+                              ) : null}
                             </span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ol>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  ) : null}
                 </section>
               );
             })}

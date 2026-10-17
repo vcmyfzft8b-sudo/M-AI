@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Form
 
 import { useTranslations } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
+import { ExamCta } from "@/components/exams/exam-screen";
 import { ExamVoicePicker } from "@/components/exams/exam-voice-picker";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
 import { storedTutorVoice, useExamVoice } from "@/components/exams/use-exam-voice";
@@ -535,10 +536,13 @@ export function ExamTutorLesson({
             </MemoPortal>
           ) : null}
 
-          <button type="button" className="memo-tutor-start" onClick={() => void begin()}>
-            <Msym name="play_arrow" size="1.3rem" fill weight={500} />
-            <span>{t("tutor.start")}</span>
-          </button>
+          {/* Starting is the screen's one action, so it is in the bottom bar with the other lessons'. */}
+          <ExamCta>
+            <button type="button" className="memo-button-coral" onClick={() => void begin()}>
+              <Msym name="play_arrow" size="1.3rem" fill weight={500} />
+              <span>{t("tutor.start")}</span>
+            </button>
+          </ExamCta>
         </>
       ) : preparing ? (
         <button type="button" className="memo-button-ghost memo-tutor-cancel" onClick={cancel}>

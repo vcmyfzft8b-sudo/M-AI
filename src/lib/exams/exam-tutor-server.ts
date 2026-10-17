@@ -87,7 +87,7 @@ Write exactly ${TUTOR_STEPS} steps, each about one of the topic's most important
 - question: one open question that checks the student understood that point (not just repeated your words): ask them to explain, apply or compare. It must be answerable out loud in one or two sentences.
 - answerGuide: a bullet list ("- ") of the 1 to 3 points a correct answer must contain.
 
-Teach only what the student's note says about the topic (the input); where it is thin, use standard, well-established knowledge of the subject, never invented specifics. Do not reuse the questions under "avoid". Write in the language of the note, as a native speaking teacher would say it: natural, everyday spoken phrasing, correct grammar and real words only, never an English phrase translated word for word. Student level: ${params.school}.`,
+Teach only what the student's note says about the topic (the input); where it is thin, use standard, well-established knowledge of the subject, never invented specifics. Do not reuse the questions under "avoid". Write in the language of the note, as a native speaking teacher would say it: natural, everyday spoken phrasing, correct grammar and real words only, never an English phrase translated word for word. Speak to the student the familiar way, in the singular (in Slovenian "si", never "ste"). Student level: ${params.school}.`,
     input: JSON.stringify({
       ...(({ title, summary, keyPoints }) => ({ topic: title, summary, keyPoints }))(
         promptTopic({ title: params.topicTitle, summary: params.summary, keyPoints: params.keyPoints }),
@@ -159,7 +159,7 @@ ${
 - partial or wrong: give the right answer in one or two sentences, kindly, without asking again.`
 }${params.isLast ? " This is the last question: end with one short sentence closing the lesson." : ""}
 
-Always speak in this language (ISO code): ${params.language}.`,
+Always speak in this language (ISO code): ${params.language}. Address the student the familiar way, in the singular, from the first word to the last (in Slovenian "si", never "ste").`,
     input: JSON.stringify({
       question: params.question,
       answerGuide: params.answerGuide,

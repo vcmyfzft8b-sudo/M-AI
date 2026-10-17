@@ -9,7 +9,7 @@ import { MemoPortal } from "@/components/memo-portal";
 import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { sheetClass, useSheet } from "@/components/use-sheet";
-import { ExamScreen } from "@/components/exams/exam-screen";
+import { ExamCta, ExamScreen } from "@/components/exams/exam-screen";
 import { formatExamDay } from "@/components/exams/exam-format";
 import { EXAM_PREPS_HREF, LESSON_KIND_EMOJI, LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
 import { prefetchLesson } from "@/components/exams/lesson-prefetch";
@@ -33,6 +33,12 @@ import { currentPaywallBack, paywallPath } from "@/lib/paywall-reasons";
  * adds stations instead of moving the learner on. At most this many are drawn.
  */
 const MAX_LOCKED_SHOWN = 12;
+
+/*
+ * The lessons a module has done, drawn most recent last: only the last few, so a module worked at
+ * for weeks is not a column of identical circles to scroll past. The rest open with one tap.
+ */
+const DONE_SHOWN = 4;
 
 /* Practice lessons a topic needs before "Ponovitev" (repeat the weakest format) opens. */
 const REPETITION_AFTER = 3;
@@ -82,6 +88,8 @@ export function ExamDashboard({
   const [menuOpen, setMenuOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerTab, setPickerTab] = useState<PickerTab>("learn");
+  /* Modules whose earlier lessons the learner opened on the path. */
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => new Set());
   const [pickerTopic, setPickerTopic] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -342,6 +350,8 @@ export function ExamDashboard({
   const showsNext = next?.type === "lesson" && !examPassed && nextModule !== null;
   const lessonsLeft = nextModule ? Math.max(1, practicesOwed(nextModule, target / 100)) : 0;
   const stations: Station[] = [];
+  /* How many of each module's earlier lessons are folded away, by topic. */
+  const folded = new Map<string, number>();
 
   for (const pathModule of [...modules].sort((left, right) => left.position - right.position)) {
     if (!reachedTopics.has(pathModule.topicId)) {
@@ -352,10 +362,15 @@ export function ExamDashboard({
       break;
     }
 
-    for (const entry of detail.history) {
-      if (entry.topicId === pathModule.topicId) {
-        stations.push({ type: "done", id: entry.id, topicId: entry.topicId, kind: entry.kind, score: entry.score });
-      }
+    const done = detail.history.filter((entry) => entry.topicId === pathModule.topicId);
+    const hidden = unfolded.has(pathModule.topicId) ? 0 : Math.max(0, done.length - DONE_SHOWN);
+
+    if (hidden > 0) {
+      folded.set(pathModule.topicId, hidden);
+    }
+
+    for (const entry of done.slice(hidden)) {
+      stations.push({ type: "done", id: entry.id, topicId: entry.topicId, kind: entry.kind, score: entry.score });
     }
 
     if (showsNext && next?.type === "lesson" && next.topicId === pathModule.topicId) {
@@ -509,7 +524,7 @@ export function ExamDashboard({
               <Emoji symbol="✅" size="1rem" />
               <span>
                 {/* Past the day's goal the count stands alone; "12/5" reads like an error. */}
-                <b>{plan.doneToday >= plan.goal ? plan.doneToday : `${plan.doneToday}/${plan.goal}`}</b>{" "}
+                <b>{plan.doneToday >= plan.goal ? plan.doneToday : `${plan.doneToday} / ${plan.goal}`}</b>{" "}
                 {t("exam.path.today", { count: plan.doneToday >= plan.goal ? plan.doneToday : plan.goal })}
               </span>
             </span>
@@ -573,9 +588,11 @@ export function ExamDashboard({
                 <MemoBuddy mood="sad" size="6rem" />
                 <h2>{t("exam.dash.empty.title")}</h2>
                 <p>{t("exam.dash.empty.body")}</p>
-                <InstantLink href="/app/exams/new" className="memo-button-coral">
-                  {t("exam.dash.empty.cta")}
-                </InstantLink>
+                <ExamCta>
+                  <InstantLink href="/app/exams/new" className="memo-button-coral">
+                    {t("exam.dash.empty.cta")}
+                  </InstantLink>
+                </ExamCta>
               </div>
             ) : null}
             {/* Material still being read at setup: its topics join the path when the note is ready. */}
@@ -619,6 +636,16 @@ export function ExamDashboard({
                     </span>
                     {topic?.mastered ? <Msym name="check_circle" size="1.6rem" className="memo-exam-trail-banner-mark" /> : null}
                   </div>
+                  {folded.get(run.topicId) && run.stations[0]?.type === "done" ? (
+                    <button
+                      type="button"
+                      className="memo-exam-trail-earlier"
+                      onClick={() => setUnfolded((current) => new Set(current).add(run.topicId))}
+                    >
+                      <Msym name="expand_more" size="1.2rem" fill={false} weight={500} />
+                      {t("exam.path.earlier", { count: folded.get(run.topicId) ?? 0 })}
+                    </button>
+                  ) : null}
                   <ol className="memo-exam-trail-stations">
                     {run.stations.map((station, offsetInRun) => {
                       const index = run.start + offsetInRun;
@@ -864,7 +891,7 @@ export function ExamDashboard({
                     onClick={() => choose(item)}
                   >
                     {recommended ? <span className="memo-exam-picker-badge">{t("exam.picker.recommended")}</span> : null}
-                    <Emoji symbol={item.locked ? "🔒" : item.emoji} size="1.6rem" />
+                    {item.locked ? <Msym name="lock" size="1.6rem" fill={false} /> : <Emoji symbol={item.emoji} size="1.6rem" />}
                     <b>{t(item.label)}</b>
                     {item.locked ? (
                       <span>{t(item.locked, { count: REPETITION_AFTER })}</span>

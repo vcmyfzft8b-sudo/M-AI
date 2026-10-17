@@ -26,7 +26,7 @@ export function ExamEntryCard({
       onClick={() => onOpen("/app/exams/new")}
     >
       <span className="memo-exam-entry-tile" aria-hidden="true">
-        <Emoji symbol="🎓" size="1.6rem" />
+        <Emoji symbol="🎓" size="1.35rem" />
       </span>
       <span className="memo-exam-entry-copy">
         <span className="memo-exam-entry-title">{t("exam.entry.title")}</span>

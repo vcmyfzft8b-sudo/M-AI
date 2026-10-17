@@ -8,7 +8,7 @@ import { useTranslations } from "@/components/i18n-provider";
 import { Emoji, Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { EXAM_PREPS_HREF, LESSON_KIND_EMOJI } from "@/components/exams/exam-links";
-import { ExamScreen } from "@/components/exams/exam-screen";
+import { ExamCta, ExamScreen } from "@/components/exams/exam-screen";
 import { formatExamDay, formatExamDayLong, formatMonth, formatWeekdayShort } from "@/components/exams/exam-format";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
 import { MemoSays } from "@/components/exams/memo-says";
@@ -1101,9 +1101,11 @@ export function ExamSetup({
           {plan.status === "failed" ? (
             <>
               <MemoSays key="building-failed" hero mood="sad" size="7.5rem" text={t("exam.setup.building.failed")} />
-              <button type="button" className="memo-button-ghost memo-exam-retry" onClick={() => void startPlan()}>
-                {t("common.retry")}
-              </button>
+              <ExamCta>
+                <button type="button" className="memo-button-coral" onClick={() => void startPlan()}>
+                  {t("common.retry")}
+                </button>
+              </ExamCta>
             </>
           ) : (
             <>

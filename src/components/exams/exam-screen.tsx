@@ -1,12 +1,27 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { Msym } from "@/components/msym";
 import { useInstantNavigation } from "@/components/navigation-loading";
 import { useT } from "@/components/i18n-provider";
 import { cameFromAppPath } from "@/lib/app-history";
+
+/*
+ * The screen's bottom bar, for a part of the screen that owns its own buttons (a written answer's
+ * "Preveri", the tutor's "Začni"): they render there, where every other screen's "Nadaljuj" sits,
+ * rather than wherever the content happens to end.
+ */
+const ExamCtaSlot = createContext<HTMLElement | null>(null);
+
+/** Puts `children` in the screen's bottom bar; inline where the screen has a bar of its own. */
+export function ExamCta({ children }: { children: ReactNode }) {
+  const slot = useContext(ExamCtaSlot);
+
+  return slot ? createPortal(children, slot) : <div className="memo-exam-cta-inline">{children}</div>;
+}
 
 /**
  * The frame every exam screen shares, built the way the app's other full screens are.
@@ -61,6 +76,7 @@ export function ExamScreen({
   const t = useT();
   const router = useRouter();
   const { navigateWithFeedback, overlay, isNavigating } = useInstantNavigation();
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null);
 
   function goBack() {
     if (historyBack && cameFromAppPath(backHref)) {
@@ -100,12 +116,16 @@ export function ExamScreen({
         </div>
 
         <div className="memo-screen-scroll">
-          <div className={`memo-page memo-exam-page ${cta ? "has-cta" : ""}`.trim()}>{children}</div>
+          <div className={`memo-page memo-exam-page ${cta ? "has-cta" : ""}`.trim()}>
+            <ExamCtaSlot.Provider value={cta ? null : slot}>{children}</ExamCtaSlot.Provider>
+          </div>
         </div>
 
         {cta ? (
           <div className={`memo-exam-cta ${ctaOnDesktop ? "" : "phone-only"}`.trim()}>{cta}</div>
-        ) : null}
+        ) : (
+          <div className="memo-exam-cta memo-exam-cta-slot" ref={setSlot} />
+        )}
       </div>
     </>
   );

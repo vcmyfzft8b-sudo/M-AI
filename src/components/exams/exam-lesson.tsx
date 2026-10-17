@@ -12,7 +12,7 @@ import { NoteSpeedReader } from "@/components/note-speed-reader";
 import { StudyFlashcard, type StudyFlashcardExit } from "@/components/study-flashcard";
 import { StudyPracticeQuestion, StudyQuizQuestion } from "@/components/study-question";
 import { LESSON_KIND_EMOJI, LESSON_KIND_KEY, lessonHref } from "@/components/exams/exam-links";
-import { ExamScreen } from "@/components/exams/exam-screen";
+import { ExamCta, ExamScreen } from "@/components/exams/exam-screen";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import { MemoBuddy, type BuddyMood } from "@/components/exams/memo-buddy";
 import { ExamTutorLesson } from "@/components/exams/exam-tutor-lesson";
@@ -500,7 +500,10 @@ export function ExamLesson({
                 className={index - 1 === part ? "current" : index - 1 < part ? "done" : undefined}
               >
                 <Emoji symbol={LESSON_PART_EMOJI[entry.kind]} size="0.95rem" />
-                {t(index === 0 ? "exam.lesson.part.read" : LESSON_KIND_KEY[entry.kind])}
+                {/* Named where the learner is; the others are their picture, so the steps fit one row. */}
+                <span className={index - 1 === part ? undefined : "sr-only"}>
+                  {t(index === 0 ? "exam.lesson.part.read" : LESSON_KIND_KEY[entry.kind])}
+                </span>
               </li>
             ))}
           </ol>
@@ -513,9 +516,9 @@ export function ExamLesson({
         ) : phase.name === "generating" ? (
           <StudyGenerationNotice preview={GENERATOR_PREVIEW[phase.generator]} stageCopy={t(GENERATOR_STAGE[phase.generator])} />
         ) : phase.name === "failed" ? (
-          <div className="memo-exam-center">
-            <MemoBuddy mood="sad" size="6rem" />
-            <p className="memo-study-empty-title">{t("exam.lesson.failed")}</p>
+          <div className="memo-exam-center memo-exam-loading" role="alert">
+            <MemoBuddy mood="sad" size="6.5rem" />
+            <h2>{t("exam.lesson.failed")}</h2>
           </div>
         ) : phase.name === "playing" && phase.lesson.kind === "summary" && part >= 0 && phase.lesson.parts?.[part] ? (
           /*
@@ -1241,59 +1244,62 @@ function LessonBody({
         </div>
       ) : null}
 
-      <div className="memo-test-actions">
-        {mark && mark.marked && !passed && !revision && (mark.missingPoints || mark.expectedAnswer) ? (
-          <button
-            type="button"
-            className="memo-test-prev"
-            onClick={() => {
-              setRevision({ first: mark.score ?? 0, hint: mark.missingPoints || mark.expectedAnswer });
-              setUnknown(false);
-              setMark(null);
-            }}
-          >
-            {t("exam.written.revise")}
-          </button>
-        ) : null}
-        {mark ? (
-          <button
-            type="button"
-            className="memo-test-next"
-            onClick={() => {
-              const second = mark.marked ? (mark.score ?? 0) : 0;
-              const earned = revision ? Math.round((revision.first + second) / 2) : second;
-              const possible = mark.marked ? mark.maxScore : 0;
-              const nextTotal = writtenTotal + possible;
-              const nextCorrect = correct + earned;
+      {/* In the screen's bottom bar, where every lesson's next step is: the quiet choice, then the action. */}
+      <ExamCta>
+        <div className="memo-exam-cta-row">
+          {mark && mark.marked && !passed && !revision && (mark.missingPoints || mark.expectedAnswer) ? (
+            <button
+              type="button"
+              className="memo-button-ghost"
+              onClick={() => {
+                setRevision({ first: mark.score ?? 0, hint: mark.missingPoints || mark.expectedAnswer });
+                setUnknown(false);
+                setMark(null);
+              }}
+            >
+              {t("exam.written.revise")}
+            </button>
+          ) : null}
+          {mark ? (
+            <button
+              type="button"
+              className="memo-button-coral"
+              onClick={() => {
+                const second = mark.marked ? (mark.score ?? 0) : 0;
+                const earned = revision ? Math.round((revision.first + second) / 2) : second;
+                const possible = mark.marked ? mark.maxScore : 0;
+                const nextTotal = writtenTotal + possible;
+                const nextCorrect = correct + earned;
 
-              if (index + 1 >= lesson.questions.length) {
-                onFinish(nextCorrect, nextTotal);
-                return;
-              }
+                if (index + 1 >= lesson.questions.length) {
+                  onFinish(nextCorrect, nextTotal);
+                  return;
+                }
 
-              setCorrect(nextCorrect);
-              setWrittenTotal(nextTotal);
-              setIndex(index + 1);
-              setAnswer("");
-              setUnknown(false);
-              setMark(null);
-              setRevision(null);
-            }}
-          >
-            {t("exam.lesson.next")}
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="memo-test-next"
-            disabled={marking || (!unknown && answer.trim().length === 0)}
-            onClick={() => void check()}
-          >
-            {marking ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            <span>{marking ? t("palace.checking") : t("palace.checkAnswer")}</span>
-          </button>
-        )}
-      </div>
+                setCorrect(nextCorrect);
+                setWrittenTotal(nextTotal);
+                setIndex(index + 1);
+                setAnswer("");
+                setUnknown(false);
+                setMark(null);
+                setRevision(null);
+              }}
+            >
+              {t("exam.lesson.next")}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="memo-button-coral"
+              disabled={marking || (!unknown && answer.trim().length === 0)}
+              onClick={() => void check()}
+            >
+              {marking ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              <span>{marking ? t("palace.checking") : t("palace.checkAnswer")}</span>
+            </button>
+          )}
+        </div>
+      </ExamCta>
     </div>
   );
 }

@@ -1998,9 +1998,7 @@
     width: 2.9rem;
     height: 2.9rem;
     padding: 0;
-    border: 0;
     border-radius: 999px;
-    background: var(--tile);
     color: var(--text);
     cursor: pointer;
   }
@@ -6184,6 +6182,14 @@
   letter-spacing: -0.03em;
   line-height: 1.32;
   text-wrap: pretty;
+}
+
+/* "Ne vem": the app's checkbox, in ink, not the browser's blue. */
+.memo-panel .lecture-practice-unknown input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  accent-color: var(--text);
 }
 
 .memo-panel .lecture-practice-textarea {
@@ -26373,6 +26379,11 @@ select.memo-cp-input {
   margin-top: 1.6rem;
 }
 
+/* The bottom bar a screen's content fills (a written answer's buttons); gone while nothing is in it. */
+.memo-exam-cta-slot:empty {
+  display: none;
+}
+
 .memo-exam-cta > .memo-button-coral,
 .memo-exam-cta-row > .memo-button-coral {
   display: inline-flex;
@@ -26518,23 +26529,12 @@ select.memo-cp-input {
   overflow: hidden;
 }
 
-/* The onboarding's bar: coral, never narrower than its own round end, with a gloss along the top. */
+/* The onboarding's bar: coral, never narrower than its own round end; its gloss is the shared one. */
 .memo-exam-topbar-custom .memo-exam-steps > div {
   position: relative;
   min-width: 1rem;
   background: var(--coral);
   transition: width 0.62s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.memo-exam-topbar-custom .memo-exam-steps > div::after {
-  content: "";
-  position: absolute;
-  top: 0.2rem;
-  right: 0.45rem;
-  left: 0.45rem;
-  height: 0.22rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--on-photo) 38%, transparent);
 }
 
 .memo-exam-topbar[hidden] {
@@ -26600,15 +26600,19 @@ button.memo-exam-card:hover {
   text-align: center;
 }
 
+.memo-exam-empty h2 {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
 .memo-exam-empty p {
   max-width: 28rem;
   margin: 0;
   color: var(--muted);
-}
-
-.memo-exam-empty .memo-button-coral {
-  flex: 0 0 auto;
-  width: min(100%, 20rem);
 }
 
 /* --- setup ---------------------------------------------------------------- */
@@ -26651,7 +26655,7 @@ button.memo-exam-card:hover {
 
 .memo-exam-material-retry {
   flex: 0 0 auto;
-  height: 2.2rem;
+  height: 2.6rem;
   padding: 0 0.9rem;
   border: 0;
   border-radius: 999px;
@@ -26659,7 +26663,7 @@ button.memo-exam-card:hover {
   color: var(--text);
   cursor: pointer;
   font: inherit;
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   font-weight: 700;
 }
 
@@ -26687,7 +26691,7 @@ button.memo-exam-card:hover {
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
-.memo-exam-pick-emoji {
+.memo-exam-step .memo-exam-pick-emoji {
   width: 2.4rem;
   height: 2.4rem;
 }
@@ -26780,7 +26784,7 @@ button.memo-exam-card:hover {
 /* Only when a limit is reached: why the field no longer takes files. */
 .memo-exam-upload-limit {
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   text-align: center;
 }
 
@@ -26823,7 +26827,7 @@ button.memo-exam-card:hover {
 }
 
 .memo-exam-dropzone .memo-dropzone-title {
-  font-size: 0.86rem;
+  font-size: 0.92rem;
 }
 
 /* The secondary: notes already in the app, folded until asked for. */
@@ -26884,7 +26888,7 @@ button.memo-exam-card:hover {
 
 .memo-exam-stats span {
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   font-weight: 650;
 }
 
@@ -26920,9 +26924,6 @@ button.memo-exam-card:hover {
   animation: memo-spin 1s linear infinite;
 }
 
-.memo-exam-retry {
-  align-self: center;
-}
 
 /* The AI-topics switch's warning, as Astra marks it: not recommended. */
 .memo-exam-warning {
@@ -26934,7 +26935,7 @@ button.memo-exam-card:hover {
   border-radius: 18px;
   background: var(--upgrade-tint);
   color: var(--upgrade-ink);
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   font-weight: 600;
   line-height: 1.35;
 }
@@ -27041,7 +27042,7 @@ button.memo-exam-card:hover {
 
 .memo-exam-plan-meta {
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   font-weight: 600;
 }
 
@@ -27058,6 +27059,21 @@ button.memo-exam-card:hover {
 }
 
 /* "Your topic" / "Added by AI" beside a topic's title. */
+/* "Priporočeno", the picker's badge (its coral edge and ink) where it sits inline beside a title
+   (the examiner's manner); in sentence case there, so it fits beside the name on a phone. */
+.memo-exam-recommended {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1.5px var(--promo);
+  color: var(--promo);
+  font-size: 0.78rem;
+  font-weight: 700;
+  vertical-align: 0.1em;
+  white-space: nowrap;
+}
+
 .memo-exam-trail-source {
   display: inline-block;
   margin-left: 0.45rem;
@@ -27096,8 +27112,8 @@ button.memo-exam-card:hover {
 }
 
 .memo-exam-chips .memo-chip.active {
-  border-color: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--ink);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ink);
 }
 
 /*
@@ -27183,6 +27199,7 @@ button.memo-exam-card:hover {
   color: var(--muted-2);
 }
 
+.memo-exam-material.ready .memo-exam-pick-mark,
 .memo-exam-pick.on .memo-exam-pick-mark {
   color: var(--ink);
 }
@@ -27192,9 +27209,6 @@ button.memo-exam-card:hover {
   font-weight: 650;
 }
 
-.memo-exam-input:focus {
-  box-shadow: 0 0 0 3px var(--focus-ring);
-}
 
 /*
  * The Generalka's setup fits one phone screen: its dial a little smaller than the setup's, and Memo beside the title.
@@ -27228,6 +27242,12 @@ button.memo-exam-card:hover {
   .memo-exam-mock-main .memo-exam-center > .memo-exam-fine {
     align-self: start;
   }
+}
+
+/* A mock question's worth, quieter than its number beside it. */
+.memo-exam-mock-points {
+  color: var(--muted);
+  font-weight: 650;
 }
 
 .memo-exam-dial-wrap {
@@ -27321,10 +27341,15 @@ button.memo-exam-card:hover {
   font-weight: 750;
 }
 
+/* Inside the ring, never across it: a longer caption ("4 ustna vprašanja") wraps instead. */
 .memo-exam-dial-center span {
+  max-width: 62%;
   color: var(--muted);
   font-size: 0.95rem;
   font-weight: 650;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
 }
 
 .memo-exam-review-sub {
@@ -27366,7 +27391,7 @@ button.memo-exam-card:hover {
 
 .memo-exam-route-head > span > span {
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   line-height: 1.3;
 }
 
@@ -27471,7 +27496,7 @@ button.memo-exam-card:hover {
   text-align: center;
 }
 
-.memo-exam-trail-head h1 {
+.memo-exam-page .memo-exam-trail-head h1 {
   display: -webkit-box;
   margin: 0;
   overflow: hidden;
@@ -27608,7 +27633,7 @@ button.memo-exam-card:hover {
   border-radius: 999px;
   background: var(--tile);
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   font-weight: 650;
   white-space: nowrap;
 }
@@ -27679,11 +27704,11 @@ button.memo-exam-card:hover {
 
 .memo-exam-trail-banner-copy i {
   overflow: hidden;
-  font-size: 0.8rem;
+  color: var(--muted);
+  font-size: 0.78rem;
   font-style: normal;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  opacity: 0.75;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
@@ -27700,10 +27725,41 @@ button.memo-exam-card:hover {
   -webkit-line-clamp: 2;
 }
 
+/* A module's earlier lessons, folded: a quiet chip under its banner that opens them. */
+.memo-exam-trail-earlier {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.35rem;
+  height: 2.7rem;
+  margin: 0.2rem auto 0;
+  padding: 0 1.05rem 0 0.85rem;
+  border: var(--btn-border-width) solid var(--btn-border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+@media (hover: hover) {
+  .memo-exam-trail-earlier:hover {
+    box-shadow: var(--shadow), inset 0 0 0 1px var(--hover-ring);
+  }
+}
+
+.memo-exam-trail-earlier:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow), 0 0 0 3px var(--focus-ring);
+}
+
 .memo-exam-trail-banner-copy span {
-  font-size: 0.86rem;
+  color: var(--muted);
+  font-size: 0.92rem;
   font-weight: 600;
-  opacity: 0.8;
 }
 
 .memo-exam-trail-banner-mark {
@@ -27768,6 +27824,13 @@ button.memo-exam-card:hover {
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
+@media (hover: hover) {
+  .memo-exam-station:not(.locked) .memo-exam-station-node:hover {
+    outline: 1px solid var(--hover-ring);
+    outline-offset: -1px;
+  }
+}
+
 .memo-exam-station-node:active:not(:disabled) {
   transform: translateY(4px);
   box-shadow: 0 1px 0 var(--line), inset 0 0 0 2px var(--line);
@@ -27788,7 +27851,7 @@ button.memo-exam-card:hover {
   height: 5rem;
   margin-top: -0.25rem;
   background: var(--coral);
-  box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 55%, var(--text)), 0 0 0 6px color-mix(in srgb, var(--promo) 22%, transparent);
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 72%, var(--photo-stage)), 0 0 0 6px color-mix(in srgb, var(--promo) 22%, transparent);
   animation: memo-station-pulse 2.2s ease-in-out infinite;
 }
 
@@ -27805,11 +27868,11 @@ button.memo-exam-card:hover {
 @keyframes memo-station-pulse {
   0%,
   100% {
-    box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 55%, var(--text)), 0 0 0 6px color-mix(in srgb, var(--promo) 22%, transparent);
+    box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 72%, var(--photo-stage)), 0 0 0 6px color-mix(in srgb, var(--promo) 22%, transparent);
   }
 
   50% {
-    box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 55%, var(--text)), 0 0 0 12px color-mix(in srgb, var(--promo) 8%, transparent);
+    box-shadow: 0 5px 0 color-mix(in srgb, var(--promo) 72%, var(--photo-stage)), 0 0 0 12px color-mix(in srgb, var(--promo) 8%, transparent);
   }
 }
 
@@ -27927,7 +27990,7 @@ button.memo-exam-card:hover {
   border-radius: 999px;
   background: var(--text);
   color: var(--bg);
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   font-weight: 800;
   white-space: nowrap;
   animation: memo-station-bob 1.8s ease-in-out infinite;
@@ -27960,7 +28023,7 @@ button.memo-exam-card:hover {
   width: var(--btn-round);
   height: var(--btn-round);
   place-items: center;
-  border: 0;
+  border: var(--btn-border-width) solid var(--btn-border);
   border-radius: 999px;
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -27991,10 +28054,11 @@ button.memo-exam-card:hover {
   box-shadow: var(--shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--promo) 55%, transparent);
 }
 
+/* Every card on the path (mock, preparing, ready, after the exam) heads the same way. */
 .memo-exam-mock-card b {
   display: block;
-  font-size: 1.05rem;
-  font-weight: 750;
+  font-size: 1.08rem;
+  font-weight: 700;
   text-wrap: balance;
 }
 
@@ -28152,7 +28216,8 @@ button.memo-exam-card:hover {
 /* A lesson's parts in its header: reading, flashcards, quiz, written; the current one stands out. */
 .memo-exam-lesson-parts {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 0.4rem;
   margin: 0.5rem 0 0;
   padding: 0;
@@ -28161,9 +28226,13 @@ button.memo-exam-card:hover {
 
 .memo-exam-lesson-parts li {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
+  justify-content: center;
   gap: 0.3rem;
-  padding: 0.25rem 0.65rem;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.5rem;
   border-radius: 999px;
   background: var(--tile);
   color: var(--muted);
@@ -28176,6 +28245,7 @@ button.memo-exam-card:hover {
 }
 
 .memo-exam-lesson-parts li.current {
+  padding: 0 0.75rem 0 0.6rem;
   background: var(--surface);
   box-shadow: inset 0 0 0 1.5px var(--promo);
   color: var(--text);
@@ -28278,7 +28348,7 @@ button.memo-exam-card:hover {
 
 .memo-exam-picker-item > span:not(.memo-emoji):not(.memo-exam-picker-badge) {
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   line-height: 1.35;
 }
 
@@ -28332,8 +28402,9 @@ button.memo-exam-card:hover {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  height: 2.4rem;
-  padding: 0 0.85rem;
+  height: var(--btn-round);
+  padding: 0 0.95rem;
+  border: var(--btn-border-width) solid var(--btn-border);
   border-radius: 999px;
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -28371,8 +28442,9 @@ button.memo-exam-card:hover {
 }
 
 .memo-exam-after p {
-  margin: 0.25rem 0 0;
+  margin: 0.15rem 0 0;
   color: var(--muted);
+  font-size: 0.92rem;
 }
 
 .memo-exam-after-form {
@@ -28534,9 +28606,9 @@ button.memo-exam-card:hover {
 
 .memo-prep-empty h2 {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: 1.55rem;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
 }
 
 /* The exam-prep folder's count, at the end of its row in the folder picker. */
@@ -28844,7 +28916,7 @@ button.memo-exam-card:hover {
   display: flex;
   justify-content: space-between;
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   font-weight: 600;
 }
 
@@ -28914,10 +28986,6 @@ button.memo-exam-card:hover {
   box-shadow: none;
 }
 
-.memo-exam-grading .memo-gen-track {
-  width: min(100%, 18rem);
-}
-
 .memo-exam-result-head {
   display: flex;
   align-items: center;
@@ -28941,7 +29009,7 @@ button.memo-exam-card:hover {
   flex-direction: column;
   gap: 0.35rem;
   padding: 0.95rem 1.1rem;
-  border-radius: 20px;
+  border-radius: 22px;
 }
 
 .memo-exam-feedback-block b {
@@ -28997,7 +29065,7 @@ button.memo-exam-card:hover {
   flex-direction: column;
   gap: 0.4rem;
   padding: 0.95rem 1.1rem;
-  border-radius: 20px;
+  border-radius: 22px;
   background: var(--surface);
   box-shadow: var(--shadow), inset 3px 0 0 var(--danger);
 }
@@ -29016,7 +29084,7 @@ button.memo-exam-card:hover {
   justify-content: space-between;
   gap: 0.6rem;
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   font-weight: 650;
 }
 
@@ -29076,7 +29144,7 @@ button.memo-exam-card:hover {
   align-self: stretch;
   justify-content: space-between;
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -29104,6 +29172,14 @@ button.memo-exam-card:hover {
   gap: 0.6rem;
   margin-top: auto;
   padding-bottom: 0.6rem;
+}
+
+/* The answer's ink pill stands as tall as the quiet buttons beside it. */
+.memo-exam-oral-actions .memo-primary-pill {
+  height: 3.4rem;
+  padding: 0 1.6rem;
+  font-size: 1.05rem;
+  font-weight: 750;
 }
 
 /* The tutor's answer buttons sit in a row that is always there, only hidden while he speaks. */
@@ -29281,7 +29357,8 @@ button.memo-exam-card:hover {
     padding: 0 1.15rem calc(2.5rem + var(--memo-safe-bottom));
   }
 
-  .memo-exam-page.has-cta {
+  .memo-exam-page.has-cta,
+  .memo-exam-screen:has(.memo-exam-cta-slot:not(:empty)) .memo-exam-page {
     padding-bottom: calc(7rem + var(--memo-safe-bottom));
   }
 
@@ -29335,14 +29412,36 @@ button.memo-exam-card:hover {
 }
 
 @media (min-width: 1100px) {
-  .memo-exam-topbar-title,
   .memo-exam-back-round,
   .memo-exam-cta.phone-only {
     display: none;
   }
 
+  /*
+   * The way back on the left, the screen's name in the middle (a lesson's module and kind, the
+   * mock's clock), its actions on the right: three columns, so the name stays centred whatever
+   * sits either side of it.
+   */
   .memo-exam-topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     margin-bottom: 1.2rem;
+  }
+
+  .memo-exam-topbar > .memo-exam-crumb {
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .memo-exam-topbar > .memo-exam-topbar-title,
+  .memo-exam-topbar > span:empty {
+    grid-column: 2;
+    max-width: 22rem;
+  }
+
+  .memo-exam-topbar > .memo-exam-topbar-trailing {
+    grid-column: 3;
+    justify-self: end;
   }
 
   /*

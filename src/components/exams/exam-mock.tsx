@@ -371,7 +371,7 @@ export function ExamMock({
         {/* Two columns on desktop (the exam and its length, then its details); one column on the phone. */}
         <div className="memo-exam-mock-main">
           <div className="memo-exam-center">
-            <MemoBuddy mood="wave" size="4.5rem" thought={mode === "oral" ? "🎙️" : "🎓"} sparkles />
+            <MemoBuddy mood="wave" size="4.5rem" thought={mode === "oral" ? "🗣️" : "📝"} sparkles />
             <h1 className="memo-exam-step-title">{t("exam.mock.setup.title")}</h1>
             <p className="memo-exam-fine">{t("exam.mock.setup.body", { count: moduleCount })}</p>
           </div>
@@ -441,7 +441,7 @@ export function ExamMock({
                         <b>
                           {t(option.labelKey)}
                           {option.value === "strict" ? (
-                            <span className="memo-exam-trail-source">{t("exam.oral.recommended")}</span>
+                            <span className="memo-exam-recommended">{t("exam.oral.recommended")}</span>
                           ) : null}
                         </b>
                         <span>{t(option.bodyKey)}</span>
@@ -593,10 +593,10 @@ export function ExamMock({
             )
           }
         >
-          <div className="memo-exam-center memo-exam-grading" role="alert">
-            <MemoBuddy mood="sad" size="7rem" />
-            <h1 className="memo-exam-step-title">{t("exam.mock.gradingFailed.title")}</h1>
-            <p className="memo-exam-fine">{phase.closed ?? t("exam.mock.gradingFailed.body")}</p>
+          <div className="memo-exam-center memo-exam-loading memo-exam-grading" role="alert">
+            <MemoBuddy mood="sad" size="6.5rem" />
+            <h2>{t("exam.mock.gradingFailed.title")}</h2>
+            <p className="memo-exam-loading-line">{phase.closed ?? t("exam.mock.gradingFailed.body")}</p>
           </div>
         </ExamScreen>
       );
@@ -610,11 +610,12 @@ export function ExamMock({
         backIcon="close"
         title={t("exam.mock.title")}
       >
-        <div className="memo-exam-center memo-exam-grading" role="status" aria-live="polite">
-          <MemoBuddy mood="think" size="7rem" thought="📝" />
-          <h1 className="memo-exam-step-title">{t("exam.mock.grading.title")}</h1>
-          <p className="memo-exam-fine">{t("exam.mock.grading.body")}</p>
-          <span className="memo-gen-track" aria-hidden="true">
+        {/* The lesson's loader, word for word in its layout: Memo, what he is doing, a line, a bar. */}
+        <div className="memo-exam-center memo-exam-loading memo-exam-grading" role="status" aria-live="polite">
+          <MemoBuddy mood="think" size="6.5rem" thought="📝" />
+          <h2>{t("exam.mock.grading.title")}</h2>
+          <p className="memo-exam-loading-line">{t("exam.mock.grading.body")}</p>
+          <span className="memo-gen-track memo-exam-loading-track" aria-hidden="true">
             <span />
           </span>
         </div>
@@ -672,7 +673,12 @@ export function ExamMock({
           <div>
             <Msym name="flag" size="1.3rem" fill={false} />
             <span>{t("exam.mock.pass")}</span>
-            <b>{result.passed ? t("exam.mock.result.passed") : t("exam.mock.result.failed")}</b>
+            {/* The mark itself, and whether this mock reached it ("50 % · še ne"). */}
+            <b>
+              {t(result.passed ? "exam.mock.result.passed" : "exam.mock.result.failed", {
+                percent: wholePercent(passPercentage),
+              })}
+            </b>
           </div>
         </div>
 
@@ -811,23 +817,30 @@ export function ExamMock({
         </div>
       }
     >
-      {/* Where the learner is in the mock, as the lessons show it: one bar, not a step per question. */}
-      <div
-        className="memo-progress quiz memo-exam-mock-progress"
-        role="progressbar"
-        aria-valuemin={1}
-        aria-valuemax={attempt.questions.length}
-        aria-valuenow={index + 1}
-        aria-label={t("exam.mock.question", { index: index + 1, total: attempt.questions.length })}
-      >
-        <div style={{ width: `${Math.round(((index + 1) / attempt.questions.length) * 100)}%` }} />
-      </div>
-
       <div className="memo-panel study memo-exam-lesson">
-        <p className="memo-exam-fine">
-          {t("exam.mock.question", { index: index + 1, total: attempt.questions.length })} ·{" "}
-          {question.kind === "choice" ? t("exam.mock.points", { count: 1 }) : t("exam.mock.points", { count: 5 })}
-        </p>
+        {/* Where the learner is, headed and counted as the lessons' questions are, over one bar. */}
+        <div className="memo-quiz-head">
+          <span className="memo-quiz-count">
+            {t("quiz.questionN", { index: index + 1 })}
+            <span className="memo-exam-mock-points">
+              {" · "}
+              {question.kind === "choice" ? t("exam.mock.points", { count: 1 }) : t("exam.mock.points", { count: 5 })}
+            </span>
+          </span>
+          <span className="memo-quiz-total">
+            {index + 1} / {attempt.questions.length}
+          </span>
+        </div>
+        <div
+          className="memo-progress quiz"
+          role="progressbar"
+          aria-valuemin={1}
+          aria-valuemax={attempt.questions.length}
+          aria-valuenow={index + 1}
+          aria-label={t("exam.mock.question", { index: index + 1, total: attempt.questions.length })}
+        >
+          <div style={{ width: `${Math.round(((index + 1) / attempt.questions.length) * 100)}%` }} />
+        </div>
 
         {question.kind === "choice" ? (
           <div className="lecture-quiz-card">

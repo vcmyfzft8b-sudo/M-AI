@@ -341,6 +341,23 @@ on the page) and so applies to every quiz in the app: the note's quiz tab, the p
 and the landing's demo too. True or false shows the question small and the claimed answer as the
 statement; its verdict names the right answer only when the statement was false.
 
+**One bottom bar.** Every exam screen's main action is in the same place: the bar `ExamScreen`
+pins to the bottom (`cta`). A part of the screen that owns its buttons (a written answer's
+"Preveri odgovor" / "Popravi" / "Naprej", the tutor's "Začni", the empty prep's "Nova priprava",
+setup's retry) renders them there through `<ExamCta>`, a portal into the frame's slot, rather
+than wherever its content ends. Ghost for the quiet choice, coral for the action, as the other bars.
+The quiz verdict stays at the content's foot, under the answers it explains; flashcard grading and
+the tutor's playback controls stay with what they control.
+
+**The path folds what is done.** Each module draws only its last four finished lessons
+(`DONE_SHOWN`); the rest wait behind "Pokaži še N prejšnjih vaj" under the module's banner. A
+learner who worked one module for weeks scrolled past a hundred identical circles (22,000 px on
+the QA prep, 4,900 px folded).
+
+**Desktop shows the screen's name.** The bar's title (a lesson's "Modul 1 · Kviz", the mock's
+clock) is centred between the way back and the actions on desktop too; it was phone-only, which
+hid the written mock's countdown from anyone at a laptop.
+
 ## Setup
 
 `src/components/exams/exam-setup.tsx` is one screen per question, laid out like the app onboarding:

@@ -24,6 +24,7 @@ export const LESSON_KIND_EMOJI: Record<ExamLessonKind, string> = {
 export const EXAM_PREPS_HREF = "/app?view=preps";
 
 /** A lesson of one topic (a module on the path). */
-export function lessonHref(examId: string, topicId: string, kind: ExamLessonKind) {
-  return `/app/exams/${examId}/lesson?topic=${topicId}&kind=${kind}`;
+/** A lesson's screen; `check` makes it the topic's check ("Preverjanje"), a longer quiz. */
+export function lessonHref(examId: string, topicId: string, kind: ExamLessonKind, check = false) {
+  return `/app/exams/${examId}/lesson?topic=${topicId}&kind=${kind}${check ? "&check=1" : ""}`;
 }

@@ -194,13 +194,13 @@ export function ExamDashboard({
     }
   }
 
-  function openLesson(module: ExamModuleView, kind: ExamLessonKind) {
+  function openLesson(module: ExamModuleView, kind: ExamLessonKind, check = false) {
     if (!canOpen(module.lectureId)) {
       navigateWithFeedback(paywallPath("exam", currentPaywallBack()));
       return;
     }
 
-    navigateWithFeedback(lessonHref(exam.id, module.topicId, kind));
+    navigateWithFeedback(lessonHref(exam.id, module.topicId, kind, check));
   }
 
   function openMock() {
@@ -298,7 +298,7 @@ export function ExamDashboard({
    */
   type Station =
     | { type: "done"; id: string; topicId: string; kind: ExamLessonKind; score: number }
-    | { type: "next"; topicId: string; kind: ExamLessonKind }
+    | { type: "next"; topicId: string; kind: ExamLessonKind; check: boolean }
     | { type: "locked"; index: number; left: number }
     | { type: "gate"; topicId: string };
   const showsNext = next?.type === "lesson" && !examPassed && nextModule !== null;
@@ -323,7 +323,7 @@ export function ExamDashboard({
     }
 
     if (showsNext && next?.type === "lesson" && next.topicId === pathModule.topicId) {
-      stations.push({ type: "next", topicId: next.topicId, kind: next.kind });
+      stations.push({ type: "next", topicId: next.topicId, kind: next.kind, check: next.check });
 
       for (let index = 0; index < Math.min(MAX_LOCKED_SHOWN, lessonsLeft - 1); index += 1) {
         stations.push({ type: "locked", index, left: lessonsLeft - 1 });
@@ -356,8 +356,8 @@ export function ExamDashboard({
         >
           <Msym name="swap_horiz" size="1.45rem" fill={false} weight={500} />
         </button>
-        <button type="button" className="memo-button-coral" onClick={() => openLesson(nextModule, next.kind)}>
-          {t("exam.path.continue", { lesson: t(LESSON_KIND_KEY[next.kind]) })}
+        <button type="button" className="memo-button-coral" onClick={() => openLesson(nextModule, next.kind, next.check)}>
+          {t("exam.path.continue", { lesson: next.check ? t("exam.lesson.check") : t(LESSON_KIND_KEY[next.kind]) })}
         </button>
       </div>
     ) : next?.type === "mock" ? (
@@ -639,9 +639,9 @@ export function ExamDashboard({
                             type="button"
                             className="memo-exam-station-node"
                             aria-label={`${t(LESSON_KIND_KEY[station.kind])} · ${topic?.title?.trim() || t("note.untitled")}`}
-                            onClick={() => (topic ? openLesson(topic, station.kind) : undefined)}
+                            onClick={() => (topic ? openLesson(topic, station.kind, isNext && station.check) : undefined)}
                           >
-                            <Emoji symbol={LESSON_KIND_EMOJI[station.kind]} size="1.75rem" />
+                            <Emoji symbol={isNext && station.check ? "🎯" : LESSON_KIND_EMOJI[station.kind]} size="1.75rem" />
                             {isNext ? null : (
                               <span className="memo-exam-station-check" aria-hidden="true">
                                 <Msym name="check" size="0.9rem" weight={700} />
@@ -652,7 +652,7 @@ export function ExamDashboard({
                             <>
                               <span className="memo-exam-station-next">
                                 <i>{t("exam.path.nextUp")}</i>
-                                {t(LESSON_KIND_KEY[station.kind])}
+                                {station.check ? t("exam.lesson.check") : t(LESSON_KIND_KEY[station.kind])}
                               </span>
                               <span className={`memo-exam-station-buddy ${pathBuddySide(index)}`}>
                                 <MemoBuddy mood="wave" size="4.6rem" />

@@ -128,6 +128,34 @@ over the days left, never less than the learner's daily minutes buy (6 minutes a
 computed against what was left at the start of the day, so finishing a lesson moves "done", not the
 goal. Days are Ljubljana days, as everywhere else in the product.
 
+### The check ("Preverjanje") and what "ready" means
+
+A topic counts as on target for readiness only once it has **passed a check lately**: a test
+(`CHECK_KINDS`: quiz, written answer, tutor) scoring at the goal by its own score, guessing taken
+out (`knownShare`), within `REVIEW_GRACE_DAYS` (3) of now. A topic at the goal without one has
+`checkDue`, and its next station is the check: a quiz of `CHECK_QUIZ_SIZE` (10) questions
+(`&check=1` on the lesson, mostly unseen questions, since the server writes fresh ones when fewer
+than ten are left), then a written answer if the quiz failed twice that day. The result screen says
+"Preverjanje opravljeno" or "Še ne čisto". Self-graded flashcards and half-guessed true/false never
+count as a check. Opening the next module still goes by the estimate (`peak`), not by a check.
+
+Why this shape, measured on 48 simulated learners per goal (4 topics, 14 days, 8 practices a day,
+hidden true knowledge that grows with practice and fades; 2026-10-17):
+
+| Rule | 75 %: ready / truly at goal on every topic | 90 %: ready / truly at goal | ready learners' topics >5 pts under |
+|---|---|---|---|
+| Estimate only (before) | 44 / 42 | 16 / 11 | 6 % / 9 % |
+| A check before each module opens, and lately for ready | 37 / 39 | 5 / 4 | 1 % / 5 % |
+| **Estimate opens; a recent check for ready (built)** | **40 / 44** | **10 / 12** | **3 % / 5 %** |
+
+Checking before every module opened stopped lucky openings (from 3–4 % to 1 % of modules) but
+spent the days later modules needed, so fewer learners reached the goal at all; the final check
+round catches a lucky module before "ready" anyway and keeps old topics fresh. Pooling the last two
+tests, or a lenient pass mark (raw score at the goal), made readiness less honest. What remains is
+the limit of ten questions: they cannot always tell 70 % from 75 %, so a ready learner's topic can
+still be a few points under (the test allows one in 60+ topics more than ten points under, none
+fifteen). At a 100 % goal nobody finished four topics in 14 days, under any rule.
+
 ### Knowledge gaps: what comes back, and until when
 
 A lesson's result records which of the questions it showed the learner got wrong

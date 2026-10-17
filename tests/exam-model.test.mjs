@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CHECK_QUIZ_SIZE,
   addDays,
   MAX_EXAM_MODULES,
   MAX_SETUP_UPLOADS,
@@ -404,7 +405,7 @@ test("topics open in order, only on target: no number of lessons under it opens 
 test("the path takes each topic to the target in order, then practises the weakest, then offers the mock", () => {
   const learning = examModuleStates(mods("a", "b"), [], 0.75);
   assert.deepEqual(examNextStep(learning, examStage(learning, null, 0.75)), {
-    type: "lesson", topicId: "a", lectureId: "a", kind: "summary", review: false,
+    type: "lesson", topicId: "a", lectureId: "a", kind: "summary", review: false, check: false,
   });
 
   // Topic a has had four lessons under the target: the path stays on a, and b stays locked.
@@ -465,7 +466,7 @@ test("open gaps are practised before the mock exam is offered", () => {
   assert.equal(examStage(states, null, 0.75), "prove");
   assert.equal(states[0].pressingGaps, 1);
   // Missed in the quiz, asked again as true/false.
-  assert.deepEqual(examNextStep(states, "prove"), { type: "lesson", topicId: "a", lectureId: "a", kind: "true_false", review: true });
+  assert.deepEqual(examNextStep(states, "prove"), { type: "lesson", topicId: "a", lectureId: "a", kind: "true_false", review: true, check: false });
 
   const closed = examModuleStates(mods("a"), [...results, shown("a", "true_false", 1, "2026-10-15T11:00:00Z", ["q2"])], 0.75);
   assert.deepEqual(examNextStep(closed, "prove"), { type: "mock" });
@@ -534,4 +535,33 @@ test("without talking time the path never suggests the tutor, and picks another 
   // The same through the path: no topic's next lesson is the tutor.
   const states = examModuleStates(mods("a", "b"), [result("a", "summary", 0.8)], 0.75, null, null, { tutor: false });
   assert.ok(states.every((state) => state.nextKind !== "tutor"));
+});
+
+test("ready means every topic passed a check at the goal lately, by its own score", () => {
+  const now = new Date("2026-10-20T12:00:00Z");
+  const on = (results) => examModuleStates(mods("a"), results, 0.75, null, now)[0];
+
+  // Carried to the goal by flashcards alone (self-graded): open, but not ready; the check is next.
+  const cards = on(lessons("a", "flashcards", 1, 20, "2026-10-20T08:00:00Z"));
+  assert.ok(cards.rawMastery >= 0.75 && cards.learned);
+  assert.equal(cards.mastered, false);
+  assert.equal(cards.checkDue, true);
+  assert.equal(cards.nextKind, "quiz");
+  const step = examNextStep([{ ...cards, ready: true }], examStage([cards], null, 0.75));
+  assert.equal(step?.check, true);
+
+  // A check that scores under the goal once guessing is out does not count (8/10 is 73 % known).
+  const missed = on([...lessons("a", "flashcards", 1, 20, "2026-10-20T08:00:00Z"), result("a", "quiz", 0.8, "2026-10-20T11:00:00Z")]);
+  assert.equal(missed.mastered, false);
+
+  // A check passed at the goal: ready.
+  const passed = on([...lessons("a", "flashcards", 1, 20, "2026-10-20T08:00:00Z"), result("a", "quiz", 0.9, "2026-10-20T11:00:00Z")]);
+  assert.equal(passed.mastered, true);
+  assert.equal(passed.checkDue, false);
+
+  // Five days on, the check is old: the topic is checked again before it counts as ready.
+  const later = examModuleStates(mods("a"), [...lessons("a", "quiz", 1, 12, "2026-10-14T08:00:00Z")], 0.75, null, new Date("2026-10-19T12:00:00Z"))[0];
+  assert.equal(later.mastered, false);
+  assert.equal(later.checkDue, true);
+  assert.ok(CHECK_QUIZ_SIZE > 5, "a check quiz asks more than a practice quiz");
 });

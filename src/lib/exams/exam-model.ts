@@ -385,6 +385,19 @@ export function suggestedKind(input: {
   return fallback[input.lessons % fallback.length];
 }
 
+/* The check's format: a quiz, or a written answer once the quiz has failed twice today. */
+function checkKind(failedToday: Record<ExamLessonKind, number>, tutor?: boolean): ExamLessonKind {
+  if ((failedToday.quiz ?? 0) < MAX_FAILED_TRIES_PER_DAY) {
+    return "quiz";
+  }
+
+  if ((failedToday.written ?? 0) < MAX_FAILED_TRIES_PER_DAY || tutor === false) {
+    return "written";
+  }
+
+  return "tutor";
+}
+
 export type ModuleState = {
   /** The module: one topic of the exam. */
   topicId: string;
@@ -403,6 +416,8 @@ export type ModuleState = {
   lastAt: string | null;
   /** The topic has reached the target at some point (fading and later dips aside): the next one is open. */
   learned: boolean;
+  /** At the goal, but no check passed at it lately: the topic's next lesson is its check. */
+  checkDue: boolean;
   /** Mastery today reaches the target, and no failed mock asks for proof. */
   mastered: boolean;
   unlocked: boolean;
@@ -591,11 +606,28 @@ function latestByKind(results: LessonResultLike[]) {
   return latest;
 }
 
-/** A topic's mastery from its results, replayed oldest first: the exponential average, unfaded. */
-export function topicMastery(results: readonly LessonResultLike[]) {
+/*
+ * The check ("Preverjanje"). Ready means every topic has lately passed a test at the goal by its own
+ * score, guessing taken out: an estimate carried there by a lucky run, or one learned weeks ago and
+ * since forgotten, is caught here before the learner is told they are ready. Self-graded flashcards
+ * and half-guessed true/false prove nothing. A module still opens the next once its estimate
+ * reaches the goal: simulated learners (docs/exam-prep.md) reached the goal more often that way
+ * than when each module had to pass a check first, since checks spent the days later modules
+ * needed, while this final round kept their readiness as honest.
+ */
+export const CHECK_KINDS: readonly ExamLessonKind[] = ["quiz", "written", "tutor"];
+/* The check is a quiz of this many questions (a practice quiz has 5), so luck carries less of it. */
+export const CHECK_QUIZ_SIZE = 10;
+
+/**
+ * A topic's mastery from its results, replayed oldest first: the exponential average, unfaded. Also
+ * the highest it has stood (`peak`) and, with `goal`, when a check last passed at it.
+ */
+export function topicMastery(results: readonly LessonResultLike[], goal = Number.POSITIVE_INFINITY) {
   let mastery = 0;
-  /* The highest the topic has stood after any lesson: once it has reached the goal, it opened the next. */
   let peak = 0;
+  /* When a check last passed at the goal: readiness wants every topic's to be recent. */
+  let lastPassAt: string | null = null;
   let lastAt: string | null = null;
   let lastTime = Number.NEGATIVE_INFINITY;
 
@@ -608,6 +640,11 @@ export function topicMastery(results: readonly LessonResultLike[]) {
       continue;
     }
 
+
+    if (CHECK_KINDS.includes(result.lesson_kind) && meetsPassMark(knownShare(result.lesson_kind, result.score), goal)) {
+      lastPassAt = result.completed_at;
+    }
+
     mastery = masteryAfterLesson(mastery, result.lesson_kind, result.score);
     peak = Math.max(peak, mastery);
 
@@ -617,7 +654,7 @@ export function topicMastery(results: readonly LessonResultLike[]) {
     }
   }
 
-  return { mastery, peak, lastAt };
+  return { mastery, peak, lastPassAt, lastAt };
 }
 
 /**
@@ -662,9 +699,16 @@ export function moduleProgress(
     }
   }
 
-  const { mastery: rawMastery, peak, lastAt } = topicMastery(results);
-  const mastery = lastAt ? fadedScore(rawMastery, lastAt, now) : rawMastery;
   const goal = passThreshold(target);
+  const { mastery: rawMastery, peak, lastPassAt, lastAt } = topicMastery(results, goal);
+  /*
+   * Ready means every topic re-checked lately, not once weeks ago: a check passed within the days
+   * mastery keeps before it starts to fade. Without a clock (no `now`) there is nothing to age.
+   */
+  const checkedLately =
+    now === null ||
+    (lastPassAt !== null && (now.getTime() - instantOf(lastPassAt)) / 86_400_000 <= REVIEW_GRACE_DAYS);
+  const mastery = lastAt ? fadedScore(rawMastery, lastAt, now) : rawMastery;
   const tested = (result: LessonResultLike) =>
     isPracticeKind(result.lesson_kind) || (result.lesson_kind === "summary" && (result.total ?? 0) > 0);
   const practiceLessons = results.filter(tested).length;
@@ -675,6 +719,8 @@ export function moduleProgress(
   const gaps = openGaps(results);
   const gapKind = practiceLessons > 0 ? gapLessonKind(gaps, done) : null;
   const onTarget = meetsPassMark(mastery, goal);
+  const learned = meetsPassMark(peak, goal);
+  const checkDue = learned && meetsPassMark(rawMastery, goal) && !checkedLately;
 
   return {
     mastery,
@@ -683,11 +729,15 @@ export function moduleProgress(
     practiceLessons,
     lastAt,
     /* Reached the goal once: the next module stays open even if a later lesson dips under it. */
-    learned: meetsPassMark(peak, goal),
-    mastered: onTarget && !proofOwed,
+    learned,
+    mastered: onTarget && !proofOwed && checkedLately,
     proofOwed,
+    /* At the goal by its practices, the check not yet passed: the check is what comes next. */
+    checkDue,
     refreshDue: !onTarget && meetsPassMark(rawMastery, goal),
-    nextKind: suggestedKind({ done, lessons: results.length, failedToday, gapKind, tutor: options.tutor }),
+    nextKind: checkDue
+      ? checkKind(failedToday, options.tutor)
+      : suggestedKind({ done, lessons: results.length, failedToday, gapKind, tutor: options.tutor }),
     done,
     latest: scores,
     failedToday,
@@ -767,7 +817,15 @@ export function examStage(states: Pick<ModuleState, "learned" | "mastered">[], m
 }
 
 export type ExamNextStep =
-  | { type: "lesson"; topicId: string; lectureId: string; kind: ExamLessonKind; review: boolean }
+  | {
+      type: "lesson";
+      topicId: string;
+      lectureId: string;
+      kind: ExamLessonKind;
+      review: boolean;
+      /** The module check: passing it at the goal opens the next module. */
+      check: boolean;
+    }
   | { type: "mock" }
   | null;
 
@@ -780,7 +838,7 @@ export type ExamNextStepModule = Pick<
   ModuleState,
   "topicId" | "lectureId" | "learned" | "mastered" | "unlocked" | "nextKind" | "mastery" | "lessons"
 > &
-  Partial<Pick<ModuleState, "failedToday" | "triedToday" | "pressingGaps" | "gapKind">> & {
+  Partial<Pick<ModuleState, "failedToday" | "triedToday" | "pressingGaps" | "gapKind" | "checkDue">> & {
     ready?: boolean;
     pending?: boolean;
   };
@@ -829,6 +887,7 @@ export function examNextStep(
     lectureId: state.lectureId,
     kind,
     review: state.lessons > 0,
+    check: Boolean(state.checkDue) && CHECK_KINDS.includes(kind),
   });
   const rested = (state: ExamNextStepModule, kind: ExamLessonKind) =>
     (state.failedToday?.[kind] ?? 0) < MAX_FAILED_TRIES_PER_DAY;

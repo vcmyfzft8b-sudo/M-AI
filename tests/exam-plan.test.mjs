@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CHECK_QUIZ_SIZE,
   EXAM_LESSON_KINDS,
   LESSON_PASS_CAP,
   MAX_FAILED_TRIES_PER_DAY,
@@ -215,7 +216,7 @@ test("modules that cannot be opened, are not ready or are placeholders are skipp
   assert.equal(states[2].unlocked, false);
 
   const view = (overrides) => states.map((state, index) => ({ ...state, ready: true, pending: false, ...overrides[index] }));
-  const expectC = { type: "lesson", topicId: "c", lectureId: "c", kind: "summary", review: false };
+  const expectC = { type: "lesson", topicId: "c", lectureId: "c", kind: "summary", review: false, check: false };
 
   assert.deepEqual(examNextStep(states, "learn", (lectureId) => lectureId !== "b"), expectC);
   assert.deepEqual(examNextStep(view({ 1: { ready: false } }), "learn"), expectC);
@@ -336,11 +337,13 @@ function hiddenKnowledge({ topics, days, target, start, learn, seed, perDay = 8 
 
       const index = modules.findIndex((module) => module.topicId === next.topicId);
       const chance = next.kind === "flashcards" ? Math.min(1, known[index] + 0.1) : known[index] + (1 - known[index]) * GUESS[next.kind];
+      // A check ("Preverjanje") is the longer quiz the app asks for it.
+      const items = next.check && next.kind === "quiz" ? CHECK_QUIZ_SIZE : ITEMS[next.kind];
       let right = 0;
-      for (let item = 0; item < ITEMS[next.kind]; item += 1) {
+      for (let item = 0; item < items; item += 1) {
         if (random() < chance) right += 1;
       }
-      const score = right / ITEMS[next.kind];
+      const score = right / items;
 
       results.push({ lecture_id: next.lectureId, topic_id: next.topicId, lesson_kind: next.kind, score: Math.fround(score), completed_at: now.toISOString() });
       known[index] += (next.kind === "flashcards" ? learn * 0.7 : next.kind === "summary" ? learn * 1.5 : learn) * (1 - known[index]);
@@ -407,4 +410,28 @@ test("the practices still owed are an estimate that never runs out before the go
     const state = examModuleStates(weak.modules.slice(0, 1), weak.results.slice(0, count), 0.9)[0];
     assert.ok(state.learned || lessonsToTarget(state.mastery, 0.9) >= 1);
   }
+});
+
+test("a learner the prep calls ready has no topic far under the goal: each was checked lately", () => {
+  // Ten questions cannot tell 70 % from 75 % every time, so the bar is "far under": more than ten
+  // points under the goal at most once in all these learners' topics, and never fifteen.
+  let farUnder = 0;
+  let topics = 0;
+
+  for (const target of [0.75, 0.9]) {
+    for (const learn of [0.06, 0.08, 0.12]) {
+      for (const seed of [1, 2, 3, 4, 5, 6]) {
+        const run = hiddenKnowledge({ topics: 4, days: 14, target, start: 0.25, learn, seed });
+
+        if (run.readyKnown) {
+          topics += run.readyKnown.length;
+          farUnder += run.readyKnown.filter((value) => value < target - 0.1).length;
+          assert.ok(Math.min(...run.readyKnown) >= target - 0.15, `a topic at ${Math.min(...run.readyKnown).toFixed(2)} against ${target}`);
+        }
+      }
+    }
+  }
+
+  assert.ok(topics >= 60, `${topics} topics of ready learners`);
+  assert.ok(farUnder <= 1, `${farUnder} of ${topics} topics more than ten points under`);
 });

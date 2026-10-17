@@ -22,6 +22,7 @@ import {
   lessonsToTarget,
   masteryAfterLesson,
   meetsPassMark,
+  knownShare,
   passThreshold,
   percent,
   type ExamLessonKind,
@@ -76,6 +77,8 @@ type Phase =
       after: number;
       /** The lesson took the topic to its target. */
       reached: boolean;
+      /** A check ("Preverjanje"): whether it passed at the goal by its own score, guessing taken out. */
+      checkPassed: boolean | null;
       /** Knowledge gaps: earlier misses answered right this time, and this lesson's misses (they come back). */
       gapsClosed: number;
       gapsOpen: number;
@@ -134,6 +137,7 @@ export function ExamLesson({
   examTitle,
   module,
   kind,
+  check = false,
   target,
   instead,
 }: {
@@ -141,6 +145,8 @@ export function ExamLesson({
   examTitle: string;
   module: ExamLessonModule;
   kind: ExamLessonKind;
+  /** The topic's check ("Preverjanje"): a longer quiz, passed at the goal by its own score. */
+  check?: boolean;
   /** The exam's goal, 0..100. */
   target: number;
   /**
@@ -187,7 +193,7 @@ export function ExamLesson({
       return;
     }
 
-    const response = await fetch(lessonUrl(examId, module.topicId, kind), { cache: "no-store" });
+    const response = await fetch(lessonUrl(examId, module.topicId, kind, check), { cache: "no-store" });
 
     if (response.status === 402) {
       // Back to the prep, not this lesson, which would only send the learner here again.
@@ -238,7 +244,7 @@ export function ExamLesson({
     }
 
     setPhase({ name: "generating", generator: load.generator });
-  }, [examId, instead, kind, module.lectureId, module.topicId]);
+  }, [check, examId, instead, kind, module.lectureId, module.topicId]);
 
   /*
    * A network failure, a busy server or a failed plan is tried again twice on its own, a moment
@@ -362,6 +368,7 @@ export function ExamLesson({
       before: module.mastery,
       after,
       reached,
+      checkPassed: check && total > 0 ? meetsPassMark(knownShare(kind, correct / total), mark) : null,
       gapsClosed,
       gapsOpen: GAP_LESSON_KINDS.includes(kind as PracticeLessonKind) ? missedNow : 0,
     });
@@ -371,7 +378,7 @@ export function ExamLesson({
     kind === "tutor"
       ? t("exam.tutor.score", { percent: percent(correct / Math.max(1, total)) })
       : t("exam.zone.score", { correct, total });
-  const title = `${t("exam.dash.module", { index: module.position + 1 })} · ${t(LESSON_KIND_KEY[kind])}`;
+  const title = `${t("exam.dash.module", { index: module.position + 1 })} · ${check ? t("exam.lesson.check") : t(LESSON_KIND_KEY[kind])}`;
 
   function retryLoad(generator: LessonGenerator | null) {
     startedGeneration.current = false;
@@ -533,9 +540,13 @@ export function ExamLesson({
             <MemoBuddy mood={buddy.mood} moodKey={buddy.key} size="6rem" sparkles={phase.after > phase.before} />
             {/* Astra's result: what the lesson added to the topic, and where the topic now stands. */}
             <h2 className="memo-exam-gain">
-              {phase.reached
-                ? t("exam.lesson.done.reached")
-                : t("exam.lesson.done.gained", { percent: Math.max(0, percent(phase.after) - percent(phase.before)) })}
+              {phase.checkPassed === true
+                ? t("exam.lesson.check.passed")
+                : phase.checkPassed === false
+                  ? t("exam.lesson.check.failed")
+                  : phase.reached
+                    ? t("exam.lesson.done.reached")
+                    : t("exam.lesson.done.gained", { percent: Math.max(0, percent(phase.after) - percent(phase.before)) })}
             </h2>
             <div className="memo-exam-done-mastery">
               <span>

@@ -40,6 +40,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const query = lessonQuerySchema.safeParse({
     topicId: url.searchParams.get("topicId"),
     kind: url.searchParams.get("kind"),
+    check: url.searchParams.get("check") === "1",
   });
 
   if (!params.success || !query.success) {
@@ -94,6 +95,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       examId: params.data.id,
       topicId: topic.id,
       kind: query.data.kind,
+      check: query.data.check,
       mayCallModel,
     });
 

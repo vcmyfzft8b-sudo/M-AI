@@ -72,6 +72,8 @@ export const examPatchSchema = z
 export const lessonQuerySchema = z.object({
   topicId: z.string().uuid(),
   kind: z.enum(EXAM_LESSON_KINDS),
+  /** The topic's check ("Preverjanje"): a quiz asks `CHECK_QUIZ_SIZE` questions. */
+  check: z.boolean().default(false),
 });
 
 export const lessonResultSchema = z.object({

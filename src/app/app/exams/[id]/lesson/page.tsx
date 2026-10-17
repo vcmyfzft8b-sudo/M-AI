@@ -16,7 +16,7 @@ export default async function ExamLessonPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ topic?: string; kind?: string }>;
+  searchParams?: Promise<{ topic?: string; kind?: string; check?: string }>;
 }) {
   const [user, appState, resolved, query, { t }] = await Promise.all([
     requireUser(),
@@ -76,6 +76,7 @@ export default async function ExamLessonPage({
       examId={detail.exam.id}
       examTitle={detail.exam.title}
       kind={query.kind}
+      check={query.check === "1"}
       module={{
         topicId: current.topicId,
         lectureId: current.lectureId,

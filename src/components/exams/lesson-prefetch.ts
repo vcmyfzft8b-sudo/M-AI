@@ -15,8 +15,8 @@ const prefetched = new Map<string, Prefetched>();
 
 const keyOf = (examId: string, topicId: string, kind: ExamLessonKind) => `${examId}:${topicId}:${kind}`;
 
-export function lessonUrl(examId: string, topicId: string, kind: ExamLessonKind) {
-  return `/api/exams/${examId}/lesson?topicId=${topicId}&kind=${kind}`;
+export function lessonUrl(examId: string, topicId: string, kind: ExamLessonKind, check = false) {
+  return `/api/exams/${examId}/lesson?topicId=${topicId}&kind=${kind}${check ? "&check=1" : ""}`;
 }
 
 /** Starts loading a lesson ahead of time, once; a second call for the same lesson does nothing. */

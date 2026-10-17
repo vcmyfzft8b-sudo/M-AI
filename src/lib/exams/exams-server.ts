@@ -10,6 +10,7 @@ import type {
 } from "@/lib/database.types";
 import {
   buildTrueFalse,
+  CHECK_QUIZ_SIZE,
   dailyPlan,
   dayKey,
   daysBetween,
@@ -1487,6 +1488,8 @@ export async function loadLesson(
     examId: string;
     topicId: string;
     kind: ExamLessonKind;
+    /** The topic's check ("Preverjanje"): a quiz of `CHECK_QUIZ_SIZE` questions instead of a practice's. */
+    check?: boolean;
     /**
      * Asked before each model call the lesson needs (its rate limit). When it says no, a lesson
      * that cannot be built without the call throws `ExamModelCallRefused`; a repeat that only
@@ -1544,7 +1547,7 @@ export async function loadLesson(
     const parts: LessonPayload[] = [];
 
     for (const kind of LESSON_PARTS) {
-      const part = await loadLesson(supabase, userId, { ...input, kind }).catch((error) => {
+      const part = await loadLesson(supabase, userId, { ...input, kind, check: false }).catch((error) => {
         if (error instanceof ExamModelCallRefused) {
           return null;
         }
@@ -1710,7 +1713,7 @@ export async function loadLesson(
       base = topUp(all, assigned.quiz_ids, TOPIC_POOL_MIN.quiz, seed);
     }
 
-    const size = LESSON_SIZE[input.kind];
+    const size = input.kind === "quiz" && input.check ? CHECK_QUIZ_SIZE : LESSON_SIZE[input.kind];
     let pool = [...base, ...contentQuiz("x", topic.id, extra?.quiz)];
 
     if (needsFreshItems(pool, seen, size)) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, CircleCheck, Loader2 } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useT, useTranslations } from "@/components/i18n-provider";
@@ -20,8 +20,8 @@ import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import { notePaywallShown, paywallVisitCounted } from "@/lib/paywall-offer-timing";
 import { discountedAmount, paywallOffer, weeklyAmount } from "@/lib/paywall-ladder";
 import { fitScreenScript, useFitScreen } from "@/components/use-fit-screen";
-import { PaywallBrand, PaywallCompare, PaywallHero, paywallAccentStyle, paywallLayout } from "@/components/paywall-hero";
-import { SEO_BRAND_NAME } from "@/lib/brand";
+import { PaywallDeck, PaywallHero, paywallAccentStyle } from "@/components/paywall-hero";
+import { Checklist, HAND_FONT, Marked, NotebookSpiral, PenCircle, Tape, Ticket, TrialTimeline } from "@/components/paywall-notebook";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 
 type BillingPlanCard = {
@@ -35,13 +35,22 @@ type BillingPlanCard = {
   blurbKey: MessageKey;
 };
 
-type PaywallBenefit = { titleKey: MessageKey; copyKey: MessageKey; icon: string };
-
-const DEFAULT_BENEFITS: readonly PaywallBenefit[] = [
-  { titleKey: "paywall.benefit.notesTitle", copyKey: "paywall.benefit.notesCopy", icon: "description" },
-  { titleKey: "paywall.benefit.toolsTitle", copyKey: "paywall.benefit.toolsCopy", icon: "quiz" },
-  { titleKey: "paywall.benefit.speedTitle", copyKey: "paywall.benefit.speedCopy", icon: "bolt" },
-];
+/**
+ * What the plan adds, ticked off in pen under the headline: three short items
+ * for the screen nothing opened, and for each feature the ones that answer it.
+ */
+const CHECKLISTS: Record<PaywallReason | "plain", MessageKey[]> = {
+  plain: ["paywall.check.unlimitedNotes", "paywall.check.everyTool", "paywall.check.tutorPodcasts"],
+  note: ["paywall.check.everyLecture", "paywall.check.flashcards", "paywall.check.quizzes"],
+  locked: ["paywall.check.allNotes", "paywall.check.everyTool", "paywall.check.tutor"],
+  chat: ["paywall.check.everyNote", "paywall.check.noLimits", "paywall.check.instant"],
+  listen: ["paywall.check.everyNote", "paywall.check.anywhere", "paywall.check.noLimits"],
+  tutor: ["paywall.check.everyNote", "paywall.check.everyDay", "paywall.check.yourPace"],
+  podcast: ["paywall.check.everyNote", "paywall.check.everyDay", "paywall.check.anywhere"],
+  regenerate: ["paywall.check.flashcards", "paywall.check.mindMaps", "paywall.check.tests"],
+  library: ["paywall.check.everySubject", "paywall.check.oneChat"],
+  offer: ["paywall.check.notes", "paywall.check.chat", "paywall.check.tutor"],
+};
 
 
 /**
@@ -246,18 +255,20 @@ export function OnboardingPaywall({
   const paywallPlans = [yearlyPlan, monthlyPlan].filter(
     (plan): plan is BillingPlanCard => Boolean(plan),
   );
-  // What the discount is worth on the plan that is selected, in money.
-  const savingPlan = paywallPlans.find((plan) => plan.id === selectedPaywallPlan) ?? paywallPlans[0];
-  const savingLine = discounted && savingPlan
-    ? t("paywall.offer.save", {
-        amount: formatCurrency(savingPlan.amount - discountedAmount(savingPlan.amount, offer.percentOff), locale),
-      })
-    : null;
 
   if (!effectiveOnboardingComplete) {
     return <OnboardingFlow profile={profile} />;
   }
 
+
+  const yearlySavingsFor = (plan: BillingPlanCard) => {
+    const annualizedMonthly = monthlyPlan?.annualizedAmount ?? 0;
+    return native
+      ? (apple.productForPlan(plan.id)?.yearlySavings ?? 0)
+      : annualizedMonthly > plan.annualizedAmount
+        ? Math.round((1 - plan.annualizedAmount / annualizedMonthly) * 100)
+        : 0;
+  };
 
   return (
     <>
@@ -265,10 +276,11 @@ export function OnboardingPaywall({
       ref={shellRef}
       // `data-fit` is set before the app starts (`fitScreenScript`), on purpose.
       suppressHydrationWarning
-      className={`app-start-panel app-start-panel-paywall memo-paywall-shell${native ? " memo-paywall-apple" : ""}`}
+      className={`app-start-panel app-start-panel-paywall memo-paywall-shell memo-nb-paper ${HAND_FONT.variable}${native ? " memo-paywall-apple" : ""}`}
       data-reason={reason ?? undefined}
       style={paywallAccentStyle(reason)}
     >
+      <NotebookSpiral />
       {effectiveOnboardingComplete ? (
         <div className="app-start-dismiss-row">
           <button
@@ -293,84 +305,44 @@ export function OnboardingPaywall({
         </div>
       ) : null}
 
-      {/* A notice takes the wordmark's place rather than a row of its own. The
-          screen is laid out to land on exactly one viewport, so a row added on
-          top of the full column is a row that pushes the footer under the fold
-          — which is how the old cancelled-payment banner turned this into a
-          scroller. The wordmark is the one block here that says nothing the
-          buyer needs, so it is the one that stands aside. */}
+      {/* A notice takes the scene's place rather than a row of its own: the
+          screen is laid out to land on exactly one viewport, so a row added
+          on top is a row that pushes the button under the fold. */}
       {hasNotice ? (
         <div className="memo-paywall-notices" role="status" aria-live="polite">
           <CheckoutBanner state={checkoutState} />
           {billingError ? <div className="app-start-banner">{billingError}</div> : null}
           {native && apple.notice ? <div className="app-start-banner">{apple.notice}</div> : null}
         </div>
-      ) : reason ? null : (
-        <PaywallBrand label={SEO_BRAND_NAME} />
-      )}
-
-      {/* A feature's paywall shows the feature, moving, in place of the list. */}
-      {reason && !hasNotice ? (
+      ) : reason ? (
         <PaywallHero reason={reason} step={offer.step} />
-      ) : null}
-
-      {/* The discount is the headline; that it covers only the first payment is
-          the small print at the foot, with the renewal price on each plan. */}
-      {discounted ? (
-        <div className="memo-paywall-offer">
-          <span className="memo-paywall-offer-percent">
-            −{offer.percentOff}%<small>{t("paywall.offer.off")}</small>
-          </span>
-          {savingLine ? <span className="memo-paywall-offer-save">{savingLine}</span> : null}
-        </div>
-      ) : null}
-
-      <h1 className="memo-paywall-title">
-        {t(
-          reason === "offer" && !improved
-            ? "paywall.reason.offer.titleBest"
-            : reason ? `paywall.reason.${reason}.title` : "paywall.title",
-        )}
-      </h1>
-      {reason ? (
-        <p className="memo-paywall-sub">
-          <strong>{t(`paywall.reason.${reason}.benefitTitle`)}</strong>
-          {" · "}
-          {t(`paywall.reason.${reason}.benefitCopy`)}
-        </p>
-      ) : null}
-
-      {reason === "library" ? <PaywallCompare /> : null}
-
-      {reason ? null : (
-        <div className="memo-paywall-benefits">
-          {DEFAULT_BENEFITS.map((benefit, index) => (
-            <div className="memo-paywall-benefit" key={benefit.titleKey} style={{ "--i": index } as CSSProperties}>
-              <span aria-hidden="true">
-                <Msym name={benefit.icon} size="1.35rem" fill={false} weight={500} />
-              </span>
-              <div>
-                <strong>{t(benefit.titleKey)}</strong>
-                <p>{t(benefit.copyKey)}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+      ) : (
+        <PaywallDeck />
       )}
 
-      <div
-        className={`memo-paywall-plan-grid ${paywallLayout(reason)}`}
-        role="radiogroup"
-        aria-label={t("paywall.choosePlan")}
-      >
+      {/* The discount is a coupon taped to the page; that it covers the first
+          payment only is written on it, and the renewal price is on each plan. */}
+      {discounted ? (
+        <Ticket percent={offer.percentOff} off={t("paywall.offer.off")} note={t("paywall.offer.firstPayment")} />
+      ) : null}
+
+      <h1 className="memo-nb-title">
+        <Marked
+          text={t(
+            reason === "offer" && !improved
+              ? "paywall.reason.offer.titleBest"
+              : reason ? `paywall.reason.${reason}.title` : "paywall.title",
+          )}
+        />
+      </h1>
+
+      <Checklist items={CHECKLISTS[reason ?? "plain"].map((key) => t(key))} />
+
+      <div className="memo-nb-plans" role="radiogroup" aria-label={t("paywall.choosePlan")}>
         {paywallPlans.map((plan) => {
           const selected = selectedPlan === plan.id;
           const appleProduct = apple.productForPlan(plan.id);
-          const activePlan = subscription?.plan === plan.id && hasPaidAccess;
-          const annualizedMonthly = monthlyPlan?.annualizedAmount ?? 0;
-          const yearlySavings = native ? (appleProduct?.yearlySavings ?? 0) : annualizedMonthly > plan.annualizedAmount
-            ? Math.round((1 - plan.annualizedAmount / annualizedMonthly) * 100)
-            : 0;
+          const yearlySavings = yearlySavingsFor(plan);
           /*
            * At full price (the paywall after onboarding) the year reads as a
            * month, as it always has. A discounted year is priced by the week, as
@@ -413,47 +385,59 @@ export function OnboardingPaywall({
             <button
               type="button"
               key={plan.id}
-              className={`memo-paywall-plan ${selected ? "selected" : ""}`}
+              className={`memo-nb-plan ${selected ? "selected" : ""}`.trim()}
               onClick={() => native ? apple.selectPlan(plan.id) : setSelectedPaywallPlan(plan.id)}
               disabled={checkingOut || (native && !appleProduct)}
               role="radio"
               aria-checked={selected}
             >
-              {/* The discount is said once, above the plans; the cards only strike the old price. */}
+              <Tape tone={plan.id === "yearly" ? "yellow" : "mint"} />
               {plan.id === "yearly" ? (
-                <span className="memo-paywall-plan-badge">{t("paywall.mostPopular")}</span>
+                <span className="memo-nb-badge">{t("paywall.mostPopular")}</span>
               ) : null}
-              <span className="memo-paywall-plan-header">
-                <strong>{t(plan.labelKey)}</strong>
-                <span className="memo-paywall-radio" aria-hidden="true">
-                  {selected || activePlan ? <span /> : null}
-                </span>
-              </span>
-              <span className="memo-paywall-plan-price">
-                {discounted ? (
-                  <s className="memo-paywall-plan-was">{formatCurrency(regularShown, locale)}</s>
+              <PenCircle />
+              <span className="memo-nb-plan-name">
+                {t(plan.labelKey)}
+                {/* Not beside a discount: two percentages on one note contradict each other. */}
+                {plan.id === "yearly" && yearlySavings > 0 && !discounted ? (
+                  <span className="memo-nb-save">−{yearlySavings}%</span>
                 ) : null}
-                {displayPrice}
-                <small>{suffix}</small>
               </span>
-              <span className="memo-paywall-plan-detail">{detail}</span>
-              {/* Not beside a discount: two percentages on one card contradict each other. */}
-              {plan.id === "yearly" && yearlySavings > 0 && !discounted ? (
-                <span className="memo-paywall-save">
-                  {t("paywall.save", { percent: yearlySavings })}
-                </span>
+              {discounted ? (
+                <s className="memo-nb-plan-was">{formatCurrency(regularShown, locale)}</s>
               ) : null}
+              <span className="memo-nb-plan-price">
+                {displayPrice}
+                <small> {suffix}</small>
+              </span>
+              <span className="memo-nb-plan-detail">{detail}</span>
             </button>
           );
         })}
       </div>
 
+      {/* The plain paywall says what the trial means, day by day. */}
+      {!reason && trialEligible && !discounted ? (
+        <TrialTimeline
+          steps={[
+            { icon: "lock_open", title: t("paywall.timeline.today"), body: t("paywall.timeline.free") },
+            { icon: "workspace_premium", title: t("paywall.timeline.day3"), body: t("paywall.timeline.starts") },
+            { icon: "event_busy", title: t("paywall.timeline.anyTime"), body: t("paywall.timeline.cancel") },
+          ]}
+        />
+      ) : null}
+
       {/* The app pays through the App Store, so the reassurance line must
           never name Stripe there — not even while the products are loading. */}
-      <p className="memo-paywall-due">
+      {/* Where the timeline is drawn it already says all this. */}
+      {!reason && trialEligible && !discounted ? null : (
+      <p className="memo-nb-due">
         <CircleCheck className="h-5 w-5" />
         {t(trialEligible ? "paywall.nothingToday" : native ? "native.securePayment" : "paywall.securePayment")}
+        {" · "}
+        {t("paywall.cancelAnytime")}
       </p>
+      )}
 
       <button
         type="button"
@@ -479,13 +463,6 @@ export function OnboardingPaywall({
         )}
       </button>
 
-      <div className="memo-paywall-foot">
-        <span>
-          <CircleCheck className="h-5 w-5" />
-          {t("paywall.cancelAnytime")}
-        </span>
-      </div>
-      {discounted ? <p className="memo-paywall-fine">{t("paywall.offer.firstOnly")}</p> : null}
       {native ? <AppleBillingTerms busy={apple.busy} onRestore={() => void apple.restore()} /> : null}
     </section>
     {/* Fits a freshly loaded page as it is first drawn (`use-fit-screen.ts`). */}

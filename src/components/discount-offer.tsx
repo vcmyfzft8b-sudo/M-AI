@@ -5,8 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useTranslations } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
-import { MascotSparkles } from "@/components/onboarding-mascot";
-import { PaywallMascot } from "@/components/paywall-hero";
+import { HAND_FONT, Marked, NotebookSpiral, PenCircle, Tape, Ticket } from "@/components/paywall-notebook";
 import { useFitScreen } from "@/components/use-fit-screen";
 import { MemoPortal } from "@/components/memo-portal";
 import { sheetClass, useSheet } from "@/components/use-sheet";
@@ -131,6 +130,8 @@ type OfferPlan = {
   /** Null on the plan the design leaves unbadged. */
   badgeKey: MessageKey | null;
   headlineAmount: number;
+  /** The same period at full price, struck out above the headline. */
+  regularAmount: number;
   discountedAmount: number;
   renewalAmount: number;
 };
@@ -145,7 +146,7 @@ function offerPlansFor(prices: PlanPrices): OfferPlan[] {
   return [
     {
       id: "yearly",
-      labelKey: "offer.plan.oneOff",
+      labelKey: "billing.plan.yearly",
       priceKey: "offer.plan.oneOffPrice",
       /*
        * One line of small print, not two. The card used to say the same thing
@@ -161,6 +162,7 @@ function offerPlansFor(prices: PlanPrices): OfferPlan[] {
       // The discounted year spread over its 52 weeks, rounded down to the cent
       // (65 euros is 1.25 a week): never advertised above what is charged.
       headlineAmount: Math.floor((halfYearly / 52) * 100) / 100,
+      regularAmount: Math.floor((prices.yearly / 52) * 100) / 100,
       discountedAmount: halfYearly,
       renewalAmount: prices.yearly,
     },
@@ -171,6 +173,7 @@ function offerPlansFor(prices: PlanPrices): OfferPlan[] {
       billingKey: "offer.plan.monthlyBilling",
       badgeKey: null,
       headlineAmount: prices.monthly / 2,
+      regularAmount: prices.monthly,
       discountedAmount: prices.monthly / 2,
       renewalAmount: prices.monthly,
     },
@@ -547,11 +550,12 @@ export function DiscountOffer({
 
       {wheelOpen && !offerOpen ? (
         <div
-          className={sheetClass("memo-sheet-full memo-wheel-sheet", wheelSheet.closing)}
+          className={sheetClass(`memo-sheet-full memo-wheel-sheet memo-nb-paper ${HAND_FONT.variable}`, wheelSheet.closing)}
           role="dialog"
           aria-modal="true"
           {...wheelSheet.dragProps}
         >
+          <NotebookSpiral />
           <div className="memo-grab-wide" data-drag-handle>
             <span />
           </div>
@@ -601,7 +605,12 @@ export function DiscountOffer({
               </div>
             ) : null}
 
-            <h1 className="memo-wheel-title">{t("offer.wheelTitle")}</h1>
+            {/* Once it lands, the prize takes the title's place, on a coupon. */}
+            {hasWon && !nativeOffer ? (
+              <Ticket percent={50} off={t("paywall.offer.off")} note={t("offer.youWon")} />
+            ) : (
+              <h1 className="memo-wheel-title memo-nb-title"><Marked text={t("offer.wheelTitle")} /></h1>
+            )}
             <p className="memo-wheel-sub">
               {t(
                 hasWon
@@ -654,16 +663,32 @@ export function DiscountOffer({
                   />
                 ))}
               </div>
+              <span className="memo-nb-stand" aria-hidden="true" />
               <div className="memo-wheel-hub">
                 {/* Eager: the sheet opens on a tap, and a hub that fills in a
                     moment later looks like the wheel loading in pieces. */}
                 <Image src="/memo-mascot.png" alt="" width={320} height={288} priority />
               </div>
+              {/* The prize on a sticker, and Memo beside the wheel cheering it on:
+                  hopping while it waits, leaning in while it spins, jumping for
+                  joy when it lands. Decoration only. */}
+              <span className="memo-nb-starburst" aria-hidden="true">
+                <span>
+                  <small>{t("offer.upTo")}</small>
+                  <b>{WHEEL_SLICES[3]}</b>
+                </span>
+              </span>
+              <span className={`memo-nb-cheer ${isSpinning && !hasWon ? "spinning" : ""} ${hasWon ? "won" : ""}`.trim()} aria-hidden="true">
+                <span className="memo-nb-say memo-nb-hand">
+                  {t(hasWon ? "offer.cheerWon" : isSpinning ? "offer.cheerSpin" : "offer.cheerIdle")}
+                </span>
+                <Image src="/memo-mascot.png" alt="" width={320} height={288} />
+              </span>
             </div>
 
             {/* There from the start, unseen until the win, so the sheet is
                 already the size it will be and nothing jumps as it lands. */}
-            <div className={`memo-wheel-prize ${hasWon ? "shown" : ""}`.trim()} aria-hidden={!hasWon}>
+            <div className={`memo-wheel-prize ${hasWon ? "shown" : ""} ${nativeOffer ? "" : "memo-nb-off"}`.trim()} aria-hidden={!hasWon}>
               <p>{t("offer.prizeAmount")}</p>
               <p>{t(nativeOffer ? "native.introCaption" : "offer.prizeCaption")}</p>
               {nativeOffer ? appleOffers.map(product => <p key={product.id}>{t(
@@ -674,9 +699,18 @@ export function DiscountOffer({
 
             {error ? <p className="memo-inline-error">{error}</p> : null}
 
+            {!isSpinning && !hasWon ? (
+              <p className="memo-nb-tap memo-nb-hand" aria-hidden="true">
+                <svg className="memo-nb-pen" width="34" height="30" viewBox="0 0 40 34" style={{ overflow: "visible", "--dl": "2s" } as React.CSSProperties}>
+                  <path pathLength={1} d="M36 4 C 22 6, 10 14, 8 28 M2 20 L 8 30 L 16 22" />
+                </svg>
+                {t("offer.tapToSpin")}
+              </p>
+            ) : null}
+
             <button
               type="button"
-              className={`memo-wheel-cta ${isSpinning && !hasWon ? "waiting" : ""}`.trim()}
+              className={`memo-nb-cta memo-wheel-cta ${isSpinning && !hasWon ? "waiting" : ""}`.trim()}
               onClick={() => {
                 if (hasWon) {
                   onOfferOpenChange(true);
@@ -695,7 +729,7 @@ export function DiscountOffer({
 
       {offerOpen ? (
         <div
-          className={sheetClass(`memo-sheet-full memo-offer-sheet ${offerRestored ? "restored" : ""}`.trim(), offerSheet.closing)}
+          className={sheetClass(`memo-sheet-full memo-offer-sheet memo-nb-paper ${HAND_FONT.variable} ${offerRestored ? "restored" : ""}`.trim(), offerSheet.closing)}
           role="dialog"
           aria-modal="true"
           {...offerSheet.dragProps}
@@ -716,26 +750,38 @@ export function DiscountOffer({
           </div>
 
           <div className="memo-offer-body" ref={offerBodyRef}>
-            {/* Memo with the prize, hopping, where the logo was. */}
-            <span className="memo-offer-mascot" aria-hidden="true">
-              <PaywallMascot move="hop" badge="redeem" />
-              <MascotSparkles />
-            </span>
-            <p className="memo-offer-kicker">{t("offer.kicker")}</p>
-            <p className="memo-offer-headline">{t("offer.headline")}</p>
-            <p className="memo-offer-sub">{t("offer.sub")}</p>
+            {/* The deadline, as a timer strapped to dynamite: the urgency is the number. */}
+            <div className="memo-nb-tnt" role="timer" aria-live="off" aria-label={t("offer.timerLabel")}>
+              <span className="memo-nb-stick" style={{ top: "0.5rem" }} aria-hidden="true" />
+              <span className="memo-nb-stick" style={{ top: "2.9rem" }} aria-hidden="true" />
+              <span className="memo-nb-stick" style={{ top: "5.3rem" }} aria-hidden="true" />
+              <span className="memo-nb-strap" style={{ left: "1.9rem" }} aria-hidden="true" />
+              <span className="memo-nb-strap" style={{ right: "1.9rem" }} aria-hidden="true" />
+              <svg className="memo-nb-fuse" viewBox="0 0 60 50" aria-hidden="true"><path d="M48 46 C 46 30, 30 32, 24 22 C 18 12, 22 6, 12 4" /></svg>
+              <span className="memo-nb-spark-fuse" aria-hidden="true" />
+              <svg className="memo-nb-wires" viewBox="0 0 300 130" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M78 52 C 60 40, 40 30, 44 14" stroke="var(--nb-dynamite)" />
+                <path d="M222 52 C 240 40, 262 34, 256 14" stroke="var(--nb-gold)" />
+                <path d="M80 82 C 60 96, 56 112, 44 118" stroke="var(--nb-good)" />
+              </svg>
+              <span className="memo-nb-box">
+                <span className="memo-nb-screen">
+                  <span className="ghost" aria-hidden="true">88:88</span>
+                  <span className="digits">
+                    {String(Math.floor(secondsLeft / 60)).padStart(2, "0")}
+                    <span className="colon">:</span>
+                    {String(secondsLeft % 60).padStart(2, "0")}
+                  </span>
+                </span>
+                <span className="memo-nb-leds" aria-hidden="true"><i /><i /><i /></span>
+              </span>
+            </div>
 
-            {/* Big numbers and nothing else. The urgency is the number. */}
-            <p
-              className={`memo-offer-timer ${secondsLeft <= 60 ? "urgent" : ""}`.trim()}
-              role="timer"
-              aria-live="off"
-            >
-              {String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:
-              {String(secondsLeft % 60).padStart(2, "0")}
-            </p>
+            <Ticket percent={50} off={t("paywall.offer.off")} note={t("paywall.offer.firstPayment")} />
+            <h1 className="memo-nb-title"><Marked text={t("offer.prizeTitle")} /></h1>
 
             <div className="memo-offer-plans">
+              <div className="memo-nb-plans">
               {offerPlans.filter(offerPlan => !nativeOffer || apple.productForPlan(offerPlan.id)).map((offerPlan) => {
                 const product = apple.productForPlan(offerPlan.id);
                 const selectedPlan = nativeOffer ? APPLE_PRODUCTS[apple.selected] : plan;
@@ -743,27 +789,21 @@ export function DiscountOffer({
                 <button
                   key={offerPlan.id}
                   type="button"
-                  className={`memo-offer-plan ${selectedPlan === offerPlan.id ? "selected" : ""}`.trim()}
+                  role="radio"
+                  aria-checked={selectedPlan === offerPlan.id}
+                  className={`memo-nb-plan ${selectedPlan === offerPlan.id ? "selected" : ""}`.trim()}
                   onClick={() => nativeOffer ? apple.selectPlan(offerPlan.id) : setPlan(offerPlan.id)}
                   disabled={nativeOffer ? apple.busy : isCheckingOut}
                 >
+                  <Tape tone={offerPlan.id === "yearly" ? "yellow" : "mint"} />
                   {offerPlan.badgeKey ? (
-                    <span className="memo-offer-badge">{t(offerPlan.badgeKey)}</span>
+                    <span className="memo-nb-badge">{t(offerPlan.badgeKey)}</span>
                   ) : null}
-                  <span className="memo-offer-radio" />
-                  {/* Name over its small print on the left, the headline price
-                      on the right — the long billing line needs the full width
-                      of the card, not the sliver beside the price. */}
-                  <span className="memo-offer-plan-copy">
-                    <span>{t(offerPlan.labelKey)}</span>
-                    <span className="memo-offer-billing">
-                      {t(offerPlan.billingKey, {
-                        discounted: nativeOffer ? product!.introPrice! : formatCurrency(offerPlan.discountedAmount, locale),
-                        renewal: nativeOffer ? product!.price : formatCurrency(offerPlan.renewalAmount, locale),
-                      })}
-                    </span>
-                  </span>
-                  <span className="memo-offer-price">
+                  <PenCircle />
+                  <span className="memo-nb-plan-name">{t(offerPlan.labelKey)}</span>
+                  {/* Apple's full price is the renewal on the line below; the web strikes its own. */}
+                  {nativeOffer ? null : <s className="memo-nb-plan-was">{formatCurrency(offerPlan.regularAmount, locale)}</s>}
+                  <span className="memo-nb-plan-price">
                     {nativeOffer && offerPlan.id === "yearly" && !product?.introWeeklyPrice
                       ? product?.introPrice
                       : t(offerPlan.priceKey, {
@@ -772,19 +812,26 @@ export function DiscountOffer({
                             : formatCurrency(offerPlan.headlineAmount, locale),
                         })}
                   </span>
+                  <span className="memo-nb-plan-detail">
+                    {t(offerPlan.billingKey, {
+                      discounted: nativeOffer ? product!.introPrice! : formatCurrency(offerPlan.discountedAmount, locale),
+                      renewal: nativeOffer ? product!.price : formatCurrency(offerPlan.renewalAmount, locale),
+                    })}
+                  </span>
                 </button>
               ); })}
+              </div>
 
               {nativeOffer && apple.notice ? <p role="status" className="memo-inline-error">{apple.notice}</p> : null}
               {error ? <p className="memo-inline-error">{error}</p> : null}
 
               <button
                 type="button"
-                className="memo-offer-cta"
+                className="memo-nb-cta memo-offer-cta"
                 onClick={() => void startCheckout()}
                 disabled={nativeOffer ? apple.busy || !apple.selectedProduct : isCheckingOut}
               >
-                {t((nativeOffer ? apple.busy : isCheckingOut) ? "offer.opening" : "common.continue")}
+                {t((nativeOffer ? apple.busy : isCheckingOut) ? "offer.opening" : "offer.claimCta")}
               </button>
               <p className="memo-offer-fine">{t("offer.fine")}</p>
               {nativeOffer ? <AppleBillingTerms busy={apple.busy} onRestore={() => void apple.restore()} /> : null}

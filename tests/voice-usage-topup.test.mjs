@@ -27,6 +27,7 @@ function load(native) {
     "@/components/i18n-provider": { useT: () => t },
     "@/components/memo-portal": { MemoPortal: ({ children }) => children },
     "@/components/msym": { Msym: () => null },
+    "@/components/paywall-notebook": { HAND_FONT: { variable: "hand" }, Marked: ({ text }) => text.replaceAll("*", "") },
     "@/components/use-sheet": { useSheet: () => ({ closing: false, dismiss() {}, dragProps: {} }), sheetClass: s => s },
   };
   const context = { exports: {}, require: name => { assert.ok(name in modules, name); return modules[name]; } };
@@ -84,8 +85,9 @@ test("a refused tutor start opens the tutor-time sheet instead of seeming to do 
 
 test("without a subscription, the offer goes straight to the paywall", () => {
   const html = render(usage({ hasPaidAccess: false, remainingSeconds: 0, limitSeconds: 60, usedSeconds: 60 }));
-  assert.match(html, /Your trial is used up/);
+  assert.match(html, /Out of time today/);
+  assert.match(html, /Your free minute is back at midnight/);
   // The paywall that names the tutor, closing back to the note it was opened on.
-  assert.match(html, /href="\/app\/start\?for=tutor&amp;back=%2Fapp%2Flectures%2Fabc"[^>]*>See plans/);
+  assert.match(html, /href="\/app\/start\?for=tutor&amp;back=%2Fapp%2Flectures%2Fabc"[^>]*>Get more time every day/);
   assert.doesNotMatch(html, /href="\/app\/settings"/);
 });

@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { createBillingRequiredResponse, hasPaidAccessForUserId } from "@/lib/billing";
 import { examinerTurn, type OralVibe } from "@/lib/exams/exam-oral-server";
-import { mockAttemptExpired, readMockAttempt } from "@/lib/exams/exams-server";
+import { mockAttemptExpired, readMockAttempt, readOwnedExam } from "@/lib/exams/exams-server";
 import { captureRouteError } from "@/lib/monitoring";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -51,12 +51,19 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
 
   try {
-    const attempt = await readMockAttempt(auth.supabase, auth.user.id, params.data.id, params.data.attemptId);
+    const [exam, attempt] = await Promise.all([
+      readOwnedExam(auth.supabase, auth.user.id, params.data.id),
+      readMockAttempt(auth.supabase, auth.user.id, params.data.id, params.data.attemptId),
+    ]);
     const questions = (attempt?.questions ?? []) as { prompt: string; answerGuide?: string }[];
     const question = questions[parsed.data.questionIndex];
 
     if (!attempt || attempt.mode !== "oral" || attempt.status !== "in_progress" || !question) {
       return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
+    }
+
+    if (exam?.archived_at) {
+      return NextResponse.json({ error: await tr("api.exam.archived") }, { status: 409 });
     }
 
     // The mock exam is paid-only, every turn of it, and an attempt past its time takes no more.

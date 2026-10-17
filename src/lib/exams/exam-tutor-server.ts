@@ -6,6 +6,7 @@ import { generateStructuredObject } from "@/lib/ai/json";
 import { repairPassage } from "@/lib/ai/language-check";
 import { shouldCheckLanguage } from "@/lib/ai/language-repair";
 import type { TutorVerdict } from "@/lib/exams/exam-model";
+import { promptTopic } from "@/lib/exams/exam-topics-server";
 import { resolvePassageLanguage } from "@/lib/tutor/spoken-language";
 
 /*
@@ -79,7 +80,7 @@ export async function planTutorLesson(params: {
     schema: planSchema,
     stage: "tutor_turn",
     maxOutputTokens: 1600,
-    instructions: `You are a patient private tutor preparing a student for an exam. Plan a short spoken lesson on one topic: "${params.topicTitle}".
+    instructions: `You are a patient private tutor preparing a student for an exam. Plan a short spoken lesson on one topic: "${promptTopic({ title: params.topicTitle }).title}".
 
 Write exactly ${TUTOR_STEPS} steps, each about one of the topic's most important points, in the order they build on each other. The first step's explain opens with one short, plain sentence that names the topic and says you will ask about each point (in Slovenian, for example: "Pogovoriva se o zakonu ponudbe, po vsaki točki te bom nekaj vprašal."). No greeting phrases, idioms or figures of speech there or anywhere else: they come out wrong in other languages. In each step:
 - explain: teach the point out loud in 2 to 4 short, clear sentences, as you would to the student sitting in front of you, with one concrete example where it helps. Plain spoken language: no lists, no formatting, no "as we saw".
@@ -88,9 +89,9 @@ Write exactly ${TUTOR_STEPS} steps, each about one of the topic's most important
 
 Teach only what the student's note says about the topic (the input); where it is thin, use standard, well-established knowledge of the subject, never invented specifics. Do not reuse the questions under "avoid". Write in the language of the note, as a native speaking teacher would say it: natural, everyday spoken phrasing, correct grammar and real words only, never an English phrase translated word for word. Student level: ${params.school}.`,
     input: JSON.stringify({
-      topic: params.topicTitle,
-      summary: params.summary,
-      keyPoints: params.keyPoints,
+      ...(({ title, summary, keyPoints }) => ({ topic: title, summary, keyPoints }))(
+        promptTopic({ title: params.topicTitle, summary: params.summary, keyPoints: params.keyPoints }),
+      ),
       note: params.notesMarkdown.slice(0, 12_000),
       avoid: params.avoid.slice(0, 40).map((prompt) => prompt.slice(0, 200)),
     }),

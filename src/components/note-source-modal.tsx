@@ -2137,7 +2137,9 @@ export function NoteSourceModal({
     }
 
     setSelectedMode("text");
-    void acceptDocumentOrPhotoFiles(files);
+    // Compressing a large file sets the busy label; clear it as the picker does, or the sheet (and
+    // the exam setup, which creates the note once nothing is busy) waits on it for good.
+    void acceptDocumentOrPhotoFiles(files).finally(() => setBusyLabel(null));
   }
 
   async function handlePdfPick(event: React.ChangeEvent<HTMLInputElement>) {

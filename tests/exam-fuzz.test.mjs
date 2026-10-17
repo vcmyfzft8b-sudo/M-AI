@@ -52,11 +52,11 @@ function makeCase(seed) {
   const scores = () =>
     random() < 0.08 ? pick([-0.4, 1.6, Number.NaN, Number.POSITIVE_INFINITY]) : pick([0, 1, random(), Math.round(random() * 5) / 5]);
   const results = Array.from({ length: Math.floor(random() * 300) }, () => {
-    const module = modules.length > 0 && random() > 0.04 ? pick(modules) : null;
+    const chosen = modules.length > 0 && random() > 0.04 ? pick(modules) : null;
     const items = Array.from({ length: Math.floor(random() * 6) }, () => `q${Math.floor(random() * 30)}`);
     return {
-      lecture_id: module?.lectureId ?? "n0",
-      topic_id: module ? module.topicId : pick([null, undefined, "unknown-topic"]),
+      lecture_id: chosen?.lectureId ?? "n0",
+      topic_id: chosen ? chosen.topicId : pick([null, undefined, "unknown-topic"]),
       lesson_kind: pick(EXAM_LESSON_KINDS),
       score: scores(),
       completed_at:

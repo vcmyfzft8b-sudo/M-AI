@@ -348,7 +348,8 @@ export function ExamSetup({
   /* Uploads still on their way hold their place: a note ticked meanwhile cannot take it from them. */
   const uploadsPending = uploads.filter((upload) => upload.status === "uploading" || upload.status === "waiting").length;
   const examFull = selected.length + uploadsPending >= MAX_EXAM_MODULES;
-  const planKey = `${selected.join(",")}|${aiExpand ? 1 : 0}`;
+  // Everything the plan is made from: topics added by the AI are pitched at the school level too.
+  const planKey = `${selected.join(",")}|${aiExpand ? 1 : 0}|${schoolLevel ?? ""}|${schoolYear ?? ""}`;
   const keptTopics = planTopics.filter((topic) => topic.kept);
   const moduleCount = plan.status === "done" ? Math.max(1, keptTopics.length) : selected.length;
   // What it takes to bring every topic from nothing to the target, a lesson at a time (as Astra counts).
@@ -438,6 +439,23 @@ export function ExamSetup({
     return () => window.clearTimeout(timer);
   }, [planReady, step]);
 
+  /*
+   * An upload that finishes while the building screen waits changes the material under it: plan
+   * again for what is there now, or the screen would wait for good on a plan for the old choice.
+   */
+  const planFor = plan.status === "idle" ? null : plan.key;
+  useEffect(() => {
+    if (step !== "building" || planFor === planKey || plan.status === "failed") {
+      return;
+    }
+
+    const timer = window.setTimeout(() => void startPlan(), 0);
+
+    return () => window.clearTimeout(timer);
+    // startPlan reads this render's material, which is what planKey names.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, planFor, planKey, plan.status]);
+
   useEffect(() => {
     reviewArmed.current = false;
 
@@ -464,7 +482,15 @@ export function ExamSetup({
             : true;
 
   /* The upload field: whatever was picked or dropped becomes the prep's material, read right here. */
-  function openFiles(files: File[]) {
+  function openFiles(picked: File[]) {
+    // A file already here (picked twice, or dropped after picking) would become a second, identical
+    // note. A failed one may be picked again.
+    const fileId = (file: File) => `${file.name}|${file.size}|${file.lastModified}`;
+    const queued = new Set(
+      uploads.filter((upload) => upload.status !== "failed").flatMap((upload) => upload.files.map(fileId)),
+    );
+    const files = picked.filter((file) => !queued.has(fileId(file)));
+
     if (files.length === 0 || blockedOffline("create")) {
       return;
     }
@@ -951,6 +977,7 @@ export function ExamSetup({
           <MemoSays key="subject" mood="idle" thought="🎓" text={t("exam.setup.subject.title")} />
           <input
             id="exam-title"
+            aria-label={t("exam.setup.subject.title")}
             className="memo-field memo-exam-input"
             value={title}
             maxLength={120}
@@ -1111,7 +1138,7 @@ export function ExamSetup({
               <span>{t("exam.setup.motivate.days", { count: Math.max(0, days) })}</span>
             </div>
             <div>
-              <b>{target} %</b>
+              <b>{t("exam.percent", { percent: target })}</b>
               <span>{t("exam.setup.review.goal")}</span>
             </div>
             <div>

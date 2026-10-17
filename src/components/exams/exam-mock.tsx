@@ -56,7 +56,7 @@ type Phase =
    * `failed` keeps the learner here, with a retry, whenever going back to the questions would not
    * help (an oral mock, or a written one whose clock has already run out).
    */
-  | { name: "grading"; attempt: Attempt; answers: Record<string, Answer>; failed?: boolean }
+  | { name: "grading"; attempt: Attempt; answers: Record<string, Answer>; failed?: boolean; closed?: string }
   | { name: "result"; result: MockResult };
 
 function answered(question: MockQuestionForLearner, answer: Answer | undefined) {
@@ -71,7 +71,11 @@ function answered(question: MockQuestionForLearner, answer: Answer | undefined) 
   return question.kind === "choice" ? typeof answer.selected === "number" : Boolean(answer.text?.trim());
 }
 
-function clock(seconds: number) {
+function clock(seconds: number | null) {
+  if (seconds === null) {
+    return "--:--";
+  }
+
   const safe = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(safe / 60);
   return `${String(minutes).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
@@ -99,6 +103,12 @@ export function ExamMock({
 }) {
   const { t, locale } = useTranslations();
   const { navigateWithFeedback } = useInstantNavigation();
+  /* A new function every render; `submit` (and the clock keyed on it) must not change with it. */
+  const navigateRef = useRef(navigateWithFeedback);
+
+  useEffect(() => {
+    navigateRef.current = navigateWithFeedback;
+  });
   const [phase, setPhase] = useState<Phase>(openAttempt ? { name: "sitting", attempt: openAttempt } : { name: "setup" });
   const [mode, setMode] = useState<"written" | "oral">("written");
   const [duration, setDuration] = useState<number>(MOCK_MINUTES.initial);
@@ -109,7 +119,8 @@ export function ExamMock({
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [index, setIndex] = useState(0);
-  const [now, setNow] = useState(() => Date.now());
+  /* Unknown until mounted: a resumed mock renders on the server too, whose clock is not the browser's. */
+  const [now, setNow] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -237,6 +248,33 @@ export function ExamMock({
       const payload = response?.ok ? ((await response.json()) as { result: MockResult | null }) : null;
       submitting.current = false;
 
+      // The plan lapsed mid-mock: the paywall, not a retry that can only be refused again.
+      if (response?.status === 402) {
+        navigateRef.current(paywallPath("exam", examHref));
+        return;
+      }
+
+      // Too long past its clock (or the prep was archived): this attempt is closed for good, so its
+      // saved answers go and the learner starts a new one rather than retrying.
+      if (response?.status === 409) {
+        const refusal = (await response.json().catch(() => null)) as { error?: string } | null;
+
+        try {
+          window.localStorage.removeItem(`memo-exam-mock:${attempt.id}`);
+        } catch {
+          /* Nothing to clean up. */
+        }
+
+        setPhase({
+          name: "grading",
+          attempt,
+          answers: current,
+          failed: true,
+          closed: refusal?.error ?? t("api.exam.mockExpired"),
+        });
+        return;
+      }
+
       if (!payload?.result) {
         const clockOut = Date.now() >= new Date(attempt.startedAt).getTime() + attempt.durationMinutes * 60_000;
 
@@ -261,13 +299,15 @@ export function ExamMock({
       setTab("ai");
       setPhase({ name: "result", result: payload.result });
     },
-    [examId, t],
+    [examHref, examId, t],
   );
 
   const secondsLeft =
-    phase.name === "sitting"
-      ? phase.attempt.durationMinutes * 60 - (now - new Date(phase.attempt.startedAt).getTime()) / 1000
-      : 0;
+    phase.name !== "sitting"
+      ? 0
+      : now === null
+        ? null
+        : phase.attempt.durationMinutes * 60 - (now - new Date(phase.attempt.startedAt).getTime()) / 1000;
 
   /* The clock, and handing in on its own when it runs out. */
   useEffect(() => {
@@ -277,16 +317,22 @@ export function ExamMock({
 
     const attempt = phase.attempt;
     const endsAt = new Date(attempt.startedAt).getTime() + attempt.durationMinutes * 60_000;
-    const timer = window.setInterval(() => {
+    const tick = () => {
       const current = Date.now();
       setNow(current);
 
       if (current >= endsAt) {
         void submit(attempt, answersRef.current);
       }
-    }, 1000);
+    };
+    // At once, then every second: the clock has no reading until the first tick.
+    const first = window.setTimeout(tick, 0);
+    const timer = window.setInterval(tick, 1000);
 
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(timer);
+    };
   }, [phase, submit]);
 
   if (phase.name === "setup") {
@@ -536,15 +582,21 @@ export function ExamMock({
           backIcon="close"
           title={t("exam.mock.title")}
           cta={
-            <button type="button" className="memo-button-coral" onClick={() => void submit(attempt, handedIn)}>
-              {t("common.retry")}
-            </button>
+            phase.closed ? (
+              <button type="button" className="memo-button-coral" onClick={() => setPhase({ name: "setup" })}>
+                {t("exam.mock.start")}
+              </button>
+            ) : (
+              <button type="button" className="memo-button-coral" onClick={() => void submit(attempt, handedIn)}>
+                {t("common.retry")}
+              </button>
+            )
           }
         >
           <div className="memo-exam-center memo-exam-grading" role="alert">
             <MemoBuddy mood="sad" size="7rem" />
             <h1 className="memo-exam-step-title">{t("exam.mock.gradingFailed.title")}</h1>
-            <p className="memo-exam-fine">{t("exam.mock.gradingFailed.body")}</p>
+            <p className="memo-exam-fine">{phase.closed ?? t("exam.mock.gradingFailed.body")}</p>
           </div>
         </ExamScreen>
       );

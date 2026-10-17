@@ -33,7 +33,6 @@ import {
   spreadAcrossModules,
   streakDays,
   summarizeMock,
-  fadedScore,
   needsFreshItems,
   preferUnseen,
   tutorStepPoints,

@@ -26247,9 +26247,13 @@ select.memo-cp-input {
 
 /* --- Memo, the animated brain -------------------------------------------- */
 
-.memo-buddy {
-  /* MascotFigure's drop shadow reads this; the onboarding declares it in its own scope. */
+/* MascotFigure's drop shadow reads --memo-shadow. Inside the app it is the hover ring; elsewhere (the
+   lockup on the landing, legal and admin pages) the page's own value or none, never an unset ring. */
+:is(.memo, .memo-portal) .memo-buddy {
   --memo-shadow: var(--hover-ring);
+}
+
+.memo-buddy {
   position: relative;
   flex: 0 0 auto;
   width: var(--memo-buddy-size, 6rem);

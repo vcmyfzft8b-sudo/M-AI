@@ -161,7 +161,7 @@ export function TargetDial({ value, onChange }: { value: number; onChange: (valu
       onChange={onChange}
       range={TARGET_RANGE}
       label={t("exam.setup.target.title")}
-      valueText={`${value} %, ${t(levelKey(value))}`}
+      valueText={`${t("exam.percent", { percent: value })}, ${t(levelKey(value))}`}
       unit="%"
       caption={t(levelKey(value))}
     />

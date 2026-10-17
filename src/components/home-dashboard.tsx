@@ -1645,11 +1645,13 @@ export function HomeDashboard({
     window.history.replaceState(window.history.state, "", view === "preps" ? EXAM_PREPS_HREF : "/app");
   }, []);
   const handleSelectFolder = useCallback(
-    (folderId: string | null, lectureIds: string[] | null) => {
+    (folderId: string | null, lectureIds: string[] | null, chosen?: boolean) => {
       setSelectedFolderId(folderId);
       setSelectedFolderLectureIds(lectureIds);
 
-      if (folderId) {
+      // Only a folder the learner picks leaves the preps: the one restored on arrival must not, or
+      // the way back from a prep would land on the last folder instead of the preps.
+      if (folderId && chosen) {
         selectLibraryView("all");
       }
     },

@@ -96,7 +96,7 @@ As in Astra, the path is one lesson after another, and the path picks the next o
    **only reaching the goal opens the next one** (the owner's rule, 2026-10-17): no number of lessons
    under it does, so a learner at 0 % stays in the module and its lessons keep coming. The path
    draws what it still needs after "Naslednja" as locked stations (`lessonsToTarget` from the
-   module's knowledge now, at most 12 drawn, "Še 9 lekcij do 90 %"), so a weak lesson visibly adds
+   module's knowledge now, at most 12 drawn, "Še ~9 vaj do 90 %"), so a weak lesson visibly adds
    stations, and the next module sits under its own locked heading ("Odklene se, ko modul 1 doseže
    90 %"). The lesson's done screen says the same under the bar. **Reaching the goal once is what
    counts** (`topicMastery`'s `peak`): a later lesson that dips under it does not shut the next
@@ -124,9 +124,10 @@ The learner can swap it for any other (below); the suggestion is only the defaul
 
 The daily goal (`dailyPlan`) spreads the lessons every topic still needs to reach the goal
 (`lessonsToTarget`, assuming about 90 % right answers), a lesson per topic's gaps and owed proofs,
-over the days left, never less than the learner's daily minutes buy (6 minutes a lesson). It is
-computed against what was left at the start of the day, so finishing a lesson moves "done", not the
-goal. Days are Ljubljana days, as everywhere else in the product.
+over the days left, never less than the learner's daily minutes buy (6 minutes a lesson) and never
+more than three times that (`DAILY_STRETCH`), with a floor of 8 (`DAILY_STRETCH_FLOOR`): without the
+cap the eve of the exam asked for 54 lessons. It is computed against what was left at the start of the
+day, so finishing a lesson moves "done", not the goal. Days are Ljubljana days, as everywhere else in the product.
 
 ### The check ("Preverjanje") and what "ready" means
 
@@ -190,7 +191,7 @@ A lesson's result records which of the questions it showed the learner got wrong
 (`exam_lesson_results.missed_ids`, migration `0070`): a wrong quiz answer or true/false call, or a
 written answer marked under 3 of 5. A question missed and not answered right since is an open
 **knowledge gap** (`openGaps`, replaying the topic's results in order). Only the quiz, true/false and
-written lessons open and close gaps: flashcards are graded by the learner and return by the note's
+written lessons, and the Lekcija's quiz part, open and close gaps: flashcards are graded by the learner and return by the note's
 own spaced repetition, and the summary and tutor show no stored questions.
 
 - **Asked again first.** The next quiz, true/false or written lesson of the topic starts with its
@@ -251,7 +252,7 @@ marking and the first count half each. The tutor lesson is the fully guided, ste
 ### Choosing the lesson format
 
 The bottom bar of the path has Astra's two buttons: the round **swap** button and the coral
-**"Nadaljuj · <lesson>"**. Swap opens the **"Naslednja lekcija"** picker (a sheet on the phone, a
+**"Nadaljuj · <lesson>"**. Swap opens the **"Naslednja vaja"** picker (a sheet on the phone, a
 dialog on desktop), in Astra's three tabs:
 
 - **Nauči se:** Lekcija, Tutor, Kartice, and **Vrzeli** (the topic's open gaps; locked while there
@@ -266,7 +267,7 @@ is marked "Priporočeno". Whatever the learner picks counts the same.
 A lesson ends Astra's way: after the learning-zone question, **"+N % znanja"** with the topic's
 mastery on a bar against the goal (or "Tema je na cilju! 🎯" when it got there), the score, and the
 gaps it closed and left. "Nadaljuj" goes back to the path, where "Next up" is the next lesson;
-"Ponovi lekcijo" does the same lesson again. The summary's "Nadaljuj" saves it as read and goes back
+"Ponovi vajo" does the same lesson again. The summary's "Nadaljuj" saves it as read and goes back
 to the path too.
 
 ### The tutor lesson
@@ -327,7 +328,7 @@ The daily goal counts the repeats still owed, not only untried lessons. The less
 applies the same rule to decide what comes next (the next lesson, a repeat, the next module, or the
 mock exam) and says when a score is under the target.
 
-- **Grades:** the setup only offers a target percentage (75/90/100 %); the model still maps
+- **Grades:** the setup only offers a target percentage (a dial from 50 to 100 % in steps of 5, `TARGET_MIN`/`TARGET_MAX`/`TARGET_STEP`); the model still maps
   university 5–10 and school 1–5 scales, which older rows or a future setting may use.
 
 ### Lesson screens on the phone
@@ -437,7 +438,7 @@ own pixels with the brain taken out and the sticker outline closed round the "M"
 of the lockup left the M's outline cut flat), the brain is a live `MemoBuddy` laid exactly over the
 image's brain, livelier than elsewhere (a hop every 3–5.5 s, a blink every 1.4–3.2 s), and a sheen
 masked by the lettering crosses it every 4.5 s. A tap anywhere on the lockup makes him hop with a
-sparkle and runs the sheen at once. The landing, paywall and onboarding keep the still image.
+sparkle and runs the sheen at once. The same animated lockup (`AnimatedLockup`, and `BrandLogo` through it) is on the landing nav, footer and hero phone, the onboarding's desktop aside, and the error, legal, admin and UGC pages.
 
 ## Not built yet
 

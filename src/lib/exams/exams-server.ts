@@ -22,6 +22,7 @@ import {
   examStage,
   gradeForPercentage,
   mockQuestionCounts,
+  MOCK_MINUTES,
   needsFreshItems,
   openGaps,
   gapsForLesson,
@@ -261,12 +262,17 @@ export async function listExamsForUser(
 
   const examIds = exams.map((exam) => exam.id);
   const [{ data: moduleRows, error: moduleError }, results, topics] = await Promise.all([
-    supabase
-      .from("exam_modules")
-      .select("exam_id, lecture_id, position")
-      .eq("user_id", userId)
-      .in("exam_id", examIds)
-      .order("position", { ascending: true }),
+    loadEveryRow<{ exam_id: string; lecture_id: string; position: number }>((from, to) =>
+      supabase
+        .from("exam_modules")
+        .select("exam_id, lecture_id, position")
+        .eq("user_id", userId)
+        .in("exam_id", examIds)
+        .order("position", { ascending: true })
+        .order("exam_id", { ascending: true })
+        .order("lecture_id", { ascending: true })
+        .range(from, to),
+    ).then((rows) => ({ data: rows, error: null })),
     readResults(supabase, userId, examIds),
     readTopicLines(supabase, userId, examIds),
   ]);
@@ -373,18 +379,17 @@ async function readTopicLines(supabase: ExamSupabase, userId: string, examIds: s
     return [] as TopicLine[];
   }
 
-  const { data, error } = await supabase
-    .from("exam_topics")
-    .select("id, exam_id, lecture_id, position, title, source")
-    .eq("user_id", userId)
-    .in("exam_id", examIds)
-    .order("position", { ascending: true });
-
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as TopicLine[];
+  // Paged: across every prep a learner has, topics pass PostgREST's 1000-row cap.
+  return loadEveryRow<TopicLine>((from, to) =>
+    supabase
+      .from("exam_topics")
+      .select("id, exam_id, lecture_id, position, title, source")
+      .eq("user_id", userId)
+      .in("exam_id", examIds)
+      .order("position", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 }
 
 export async function readOwnedExam(supabase: ExamSupabase, userId: string, examId: string) {
@@ -1271,7 +1276,9 @@ async function assetState(
     return { status: "generating", generator };
   }
 
-  if (status === "failed") {
+  // "ready" with nothing in it: the note had nothing of this kind to give. Asking again would pay for
+  // the same empty answer on every visit, so it is a failed part (left out of a Lekcija).
+  if (status === "failed" || status === "ready") {
     return { status: "failed", generator };
   }
 
@@ -2458,7 +2465,10 @@ export async function submitMockExam(
   userId: string,
   input: { exam: ExamRow; attempt: ExamMockAttemptRow; answers: MockAnswerInput[] },
 ) {
-  const questions = (input.attempt.questions ?? []) as MockQuestion[];
+  // No more than the longest mock sets: the attempt row is the learner's own, and every written
+  // answer in it is a model call.
+  const most = mockQuestionCounts(MOCK_MINUTES.max);
+  const questions = ((input.attempt.questions ?? []) as MockQuestion[]).slice(0, most.choice + most.written);
   const byQuestion = new Map(input.answers.map((answer) => [answer.questionId, answer]));
   const submittedAt = new Date().toISOString();
 

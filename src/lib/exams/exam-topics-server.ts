@@ -59,6 +59,21 @@ function clean(text: unknown, max: number) {
   return typeof text === "string" ? text.replace(/\s+/g, " ").trim().slice(0, max) : "";
 }
 
+/**
+ * A topic as it goes into a prompt, bounded. Its row is the learner's own and can hold anything, so
+ * nothing read back from it reaches a model call at more than the sizes a plan ever writes.
+ */
+export function promptTopic(topic: { title?: unknown; summary?: unknown; keyPoints?: unknown }) {
+  return {
+    title: clean(topic.title, 200),
+    summary: clean(topic.summary, 2400),
+    keyPoints: (Array.isArray(topic.keyPoints) ? topic.keyPoints : [])
+      .slice(0, MAX_KEY_POINTS)
+      .map((point) => clean(point, 400))
+      .filter(Boolean),
+  };
+}
+
 function cleanTopic(topic: { title?: unknown; summary?: unknown; keyPoints?: unknown }): PlannedTopic | null {
   const title = clean(topic.title, 160);
 
@@ -244,7 +259,10 @@ export async function assignItemsToTopics(params: {
       instructions:
         "Sort study items into the topic each one tests. Return one assignment for every item: its index and the index of the topic it belongs to. Choose the single best topic.",
       input: JSON.stringify({
-        topics: params.topics.map((topic, index) => ({ index, title: topic.title, keyPoints: topic.keyPoints })),
+        topics: params.topics.map((topic, index) => {
+          const { title, keyPoints } = promptTopic(topic);
+          return { index, title, keyPoints };
+        }),
         items: params.items.map((text, index) => ({ index, text: text.slice(0, 220) })),
       }),
       usageContext: { stage: "exam_topic_assign", userId: params.userId, lectureId: params.lectureId },
@@ -398,7 +416,7 @@ export async function writeTopicContent(params: {
     schema: contentSchema,
     stage: "study_items",
     maxOutputTokens: 7000,
-    instructions: `Write the study material for one exam topic a student asked to learn: "${params.topicTitle}".
+    instructions: `Write the study material for one exam topic a student asked to learn: "${promptTopic({ title: params.topicTitle }).title}".
 
 Use the student's note in the input where it covers the topic; where it does not, use standard, well-established knowledge of the subject. Never invent specifics (names, numbers, dates) you are not sure of.
 
@@ -411,9 +429,9 @@ Return:
 
 Write in the language of the note (if the note is empty, the language of the topic title). Student level: ${params.school}.`,
     input: JSON.stringify({
-      topic: params.topicTitle,
-      knownSummary: params.summary,
-      knownKeyPoints: params.keyPoints,
+      topic: promptTopic({ title: params.topicTitle }).title,
+      knownSummary: promptTopic({ summary: params.summary }).summary,
+      knownKeyPoints: promptTopic({ keyPoints: params.keyPoints }).keyPoints,
       noteTitle: params.noteTitle ?? "",
       note: params.notesMarkdown.slice(0, 12_000),
     }),
@@ -571,15 +589,15 @@ export async function writeFreshQuestions(params: {
     schema: freshSchema,
     stage: "study_items",
     maxOutputTokens: Math.min(8000, 600 + params.quiz * 260 + params.written * 320),
-    instructions: `Write new practice questions on one exam topic, "${params.topicTitle}", for a student who has already answered every question listed under "avoid" and needs fresh ones to practise on.
+    instructions: `Write new practice questions on one exam topic, "${promptTopic({ title: params.topicTitle }).title}", for a student who has already answered every question listed under "avoid" and needs fresh ones to practise on.
 
 Write exactly ${params.quiz} multiple-choice questions (4 options, exactly one correct, correctIndex 0-based, a one-sentence explanation of the right answer) and exactly ${params.written} open questions (each with an answerGuide: a bullet list, "- ", of the 2 to 4 points a full answer must contain).
 
 Ask about what the topic's material teaches (the input), from new angles: applying it, comparing, explaining why, a small example to work through. Test understanding, not wording. Never repeat or rephrase a question under "avoid". Never invent specifics you are not sure of. Write in the language of the material. Student level: ${params.school}.`,
     input: JSON.stringify({
-      topic: params.topicTitle,
-      summary: params.summary,
-      keyPoints: params.keyPoints,
+      ...(({ title, summary, keyPoints }) => ({ topic: title, summary, keyPoints }))(
+        promptTopic({ title: params.topicTitle, summary: params.summary, keyPoints: params.keyPoints }),
+      ),
       note: params.notesMarkdown.slice(0, 12_000),
       avoid: params.avoid.slice(0, 80).map((prompt) => prompt.slice(0, 200)),
     }),

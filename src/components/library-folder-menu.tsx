@@ -143,7 +143,8 @@ export function LibraryFolderMenu({
   folders: AppLibraryFolder[];
   onFoldersChange: (folders: AppLibraryFolder[]) => void;
   selectedFolderId: string | null;
-  onSelectFolder: (folderId: string | null, lectureIds: string[] | null) => void;
+  /** `chosen` when the learner picked the folder, rather than one restored or kept in sync. */
+  onSelectFolder: (folderId: string | null, lectureIds: string[] | null, chosen?: boolean) => void;
   /**
    * The exam-prep folder, pinned under "Vsi zapiski": not a folder of notes but the library's
    * place for preps. The library decides what it shows; the picker only offers and marks it.
@@ -511,7 +512,7 @@ export function LibraryFolderMenu({
 
   function handleSelectFolder(folder: LibraryFolder) {
     writeStoredSelectedFolderId(userId, folder.id);
-    onSelectFolder(folder.id, folder.lectureIds);
+    onSelectFolder(folder.id, folder.lectureIds, true);
     animateCloseFolderSheet();
   }
 
@@ -546,7 +547,7 @@ export function LibraryFolderMenu({
 
       onFoldersChange(nextFolders);
       writeStoredSelectedFolderId(userId, nextFolder.id);
-      onSelectFolder(nextFolder.id, nextFolder.lectureIds);
+      onSelectFolder(nextFolder.id, nextFolder.lectureIds, true);
       setFolderName("");
       setDraftLectureIds([]);
       setIsCreateModalOpen(false);

@@ -245,9 +245,19 @@ export function ExamLesson({
 
     if (load.status === "missing" && !startedGeneration.current.has(load.generator)) {
       startedGeneration.current.add(load.generator);
-      await fetch(`/api/lectures/${module.lectureId}/${GENERATOR_ROUTE[load.generator]}`, {
+      const started = await fetch(`/api/lectures/${module.lectureId}/${GENERATOR_ROUTE[load.generator]}`, {
         method: "POST",
       }).catch(() => null);
+
+      // Not started (offline, busy, refused): the next poll asks again rather than waiting on nothing.
+      if (!started?.ok) {
+        startedGeneration.current.delete(load.generator);
+
+        if (started?.status === 402) {
+          navigateRef.current(paywallPath("exam", `/app/exams/${examId}`));
+          return;
+        }
+      }
     }
 
     setPhase({ name: "generating", generator: load.generator });

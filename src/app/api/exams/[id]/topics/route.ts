@@ -1,7 +1,7 @@
 import { after, NextResponse } from "next/server";
 
 import { canUseLectureFeatures, createBillingRequiredResponse } from "@/lib/billing";
-import { planPendingTopics, readExamLectureIds, warmExamMaterial } from "@/lib/exams/exams-server";
+import { planPendingTopics, readExamLectureIds, readOwnedExam, warmExamMaterial } from "@/lib/exams/exams-server";
 import { examIdParamsSchema } from "@/lib/exams/exam-validation";
 import { captureRouteError } from "@/lib/monitoring";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -40,6 +40,17 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   try {
     const userId = auth.user.id;
+    const exam = await readOwnedExam(auth.supabase, userId, params.data.id);
+
+    if (!exam) {
+      return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
+    }
+
+    // An archived prep is not studied any more: planning its topics would pay a model for nothing.
+    if (exam.archived_at) {
+      return NextResponse.json({ error: await tr("api.exam.archived") }, { status: 409 });
+    }
+
     // Planning reads the notes with a model, so it follows the notes' own access, as lessons do.
     const result = await planPendingTopics(auth.supabase, userId, params.data.id, async (lectureId) =>
       (await canUseLectureFeatures(userId, lectureId, "study")).allowed,

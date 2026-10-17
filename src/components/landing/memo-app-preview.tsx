@@ -2434,79 +2434,82 @@ class MemoAppPreviewView extends Component<PreviewProps, PreviewState> {
       { id: null, name: t("folders.allNotes"), icon: "📁" },
       ...s.folders.map((f) => ({ id: f.id, name: f.name, icon: f.icon })),
     ];
+    const row = (folder: (typeof options)[number], i: number) => (
+      <div key={folder.id ?? "all"} style={{ display: "flex", alignItems: "center", gap: "12.8px", borderTop: rowRule(i === 0) }}>
+        <button
+          type="button"
+          onClick={() => this.setState({ folderId: folder.id, sheet: null })}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "14.4px",
+            flex: 1,
+            minWidth: 0,
+            height: "64px",
+            padding: "0 9.6px 0 19.2px",
+            border: 0,
+            background: "transparent",
+            color: "var(--text)",
+            cursor: "pointer",
+            fontFamily: "inherit",
+            textAlign: "left",
+          }}
+        >
+          <Emoji symbol={folder.icon} size="19.2px" />
+          <span
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: "17.28px",
+              fontWeight: 650,
+              letterSpacing: "-0.025em",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {folder.name}
+          </span>
+          {s.folderId === folder.id ? <Msym name="check" size="21.6px" fill={false} weight={500} /> : null}
+        </button>
+        {folder.id ? (
+          <button
+            type="button"
+            aria-label={t("preview.folderOptions")}
+            onClick={() =>
+              this.setState((c) => ({
+                folders: c.folders.filter((f) => f.id !== folder.id),
+                folderId: c.folderId === folder.id ? null : c.folderId,
+              }))
+            }
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "48px",
+              height: "64px",
+              flex: "0 0 auto",
+              padding: 0,
+              border: 0,
+              background: "transparent",
+              color: "var(--muted)",
+              cursor: "pointer",
+            }}
+          >
+            <Msym name="more_horiz" size="24px" fill={false} weight={500} />
+          </button>
+        ) : null}
+      </div>
+    );
     return (
       <div role="dialog" aria-modal="true" onPointerDown={sheet.onPointerDown} style={sheet.style}>
         {GRAB}
         {sheetTitle(t("folders.title"), t("common.close"), this.closeSheet, 16, "normal")}
-        <div style={SURFACE_CARD}>
-          {options.map((folder, i) => (
-            <div key={folder.id ?? "all"} style={{ display: "flex", alignItems: "center", gap: "12.8px", borderTop: rowRule(i === 0) }}>
-              <button
-                type="button"
-                onClick={() => this.setState({ folderId: folder.id, sheet: null })}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "14.4px",
-                  flex: 1,
-                  minWidth: 0,
-                  height: "64px",
-                  padding: "0 9.6px 0 19.2px",
-                  border: 0,
-                  background: "transparent",
-                  color: "var(--text)",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  textAlign: "left",
-                }}
-              >
-                <Emoji symbol={folder.icon} size="19.2px" />
-                <span
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    fontSize: "17.28px",
-                    fontWeight: 650,
-                    letterSpacing: "-0.025em",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {folder.name}
-                </span>
-                {s.folderId === folder.id ? <Msym name="check" size="21.6px" fill={false} weight={500} /> : null}
-              </button>
-              {folder.id ? (
-                <button
-                  type="button"
-                  aria-label={t("preview.folderOptions")}
-                  onClick={() =>
-                    this.setState((c) => ({
-                      folders: c.folders.filter((f) => f.id !== folder.id),
-                      folderId: c.folderId === folder.id ? null : c.folderId,
-                    }))
-                  }
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: "48px",
-                    height: "64px",
-                    flex: "0 0 auto",
-                    padding: 0,
-                    border: 0,
-                    background: "transparent",
-                    color: "var(--muted)",
-                    cursor: "pointer",
-                  }}
-                >
-                  <Msym name="more_horiz" size="24px" fill={false} weight={500} />
-                </button>
-              ) : null}
-            </div>
-          ))}
-        </div>
+        {/* "Vsi zapiski" in a card of its own, the learner's folders a little apart, as in the app. */}
+        <div style={SURFACE_CARD}>{row(options[0], 0)}</div>
+        {options.length > 1 ? (
+          <div style={{ ...SURFACE_CARD, marginTop: "12px" }}>{options.slice(1).map((folder, i) => row(folder, i))}</div>
+        ) : null}
         <div style={{ display: "flex", justifyContent: "center", marginTop: "22.4px", paddingBottom: "20px" }}>
           <button
             type="button"

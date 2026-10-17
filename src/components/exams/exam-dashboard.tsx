@@ -70,6 +70,12 @@ export function ExamDashboard({
 }) {
   const { t, locale } = useTranslations();
   const { navigateWithFeedback } = useInstantNavigation();
+  /* A new function every render; an effect keyed on it would restart (and plan again) each time. */
+  const navigateRef = useRef(navigateWithFeedback);
+
+  useEffect(() => {
+    navigateRef.current = navigateWithFeedback;
+  });
   const router = useRouter();
   const { exam, modules, plan } = detail;
   const [tab, setTab] = useState<"path" | "progress">("path");
@@ -144,21 +150,32 @@ export function ExamDashboard({
 
     // Planned now, and asked again every 15 s if that did not land (an error, a rate limit), so a
     // failed attempt never leaves the screen on "planning"; a refusal for access is the paywall.
+    // One request at a time: planning a note takes up to a minute and every request pays for it.
     let cancelled = false;
-    const plan = () =>
-      fetch(`/api/exams/${exam.id}/topics`, { method: "POST" })
+    let inFlight = false;
+    const plan = () => {
+      if (inFlight) {
+        return Promise.resolve();
+      }
+
+      inFlight = true;
+      return fetch(`/api/exams/${exam.id}/topics`, { method: "POST" })
         .then((response) => {
           if (cancelled) {
             return;
           }
 
           if (response.status === 402) {
-            navigateWithFeedback(paywallPath("exam", currentPaywallBack()));
+            navigateRef.current(paywallPath("exam", currentPaywallBack()));
           } else if (response.ok) {
             router.refresh();
           }
         })
-        .catch(() => null);
+        .catch(() => null)
+        .finally(() => {
+          inFlight = false;
+        });
+    };
 
     void plan();
     const timer = window.setInterval(() => void plan(), 15_000);
@@ -167,7 +184,7 @@ export function ExamDashboard({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [exam.id, navigateWithFeedback, planning, planningReady, router]);
+  }, [exam.id, planning, planningReady, router]);
 
   /* Each tab starts at its top; the path then brings "Next up" into view (below). */
   function showTab(from: HTMLElement, next: "path" | "progress") {
@@ -493,7 +510,7 @@ export function ExamDashboard({
               <span>
                 {/* Past the day's goal the count stands alone; "12/5" reads like an error. */}
                 <b>{plan.doneToday >= plan.goal ? plan.doneToday : `${plan.doneToday}/${plan.goal}`}</b>{" "}
-                {t("exam.path.today")}
+                {t("exam.path.today", { count: plan.doneToday >= plan.goal ? plan.doneToday : plan.goal })}
               </span>
             </span>
           </div>
@@ -522,6 +539,7 @@ export function ExamDashboard({
                 <div className="memo-exam-after-form">
                   <input
                     id="exam-actual-grade"
+                    aria-label={t("exam.dash.after.title")}
                     className="memo-field"
                     value={grade}
                     maxLength={12}
@@ -743,7 +761,7 @@ export function ExamDashboard({
             </span>
             <span>
               <b>{Math.max(0, detail.daysLeft)}</b>
-              {t("exam.progress.days")}
+              {t("exam.progress.days", { count: Math.max(0, detail.daysLeft) })}
             </span>
             <span>
               <b>{detail.history.length}</b>

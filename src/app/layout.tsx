@@ -52,7 +52,6 @@ const MATERIAL_SYMBOL_NAMES = [
   "autorenew",
   "balance",
   "battery_full",
-  "bedtime",
   "bolt",
   "cancel",
   "center_focus_strong",

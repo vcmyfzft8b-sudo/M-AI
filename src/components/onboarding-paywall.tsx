@@ -21,7 +21,7 @@ import { notePaywallShown, paywallVisitCounted } from "@/lib/paywall-offer-timin
 import { discountedAmount, paywallOffer, weeklyAmount } from "@/lib/paywall-ladder";
 import { fitScreenScript, useFitScreen } from "@/components/use-fit-screen";
 import { PaywallDeck, PaywallHero, paywallAccentStyle } from "@/components/paywall-hero";
-import { Checklist, HAND_FONT, Marked, NotebookSpiral, PenCircle, Tape, Ticket, TrialTimeline } from "@/components/paywall-notebook";
+import { Checklist, HAND_FONT, Marked, NotebookSpiral, PenCircle, PenTick, Tape, Ticket, TrialTimeline } from "@/components/paywall-notebook";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 
 type BillingPlanCard = {
@@ -342,6 +342,7 @@ export function OnboardingPaywall({
         {paywallPlans.map((plan) => {
           const selected = selectedPlan === plan.id;
           const appleProduct = apple.productForPlan(plan.id);
+          const activePlan = subscription?.plan === plan.id && hasPaidAccess;
           const yearlySavings = yearlySavingsFor(plan);
           /*
            * At full price (the paywall after onboarding) the year reads as a
@@ -397,6 +398,13 @@ export function OnboardingPaywall({
               ) : null}
               <PenCircle />
               <span className="memo-nb-plan-name">
+                {/* The plan a subscriber is already on is ticked, whichever one is circled. */}
+                {activePlan ? (
+                  <>
+                    <PenTick delay={0.5} />
+                    <span className="sr-only">{t("paywall.currentPlan")}: </span>
+                  </>
+                ) : null}
                 {t(plan.labelKey)}
                 {/* Not beside a discount: two percentages on one note contradict each other. */}
                 {plan.id === "yearly" && yearlySavings > 0 && !discounted ? (
@@ -429,15 +437,14 @@ export function OnboardingPaywall({
 
       {/* The app pays through the App Store, so the reassurance line must
           never name Stripe there — not even while the products are loading. */}
-      {/* Where the timeline is drawn it already says all this. */}
-      {!reason && trialEligible && !discounted ? null : (
-      <p className="memo-nb-due">
+      {/* Where the timeline is drawn it already says all this — until a short
+          screen folds the timeline away, and then this line takes its place. */}
+      <p className={`memo-nb-due ${!reason && trialEligible && !discounted ? "with-timeline" : ""}`.trim()}>
         <CircleCheck className="h-5 w-5" />
         {t(trialEligible ? "paywall.nothingToday" : native ? "native.securePayment" : "paywall.securePayment")}
         {" · "}
         {t("paywall.cancelAnytime")}
       </p>
-      )}
 
       <button
         type="button"

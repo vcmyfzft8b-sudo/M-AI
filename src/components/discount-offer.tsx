@@ -781,7 +781,7 @@ export function DiscountOffer({
             <h1 className="memo-nb-title"><Marked text={t("offer.prizeTitle")} /></h1>
 
             <div className="memo-offer-plans">
-              <div className="memo-nb-plans">
+              <div className="memo-nb-plans" role="radiogroup" aria-label={t("paywall.choosePlan")}>
               {offerPlans.filter(offerPlan => !nativeOffer || apple.productForPlan(offerPlan.id)).map((offerPlan) => {
                 const product = apple.productForPlan(offerPlan.id);
                 const selectedPlan = nativeOffer ? APPLE_PRODUCTS[apple.selected] : plan;

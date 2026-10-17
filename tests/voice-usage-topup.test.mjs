@@ -85,8 +85,8 @@ test("a refused tutor start opens the tutor-time sheet instead of seeming to do 
 
 test("without a subscription, the offer goes straight to the paywall", () => {
   const html = render(usage({ hasPaidAccess: false, remainingSeconds: 0, limitSeconds: 60, usedSeconds: 60 }));
-  assert.match(html, /Out of time today/);
-  assert.match(html, /Your free minute is back at midnight/);
+  assert.match(html, /Your free minute is used up/);
+  assert.match(html, /Memo Pro gives you time every day/);
   // The paywall that names the tutor, closing back to the note it was opened on.
   assert.match(html, /href="\/app\/start\?for=tutor&amp;back=%2Fapp%2Flectures%2Fabc"[^>]*>Get more time every day/);
   assert.doesNotMatch(html, /href="\/app\/settings"/);

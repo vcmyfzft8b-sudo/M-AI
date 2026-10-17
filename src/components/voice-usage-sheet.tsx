@@ -270,8 +270,8 @@ export function VoiceUsageSheet({
         <div className="memo-nb-minutes">
           <h2 className="memo-nb-title"><Marked text={t("tutor.paywall.outTitle")} /></h2>
           <p className="memo-nb-minutes-sub">
-            <Msym name="bedtime" size="1.05rem" fill weight={600} />
-            {t("tutor.paywall.backAtMidnight")}
+            <Msym name="bolt" size="1.05rem" fill weight={600} />
+            {t("tutor.paywall.proEveryDay")}
           </p>
           <div className="memo-nb-batteries" aria-hidden="true">
             <span className="memo-nb-battery-col">

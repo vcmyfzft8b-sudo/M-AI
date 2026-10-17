@@ -11425,36 +11425,6 @@ html[data-paywall-closing] .memo-shell * {
  * primary action, and the page still lands on one phone screen.
  */
 
-/* Read-aloud: the lights go down — a dark "now playing" screen in either appearance. */
-.memo-paywall-shell[data-reason="listen"] {
-  --memo-paywall-title-text: var(--on-photo);
-  --memo-paywall-plan-bg: var(--on-photo-chip);
-  --memo-paywall-plan-text: var(--on-photo);
-  --memo-paywall-plan-border: var(--on-photo-chip);
-  --memo-paywall-plan-selected-bg: color-mix(in oklch, var(--paywall-accent) 38%, transparent);
-  --memo-paywall-plan-selected-text: var(--on-photo);
-  --memo-paywall-price-muted: var(--on-photo);
-  --memo-paywall-purple: var(--paywall-accent);
-  background:
-    radial-gradient(120% 60% at 50% 0%, color-mix(in oklch, var(--paywall-accent) 55%, transparent), transparent 70%),
-    var(--photo-stage);
-  color: var(--on-photo);
-}
-
-.memo-paywall-shell[data-reason="listen"] :is(.memo-paywall-sub, .memo-paywall-sub strong, .memo-paywall-due, .memo-paywall-foot, .memo-paywall-plan-detail, .memo-paywall-plan-was) {
-  color: var(--on-photo);
-}
-
-
-
-.memo-paywall-shell[data-reason="listen"] :is(.memo-paywall-offer-percent, .memo-paywall-fine) {
-  color: var(--on-promo);
-}
-
-.memo-paywall-shell[data-reason="listen"] .memo-pw-hero {
-  margin-top: 1.2rem;
-}
-
 /*
  * Tutor: a warm glow of the tutor's orange rising behind Memo and fading into
  * the page well before the plans, in either appearance. It glows over the plain
@@ -11693,11 +11663,11 @@ html[data-native] .memo-nb-spiral { display: none; }
 .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
   justify-content: flex-end;
   padding-inline: 1.1rem;
-  top: calc(2.4rem + env(safe-area-inset-top, 0px));
+  top: calc(2.4rem + var(--memo-safe-top, 0px));
 }
 
 html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
-  top: calc(0.6rem + env(safe-area-inset-top, 0px));
+  top: calc(0.6rem + var(--memo-safe-top, 0px));
 }
 
 .memo-paywall-shell.memo-nb-paper .app-start-close-button {
@@ -11900,6 +11870,7 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
 }
 
 .memo-nb-plan-name { font-size: 0.95rem; font-weight: 800; }
+.memo-nb-plan-name > .memo-nb-pen { width: 1rem; height: 1rem; margin-right: 0.25rem; vertical-align: -0.1rem; overflow: visible; --nb-pen: var(--nb-good); }
 .memo-nb-save { display: inline-flex; margin-left: 0.35rem; height: 1.25rem; align-items: center; padding: 0 0.45rem; border-radius: 999px; background: var(--nb-good-tint); color: var(--nb-good); font-size: 0.7rem; font-weight: 800; vertical-align: 1px; }
 .memo-nb-plan-was { position: relative; justify-self: start; margin-top: 0.3rem; font-size: 0.82rem; font-weight: 600; color: var(--nb-note-muted); text-decoration: none; }
 .memo-nb-plan-was::after { content: ""; position: absolute; left: -2px; right: -2px; top: 52%; height: 2px; border-radius: 2px; background: var(--promo); transform-origin: 0 50%; animation: memo-nb-strike 0.5s ease-out both 1.1s; }
@@ -12196,9 +12167,9 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
  */
 .memo-sheet-full.memo-wheel-sheet.memo-nb-paper { top: 0; border-radius: 0; }
 .memo-wheel-sheet.memo-nb-paper .memo-grab-wide { display: none; }
-.memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { padding: calc(2.4rem + env(safe-area-inset-top, 0px)) 1.1rem 0; }
-html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { padding-top: calc(0.6rem + env(safe-area-inset-top, 0px)); }
-.memo-wheel-sheet.memo-nb-paper .memo-wheel-body { padding: 0.6rem 1.25rem calc(1.15rem + env(safe-area-inset-bottom, 0px)); }
+.memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { padding: calc(2.4rem + var(--memo-safe-top, 0px)) 1.1rem 0; }
+html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { padding-top: calc(0.6rem + var(--memo-safe-top, 0px)); }
+.memo-wheel-sheet.memo-nb-paper .memo-wheel-body { padding: 0.6rem 1.25rem calc(1.15rem + var(--memo-safe-bottom, 0px)); }
 .memo-wheel-sheet.memo-nb-paper .memo-wheel-title { margin-top: 1.4rem; font-size: 2.25rem; line-height: 1.12; }
 :where(.memo-wheel-sheet.memo-nb-paper) .memo-wheel { --z: 1.24; }
 .memo-wheel-sheet.memo-nb-paper .memo-nb-tap { margin-top: auto; align-self: stretch; }
@@ -12213,7 +12184,7 @@ html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { paddin
 .memo-nb-minutes .memo-tutor-start { height: 4rem; border-radius: 20px; font-size: 1.15rem; font-weight: 900; letter-spacing: -0.01em; }
 .memo-wheel-sheet.memo-nb-paper .memo-wheel-cta { margin-top: auto; }
 .memo-wheel-sheet.memo-nb-paper .memo-nb-tap + .memo-wheel-cta { margin-top: 0.4rem; }
-.memo-sheet-full.memo-offer-sheet.memo-nb-paper { top: auto; max-height: calc(var(--memo-vv, 100vh) - 3.5rem); }
+.memo-sheet-full.memo-offer-sheet.memo-nb-paper { top: auto; max-height: calc(var(--memo-vv, 100vh) - 3.5rem - var(--memo-safe-top, 0px)); }
 
 /* The wheel stands on a gold base, its shadow on the page. */
 .memo-nb-stand {
@@ -12351,7 +12322,9 @@ html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibi
 .memo-paywall-shell.memo-nb-paper:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-nb-checks { --z: 0.9; }
 .memo-paywall-shell.memo-nb-paper:is([data-fit="3"], [data-fit="4"]) :is(.memo-nb-hero, .memo-nb-deck) { --z: 0.68; }
 .memo-paywall-shell.memo-nb-paper:is([data-fit="3"], [data-fit="4"]) .memo-nb-ticket-wrap { --z: 0.74; }
+.memo-nb-due.with-timeline { display: none; }
 .memo-paywall-shell.memo-nb-paper:is([data-fit="3"], [data-fit="4"]) :is(.memo-nb-checks, .memo-nb-timeline) { display: none; }
+.memo-paywall-shell.memo-nb-paper:is([data-fit="3"], [data-fit="4"]) .memo-nb-due.with-timeline { display: flex; }
 .memo-paywall-shell.memo-nb-paper[data-fit="4"] :is(.memo-nb-hero, .memo-nb-deck) { --z: 0.56; }
 .memo-paywall-shell.memo-nb-paper[data-fit="4"] .memo-nb-plans { --z: 0.88; }
 .memo-offer-body:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) .memo-nb-tnt { --z: 0.82; }
@@ -18929,7 +18902,7 @@ html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibi
  * left a screen of nothing beneath it. Matched with `:has()` rather than a class of its own
  * because the sheet element itself is read-aloud's — only its contents are the tutor's.
  */
-.note-read-usage-mobile-sheet:has(.memo-tutor-usage-heading) {
+.note-read-usage-mobile-sheet:has(.memo-tutor-usage-heading, .memo-nb-minutes) {
   min-height: 0;
 }
 

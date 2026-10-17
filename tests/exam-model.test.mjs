@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  FULL_RUN,
+  masteryAfterPractice,
+  percent as percentOf,
   CHECK_QUIZ_SIZE,
   addDays,
   MAX_EXAM_MODULES,
@@ -564,4 +567,23 @@ test("ready means every topic passed a check at the goal lately, by its own scor
   assert.equal(later.mastered, false);
   assert.equal(later.checkDue, true);
   assert.ok(CHECK_QUIZ_SIZE > 5, "a check quiz asks more than a practice quiz");
+});
+
+test("100 % is reachable: at 90 % or more, a run of fully right tests takes the topic to 100 %", () => {
+  // All right every time: the topic reaches 100 %, not a 99 % that never arrives.
+  const perfect = topicMastery(lessons("a", "quiz", 1, 14));
+  assert.equal(perfect.mastery, 1);
+  assert.equal(percentOf(perfect.mastery), 100);
+
+  // One wrong answer in the run: no jump; it has to be earned again, FULL_RUN tests in a row.
+  const slip = topicMastery([...lessons("a", "quiz", 1, 13), result("a", "quiz", 0.8, "2026-10-14T09:00:00Z")]);
+  assert.ok(slip.mastery < 1);
+  assert.equal(slip.perfectRun, 0);
+
+  // Below 90 % a perfect run only moves it the usual step.
+  assert.ok(masteryAfterPractice(0.5, FULL_RUN, "quiz", 1).mastery < 1);
+  // Flashcards neither count towards the run nor break it.
+  const cards = masteryAfterPractice(0.95, FULL_RUN - 1, "flashcards", 1);
+  assert.equal(cards.perfectRun, FULL_RUN - 1);
+  assert.equal(masteryAfterPractice(0.95, FULL_RUN - 1, "written", 1).mastery, 1);
 });

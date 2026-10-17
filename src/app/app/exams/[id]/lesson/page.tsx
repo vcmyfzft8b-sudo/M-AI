@@ -84,6 +84,7 @@ export default async function ExamLessonPage({
         position: current.position,
         mastery: current.mastery,
         rawMastery: current.rawMastery,
+        perfectRun: current.perfectRun,
       }}
       target={detail.exam.target_mastery}
       instead={instead}

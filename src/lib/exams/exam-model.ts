@@ -314,6 +314,28 @@ export function masteryAfterLesson(mastery: number, kind: ExamLessonKind, score:
   return clamp01(current + MASTERY_RATE * MASTERY_WEIGHT[kind] * (knownShare(kind, score) - current));
 }
 
+/*
+ * 100 % is reachable. The average only ever closes 20 % of the gap, so perfect answers alone would
+ * creep towards 100 % without arriving (shown as 99 %). A topic already at `FULL_FROM` whose last
+ * `FULL_RUN` tests (quiz, written answer, tutor) were all fully right is taken to 100 %: the learner
+ * plainly knows it. Self-graded flashcards neither count towards the run nor break it.
+ */
+export const FULL_RUN = 3;
+export const FULL_FROM = 0.9;
+const FULL_RUN_KINDS: readonly ExamLessonKind[] = ["quiz", "written", "tutor"];
+
+/** One practice added to a topic: its mastery and the run of fully right tests it now stands on. */
+export function masteryAfterPractice(mastery: number, perfectRun: number, kind: ExamLessonKind, score: number) {
+  let run = perfectRun;
+
+  if (FULL_RUN_KINDS.includes(kind)) {
+    run = meetsPassMark(clamp01(score), 1) ? run + 1 : 0;
+  }
+
+  const next = masteryAfterLesson(mastery, kind, score);
+  return { mastery: run >= FULL_RUN && next >= FULL_FROM ? 1 : next, perfectRun: run };
+}
+
 /**
  * The lessons a topic still needs to reach the target from `mastery`, for a learner who gets about
  * `ASSUMED_ACCURACY` right (more when the target needs more): the plan's and the forecast's unit.
@@ -409,6 +431,8 @@ export type ModuleState = {
   mastery: number;
   /** The same before fading. */
   rawMastery: number;
+  /** Tests fully right in a row (`FULL_RUN` of them at `FULL_FROM` takes the topic to 100 %). */
+  perfectRun: number;
   /** Lessons done in the topic, any kind; and of those the ones that test something. */
   lessons: number;
   practiceLessons: number;
@@ -625,6 +649,7 @@ export const CHECK_QUIZ_SIZE = 10;
  */
 export function topicMastery(results: readonly LessonResultLike[], goal = Number.POSITIVE_INFINITY) {
   let mastery = 0;
+  let perfectRun = 0;
   let peak = 0;
   /* When a check last passed at the goal: readiness wants every topic's to be recent. */
   let lastPassAt: string | null = null;
@@ -645,7 +670,7 @@ export function topicMastery(results: readonly LessonResultLike[], goal = Number
       lastPassAt = result.completed_at;
     }
 
-    mastery = masteryAfterLesson(mastery, result.lesson_kind, result.score);
+    ({ mastery, perfectRun } = masteryAfterPractice(mastery, perfectRun, result.lesson_kind, result.score));
     peak = Math.max(peak, mastery);
 
     if (time >= lastTime) {
@@ -654,7 +679,7 @@ export function topicMastery(results: readonly LessonResultLike[], goal = Number
     }
   }
 
-  return { mastery, peak, lastPassAt, lastAt };
+  return { mastery, peak, perfectRun, lastPassAt, lastAt };
 }
 
 /**
@@ -700,7 +725,7 @@ export function moduleProgress(
   }
 
   const goal = passThreshold(target);
-  const { mastery: rawMastery, peak, lastPassAt, lastAt } = topicMastery(results, goal);
+  const { mastery: rawMastery, peak, perfectRun, lastPassAt, lastAt } = topicMastery(results, goal);
   /*
    * Ready means every topic re-checked lately, not once weeks ago: a check passed within the days
    * mastery keeps before it starts to fade. Without a clock (no `now`) there is nothing to age.
@@ -725,6 +750,7 @@ export function moduleProgress(
   return {
     mastery,
     rawMastery,
+    perfectRun,
     lessons: results.length,
     practiceLessons,
     lastAt,
@@ -838,7 +864,7 @@ export type ExamNextStepModule = Pick<
   ModuleState,
   "topicId" | "lectureId" | "learned" | "mastered" | "unlocked" | "nextKind" | "mastery" | "lessons"
 > &
-  Partial<Pick<ModuleState, "failedToday" | "triedToday" | "pressingGaps" | "gapKind" | "checkDue">> & {
+  Partial<Pick<ModuleState, "failedToday" | "triedToday" | "pressingGaps" | "gapKind" | "checkDue" | "lastAt">> & {
     ready?: boolean;
     pending?: boolean;
   };
@@ -891,8 +917,10 @@ export function examNextStep(
   });
   const rested = (state: ExamNextStepModule, kind: ExamLessonKind) =>
     (state.failedToday?.[kind] ?? 0) < MAX_FAILED_TRIES_PER_DAY;
+  /* The weakest topic; between equals (several at 100 %), the one practised longest ago, so reviews rotate. */
+  const practisedAt = (state: ExamNextStepModule) => (state.lastAt ? instantOf(state.lastAt) : Number.NEGATIVE_INFINITY);
   const weakest = (list: ExamNextStepModule[]) =>
-    [...list].sort((left, right) => left.mastery - right.mastery)[0] ?? null;
+    [...list].sort((left, right) => left.mastery - right.mastery || practisedAt(left) - practisedAt(right))[0] ?? null;
 
   const learning = open.find((state) => !state.learned && rested(state, state.nextKind));
 

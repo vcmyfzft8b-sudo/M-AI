@@ -20,7 +20,7 @@ import { lessonUrl, takePrefetchedLesson } from "@/components/exams/lesson-prefe
 import {
   GAP_LESSON_KINDS,
   lessonsToTarget,
-  masteryAfterLesson,
+  masteryAfterPractice,
   meetsPassMark,
   knownShare,
   passThreshold,
@@ -124,6 +124,7 @@ export type ExamLessonModule = {
   /** The topic's mastery today (faded) and before fading, 0..1: a lesson builds on the unfaded one. */
   mastery: number;
   rawMastery: number;
+  perfectRun: number;
 };
 
 /* A lesson load that is worth trying again rather than showing as failed straight away. */
@@ -347,7 +348,8 @@ export function ExamLesson({
      */
     const score = total > 0 ? Math.min(1, correct / total) : 1;
     // A lesson that tested nothing (the reading alone) moves nothing.
-    const after = total > 0 ? masteryAfterLesson(module.rawMastery, kind, score) : module.mastery;
+    const after =
+      total > 0 ? masteryAfterPractice(module.rawMastery, module.perfectRun, kind, score).mastery : module.mastery;
     const mark = passThreshold(goal);
     const missedNow = missedRef.current.size;
     const repeatedOf = (lesson: LessonPayload | null): string[] =>

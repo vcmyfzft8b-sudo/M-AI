@@ -156,6 +156,16 @@ the limit of ten questions: they cannot always tell 70 % from 75 %, so a ready l
 still be a few points under (the test allows one in 60+ topics more than ten points under, none
 fifteen). At a 100 % goal nobody finished four topics in 14 days, under any rule.
 
+### 100 % is reachable
+
+The average closes 20 % of the gap per practice, so perfect answers alone would creep to 99.9 %
+and show 99 % for ever. `masteryAfterPractice`: a topic at `FULL_FROM` (90 %) or more whose last
+`FULL_RUN` (3) tests (quiz, written answer, tutor) were all fully right goes to 100 %; any miss resets
+the run, flashcards neither count nor break it. Between topics equally strong (several at 100 %),
+the next review goes to the one practised longest ago, so reviews rotate instead of sticking to the
+first. Simulated learners who learn fast all reached "ready" at a 100 % goal (by day 9 on average,
+each topic truly at 95 %+); slower ones do not in two weeks, which is the honest answer.
+
 ### Knowledge gaps: what comes back, and until when
 
 A lesson's result records which of the questions it showed the learner got wrong

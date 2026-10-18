@@ -235,7 +235,7 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
       height = 17.5;
       scene = (
         <>
-          {[[334, 96], [350, 150], [40, 30]].map(([x, y], index) => (
+          {[[316, 110], [330, 164], [40, 30]].map(([x, y], index) => (
             <span key={index} className="memo-nb-note-glyph" style={{ ...at(x, y), "--i": index } as CSSProperties}>
               <Msym name="music_note" size="1em" fill weight={600} />
             </span>
@@ -372,7 +372,8 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
       // The hero is as tall as the tags it holds: a second offer has one tag
       // to strike, not three, and must not leave the space of two empty.
       const shown = Math.min(earlier.length, spots.length);
-      const noteY = shown >= 3 ? 196 : 30 + shown * 62;
+      // Below Memo when it has the left side to itself, so a long language never runs into him.
+      const noteY = shown >= 3 ? 196 : Math.max(30 + shown * 62, 158);
       height = shown >= 3 ? 14.75 : Math.max(10, (noteY + 42) / 16);
       scene = (
         <>
@@ -391,9 +392,9 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
             );
           })}
           <NotebookMemo wave style={{ ...at(286, 60), width: "6.5rem" }} />
-          <span className="memo-nb-spark" style={{ ...at(330, 4), "--d": 0 } as CSSProperties} />
+          <span className="memo-nb-spark" style={{ ...at(232, 6), "--d": 0 } as CSSProperties} />
           <span className="memo-nb-spark" style={{ ...at(250, 50), "--d": 2 } as CSSProperties} />
-          <span className="memo-nb-hand" style={{ ...at(26, noteY), fontSize: "1.85rem", color: "var(--promo)", rotate: "-6deg", animation: "memo-nb-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both 2s" }}>{t("paywall.scene.bestPrice")}</span>
+          <span className="memo-nb-hand" style={{ ...at(26, noteY), fontSize: shown >= 3 ? "1.5rem" : "1.85rem", color: "var(--promo)", rotate: "-6deg", animation: "memo-nb-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both 2s" }}>{t("paywall.scene.bestPrice")}</span>
         </>
       );
       break;

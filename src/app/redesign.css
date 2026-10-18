@@ -11733,6 +11733,18 @@ html[data-native] .memo-nb-spiral { display: none; }
   .memo-paywall-shell.memo-nb-paper { padding-bottom: var(--nb-foot); }
 }
 
+/*
+ * The scenes are drawn on a 24rem stage and Memo stands at its right edge, so
+ * a phone narrower than the stage scales the scene down rather than cutting
+ * him off: the factor is about the viewport over 396px (half the stage plus
+ * Memo's overhang), on top of the fit's own zoom.
+ */
+.memo-paywall-shell.memo-nb-paper > :is(.memo-nb-hero, .memo-nb-deck) { zoom: calc(var(--z, 1) * var(--fit-squeeze, 1) * var(--nb-narrow, 1)); }
+@media (max-width: 399px) { .memo-paywall-shell.memo-nb-paper { --nb-narrow: 0.97; } }
+@media (max-width: 384px) { .memo-paywall-shell.memo-nb-paper { --nb-narrow: 0.94; } }
+@media (max-width: 369px) { .memo-paywall-shell.memo-nb-paper { --nb-narrow: 0.9; } }
+@media (max-width: 349px) { .memo-paywall-shell.memo-nb-paper { --nb-narrow: 0.84; } }
+
 /* The close button is the app's round one, top right like everywhere else in the app. */
 .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
   /* Above the scene, which is drawn after it and would otherwise take its taps. */
@@ -11950,7 +11962,7 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
 .memo-nb-save { display: inline-flex; margin-left: 0.35rem; height: 1.25rem; align-items: center; padding: 0 0.45rem; border-radius: 999px; background: var(--nb-good-tint); color: var(--nb-good); font-size: 0.7rem; font-weight: 800; vertical-align: 1px; }
 .memo-nb-plan-was { position: relative; justify-self: start; margin-top: 0.3rem; font-size: 0.82rem; font-weight: 600; color: var(--nb-note-muted); text-decoration: none; }
 .memo-nb-plan-was::after { content: ""; position: absolute; left: -2px; right: -2px; top: 52%; height: 2px; border-radius: 2px; background: var(--promo); transform-origin: 0 50%; animation: memo-nb-strike 0.5s ease-out both 1.1s; }
-.memo-nb-plan-price { margin-top: 0.3rem; font-size: 1.62rem; font-weight: 850; letter-spacing: -0.04em; line-height: 1.05; }
+.memo-nb-plan-price { margin-top: 0.3rem; font-size: clamp(1.3rem, 6.6vw, 1.62rem); font-weight: 850; letter-spacing: -0.04em; line-height: 1.05; white-space: nowrap; }
 .memo-nb-plan-price small { font-size: 0.75rem; font-weight: 600; letter-spacing: 0; color: var(--nb-note-muted); }
 .memo-nb-plan-detail { font-size: 0.75rem; line-height: 1.3; color: var(--nb-note-muted); text-wrap: balance; }
 
@@ -11983,6 +11995,9 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
   font-weight: 700;
   color: var(--nb-good);
 }
+
+/* A long label (the Slavic "try free, then N % off") is never cut off: it eases down on a narrow phone and, if it must, takes two balanced lines. */
+.memo-paywall-shell.memo-nb-paper .memo-paywall-cta-label { font-size: clamp(0.98rem, 4.4vw, 1.15rem); white-space: normal; text-overflow: clip; line-height: 1.12; text-wrap: balance; }
 
 /* The app's paywall button (.memo-paywall-cta), breathing, with a sheen across it. */
 .memo-paywall-shell.memo-nb-paper .memo-paywall-cta,
@@ -12148,7 +12163,7 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
 .memo-nb-burst i { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 2px; background: var(--c, var(--nb-gold)); transform: rotate(var(--a)) translateY(0) scale(0); animation: memo-nb-burst var(--cyc, 5s) ease-out infinite var(--dl, 0s); }
 
 /* Chat: a question, Memo typing, the answer. */
-.memo-nb-bubble { max-width: 14rem; padding: 0.68rem 0.95rem; border-radius: 18px; font-size: 0.92rem; line-height: 1.3; font-weight: 600; }
+.memo-nb-bubble { max-width: 11.5rem; padding: 0.68rem 0.95rem; border-radius: 18px; font-size: 0.92rem; line-height: 1.3; font-weight: 600; }
 .memo-nb-bubble.mine { right: 4.2rem; top: 1.1rem; background: var(--paywall-accent, var(--promo)); color: var(--on-promo); border-bottom-right-radius: 12px; animation: memo-nb-seq-q 6s ease infinite; }
 .memo-nb-bubble.theirs { left: 7rem; top: 4.9rem; background: var(--surface); color: var(--text); border-bottom-left-radius: 12px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08); animation: memo-nb-seq-a 6s ease infinite; }
 .memo-nb-bubble.theirs mark { background: var(--nb-marker); color: inherit; border-radius: 4px; padding: 0 3px; }
@@ -12401,6 +12416,7 @@ html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibi
 .memo-nb-minutes { display: grid; gap: 0.6rem; padding-top: 0.2rem; }
 /* The sheet keeps 2rem under it; the Home Screen app, drawn to the screen's rounded foot, a little more. */
 :root[data-standalone] .memo-nb-minutes { padding-bottom: 0.6rem; }
+@media (display-mode: standalone) { .memo-nb-minutes { padding-bottom: 0.6rem; } }
 .memo-nb-minutes .memo-nb-title { text-align: left; font-size: 1.55rem; }
 .memo-nb-minutes-sub { margin: 0; display: flex; align-items: center; gap: 0.35rem; color: var(--muted); font-size: 0.92rem; font-weight: 650; }
 .memo-nb-minutes-sub .msym { color: var(--nb-gold-deep); }
@@ -12435,7 +12451,8 @@ html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibi
 @keyframes memo-nb-fill { from { transform: scaleX(0); } to { transform: scaleX(0.5); } }
 @keyframes memo-nb-ping { 0% { box-shadow: 0 0 0 4px var(--nb-paper), 0 0 0 4px color-mix(in oklch, var(--promo) 50%, transparent); } 70%, 100% { box-shadow: 0 0 0 4px var(--nb-paper), 0 0 0 14px transparent; } }
 /* Each card holds until the next has landed on it (25% + 4%), so the deck is never empty. */
-@keyframes memo-nb-deal { 0% { opacity: 0; transform: translate(9rem, -0.6rem) rotate(16deg); } 4%, 29% { opacity: 1; transform: rotate(-2deg); } 34%, 100% { opacity: 0; transform: translate(-10rem, 1.2rem) rotate(-18deg); } }
+/* The arriving card is solid almost at once and always on top, the leaving one underneath, including across the wrap. */
+@keyframes memo-nb-deal { 0% { opacity: 0; transform: translate(9rem, -0.6rem) rotate(16deg); z-index: 3; } 1% { opacity: 1; } 4% { opacity: 1; transform: rotate(-2deg); z-index: 3; } 4.01% { z-index: 2; } 29% { opacity: 1; transform: rotate(-2deg); z-index: 2; } 29.01% { z-index: 1; } 34%, 100% { opacity: 0; transform: translate(-10rem, 1.2rem) rotate(-18deg); z-index: 1; } }
 @keyframes memo-nb-dot { 0% { width: 20px; background: var(--promo); } 25%, 100% { width: 7px; background: color-mix(in oklch, var(--text) 18%, transparent); } }
 @keyframes memo-nb-bob { 0%, 100% { transform: translateY(0) rotate(-1.5deg); } 50% { transform: translateY(-9px) rotate(1.5deg); } }
 @keyframes memo-nb-wave { 0%, 100% { transform: rotate(-3deg) translateY(0); } 25% { transform: rotate(4deg) translateY(-6px); } 50% { transform: rotate(-2deg) translateY(-9px); } 75% { transform: rotate(3deg) translateY(-4px); } }

@@ -11404,7 +11404,6 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
  * the foot. The prize sheet is a sheet the height of what is on it.
  */
 .memo-sheet-full.memo-wheel-sheet.memo-nb-paper { top: 0; border-radius: 0; }
-.memo-wheel-sheet.memo-nb-paper .memo-grab-wide { display: none; }
 .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { position: relative; z-index: 10; padding: calc(2.4rem + var(--memo-safe-top, 0px)) 1.1rem 0; }
 html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { padding-top: calc(0.6rem + var(--memo-safe-top, 0px)); }
 .memo-wheel-sheet.memo-nb-paper .memo-wheel-body { padding: 0.6rem 1.25rem var(--nb-foot); overflow-x: clip; }
@@ -11531,19 +11530,49 @@ html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { paddin
   background: radial-gradient(closest-side, color-mix(in oklch, var(--promo) 45%, transparent), color-mix(in oklch, var(--nb-gold) 18%, transparent) 60%, transparent 75%);
 }
 /*
- * The rays turn their gradient, not their box: a turning box's corners swing
- * past the page, the fit (use-fit-screen.ts) reads that as overflow and
- * shrinks the wheel mid-spin.
+ * The rays turn inside a still, round frame. A turning box's corners swing
+ * past the page, which the fit (use-fit-screen.ts) reads as overflow and
+ * shrinks the wheel mid-spin; turning the gradient itself instead repaints a
+ * large masked circle every frame, which stutters on a phone. A transform on
+ * the frame's own layer does neither: it runs on the compositor and the
+ * frame's box never moves.
  */
-@property --memo-ray-turn { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 .memo-wheel-sheet .memo-wheel-rays {
   inset: -6.6rem;
-  background: repeating-conic-gradient(from var(--memo-ray-turn), var(--nb-wheel-ray-a) 0deg 8deg, var(--nb-wheel-ray-b) 8deg 16deg, transparent 16deg 24deg);
+  overflow: hidden;
+  background: none;
   -webkit-mask-image: radial-gradient(closest-side, #000 35%, transparent 100%);
   mask-image: radial-gradient(closest-side, #000 35%, transparent 100%);
-  animation-name: memo-wheel-ray-turn;
+  animation: none;
 }
-@keyframes memo-wheel-ray-turn { to { --memo-ray-turn: 360deg; } }
+.memo-wheel-sheet .memo-wheel-rays::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-conic-gradient(var(--nb-wheel-ray-a) 0deg 8deg, var(--nb-wheel-ray-b) 8deg 16deg, transparent 16deg 24deg);
+  animation: memo-wheel-rays 18s linear infinite;
+  will-change: rotate;
+}
+.memo-wheel-sheet .memo-wheel.spinning .memo-wheel-rays::before { animation-duration: 3s; }
+
+/*
+ * The wheel is a whole page, not a sheet: it opens where it stands and fades
+ * out where it stands. The phone's bottom-sheet entrance slid it up from a
+ * fifth of the way down and overshot, so the whole page bounced as it opened.
+ */
+@media (max-width: 1099px) {
+  .memo-sheet-full.memo-wheel-sheet.memo-nb-paper {
+    transform: none;
+    /* `backwards`, not `both`: a held end state would outrank the closing fade. */
+    animation: memo-nb-page-in 0.22s ease-out backwards;
+  }
+  .memo-sheet-full.memo-wheel-sheet.memo-nb-paper.closing {
+    transform: none;
+    opacity: 0;
+    transition: opacity 0.2s ease-in;
+  }
+}
+@keyframes memo-nb-page-in { from { opacity: 0; } to { opacity: 1; } }
 .memo-wheel-sheet .memo-nb-stand { bottom: -2.2rem; width: 6.65rem; height: 3rem; margin-left: -3.325rem; }
 
 /* Title on two lines with a pen line under it, as drawn; the page shares its spare height out evenly. */
@@ -11622,8 +11651,12 @@ html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibi
   align-items: center;
   justify-content: flex-end;
   gap: 0.3rem;
+  /* A fixed line: the page shares its spare height out round this, and the
+     handwriting arriving after the page shows must not move anything. */
+  height: 2.2rem;
   margin: 0.4rem 0 -0.2rem;
   font-size: 1.55rem;
+  line-height: 1;
   color: var(--promo);
   rotate: -4deg;
   animation: memo-nb-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both 1.8s;

@@ -76,6 +76,21 @@ const SIGN_IN_ONLY_APP_HOSTS = [
   "teams.microsoft.com",
 ];
 
+// Steps that sign a URL with the visitor's own session, so they only ever lead somewhere for a
+// signed-in browser. A Google Drive viewer address copied out of the address bar
+// (`*-apps-viewer.googleusercontent.com/viewer/secure/...`) sends a cookieless fetch to Drive's
+// nonce signer and back, round and round until the redirect limit, which used to tell the
+// learner to paste the final address -- the address they had pasted.
+const SESSION_SIGNING_ROUTES = [{ host: "drive.google.com", pathPrefix: "/viewerng/noncesigner" }];
+
+function isSessionSigningRoute(url: URL) {
+  const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+
+  return SESSION_SIGNING_ROUTES.some(
+    (route) => hostname === route.host && url.pathname.toLowerCase().startsWith(route.pathPrefix),
+  );
+}
+
 function isIdentityProviderHost(hostname: string) {
   const normalized = hostname.trim().toLowerCase().replace(/\.$/, "");
 
@@ -97,7 +112,7 @@ export function isLoginWallUrl(value: string | URL) {
     return false;
   }
 
-  if (isIdentityProviderHost(url.hostname)) {
+  if (isIdentityProviderHost(url.hostname) || isSessionSigningRoute(url)) {
     return true;
   }
 

@@ -110,7 +110,9 @@ As in Astra, the path is one lesson after another, and the path picks the next o
    through to the last module), not in the order lessons were done, so a module's run never
    looks finished while it is under the goal. Until 2026-10-17 four practice lessons opened the next module whatever the score; that is
    gone, and with it the guarantee that every topic is reached before the exam: a learner who cannot
-   reach the goal in one module never sees the later ones.
+   reach the goal in one module never opens the later ones (they show their estimates, shut). A
+   shut module's card names the module it really waits on, the nearest earlier one that can be
+   studied (`gatingModule`), and a module the learner's plan does not open says "Odpre se s paketom".
 2. **Close gaps.** A topic's open knowledge gaps (below), the topic with the most first.
 3. **Practise.** The open topic furthest under the goal (faded ones included).
 4. **Exam day.** On the exam's eve and the day itself, a flashcard refresher for each topic.

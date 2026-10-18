@@ -2536,6 +2536,7 @@ export const sr: Messages = {
   "exam.path.continue": "Nastavi · {lesson}",
   "exam.path.topicMastery": "Znanje {percent} % · cilj {target} %",
   "exam.path.locked": "Završi vežbe iznad",
+  "exam.path.paidModule": "Otvara se sa paketom",
   "exam.path.gate": "Otključava se kad modul {index} dostigne {target} %",
   "exam.path.earlier": { one: "Prikaži još {count} raniju vežbu", few: "Prikaži još {count} ranije vežbe", other: "Prikaži još {count} ranijih vežbi" },
   "exam.path.lessonsLeft": { one: "Još ~{count} vežba do {target} %", few: "Još ~{count} vežbe do {target} %", other: "Još ~{count} vežbi do {target} %" },

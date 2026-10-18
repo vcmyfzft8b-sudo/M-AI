@@ -21,7 +21,7 @@ import {
   type ExamLessonKind,
   type PracticeLessonKind,
 } from "@/lib/exams/exam-model";
-import { pathBuddySide, pathCurve, pathPoint, pathStations } from "@/lib/exams/exam-path";
+import { gatingModule, pathBuddySide, pathCurve, pathPoint, pathStations } from "@/lib/exams/exam-path";
 import type { ExamDetail, ExamModuleView } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { currentPaywallBack, paywallPath } from "@/lib/paywall-reasons";
@@ -601,8 +601,13 @@ export function ExamDashboard({
             ) : null}
             {runs.map((run) => {
               const topic = byTopic.get(run.topicId);
-              // Not reached yet: shut until the module before it is on its goal.
-              const gated = !reachedTopics.has(run.topicId);
+              // Not in the learner's plan: it opens with one, whatever the path says.
+              const paid = topic ? !canOpen(topic.lectureId) : false;
+              // Not reached yet: shut until the module it waits on is on its goal.
+              const gated = !paid && !reachedTopics.has(run.topicId);
+              const gate = gated
+                ? gatingModule(modules, run.topicId, (candidate) => candidate.ready && !candidate.pending && canOpen(candidate.lectureId))
+                : null;
               const current = run.stations.some((station) => station.type === "next");
               const mastery = topic ? percent(topic.mastery) : 0;
               // Where each stop sits on the line, and how far the learner has walked along it.
@@ -614,8 +619,8 @@ export function ExamDashboard({
                 <section key={`run:${run.start}`} className="memo-exam-trail-unit">
                   {/* The module as a chapter: its name, and the app's bar towards its goal with the goal marked. */}
                   <div
-                    className={`memo-path-chapter ${current ? "current" : ""} ${gated ? "locked" : ""} ${
-                      !gated && mastery >= target ? "on-target" : ""
+                    className={`memo-path-chapter ${current ? "current" : ""} ${gated || paid ? "locked" : ""} ${
+                      !gated && !paid && mastery >= target ? "on-target" : ""
                     }`.trim()}
                   >
                     <div className="memo-path-chapter-head">
@@ -628,8 +633,12 @@ export function ExamDashboard({
                     </div>
                     <b className="memo-path-chapter-title">{topic?.title?.trim() || t("note.untitled")}</b>
                     {/* Shut until the module before it (the gate's position, counted from 1) is on target. */}
-                    {gated && topic ? (
-                      <span className="memo-path-chapter-gate">{t("exam.path.gate", { target, index: topic.position })}</span>
+                    {paid ? (
+                      <span className="memo-path-chapter-gate">{t("exam.path.paidModule")}</span>
+                    ) : gated && topic ? (
+                      <span className="memo-path-chapter-gate">
+                        {t("exam.path.gate", { target, index: (gate ?? topic).position + (gate ? 1 : 0) })}
+                      </span>
                     ) : topic ? (
                       <div
                         className="memo-path-chapter-bar"

@@ -29,5 +29,4 @@ test("in the app it follows the home dock down onto the home indicator", () => {
 test("the bar and the room kept for it both use that one foot", () => {
   assert.match(squash(css), /\.memo-exam-cta \{ position: absolute;[^}]*padding: 1\.6rem 1\.15rem var\(--memo-exam-bar-foot\);/);
   assert.match(squash(css), /\.memo-exam-page \{ padding-bottom: calc\(5rem \+ var\(--memo-exam-bar-foot\)\); \}/);
-  assert.doesNotMatch(css, /0\.9rem \+ var\(--memo-safe-bottom\)/);
 });

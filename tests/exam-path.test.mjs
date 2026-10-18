@@ -12,6 +12,7 @@ import {
   pathCurve,
   pathOffset,
   pathPoint,
+  gatingModule,
   pathStations,
 } from "../src/lib/exams/exam-path.ts";
 
@@ -152,4 +153,19 @@ test("notes still being made stay off the path, and old lessons fold", () => {
   assert.equal(folded.folded.get("t0"), 3);
   assert.equal(folded.runs[0].stations.filter((station) => station.type === "done").length, DONE_SHOWN);
   assert.equal(draw(new Set(["t0"])).folded.size, 0);
+});
+
+test("a shut module names the module it really waits on, past ones that cannot be studied", () => {
+  const modules = [
+    pathModule(0, 0.2, { usable: true }),
+    pathModule(1, 0, { usable: false }), // a note still being made, or one the plan does not open
+    pathModule(2, 0, { usable: true }),
+    pathModule(3, 0, { usable: true }),
+  ];
+  const usable = (candidate) => candidate.usable;
+
+  assert.equal(gatingModule(modules, "t2", usable)?.topicId, "t0");
+  assert.equal(gatingModule(modules, "t3", usable)?.topicId, "t2");
+  assert.equal(gatingModule(modules, "t0", usable), null);
+  assert.equal(gatingModule([...modules].reverse(), "t2", usable)?.topicId, "t0");
 });

@@ -151,3 +151,19 @@ export function pathStations({
 
   return { runs, folded };
 }
+
+/**
+ * The module a shut one is waiting on: the nearest one before it that can be studied. The path
+ * passes over a module that cannot be (a note still being made, or one the learner's plan does
+ * not open), so "opens when module N reaches the goal" must name the one that really holds it.
+ */
+export function gatingModule<T extends { topicId: string; position: number }>(
+  modules: readonly T[],
+  topicId: string,
+  usable: (module: T) => boolean,
+) {
+  const ordered = [...modules].sort((left, right) => left.position - right.position);
+  const at = ordered.findIndex((candidate) => candidate.topicId === topicId);
+
+  return at > 0 ? (ordered.slice(0, at).reverse().find(usable) ?? null) : null;
+}

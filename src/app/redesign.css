@@ -11407,7 +11407,7 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
 .memo-wheel-sheet.memo-nb-paper .memo-grab-wide { display: none; }
 .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { position: relative; z-index: 10; padding: calc(2.4rem + var(--memo-safe-top, 0px)) 1.1rem 0; }
 html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { padding-top: calc(0.6rem + var(--memo-safe-top, 0px)); }
-.memo-wheel-sheet.memo-nb-paper .memo-wheel-body { padding: 0.6rem 1.25rem var(--nb-foot); }
+.memo-wheel-sheet.memo-nb-paper .memo-wheel-body { padding: 0.6rem 1.25rem var(--nb-foot); overflow-x: clip; }
 .memo-offer-sheet.memo-nb-paper .memo-offer-body { padding-bottom: var(--nb-foot); }
 .memo-wheel-sheet.memo-nb-paper .memo-wheel-title { margin-top: 1.4rem; font-size: 2.25rem; line-height: 1.12; }
 :where(.memo-wheel-sheet.memo-nb-paper) .memo-wheel { --z: 1.24; }
@@ -11469,8 +11469,8 @@ html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { paddin
   border-radius: 999px;
   box-shadow: 0 0 0 4px var(--nb-wheel-rim-line), 0 24px 60px rgba(0, 0, 0, 0.35), 0 0 80px color-mix(in oklch, var(--nb-gold) 30%, transparent);
 }
-/* The gloss, which does not turn either. */
-.memo-wheel-sheet .memo-wheel::after {
+/* The gloss, which does not turn either. Not once won: then ::after is the landing's burst of light. */
+.memo-wheel-sheet .memo-wheel:not(.won)::after {
   content: "";
   position: absolute;
   inset: 0.68rem;
@@ -11549,6 +11549,8 @@ html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { paddin
 /* Title on two lines with a pen line under it, as drawn; the page shares its spare height out evenly. */
 .memo-wheel-sheet.memo-nb-paper .memo-wheel-title { margin-top: auto; max-width: 11.5rem; font-size: 2.375rem; text-wrap: balance; }
 .memo-wheel-squiggle { flex: none; margin-top: 0.1rem; overflow: visible; }
+/* Above the drifting confetti, which falls through the top of the page. */
+.memo-wheel-sheet.memo-nb-paper :is(.memo-wheel-title, .memo-wheel-squiggle) { position: relative; }
 .memo-wheel-sheet.memo-nb-paper .memo-nb-ticket-wrap { margin-top: auto; }
 .memo-nb-tap.gone { visibility: hidden; }
 
@@ -11629,7 +11631,9 @@ html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibi
 
 /* --- the prize sheet's countdown: an LED timer strapped to dynamite ------------- */
 
-.memo-nb-tnt { position: relative; width: 18.75rem; height: 8rem; margin: 0.6rem auto 0; }
+/* Room above for the lit fuse, which rises 2.5rem over the dynamite: the sheet's body scrolls, so anything above its top edge is cut off. */
+.memo-nb-tnt { position: relative; flex: none; width: 18.75rem; height: 8rem; margin: 2.3rem auto 0; }
+/* Everything in it is drawn absolutely, so a short screen's flex column would crush its box to nothing and spill the sticks over the coupon; it never shrinks, and the fit (use-fit-screen.ts) scales the sheet instead. */
 .memo-nb-stick { position: absolute; left: 0; right: 0; height: 2.4rem; border-radius: 12px; background: linear-gradient(to bottom, var(--nb-dynamite-dark), color-mix(in oklch, var(--nb-dynamite) 65%, white) 20%, var(--nb-dynamite) 48%, color-mix(in oklch, var(--nb-dynamite) 80%, black) 78%, var(--nb-dynamite-dark)); box-shadow: 0 6px 10px -4px rgba(80, 10, 0, 0.45); }
 .memo-nb-stick::before, .memo-nb-stick::after { content: ""; position: absolute; top: 0; bottom: 0; width: 14px; background: linear-gradient(to bottom, var(--nb-gold-deep), var(--nb-paper-end) 35%, var(--nb-gold-light) 60%, var(--nb-gold-dark)); }
 .memo-nb-stick::before { left: 0; border-radius: 12px 3px 3px 12px; }

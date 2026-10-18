@@ -698,6 +698,7 @@ export function DiscountOffer({
                     key={label}
                     className="memo-wheel-slice"
                     style={{
+                      // Nearer the hub than the old 4.9rem, as drawn (84px of the design's 150px radius).
                       ...onRim(index * 60 + 30, 4.3),
                       transform: `translate(-50%, -50%) rotate(${index * 60 + 30}deg)`,
                     }}

@@ -44,6 +44,31 @@ import { APPLE_PRODUCTS } from "@/lib/mobile/runtime";
 const WHEEL_SLICES = ["10 %", "15 %", "20 %", "50 %", "5 %", "30 %"];
 /** Bulbs in the ring of lights round the rim. */
 const WHEEL_BULBS = 18;
+/**
+ * Where a part sits on the wheel: `angle` degrees clockwise from the top,
+ * `radius` rem from the centre. Placed with left/top rather than a translate,
+ * because Safari does not apply the wheel's `zoom` to transform lengths and
+ * would draw every bulb, stick and label too close to the middle.
+ */
+function onRim(angle: number, radius: number) {
+  return {
+    left: `calc(50% + ${radius}rem * sin(${angle}deg))`,
+    top: `calc(50% - ${radius}rem * cos(${angle}deg))`,
+  };
+}
+
+/** The idle page's paper confetti: where each piece falls from, its colour and when. */
+const DRIFT_CONFETTI: [number, string, number][] = [
+  [6, "var(--nb-gold)", 0.3],
+  [17, "var(--promo)", 2.4],
+  [28, "var(--nb-tape-pink)", 4.6],
+  [39, "var(--nb-good)", 1.2],
+  [52, "var(--nb-gold)", 6.1],
+  [63, "var(--promo)", 3.3],
+  [74, "var(--nb-violet)", 0.9],
+  [85, "var(--nb-good)", 5.2],
+  [94, "var(--nb-tape-pink)", 7.4],
+];
 
 /** Compact levels the wheel and offer sheets may step down to (`redesign.css`). */
 const SHEET_FIT_LEVELS = 4;
@@ -573,6 +598,14 @@ export function DiscountOffer({
           </div>
 
           <div className="memo-wheel-body" ref={wheelBodyRef}>
+            {/* Paper confetti drifting down the page while the wheel waits. Decoration only. */}
+            {!hasWon ? (
+              <div className="memo-nb-drift" aria-hidden="true">
+                {DRIFT_CONFETTI.map(([x, color, delay], index) => (
+                  <i key={index} style={{ "--x": `${x}%`, "--c": color, "--t": `${delay}s` } as React.CSSProperties} />
+                ))}
+              </div>
+            ) : null}
             {hasWon ? (
               <div className="memo-confetti" aria-hidden="true">
                 {Array.from({ length: CONFETTI_COUNT }, (_, index) => {
@@ -609,7 +642,12 @@ export function DiscountOffer({
             {hasWon && !nativeOffer ? (
               <Ticket percent={50} off={t("paywall.offer.off")} note={t("offer.youWon")} />
             ) : (
-              <h1 className="memo-wheel-title memo-nb-title"><Marked text={t("offer.wheelTitle")} /></h1>
+              <>
+                <h1 className="memo-wheel-title memo-nb-title"><Marked text={t("offer.wheelTitle")} /></h1>
+                <svg className="memo-nb-pen memo-wheel-squiggle" width="150" height="16" viewBox="0 0 150 16" aria-hidden="true" style={{ "--dl": "1.3s", "--dur": "0.6s" } as React.CSSProperties}>
+                  <path pathLength={1} d="M4 10 C 30 4, 60 14, 90 8 C 110 4, 130 6, 146 10" />
+                </svg>
+              </>
             )}
             <p className="memo-wheel-sub">
               {t(
@@ -636,20 +674,32 @@ export function DiscountOffer({
                 {Array.from({ length: WHEEL_BULBS }, (_, index) => (
                   <span
                     key={index}
-                    style={{ "--i": index, transform: `rotate(${(index * 360) / WHEEL_BULBS}deg) translateY(-7.22rem)` } as React.CSSProperties}
+                    style={{ "--i": index, ...onRim((index * 360) / WHEEL_BULBS, 7.22) } as React.CSSProperties}
                   />
                 ))}
               </div>
-              <div className="memo-wheel-pointer" aria-hidden="true" />
+              {/* A gold flapper with a jewel in it, swinging from its mount as the sticks pass. */}
+              <div className="memo-wheel-pointer" aria-hidden="true">
+                <svg viewBox="0 0 34 44">
+                  <defs>
+                    <linearGradient id="memo-wheel-pointer-gold" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0" style={{ stopColor: "var(--nb-gold-light)" }} />
+                      <stop offset="0.5" style={{ stopColor: "var(--nb-gold)" }} />
+                      <stop offset="1" style={{ stopColor: "var(--nb-gold-dark)" }} />
+                    </linearGradient>
+                  </defs>
+                  <path d="M17 42 L3 10 A15 15 0 1 1 31 10 Z" fill="url(#memo-wheel-pointer-gold)" />
+                  <circle cx="17" cy="13" r="5" />
+                </svg>
+              </div>
               <div className="memo-wheel-disc">
                 {WHEEL_SLICES.map((label, index) => (
                   <span
                     key={label}
                     className="memo-wheel-slice"
                     style={{
-                      transform: `translate(-50%, -50%) rotate(${
-                        index * 60 + 30
-                      }deg) translateY(-4.9rem)`,
+                      ...onRim(index * 60 + 30, 4.3),
+                      transform: `translate(-50%, -50%) rotate(${index * 60 + 30}deg)`,
                     }}
                   >
                     {label}
@@ -659,7 +709,7 @@ export function DiscountOffer({
                   <span
                     key={`peg-${index}`}
                     className="memo-wheel-peg"
-                    style={{ transform: `rotate(${index * 60}deg) translateY(-6.35rem)` }}
+                    style={{ ...onRim(index * 60, 6.35), transform: `rotate(${index * 60}deg)` }}
                   />
                 ))}
               </div>
@@ -699,14 +749,13 @@ export function DiscountOffer({
 
             {error ? <p className="memo-inline-error">{error}</p> : null}
 
-            {!isSpinning && !hasWon ? (
-              <p className="memo-nb-tap memo-nb-hand" aria-hidden="true">
-                <svg className="memo-nb-pen" width="34" height="30" viewBox="0 0 40 34" style={{ overflow: "visible", "--dl": "2s" } as React.CSSProperties}>
-                  <path pathLength={1} d="M36 4 C 22 6, 10 14, 8 28 M2 20 L 8 30 L 16 22" />
-                </svg>
-                {t("offer.tapToSpin")}
-              </p>
-            ) : null}
+            {/* Kept in the layout once the wheel turns, only unseen, so nothing above it moves. */}
+            <p className={`memo-nb-tap memo-nb-hand ${!isSpinning && !hasWon ? "" : "gone"}`.trim()} aria-hidden="true">
+              <svg className="memo-nb-pen" width="34" height="30" viewBox="0 0 40 34" style={{ overflow: "visible", "--dl": "2s" } as React.CSSProperties}>
+                <path pathLength={1} d="M36 4 C 22 6, 10 14, 8 28 M2 20 L 8 30 L 16 22" />
+              </svg>
+              {t("offer.tapToSpin")}
+            </p>
 
             <button
               type="button"

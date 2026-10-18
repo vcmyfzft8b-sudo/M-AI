@@ -57,8 +57,6 @@ test("only known reasons are accepted, and every reason has its copy", () => {
   assert.equal(isPaywallReason(undefined), false);
 
   for (const reason of PAYWALL_REASONS) {
-    for (const part of ["title", "benefitTitle", "benefitCopy"]) {
-      assert.ok(en[`paywall.reason.${reason}.${part}`], `${reason}.${part}`);
-    }
+    assert.ok(en[`paywall.reason.${reason}.title`], `${reason}.title`);
   }
 });

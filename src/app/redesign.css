@@ -443,6 +443,8 @@
   --nb-paper: #fffdf6;
   --nb-rule: rgba(60, 110, 210, 0.15);
   --nb-margin: rgba(244, 95, 90, 0.5);
+  --nb-wheel-ray-a: color-mix(in oklch, var(--promo) 30%, transparent);
+  --nb-wheel-ray-b: color-mix(in oklch, var(--nb-gold) 28%, transparent);
   --nb-hole: #e9e4d8;
   --nb-marker: rgba(255, 216, 77, 0.75);
   --nb-sticker: #ffffff;
@@ -474,6 +476,17 @@
   --nb-dynamite-dark: #7a1712;
   --nb-paper-end: #fff1d2;
   --nb-violet: oklch(0.64 0.19 315);
+  /* The prize wheel, as drawn: the same candy in either appearance. */
+  --nb-wheel-coral: #ff6d68;
+  --nb-wheel-cream: #fff4e6;
+  --nb-wheel-pink: #ffb3c7;
+  --nb-wheel-gold: #ffd66b;
+  --nb-wheel-red: #f45f5a;
+  --nb-wheel-ink-red: #c2413c;
+  --nb-wheel-ink-berry: #8a1f40;
+  --nb-wheel-ink-brown: #3b2400;
+  --nb-wheel-bulb: #ffd27a;
+  --nb-wheel-rim-line: #1a1625;
   --nb-sky: oklch(0.66 0.15 145);
   --promo: #f45f5a;
   /* Text on a `--promo` fill. White in both appearances, so only declared here. */
@@ -555,6 +568,8 @@
   --nb-paper: #17171a;
   --nb-rule: rgba(140, 170, 255, 0.11);
   --nb-margin: rgba(255, 109, 104, 0.4);
+  --nb-wheel-ray-a: color-mix(in oklch, var(--promo) 20%, transparent);
+  --nb-wheel-ray-b: color-mix(in oklch, var(--nb-gold) 15%, transparent);
   --nb-hole: #0b0b0c;
   --nb-marker: rgba(255, 216, 77, 0.4);
   --nb-sticker: #2a2a2f;
@@ -598,6 +613,8 @@
   --nb-paper: #17171a;
   --nb-rule: rgba(140, 170, 255, 0.11);
   --nb-margin: rgba(255, 109, 104, 0.4);
+  --nb-wheel-ray-a: color-mix(in oklch, var(--promo) 20%, transparent);
+  --nb-wheel-ray-b: color-mix(in oklch, var(--nb-gold) 15%, transparent);
   --nb-hole: #0b0b0c;
   --nb-marker: rgba(255, 216, 77, 0.4);
   --nb-sticker: #2a2a2f;
@@ -11390,15 +11407,15 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
 .memo-wheel-sheet.memo-nb-paper .memo-grab-wide { display: none; }
 .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { position: relative; z-index: 10; padding: calc(2.4rem + var(--memo-safe-top, 0px)) 1.1rem 0; }
 html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { padding-top: calc(0.6rem + var(--memo-safe-top, 0px)); }
-.memo-wheel-sheet.memo-nb-paper .memo-wheel-body { padding: 0.6rem 1.25rem var(--nb-foot); }
+.memo-wheel-sheet.memo-nb-paper .memo-wheel-body { padding: 0.6rem 1.25rem var(--nb-foot); overflow-x: clip; }
 .memo-offer-sheet.memo-nb-paper .memo-offer-body { padding-bottom: var(--nb-foot); }
 .memo-wheel-sheet.memo-nb-paper .memo-wheel-title { margin-top: 1.4rem; font-size: 2.25rem; line-height: 1.12; }
 :where(.memo-wheel-sheet.memo-nb-paper) .memo-wheel { --z: 1.24; }
 .memo-wheel-sheet.memo-nb-paper .memo-nb-tap { margin-top: auto; align-self: stretch; }
 .memo-wheel-sheet.memo-nb-paper .memo-wheel-cta { width: 100%; }
 .memo-wheel-prize.memo-nb-off { display: none; }
-/* The coupon is taller than the title it replaces; it hangs into the gap above the wheel so the wheel does not move as it lands. */
-.memo-wheel-sheet.memo-nb-paper .memo-nb-ticket-wrap { margin: 0.2rem 0 -1.7rem; }
+/* The coupon takes the place of the title and its pen line, at their height, so the wheel does not move as it lands. */
+.memo-wheel-sheet.memo-nb-paper .memo-nb-ticket-wrap { margin: 0.2rem 0 0.7rem; }
 /* Once won, the coupon says it; the "up to" sticker would only crowd it. */
 .memo-wheel.won .memo-nb-starburst { filter: opacity(0); scale: 0.6; transition: filter 0.3s ease, scale 0.3s ease; }
 /* Every notebook button is the paywall's: 4rem, 20px corners, the heavy label. */
@@ -11422,9 +11439,128 @@ html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { paddin
   filter: drop-shadow(0 10px 8px rgba(60, 30, 0, 0.2));
 }
 
+/*
+ * The wheel as drawn (Wheel.dc.html), over the production wheel's own parts so
+ * its spin, its sticks and the pointer's knocks stay exactly as they are: a
+ * metal rim with a dark edge round a candy disc, bulbs set in the rim, brass
+ * knobs on the slice lines, a jewelled gold flapper, the hub ringed in gold, a
+ * gloss across the top, sun rays behind and paper confetti drifting down.
+ */
+.memo-wheel-sheet .memo-wheel-disc {
+  background:
+    repeating-conic-gradient(from -0.6deg, rgba(0, 0, 0, 0.12) 0deg 1.2deg, transparent 1.2deg 60deg),
+    radial-gradient(closest-side, transparent 55%, rgba(0, 0, 0, 0.07) 100%),
+    conic-gradient(var(--nb-wheel-coral) 0 60deg, var(--nb-wheel-cream) 60deg 120deg, var(--nb-wheel-pink) 120deg 180deg, var(--nb-wheel-gold) 180deg 240deg, var(--nb-wheel-red) 240deg 300deg, var(--nb-wheel-cream) 300deg 360deg);
+  box-shadow: inset 0 0 0 3px rgba(120, 60, 0, 0.18), inset 0 0 24px rgba(0, 0, 0, 0.12);
+}
+/* The rim: still while the disc turns inside it. */
+.memo-wheel-sheet .memo-wheel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 999px;
+  pointer-events: none;
+  background: conic-gradient(from 0deg, var(--nb-gold-deep), var(--nb-gold-light), var(--nb-gold-deep), var(--nb-paper-end), var(--nb-gold-deep), var(--nb-gold-light), var(--nb-gold-deep), var(--nb-paper-end), var(--nb-gold-deep));
+  -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 0.7rem), #000 calc(100% - 0.68rem));
+  mask: radial-gradient(closest-side, transparent calc(100% - 0.7rem), #000 calc(100% - 0.68rem));
+}
+.memo-wheel-sheet .memo-wheel {
+  border-radius: 999px;
+  box-shadow: 0 0 0 4px var(--nb-wheel-rim-line), 0 24px 60px rgba(0, 0, 0, 0.35), 0 0 80px color-mix(in oklch, var(--nb-gold) 30%, transparent);
+}
+/* The gloss, which does not turn either. Not once won: then ::after is the landing's burst of light. */
+.memo-wheel-sheet .memo-wheel:not(.won)::after {
+  content: "";
+  position: absolute;
+  inset: 0.68rem;
+  z-index: 1;
+  border-radius: 999px;
+  pointer-events: none;
+  background: radial-gradient(80% 60% at 35% 20%, rgba(255, 255, 255, 0.35), transparent 60%), radial-gradient(closest-side, transparent 80%, rgba(0, 0, 0, 0.18));
+}
+.memo-wheel-sheet .memo-wheel-lights span {
+  width: 0.38rem;
+  height: 0.38rem;
+  margin: -0.19rem 0 0 -0.19rem;
+  background: var(--nb-wheel-bulb);
+  box-shadow: 0 0 7px var(--nb-wheel-bulb);
+}
+/* Knobs, not posts: the design's brass studs, at the same place on the slice lines. */
+.memo-wheel-sheet .memo-wheel-peg {
+  width: 0.42rem;
+  height: 0.42rem;
+  margin: -0.21rem 0 0 -0.21rem;
+  background: radial-gradient(circle at 35% 30%, var(--nb-index-card), var(--nb-gold) 60%, var(--nb-gold-dark));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.memo-wheel-sheet .memo-wheel-slice {
+  text-align: center;
+  white-space: nowrap;
+  font-size: 1.32rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.memo-wheel-sheet .memo-wheel-slice:nth-child(1),
+.memo-wheel-sheet .memo-wheel-slice:nth-child(5) { color: var(--on-promo); text-shadow: none; }
+.memo-wheel-sheet .memo-wheel-slice:nth-child(2),
+.memo-wheel-sheet .memo-wheel-slice:nth-child(6) { color: var(--nb-wheel-ink-red); }
+.memo-wheel-sheet .memo-wheel-slice:nth-child(3) { color: var(--nb-wheel-ink-berry); }
+.memo-wheel-sheet .memo-wheel-slice:nth-child(4) { color: var(--nb-wheel-ink-brown); }
+/* The flapper: its tip reaches the studs, so it still knocks on each one. */
+.memo-wheel-sheet .memo-wheel-pointer {
+  top: -0.95rem;
+  width: 1.62rem;
+  height: 2.1rem;
+  border: 0;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+}
+.memo-wheel-sheet .memo-wheel-pointer svg { display: block; width: 100%; height: 100%; }
+.memo-wheel-sheet .memo-wheel-pointer path { stroke: var(--nb-gold-dark); stroke-width: 2; }
+.memo-wheel-sheet .memo-wheel-pointer circle { fill: var(--promo); }
+.memo-wheel-sheet .memo-wheel-hub {
+  z-index: 3;
+  width: 3.75rem;
+  height: 3.75rem;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25), 0 0 0 5px var(--nb-gold), 0 0 0 6.5px var(--nb-gold-dark);
+}
+.memo-wheel-sheet .memo-wheel:not(.spinning):not(.won) .memo-wheel-hub img { animation: memo-nb-bob 2.6s ease-in-out infinite; }
+.memo-wheel-sheet .memo-wheel-glow {
+  inset: -2.3rem;
+  background: radial-gradient(closest-side, color-mix(in oklch, var(--promo) 45%, transparent), color-mix(in oklch, var(--nb-gold) 18%, transparent) 60%, transparent 75%);
+}
+/*
+ * The rays turn their gradient, not their box: a turning box's corners swing
+ * past the page, the fit (use-fit-screen.ts) reads that as overflow and
+ * shrinks the wheel mid-spin.
+ */
+@property --memo-ray-turn { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.memo-wheel-sheet .memo-wheel-rays {
+  inset: -6.6rem;
+  background: repeating-conic-gradient(from var(--memo-ray-turn), var(--nb-wheel-ray-a) 0deg 8deg, var(--nb-wheel-ray-b) 8deg 16deg, transparent 16deg 24deg);
+  -webkit-mask-image: radial-gradient(closest-side, #000 35%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 35%, transparent 100%);
+  animation-name: memo-wheel-ray-turn;
+}
+@keyframes memo-wheel-ray-turn { to { --memo-ray-turn: 360deg; } }
+.memo-wheel-sheet .memo-nb-stand { bottom: -2.2rem; width: 6.65rem; height: 3rem; margin-left: -3.325rem; }
+
+/* Title on two lines with a pen line under it, as drawn; the page shares its spare height out evenly. */
+.memo-wheel-sheet.memo-nb-paper .memo-wheel-title { margin-top: auto; max-width: 11.5rem; font-size: 2.375rem; text-wrap: balance; }
+.memo-wheel-squiggle { flex: none; margin-top: 0.1rem; overflow: visible; }
+/* Above the drifting confetti, which falls through the top of the page. */
+.memo-wheel-sheet.memo-nb-paper :is(.memo-wheel-title, .memo-wheel-squiggle) { position: relative; }
+.memo-wheel-sheet.memo-nb-paper .memo-nb-ticket-wrap { margin-top: auto; }
+.memo-nb-tap.gone { visibility: hidden; }
+
+.memo-nb-drift { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.memo-nb-drift i { position: absolute; top: -0.75rem; left: var(--x); width: 0.44rem; height: 0.7rem; border-radius: 2px; background: var(--c); opacity: 0; animation: memo-nb-drift 9s cubic-bezier(0.3, 0.6, 0.5, 1) infinite var(--t); }
+@keyframes memo-nb-drift { 0% { opacity: 0; transform: translateY(0) rotate(0); } 4% { opacity: 1; } 40% { opacity: 1; transform: translateY(20rem) rotate(540deg); } 46%, 100% { opacity: 0; transform: translateY(23.75rem) rotate(620deg); } }
+
 /* The web's wheel says what it is in its title; the app keeps its line about Apple's offer. */
 html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibility: hidden; height: 0.6rem; margin: 0; }
-.memo-wheel-sheet.memo-nb-paper .memo-wheel { margin: 1.8rem 0 2.6rem; isolation: isolate; }
+.memo-wheel-sheet.memo-nb-paper .memo-wheel { margin: auto 0 2.6rem; isolation: isolate; }
 
 .memo-nb-starburst {
   position: absolute;
@@ -11495,7 +11631,9 @@ html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibi
 
 /* --- the prize sheet's countdown: an LED timer strapped to dynamite ------------- */
 
-.memo-nb-tnt { position: relative; width: 18.75rem; height: 8rem; margin: 0.6rem auto 0; }
+/* Room above for the lit fuse, which rises 2.5rem over the dynamite: the sheet's body scrolls, so anything above its top edge is cut off. */
+.memo-nb-tnt { position: relative; flex: none; width: 18.75rem; height: 8rem; margin: 2.3rem auto 0; }
+/* Everything in it is drawn absolutely, so a short screen's flex column would crush its box to nothing and spill the sticks over the coupon; it never shrinks, and the fit (use-fit-screen.ts) scales the sheet instead. */
 .memo-nb-stick { position: absolute; left: 0; right: 0; height: 2.4rem; border-radius: 12px; background: linear-gradient(to bottom, var(--nb-dynamite-dark), color-mix(in oklch, var(--nb-dynamite) 65%, white) 20%, var(--nb-dynamite) 48%, color-mix(in oklch, var(--nb-dynamite) 80%, black) 78%, var(--nb-dynamite-dark)); box-shadow: 0 6px 10px -4px rgba(80, 10, 0, 0.45); }
 .memo-nb-stick::before, .memo-nb-stick::after { content: ""; position: absolute; top: 0; bottom: 0; width: 14px; background: linear-gradient(to bottom, var(--nb-gold-deep), var(--nb-paper-end) 35%, var(--nb-gold-light) 60%, var(--nb-gold-dark)); }
 .memo-nb-stick::before { left: 0; border-radius: 12px 3px 3px 12px; }

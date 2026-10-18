@@ -12224,11 +12224,12 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
 .memo-nb-cite { width: 12px; height: 12px; border-radius: 999px; background: var(--c); animation: memo-nb-node 3s ease-in-out infinite calc(var(--i) * 0.4s); }
 
 /* The browsing offer: the earlier prices, taped up and struck out in turn. */
-.memo-nb-tag { display: block; padding: 0.75rem 1.1rem; border-radius: 12px; background: var(--surface); box-shadow: 0 10px 18px -6px rgba(40, 30, 10, 0.3); font-size: 1.25rem; font-weight: 850; color: var(--muted); animation: memo-nb-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) both calc(var(--i) * 0.2s + 0.15s); }
-.memo-nb-tag > span { position: relative; display: inline-block; }
+/* The earlier offers: index cards in either appearance, like the plans' sticky notes, each taped at its top edge with the old price clear underneath. */
+.memo-nb-tag { display: block; padding: 1rem 1.15rem 0.7rem; border-radius: 12px; background: var(--nb-index-card); box-shadow: 0 12px 20px -8px rgba(40, 30, 10, 0.35); font-size: 1.25rem; font-weight: 850; line-height: 1.1; color: var(--nb-note-muted); animation: memo-nb-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) both calc(var(--i) * 0.2s + 0.15s); }
+.memo-nb-tag > span:not(.memo-nb-tape) { position: relative; display: inline-block; }
 .memo-nb-tag svg { position: absolute; left: -6px; top: 50%; width: calc(100% + 12px); height: 12px; margin-top: -5px; overflow: visible; }
 .memo-nb-tag svg path { stroke-width: 3; }
-.memo-nb-tag > .memo-nb-tape { left: 1.4rem; top: -0.7rem; width: 2.9rem; height: 1.1rem; }
+.memo-nb-tag > .memo-nb-tape { left: 50%; top: -0.55rem; translate: -50% 0; width: 3.1rem; height: 1rem; rotate: -3deg; }
 
 /* --- the wheel (discount-offer.tsx) ----------------------------------------------- */
 

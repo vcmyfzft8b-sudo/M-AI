@@ -41,7 +41,7 @@ import {
   NoReadableScanTextError,
   type ScanOcrAttemptDiagnostics,
 } from "@/lib/scan-ocr-errors";
-import { classifyImageOcrText, hasFailurePhrase } from "@/lib/scan-ocr-text";
+import { classifyImageOcrText, hasFailurePhrase, isLabelOnlyOcrReading } from "@/lib/scan-ocr-text";
 import { getServerEnv } from "@/lib/server-env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import {
@@ -1883,8 +1883,9 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
   let sawAnswer = false;
 
   for (const plan of plans) {
-    // A verbatim reading that came back as real but thin text will not grow when restated.
-    if (plan.stage === "ocr_restate" && bestShortText) {
+    // A verbatim reading that came back as real but thin text will not grow when restated, unless
+    // it is only a diagram's labels: the restatement describes the drawing they belong to.
+    if (plan.stage === "ocr_restate" && bestShortText && !isLabelOnlyOcrReading(bestShortText)) {
       break;
     }
 

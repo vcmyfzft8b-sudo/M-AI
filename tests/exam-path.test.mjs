@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { lessonsToTarget } from "../src/lib/exams/exam-model.ts";
 import {
+  DONE_SHOWN,
   PATH_ROW_REM,
   PATH_STATION_REM,
   PATH_SWING_REM,
@@ -10,6 +12,7 @@ import {
   pathCurve,
   pathOffset,
   pathPoint,
+  pathStations,
 } from "../src/lib/exams/exam-path.ts";
 
 test("the path starts in the middle and swings within its bounds", () => {
@@ -70,4 +73,83 @@ test("a stop's pills slide in rather than leave the path on a wide swing", () =>
     /:is\(\.memo-path-label, \.memo-path-next, \.memo-path-left\) \{\s*translate: clamp\(calc\(50% - 50cqw - var\(--x, 0rem\)\), 0px, calc\(50cqw - var\(--x, 0rem\) - 50%\)\) 0;/,
   );
   assert.match(dashboard, /"--x": `\$\{points\[row\]\.x\}rem`/);
+});
+
+const pathModule = (position, mastery = 0, extra = {}) => ({ topicId: `t${position}`, position, mastery, ...extra });
+const kinds = (run) => run.stations.map((station) => station.type);
+
+test("every module shows its own estimate from the start, not only the one being studied", () => {
+  const { runs } = pathStations({
+    modules: [pathModule(2), pathModule(0), pathModule(1)],
+    history: [],
+    next: { topicId: "t0", kind: "summary", check: false },
+    ahead: true,
+    unfolded: new Set(),
+    target: 0.9,
+  });
+  const fresh = lessonsToTarget(0, 0.9);
+
+  assert.ok(fresh > 1);
+  // In path order, one run per module.
+  assert.deepEqual(runs.map((run) => run.topicId), ["t0", "t1", "t2"]);
+  // The module being studied: "Next up", then the rest of its way to the goal.
+  assert.deepEqual(kinds(runs[0]), ["next", ...Array(fresh - 1).fill("locked")]);
+  assert.equal(runs[0].stations[1].left, fresh - 1);
+  // The modules not reached yet: their whole way to the goal, with the count on the first.
+  for (const run of runs.slice(1)) {
+    assert.deepEqual(kinds(run), Array(fresh).fill("locked"));
+    assert.equal(run.stations[0].left, fresh);
+  }
+  // Each run starts where the one before ended, so the line swings on across modules.
+  assert.equal(runs[1].start, runs[0].stations.length);
+  assert.equal(runs[2].start, runs[1].start + runs[1].stations.length);
+});
+
+test("a weak module's estimate grows; one on its goal needs no more stops", () => {
+  const draw = (mastery) =>
+    pathStations({
+      modules: [pathModule(0, 0.95, { rawMastery: 0.95 }), pathModule(1, mastery, { rawMastery: mastery })],
+      history: [{ id: "h1", topicId: "t0", kind: "quiz", score: 1 }],
+      next: null,
+      ahead: true,
+      unfolded: new Set(),
+      target: 0.9,
+    }).runs;
+
+  const [onGoal, weak] = draw(0.2);
+  assert.deepEqual(kinds(onGoal), ["done"]);
+  assert.ok(draw(0.2)[1].stations.length > draw(0.6)[1].stations.length);
+  assert.equal(weak.stations[0].left, lessonsToTarget(0.2, 0.9));
+});
+
+test("past the exam, or archived, only what was done is drawn", () => {
+  const { runs } = pathStations({
+    modules: [pathModule(0), pathModule(1)],
+    history: [{ id: "h1", topicId: "t0", kind: "quiz", score: 0.4 }],
+    next: null,
+    ahead: false,
+    unfolded: new Set(),
+    target: 0.9,
+  });
+
+  assert.deepEqual(runs.map(kinds), [["done"]]);
+});
+
+test("notes still being made stay off the path, and old lessons fold", () => {
+  const history = Array.from({ length: DONE_SHOWN + 3 }, (_, index) => ({ id: `h${index}`, topicId: "t0", kind: "quiz", score: 0.5 }));
+  const draw = (unfolded) =>
+    pathStations({
+      modules: [pathModule(0, 0.5), pathModule(1, 0, { pending: true })],
+      history,
+      next: { topicId: "t0", kind: "quiz", check: false },
+      ahead: true,
+      unfolded,
+      target: 0.9,
+    });
+
+  const folded = draw(new Set());
+  assert.deepEqual(folded.runs.map((run) => run.topicId), ["t0"]);
+  assert.equal(folded.folded.get("t0"), 3);
+  assert.equal(folded.runs[0].stations.filter((station) => station.type === "done").length, DONE_SHOWN);
+  assert.equal(draw(new Set(["t0"])).folded.size, 0);
 });

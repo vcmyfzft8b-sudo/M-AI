@@ -1,3 +1,5 @@
+import { practicesOwed, type ExamLessonKind, type ModuleState } from "./exam-model.ts";
+
 /*
  * The study path's geometry, in rem: lessons are stops on one smooth line that swings gently left
  * and right down the screen, one stop per row. Pure, so the dashboard and its tests agree on it.
@@ -46,4 +48,106 @@ export function pathCurve(points: { x: number; y: number }[]) {
 /** Memo sits beside the next stop, on the side the line is not swinging towards. */
 export function pathBuddySide(index: number): "left" | "right" {
   return pathOffset(index) > 0 ? "left" : "right";
+}
+
+/**
+ * The lessons ahead of a module, drawn locked: at most this many, however many it still needs (the
+ * pill under the first says the full count).
+ */
+export const MAX_LOCKED_SHOWN = 12;
+
+/*
+ * The lessons a module has done, drawn most recent last: only the last few, so a module worked at
+ * for weeks is not a column of identical circles to scroll past. The rest open with one tap.
+ */
+export const DONE_SHOWN = 4;
+
+export type PathStation =
+  | { type: "done"; id: string; topicId: string; kind: ExamLessonKind; score: number }
+  | { type: "next"; topicId: string; kind: ExamLessonKind; check: boolean }
+  /** A lesson still to come; `left` is how many the module still needs, counted from here. */
+  | { type: "locked"; topicId: string; index: number; left: number };
+
+/** One module's stretch of the path, `start` stops into the whole path (its place on the swing). */
+export type PathRun = { topicId: string; start: number; stations: PathStation[] };
+
+type PathModule = Pick<ModuleState, "topicId" | "mastery"> &
+  Partial<Pick<ModuleState, "rawMastery" | "checkDue">> & { position: number; pending?: boolean };
+
+/**
+ * The path's stations, module by module in path order: each module's lessons done (oldest first),
+ * then what it still needs to reach the goal, so every module shows its estimate from the start, not
+ * only the one being studied. In the module "Next up" is in, that is "Next up" and the lessons after
+ * it. The estimate is `practicesOwed` from where the module's knowledge is now, so a weak lesson
+ * visibly adds stations and a module never started shows the whole way to the goal.
+ *
+ * `next` is "Next up" when the screen shows it; `ahead` is false once nothing is being worked
+ * towards (the exam has passed, or the prep is archived), and then only what was done is drawn.
+ */
+export function pathStations({
+  modules,
+  history,
+  next,
+  ahead,
+  unfolded,
+  target,
+}: {
+  modules: readonly PathModule[];
+  history: readonly { id: string; topicId: string; kind: ExamLessonKind; score: number }[];
+  next: { topicId: string; kind: ExamLessonKind; check: boolean } | null;
+  ahead: boolean;
+  /** Modules whose earlier lessons the learner unfolded. */
+  unfolded: ReadonlySet<string>;
+  /** The goal, as a share (0.9). */
+  target: number;
+}) {
+  const stations: PathStation[] = [];
+  /* How many of each module's earlier lessons are folded away, by topic. */
+  const folded = new Map<string, number>();
+
+  for (const pathModule of [...modules].sort((left, right) => left.position - right.position)) {
+    // A note still being made has no topics yet; the screen's "reading your material" card stands for it.
+    if (pathModule.pending) {
+      continue;
+    }
+
+    const done = history.filter((entry) => entry.topicId === pathModule.topicId);
+    const hidden = unfolded.has(pathModule.topicId) ? 0 : Math.max(0, done.length - DONE_SHOWN);
+
+    if (hidden > 0) {
+      folded.set(pathModule.topicId, hidden);
+    }
+
+    for (const entry of done.slice(hidden)) {
+      stations.push({ type: "done", id: entry.id, topicId: entry.topicId, kind: entry.kind, score: entry.score });
+    }
+
+    const owed = practicesOwed(pathModule, target);
+    const isNext = next !== null && next.topicId === pathModule.topicId;
+
+    if (isNext) {
+      stations.push({ type: "next", topicId: pathModule.topicId, kind: next.kind, check: next.check });
+    }
+
+    // The lessons after "Next up" here; elsewhere, every lesson the module still needs.
+    const left = isNext ? Math.max(1, owed) - 1 : ahead ? owed : 0;
+
+    for (let index = 0; index < Math.min(MAX_LOCKED_SHOWN, left); index += 1) {
+      stations.push({ type: "locked", topicId: pathModule.topicId, index, left });
+    }
+  }
+
+  /* The stations in runs of one module each, every run under its module's chapter card. */
+  const runs: PathRun[] = [];
+  stations.forEach((station, index) => {
+    const current = runs.at(-1);
+
+    if (current && current.topicId === station.topicId) {
+      current.stations.push(station);
+    } else {
+      runs.push({ topicId: station.topicId, start: index, stations: [station] });
+    }
+  });
+
+  return { runs, folded };
 }

@@ -97,14 +97,17 @@ As in Astra, the path is one lesson after another, and the path picks the next o
    under it does, so a learner at 0 % stays in the module and its lessons keep coming. The path
    draws what it still needs after "Naslednja" as locked stations (`lessonsToTarget` from the
    module's knowledge now, at most 12 drawn, "Še ~9 vaj do 90 %"), so a weak lesson visibly adds
-   stations, and the next module sits under its own locked heading ("Odklene se, ko modul 1 doseže
-   90 %"). The lesson's done screen says the same under the bar. **Reaching the goal once is what
+   stations. **Every module shows its estimate from the start** (`pathStations`, owner's request
+   2026-10-18): a module the path has not reached yet sits under its own locked chapter card
+   ("Odklene se, ko modul 1 doseže 90 %") with the whole way to the goal drawn as locked stations
+   (`practicesOwed` from its knowledge, ~11 for an untouched module at 90 %), and a module that
+   dipped under the goal shows what it needs again. The lesson's done screen says the same under the bar. **Reaching the goal once is what
    counts** (`topicMastery`'s `peak`): a later lesson that dips under it does not shut the next
    module again; the dip is practised like a faded topic. A module studied before the one ahead of
    it reached the goal (old data, or a link) is shut again until it does, and the lesson page sends
    a link to a shut module back to the path. The path is drawn **module by module** in path order
-   (each open module's lessons done, "Naslednja" and what it still needs in its own module, then
-   the first shut module's heading), not in the order lessons were done, so a module's run never
+   (each module's lessons done, then "Naslednja" in its module and what each module still needs,
+   through to the last module), not in the order lessons were done, so a module's run never
    looks finished while it is under the goal. Until 2026-10-17 four practice lessons opened the next module whatever the score; that is
    gone, and with it the guarantee that every topic is reached before the exam: a learner who cannot
    reach the goal in one module never sees the later ones.
@@ -342,7 +345,9 @@ and the landing's demo too. True or false shows the question small and the claim
 statement; its verdict names the right answer only when the statement was false.
 
 **One bottom bar.** Every exam screen's main action is in the same place: the bar `ExamScreen`
-pins to the bottom (`cta`). A part of the screen that owns its buttons (a written answer's
+pins to the bottom (`cta`), at the same height as the home screen's chat and "New" buttons
+(`--memo-exam-bar-foot` mirrors `.memo-m-homebar`: 1.9 rem over the edge on the web, 0.15 rem over
+the home indicator in the app, the keyboard's clearance when it is up). A part of the screen that owns its buttons (a written answer's
 "Preveri odgovor" / "Popravi" / "Naprej", the tutor's "Začni", the empty prep's "Nova priprava",
 setup's retry) renders them there through `<ExamCta>`, a portal into the frame's slot, rather
 than wherever its content ends. Ghost for the quiet choice, coral for the action, as the other bars.

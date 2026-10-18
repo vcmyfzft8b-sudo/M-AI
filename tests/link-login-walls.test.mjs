@@ -68,6 +68,18 @@ test("a Microsoft Teams link is always behind a sign-in", () => {
   assert.equal(isLoginWallUrl("https://learn.microsoft.com/en-us/microsoftteams/"), false);
 });
 
+test("a Google Drive viewer address bounces through Drive's session signer", () => {
+  // A cookieless fetch of a copied viewer address redirects to the nonce signer and back until
+  // the redirect limit; the hop to the signer is what marks it as private.
+  assert.equal(
+    isLoginWallUrl("https://drive.google.com/viewerng/noncesigner?url=EXAMPLE&nonce=EXAMPLE"),
+    true,
+  );
+  assert.equal(isLoginWallUrl("https://drive.google.com/file/d/EXAMPLE_ID/view"), false);
+  assert.equal(isLoginWallUrl("https://drive.google.com/uc?export=download&id=EXAMPLE_ID"), false);
+  assert.equal(isLoginWallUrl("https://example.com/viewerng/noncesigner"), false);
+});
+
 test("a Rokus Klett e-textbook link is always behind a sign-in", () => {
   // The reader is an empty app shell that signs in with a Rokus account before loading a book.
   assert.equal(isLoginWallUrl("https://folio.rokus-klett.si/?credit=EXAMPLE_BOOK&pages=12"), true);

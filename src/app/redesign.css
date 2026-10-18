@@ -23073,6 +23073,14 @@ html[data-native] .memo-toast.subtle {
   /* No browser bar under the buttons in the app: sit them closer to the home
      indicator. The note screen's dock and sub-screen chat bar sit at the same
      height as the home dock. */
+  html[data-native] .memo-exam-screen {
+    /* The exam screens' bar follows the home dock down onto the home indicator. */
+    --memo-exam-bar-foot: calc(
+      var(--memo-kb-down) * (0.15rem + var(--memo-safe-bottom))
+      + var(--memo-kb-up) * var(--memo-kb-clear)
+    );
+  }
+
   html[data-native] .memo-m-homebar,
   html[data-native] .memo-dock,
   html[data-native] .memo-sub-chatbar {
@@ -29338,11 +29346,23 @@ button.memo-exam-card:hover {
     padding: 0 1.15rem calc(2.5rem + var(--memo-safe-bottom));
   }
 
+  /*
+   * The bar's buttons stand where the home screen's chat and "New" buttons do (`.memo-m-homebar`),
+   * so the main action never moves between screens: the same height over the bottom edge, the
+   * same lift over the keyboard.
+   */
+  .memo-exam-screen {
+    --memo-exam-bar-foot: calc(
+      var(--memo-kb-down) * (1.9rem + var(--memo-safe-bottom))
+      + var(--memo-kb-up) * var(--memo-kb-clear)
+    );
+  }
+
   .memo-exam-page.has-cta,
   .memo-exam-screen:has(.memo-exam-cta-slot:not(:empty)) .memo-exam-page {
     /* The bar's own height (its fade, a 3.4rem button, its foot), so nothing hides under it and no
        room is held back that a screen meant to fit could use. */
-    padding-bottom: calc(5.9rem + var(--memo-safe-bottom));
+    padding-bottom: calc(5rem + var(--memo-exam-bar-foot));
   }
 
   /* An empty or locked screen sits in the middle of the phone, not under the bar. */
@@ -29375,7 +29395,7 @@ button.memo-exam-card:hover {
     z-index: 6;
     max-width: none;
     margin: 0;
-    padding: 1.6rem 1.15rem calc(0.9rem + var(--memo-safe-bottom));
+    padding: 1.6rem 1.15rem var(--memo-exam-bar-foot);
     background: linear-gradient(to bottom, transparent, var(--bg) 1.4rem);
   }
 

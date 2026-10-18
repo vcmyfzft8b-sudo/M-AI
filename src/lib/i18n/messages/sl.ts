@@ -2559,6 +2559,7 @@ export const sl = {
   "exam.path.continue": "Nadaljuj · {lesson}",
   "exam.path.topicMastery": "Znanje {percent} % · cilj {target} %",
   "exam.path.locked": "Dokončaj zgornje vaje",
+  "exam.path.paidModule": "Odpre se s paketom",
   "exam.path.gate": "Odklene se, ko modul {index} doseže {target} %",
   "exam.path.earlier": { one: "Pokaži še {count} prejšnjo vajo", two: "Pokaži še {count} prejšnji vaji", few: "Pokaži še {count} prejšnje vaje", other: "Pokaži še {count} prejšnjih vaj" },
   "exam.path.lessonsLeft": { one: "Še ~{count} vaja do {target} %", two: "Še ~{count} vaji do {target} %", few: "Še ~{count} vaje do {target} %", other: "Še ~{count} vaj do {target} %" },

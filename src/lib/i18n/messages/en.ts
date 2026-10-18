@@ -2522,6 +2522,7 @@ export const en: Messages = {
   "exam.path.continue": "Continue · {lesson}",
   "exam.path.topicMastery": "{percent}% known · goal {target}%",
   "exam.path.locked": "Finish the exercises above",
+  "exam.path.paidModule": "Opens with a plan",
   "exam.path.gate": "Opens when module {index} reaches {target}%",
   "exam.path.earlier": { one: "Show {count} earlier exercise", other: "Show {count} earlier exercises" },
   "exam.path.lessonsLeft": { one: "~{count} more exercise to {target}%", other: "~{count} more exercises to {target}%" },

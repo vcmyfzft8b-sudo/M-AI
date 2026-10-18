@@ -2536,6 +2536,7 @@ export const bs: Messages = {
   "exam.path.continue": "Nastavi · {lesson}",
   "exam.path.topicMastery": "Znanje {percent} % · cilj {target} %",
   "exam.path.locked": "Završi vježbe iznad",
+  "exam.path.paidModule": "Otvara se s paketom",
   "exam.path.gate": "Otključava se kad modul {index} dostigne {target} %",
   "exam.path.earlier": { one: "Prikaži još {count} raniju vježbu", few: "Prikaži još {count} ranije vježbe", other: "Prikaži još {count} ranijih vježbi" },
   "exam.path.lessonsLeft": { one: "Još ~{count} vježba do {target} %", few: "Još ~{count} vježbe do {target} %", other: "Još ~{count} vježbi do {target} %" },

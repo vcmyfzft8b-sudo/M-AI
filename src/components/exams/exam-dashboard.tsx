@@ -16,29 +16,15 @@ import { prefetchLesson } from "@/components/exams/lesson-prefetch";
 import { MemoBuddy } from "@/components/exams/memo-buddy";
 import {
   examNextStep,
-  practicesOwed,
   percent,
   reachableModules,
   type ExamLessonKind,
   type PracticeLessonKind,
 } from "@/lib/exams/exam-model";
-import { pathBuddySide, pathCurve, pathPoint } from "@/lib/exams/exam-path";
+import { gatingModule, pathBuddySide, pathCurve, pathPoint, pathStations } from "@/lib/exams/exam-path";
 import type { ExamDetail, ExamModuleView } from "@/lib/exams/exams-server";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
 import { currentPaywallBack, paywallPath } from "@/lib/paywall-reasons";
-
-/*
- * After "Next up", the lessons its topic still needs to reach the goal, locked, as Astra draws the
- * levels still to come. Counted from where the topic's knowledge is now, so a lesson under the mark
- * adds stations instead of moving the learner on. At most this many are drawn.
- */
-const MAX_LOCKED_SHOWN = 12;
-
-/*
- * The lessons a module has done, drawn most recent last: only the last few, so a module worked at
- * for weeks is not a column of identical circles to scroll past. The rest open with one tap.
- */
-const DONE_SHOWN = 4;
 
 /* Practice lessons a topic needs before "Ponovitev" (repeat the weakest format) opens. */
 const REPETITION_AFTER = 3;
@@ -355,63 +341,14 @@ export function ExamDashboard({
   const goalLeft = Math.max(0, exam.target_mastery - known);
   const decimal = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
 
-  /*
-   * The path's stations, module by module in path order: each open module's lessons done (oldest
-   * first), and in the module "Next up" is in, "Next up" and the lessons it still needs to reach the
-   * goal. The first module still shut follows under its locked heading, and the path ends there.
-   */
-  type Station =
-    | { type: "done"; id: string; topicId: string; kind: ExamLessonKind; score: number }
-    | { type: "next"; topicId: string; kind: ExamLessonKind; check: boolean }
-    | { type: "locked"; index: number; left: number }
-    | { type: "gate"; topicId: string };
   const showsNext = next?.type === "lesson" && !examPassed && !archived && nextModule !== null;
-  const lessonsLeft = nextModule ? Math.max(1, practicesOwed(nextModule, target / 100)) : 0;
-  const stations: Station[] = [];
-  /* How many of each module's earlier lessons are folded away, by topic. */
-  const folded = new Map<string, number>();
-
-  for (const pathModule of [...modules].sort((left, right) => left.position - right.position)) {
-    if (!reachedTopics.has(pathModule.topicId)) {
-      if (showsNext) {
-        stations.push({ type: "gate", topicId: pathModule.topicId });
-      }
-
-      break;
-    }
-
-    const done = detail.history.filter((entry) => entry.topicId === pathModule.topicId);
-    const hidden = unfolded.has(pathModule.topicId) ? 0 : Math.max(0, done.length - DONE_SHOWN);
-
-    if (hidden > 0) {
-      folded.set(pathModule.topicId, hidden);
-    }
-
-    for (const entry of done.slice(hidden)) {
-      stations.push({ type: "done", id: entry.id, topicId: entry.topicId, kind: entry.kind, score: entry.score });
-    }
-
-    if (showsNext && next?.type === "lesson" && next.topicId === pathModule.topicId) {
-      stations.push({ type: "next", topicId: next.topicId, kind: next.kind, check: next.check });
-
-      for (let index = 0; index < Math.min(MAX_LOCKED_SHOWN, lessonsLeft - 1); index += 1) {
-        stations.push({ type: "locked", index, left: lessonsLeft - 1 });
-      }
-    }
-  }
-
-  /* The stations in runs of one topic each, every run under its topic's heading. */
-  type Run = { topicId: string; start: number; stations: Station[] };
-  const runs: Run[] = [];
-  stations.forEach((station, index) => {
-    const topicId = station.type === "locked" ? (runs.at(-1)?.topicId ?? "") : station.topicId;
-    const current = runs.at(-1);
-
-    if (current && current.topicId === topicId) {
-      current.stations.push(station);
-    } else {
-      runs.push({ topicId, start: index, stations: [station] });
-    }
+  const { runs, folded } = pathStations({
+    modules,
+    history: detail.history,
+    next: showsNext && next?.type === "lesson" ? next : null,
+    ahead: !examPassed && !archived,
+    unfolded,
+    target: target / 100,
   });
 
   const cta =
@@ -664,7 +601,13 @@ export function ExamDashboard({
             ) : null}
             {runs.map((run) => {
               const topic = byTopic.get(run.topicId);
-              const gated = run.stations.some((station) => station.type === "gate");
+              // Not in the learner's plan: it opens with one, whatever the path says.
+              const paid = topic ? !canOpen(topic.lectureId) : false;
+              // Not reached yet: shut until the module it waits on is on its goal.
+              const gated = !paid && !reachedTopics.has(run.topicId);
+              const gate = gated
+                ? gatingModule(modules, run.topicId, (candidate) => candidate.ready && !candidate.pending && canOpen(candidate.lectureId))
+                : null;
               const current = run.stations.some((station) => station.type === "next");
               const mastery = topic ? percent(topic.mastery) : 0;
               // Where each stop sits on the line, and how far the learner has walked along it.
@@ -676,8 +619,8 @@ export function ExamDashboard({
                 <section key={`run:${run.start}`} className="memo-exam-trail-unit">
                   {/* The module as a chapter: its name, and the app's bar towards its goal with the goal marked. */}
                   <div
-                    className={`memo-path-chapter ${current ? "current" : ""} ${gated ? "locked" : ""} ${
-                      !gated && mastery >= target ? "on-target" : ""
+                    className={`memo-path-chapter ${current ? "current" : ""} ${gated || paid ? "locked" : ""} ${
+                      !gated && !paid && mastery >= target ? "on-target" : ""
                     }`.trim()}
                   >
                     <div className="memo-path-chapter-head">
@@ -690,8 +633,12 @@ export function ExamDashboard({
                     </div>
                     <b className="memo-path-chapter-title">{topic?.title?.trim() || t("note.untitled")}</b>
                     {/* Shut until the module before it (the gate's position, counted from 1) is on target. */}
-                    {gated && topic ? (
-                      <span className="memo-path-chapter-gate">{t("exam.path.gate", { target, index: topic.position })}</span>
+                    {paid ? (
+                      <span className="memo-path-chapter-gate">{t("exam.path.paidModule")}</span>
+                    ) : gated && topic ? (
+                      <span className="memo-path-chapter-gate">
+                        {t("exam.path.gate", { target, index: (gate ?? topic).position + (gate ? 1 : 0) })}
+                      </span>
                     ) : topic ? (
                       <div
                         className="memo-path-chapter-bar"
@@ -740,13 +687,13 @@ export function ExamDashboard({
                         const index = run.start + row;
                         const place = { "--x": `${points[row].x}rem`, top: `${points[row].y}rem` } as CSSProperties;
 
-                        if (station.type === "gate" || station.type === "locked") {
+                        if (station.type === "locked") {
                           return (
-                            <li key={station.type === "gate" ? "gate" : `locked:${station.index}`} className="memo-path-stop" style={place}>
+                            <li key={`locked:${station.index}`} className="memo-path-stop" style={place}>
                               <span className="memo-path-node locked" aria-label={t("exam.path.locked")}>
                                 <Msym name="lock" size="1.4rem" fill={false} />
                               </span>
-                              {station.type === "locked" && station.index === 0 ? (
+                              {station.index === 0 ? (
                                 <span className="memo-path-left">{t("exam.path.lessonsLeft", { count: station.left, target })}</span>
                               ) : null}
                             </li>

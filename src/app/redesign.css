@@ -11595,7 +11595,16 @@ html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { paddin
 
 /* The web's wheel says what it is in its title; the app keeps its line about Apple's offer. */
 html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibility: hidden; height: 0.6rem; margin: 0; }
-.memo-wheel-sheet.memo-nb-paper .memo-wheel { margin: auto 0 2.6rem; isolation: isolate; }
+/*
+ * No rem margin on the wheel itself: it is zoomed, and Safari now and then
+ * resolves a rem margin on a zoomed element without the zoom for a frame
+ * (41.6px became 33.5px), which dropped the title and the wheel 7pt and
+ * back while the page sat open. The room for the stand is kept by the
+ * unzoomed line below it instead.
+ */
+.memo-wheel-sheet.memo-nb-paper .memo-wheel { margin: auto 0 0; isolation: isolate; }
+.memo-wheel-sheet.memo-nb-paper .memo-nb-tap { box-sizing: content-box; padding-top: 2.6rem; }
+.memo-wheel-sheet.memo-nb-paper .memo-wheel-prize.shown { margin-top: 2.6rem; }
 
 .memo-nb-starburst {
   position: absolute;

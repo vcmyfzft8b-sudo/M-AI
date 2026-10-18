@@ -110,7 +110,7 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
             </Fragment>
           ))}
           <span className="memo-nb-write-title memo-nb-hand" style={at(134, 62)}>{t("paywall.scene.subject")}</span>
-          <Pen width={44} height={44} viewBox="0 0 44 44" loop d={["M8 36 C 10 16, 24 6, 38 6 C 38 22, 28 34, 8 36 Z M8 36 L 26 18"]} style={{ ...at(324, 14), "--nb-pen": tint("test"), "--cyc": "6s", "--dl": "0.4s" } as CSSProperties} />
+          <Pen width={44} height={44} viewBox="0 0 44 44" loop d={["M8 36 C 10 16, 24 6, 38 6 C 38 22, 28 34, 8 36 Z M8 36 L 26 18"]} style={{ ...at(328, 62), "--nb-pen": tint("test"), "--cyc": "6s", "--dl": "0.4s" } as CSSProperties} />
           <span className="memo-nb-bar" style={{ ...at(134, 120), width: "13rem", "--i": 0 } as CSSProperties} />
           <span className="memo-nb-bar mark" style={{ ...at(134, 148), width: "7.5rem", "--i": 1 } as CSSProperties} />
           <span className="memo-nb-bar" style={{ ...at(262, 150), width: "5rem", "--i": 2 } as CSSProperties} />
@@ -218,8 +218,8 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
         <>
           <NotebookMemo style={{ ...at(34, 92), width: "9rem" }} />
           <Icon name="school" color="var(--paywall-accent)" className="memo-nb-badge-round" style={{ ...at(4, 70), width: "3rem", height: "3rem" }} />
-          <Pen width={196} height={136} viewBox="0 0 196 136" loop d={["M24 10 C 70 0, 160 2, 182 16 C 196 28, 194 86, 180 98 C 156 112, 96 112, 66 108 L 22 132 L 42 104 C 14 100, 4 86, 6 56 C 6 28, 12 14, 24 10 Z"]} style={{ ...at(182, 18), "--nb-pen": "var(--text)", "--cyc": "6s" } as CSSProperties} />
-          <Bars count={15} style={at(214, 50)} />
+          <Pen width={196} height={136} viewBox="0 0 196 136" loop d={["M24 10 C 70 0, 160 2, 182 16 C 196 28, 194 86, 180 98 C 156 112, 96 112, 66 108 L 22 132 L 42 104 C 14 100, 4 86, 6 56 C 6 28, 12 14, 24 10 Z"]} style={{ ...at(182, 48), "--nb-pen": "var(--text)", "--cyc": "6s" } as CSSProperties} />
+          <Bars count={15} style={at(214, 80)} />
           <span className="memo-nb-ring" style={{ ...at(287, 187), "--i": 0 } as CSSProperties} />
           <span className="memo-nb-ring" style={{ ...at(287, 187), "--i": 1 } as CSSProperties} />
           <span className="memo-nb-mic" style={{ ...at(287, 187), display: "grid", placeItems: "center" }}>
@@ -235,7 +235,7 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
       height = 17.5;
       scene = (
         <>
-          {[[300, 20], [336, 64], [40, 30]].map(([x, y], index) => (
+          {[[316, 110], [330, 164], [40, 30]].map(([x, y], index) => (
             <span key={index} className="memo-nb-note-glyph" style={{ ...at(x, y), "--i": index } as CSSProperties}>
               <Msym name="music_note" size="1em" fill weight={600} />
             </span>
@@ -270,7 +270,7 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
             <span className="memo-nb-face front memo-nb-hand">{t("paywall.scene.flashFront")}</span>
             <span className="memo-nb-face back">{t("paywall.scene.flashBack")}</span>
           </span>
-          <Icon name="autorenew" color="var(--paywall-accent)" className="memo-nb-renew" style={at(276, 14)} />
+          <Icon name="autorenew" color="var(--paywall-accent)" className="memo-nb-renew" style={at(252, 6)} />
           {[
             ["account_tree", tint("tutor")],
             ["assignment", tint("test")],
@@ -294,9 +294,9 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
       scene = (
         <>
           {[
-            ["paywall.scene.biology", "var(--nb-note-yellow)", "lilac", 26, 8, "-6deg"],
-            ["paywall.scene.history", "var(--nb-note-pink)", "yellow", 143, 2, "3deg"],
-            ["paywall.scene.chemistry", "var(--nb-note-mint)", "pink", 260, 10, "-3deg"],
+            ["paywall.scene.biology", "var(--nb-note-yellow)", "lilac", 16, 8, "-6deg"],
+            ["paywall.scene.history", "var(--nb-note-pink)", "yellow", 128, 2, "3deg"],
+            ["paywall.scene.chemistry", "var(--nb-note-mint)", "pink", 236, 58, "-3deg"],
           ].map(([key, note, tape, x, y, rotate], index) => (
             <span key={key as string} className="memo-nb-subject" style={{ ...at(x as number, y as number), "--note": note, rotate, "--d": index } as CSSProperties}>
               <Tape tone={tape as "lilac" | "yellow" | "pink"} />
@@ -310,7 +310,7 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
             height={70}
             viewBox="0 0 390 70"
             loop
-            d={["M80 4 C 90 34, 140 44, 178 62 M172 52 L 180 63 L 167 66", "M195 4 C 194 24, 195 40, 195 60 M188 50 L 195 62 L 202 50", "M312 6 C 300 34, 250 44, 212 62 M224 52 L 211 63 L 224 67"]}
+            d={["M70 4 C 84 34, 140 44, 178 62 M172 52 L 180 63 L 167 66", "M182 4 C 186 24, 192 40, 195 60 M188 50 L 195 62 L 202 50", "M288 52 C 272 58, 240 58, 212 62 M224 52 L 211 63 L 224 67"]}
             style={{ ...at(0, 84), "--nb-pen": "color-mix(in oklch, var(--text) 55%, transparent)", "--cyc": "5s" } as CSSProperties}
           />
           <span className="memo-nb-answer">
@@ -369,10 +369,15 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
         [134, 86, "5deg", "yellow"],
         [240, 154, "-4deg", "pink"],
       ];
-      height = 14.75;
+      // The hero is as tall as the tags it holds: a second offer has one tag
+      // to strike, not three, and must not leave the space of two empty.
+      const shown = Math.min(earlier.length, spots.length);
+      // Below Memo when it has the left side to itself, so a long language never runs into him.
+      const noteY = shown >= 3 ? 196 : Math.max(30 + shown * 62, 158);
+      height = shown >= 3 ? 14.75 : Math.max(10, (noteY + 42) / 16);
       scene = (
         <>
-          {earlier.map((offer, index) => {
+          {earlier.slice(0, spots.length).map((offer, index) => {
             const [x, y, rotate, tape] = spots[index];
             return (
               <span key={offer.step} className="memo-nb-tag" style={{ ...at(x, y), rotate, "--i": index } as CSSProperties}>
@@ -387,9 +392,9 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
             );
           })}
           <NotebookMemo wave style={{ ...at(286, 60), width: "6.5rem" }} />
-          <span className="memo-nb-spark" style={{ ...at(330, 4), "--d": 0 } as CSSProperties} />
+          <span className="memo-nb-spark" style={{ ...at(232, 6), "--d": 0 } as CSSProperties} />
           <span className="memo-nb-spark" style={{ ...at(250, 50), "--d": 2 } as CSSProperties} />
-          <span className="memo-nb-hand" style={{ ...at(26, 196), fontSize: "1.85rem", color: "var(--promo)", rotate: "-6deg", animation: "memo-nb-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both 2s" }}>{t("paywall.scene.bestPrice")}</span>
+          <span className="memo-nb-hand" style={{ ...at(26, noteY), fontSize: shown >= 3 ? "1.5rem" : "1.85rem", color: "var(--promo)", rotate: "-6deg", animation: "memo-nb-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both 2s" }}>{t("paywall.scene.bestPrice")}</span>
         </>
       );
       break;
@@ -420,7 +425,6 @@ export function PaywallDeck() {
   return (
     <div className="memo-nb-deck" aria-hidden="true">
       <Pen width={36} height={36} viewBox="0 0 34 34" loop d={["M17 2 L 20 13 L 32 14 L 22 21 L 26 32 L 17 25 L 8 32 L 12 21 L 2 14 L 14 13 Z"]} style={{ ...at(24, 18), "--nb-pen": "var(--nb-gold)", "--cyc": "5s" } as CSSProperties} />
-      <Pen width={34} height={34} viewBox="0 0 34 34" loop d={["M17 4 L 17 12 M17 22 L 17 30 M4 17 L 12 17 M22 17 L 30 17 M8 8 L 12 12 M22 22 L 26 26 M26 8 L 22 12 M12 22 L 8 26"]} style={{ ...at(326, 8), "--cyc": "5s", "--dl": "0.8s" } as CSSProperties} />
       <div className="memo-nb-deck-stage">
         <div className="memo-nb-card base" style={{ "--r": "-7deg", "--x": "-10px", "--y": "8px" } as CSSProperties} />
         <div className="memo-nb-card base" style={{ "--r": "5deg", "--x": "10px", "--y": "4px" } as CSSProperties} />

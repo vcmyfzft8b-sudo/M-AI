@@ -449,6 +449,8 @@
   --nb-marker: rgba(255, 216, 77, 0.75);
   --nb-sticker: #ffffff;
   --nb-good: #12804a;
+  /* On a sticky note, whose paper does not change with the theme. */
+  --nb-note-good: #12804a;
   --nb-good-tint: rgba(31, 157, 87, 0.12);
   --nb-note-yellow: #fff1a6;
   --nb-note-pink: #ffd8e2;
@@ -10878,6 +10880,35 @@ html[data-native] .memo-nb-spiral { display: none; }
 @media (max-width: 369px) { .memo-paywall-shell.memo-nb-paper { --nb-narrow: 0.9; } }
 @media (max-width: 349px) { .memo-paywall-shell.memo-nb-paper { --nb-narrow: 0.84; } }
 
+/*
+ * The paywall's skeleton (paywall-loading.tsx): the same page, with pills.
+ * The plans are the real sticky notes; on the yellow and pink paper the pills
+ * are drawn in the note's own ink so they read on either appearance.
+ */
+.memo-nb-skeleton .app-start-close-button { display: block; }
+/* Pills in the page's own ink, so they sit on the paper in either appearance. */
+.memo-nb-skeleton .app-loading-pill { background: color-mix(in oklch, var(--text) 9%, transparent); }
+.memo-nb-skeleton .app-loading-pill::after { background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--text) 7%, transparent), transparent); }
+.memo-nb-skel-timeline { display: grid; grid-template-columns: repeat(3, 1fr); padding: 0.2rem 0; }
+.memo-nb-skel-timeline > span { display: grid; justify-items: center; gap: 0.35rem; }
+.memo-nb-skel-timeline .app-loading-pill { height: 0.75rem; }
+.memo-nb-skeleton .memo-nb-skel-dot { width: 1.9rem; height: 1.9rem; }
+.memo-nb-skel-scene { position: relative; height: 13.2rem; display: grid; place-items: center; }
+.memo-nb-skel-card { position: relative; width: 12.5rem; height: 8rem; padding: 1.4rem 1rem 1rem; border-radius: 12px; display: grid; align-content: start; gap: 0.75rem; background: var(--nb-index-card); box-shadow: 0 14px 26px -6px rgba(40, 30, 10, 0.3); rotate: -2deg; }
+.memo-nb-skel-card > .memo-nb-tape { left: 50%; top: -0.6rem; translate: -50% 0; rotate: -3deg; }
+.memo-nb-skeleton .memo-nb-skel-card .app-loading-pill { height: 0.8rem; background: rgba(0, 0, 0, 0.08); }
+.memo-nb-skel-memo { position: absolute; right: 2.2rem; bottom: 0.8rem; width: 4.8rem; height: 4.3rem; border-radius: 999px; }
+.memo-nb-skel-title { display: grid; justify-items: center; gap: 0.5rem; }
+.memo-nb-skel-title .app-loading-pill { height: 1.8rem; max-width: 100%; }
+.memo-nb-skel-checks { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem 1rem; }
+.memo-nb-skel-checks .app-loading-pill { height: 1.1rem; }
+.memo-nb-skel-plan { cursor: default; }
+.memo-nb-skeleton .memo-nb-skel-plan .app-loading-pill { height: 0.85rem; background: rgba(0, 0, 0, 0.09); }
+.memo-nb-skeleton .memo-nb-skel-plan .app-loading-pill::after, .memo-nb-skeleton .memo-nb-skel-card .app-loading-pill::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent); }
+.memo-nb-skel-plan .memo-nb-skel-price { width: 6.5rem; height: 1.7rem; margin: 0.35rem 0 0.2rem; }
+.memo-nb-skel-due { width: 15rem; height: 0.95rem; }
+.memo-nb-skel-cta { display: block; width: 100%; opacity: 0.55; pointer-events: none; }
+
 /* The close button is the app's round one, top right like everywhere else in the app. */
 .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
   /* Above the scene, which is drawn after it and would otherwise take its taps. */
@@ -11093,7 +11124,8 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
 
 .memo-nb-plan-name { font-size: 0.95rem; font-weight: 800; }
 .memo-nb-plan-name > .memo-nb-pen { width: 1rem; height: 1rem; margin-right: 0.25rem; vertical-align: -0.1rem; overflow: visible; --nb-pen: var(--nb-good); }
-.memo-nb-save { display: inline-flex; margin-left: 0.35rem; height: 1.25rem; align-items: center; padding: 0 0.45rem; border-radius: 999px; background: var(--nb-good-tint); color: var(--nb-good); font-size: 0.7rem; font-weight: 800; vertical-align: 1px; }
+/* On the note, which is the same yellow in either appearance: a solid green pill, not the page's green, which turns pale in the dark. */
+.memo-nb-save { display: inline-flex; margin-left: 0.35rem; height: 1.25rem; align-items: center; padding: 0 0.5rem; border-radius: 999px; background: var(--nb-note-good); color: var(--on-promo); font-size: 0.72rem; font-weight: 850; vertical-align: 1px; box-shadow: 0 1px 2px rgba(0, 40, 20, 0.25); }
 .memo-nb-plan-was { position: relative; justify-self: start; margin-top: 0.3rem; font-size: 0.82rem; font-weight: 600; color: var(--nb-note-muted); text-decoration: none; }
 .memo-nb-plan-was::after { content: ""; position: absolute; left: -2px; right: -2px; top: 52%; height: 2px; border-radius: 2px; background: var(--promo); transform-origin: 0 50%; animation: memo-nb-strike 0.5s ease-out both 1.1s; }
 .memo-nb-plan-price { margin-top: 0.3rem; font-size: clamp(1.3rem, 6.6vw, 1.62rem); font-weight: 850; letter-spacing: -0.04em; line-height: 1.05; white-space: nowrap; }

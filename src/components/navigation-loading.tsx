@@ -16,6 +16,8 @@ import {
 import { createPortal } from "react-dom";
 
 import { DashboardLoading } from "@/components/dashboard-loading";
+import { PaywallLoading } from "@/components/paywall-loading";
+import { isPaywallReason } from "@/lib/paywall-reasons";
 import { LectureWorkspaceLoading } from "@/components/lecture-loading";
 import { SettingsLoading } from "@/components/settings-loading";
 import { SupportArticleLoading, SupportIndexLoading } from "@/components/support-loading";
@@ -61,6 +63,13 @@ function getNavigationSkeleton(href: string, demoBasePath: string | null): React
 
   if (pathname === "/app/settings") {
     return <SettingsLoading />;
+  }
+
+  if (pathname === "/app/start") {
+    // A paywall, in the colour of the feature that opened it.
+    const query = href.includes("?") ? new URLSearchParams(href.slice(href.indexOf("?") + 1).split("#")[0]) : null;
+    const reason = query?.get("for");
+    return <PaywallLoading reason={isPaywallReason(reason) ? reason : null} />;
   }
 
   if (pathname === "/app") {

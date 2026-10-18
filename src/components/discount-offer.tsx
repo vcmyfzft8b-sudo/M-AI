@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useTranslations } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
-import { HAND_FONT, Marked, NotebookSpiral, PenCircle, Tape, Ticket } from "@/components/paywall-notebook";
+import { HAND_FONT, Marked, NotebookSpiral, PenCircle, Tape, Ticket, warmHandFont } from "@/components/paywall-notebook";
 import { useFitScreen } from "@/components/use-fit-screen";
 import { MemoPortal } from "@/components/memo-portal";
 import { sheetClass, useSheet } from "@/components/use-sheet";
@@ -41,6 +41,10 @@ import { APPLE_PRODUCTS } from "@/lib/mobile/runtime";
  * last one it crosses before 50 %. That is the slice the wheel pretends to
  * stop on, so it is the worst prize on the board rather than a middling one.
  */
+// The home screen loads this module while idle, ahead of the gift being
+// tapped; that is the moment to fetch the wheel's handwriting too.
+warmHandFont();
+
 const WHEEL_SLICES = ["10 %", "15 %", "20 %", "50 %", "5 %", "30 %"];
 /** Bulbs in the ring of lights round the rim. */
 const WHEEL_BULBS = 18;
@@ -578,15 +582,10 @@ export function DiscountOffer({
           className={sheetClass(`memo-sheet-full memo-wheel-sheet memo-nb-paper ${HAND_FONT.variable}`, wheelSheet.closing)}
           role="dialog"
           aria-modal="true"
-          {...wheelSheet.dragProps}
         >
+          {/* A whole page, not a sheet: it does not drag. The cross closes it. */}
           <NotebookSpiral />
-          <div className="memo-grab-wide" data-drag-handle>
-            <span />
-          </div>
-          {/* The whole header drags, not just the 3.4rem grabber — the same
-              zone the app's other sheets give a thumb. */}
-          <div className="memo-wheel-close-row" data-drag-zone>
+          <div className="memo-wheel-close-row">
             <button
               type="button"
               aria-label={t("common.close")}

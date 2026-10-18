@@ -54,6 +54,7 @@ function load(component, native, products = []) {
     // The notebook's pieces, as their text: what a buyer reads is what is checked.
     "@/components/paywall-notebook": {
       HAND_FONT: { variable: "hand" },
+      warmHandFont: () => {},
       Marked: ({ text }) => text.replaceAll("*", ""),
       NotebookSpiral: () => null,
       PenCircle: () => null,

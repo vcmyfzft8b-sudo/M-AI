@@ -11404,7 +11404,6 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
  * the foot. The prize sheet is a sheet the height of what is on it.
  */
 .memo-sheet-full.memo-wheel-sheet.memo-nb-paper { top: 0; border-radius: 0; }
-.memo-wheel-sheet.memo-nb-paper .memo-grab-wide { display: none; }
 .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { position: relative; z-index: 10; padding: calc(2.4rem + var(--memo-safe-top, 0px)) 1.1rem 0; }
 html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { padding-top: calc(0.6rem + var(--memo-safe-top, 0px)); }
 .memo-wheel-sheet.memo-nb-paper .memo-wheel-body { padding: 0.6rem 1.25rem var(--nb-foot); overflow-x: clip; }
@@ -11564,7 +11563,8 @@ html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { paddin
 @media (max-width: 1099px) {
   .memo-sheet-full.memo-wheel-sheet.memo-nb-paper {
     transform: none;
-    animation: memo-nb-page-in 0.22s ease-out both;
+    /* `backwards`, not `both`: a held end state would outrank the closing fade. */
+    animation: memo-nb-page-in 0.22s ease-out backwards;
   }
   .memo-sheet-full.memo-wheel-sheet.memo-nb-paper.closing {
     transform: none;
@@ -11651,8 +11651,12 @@ html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibi
   align-items: center;
   justify-content: flex-end;
   gap: 0.3rem;
+  /* A fixed line: the page shares its spare height out round this, and the
+     handwriting arriving after the page shows must not move anything. */
+  height: 2.2rem;
   margin: 0.4rem 0 -0.2rem;
   font-size: 1.55rem;
+  line-height: 1;
   color: var(--promo);
   rotate: -4deg;
   animation: memo-nb-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both 1.8s;

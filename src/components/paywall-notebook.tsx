@@ -20,6 +20,19 @@ import { Msym } from "@/components/msym";
  */
 export const HAND_FONT = Caveat({ subsets: ["latin", "latin-ext"], weight: "700", variable: "--font-hand", display: "swap" });
 
+/**
+ * Fetch the handwriting ahead of the screen that uses it. A browser only
+ * downloads a font once text first asks for it, so the wheel used to open in
+ * the fallback face and change face a moment later.
+ */
+export function warmHandFont() {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  void document.fonts?.load(`700 1em ${HAND_FONT.style.fontFamily}`).catch(() => {});
+}
+
 /** Washi tape in one of the notebook's colours. */
 export type TapeTone = "yellow" | "pink" | "mint" | "lilac";
 

@@ -40,6 +40,7 @@ import {
 } from "../src/lib/ocr-prompts.ts";
 import { pickPageArticleHtml, pickRoleMainHtml } from "../src/lib/link-main-article.ts";
 import { isLegiblePdfTextLayer } from "../src/lib/pdf-text-layer.ts";
+import { isLabelOnlyOcrReading } from "../src/lib/scan-ocr-text.ts";
 import { hasEnoughSourceTextToTeach } from "../src/lib/source-text-gate.ts";
 import { runCase } from "./lib/note-replay.mjs";
 import { countWords, ledger, loadEnv } from "./lib/eval-runtime.mjs";
@@ -125,8 +126,9 @@ async function readPhoto(bytes) {
     attempts.push({ stage, model, finishReason: result.finishReason, chars: result.text.length });
     if (result.text.length >= 120) return { text: result.text, attempts };
     if (result.text.length > shortText.length) shortText = result.text;
-    // Real but thin text will not grow when restated; production keeps it and stops here too.
-    if (shortText && stage === "ocr_rescue") break;
+    // Real but thin text will not grow when restated, unless it is only a diagram's labels;
+    // production keeps it and stops here too.
+    if (shortText && stage === "ocr_rescue" && !isLabelOnlyOcrReading(shortText)) break;
   }
   return { text: shortText, attempts };
 }

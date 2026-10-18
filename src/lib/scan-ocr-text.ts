@@ -86,6 +86,21 @@ export function classifyImageOcrText(text: string): ImageOcrVerdict {
   return { acceptable: true };
 }
 
+/**
+ * A thin reading made only of labels and symbols ("L", "F1", "S2", "13 (53, 43)"), with no word of
+ * four letters or more. That is what a verbatim reader returns for a diagram, a circuit or a map:
+ * it copies the labels and drops the drawing, which is the study content. A restatement describes
+ * what the drawing shows, so such a reading earns one more attempt where a thin page of real words
+ * (one heading, one exercise) does not. Measured on a whiteboard circuit diagram on 2026-10-18:
+ * both verbatim reads returned 54-67 characters of labels, the restatement ~1000 characters
+ * explaining the circuit.
+ */
+export function isLabelOnlyOcrReading(text: string) {
+  const normalized = stripUnstorableCharacters(text).trim();
+
+  return normalized.length > 0 && !/\p{L}{4,}/u.test(normalized);
+}
+
 export function isAcceptableImageOcrText(text: string) {
   return classifyImageOcrText(text).acceptable;
 }

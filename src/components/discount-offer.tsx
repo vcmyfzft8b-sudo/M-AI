@@ -795,7 +795,7 @@ export function DiscountOffer({
                   onClick={() => nativeOffer ? apple.selectPlan(offerPlan.id) : setPlan(offerPlan.id)}
                   disabled={nativeOffer ? apple.busy : isCheckingOut}
                 >
-                  <Tape tone={offerPlan.id === "yearly" ? "yellow" : "mint"} />
+                  <Tape tone="mint" />
                   {offerPlan.badgeKey ? (
                     <span className="memo-nb-badge">{t(offerPlan.badgeKey)}</span>
                   ) : null}

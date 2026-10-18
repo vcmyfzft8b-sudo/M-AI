@@ -11719,8 +11719,24 @@ html[data-paywall-closing] .memo-shell * {
 
 html[data-native] .memo-nb-spiral { display: none; }
 
+/*
+ * The space under the button. A phone's corners are rounded, so a button
+ * that runs to the bottom edge looks clipped; it sits clear of them. The
+ * Home Screen app has no browser bar beneath it and draws to the very
+ * bottom of the screen, under the home indicator, so it keeps more.
+ */
+/* On the portal too: the wheel and its prize are portalled out of the shell. */
+:is(.memo, .memo-portal) { --nb-foot: max(1.6rem, calc(var(--memo-safe-bottom, 0px) + 0.9rem)); }
+:root[data-standalone] :is(.memo, .memo-portal) { --nb-foot: max(2.6rem, calc(var(--memo-safe-bottom, 0px) + 0.9rem)); }
+@media (display-mode: standalone) { :is(.memo, .memo-portal) { --nb-foot: max(2.6rem, calc(var(--memo-safe-bottom, 0px) + 0.9rem)); } }
+@media (max-width: 1099px) {
+  .memo-paywall-shell.memo-nb-paper { padding-bottom: var(--nb-foot); }
+}
+
 /* The close button is the app's round one, top right like everywhere else in the app. */
 .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
+  /* Above the scene, which is drawn after it and would otherwise take its taps. */
+  z-index: 10;
   justify-content: flex-end;
   padding-inline: 1.1rem;
   top: calc(2.4rem + var(--memo-safe-top, 0px));
@@ -12025,6 +12041,7 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
 .memo-nb-deck {
   position: relative;
   height: 13.2rem;
+  pointer-events: none;
 }
 
 .memo-nb-deck > * { position: absolute; }
@@ -12132,7 +12149,7 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
 
 /* Chat: a question, Memo typing, the answer. */
 .memo-nb-bubble { max-width: 14rem; padding: 0.68rem 0.95rem; border-radius: 18px; font-size: 0.92rem; line-height: 1.3; font-weight: 600; }
-.memo-nb-bubble.mine { right: 1.6rem; top: 0.9rem; background: var(--paywall-accent, var(--promo)); color: var(--on-promo); border-bottom-right-radius: 12px; animation: memo-nb-seq-q 6s ease infinite; }
+.memo-nb-bubble.mine { right: 4.2rem; top: 1.1rem; background: var(--paywall-accent, var(--promo)); color: var(--on-promo); border-bottom-right-radius: 12px; animation: memo-nb-seq-q 6s ease infinite; }
 .memo-nb-bubble.theirs { left: 7rem; top: 4.9rem; background: var(--surface); color: var(--text); border-bottom-left-radius: 12px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08); animation: memo-nb-seq-a 6s ease infinite; }
 .memo-nb-bubble.theirs mark { background: var(--nb-marker); color: inherit; border-radius: 4px; padding: 0 3px; }
 .memo-nb-typing { left: 7rem; top: 4.9rem; display: flex; gap: 4px; padding: 0.75rem 0.9rem; border-radius: 18px; border-bottom-left-radius: 12px; background: var(--surface); animation: memo-nb-seq-typing 6s ease infinite; }
@@ -12151,7 +12168,7 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
 .memo-nb-ring { width: 3.9rem; height: 3.9rem; border-radius: 999px; border: 2px solid var(--promo); opacity: 0; animation: memo-nb-ring 2.4s ease-out infinite calc(var(--i) * 0.8s); }
 
 /* Podcast: a cassette, its reels turning. */
-.memo-nb-cassette { left: 4.4rem; top: 1.9rem; width: 15.6rem; height: 10rem; border-radius: 18px; rotate: -4deg; background: linear-gradient(160deg, color-mix(in oklch, var(--nb-dynamite) 70%, white), var(--nb-dynamite) 70%, color-mix(in oklch, var(--nb-dynamite) 80%, black)); box-shadow: 0 22px 36px -10px color-mix(in oklch, var(--nb-dynamite) 50%, transparent), inset 0 2px 0 rgba(255, 255, 255, 0.3); animation: memo-nb-pop 0.6s cubic-bezier(0.3, 1.5, 0.5, 1) both 0.2s, memo-nb-float 4.4s ease-in-out infinite; }
+.memo-nb-cassette { left: 3.6rem; top: 2.3rem; width: 15.6rem; height: 10rem; border-radius: 18px; rotate: -4deg; background: linear-gradient(160deg, color-mix(in oklch, var(--nb-dynamite) 70%, white), var(--nb-dynamite) 70%, color-mix(in oklch, var(--nb-dynamite) 80%, black)); box-shadow: 0 22px 36px -10px color-mix(in oklch, var(--nb-dynamite) 50%, transparent), inset 0 2px 0 rgba(255, 255, 255, 0.3); animation: memo-nb-pop 0.6s cubic-bezier(0.3, 1.5, 0.5, 1) both 0.2s, memo-nb-float 4.4s ease-in-out infinite; }
 .memo-nb-cassette::before { content: ""; position: absolute; inset: 8px; border-radius: 12px; border: 1.5px dashed rgba(255, 255, 255, 0.35); }
 .memo-nb-cassette-label { position: absolute; left: 1.1rem; right: 1.1rem; top: 1rem; height: 2.75rem; border-radius: 12px; display: grid; place-items: center; color: var(--nb-note-ink); font-size: 1.5rem; background: linear-gradient(to bottom, transparent 1.9rem, var(--nb-margin) 1.9rem 2rem, transparent 2rem), var(--nb-paper-end); }
 .memo-nb-cassette-window { position: absolute; left: 2.5rem; right: 2.5rem; top: 4.4rem; height: 3.1rem; border-radius: 999px; display: flex; align-items: center; justify-content: space-between; padding: 0 0.5rem; background: var(--nb-ink-dark); box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.5); }
@@ -12239,9 +12256,10 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
  */
 .memo-sheet-full.memo-wheel-sheet.memo-nb-paper { top: 0; border-radius: 0; }
 .memo-wheel-sheet.memo-nb-paper .memo-grab-wide { display: none; }
-.memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { padding: calc(2.4rem + var(--memo-safe-top, 0px)) 1.1rem 0; }
+.memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { position: relative; z-index: 10; padding: calc(2.4rem + var(--memo-safe-top, 0px)) 1.1rem 0; }
 html[data-native] .memo-wheel-sheet.memo-nb-paper .memo-wheel-close-row { padding-top: calc(0.6rem + var(--memo-safe-top, 0px)); }
-.memo-wheel-sheet.memo-nb-paper .memo-wheel-body { padding: 0.6rem 1.25rem calc(1.15rem + var(--memo-safe-bottom, 0px)); }
+.memo-wheel-sheet.memo-nb-paper .memo-wheel-body { padding: 0.6rem 1.25rem var(--nb-foot); }
+.memo-offer-sheet.memo-nb-paper .memo-offer-body { padding-bottom: var(--nb-foot); }
 .memo-wheel-sheet.memo-nb-paper .memo-wheel-title { margin-top: 1.4rem; font-size: 2.25rem; line-height: 1.12; }
 :where(.memo-wheel-sheet.memo-nb-paper) .memo-wheel { --z: 1.24; }
 .memo-wheel-sheet.memo-nb-paper .memo-nb-tap { margin-top: auto; align-self: stretch; }
@@ -12381,6 +12399,8 @@ html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibi
 .memo-nb-battery .memo-nb-icon { position: absolute; right: -1rem; top: -1rem; width: 2rem; height: 2rem; border-radius: 999px; font-size: 1.25rem; --t: var(--promo); box-shadow: 0 0 0 3px var(--surface); animation: memo-nb-orb 1.3s ease-in-out infinite; }
 
 .memo-nb-minutes { display: grid; gap: 0.6rem; padding-top: 0.2rem; }
+/* The sheet keeps 2rem under it; the Home Screen app, drawn to the screen's rounded foot, a little more. */
+:root[data-standalone] .memo-nb-minutes { padding-bottom: 0.6rem; }
 .memo-nb-minutes .memo-nb-title { text-align: left; font-size: 1.55rem; }
 .memo-nb-minutes-sub { margin: 0; display: flex; align-items: center; gap: 0.35rem; color: var(--muted); font-size: 0.92rem; font-weight: 650; }
 .memo-nb-minutes-sub .msym { color: var(--nb-gold-deep); }
@@ -12414,7 +12434,8 @@ html:not([data-native]) .memo-wheel-sheet.memo-nb-paper .memo-wheel-sub { visibi
 @keyframes memo-nb-breathe { 0%, 100% { scale: 1; } 50% { scale: 1.018; } }
 @keyframes memo-nb-fill { from { transform: scaleX(0); } to { transform: scaleX(0.5); } }
 @keyframes memo-nb-ping { 0% { box-shadow: 0 0 0 4px var(--nb-paper), 0 0 0 4px color-mix(in oklch, var(--promo) 50%, transparent); } 70%, 100% { box-shadow: 0 0 0 4px var(--nb-paper), 0 0 0 14px transparent; } }
-@keyframes memo-nb-deal { 0% { opacity: 0; transform: translate(9rem, -0.6rem) rotate(16deg); } 4%, 22% { opacity: 1; transform: rotate(-2deg); } 27%, 100% { opacity: 0; transform: translate(-10rem, 1.2rem) rotate(-18deg); } }
+/* Each card holds until the next has landed on it (25% + 4%), so the deck is never empty. */
+@keyframes memo-nb-deal { 0% { opacity: 0; transform: translate(9rem, -0.6rem) rotate(16deg); } 4%, 29% { opacity: 1; transform: rotate(-2deg); } 34%, 100% { opacity: 0; transform: translate(-10rem, 1.2rem) rotate(-18deg); } }
 @keyframes memo-nb-dot { 0% { width: 20px; background: var(--promo); } 25%, 100% { width: 7px; background: color-mix(in oklch, var(--text) 18%, transparent); } }
 @keyframes memo-nb-bob { 0%, 100% { transform: translateY(0) rotate(-1.5deg); } 50% { transform: translateY(-9px) rotate(1.5deg); } }
 @keyframes memo-nb-wave { 0%, 100% { transform: rotate(-3deg) translateY(0); } 25% { transform: rotate(4deg) translateY(-6px); } 50% { transform: rotate(-2deg) translateY(-9px); } 75% { transform: rotate(3deg) translateY(-4px); } }

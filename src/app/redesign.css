@@ -10686,12 +10686,9 @@
 /* ===========================================================================
    Paywall
    ---------------------------------------------------------------------------
-   The paywall already had the redesign's structure and its blue accent (the
-   `--memo-paywall-purple` variable is a misnomer — it resolves to --tint). What
-   differs is the surface treatment: the redesign puts it on a plain card with
-   softer radii instead of a gradient hero. Only those properties are overridden
-   here, so the onboarding flow around it — which the redesign leaves alone —
-   keeps working as it does today.
+   Every paywall is a page in a notebook (the `.memo-nb-*` section below). What
+   is left here is the shell's base surface and the button the whole business
+   runs through.
    ========================================================================= */
 
 .memo-paywall-shell {
@@ -10719,7 +10716,7 @@
 
 /*
  * The wheel and its offer are one screen too (`use-fit-screen.ts`): the wheel
- * and Memo shrink first, then the headings, never the button or the plans.
+ * shrinks first, then the headings, never the button or the plans.
  * The wheel's decoration never takes a tap meant for what is under it.
  */
 .memo-wheel :is(.memo-wheel-rays, .memo-wheel-glow, .memo-wheel-lights) { pointer-events: none; }
@@ -10728,7 +10725,7 @@
  * Every compact level sets a size (`--z`) on the screen's own parts rather than
  * a zoom, and one rule applies it, times the last-resort squeeze
  * (`--fit-squeeze`, `use-fit-screen.ts`) — so the two multiply instead of one
- * overriding the other. The scenes and the logo give way least.
+ * overriding the other.
  */
 :is(.memo-paywall-shell, .memo-wheel-body, .memo-offer-body) > :not(.app-start-dismiss-row, .memo-confetti, .memo-nb-spiral, script) {
   zoom: calc(var(--z, 1) * var(--fit-squeeze, 1));

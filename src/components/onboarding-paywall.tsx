@@ -393,7 +393,7 @@ export function OnboardingPaywall({
               role="radio"
               aria-checked={selected}
             >
-              <Tape tone={plan.id === "yearly" ? "yellow" : "mint"} />
+              <Tape tone="mint" />
               {plan.id === "yearly" ? (
                 <span className="memo-nb-badge">{t("paywall.mostPopular")}</span>
               ) : null}

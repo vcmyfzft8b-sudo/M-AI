@@ -11932,7 +11932,8 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
 .memo-nb-plan.selected { transform: rotate(0deg) scale(1.04); box-shadow: 0 1px 1px rgba(0, 0, 0, 0.06), 0 18px 28px -8px rgba(60, 40, 0, 0.34), inset 0 -18px 22px -18px rgba(120, 80, 0, 0.18); }
 .memo-nb-plan:disabled { cursor: default; }
 .memo-nb-plan > .memo-nb-tape { left: 50%; top: -0.6rem; translate: -50% 0; rotate: -3deg; }
-.memo-nb-plan:has(.memo-nb-badge) > .memo-nb-tape { left: 0.5rem; top: -0.25rem; translate: 0 0; rotate: -34deg; width: 3.6rem; }
+/* The badge takes the top edge, so the tape goes across the corner: half on the note, half off it, clear of the plan's name. */
+.memo-nb-plan:has(.memo-nb-badge) > .memo-nb-tape { left: -0.85rem; top: -0.3rem; translate: 0 0; rotate: -40deg; width: 3rem; height: 1.1rem; }
 
 .memo-nb-badge {
   position: absolute;

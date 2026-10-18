@@ -10,6 +10,7 @@ import { en } from "../src/lib/i18n/messages/en.ts";
 import { createTranslator } from "../src/lib/i18n/translate.ts";
 import { APPLE_PRODUCTS } from "../src/lib/mobile/runtime.ts";
 import * as paywallLadder from "../src/lib/paywall-ladder.ts";
+import * as paywallCopy from "../src/lib/paywall-copy.ts";
 
 const t = createTranslator("en", [en]);
 const plans = [
@@ -45,6 +46,8 @@ function load(component, native, products = []) {
     "@/lib/utils": { formatCurrency: value => `€${value.toFixed(2)}` },
     "@/lib/billing-regions": { STANDARD_PLAN_PRICES: { monthly: 20, yearly: 130 } },
     "@/lib/paywall-ladder": paywallLadder,
+    "@/lib/paywall-copy": paywallCopy,
+    "@/components/discount-offer-loading": { SHEET_FIT_LEVELS: 4, discountOfferSkeleton: { shown: false } },
     "@/lib/paywall-offer-timing": { notePaywallShown() {}, paywallVisitCounted: () => false },
     "@/components/paywall-hero": {
       PaywallHero: ({ reason }) => React.createElement("div", { className: "memo-nb-hero", "data-reason": reason }),

@@ -7,8 +7,10 @@ import type { LibraryExamPrep } from "@/lib/exams/exams-server";
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 import {
+  lazy,
   memo,
   startTransition,
+  Suspense,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -23,6 +25,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { flushSync } from "react-dom";
 
 import { useAppHref, useIsCreatorDemo } from "@/components/creator-demo/creator-demo-context";
+import { DiscountOfferLoading } from "@/components/discount-offer-loading";
 import { paywallPath } from "@/lib/paywall-reasons";
 import { useT, useTranslations } from "@/components/i18n-provider";
 import {
@@ -100,10 +103,12 @@ const DeferredNoteSourceModal = dynamic(
   { loading: DeferredSurfaceLoading },
 );
 
-const DeferredDiscountOffer = dynamic(
-  () => loadDiscountOffer().then((module) => module.DiscountOffer),
-  { loading: DeferredSurfaceLoading },
-);
+/*
+ * Lazy rather than `dynamic`, so what shows while it loads can know which
+ * page is opening: the wheel's or the prize's own skeleton
+ * (`discount-offer-loading.tsx`), not just the bar at the top.
+ */
+const LazyDiscountOffer = lazy(() => loadDiscountOffer().then((module) => ({ default: module.DiscountOffer })));
 
 function connectionAllowsIdleWarmup() {
   const connection = (
@@ -2062,7 +2067,8 @@ export function HomeDashboard({
           `sessionStorage` during render: see the seed above. The wheel is
           always closed on the first pass, so it loses nothing by waiting. */}
       {isHydrated && (isWheelOpen || (!native && isOfferOpen) || (native && isOfferOpen && nativeHalfOffAvailable)) ? (
-        <DeferredDiscountOffer
+        <Suspense fallback={<DiscountOfferLoading sheet={isOfferOpen ? "offer" : "wheel"} restored={isOfferRestored} />}>
+        <LazyDiscountOffer
           nativeOffer={native}
           planPrices={planPrices}
           wheelOpen={isWheelOpen}
@@ -2078,6 +2084,7 @@ export function HomeDashboard({
           offerRestored={isOfferRestored}
           onClaimed={() => setHasClaimedDiscount(true)}
         />
+        </Suspense>
       ) : null}
 
       {/* Rename and delete are bottom sheets on the phone and centred dialogs

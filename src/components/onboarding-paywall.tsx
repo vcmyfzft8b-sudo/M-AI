@@ -15,6 +15,7 @@ import { useNativeIOS } from "@/lib/mobile/client";
 import { clearOfferResume } from "@/lib/offer-resume";
 import { formatCurrency } from "@/lib/utils";
 import type { PaywallReason } from "@/lib/paywall-reasons";
+import { PAYWALL_CHECKLISTS, paywallTitleKey } from "@/lib/paywall-copy";
 import { cameFromAppPath, quietNextEntrance } from "@/lib/app-history";
 import { safeRouterPrefetch } from "@/lib/safe-router-prefetch";
 import { notePaywallShown, paywallVisitCounted } from "@/lib/paywall-offer-timing";
@@ -34,25 +35,6 @@ type BillingPlanCard = {
   annualizedAmount: number;
   blurbKey: MessageKey;
 };
-
-/**
- * What the plan adds, ticked off in pen under the headline: three short items
- * for the screen nothing opened, and for each feature the ones that answer it.
- */
-const CHECKLISTS: Record<PaywallReason | "plain", MessageKey[]> = {
-  plain: ["paywall.check.unlimitedNotes", "paywall.check.everyTool", "paywall.check.tutorPodcasts"],
-  note: ["paywall.check.everyLecture", "paywall.check.flashcards", "paywall.check.quizzes"],
-  locked: ["paywall.check.allNotes", "paywall.check.everyTool", "paywall.check.tutor"],
-  chat: ["paywall.check.everyNote", "paywall.check.noLimits", "paywall.check.instant"],
-  listen: ["paywall.check.everyNote", "paywall.check.anywhere", "paywall.check.noLimits"],
-  tutor: ["paywall.check.everyNote", "paywall.check.everyDay", "paywall.check.yourPace"],
-  podcast: ["paywall.check.everyNote", "paywall.check.everyDay", "paywall.check.anywhere"],
-  regenerate: ["paywall.check.flashcards", "paywall.check.mindMaps", "paywall.check.tests"],
-  library: ["paywall.check.everySubject", "paywall.check.oneChat"],
-  exam: ["paywall.check.studyPlan", "paywall.check.mockExams", "paywall.check.tutor"],
-  offer: ["paywall.check.notes", "paywall.check.chat", "paywall.check.tutor"],
-};
-
 
 /**
  * Only the one message the buyer cannot work out for themselves.
@@ -329,15 +311,11 @@ export function OnboardingPaywall({
 
       <h1 className="memo-nb-title">
         <Marked
-          text={t(
-            reason === "offer" && !improved
-              ? "paywall.reason.offer.titleBest"
-              : reason ? `paywall.reason.${reason}.title` : "paywall.title",
-          )}
+          text={t(paywallTitleKey(reason, improved))}
         />
       </h1>
 
-      <Checklist items={CHECKLISTS[reason ?? "plain"].map((key) => t(key))} />
+      <Checklist items={PAYWALL_CHECKLISTS[reason ?? "plain"].map((key) => t(key))} />
 
       <div className="memo-nb-plans" role="radiogroup" aria-label={t("paywall.choosePlan")}>
         {paywallPlans.map((plan) => {

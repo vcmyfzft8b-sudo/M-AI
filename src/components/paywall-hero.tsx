@@ -89,14 +89,48 @@ function Bars({ count, style }: { count: number; style?: CSSProperties }) {
 
 const EQ_HEIGHTS = [0.5, 0.8, 0.6, 1, 0.7, 0.9, 0.55, 1, 0.75, 0.6, 0.9, 0.5, 0.8, 0.65, 0.95, 0.55, 0.8, 0.6, 0.9, 0.45];
 
+/** How many earlier offers the browsing offer strikes out (at most three). */
+function offerTagsShown(step: number) {
+  return Math.min(PAYWALL_LADDER.filter((offer) => offer.step < step).length, 3);
+}
+
+/** Below Memo when it has the left side to itself, so a long language never runs into him. */
+function offerNoteY(shown: number) {
+  return shown >= 3 ? 196 : Math.max(30 + shown * 62, 158);
+}
+
+/**
+ * Each scene's height, in rem. Shared with the paywall's skeleton
+ * (`paywall-loading.tsx`), which holds exactly this much room so nothing under
+ * the scene moves when the page arrives.
+ */
+export function paywallHeroHeight(reason: PaywallReason, step = 1): number {
+  switch (reason) {
+    case "note": return 14.75;
+    case "locked": return 16.4;
+    case "chat": return 13;
+    case "listen": return 15.6;
+    case "tutor": return 16.9;
+    case "podcast": return 17.5;
+    case "regenerate": return 16.4;
+    case "library": return 13.4;
+    case "exam": return 14.5;
+    case "offer": {
+      // As tall as the tags it holds: a second offer has one tag to strike,
+      // not three, and must not leave the space of two empty.
+      const shown = offerTagsShown(step);
+      return shown >= 3 ? 14.75 : Math.max(10, (offerNoteY(shown) + 42) / 16);
+    }
+  }
+}
+
 export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?: number }) {
   const t = useT();
   let scene: ReactNode;
-  let height = 15;
+  const height = paywallHeroHeight(reason, step);
 
   switch (reason) {
     case "note":
-      height = 14.75;
       scene = (
         <>
           {[
@@ -105,12 +139,15 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
             ["photo_camera", tint("test")],
           ].map(([icon, color], index) => (
             <Fragment key={icon}>
-              <Icon name={icon} color={color} className="memo-nb-src" style={{ ...at(52, 6 + index * 56), "--i": index } as CSSProperties} />
-              <span className="memo-nb-packet" style={{ ...at(70, 24 + index * 56), "--t": color, "--i": index, "--dx": "82px", "--dy": `${66 - index * 56}px` } as CSSProperties} />
+              <Icon name={icon} color={color} className="memo-nb-src" style={{ ...at(52, 6 + index * 52), "--i": index } as CSSProperties} />
+              <span className="memo-nb-packet" style={{ ...at(70, 24 + index * 52), "--t": color, "--i": index, "--dx": "82px", "--dy": `${66 - index * 52}px` } as CSSProperties} />
             </Fragment>
           ))}
-          <span className="memo-nb-write-title memo-nb-hand" style={at(134, 62)}>{t("paywall.scene.subject")}</span>
-          <Pen width={44} height={44} viewBox="0 0 44 44" loop d={["M8 36 C 10 16, 24 6, 38 6 C 38 22, 28 34, 8 36 Z M8 36 L 26 18"]} style={{ ...at(328, 62), "--nb-pen": tint("test"), "--cyc": "6s", "--dl": "0.4s" } as CSSProperties} />
+          {/* The leaf follows the word, however long the language makes it. */}
+          <span className="memo-nb-doodled" style={at(134, 62)}>
+            <span className="memo-nb-write-title memo-nb-hand">{t("paywall.scene.subject")}</span>
+            <Pen width={30} height={30} viewBox="0 0 44 44" loop d={["M8 36 C 10 16, 24 6, 38 6 C 38 22, 28 34, 8 36 Z M8 36 L 26 18"]} style={{ marginTop: "-0.55rem", "--nb-pen": tint("test"), "--cyc": "6s", "--dl": "0.4s" } as CSSProperties} />
+          </span>
           <span className="memo-nb-bar" style={{ ...at(134, 120), width: "13rem", "--i": 0 } as CSSProperties} />
           <span className="memo-nb-bar mark" style={{ ...at(134, 148), width: "7.5rem", "--i": 1 } as CSSProperties} />
           <span className="memo-nb-bar" style={{ ...at(262, 150), width: "5rem", "--i": 2 } as CSSProperties} />
@@ -122,13 +159,12 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
           ].map(([icon, color], index) => (
             <Icon key={icon} name={icon} color={color} className="memo-nb-out" style={{ ...at(196 + index * 54, 190), "--i": index } as CSSProperties} />
           ))}
-          <NotebookMemo style={{ ...at(34, 160), width: "5.5rem" }} />
+          <NotebookMemo style={{ ...at(36, 164), width: "5.25rem" }} />
         </>
       );
       break;
 
     case "locked":
-      height = 16.4;
       scene = (
         <>
           <span className="memo-nb-halo" />
@@ -151,7 +187,10 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
               <i key={angle} style={{ "--a": `${angle}deg`, "--c": index % 2 ? "var(--promo)" : "var(--nb-gold)" } as CSSProperties} />
             ))}
           </span>
-          <svg className="memo-nb-lock" viewBox="0 0 118 140">
+          {/* 30 units of empty sky above the shackle: WebKit paints a filtered
+              svg only a few pixels past its own box, so the shackle springing
+              open used to lose its top in Safari and the app. */}
+          <svg className="memo-nb-lock" viewBox="0 -30 118 170">
             <defs>
               <linearGradient id="memo-nb-lock-body" x1="0" y1="0" x2="0.35" y2="1">
                 <stop offset="0" stopColor="var(--nb-gold-light)" />
@@ -177,7 +216,6 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
       break;
 
     case "chat":
-      height = 13;
       scene = (
         <>
           <Pen width={52} height={60} viewBox="0 0 52 60" loop d={["M26 6 C 12 6, 6 18, 10 28 C 13 35, 19 37, 19 44 L 33 44 C 33 37, 39 35, 42 28 C 46 18, 40 6, 26 6 Z M20 50 L 32 50 M22 55 L 30 55"]} style={{ ...at(28, 4), "--nb-pen": "var(--nb-gold)", "--cyc": "6s" } as CSSProperties} />
@@ -195,7 +233,6 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
       break;
 
     case "listen":
-      height = 15.6;
       scene = (
         <>
           <span className="memo-nb-readcard">
@@ -213,7 +250,6 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
       break;
 
     case "tutor":
-      height = 16.9;
       scene = (
         <>
           <NotebookMemo style={{ ...at(34, 92), width: "9rem" }} />
@@ -225,14 +261,17 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
           <span className="memo-nb-mic" style={{ ...at(287, 187), display: "grid", placeItems: "center" }}>
             <Msym name="mic" size="1.9rem" fill weight={600} />
           </span>
-          <span className="memo-nb-hand" style={{ ...at(148, 200), fontSize: "1.85rem", color: "var(--promo)", rotate: "-7deg" }}>{t("paywall.scene.yourTurn")}</span>
-          <Pen width={40} height={30} viewBox="0 0 40 30" d={["M2 6 C 12 22, 24 24, 36 18 M28 14 L 37 18 L 31 26"]} style={{ ...at(244, 214), "--dl": "1.6s" } as CSSProperties} />
+          {/* Pinned by its right end, so the arrow always points into the mic
+              and a longer language grows to the left. */}
+          <span className="memo-nb-doodled" style={{ right: "6.4rem", top: "12.5rem" }}>
+            <span className="memo-nb-hand" style={{ fontSize: "1.85rem", color: "var(--promo)", rotate: "-7deg" }}>{t("paywall.scene.yourTurn")}</span>
+            <Pen width={40} height={30} viewBox="0 0 40 30" d={["M2 6 C 12 22, 24 24, 36 18 M28 14 L 37 18 L 31 26"]} style={{ marginTop: "0.9rem", "--dl": "1.6s" } as CSSProperties} />
+          </span>
         </>
       );
       break;
 
     case "podcast":
-      height = 17.5;
       scene = (
         <>
           {[[316, 110], [330, 164], [40, 30]].map(([x, y], index) => (
@@ -261,7 +300,6 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
       break;
 
     case "regenerate":
-      height = 16.4;
       scene = (
         <>
           <span className="memo-nb-index" style={{ top: "2.9rem", transform: "rotate(-9deg) translate(-18px, 8px)" }} />
@@ -290,7 +328,6 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
       break;
 
     case "library":
-      height = 13.4;
       scene = (
         <>
           {[
@@ -328,7 +365,6 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
       break;
 
     case "exam":
-      height = 14.5;
       // A week on a calendar page: the study days ticked off in turn, the
       // exam day circled in pen.
       scene = (
@@ -369,12 +405,8 @@ export function PaywallHero({ reason, step = 1 }: { reason: PaywallReason; step?
         [134, 86, "5deg", "yellow"],
         [240, 154, "-4deg", "pink"],
       ];
-      // The hero is as tall as the tags it holds: a second offer has one tag
-      // to strike, not three, and must not leave the space of two empty.
-      const shown = Math.min(earlier.length, spots.length);
-      // Below Memo when it has the left side to itself, so a long language never runs into him.
-      const noteY = shown >= 3 ? 196 : Math.max(30 + shown * 62, 158);
-      height = shown >= 3 ? 14.75 : Math.max(10, (noteY + 42) / 16);
+      const shown = offerTagsShown(step);
+      const noteY = offerNoteY(shown);
       scene = (
         <>
           {earlier.slice(0, spots.length).map((offer, index) => {

@@ -10893,19 +10893,68 @@ html[data-native] .memo-nb-spiral { display: none; }
 .memo-nb-skel-timeline > span { display: grid; justify-items: center; gap: 0.35rem; }
 .memo-nb-skel-timeline .app-loading-pill { height: 0.75rem; }
 .memo-nb-skeleton .memo-nb-skel-dot { width: 1.9rem; height: 1.9rem; }
-.memo-nb-skel-scene { position: relative; height: 13.2rem; display: grid; place-items: center; }
-.memo-nb-skel-card { position: relative; width: 12.5rem; height: 8rem; padding: 1.4rem 1rem 1rem; border-radius: 12px; display: grid; align-content: start; gap: 0.75rem; background: var(--nb-index-card); box-shadow: 0 14px 26px -6px rgba(40, 30, 10, 0.3); rotate: -2deg; }
-.memo-nb-skel-card > .memo-nb-tape { left: 50%; top: -0.6rem; translate: -50% 0; rotate: -3deg; }
-.memo-nb-skeleton .memo-nb-skel-card .app-loading-pill { height: 0.8rem; background: rgba(0, 0, 0, 0.08); }
-.memo-nb-skel-memo { position: absolute; right: 2.2rem; bottom: 0.8rem; width: 4.8rem; height: 4.3rem; border-radius: 999px; }
-.memo-nb-skel-title { display: grid; justify-items: center; gap: 0.5rem; }
-.memo-nb-skel-title .app-loading-pill { height: 1.8rem; max-width: 100%; }
-.memo-nb-skel-checks { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem 1rem; }
-.memo-nb-skel-checks .app-loading-pill { height: 1.1rem; }
+/* The scene's place: that paywall's own scene as flat shapes, in the same
+   places on the same stage (`.memo-nb-hero`), so its height and its zoom are
+   the real one's. Opaque, so two shapes that overlap read as two, not as a
+   darker patch. */
+.memo-nb-skeleton .memo-nb-ghost { background: color-mix(in oklch, var(--text) 9%, var(--nb-paper)); }
+.memo-nb-ghost-paper { display: grid; align-content: start; gap: 0.6rem; padding: 1.3rem 1rem 1rem; background: var(--nb-index-card); box-shadow: 0 14px 26px -6px color-mix(in oklch, var(--nb-note-ink) 30%, transparent); }
+.memo-nb-ghost-paper > .memo-nb-tape { left: 50%; top: -0.6rem; translate: -50% 0; rotate: -3deg; width: 3.4rem; height: 1.1rem; }
+.memo-nb-skeleton .memo-nb-ghost-paper .app-loading-pill { height: 0.7rem; background: color-mix(in oklch, var(--nb-note-ink) 8%, transparent); }
+/* The lock: the notes fanned open round it, the lock in front, in its metals. */
+.memo-nb-skeleton .memo-nb-skel-lockcard { left: 50%; top: 2.1rem; width: 7rem; height: 9rem; margin-left: -3.5rem; border-radius: 18px; transform-origin: 50% 140%; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+/* 7.4rem is the lock's 118 units, as in `.memo-nb-lock`. */
+.memo-nb-skel-shackle { left: 50%; top: calc(6.5rem + 7.4rem * 10.5 / 118); width: calc(7.4rem * 67 / 118); height: calc(7.4rem * 61.5 / 118); margin-left: calc(7.4rem * -33.5 / 118); border: calc(7.4rem * 13 / 118) solid color-mix(in oklch, var(--nb-steel) 55%, var(--nb-paper)); border-bottom: 0; border-radius: 999px 999px 0 0; }
+.memo-nb-skel-lockbody { left: 50%; top: calc(6.5rem + 7.4rem * 62 / 118); width: calc(7.4rem * 102 / 118); height: calc(7.4rem * 74 / 118); margin-left: calc(7.4rem * -51 / 118); border-radius: calc(7.4rem * 22 / 118); background: color-mix(in oklch, var(--nb-gold) 45%, var(--nb-paper)); }
+/* The exam's calendar page: its coloured head and eight days. */
+.memo-nb-skel-cal { width: 12.5rem; padding: 0 0.7rem 0.8rem; border-radius: 14px; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; rotate: -3deg; }
+.memo-nb-skel-cal-head { grid-column: 1 / -1; height: 1.7rem; margin: 0 -0.7rem 0.3rem; border-radius: 14px 14px 0 0; background: color-mix(in oklch, var(--paywall-accent, var(--promo)) 45%, var(--nb-index-card)); }
+.memo-nb-skeleton .memo-nb-skel-cal .app-loading-pill { height: 2.5rem; border-radius: 12px; }
+.memo-nb-skel-cal > .memo-nb-tape { z-index: 2; }
+/* The plain paywall's deck: the real cards, the top one with pills for words. */
+.memo-nb-skel-deal { grid-template-rows: auto; }
+.memo-nb-skeleton .memo-nb-skel-deal-icon { width: 3.6rem; height: 3.6rem; border-radius: 18px; background: color-mix(in oklch, var(--nb-note-ink) 8%, transparent); }
+.memo-nb-skel-deal-text { display: grid; gap: 0.5rem; }
+.memo-nb-skeleton .memo-nb-skel-deal-text .app-loading-pill { height: 1rem; background: color-mix(in oklch, var(--nb-note-ink) 8%, transparent); }
+.memo-nb-skel-deck-memo { right: -0.5rem; top: 7.6rem; width: 6rem; height: 5.4rem; z-index: 6; }
+/*
+ * The headline, the checklist and the coupon are the real words, unseen, with
+ * the page's ink behind each line: they wrap exactly as the page's will, in
+ * any language, so nothing under them moves when it arrives.
+ */
+.memo-nb-ghost-text, .memo-nb-ghost-text * { color: transparent; }
+.memo-nb-ghost-text :is(.memo-nb-ticket-num, .memo-nb-ticket-off > *),
+.memo-nb-title.memo-nb-ghost-text > span,
+.memo-nb-checks.memo-nb-ghost-text li > span:last-child {
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--text) 9%, transparent);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.memo-nb-ghost-text :is(.memo-nb-ticket-num, .memo-nb-ticket-off > *) { justify-self: start; border-radius: 12px; background: color-mix(in oklch, var(--on-promo) 30%, transparent); }
+.memo-nb-skel-tick { width: 1.2rem; height: 1.2rem; flex: none; border-radius: 999px; background: color-mix(in oklch, var(--text) 9%, transparent); }
+/* The coupon: centred like the real one, and still; none in the app. */
+.memo-nb-skel-ticket { display: grid; justify-items: center; }
+.memo-nb-skeleton .memo-nb-ticket-wrap { animation: none; }
+/* The app's paywall has no coupon (Apple's prices); its prize sheet does, without a struck price. */
+html[data-native] :is(.memo-paywall-shell .memo-nb-skel-ticket, .memo-nb-skel-was) { display: none; }
+.memo-nb-ghost-text .memo-nb-ghost-line { border-radius: 999px; background: color-mix(in oklch, var(--text) 9%, transparent); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+
+/* The wheel's page and the prize's sheet while they load (discount-offer-loading.tsx). */
+.memo-nb-skel-disc { position: absolute; inset: 0; border-radius: 999px; }
+.memo-nb-skel-cheer { position: absolute; left: -2.4rem; bottom: -1.2rem; z-index: 5; width: 5.6rem; height: 5rem; }
+.memo-nb-skeleton .memo-nb-stand { background: color-mix(in oklch, var(--nb-gold) 45%, var(--nb-paper)); }
+.memo-nb-skel-tnt { position: absolute; inset: 0.5rem 0 0.3rem; border-radius: 12px; }
+/* Its skeleton already opened the page: the real one takes its place as it stands. */
+.memo-sheet-full.memo-nb-paper:is(.memo-wheel-sheet, .memo-offer-sheet).entered:not(.closing),
+.memo-scrim.entered:not(.closing) { animation: none; }
 .memo-nb-skel-plan { cursor: default; }
-.memo-nb-skeleton .memo-nb-skel-plan .app-loading-pill { height: 0.85rem; background: rgba(0, 0, 0, 0.09); }
-.memo-nb-skeleton .memo-nb-skel-plan .app-loading-pill::after, .memo-nb-skeleton .memo-nb-skel-card .app-loading-pill::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent); }
-.memo-nb-skel-plan .memo-nb-skel-price { width: 6.5rem; height: 1.7rem; margin: 0.35rem 0 0.2rem; }
+/* Each pill in the real note's own line, so the note is as tall as the real one. */
+.memo-nb-skeleton .memo-nb-skel-plan .app-loading-pill { background: color-mix(in oklch, var(--nb-note-ink) 9%, transparent); }
+.memo-nb-skel-line { display: inline-block; height: 0.8em; vertical-align: middle; }
+.memo-nb-skel-line.block { display: block; margin: 0.25em 0; }
+.memo-nb-skeleton .memo-nb-skel-was::after { display: none; }
+.memo-nb-skeleton :is(.memo-nb-skel-plan, .memo-nb-ghost-paper, .memo-nb-skel-deal) .app-loading-pill::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent); }
 .memo-nb-skel-due { width: 15rem; height: 0.95rem; }
 .memo-nb-skel-cta { display: block; width: 100%; opacity: 0.55; pointer-events: none; }
 
@@ -11309,11 +11358,17 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
 /* New note: sources fly into a page that writes itself, the study tools pop out. */
 .memo-nb-src { width: 2.9rem; height: 2.9rem; border-radius: 16px; font-size: 1.5rem; animation: memo-nb-src 6s ease-in-out infinite calc(var(--i) * 0.35s); }
 .memo-nb-packet { width: 10px; height: 10px; border-radius: 999px; background: var(--t); box-shadow: 0 0 10px var(--t); opacity: 0; animation: memo-nb-packet 6s cubic-bezier(0.5, 0, 0.3, 1) infinite calc(var(--i) * 0.35s); }
-.memo-nb-write-title { font-size: 2.6rem; line-height: 1; color: var(--text); clip-path: inset(0 100% 0 0); animation: memo-nb-handwrite 6s steps(14) infinite; }
+.memo-nb-write-title { font-size: 2.35rem; line-height: 1; color: var(--text); clip-path: inset(0 100% 0 0); animation: memo-nb-handwrite 6s steps(14) infinite; }
 .memo-nb-bar { height: 9px; border-radius: 9px; background: color-mix(in oklch, var(--text) 18%, transparent); transform-origin: 0 50%; transform: scaleX(0); animation: memo-nb-write 6s cubic-bezier(0.5, 0, 0.3, 1) infinite calc(var(--i) * 0.28s); }
 .memo-nb-bar.mark { height: 12px; background: var(--nb-marker); }
 .memo-nb-bar.ink { background: color-mix(in oklch, var(--promo) 55%, transparent); }
 .memo-nb-out { width: 2.75rem; height: 2.75rem; border-radius: 15px; font-size: 1.4rem; opacity: 0; animation: memo-nb-out 6s cubic-bezier(0.3, 1.5, 0.5, 1) infinite calc(var(--i) * 0.18s); }
+
+/* A word with a pen doodle after it (the leaf, the arrow to the mic): one
+   row, so the doodle follows the word's end in every language rather than a
+   spot the English word happened to end at. */
+.memo-nb-doodled { display: flex; align-items: flex-start; gap: 0.15rem; white-space: nowrap; }
+.memo-nb-doodled > * { position: relative; flex: none; }
 
 /* An older note: shake the lock, open it, the notes fan out of the blur. */
 .memo-nb-halo { left: 50%; top: 52%; width: 18rem; height: 18rem; translate: -50% -50%; border-radius: 999px; background: radial-gradient(closest-side, color-mix(in oklch, var(--nb-gold) 75%, transparent), color-mix(in oklch, var(--nb-gold) 18%, transparent) 55%, transparent 75%); animation: memo-nb-halo 5s ease-in-out infinite; }
@@ -11321,7 +11376,11 @@ html[data-native] .memo-paywall-shell.memo-nb-paper .app-start-dismiss-row {
 .memo-nb-lockcard .memo-nb-icon { width: 2rem; height: 2rem; border-radius: 12px; font-size: 1.2rem; }
 .memo-nb-line { display: block; height: 7px; border-radius: 7px; background: var(--track); }
 .memo-nb-line.tinted { background: color-mix(in oklch, var(--t) 45%, var(--track)); }
-.memo-nb-lock { left: 50%; top: 6.5rem; width: 7.4rem; height: 8.75rem; margin-left: -3.7rem; overflow: visible; filter: drop-shadow(0 16px 22px color-mix(in oklch, var(--nb-gold-dark) 45%, transparent)); animation: memo-nb-lock 5s ease-in-out infinite; transform-origin: 50% 60%; }
+/* The box starts 30 viewBox units above the shackle (`viewBox="0 -30 118 170"`)
+   so the open shackle never leaves it: WebKit clips a filtered svg at its
+   filter region however `overflow` is set. Same lock, same place: 7.4rem is
+   118 units, and the shake pivots on the body as before (114 of 170). */
+.memo-nb-lock { left: 50%; top: calc(6.5rem - 7.4rem * 30 / 118); width: 7.4rem; height: calc(7.4rem * 170 / 118); margin-left: -3.7rem; overflow: visible; filter: drop-shadow(0 16px 22px color-mix(in oklch, var(--nb-gold-dark) 45%, transparent)); animation: memo-nb-lock 5s ease-in-out infinite; transform-origin: 50% 67%; }
 .memo-nb-shackle { transform-box: fill-box; transform-origin: 100% 100%; animation: memo-nb-shackle 5s cubic-bezier(0.3, 1.5, 0.5, 1) infinite; }
 .memo-nb-keyhole { animation: memo-nb-keyhole 5s ease-in-out infinite; }
 

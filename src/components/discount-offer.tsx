@@ -7,6 +7,7 @@ import { useTranslations } from "@/components/i18n-provider";
 import { Msym } from "@/components/msym";
 import { HAND_FONT, Marked, NotebookSpiral, PenCircle, Tape, Ticket, warmHandFont } from "@/components/paywall-notebook";
 import { useFitScreen } from "@/components/use-fit-screen";
+import { SHEET_FIT_LEVELS, discountOfferSkeleton } from "@/components/discount-offer-loading";
 import { MemoPortal } from "@/components/memo-portal";
 import { sheetClass, useSheet } from "@/components/use-sheet";
 import type { MessageKey } from "@/lib/i18n/messages/keys";
@@ -73,9 +74,6 @@ const DRIFT_CONFETTI: [number, string, number][] = [
   [85, "var(--nb-good)", 5.2],
   [94, "var(--nb-tape-pink)", 7.4],
 ];
-
-/** Compact levels the wheel and offer sheets may step down to (`redesign.css`). */
-const SHEET_FIT_LEVELS = 4;
 
 /** How long the offer stands, matching WHEEL_PRIZE_TTL_MS on the server. */
 const OFFER_SECONDS = 10 * 60;
@@ -256,6 +254,18 @@ export function DiscountOffer({
   const [secondsLeft, setSecondsLeft] = useState(() => remainingSeconds(offerRestored));
   /** Read by the countdown, which must not close a sheet mid-purchase. */
   const busyRef = useRef(false);
+  /*
+   * The sheet its skeleton stood in for while this code loaded
+   * (`discount-offer-loading.tsx`). That one already opened, so this one takes
+   * its place as it stands; a sheet opened after it (the prize after the
+   * wheel) still opens as usual.
+   */
+  const [enteredSheet] = useState<"wheel" | "offer" | null>(() =>
+    discountOfferSkeleton.shown ? (offerOpen ? "offer" : "wheel") : null,
+  );
+  useEffect(() => {
+    discountOfferSkeleton.shown = false;
+  }, []);
 
   useEffect(
     () => () => {
@@ -566,7 +576,7 @@ export function DiscountOffer({
       <button
         type="button"
         aria-label={t("common.close")}
-        className={sheetClass("memo-scrim", isClosing)}
+        className={sheetClass(enteredSheet ? "memo-scrim entered" : "memo-scrim", isClosing)}
         onClick={() => {
           if (offerOpen) {
             closeOffer();
@@ -579,7 +589,7 @@ export function DiscountOffer({
 
       {wheelOpen && !offerOpen ? (
         <div
-          className={sheetClass(`memo-sheet-full memo-wheel-sheet memo-nb-paper ${HAND_FONT.variable}`, wheelSheet.closing)}
+          className={sheetClass(`memo-sheet-full memo-wheel-sheet memo-nb-paper ${HAND_FONT.variable}${enteredSheet === "wheel" ? " entered" : ""}`, wheelSheet.closing)}
           role="dialog"
           aria-modal="true"
         >
@@ -778,7 +788,7 @@ export function DiscountOffer({
 
       {offerOpen ? (
         <div
-          className={sheetClass(`memo-sheet-full memo-offer-sheet memo-nb-paper ${HAND_FONT.variable} ${offerRestored ? "restored" : ""}`.trim(), offerSheet.closing)}
+          className={sheetClass(`memo-sheet-full memo-offer-sheet memo-nb-paper ${HAND_FONT.variable} ${offerRestored ? "restored" : ""} ${enteredSheet === "offer" ? "entered" : ""}`.trim(), offerSheet.closing)}
           role="dialog"
           aria-modal="true"
           {...offerSheet.dragProps}

@@ -2067,7 +2067,7 @@ export function HomeDashboard({
           `sessionStorage` during render: see the seed above. The wheel is
           always closed on the first pass, so it loses nothing by waiting. */}
       {isHydrated && (isWheelOpen || (!native && isOfferOpen) || (native && isOfferOpen && nativeHalfOffAvailable)) ? (
-        <Suspense fallback={<DiscountOfferLoading sheet={isOfferOpen ? "offer" : "wheel"} restored={isOfferRestored} />}>
+        <Suspense fallback={<DiscountOfferLoading sheet={isOfferOpen ? "offer" : "wheel"} restored={isOfferRestored} native={native} />}>
         <LazyDiscountOffer
           nativeOffer={native}
           planPrices={planPrices}

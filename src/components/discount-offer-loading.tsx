@@ -28,7 +28,7 @@ export const discountOfferSkeleton = { shown: false };
  * sticky-note plans, the coral button — with pills where the words go and the
  * real headline set in the page's ink, so nothing moves when the page lands.
  */
-export function DiscountOfferLoading({ sheet, restored = false }: { sheet: "wheel" | "offer"; restored?: boolean }) {
+export function DiscountOfferLoading({ sheet, restored = false, native = false }: { sheet: "wheel" | "offer"; restored?: boolean; native?: boolean }) {
   const t = useT();
   const bodyRef = useRef<HTMLDivElement | null>(null);
   useFitScreen(bodyRef, SHEET_FIT_LEVELS);
@@ -60,7 +60,8 @@ export function DiscountOfferLoading({ sheet, restored = false }: { sheet: "whee
             {/* The squiggle under the headline: its room, undrawn. */}
             <svg className="memo-wheel-squiggle" width="150" height="16" viewBox="0 0 150 16" />
             <p className="memo-wheel-sub memo-nb-ghost-text">
-              <span className="memo-nb-ghost-line">{t("offer.wheelIdle")}</span>
+              {/* The app's wheel promises Apple's introductory offer in its own words. */}
+              <span className="memo-nb-ghost-line">{t(native ? "native.introReveal" : "offer.wheelIdle")}</span>
             </p>
 
             <div className="memo-wheel">
@@ -70,9 +71,9 @@ export function DiscountOfferLoading({ sheet, restored = false }: { sheet: "whee
             </div>
 
             {/* Unseen until a win on the real page, but it holds its room. */}
-            <div className="memo-wheel-prize memo-nb-off">
+            <div className={`memo-wheel-prize ${native ? "" : "memo-nb-off"}`.trim()}>
               <p>{t("offer.prizeAmount")}</p>
-              <p>{t("offer.prizeCaption")}</p>
+              <p>{t(native ? "native.introCaption" : "offer.prizeCaption")}</p>
             </div>
 
             <p className="memo-nb-tap">

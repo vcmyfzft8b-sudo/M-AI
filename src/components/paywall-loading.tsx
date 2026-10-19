@@ -7,6 +7,7 @@ import { HAND_FONT, NotebookSpiral, Tape, Ticket } from "@/components/paywall-no
 import { paywallAccentStyle, paywallHeroHeight } from "@/components/paywall-hero";
 import { PlanSkeleton } from "@/components/paywall-plan-skeleton";
 import { PAYWALL_CHECKLISTS, paywallTitleKey } from "@/lib/paywall-copy";
+import { PAYWALL_LADDER } from "@/lib/paywall-ladder";
 import type { PaywallReason } from "@/lib/paywall-reasons";
 
 /**
@@ -54,7 +55,7 @@ export function PaywallLoading({ reason = null }: { reason?: PaywallReason | nul
         ) : null}
 
         <h1 className="memo-nb-title memo-nb-ghost-text">
-          <span>{t(paywallTitleKey(reason, true)).replaceAll("*", "")}</span>
+          <span>{t(paywallTitleKey(reason, false)).replaceAll("*", "")}</span>
         </h1>
 
         <ul className="memo-nb-checks memo-nb-hand memo-nb-ghost-text">
@@ -141,12 +142,12 @@ function SceneSkeleton({ reason }: { reason: PaywallReason }) {
       scene = (
         <>
           {[0, 1, 2].map((index) => <Ghost key={index} x={52} y={6 + index * 52} w={46} h={46} r={16} />)}
-          <Ghost x={134} y={64} w={190} h={30} r={10} />
+          <Ghost x={134} y={64} w={190} h={30} r={12} />
           <Ghost x={134} y={120} w={208} h={9} />
           <Ghost x={134} y={148} w={120} h={12} />
           <Ghost x={262} y={150} w={80} h={9} />
           <Ghost x={134} y={178} w={170} h={9} />
-          {[0, 1, 2].map((index) => <Ghost key={index} x={196 + index * 54} y={190} w={44} h={44} r={15} />)}
+          {[0, 1, 2].map((index) => <Ghost key={index} x={196 + index * 54} y={190} w={44} h={44} r={14} />)}
           <GhostMemo x={36} y={164} w={84} />
         </>
       );
@@ -196,7 +197,7 @@ function SceneSkeleton({ reason }: { reason: PaywallReason }) {
         <>
           <GhostMemo x={34} y={92} w={144} />
           <Ghost x={4} y={70} w={48} h={48} />
-          <Ghost x={182} y={48} w={196} h={112} r={28} />
+          <Ghost x={182} y={48} w={196} h={112} r={26} />
           <Ghost x={287} y={187} w={62} h={62} />
           <Ghost w={120} h={24} rotate="-7deg" style={{ right: "6.4rem", top: "12.9rem" }} />
         </>
@@ -209,7 +210,7 @@ function SceneSkeleton({ reason }: { reason: PaywallReason }) {
           <Ghost w={250} h={160} r={18} rotate="-4deg" style={{ left: "3.6rem", top: "2.3rem" }} />
           <GhostMemo x={12} y={168} w={104} />
           <Ghost x={84} y={166} w={43} h={43} />
-          <Ghost x={140} y={222} w={176} h={40} r={8} />
+          <Ghost x={140} y={222} w={176} h={40} r={12} />
         </>
       );
       break;
@@ -221,7 +222,7 @@ function SceneSkeleton({ reason }: { reason: PaywallReason }) {
           <GhostPaper tape={false} lines={[]} w={200} h={128} style={{ left: "50%", marginLeft: "-6.25rem", top: "2.6rem", transform: "rotate(6deg) translate(16px, 4px)" }} />
           <GhostPaper tape={false} lines={[64]} w={200} h={128} style={{ left: "50%", marginLeft: "-6.25rem", top: "2.25rem", paddingTop: "3rem", justifyItems: "center" }} />
           <Ghost x={252} y={6} w={46} h={46} />
-          {[0, 1, 2].map((index) => <Ghost key={index} x={132 + index * 54} y={index === 1 ? 206 : 200} w={44} h={44} r={15} />)}
+          {[0, 1, 2].map((index) => <Ghost key={index} x={132 + index * 54} y={index === 1 ? 206 : 200} w={44} h={44} r={14} />)}
           <GhostMemo x={18} y={150} w={96} />
         </>
       );
@@ -260,20 +261,22 @@ function SceneSkeleton({ reason }: { reason: PaywallReason }) {
       break;
 
     case "offer":
-      // The browsing offer most often strikes out one or two earlier prices.
+      // As on the top rung, where a learner who keeps browsing stays: three
+      // earlier prices struck out, the "best price" note under them.
       scene = (
         <>
           <GhostPaper x={30} y={12} w={124} h={52} rotate="-7deg" lines={[80]} style={{ padding: "1.15rem 1.15rem 0.7rem" }} />
           <GhostPaper x={134} y={86} w={104} h={52} rotate="5deg" lines={[80]} style={{ padding: "1.15rem 1.15rem 0.7rem" }} />
+          <GhostPaper x={240} y={154} w={104} h={52} rotate="-4deg" lines={[80]} style={{ padding: "1.15rem 1.15rem 0.7rem" }} />
           <GhostMemo x={286} y={60} w={104} />
-          <Ghost x={26} y={164} w={180} h={26} rotate="-6deg" />
+          <Ghost x={26} y={200} w={160} h={24} rotate="-6deg" />
         </>
       );
       break;
   }
 
   return (
-    <div className="memo-nb-hero memo-nb-skel-hero" style={{ height: `${paywallHeroHeight(reason, 3)}rem` }}>
+    <div className="memo-nb-hero memo-nb-skel-hero" style={{ height: `${paywallHeroHeight(reason, PAYWALL_LADDER.length)}rem` }}>
       {scene}
     </div>
   );

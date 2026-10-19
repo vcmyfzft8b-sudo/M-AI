@@ -10898,7 +10898,7 @@ html[data-native] .memo-nb-spiral { display: none; }
    the real one's. Opaque, so two shapes that overlap read as two, not as a
    darker patch. */
 .memo-nb-skeleton .memo-nb-ghost { background: color-mix(in oklch, var(--text) 9%, var(--nb-paper)); }
-.memo-nb-ghost-paper { display: grid; align-content: start; gap: 0.6rem; padding: 1.3rem 1rem 1rem; background: var(--nb-index-card); box-shadow: 0 14px 26px -6px rgba(40, 30, 10, 0.3); }
+.memo-nb-ghost-paper { display: grid; align-content: start; gap: 0.6rem; padding: 1.3rem 1rem 1rem; background: var(--nb-index-card); box-shadow: 0 14px 26px -6px color-mix(in oklch, var(--nb-note-ink) 30%, transparent); }
 .memo-nb-ghost-paper > .memo-nb-tape { left: 50%; top: -0.6rem; translate: -50% 0; rotate: -3deg; width: 3.4rem; height: 1.1rem; }
 .memo-nb-skeleton .memo-nb-ghost-paper .app-loading-pill { height: 0.7rem; background: color-mix(in oklch, var(--nb-note-ink) 8%, transparent); }
 /* The lock: the notes fanned open round it, the lock in front, in its metals. */

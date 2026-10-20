@@ -97,6 +97,17 @@ test("an ordinary 429 stays a transient rate limit", () => {
   }
 });
 
+test("our own cost alarm's wording about the cap is not the cap", () => {
+  // src/lib/ai-cost-report.ts: a forecast and a billing-category explanation, not a refusal.
+  for (const text of [
+    "AI spend cap warning: Gemini for 2026-10 is €102.30 (estimate), 51% of the €200 monthly spending cap.",
+    "At $9.80 a day, Gemini reaches the €200 monthly spending cap around 2026-10-26 (month-end forecast €282).",
+    "Google refused the call because the Gemini project reached its monthly spending cap; nothing on Google works again until the cap is raised at https://ai.studio/spend.",
+  ]) {
+    assert.equal(isAiProviderSpendCapError(new Error(text)), false, text);
+  }
+});
+
 test("the learner is no longer told the provider is overloaded", () => {
   const message = toUserFacingAiErrorMessage(apiError(SPEND_CAP_BODY));
 

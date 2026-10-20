@@ -10,6 +10,12 @@ type CaptureRouteErrorContext = {
   lectureId?: string;
   tags?: Record<string, string>;
   extra?: Record<string, unknown>;
+  /**
+   * Sentry groups by stack trace unless told otherwise. An alarm that must email once per period
+   * (the monthly spend caps) passes its own key here: a new key is a new issue, and a new issue is
+   * what the "new production issue" alert emails about.
+   */
+  fingerprint?: string[];
 };
 
 export function captureRouteError(
@@ -22,11 +28,16 @@ export function captureRouteError(
     lectureId,
     tags,
     extra,
+    fingerprint,
   }: CaptureRouteErrorContext,
 ) {
   Sentry.withScope((scope) => {
     scope.setTag("route", route);
     scope.setTag("operation", operation);
+
+    if (fingerprint) {
+      scope.setFingerprint(fingerprint);
+    }
 
     if (lectureId) {
       scope.setTag("lectureId", lectureId);

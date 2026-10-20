@@ -52,7 +52,11 @@ export function groupProviderBillingEvent<T extends SentryEventLike>(
   event: T,
   hint?: { originalException?: unknown },
 ): T {
-  if (!mentionsSpendCap(event, hint?.originalException)) {
+  // An event that already names its own issue keeps it: the cost alarm files its monthly cap
+  // warnings under one fingerprint per provider and month (src/app/api/cron/ai-cost-report).
+  const hasOwnFingerprint = (event.fingerprint ?? []).some((part) => part !== "{{ default }}");
+
+  if (hasOwnFingerprint || !mentionsSpendCap(event, hint?.originalException)) {
     return event;
   }
 

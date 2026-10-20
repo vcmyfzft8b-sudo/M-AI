@@ -2279,6 +2279,15 @@ export type Database = {
           cost_usd: number;
         }[];
       };
+      ai_cost_report_window: {
+        Args: {
+          p_from: string;
+          p_to: string;
+          p_top_lectures?: number;
+          p_max_failure_groups?: number;
+        };
+        Returns: Json;
+      };
       ugc_daily_view_deltas: {
         Args: {
           p_from: string;

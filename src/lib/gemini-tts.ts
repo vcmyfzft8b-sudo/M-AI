@@ -60,6 +60,15 @@ function pcmOf(bytes: Buffer) {
   return Buffer.alloc(0);
 }
 
+/**
+ * Google's API root, or the override `@google/genai` itself honours (`GOOGLE_GEMINI_BASE_URL`), so
+ * every Gemini call in the app — speech included — can be pointed at a local stub to rehearse a
+ * refusal such as the spend cap without spending anything.
+ */
+function geminiApiBase() {
+  return (process.env.GOOGLE_GEMINI_BASE_URL?.trim() || "https://generativelanguage.googleapis.com").replace(/\/+$/, "");
+}
+
 async function openStream(params: {
   apiKey: string;
   model: string;
@@ -69,7 +78,7 @@ async function openStream(params: {
   signal?: AbortSignal;
 }) {
   return fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(params.model)}:streamGenerateContent?alt=sse`,
+    `${geminiApiBase()}/v1beta/models/${encodeURIComponent(params.model)}:streamGenerateContent?alt=sse`,
     {
       method: "POST",
       signal: params.signal,

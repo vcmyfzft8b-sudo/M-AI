@@ -1,34 +1,106 @@
 import "server-only";
 
+import { isAiProviderSpendCapError, toProviderBillingError } from "@/lib/ai/errors";
 import { logGeminiUsageEvent } from "@/lib/ai/usage-logging";
+import { captureBackgroundError } from "@/lib/monitoring";
 import { GEMINI_TTS_SAMPLE_RATE, GeminiSpeechError, startGeminiSpeech } from "@/lib/gemini-tts";
 import type { NoteTtsVoice } from "@/lib/note-tts-settings";
 import { encodeMp3 } from "@/lib/mp3-encode";
 import { getServerEnv } from "@/lib/server-env";
+import {
+  GeminiSpeechHealth,
+  classifyGeminiSpeechFailure,
+  shouldSpeakWithSoniox,
+} from "@/lib/speech-provider-health";
 import { geminiVoiceFor } from "@/lib/tutor/gemini-voices";
 
+export type SpeechProvider = "gemini" | "soniox";
+
+/** This instance's memory of Gemini refusing to speak. See src/lib/speech-provider-health.ts. */
+const geminiSpeechHealth = new GeminiSpeechHealth();
+
 /**
- * Which engine speaks, for every voice in the app: the tutor, read-aloud and the podcast.
- *
- * Gemini since 2026-10-14, chosen over Soniox tts-rt-v2 by a blind listening test on Slovenian and
- * Croatian (docs/voice-tutor.md). `TTS_PROVIDER=soniox` puts the old voice back everywhere at once,
- * and so does a deployment without a Gemini key. Transcription stays on Soniox either way.
+ * The engine the deployment is set to: Gemini since 2026-10-14, chosen over Soniox tts-rt-v2 by a
+ * blind listening test on Slovenian and Croatian (docs/voice-tutor.md). `TTS_PROVIDER=soniox` puts
+ * the old voice back everywhere at once, and so does a deployment without a Gemini key.
+ * Transcription stays on Soniox either way.
  */
-export function speechProvider(): "gemini" | "soniox" {
+function configuredSpeechProvider(): SpeechProvider {
   const env = getServerEnv();
 
   return env.TTS_PROVIDER === "gemini" && env.GEMINI_API_KEY ? "gemini" : "soniox";
 }
 
 /**
- * The model the stored audio was made with. It is part of every read-aloud and podcast cache key,
- * so switching engines retires the old audio on its own: the first play after a switch makes the
- * new voice, and the old rows are left where they are.
+ * Which engine speaks now, for every voice in the app: the tutor, read-aloud and the podcast.
+ *
+ * The configured one, except while Gemini is refusing (its spend cap, or a run of server errors):
+ * then Soniox, which spoke every one of these voices until the switch and still can.
  */
-export function speechModel() {
+export function speechProvider(): SpeechProvider {
+  const configured = configuredSpeechProvider();
+
+  return configured === "gemini" && geminiSpeechHealth.isFallingBack() ? "soniox" : configured;
+}
+
+/**
+ * The model a provider's audio is made with. It is part of every read-aloud and podcast cache key,
+ * so switching engines retires the old audio on its own: the first play after a switch makes the
+ * new voice, and the old rows are left where they are. The same holds for a fallback: audio Soniox
+ * made while Gemini was refusing is stored under Soniox's model, and is remade in Gemini's voice
+ * the first time it is played after Gemini is back.
+ */
+export function speechModelFor(provider: SpeechProvider) {
   const env = getServerEnv();
 
-  return speechProvider() === "gemini" ? env.GEMINI_TTS_MODEL : env.SONIOX_TTS_MODEL;
+  return provider === "gemini" ? env.GEMINI_TTS_MODEL : env.SONIOX_TTS_MODEL;
+}
+
+export function speechModel() {
+  return speechModelFor(speechProvider());
+}
+
+/**
+ * Records how a Gemini speech request ended, and says whether this request should now be spoken
+ * by Soniox instead: yes for the spend cap and for a fault on Google's side or on the way there; no
+ * for an ordinary 429 (busy, which the callers back off on), a line Gemini had no audio for, our
+ * own deadline, or a request Soniox would refuse just the same.
+ *
+ * The spend cap is reported once per instance per fallback window, not per sentence: nothing fails
+ * any more when it hits a voice, so this is how anyone learns that it did.
+ */
+export function noteGeminiSpeechResult(error: unknown | null) {
+  if (error === null) {
+    geminiSpeechHealth.recordSuccess();
+    return false;
+  }
+
+  const failure = classifyGeminiSpeechFailure(error);
+  const alreadyFallingBack = geminiSpeechHealth.isFallingBack();
+
+  geminiSpeechHealth.record(failure);
+
+  if (failure === "billing" && !alreadyFallingBack) {
+    captureBackgroundError(toProviderBillingError(error), {
+      operation: "gemini_speech",
+      tags: { fallback: "soniox" },
+    });
+  }
+
+  // Configured, not current: TTS_PROVIDER=soniox never asked Gemini in the first place.
+  return configuredSpeechProvider() === "gemini" && shouldSpeakWithSoniox(failure);
+}
+
+/**
+ * Gemini could not speak this and Soniox should: thrown by `synthesizeGeminiMp3` so read-aloud and
+ * the podcast can make the same audio in Soniox's voice, under Soniox's model in their cache key.
+ */
+export class GeminiSpeechUnavailableError extends Error {
+  constructor(cause: unknown) {
+    super(`Gemini could not speak; Soniox speaks instead: ${cause instanceof Error ? cause.message : String(cause)}`);
+    this.name = "GeminiSpeechUnavailableError";
+    this.cause = cause;
+  }
 }
 
 /**
@@ -90,6 +162,7 @@ export async function synthesizeGeminiMp3(params: {
 
       const pcm = new Uint8Array(Buffer.concat(chunks));
 
+      noteGeminiSpeechResult(null);
       await log(true, { usageMetadata: next.value });
 
       return {
@@ -108,6 +181,15 @@ export async function synthesizeGeminiMp3(params: {
   }
 
   await log(false, { error: lastError });
+
+  if (noteGeminiSpeechResult(lastError)) {
+    throw new GeminiSpeechUnavailableError(lastError);
+  }
+
+  /* Before the rate-limit shape below: the cap answers 429 too, and backing off cannot outlast it. */
+  if (isAiProviderSpendCapError(lastError)) {
+    throw toProviderBillingError(lastError);
+  }
 
   if (lastError instanceof GeminiSpeechError && lastError.status === 429) {
     /* The shape isTtsProviderRateLimitError recognises, so callers back off exactly as for Soniox. */

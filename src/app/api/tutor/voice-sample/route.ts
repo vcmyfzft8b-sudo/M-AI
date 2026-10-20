@@ -11,7 +11,7 @@ import { synthesizeTtsChunkWithTimestamps } from "@/lib/note-tts-synthesis";
 import { NOTE_TTS_VOICES } from "@/lib/note-tts-settings";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { getServerEnv } from "@/lib/server-env";
-import { speechProvider } from "@/lib/speech-synthesis";
+import { noteGeminiSpeechResult, speechProvider } from "@/lib/speech-synthesis";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { geminiVoiceFor } from "@/lib/tutor/gemini-voices";
 import { CLIP_VERSION, hasStaticVoiceSamples } from "@/lib/tutor/voice-clips";
@@ -198,21 +198,30 @@ export async function GET(request: Request) {
     const line = await sampleLineFor(language, parsed.data.context);
 
     if (geminiKey) {
-      const audio = await geminiSample({
-        apiKey: geminiKey,
-        model: env.GEMINI_TTS_MODEL,
-        line,
-        voice: geminiVoiceFor(parsed.data.voice),
-        language,
-      });
+      try {
+        const audio = await geminiSample({
+          apiKey: geminiKey,
+          model: env.GEMINI_TTS_MODEL,
+          line,
+          voice: geminiVoiceFor(parsed.data.voice),
+          language,
+        });
 
-      return new NextResponse(audio as unknown as BodyInit, {
-        headers: {
-          "Content-Type": "audio/wav",
-          "Cache-Control": CACHE_HEADER,
-          "Content-Length": String(audio.byteLength),
-        },
-      });
+        noteGeminiSpeechResult(null);
+
+        return new NextResponse(audio as unknown as BodyInit, {
+          headers: {
+            "Content-Type": "audio/wav",
+            "Cache-Control": CACHE_HEADER,
+            "Content-Length": String(audio.byteLength),
+          },
+        });
+      } catch (error) {
+        /* Gemini's spend cap or Google failing: Soniox says the line below, as the app's voice did. */
+        if (!noteGeminiSpeechResult(error) || !env.SONIOX_API_KEY) {
+          throw error;
+        }
+      }
     }
 
     const { audio } = await synthesizeTtsChunkWithTimestamps({
@@ -229,7 +238,12 @@ export async function GET(request: Request) {
     return new NextResponse(audio as unknown as BodyInit, {
       headers: {
         "Content-Type": "audio/mpeg",
-        "Cache-Control": CACHE_HEADER,
+        /*
+         * Kept as long as any sample only when Soniox is the voice the app is set to. Said by Soniox
+         * because Gemini was refusing, it is a stand-in, and caching it would keep the wrong voice
+         * as this voice's sample long after Gemini is back.
+         */
+        "Cache-Control": env.TTS_PROVIDER === "gemini" ? "no-store" : CACHE_HEADER,
         "Content-Length": String(audio.byteLength),
       },
     });

@@ -757,17 +757,22 @@ export function findCostAnomalies(
  * from ~$1.5 to ~$10 a day; the owner raised it to €200 the same afternoon. It resets at
  * midnight Pacific time on the 1st, which is the month measured here.
  *
- * The figure here is what production logs, and Google's cap meter reads higher: it counts cost
- * before Google's "savings", and every other user of the same key (local runs and evals, the
- * note-triage replays) spends against it without writing to production's log. On 2026-10-20 the
- * log said $62.28 when the meter said €100.07. Warning at 70% of the cap and on a month-end
- * forecast over it leaves room for that gap; giving non-production its own key closes it.
+ * Production's log reads well below Google's cap meter: the meter counts cost before Google's
+ * "savings", and every other user of the same key (local runs and evals, the note-triage replays)
+ * spends against it without writing to production's log. On 2026-10-20 the log said $62.28
+ * (€55.5) when the meter said €100.07, 1.8 times as much. So the logged figure is scaled by
+ * GEMINI_SPEND_METER_FACTOR (default {@link DEFAULT_GEMINI_SPEND_METER_FACTOR}) before it is held
+ * against the cap; the report shows both. Without it the alarm would have read 28% that afternoon
+ * with the meter already past half. Giving non-production its own key shrinks the gap; set the
+ * factor to 1 once the log and the meter agree.
  *
  * Soniox has an organisation budget of its own (it ran out at about $50 on 2026-10-14, which
  * stopped transcription). It is only checked when SONIOX_MONTHLY_BUDGET_USD is set, and against
  * Soniox's own meter, which counts in whole UTC days, so its month is the UTC calendar month.
  */
 export const DEFAULT_GEMINI_MONTHLY_SPEND_CAP_EUR = 200;
+/** Google's cap meter over production's log, measured 2026-10-20 (€100.07 / €55.5). */
+export const DEFAULT_GEMINI_SPEND_METER_FACTOR = 1.8;
 export const GEMINI_SPEND_CAP_TIME_ZONE = "America/Los_Angeles";
 export const SONIOX_BUDGET_TIME_ZONE = "UTC";
 /** Share of a cap at which the alarm fires, whatever the forecast says. */
@@ -842,9 +847,16 @@ export type MonthlyCapStatus = {
   currency: "EUR" | "USD";
   /** The limit, in its own currency. */
   cap: number;
-  /** Spent this billing month so far, in the cap's currency and in dollars. */
+  /**
+   * Spent this billing month so far as the provider's meter would read it, in the cap's currency
+   * and in dollars: the logged figure times `meterFactor`.
+   */
   spent: number;
   spentUsd: number;
+  /** What our own records say, before the meter factor. */
+  loggedUsd: number;
+  /** How much higher the provider's meter reads than our records (1 = they agree). */
+  meterFactor: number;
   usedShare: number;
   /**
    * The pace the forecast assumes, in dollars a day: the faster of yesterday and the last seven
@@ -873,28 +885,32 @@ export function assessMonthlyCap(params: {
   /** Spend of each complete UTC day before today, oldest first. */
   recentDailyUsd: number[];
   complete: boolean;
+  /** Scales our records up to the provider's meter (see DEFAULT_GEMINI_SPEND_METER_FACTOR). */
+  meterFactor?: number;
 }): MonthlyCapStatus {
   const { now, cap, capCurrencyPerUsd } = params;
+  const meterFactor = params.meterFactor ?? 1;
+  const spentUsd = params.spentUsd * meterFactor;
   const monthEnd = Date.parse(params.month.endIso);
-  const lastWeek = params.recentDailyUsd.slice(-7);
+  const lastWeek = params.recentDailyUsd.slice(-7).map((usd) => usd * meterFactor);
   const yesterday = lastWeek.at(-1) ?? 0;
   const weekAverage =
     lastWeek.length > 0 ? lastWeek.reduce((sum, value) => sum + value, 0) / lastWeek.length : 0;
   const pace = Math.max(yesterday, weekAverage);
   const remainingDays = Math.max(0, (monthEnd - now.getTime()) / DAY_MS);
-  const forecastUsd = params.spentUsd + pace * remainingDays;
+  const forecastUsd = spentUsd + pace * remainingDays;
   const capUsd = cap / capCurrencyPerUsd;
 
   let capReachedOn: string | null = null;
 
-  if (params.spentUsd >= capUsd) {
+  if (spentUsd >= capUsd) {
     capReachedOn = now.toISOString().slice(0, 10);
   } else if (pace > 0) {
-    const reachedAt = now.getTime() + ((capUsd - params.spentUsd) / pace) * DAY_MS;
+    const reachedAt = now.getTime() + ((capUsd - spentUsd) / pace) * DAY_MS;
     capReachedOn = reachedAt < monthEnd ? new Date(reachedAt).toISOString().slice(0, 10) : null;
   }
 
-  const spent = params.spentUsd * capCurrencyPerUsd;
+  const spent = spentUsd * capCurrencyPerUsd;
   const forecast = forecastUsd * capCurrencyPerUsd;
 
   return {
@@ -903,7 +919,9 @@ export function assessMonthlyCap(params: {
     currency: params.currency,
     cap,
     spent: round2(spent),
-    spentUsd: round2(params.spentUsd),
+    spentUsd: round2(spentUsd),
+    loggedUsd: round2(params.spentUsd),
+    meterFactor,
     usedShare: round(spent / cap),
     paceUsdPerDay: round2(pace),
     forecast: round2(forecast),
@@ -928,7 +946,7 @@ const CAP_COPY: Record<MonthlyCapStatus["provider"], { name: string; limit: stri
       name: "Google Gemini (direct) spend",
       limit: "monthly spending cap",
       stops:
-        "When it is reached, new notes, photo and PDF reading and every voice stop: raise it at https://ai.studio/spend. Our log reads below Google's meter, which also counts other uses of the key.",
+        "When it is reached, new notes, photo and PDF reading and every voice stop: check the real figure and raise the cap at https://ai.studio/spend.",
     },
     soniox: {
       name: "Soniox spend",
@@ -946,12 +964,16 @@ export function findCapAnomalies(
   const copy = CAP_COPY[status.provider];
   const cap = money(status.cap, status.currency);
   const floor = status.complete ? "" : " (at least: some days could not be read)";
+  const estimate =
+    status.meterFactor === 1
+      ? ""
+      : ` by Google's meter as estimated (our log's $${status.loggedUsd.toFixed(2)} \u00d7 ${status.meterFactor})`;
   const anomalies: CostAnomaly[] = [];
 
   if (status.usedShare >= warnShare) {
     anomalies.push({
       kind: "monthly_cap_used",
-      message: `${copy.name} for ${status.month.key} is ${money(status.spent, status.currency)}${floor}, ${Math.round(status.usedShare * 100)}% of the ${cap} ${copy.limit}.`,
+      message: `${copy.name} for ${status.month.key} is ${money(status.spent, status.currency)}${estimate}${floor}, ${Math.round(status.usedShare * 100)}% of the ${cap} ${copy.limit}.`,
     });
   }
 

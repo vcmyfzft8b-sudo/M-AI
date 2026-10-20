@@ -14,6 +14,7 @@ import {
   CAP_WARN_SHARE,
   DEFAULT_DAILY_ALERT_USD,
   DEFAULT_GEMINI_MONTHLY_SPEND_CAP_EUR,
+  DEFAULT_GEMINI_SPEND_METER_FACTOR,
   DEFAULT_LECTURE_ALERT_USD,
   GEMINI_SPEND_CAP_TIME_ZONE,
   SONIOX_BUDGET_TIME_ZONE,
@@ -503,6 +504,10 @@ export async function GET(request: NextRequest) {
         process.env.GEMINI_MONTHLY_SPEND_CAP_EUR,
         DEFAULT_GEMINI_MONTHLY_SPEND_CAP_EUR,
       ),
+      geminiSpendMeterFactor: Math.max(
+        1,
+        parseThreshold(process.env.GEMINI_SPEND_METER_FACTOR, DEFAULT_GEMINI_SPEND_METER_FACTOR),
+      ),
       sonioxMonthlyBudgetUsd: parseOptionalAmount(process.env.SONIOX_MONTHLY_BUDGET_USD),
       capWarnShare: CAP_WARN_SHARE,
     };
@@ -527,6 +532,7 @@ export async function GET(request: NextRequest) {
       cap: limits.geminiMonthlySpendCapEur,
       currency: "EUR",
       capCurrencyPerUsd: eurPerUsd.rate,
+      meterFactor: limits.geminiSpendMeterFactor,
       spentUsd: googleMonthKeys.reduce((sum, key) => {
         const window = usageByDay.get(key);
         return window ? sum + googleUsdOf(window) : sum;
@@ -651,8 +657,9 @@ export async function GET(request: NextRequest) {
         ...capAnomalies.flatMap((entry) => entry.anomalies),
         ...coverageAnomalies,
       ],
-      // Month-to-date against each provider's own limit. Google's is from our call log, which
-      // reads below Google's cap meter; soniox is null unless SONIOX_MONTHLY_BUDGET_USD is set.
+      // Month-to-date against each provider's own limit. Google's is our call log scaled by
+      // geminiSpendMeterFactor to what Google's cap meter reads (loggedUsd is the raw log);
+      // soniox is null unless SONIOX_MONTHLY_BUDGET_USD is set.
       caps: { google: googleCap, soniox: sonioxCap },
       eurPerUsd,
       // Days that could not be read are listed here and left out of `daily`, never shown as $0.

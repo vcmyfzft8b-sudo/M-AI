@@ -5,6 +5,7 @@ import {
   CAP_WARN_SHARE,
   DEFAULT_DAILY_ALERT_USD,
   DEFAULT_GEMINI_MONTHLY_SPEND_CAP_EUR,
+  DEFAULT_GEMINI_SPEND_METER_FACTOR,
   DEFAULT_LECTURE_ALERT_USD,
   GEMINI_SPEND_CAP_TIME_ZONE,
   GENERATION_KINDS,
@@ -531,4 +532,43 @@ test("Gemini's spending-cap 429 is a billing failure, not an overloaded provider
     day.callFailureCategories.map((entry) => entry.category).sort(),
     ["billing", "provider"],
   );
+});
+
+test("the cap is held against Google's meter, which reads 1.8 times our log", () => {
+  // Production at 2026-10-20 15:11 UTC, after the cap was raised to €200: the log said $63.34 for
+  // October and $9.63 for yesterday, while Google's meter had already passed €100 at 13:23.
+  const now = new Date("2026-10-20T15:11:00Z");
+  const check = (meterFactor) =>
+    assessMonthlyCap({
+      provider: "google",
+      month: billingMonth(now, GEMINI_SPEND_CAP_TIME_ZONE),
+      now,
+      cap: 200,
+      currency: "EUR",
+      capCurrencyPerUsd: 0.89166,
+      spentUsd: 63.34,
+      recentDailyUsd: [1.22, 1.68, 1.41, 7.06, 3.92, 9.15, 15.7, 9.63],
+      complete: true,
+      meterFactor,
+    });
+
+  // Our log alone: 28% used, month ending at ~78% — no warning, while the meter was past half.
+  const logOnly = check(1);
+  assert.equal(Math.round(logOnly.usedShare * 100), 28);
+  assert.deepEqual(findCapAnomalies(logOnly), []);
+
+  // Scaled to the meter, the same day is past half and heading well over the cap within the week.
+  const metered = check(DEFAULT_GEMINI_SPEND_METER_FACTOR);
+  assert.equal(metered.loggedUsd, 63.34);
+  assert.equal(metered.meterFactor, 1.8);
+  assert.ok(metered.spent > 100 && metered.spent < 103, `spent €${metered.spent}`);
+  assert.ok(metered.forecastShare > 1.3, `forecast ${metered.forecastShare}`);
+  assert.ok(metered.capReachedOn >= "2026-10-25" && metered.capReachedOn <= "2026-10-28", metered.capReachedOn);
+
+  const [warning] = findCapAnomalies(metered);
+  assert.equal(warning.kind, "monthly_cap_forecast");
+  assert.match(warning.message, /ai\.studio\/spend/);
+
+  const [used] = findCapAnomalies({ ...metered, usedShare: 0.75 });
+  assert.match(used.message, /our log's \$63\.34 \u00d7 1\.8/);
 });

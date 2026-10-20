@@ -113,6 +113,30 @@ threw a bare `Error` out of the extraction step, so it was retried four times ag
 that could not change, reported to Sentry as a defect, and left offering the learner a retry
 button that could not work.
 
+### The Gemini spend cap is classified there too
+
+On 2026-10-20 (13:23–13:58 UTC) the Google AI Studio project hit its monthly spend cap and
+Google answered every Gemini call with `429 RESOURCE_EXHAUSTED "Your project has exceeded its
+monthly spending cap…"`. An ordinary 429 is "busy, try again"; this one lasts until the cap is
+raised or the month turns over. `isAiProviderSpendCapError` in
+[src/lib/ai/errors.ts](/src/lib/ai/errors.ts) tells them apart by Google's sentence, never by the
+code, and survives the step boundary because it reads the text.
+
+- Every Gemini retry loop stops on it after one call (`AiProviderSpendCapError`), and
+  `runLectureStage` / `runNotesStageWithGuard` record it on the throwing side like an input
+  failure: one failed lecture with the code `ai_provider_spend_cap` and the learner sentence
+  "a temporary problem on our side, your material is saved, we'll finish it", not four Inngest
+  retries and "the provider is overloaded, try again in a minute".
+- A transcript's embeddings can no longer fail a note: it is saved with nulls and backfilled
+  (`src/lib/transcript-embeddings.ts`) on the note's first chat question and by the hourly sweep.
+- The hourly stall sweep (`recoverFromProviderOutage` in
+  [src/lib/lecture-stall-sweep.ts](/src/lib/lecture-stall-sweep.ts)) asks Gemini with one tiny
+  embedding whenever something is waiting, and once it answers retries each spend-cap lecture
+  once, ever, stamped (`processing_metadata.providerOutageRetry`) before the job is enqueued.
+  Photos and scanned PDFs have no other reader, so they fail honestly and wait for this.
+- Sentry files every spend-cap event under one issue, "Gemini monthly spending cap reached"
+  (`src/lib/sentry-server-filters.ts`). The fix is at https://ai.studio/spend, not in the code.
+
 ## The invocation budget
 
 `INNGEST_MAX_DURATION_SECONDS` in `src/inngest/functions.ts` must match `maxDuration` in

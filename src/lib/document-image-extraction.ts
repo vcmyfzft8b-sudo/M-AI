@@ -9,7 +9,7 @@ import { PartMediaResolutionLevel } from "@google/genai";
 import JSZip from "jszip";
 import sharp from "sharp";
 
-import { isRetryableAiError } from "@/lib/ai/errors";
+import { isAiProviderSpendCapError, isRetryableAiError } from "@/lib/ai/errors";
 import { GeminiEmptyTextOutputError, generateTextWithGeminiFile } from "@/lib/ai/gemini";
 import { resolveMinimalThinkingConfig } from "@/lib/ai/gemini-models";
 import { MAX_SCAN_IMAGE_BYTES, STORAGE_BUCKET } from "@/lib/constants";
@@ -336,8 +336,10 @@ Return plain text only. Keep the USEFUL and NOT_USEFUL markers in English exactl
     // already retried once with the shared backoff; if the provider is still unavailable, keep the
     // image on its nearby text and let the document continue. Each failed attempt is already in
     // ai_usage_events, so sending this handled degradation to Sentry only creates a false app
-    // regression. Unexpected code, parsing and file failures must remain visible there.
-    if (isRetryableAiError(error)) {
+    // regression. Unexpected code, parsing and file failures must remain visible there. The spend
+    // cap degrades it the same way, and reaches Sentry from the calls it actually stops — not once
+    // per picture in every document read while it lasts.
+    if (isRetryableAiError(error) || isAiProviderSpendCapError(error)) {
       console.warn(
         "Document image description provider was temporarily unavailable; keeping the image undescribed.",
       );

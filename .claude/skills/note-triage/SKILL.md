@@ -49,7 +49,10 @@ cause so the next learner with the same material gets a note.
 | `NOTE_TRIAGE_ENV` | env file with the model keys only |
 
 Findings with `triage: "material-only"` (a login wall, a private-network link, a video link) are
-recorded as `correct` without replaying.
+recorded as `correct` without replaying. Findings with `triage: "provider-outage"` (code
+`ai_provider_spend_cap`: our Gemini project hit its monthly spend cap) are not replayed either: the
+stall sweep retries them once Gemini answers, and the fix is raising the cap at
+https://ai.studio/spend, not a code change. Mention them in the run summary if any are still failed.
 
 ## For each remaining finding
 

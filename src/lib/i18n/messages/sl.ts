@@ -1470,6 +1470,7 @@ export const sl = {
   /* ---- AI and pipeline messages ---- */
   "ai.saveTimeout": "Shranjevanje zapiskov je trajalo predolgo. Poskusi znova čez minuto.",
   "ai.providerOverloaded": "Naš ponudnik UI je trenutno preobremenjen. Poskusi znova čez minuto.",
+  "ai.providerSpendCap": "Pri nas je prišlo do začasne težave, zato zapiskov še nismo mogli dokončati. Tvoje gradivo je shranjeno in zapiske bomo samodejno dokončali, ko bo težava odpravljena.",
   "ai.processingTooLong": "Obdelava je trajala predolgo in se je ustavila. Poskusi znova.",
   "ai.sourceTooExtensive": "Gradivo je preobsežno, da bi ga obdelali v enem kosu. Razdeli ga na manjše dele in vsak del dodaj kot svoj zapisek.",
   "ai.unexpectedError": "Pri obdelavi je prišlo do nepričakovane napake.",

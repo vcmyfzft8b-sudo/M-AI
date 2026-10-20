@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { isAiProviderSpendCapError } from "@/lib/ai/errors";
 import { generateStructuredObjectWithGemini } from "@/lib/ai/gemini";
 import { getServerEnv } from "@/lib/server-env";
 import {
@@ -154,7 +155,13 @@ export async function classifyWithAi(
           reason: verdict.reason,
         });
       }
-    } catch {
+    } catch (error) {
+      // The spend cap refuses every remaining batch the same way; asking for each only adds a
+      // failed call per batch to the log.
+      if (isAiProviderSpendCapError(error)) {
+        break;
+      }
+
       // A model failure must not stop a sync: those posts keep the rule verdict
       // and can be reviewed by hand.
       continue;

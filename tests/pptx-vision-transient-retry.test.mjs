@@ -27,7 +27,8 @@ test("a slide image gets one more attempt after a transient provider failure", (
 test("an exhausted transient outage skips the image without opening a Sentry defect", () => {
   assert.equal(isRetryableAiError(new Error(PRODUCTION_ERROR)), true);
 
-  const transientGuard = VISION_SOURCE.indexOf("if (isRetryableAiError(error))");
+  // The guard also takes the spend cap (`|| isAiProviderSpendCapError(error)`), so match its start.
+  const transientGuard = VISION_SOURCE.indexOf("if (isRetryableAiError(error)");
   const skip = VISION_SOURCE.indexOf("continue;", transientGuard);
   const capture = VISION_SOURCE.indexOf("captureBackgroundError(error", transientGuard);
 

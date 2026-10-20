@@ -3,7 +3,7 @@ import {
   getInvocationBudgetMs,
   runWithinInvocationBudget,
 } from "@/lib/invocation-budget";
-import { isBudgetOverrunFailure } from "@/lib/ai/errors";
+import { isAiProviderSpendCapError, isBudgetOverrunFailure } from "@/lib/ai/errors";
 import {
   isExpectedLectureInputFailure,
   isLectureNoLongerExistsError,
@@ -89,7 +89,9 @@ async function warmNotesPhase(lectureId: string, stopAfter: NotesGenerationPhase
  * would buy four retried refusals and then an unclassifiable error in the function body's catch.
  *
  * The transcription stage gets this from `runLectureStage`; the notes stage cannot reuse it
- * because it also has to classify the budget refusal, which is not an input failure.
+ * because it also has to classify the budget refusal, which is not an input failure. The Gemini
+ * spend cap is classified here too, as it is there: four retries a few seconds apart cannot outlast
+ * a monthly cap, and the stall sweep retries the lecture once Gemini answers again.
  */
 async function runNotesStageWithGuard(lectureId: string) {
   try {
@@ -97,7 +99,11 @@ async function runNotesStageWithGuard(lectureId: string) {
 
     return { completed: true };
   } catch (error) {
-    if (isLectureGenerationBudgetExceededError(error) || isExpectedLectureInputFailure(error)) {
+    if (
+      isLectureGenerationBudgetExceededError(error) ||
+      isExpectedLectureInputFailure(error) ||
+      isAiProviderSpendCapError(error)
+    ) {
       await markLecturePipelineFailed({ lectureId, error });
 
       return { completed: false };

@@ -51,6 +51,13 @@ const MATERIAL_ONLY_CODES = new Set([
   "unsupported_video_link",
 ]);
 
+/**
+ * Failures the Gemini spend cap caused. Neither the material nor the code: the stall sweep retries
+ * them once Gemini answers again (recoverFromProviderOutage), and replaying them while the cap is
+ * still on only fails the same way.
+ */
+const PROVIDER_OUTAGE_CODES = new Set(["ai_provider_spend_cap"]);
+
 async function get(path) {
   const response = await fetch(`${url}${path}`, {
     headers: { apikey: key, Authorization: `Bearer ${key}` },
@@ -115,7 +122,12 @@ try {
         typeof metadata?.pendingLinkUrl === "string"
           ? metadata.pendingLinkUrl
           : metadata?.manualImport?.modelMetadata?.sourceUrl ?? null,
-      triage: code && MATERIAL_ONLY_CODES.has(code) ? "material-only" : "review",
+      triage:
+        code && MATERIAL_ONLY_CODES.has(code)
+          ? "material-only"
+          : code && PROVIDER_OUTAGE_CODES.has(code)
+            ? "provider-outage"
+            : "review",
     });
   }
 

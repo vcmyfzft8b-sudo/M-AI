@@ -77,6 +77,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    if (outcome.providerOutage.error) {
+      captureRouteError(new Error(`Provider-outage recovery failed: ${outcome.providerOutage.error}`), {
+        route: "cron:stalled-lectures",
+        operation: "recoverFromProviderOutage",
+      });
+    }
+
     return NextResponse.json({ sweptAt: new Date().toISOString(), ...outcome });
   } catch (error) {
     captureRouteError(error, {

@@ -38,6 +38,15 @@ export const AI_SAVE_TIMEOUT_MESSAGE =
   "Shranjevanje zapiskov je trajalo predolgo. Poskusi znova čez minuto.";
 export const AI_PROVIDER_OVERLOADED_MESSAGE =
   "Naš ponudnik UI je trenutno preobremenjen. Poskusi znova čez minuto.";
+/*
+ * What the learner reads when Google refused because our Gemini project hit its monthly spend
+ * cap. Unlike the overloaded sentence above it does not ask them to try again in a minute — that
+ * would be untrue for hours — and it is ours to say, because the cap is a setting on our side:
+ * the material is already stored, and the stall sweep finishes the note once Gemini answers
+ * again (`recoverFromProviderOutage` in src/lib/lecture-stall-sweep.ts).
+ */
+export const AI_PROVIDER_SPEND_CAP_MESSAGE =
+  "Pri nas je prišlo do začasne težave, zato zapiskov še nismo mogli dokončati. Tvoje gradivo je shranjeno in zapiske bomo samodejno dokončali, ko bo težava odpravljena.";
 // The sentence `runWithinInvocationBudget` already rejects with when a stage outlives its budget.
 // Repeated here rather than imported from the five call sites that declare it, because those live
 // in route modules this dependency-free file must not pull in; tests/aborted-run-message.test.mjs
@@ -116,11 +125,87 @@ export function isBudgetOverrunFailure(error: unknown) {
   return getErrorText(error).trim() === AI_PROCESSING_TOO_LONG_MESSAGE;
 }
 
+/** The title every spend-cap failure is filed under in Sentry, whichever route it came from. */
+export const GEMINI_SPEND_CAP_ISSUE_TITLE = "Gemini monthly spending cap reached";
+
+/**
+ * Google's own words when the project's monthly spend cap stops every call (2026-10-20, 13:23 to
+ * 13:58 UTC):
+ *
+ *   429 RESOURCE_EXHAUSTED "Your project has exceeded its monthly spending cap. Please go to AI
+ *   Studio at https://ai.studio/spend to manage your project spend cap. ..."
+ *
+ * The status and code are the ones an ordinary rate limit carries, and an ordinary rate limit is
+ * transient, so the code alone must never decide this: only the sentence does. Matched on three
+ * phrases from it, so a small rewording of one still leaves the others — and only Google's own
+ * phrasing: our cost alarm writes "…% of the €200 monthly spending cap" in its warnings, and that
+ * is a forecast, not a refusal.
+ */
+const SPEND_CAP_MARKERS = [
+  "exceeded its monthly spending cap",
+  "manage your project spend cap",
+  "billing#project-spend-caps",
+];
+
+/**
+ * A call Google refused because our Gemini project hit its monthly spend cap.
+ *
+ * Not retryable, and not the learner's fault: nothing changes until the cap is raised or the month
+ * turns over, so every retry loop and backoff that treats a 429 as "busy" has to stop on this one.
+ * Named so a Sentry event says what happened before anyone reads Google's JSON.
+ */
+export class AiProviderSpendCapError extends Error {
+  constructor(providerMessage: string) {
+    super(`${GEMINI_SPEND_CAP_ISSUE_TITLE}: ${providerMessage}`);
+    this.name = "AiProviderSpendCapError";
+  }
+}
+
+/**
+ * Whether this is the spend cap, however it reaches us: Google's own error, our wrapper, our
+ * learner sentence rethrown as a fresh Error by the scan rescue path, or any of them flattened to
+ * `{ name: "Error", message }` by an Inngest step boundary — which is why the text is what decides.
+ */
+export function isAiProviderSpendCapError(error: unknown) {
+  if (error instanceof AiProviderSpendCapError) {
+    return true;
+  }
+
+  const text = getErrorText(error);
+
+  if (text.trim() === AI_PROVIDER_SPEND_CAP_MESSAGE) {
+    return true;
+  }
+
+  const lower = text.toLowerCase();
+
+  return (
+    lower.startsWith(GEMINI_SPEND_CAP_ISSUE_TITLE.toLowerCase()) ||
+    SPEND_CAP_MARKERS.some((marker) => lower.includes(marker))
+  );
+}
+
+/** The spend cap as an `AiProviderSpendCapError`, or the error unchanged when it is anything else. */
+export function toProviderBillingError(error: unknown) {
+  if (!isAiProviderSpendCapError(error) || error instanceof AiProviderSpendCapError) {
+    return error;
+  }
+
+  return new AiProviderSpendCapError(getErrorText(error));
+}
+
 // Only the overloaded sentence, deliberately. The English wording of the save-timeout message
 // contained no provider keyword, so it classified as NOT retryable, and mapping it to retryable
 // now would be a behaviour change rather than a translation.
 export function isRetryableAiError(error: unknown) {
   const message = getErrorText(error).toLowerCase();
+
+  // Before every keyword below: the cap answers 429 RESOURCE_EXHAUSTED, which those would read as
+  // "busy" and back off on for a minute per attempt, against a refusal that lasts until the month
+  // turns over.
+  if (isAiProviderSpendCapError(error)) {
+    return false;
+  }
 
   if (message.includes(AI_PROVIDER_OVERLOADED_MESSAGE.toLowerCase())) {
     return true;
@@ -156,7 +241,11 @@ export function toUserFacingAiErrorMessage(error: unknown) {
   // Idempotent: the scan rescue path rethrows this function's own output as a fresh Error, so
   // the same text can arrive here twice. Without this, the second pass would match the
   // save-timeout sentence against the overloaded rule and swap one message for the other.
-  if (text.trim() === AI_SAVE_TIMEOUT_MESSAGE || text.trim() === AI_PROVIDER_OVERLOADED_MESSAGE) {
+  if (
+    text.trim() === AI_SAVE_TIMEOUT_MESSAGE ||
+    text.trim() === AI_PROVIDER_OVERLOADED_MESSAGE ||
+    text.trim() === AI_PROVIDER_SPEND_CAP_MESSAGE
+  ) {
     return text.trim();
   }
 
@@ -165,6 +254,12 @@ export function toUserFacingAiErrorMessage(error: unknown) {
   // budget reports when its rejection wins the race, so the two paths now read identically.
   if (isAbortedWorkError(error)) {
     return AI_PROCESSING_TOO_LONG_MESSAGE;
+  }
+
+  // Before the retryable rule, which would otherwise call our own spend cap an overloaded
+  // provider and tell the learner to try again in a minute (what they read on 2026-10-20).
+  if (isAiProviderSpendCapError(error)) {
+    return AI_PROVIDER_SPEND_CAP_MESSAGE;
   }
 
   if (
@@ -189,6 +284,12 @@ export function toUserFacingAiErrorMessage(error: unknown) {
   return AI_UNEXPECTED_MESSAGE;
 }
 
+/**
+ * The failure code a lecture stopped by the spend cap is recorded with. The stall sweep looks for
+ * exactly this code to finish those lectures once Gemini answers again.
+ */
+export const AI_PROVIDER_SPEND_CAP_FAILURE_CODE = "ai_provider_spend_cap";
+
 /** The generic last resort, named so `toAiFailureCode` can recognise it too. */
 export const AI_UNEXPECTED_MESSAGE = "Pri obdelavi je prišlo do nepričakovane napake.";
 
@@ -208,6 +309,10 @@ export function toAiFailureCode(message: string): string | null {
 
   if (message === AI_PROVIDER_OVERLOADED_MESSAGE) {
     return "ai_provider_overloaded";
+  }
+
+  if (message === AI_PROVIDER_SPEND_CAP_MESSAGE) {
+    return AI_PROVIDER_SPEND_CAP_FAILURE_CODE;
   }
 
   if (message === AI_PROCESSING_TOO_LONG_MESSAGE) {

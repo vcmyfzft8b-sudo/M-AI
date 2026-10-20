@@ -57,6 +57,20 @@ test("a message event is grouped too", () => {
   assert.deepEqual(grouped.fingerprint, GEMINI_SPEND_CAP_FINGERPRINT);
 });
 
+test("an event that names its own issue keeps it", () => {
+  // The cost alarm's monthly cap warning, fingerprinted per provider and month.
+  const warning = {
+    ...event("Error", "AI spend cap warning: Gemini for 2026-10 is €102, 51% of the €200 monthly spending cap."),
+    fingerprint: ["ai-cost-report", "monthly-cap", "google", "2026-10"],
+  };
+
+  assert.deepEqual(groupProviderBillingEvent(structuredClone(warning)), warning);
+
+  // Even one that quotes Google's refusal: whoever set the fingerprint chose the issue.
+  const quoted = { ...event("Error", SPEND_CAP_BODY), fingerprint: ["ai-cost-report", "monthly-cap"] };
+  assert.deepEqual(groupProviderBillingEvent(structuredClone(quoted)), quoted);
+});
+
 test("anything else is left exactly as it was", () => {
   const unrelated = [
     event("Error", "Naš ponudnik UI je trenutno preobremenjen. Poskusi znova čez minuto."),

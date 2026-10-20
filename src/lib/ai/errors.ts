@@ -136,10 +136,16 @@ export const GEMINI_SPEND_CAP_ISSUE_TITLE = "Gemini monthly spending cap reached
  *   Studio at https://ai.studio/spend to manage your project spend cap. ..."
  *
  * The status and code are the ones an ordinary rate limit carries, and an ordinary rate limit is
- * transient, so the code alone must never decide this: only the sentence does. Matched on two
- * phrases from it, so a small rewording of one still leaves the other.
+ * transient, so the code alone must never decide this: only the sentence does. Matched on three
+ * phrases from it, so a small rewording of one still leaves the others — and only Google's own
+ * phrasing: our cost alarm writes "…% of the €200 monthly spending cap" in its warnings, and that
+ * is a forecast, not a refusal.
  */
-const SPEND_CAP_MARKERS = ["monthly spending cap", "project spend cap", "project-spend-caps"];
+const SPEND_CAP_MARKERS = [
+  "exceeded its monthly spending cap",
+  "manage your project spend cap",
+  "billing#project-spend-caps",
+];
 
 /**
  * A call Google refused because our Gemini project hit its monthly spend cap.
@@ -171,10 +177,12 @@ export function isAiProviderSpendCapError(error: unknown) {
     return true;
   }
 
-  // Our own title ("Gemini monthly spending cap reached") carries the first marker too.
   const lower = text.toLowerCase();
 
-  return SPEND_CAP_MARKERS.some((marker) => lower.includes(marker));
+  return (
+    lower.startsWith(GEMINI_SPEND_CAP_ISSUE_TITLE.toLowerCase()) ||
+    SPEND_CAP_MARKERS.some((marker) => lower.includes(marker))
+  );
 }
 
 /** The spend cap as an `AiProviderSpendCapError`, or the error unchanged when it is anything else. */

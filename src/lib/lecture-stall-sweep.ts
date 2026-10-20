@@ -85,6 +85,8 @@ export type ProviderOutageOutcome = {
   embeddingsFilled: number;
   /** A backfill that failed: logged with the outcome, and retried by the next run. */
   embeddingBackfillError: string | null;
+  /** The recovery itself could not run (a failed read). The cron route reports this one. */
+  error: string | null;
 };
 
 export type StallSweepOutcome = {
@@ -287,9 +289,9 @@ async function retryAfterProviderOutage(
   } catch (enqueueError) {
     // As in the retry route: a job that could not even be started is a failure the learner sees,
     // with its own message rather than the spend cap's, and with the stamp on the row it is not
-    // retried again by the sweep.
+    // retried again by the sweep. Recording it reports it, so it is not also a sweep error.
     await markLecturePipelineFailed({ lectureId: lecture.id, error: enqueueError });
-    throw enqueueError;
+    return false;
   }
 
   return true;
@@ -314,6 +316,7 @@ async function recoverFromProviderOutage(
     deferred: 0,
     embeddingsFilled: 0,
     embeddingBackfillError: null,
+    error: null,
   };
   const backfillSince = new Date(now - EMBEDDING_BACKFILL_LOOKBACK_MS).toISOString();
   const failures = await loadSpendCapFailures(now);
@@ -394,13 +397,19 @@ export async function sweepStalledLectures(now = Date.now()): Promise<StallSweep
       deferred: 0,
       embeddingsFilled: 0,
       embeddingBackfillError: null,
+      error: null,
     },
   };
 
   await settleStalledLectures(now, outcome);
 
   // After the stalls, so a lecture re-queued here is not also looked at as a stall in the same run.
-  outcome.providerOutage = await recoverFromProviderOutage(now, outcome.errors);
+  // Caught so a failed read here cannot turn the stall work already done into a failed sweep.
+  try {
+    outcome.providerOutage = await recoverFromProviderOutage(now, outcome.errors);
+  } catch (error) {
+    outcome.providerOutage.error = error instanceof Error ? error.message : String(error);
+  }
 
   return outcome;
 }

@@ -32,7 +32,8 @@ test("a transcript is saved through the embedding path that cannot fail the note
   // The only direct call left embeds a chat question, inside retrieval's own catch.
   assert.equal(pipeline.match(/createEmbeddings\(/g)?.length, 1);
   const retrieval = functionBody(pipeline, "async function retrieveLectureContext");
-  assert.match(retrieval, /try \{\s*const \[embedding\] = await createEmbeddings\(\[params\.question\]\);/);
+  assert.ok(retrieval.indexOf("try {") < retrieval.indexOf("createEmbeddings([params.question])"));
+  assert.match(retrieval, /\} catch \(error\) \{\s*console\.warn\("\[chat\] transcript retrieval failed/);
 });
 
 test("only a budget abort escapes the transcript embeddings", () => {
@@ -47,6 +48,8 @@ test("only a budget abort escapes the transcript embeddings", () => {
 test("a chat question fills in what the note is missing before it searches", () => {
   const retrieval = functionBody(read("src/lib/pipeline.ts"), "async function retrieveLectureContext");
 
+  // Alongside the question's own embedding, not after it, so a complete note pays no extra wait.
+  assert.match(retrieval, /await Promise\.all\(\[\s*createEmbeddings\(\[params\.question\]\),\s*backfillTranscriptEmbeddings\(/);
   assert.ok(retrieval.indexOf("backfillTranscriptEmbeddings(") > 0);
   assert.ok(
     retrieval.indexOf("backfillTranscriptEmbeddings(") < retrieval.indexOf('"match_transcript_segments"'),

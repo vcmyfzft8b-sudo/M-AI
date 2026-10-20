@@ -2,6 +2,7 @@ import "server-only";
 
 import { isWorkAbortedError } from "@/lib/abort-context";
 import { createEmbeddings } from "@/lib/ai/embeddings";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import { captureBackgroundError } from "@/lib/monitoring";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { serializeVector } from "@/lib/utils";
@@ -80,30 +81,7 @@ export async function embedTranscriptTexts(params: {
   });
 }
 
-export type EmbeddingBackfillResult = {
-  /** Rows given an embedding by this call. */
-  filled: number;
-  /** Lectures at least one of those rows belongs to. */
-  lectureIds: string[];
-  /** More rows were waiting than this call was allowed to take. */
-  more: boolean;
-};
-
 type MissingEmbeddingRow = { id: string; lecture_id: string; text: string };
-
-async function mapWithConcurrency<T>(items: T[], limit: number, run: (item: T) => Promise<void>) {
-  let cursor = 0;
-
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (cursor < items.length) {
-        const item = items[cursor];
-        cursor += 1;
-        await run(item);
-      }
-    }),
-  );
-}
 
 /**
  * Gives transcript rows saved without an embedding their embedding.
@@ -122,7 +100,7 @@ export async function backfillTranscriptEmbeddings(params: {
   lectureId?: string;
   since?: string;
   maxSegments: number;
-}): Promise<EmbeddingBackfillResult> {
+}): Promise<{ filled: number }> {
   const supabase = createSupabaseServiceRoleClient();
   let query = supabase
     .from("transcript_segments")
@@ -130,7 +108,7 @@ export async function backfillTranscriptEmbeddings(params: {
     .is("embedding", null)
     .filter("text", "match", HAS_TEXT_PATTERN)
     .order("created_at", { ascending: true })
-    .limit(params.maxSegments + 1);
+    .limit(params.maxSegments);
 
   if (params.lectureId) {
     query = query.eq("lecture_id", params.lectureId);
@@ -146,14 +124,8 @@ export async function backfillTranscriptEmbeddings(params: {
     throw error;
   }
 
-  const found = (data ?? []) as MissingEmbeddingRow[];
-  const rows = found.slice(0, params.maxSegments).filter((row) => row.text.trim().length > 0);
-  const result: EmbeddingBackfillResult = {
-    filled: 0,
-    lectureIds: [],
-    more: found.length > params.maxSegments,
-  };
-  const lectureIds = new Set<string>();
+  const rows = ((data ?? []) as MissingEmbeddingRow[]).filter((row) => row.text.trim().length > 0);
+  let filled = 0;
 
   for (let start = 0; start < rows.length; start += EMBEDDING_BATCH_SIZE) {
     const batch = rows.slice(start, start + EMBEDDING_BATCH_SIZE);
@@ -182,13 +154,10 @@ export async function backfillTranscriptEmbeddings(params: {
           return;
         }
 
-        result.filled += 1;
-        lectureIds.add(row.lecture_id);
+        filled += 1;
       },
     );
   }
 
-  result.lectureIds = [...lectureIds];
-
-  return result;
+  return { filled };
 }

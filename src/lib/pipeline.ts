@@ -1187,11 +1187,11 @@ async function streamChatAnswer(
 }
 
 /**
- * How many unembedded rows one chat question will embed before it is answered. A lecture-length
- * transcript is a few hundred segments, so this is most notes whole, in about a second; a longer
- * one finishes over the next questions or the hourly sweep.
+ * How many unembedded rows one chat question will embed before it is answered: one embedding call
+ * and a hundred small writes, run alongside the question's own embedding. A longer transcript
+ * finishes over the next questions or in the hourly sweep.
  */
-const CHAT_EMBEDDING_BACKFILL_MAX_SEGMENTS = 300;
+const CHAT_EMBEDDING_BACKFILL_MAX_SEGMENTS = 100;
 
 /**
  * The transcript chunks nearest the question — or none of them.
@@ -1210,21 +1210,23 @@ async function retrieveLectureContext(params: {
   const supabase = createSupabaseServiceRoleClient();
 
   try {
-    const [embedding] = await createEmbeddings([params.question]);
+    // A note saved while Gemini refused embeddings has rows the search below skips. They are filled
+    // in alongside the question's own embedding, so a note with nothing missing costs one indexed
+    // read in parallel, and one that is missing some gets them back before it is searched. While
+    // Gemini still refuses, the fill fails with the question and the answer comes from the note.
+    const [[embedding]] = await Promise.all([
+      createEmbeddings([params.question]),
+      backfillTranscriptEmbeddings({
+        lectureId: params.lectureId,
+        maxSegments: CHAT_EMBEDDING_BACKFILL_MAX_SEGMENTS,
+      }).catch((error: unknown) => {
+        console.warn("[chat] embedding backfill failed; searching what is embedded", error);
+      }),
+    ]);
 
     if (!embedding) {
       return [];
     }
-
-    // The question embedded, so Gemini is answering: a note saved while it was not (its rows have
-    // no embedding, and the search below skips them) gets its search back before this question is
-    // matched against it. A note with nothing missing costs one indexed read that finds no rows.
-    await backfillTranscriptEmbeddings({
-      lectureId: params.lectureId,
-      maxSegments: CHAT_EMBEDDING_BACKFILL_MAX_SEGMENTS,
-    }).catch((error: unknown) => {
-      console.warn("[chat] embedding backfill failed; searching what is embedded", error);
-    });
 
     const { data, error } = await supabase.rpc("match_transcript_segments" as never, {
       filter_lecture_id: params.lectureId,

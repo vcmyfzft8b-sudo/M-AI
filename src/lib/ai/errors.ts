@@ -171,12 +171,10 @@ export function isAiProviderSpendCapError(error: unknown) {
     return true;
   }
 
+  // Our own title ("Gemini monthly spending cap reached") carries the first marker too.
   const lower = text.toLowerCase();
 
-  return (
-    lower.includes(GEMINI_SPEND_CAP_ISSUE_TITLE.toLowerCase()) ||
-    SPEND_CAP_MARKERS.some((marker) => lower.includes(marker))
-  );
+  return SPEND_CAP_MARKERS.some((marker) => lower.includes(marker));
 }
 
 /** The spend cap as an `AiProviderSpendCapError`, or the error unchanged when it is anything else. */

@@ -112,6 +112,8 @@ test("a Stripe row is still the one shown, live or not, whatever comps sit besid
   const cancelled = stripeRow({ status: "canceled", updated_at: "2026-09-01T00:00:00Z" });
   assert.equal(getActiveSubscription([comp(), cancelled], AFTER)?.id, "row-stripe");
   assert.equal(getActiveSubscription([comp(), cancelled], DURING)?.id, "row-comp");
+  // Both live: the plan they pay for is the one settings shows and lets them manage.
+  assert.equal(getActiveSubscription([comp(), stripeRow({ updated_at: "2026-09-01T00:00:00Z" })], DURING)?.id, "row-stripe");
 });
 
 test("entitlements and checkout read the comp-aware history, not a row count", () => {

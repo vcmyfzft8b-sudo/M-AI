@@ -69,6 +69,10 @@ async function loadPlanMembership(
   );
 }
 
+function planRank(row: BillingSubscriptionRow) {
+  return holdsPlan(row) ? (isCompSubscriptionRow(row) ? 1 : 2) : 0;
+}
+
 export async function listUsers(options: {
   page?: number;
   pageSize?: number;
@@ -152,8 +156,9 @@ export async function listUsers(options: {
     for (const row of (subscriptionResult.data ?? []) as BillingSubscriptionRow[]) {
       const existing = subscriptions.get(row.user_id);
 
-      // Prefer a live subscription over a stale cancelled one, or an ended comp.
-      if (!existing || (!holdsPlan(existing) && holdsPlan(row))) {
+      // Prefer a live subscription over a stale cancelled one or an ended comp,
+      // and a live Stripe row over a live comp, so the Paying tab shows the sale.
+      if (!existing || planRank(row) > planRank(existing)) {
         subscriptions.set(row.user_id, row);
       }
     }

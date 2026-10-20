@@ -82,7 +82,8 @@ export function hasPriorSubscriptionHistory(
 /**
  * The row that grants access, or else the latest one to describe the account by.
  *
- * An ended comp is never that description. Its status still says `active`, so settings would
+ * A Stripe row that grants access beats a comp that does, so a subscriber who also holds a comp
+ * still sees the plan they pay for and can manage it. An ended comp is never the description. Its status still says `active`, so settings would
  * show a plan the account no longer has and offer to manage it in a Stripe portal that has
  * nothing in it; without a row the account reads as having no subscription, which is true.
  */
@@ -94,8 +95,11 @@ export function getActiveSubscription(
     right.updated_at.localeCompare(left.updated_at),
   );
 
+  const live = sorted.filter((subscription) => hasPaidAccess(subscription, nowMs));
+
   return (
-    sorted.find((subscription) => hasPaidAccess(subscription, nowMs)) ??
+    live.find((subscription) => !isCompSubscriptionRow(subscription)) ??
+    live[0] ??
     sorted.find((subscription) => !isCompSubscriptionRow(subscription)) ??
     null
   );

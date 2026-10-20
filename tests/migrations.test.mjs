@@ -855,6 +855,13 @@ test("the cost report reads a UTC day as one aggregate that matches its raw rows
   });
   assert.equal(window.groups.find((group) => group.model === "or/new/model").unpriced_calls, 1);
 
+  // Totals only (the route's read of a day outside the report): same groups, no lists.
+  const [{ totals }] = await query(
+    `select public.ai_cost_report_window('2026-10-19T00:00:00Z', '2026-10-20T00:00:00Z', 0, 0) as totals`,
+  );
+  assert.deepEqual(totals.groups, window.groups);
+  assert.deepEqual([totals.lectures, totals.failures], [[], []]);
+
   // An empty day is three empty lists, not a null the route would mistake for a failed read.
   const [{ empty }] = await query(
     `select public.ai_cost_report_window('2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z') as empty`,

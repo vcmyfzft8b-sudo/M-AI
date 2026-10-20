@@ -168,8 +168,16 @@ function isUsageWindow(value: unknown): value is AiUsageWindow {
   );
 }
 
-/** One window of `ai_usage_events`, aggregated in SQL. Asked twice before giving up. */
-async function loadUsageWindow(fromIso: string, toIso: string): Promise<AiUsageWindow> {
+/**
+ * One window of `ai_usage_events`, aggregated in SQL. Asked twice before giving up. `totalsOnly`
+ * skips the lecture and failure lists, for days read only for their cost (the rest of the cap
+ * month and the pace week).
+ */
+async function loadUsageWindow(
+  fromIso: string,
+  toIso: string,
+  totalsOnly: boolean,
+): Promise<AiUsageWindow> {
   const supabase = createSupabaseServiceRoleClient();
   let lastError: unknown = null;
 
@@ -177,6 +185,7 @@ async function loadUsageWindow(fromIso: string, toIso: string): Promise<AiUsageW
     const { data, error } = await callRpc(supabase, "ai_cost_report_window", {
       p_from: fromIso,
       p_to: toIso,
+      ...(totalsOnly ? { p_top_lectures: 0, p_max_failure_groups: 0 } : {}),
     });
 
     if (!error && isUsageWindow(data)) {
@@ -396,6 +405,14 @@ export async function GET(request: NextRequest) {
     ),
   );
 
+  const sonioxFirstDay = new Date(
+    Math.min(
+      reportStart.getTime(),
+      Date.parse(sonioxMonth.startIso),
+      addDays(today, -PACE_DAYS).getTime(),
+    ),
+  );
+
   // Every UTC day from the oldest one any figure needs, today (still running) last.
   const dayStarts: Date[] = [];
 
@@ -416,11 +433,17 @@ export async function GET(request: NextRequest) {
   try {
     const [loaded, generationLoad, openRouterAccount, sonioxUsage, eurPerUsd] = await Promise.all([
       settleEach(windows, DAY_READ_CONCURRENCY, (window) =>
-        loadUsageWindow(window.from.toISOString(), window.to.toISOString()),
+        loadUsageWindow(
+          window.from.toISOString(),
+          window.to.toISOString(),
+          window.from.getTime() < reportStart.getTime() || window.key === monthHeadKey,
+        ),
       ),
       loadGenerationRows(reportStart.toISOString()),
       fetchOpenRouterCredits(),
-      fetchSonioxUsage(firstDay.toISOString(), now.toISOString()),
+      // Soniox needs only its own (UTC) month and the pace week, not Google's Pacific month: at
+      // 04:15 UTC on the 1st that would ask Soniox for 32 days.
+      fetchSonioxUsage(sonioxFirstDay.toISOString(), now.toISOString()),
       fetchEurPerUsd(),
     ]);
 
@@ -600,9 +623,11 @@ export async function GET(request: NextRequest) {
 
     if (coverageAnomalies.length > 0) {
       console.error("[ai-cost-report] Report incomplete", { missing });
+      // Its own issue per month, like the caps: an old unresolved one must not swallow a new gap.
       captureRouteError(new Error(coverageAnomalies[0].message), {
         route: "cron:ai-cost-report",
         operation: "reportCoverage",
+        fingerprint: ["ai-cost-report", "report-incomplete", googleMonth.key],
         extra: { missing, sonioxAvailable },
       });
     }

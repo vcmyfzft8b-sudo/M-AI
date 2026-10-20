@@ -16,10 +16,7 @@ export const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing", "past
  */
 export const PERIOD_ROLLOVER_GRACE_MS = 2 * 60 * 60 * 1000;
 
-export function subscriptionPeriodAllowsAccess(
-  subscription: Pick<BillingSubscriptionRow, "current_period_end" | "cancel_at_period_end">,
-  nowMs = Date.now(),
-) {
+export function subscriptionPeriodAllowsAccess(subscription: BillingSubscriptionRow, nowMs = Date.now()) {
   if (!subscription.current_period_end) {
     return true;
   }
@@ -50,57 +47,34 @@ export function hasLiveStripeSubscription(subscriptions: ReadonlyArray<{ status:
 }
 
 /**
- * Whether a row is a comp: free premium we granted by hand, with nothing behind it in Stripe.
- *
- * A comp is a row written straight into `billing_subscriptions` for somebody with no Stripe
- * subscription to extend: `stripe_subscription_id` is `comp_<user id prefix>_<end date>`, with no
- * customer, no price and an amount of 0. It grants access like any other row until its
- * `current_period_end`, but no webhook ever touches it, so its status stays `active` after it
- * ends. Stripe's own ids start with `sub_`, never `comp_`.
+ * Whether a row is a comp: free premium granted by hand to somebody with no Stripe subscription
+ * to extend. It is written straight into `billing_subscriptions` as `comp_<user id
+ * prefix>_<end date>` with no customer, no price and an amount of 0, and nothing in Stripe stands
+ * behind it. Both halves are required: Stripe's own ids start with `sub_`, and a row that names a
+ * Stripe customer is never treated as a comp, whatever its id looks like.
  */
-export function isCompSubscriptionRow(row: Pick<BillingSubscriptionRow, "stripe_subscription_id">) {
-  return row.stripe_subscription_id.startsWith("comp_");
+export function isCompSubscriptionRow(
+  row: Pick<BillingSubscriptionRow, "stripe_subscription_id" | "stripe_customer_id">,
+) {
+  return row.stripe_subscription_id.startsWith("comp_") && row.stripe_customer_id === null;
 }
 
 /**
- * Whether this account has had a subscription before, which costs it the free trial at checkout.
+ * Whether this account has had a subscription before, which costs it the three-day trial at
+ * checkout. A trial already started (by Stripe, or an Apple purchase) counts, and so does every
+ * real subscription row in any status.
  *
- * A comp is not one. On 2026-10-20 four free learners were given three comped days as an
- * apology for an outage, and counting those rows here would have quietly and permanently taken
- * away the three-day trial every one of them was still owed.
+ * A comp does not. On 2026-10-20 four free learners were given three comped days as an apology
+ * for an outage, and counting those rows would have quietly and permanently taken away the trial
+ * each of them was still owed. Stripe's own history is checked separately, by
+ * `hasStripeSubscriptionHistory`, before checkout grants a trial.
  */
 export function hasPriorSubscriptionHistory(
   profile: Pick<ProfileRow, "subscription_trial_started_at"> | null,
-  subscriptions: ReadonlyArray<Pick<BillingSubscriptionRow, "stripe_subscription_id">>,
+  subscriptions: ReadonlyArray<Pick<BillingSubscriptionRow, "stripe_subscription_id" | "stripe_customer_id">>,
 ) {
   return Boolean(
     profile?.subscription_trial_started_at ||
       subscriptions.some((subscription) => !isCompSubscriptionRow(subscription)),
-  );
-}
-
-/**
- * The row that grants access, or else the latest one to describe the account by.
- *
- * A Stripe row that grants access beats a comp that does, so a subscriber who also holds a comp
- * still sees the plan they pay for and can manage it. An ended comp is never the description. Its status still says `active`, so settings would
- * show a plan the account no longer has and offer to manage it in a Stripe portal that has
- * nothing in it; without a row the account reads as having no subscription, which is true.
- */
-export function getActiveSubscription(
-  subscriptions: BillingSubscriptionRow[],
-  nowMs = Date.now(),
-): BillingSubscriptionRow | null {
-  const sorted = [...subscriptions].sort((left, right) =>
-    right.updated_at.localeCompare(left.updated_at),
-  );
-
-  const live = sorted.filter((subscription) => hasPaidAccess(subscription, nowMs));
-
-  return (
-    live.find((subscription) => !isCompSubscriptionRow(subscription)) ??
-    live[0] ??
-    sorted.find((subscription) => !isCompSubscriptionRow(subscription)) ??
-    null
   );
 }

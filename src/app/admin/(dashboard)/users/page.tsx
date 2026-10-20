@@ -271,11 +271,7 @@ export default async function UsersPage({
                     <td>{formatDate(user.createdAt)}</td>
                     <td>{user.plan ?? "—"}</td>
                     <td>
-                      {user.isComp ? (
-                        <Badge tone={user.hasPaidAccess ? "green" : "grey"}>
-                          {user.hasPaidAccess ? "comp" : "comp ended"}
-                        </Badge>
-                      ) : user.subscriptionStatus === "trialing" ? (
+                      {user.subscriptionStatus === "trialing" ? (
                         <Badge tone="blue">trial</Badge>
                       ) : user.hasPaidAccess ? (
                         <Badge tone="green">{user.subscriptionStatus}</Badge>

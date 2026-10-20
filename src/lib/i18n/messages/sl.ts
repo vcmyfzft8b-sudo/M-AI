@@ -64,7 +64,6 @@ export const sl = {
   "settings.plan.eyebrow": "Paket",
   "settings.plan.choose": "Izberi paket",
   "settings.plan.none": "Brez naročnine",
-  "settings.plan.comp": "Brezplačni Premium",
   "settings.plan.summary": "{plan} ({status})",
   "settings.plan.activeUntil": "Aktivno do {date}",
   "settings.plan.choosePrompt": "Izberi paket za zapiske iz vseh predavanj in vsa učna orodja.",

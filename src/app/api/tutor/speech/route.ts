@@ -6,6 +6,8 @@ import { GeminiSpeechError, GEMINI_TTS_SAMPLE_RATE, startGeminiSpeech } from "@/
 import { noteTtsVoiceSchema } from "@/lib/note-tts-voice-schema";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { getServerEnv } from "@/lib/server-env";
+import { SonioxSpeechError, startSonioxSpeech } from "@/lib/soniox-speech-stream";
+import { noteGeminiSpeechResult, speechProvider } from "@/lib/speech-synthesis";
 import { geminiVoiceFor } from "@/lib/tutor/gemini-voices";
 import { tutorSpeechTokenSecret, verifyTutorSpeechToken } from "@/lib/tutor/speech-token";
 
@@ -25,7 +27,15 @@ export const maxDuration = 60;
  * the tutor's audio graph has always eaten: it starts playing on the first chunk and can stop on a
  * syllable. Google is waited on for the first chunk before answering, so a refusal is a status the
  * client can act on (429 busy, 422 nothing to say) rather than a 200 with a broken body.
+ *
+ * When Gemini refuses for a reason that will not clear by itself — the project's spend cap, as on
+ * 2026-10-20, or Google's side failing — the same piece is spoken by Soniox here, in the same PCM at
+ * the same rate, so the learner hears the old voice instead of a tutor gone silent. While this
+ * instance knows Gemini is refusing, it goes to Soniox straight away (src/lib/speech-synthesis.ts).
  */
+
+/** Soniox needs a language where Gemini only takes a hint; the tutor's own default. */
+const FALLBACK_SPEECH_LANGUAGE = "sl";
 
 const requestSchema = z.object({
   /* A piece is at most a few sentences; anything longer is not the tutor's client. */
@@ -59,10 +69,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  if (!env.GEMINI_API_KEY) {
-    return NextResponse.json({ error: "speech_unavailable" }, { status: 503 });
-  }
-
   const limited = await enforceRateLimit({
     request,
     route: "api:tutor:speech",
@@ -88,30 +94,11 @@ export async function POST(request: Request) {
 
   request.signal.addEventListener("abort", abortUpstream, { once: true });
 
-  let audio: Awaited<ReturnType<typeof startGeminiSpeech>>;
+  let audio: AsyncGenerator<Uint8Array, unknown, undefined>;
   let first: IteratorResult<Uint8Array, unknown>;
-
-  try {
-    audio = await startGeminiSpeech({
-      apiKey: env.GEMINI_API_KEY,
-      model,
-      text,
-      voice: geminiVoiceFor(voice),
-      language: language ?? null,
-      signal: upstream.signal,
-    });
-    first = await audio.next();
-  } catch (error) {
-    request.signal.removeEventListener("abort", abortUpstream);
-
-    if (request.signal.aborted) {
-      return new NextResponse(null, { status: 499 });
-    }
-
-    const status = error instanceof GeminiSpeechError ? error.status : null;
-
-    console.error("[tutor] speech failed", { status, model, voice, chars: text.length, error });
-
+  /* Soniox when TTS_PROVIDER says so, when there is no Gemini key, or while Gemini is refusing. */
+  let spokenBy = speechProvider();
+  const logGeminiFailure = (error: unknown) =>
     after(() =>
       logGeminiUsageEvent({
         model,
@@ -124,12 +111,77 @@ export async function POST(request: Request) {
       }),
     );
 
+  try {
+    let started: { audio: typeof audio; first: typeof first } | null = null;
+
+    if (spokenBy === "gemini" && env.GEMINI_API_KEY) {
+      try {
+        const geminiAudio = await startGeminiSpeech({
+          apiKey: env.GEMINI_API_KEY,
+          model,
+          text,
+          voice: geminiVoiceFor(voice),
+          language: language ?? null,
+          signal: upstream.signal,
+        });
+
+        started = { audio: geminiAudio, first: await geminiAudio.next() };
+        noteGeminiSpeechResult(null);
+      } catch (error) {
+        if (request.signal.aborted || !noteGeminiSpeechResult(error)) {
+          throw error;
+        }
+
+        console.warn("[tutor] Gemini could not speak; Soniox speaks this piece", {
+          status: error instanceof GeminiSpeechError ? error.status : null,
+          voice,
+          chars: text.length,
+        });
+        logGeminiFailure(error);
+        spokenBy = "soniox";
+      }
+    }
+
+    if (!started) {
+      const sonioxAudio = await startSonioxSpeech({
+        text,
+        voice,
+        language: language ?? FALLBACK_SPEECH_LANGUAGE,
+        sampleRate: GEMINI_TTS_SAMPLE_RATE,
+        signal: upstream.signal,
+      });
+
+      started = { audio: sonioxAudio, first: await sonioxAudio.next() };
+    }
+
+    audio = started.audio;
+    first = started.first;
+  } catch (error) {
+    request.signal.removeEventListener("abort", abortUpstream);
+
+    if (request.signal.aborted) {
+      return new NextResponse(null, { status: 499 });
+    }
+
+    const status =
+      error instanceof GeminiSpeechError
+        ? error.status
+        : error instanceof SonioxSpeechError
+          ? (error.statusCode ?? 502)
+          : 502;
+
+    console.error("[tutor] speech failed", { status, spokenBy, model, voice, chars: text.length, error });
+
+    if (spokenBy === "gemini") {
+      logGeminiFailure(error);
+    }
+
     return NextResponse.json(
       { error: status === null ? "no_audio" : "speech_failed" },
       /*
        * Busy is busy and says so; a stream that ended without a sample is something this sentence
        * could not be said as, and the client moves past it rather than ending the lesson. Anything
-       * else is a fault on the way to Google.
+       * else is a fault on the way to Google or Soniox.
        */
       { status: status === 429 ? 429 : status === null ? 422 : 502 },
     );
@@ -144,6 +196,11 @@ export async function POST(request: Request) {
 
   after(async () => {
     const usage = await finished;
+
+    /* Soniox's spend is read from Soniox; ai_usage_events holds what Google bills. */
+    if (spokenBy !== "gemini") {
+      return;
+    }
 
     await logGeminiUsageEvent({
       model,
@@ -179,7 +236,7 @@ export async function POST(request: Request) {
         finishUsage(undefined);
 
         if (!request.signal.aborted) {
-          console.error("[tutor] speech stream broke", { model, voice, error });
+          console.error("[tutor] speech stream broke", { spokenBy, model, voice, error });
         }
 
         controller.error(error);

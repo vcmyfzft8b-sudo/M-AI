@@ -30,7 +30,15 @@ import {
 } from "@/lib/note-tts-text";
 import { isMissingLectureReferenceError } from "@/lib/postgres-errors";
 import { getServerEnv, requireSonioxEnv } from "@/lib/server-env";
-import { speechModel, speechProvider, synthesizeGeminiMp3 } from "@/lib/speech-synthesis";
+import {
+  GeminiSpeechUnavailableError,
+  configuredSpeechModel,
+  speechModel,
+  speechModelFor,
+  speechProvider,
+  synthesizeGeminiMp3,
+  type SpeechProvider,
+} from "@/lib/speech-synthesis";
 import { retryTransientStorageOperation } from "@/lib/storage-download-errors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
@@ -862,8 +870,9 @@ async function synthesizeAlignedTtsChunk(params: {
   clientReferenceId: string;
   userId: string;
   lectureId: string;
+  provider: SpeechProvider;
 }) {
-  if (speechProvider() === "gemini") {
+  if (params.provider === "gemini") {
     return synthesizeGeminiAlignedChunk(params);
   }
 
@@ -969,6 +978,9 @@ async function generateTtsChunk(params: {
   sourceLanguage: string;
   language: string;
   voice: NoteTtsVoice;
+  provider: SpeechProvider;
+  /** The provider's model, which the stored audio is keyed by. */
+  model: string;
 }) {
   const speechText = await prepareSpeechText(params.chunk.text, params.sourceLanguage);
   const { audio, durationMs, alignment: spokenAlignment } = await synthesizeAlignedTtsChunk({
@@ -981,6 +993,7 @@ async function generateTtsChunk(params: {
     clientReferenceId: `${params.lectureId}:${params.contentHash}:${params.chunk.chunkIndex}`,
     userId: params.userId,
     lectureId: params.lectureId,
+    provider: params.provider,
   });
   // A translation has no truthful word-for-word timing against the written source.
   // Empty alignment keeps playback and seeking, while suppressing misleading word highlights.
@@ -990,7 +1003,7 @@ async function generateTtsChunk(params: {
     lectureId: params.lectureId,
     contentHash: params.contentHash,
     chunkIndex: params.chunk.chunkIndex,
-    model: speechModel(),
+    model: params.model,
     voice: params.voice,
   });
   const service = createSupabaseServiceRoleClient();
@@ -1021,7 +1034,7 @@ async function generateTtsChunk(params: {
         word_end_index: params.chunk.wordEndIndex,
         language: params.language,
         voice: params.voice,
-        model: speechModel(),
+        model: params.model,
         audio_storage_path: audioStoragePath,
         audio_mime_type: TTS_OUTPUT_MIME_TYPE,
         duration_ms: Math.ceil(durationMs),
@@ -1148,7 +1161,11 @@ export async function getOrCreateTtsChunk(params: {
   sourceMetadata?: unknown;
   voice?: NoteTtsVoice;
   quotaContext: TtsQuotaContext;
-}) {
+  /** Set only by the fallback below; otherwise whichever engine speaks now. */
+  provider?: SpeechProvider;
+}): Promise<Awaited<ReturnType<typeof signTtsChunk>> & { quota: TtsQuotaState }> {
+  const provider = params.provider ?? speechProvider();
+  const model = speechModelFor(provider);
   const sourceLanguage = await resolveSourceLanguage({ text: params.sourceText, hint: params.languageHint,
     metadata: params.sourceMetadata, lectureId: params.lectureId, userId: params.userId });
   const language = resolveSpeechLanguage(sourceLanguage);
@@ -1160,9 +1177,12 @@ export async function getOrCreateTtsChunk(params: {
     chunkIndex: params.chunk.chunkIndex,
     language,
     voice,
-    model: speechModel(),
+    model,
   };
-  const cached = await getCachedTtsChunkRow(identity);
+  const configuredModel = configuredSpeechModel();
+  const cached =
+    (await getCachedTtsChunkRow(identity)) ??
+    (model === configuredModel ? null : await getCachedTtsChunkRow({ ...identity, model: configuredModel }));
   const usage = await getTtsUsageState({
     userId: params.userId,
     hasPaidAccess: params.quotaContext.hasPaidAccess,
@@ -1214,6 +1234,8 @@ export async function getOrCreateTtsChunk(params: {
       sourceLanguage,
       language,
       voice,
+      provider,
+      model,
     });
 
     shouldReleaseReservation = false;
@@ -1231,6 +1253,16 @@ export async function getOrCreateTtsChunk(params: {
   } catch (error) {
     if (shouldReleaseReservation) {
       await abandonTtsGeneration(reservation);
+    }
+
+    /*
+     * Gemini refused for a reason that will not clear by itself (its spend cap, or Google's side
+     * failing): the same chunk again, as a Soniox request from the top — its own cache lookup, its
+     * own claim and its own row, all keyed by Soniox's model — so the reader hears the note in the
+     * old voice rather than nothing, and nothing Soniox made is ever filed as Gemini's.
+     */
+    if (provider === "gemini" && error instanceof GeminiSpeechUnavailableError) {
+      return getOrCreateTtsChunk({ ...params, provider: "soniox" });
     }
 
     throw error;

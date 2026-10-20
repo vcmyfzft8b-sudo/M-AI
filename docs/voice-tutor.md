@@ -79,6 +79,32 @@ the first minute of each demo note from clips made by `scripts/generate-creator-
 $0.70), logged to `ai_usage_events` as stage `tutor_speech`. Google's pricing page says it
 doubles on 2027-01-01, to $1.63 an hour.
 
+**When Gemini refuses, Soniox speaks.** On 2026-10-20 the Google AI Studio project hit its
+monthly spend cap and every voice went silent for 35 minutes (tutor `speech_failed` 429,
+MEMOAI-WEB-66; read-aloud and podcasts stopped). Now a refusal that will not clear by itself —
+the cap (`429 RESOURCE_EXHAUSTED "…exceeded its monthly spending cap…"`) or a 5xx/network fault —
+is spoken by Soniox in the same voice name, per request:
+
+- `/api/tutor/speech` streams the piece from Soniox on the server (`src/lib/soniox-speech-stream.ts`)
+  as the same 24 kHz PCM, so the browser's player does not change; first audio in about a second.
+- Read-aloud re-runs the chunk request as Soniox from the top and the podcast speaks the turn with
+  Soniox; both store it under Soniox's model, so the next play after Gemini is back remakes it in
+  Gemini's voice.
+- `src/lib/speech-provider-health.ts` remembers it per server instance: one spend-cap refusal sends
+  that instance's voices to Soniox for 15 minutes, three server failures within two minutes for
+  5 minutes, so later requests skip the refusal and new tutor sessions get Soniox credentials
+  straight away. The cap is reported to Sentry once per instance per window, under the one
+  "Gemini monthly spending cap reached" issue.
+- An ordinary 429 (busy), a line Gemini had no audio for, and our own timeout stay Gemini's:
+  callers back off or skip exactly as before. `TTS_PROVIDER=soniox` still means Soniox and never
+  asks Gemini at all.
+- Soniox's own limits apply while it carries everything: 25 concurrent TTS streams org-wide
+  (a 429 from Soniox reaches the client as busy), 180 s of audio per request (pieces and chunks
+  are far below it), and Soniox's monthly organization budget.
+
+Rehearse it without spending anything: `GOOGLE_GEMINI_BASE_URL` (the SDK's own override, which
+`src/lib/gemini-tts.ts` honours too) pointed at a local stub that answers the 429 body.
+
 ## The pieces
 
 | File | What it is |

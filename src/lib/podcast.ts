@@ -36,7 +36,15 @@ import {
   type TutorAllowance,
 } from "@/lib/tutor-usage";
 import { synthesizeTtsChunkWithTimestamps } from "@/lib/note-tts-synthesis";
-import { speechModel, speechProvider, synthesizeGeminiMp3 } from "@/lib/speech-synthesis";
+import {
+  GeminiSpeechUnavailableError,
+  configuredSpeechModel,
+  speechModel,
+  speechModelFor,
+  speechProvider,
+  synthesizeGeminiMp3,
+  type SpeechProvider,
+} from "@/lib/speech-synthesis";
 import type { NoteTtsVoice } from "@/lib/note-tts-settings";
 import { stripLeadingRedundantHeading } from "@/lib/note-tts-text";
 import { keepsSourceTerms, normalizePodcastTurns, parseStoredTurns } from "@/lib/podcast-script";
@@ -856,13 +864,14 @@ export async function getOrCreatePodcastSegment(params: {
   }
 
   const voice = params.voices[turn.speaker];
-  const model = speechModel();
-  const cached = await getCachedSegmentRow({
-    podcastId: params.podcast.id,
-    segmentIndex: params.segmentIndex,
-    voice,
-    model,
-  });
+  const provider = speechProvider();
+  let model = speechModelFor(provider);
+  const configuredModel = configuredSpeechModel();
+  const segment = { podcastId: params.podcast.id, segmentIndex: params.segmentIndex, voice };
+  /* While Soniox stands in, a turn already made in the configured voice is still served as it is. */
+  const cached =
+    (await getCachedSegmentRow({ ...segment, model })) ??
+    (model === configuredModel ? null : await getCachedSegmentRow({ ...segment, model: configuredModel }));
 
   if (cached) {
     /*
@@ -894,13 +903,28 @@ export async function getOrCreatePodcastSegment(params: {
   let settled = false;
 
   try {
-    const { audio, durationMs } = await synthesizePodcastTurn({
-      text: turn.text,
-      language: params.podcast.language,
-      voice,
-      model,
-      userId: params.userId,
-      lectureId: params.lectureId,
+    const synthesize = (turnProvider: SpeechProvider) =>
+      synthesizePodcastTurn({
+        text: turn.text,
+        language: params.podcast.language,
+        voice,
+        provider: turnProvider,
+        model: speechModelFor(turnProvider),
+        userId: params.userId,
+        lectureId: params.lectureId,
+      });
+    const { audio, durationMs } = await synthesize(provider).catch((error: unknown) => {
+      /*
+       * Gemini refused for a reason that will not clear by itself (its spend cap, or Google's side
+       * failing): this turn is spoken by Soniox instead and stored under Soniox's model, so it is
+       * remade in Gemini's voice the first time it is played after Gemini is back.
+       */
+      if (provider === "gemini" && error instanceof GeminiSpeechUnavailableError) {
+        model = speechModelFor("soniox");
+        return synthesize("soniox");
+      }
+
+      throw error;
     });
     const audioStoragePath = buildPodcastStoragePath({
       userId: params.userId,
@@ -1008,12 +1032,13 @@ async function synthesizePodcastTurn(params: {
   text: string;
   language: string;
   voice: NoteTtsVoice;
+  provider: SpeechProvider;
   model: string;
   userId: string;
   lectureId: string;
 }) {
   /* The Gemini voice since 2026-10-14; its length comes from the samples, so no timing pass. */
-  if (speechProvider() === "gemini") {
+  if (params.provider === "gemini") {
     const { audio, durationMs } = await synthesizeGeminiMp3({
       text: toSpeechScript(params.text, params.language),
       voice: params.voice,

@@ -751,8 +751,10 @@ export function findCostAnomalies(
  * Monthly spending limits that switch a provider off outright when reached.
  *
  * Google's is the Gemini project's spending cap in AI Studio (https://ai.studio/spend). When it
- * is reached Gemini answers every call with a 429 until the cap is raised or the month turns, and
- * that stops every new note (embeddings), all photo and PDF reading and every voice. It hit
+ * is reached Gemini answers every call with a 429 until the cap is raised or the month turns. On
+ * 2026-10-20 that stopped every new note, all photo and PDF reading and every voice; since #617 and
+ * #619 notes still come out (embeddings are filled in later) and voices move to Soniox, so what
+ * stops is photo and scanned-PDF reading, retried automatically once Gemini answers. It hit
  * €100 on 2026-10-20 13:23 UTC, five days after all voices moved to Gemini TTS took Google spend
  * from ~$1.5 to ~$10 a day; the owner raised it to €200 the same afternoon. It resets at
  * midnight Pacific time on the 1st, which is the month measured here.
@@ -946,7 +948,7 @@ const CAP_COPY: Record<MonthlyCapStatus["provider"], { name: string; limit: stri
       name: "Google Gemini (direct) spend",
       limit: "monthly spending cap",
       stops:
-        "When it is reached, new notes, photo and PDF reading and every voice stop: check the real figure and raise the cap at https://ai.studio/spend.",
+        "When it is reached, photos and scanned PDFs cannot be read until it is raised (those notes retry by themselves once Gemini answers) and every voice moves to Soniox, spending its budget instead: check the real figure and raise the cap at https://ai.studio/spend.",
     },
     soniox: {
       name: "Soniox spend",

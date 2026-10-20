@@ -79,6 +79,12 @@ export function monthWindow(period: PeriodKey, now: Date = new Date()): MonthWin
   return { period, from, to, fromIso, toIso, utcFromIso, utcToIso, isCurrent, elapsed };
 }
 
+/**
+ * ECB's rate on 30 Sep 2026, for when the live rate cannot be fetched. Shared with the daily AI
+ * cost report, which compares dollar spend with the euro Gemini spending cap.
+ */
+export const FALLBACK_EUR_PER_USD = 1 / 1.1355;
+
 /** Dollars to euro cents at `eurPerUsd`. */
 export function usdToEurCents(usd: number, eurPerUsd: number): number {
   return Math.round(usd * eurPerUsd * 100);

@@ -780,6 +780,102 @@ test("AI spend is totalled per provider, with OpenRouter told apart by its prefi
   assert.equal(fixed.find((row) => row.name === "Vercel").live_source, "vercel");
 });
 
+test("the cost report reads a UTC day as one aggregate that matches its raw rows", options, async () => {
+  const { query } = await migratedDatabase();
+  const { aggregateAiUsageRows } = await import("../src/lib/ai-cost-report.ts");
+
+  const [first, second] = await query(
+    `with u as (insert into auth.users (id) values (gen_random_uuid()) returning id)
+     insert into public.lectures (user_id, source_type)
+       select id, 'text' from u, generate_series(1, 2)
+     returning id`,
+  );
+  const rows = [
+    // The session runs at UTC+8 (see SUPABASE_BOOTSTRAP): the window must still be the UTC day.
+    ["gemini-3.8-flash-tts", "tutor_speech", true, 0.0125, first.id, null, null, 40, "2026-10-19T00:00:00Z"],
+    ["gemini-3.8-flash-tts", "tutor_speech", false, null, null, "429", "Your project has exceeded its monthly spending cap.", null, "2026-10-19T13:23:00Z"],
+    ["gemini-3.8-flash-tts", "tutor_speech", false, null, null, "429", "Your project has exceeded its monthly spending cap.", null, "2026-10-19T13:24:00Z"],
+    ["or/z-ai/glm-5.3-flash", "note_write", true, 0.5, second.id, null, null, 9000, "2026-10-19T23:59:59Z"],
+    // Used tokens, logged no cost: a model missing from the price table.
+    ["or/new/model", "chat", true, null, null, null, null, 1200, "2026-10-19T12:00:00Z"],
+    // Neighbouring days stay out.
+    ["gemini-2.5-flash-lite", "ocr_primary", true, 9.99, null, null, null, 10, "2026-10-18T23:59:59Z"],
+    ["gemini-2.5-flash-lite", "ocr_primary", true, 9.99, null, null, null, 10, "2026-10-20T00:00:00Z"],
+  ];
+
+  for (const [model, stage, success, cost, lectureId, code, message, tokens, createdAt] of rows) {
+    await query(
+      `insert into public.ai_usage_events
+         (provider, model, stage, success, estimated_cost_usd, lecture_id, error_code, error_message, prompt_token_count, created_at)
+       values ('gemini', $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [model, stage, success, cost, lectureId, code, message, tokens, createdAt],
+    );
+  }
+
+  const [{ window }] = await query(
+    `select public.ai_cost_report_window('2026-10-19T00:00:00Z', '2026-10-20T00:00:00Z') as window`,
+  );
+  const stored = await query(
+    `select created_at, model, stage, success, estimated_cost_usd::float8 as estimated_cost_usd, lecture_id,
+            error_code, error_message, prompt_token_count
+     from public.ai_usage_events
+     where created_at >= '2026-10-19T00:00:00Z' and created_at < '2026-10-20T00:00:00Z'`,
+  );
+  const expected = aggregateAiUsageRows(
+    stored.map((row) => ({ ...row, created_at: "2026-10-19T00:00:00Z" })),
+  )["2026-10-19"];
+  const byKey = (list, key) => [...list].sort((a, b) => key(a).localeCompare(key(b)));
+
+  assert.equal(window.groups.length, 3);
+  assert.deepEqual(
+    byKey(window.groups, (group) => group.model),
+    byKey(expected.groups, (group) => group.model),
+  );
+  assert.deepEqual(
+    byKey(window.lectures, (lecture) => lecture.lecture_id),
+    byKey(expected.lectures, (lecture) => lecture.lecture_id),
+  );
+  assert.deepEqual(window.failures, [
+    {
+      stage: "tutor_speech",
+      error_code: "429",
+      error_message: "Your project has exceeded its monthly spending cap.",
+      failures: 2,
+    },
+  ]);
+
+  const tts = window.groups.find((group) => group.model === "gemini-3.8-flash-tts");
+  assert.deepEqual(tts, {
+    model: "gemini-3.8-flash-tts",
+    stage: "tutor_speech",
+    calls: 3,
+    failed_calls: 2,
+    cost_usd: 0.0125,
+    unpriced_calls: 0,
+  });
+  assert.equal(window.groups.find((group) => group.model === "or/new/model").unpriced_calls, 1);
+
+  // Totals only (the route's read of a day outside the report): same groups, no lists.
+  const [{ totals }] = await query(
+    `select public.ai_cost_report_window('2026-10-19T00:00:00Z', '2026-10-20T00:00:00Z', 0, 0) as totals`,
+  );
+  assert.deepEqual(totals.groups, window.groups);
+  assert.deepEqual([totals.lectures, totals.failures], [[], []]);
+
+  // An empty day is three empty lists, not a null the route would mistake for a failed read.
+  const [{ empty }] = await query(
+    `select public.ai_cost_report_window('2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z') as empty`,
+  );
+  assert.deepEqual(empty, { groups: [], lectures: [], failures: [] });
+
+  // Service role only: the anon and signed-in roles cannot read the spend.
+  const grants = await query(`select
+      has_function_privilege('anon', 'public.ai_cost_report_window(timestamptz, timestamptz, integer, integer)', 'execute') as anon,
+      has_function_privilege('authenticated', 'public.ai_cost_report_window(timestamptz, timestamptz, integer, integer)', 'execute') as authed,
+      has_function_privilege('service_role', 'public.ai_cost_report_window(timestamptz, timestamptz, integer, integer)', 'execute') as service`);
+  assert.deepEqual(grants, [{ anon: false, authed: false, service: true }]);
+});
+
 test("a bulk upsert of mixed-shape rows would null a not-null column", options, async () => {
   const { db, query } = await migratedDatabase();
 

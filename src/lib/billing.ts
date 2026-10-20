@@ -6,7 +6,7 @@ import { cache } from "react";
 import Stripe from "stripe";
 import { getAppleEntitlement } from "@/lib/mobile/apple";
 import { isNativeUserAgent } from "@/lib/mobile/runtime";
-import { hasPaidAccess } from "@/lib/billing-access";
+import { hasPaidAccess, hasPriorSubscriptionHistory } from "@/lib/billing-access";
 import {
   type BillingSubscriptionsTable,
   writeStripeSubscriptionRow,
@@ -32,7 +32,7 @@ import { getServerEnv } from "@/lib/server-env";
 import { resolveSiteOrigin } from "@/lib/site-url";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
-export { hasPaidAccess };
+export { hasPaidAccess, hasPriorSubscriptionHistory };
 
 export type BillingPlan = "weekly" | "monthly" | "yearly";
 export type PurchasableBillingPlan = Exclude<BillingPlan, "weekly">;
@@ -148,13 +148,6 @@ export async function getPricingCountry(): Promise<string | null> {
   return requestHeaders.get(GEO_COUNTRY_HEADER);
 }
 
-
-export function hasPriorSubscriptionHistory(
-  profile: ProfileRow | null,
-  subscriptions: BillingSubscriptionRow[],
-) {
-  return Boolean(profile?.subscription_trial_started_at || subscriptions.length > 0);
-}
 
 export async function hasStripeSubscriptionHistory(params: {
   stripe?: Stripe;

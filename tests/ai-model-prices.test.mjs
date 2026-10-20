@@ -41,12 +41,8 @@ function directModelId(model) {
  */
 function modelsTheCodeCalls() {
   const envDefaults = serverEnvModelDefaults();
-  const models = new Set(
-    Object.entries(envDefaults)
-      // Embeddings are billed per input token and never pass through the usage log.
-      .filter(([key]) => key !== "GEMINI_EMBEDDING_MODEL")
-      .map(([, model]) => model),
-  );
+  // Embeddings included: they are logged since 2026-10-20 (embeddings.ts).
+  const models = new Set(Object.values(envDefaults));
 
   for (const stage of AI_STAGES) {
     const { model } = resolveStageModelConfig({
@@ -106,7 +102,6 @@ const LITERAL_MODEL_ID =
 
 /** Literals that are not calls the usage log prices, each with the reason. */
 const UNPRICED_LITERALS = new Map([
-  ["gemini-embedding-001", "embeddings never pass through the usage log"],
   ["glm-5.3-flash", "named in json.ts as the bare id that must never be sent to the Gemini API"],
 ]);
 
@@ -151,8 +146,67 @@ test("routed prices are the gateway's, and the 2026-10-02 corrections hold", () 
 
   for (const [model, price] of Object.entries(MODEL_PRICES)) {
     assert.equal(model, model.toLowerCase(), `${model} must be lower-case to be found`);
-    assert.ok(price.inputUsdPerMillion > 0 && price.outputUsdPerMillion > 0, model);
+    assert.ok(price.inputUsdPerMillion > 0, model);
+    // An embedding produces vectors, not tokens; everything else bills its output.
+    assert.ok(model.includes("embedding") || price.outputUsdPerMillion > 0, model);
   }
+});
+
+test("direct Gemini rates match Google's pricing page as read on 2026-10-20", () => {
+  // The day the €100 spending cap was reached while this log said $62. Every rate matched the
+  // page (https://ai.google.dev/gemini-api/docs/pricing, paid tier, standard), so the gap was
+  // unlogged calls and other users of the key, not prices. Re-read the page before changing one.
+  const page = {
+    "gemini-3.8-flash-tts": [0.5, 9],
+    "gemini-3-flash-preview": [0.5, 3],
+    "gemini-3.5-flash-lite": [0.3, 2.5],
+    "gemini-3.1-flash-lite": [0.25, 1.5],
+    "gemini-2.5-flash-lite": [0.1, 0.4],
+    "gemini-3.6-flash": [0.75, 3.75],
+  };
+
+  const readOn = new Date("2026-10-20T12:00:00Z");
+
+  for (const [model, [input, output]] of Object.entries(page)) {
+    assert.deepEqual(
+      getModelPrice(model, readOn),
+      { inputUsdPerMillion: input, outputUsdPerMillion: output },
+      model,
+    );
+  }
+
+});
+
+test("the announced 2027-01-01 doubling applies on its own from that date", () => {
+  const before = new Date("2026-12-31T23:59:59Z");
+  const after = new Date("2027-01-01T00:00:00Z");
+
+  assert.deepEqual(getModelPrice("gemini-3.8-flash-tts", before), {
+    inputUsdPerMillion: 0.5,
+    outputUsdPerMillion: 9,
+  });
+  assert.deepEqual(getModelPrice("gemini-3.8-flash-tts", after), {
+    inputUsdPerMillion: 1,
+    outputUsdPerMillion: 18,
+  });
+  assert.deepEqual(getModelPrice("models/gemini-3.6-flash", after), {
+    inputUsdPerMillion: 1.5,
+    outputUsdPerMillion: 7.5,
+  });
+  // A model with no announced change keeps its rate.
+  assert.deepEqual(getModelPrice("gemini-2.5-flash-lite", after), MODEL_PRICES["gemini-2.5-flash-lite"]);
+});
+
+test("embeddings are logged and priced, so they count toward the Gemini spending cap", () => {
+  assert.deepEqual(getModelPrice("gemini-embedding-001"), {
+    inputUsdPerMillion: 0.15,
+    outputUsdPerMillion: 0,
+  });
+
+  const source = readFileSync(path.join(root, "src/lib/ai/embeddings.ts"), "utf8");
+  assert.match(source, /logGeminiUsageEvent\(/);
+  assert.match(source, /stage: "embedding"/);
+  assert.match(source, /promptTokenCount: Math\.ceil\(chars \/ EMBEDDING_CHARS_PER_TOKEN\)/);
 });
 
 test("every routed call logs what the gateway billed, not our estimate of it", () => {

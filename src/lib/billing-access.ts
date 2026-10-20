@@ -1,4 +1,4 @@
-import type { BillingSubscriptionRow } from "@/lib/database.types";
+import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 
 export const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing", "past_due"]);
 
@@ -44,4 +44,37 @@ export function hasPaidAccess(subscription: BillingSubscriptionRow | null, nowMs
  */
 export function hasLiveStripeSubscription(subscriptions: ReadonlyArray<{ status: string }>) {
   return subscriptions.some((subscription) => ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status));
+}
+
+/**
+ * Whether a row is a comp: free premium granted by hand to somebody with no Stripe subscription
+ * to extend. It is written straight into `billing_subscriptions` as `comp_<user id
+ * prefix>_<end date>` with no customer, no price and an amount of 0, and nothing in Stripe stands
+ * behind it. Both halves are required: Stripe's own ids start with `sub_`, and a row that names a
+ * Stripe customer is never treated as a comp, whatever its id looks like.
+ */
+export function isCompSubscriptionRow(
+  row: Pick<BillingSubscriptionRow, "stripe_subscription_id" | "stripe_customer_id">,
+) {
+  return row.stripe_subscription_id.startsWith("comp_") && row.stripe_customer_id === null;
+}
+
+/**
+ * Whether this account has had a subscription before, which costs it the three-day trial at
+ * checkout. A trial already started (by Stripe, or an Apple purchase) counts, and so does every
+ * real subscription row in any status.
+ *
+ * A comp does not. On 2026-10-20 four free learners were given three comped days as an apology
+ * for an outage, and counting those rows would have quietly and permanently taken away the trial
+ * each of them was still owed. Stripe's own history is checked separately, by
+ * `hasStripeSubscriptionHistory`, before checkout grants a trial.
+ */
+export function hasPriorSubscriptionHistory(
+  profile: Pick<ProfileRow, "subscription_trial_started_at"> | null,
+  subscriptions: ReadonlyArray<Pick<BillingSubscriptionRow, "stripe_subscription_id" | "stripe_customer_id">>,
+) {
+  return Boolean(
+    profile?.subscription_trial_started_at ||
+      subscriptions.some((subscription) => !isCompSubscriptionRow(subscription)),
+  );
 }

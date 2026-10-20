@@ -61,6 +61,15 @@ export function speechModel() {
 }
 
 /**
+ * The model of the voice the deployment is set to, fallback or not. While Soniox stands in, audio
+ * already made in that voice is still the right audio: a chunk or turn cached under it is served
+ * as it is, rather than made again by Soniox and charged to the listener a second time.
+ */
+export function configuredSpeechModel() {
+  return speechModelFor(configuredSpeechProvider());
+}
+
+/**
  * Records how a Gemini speech request ended, and says whether this request should now be spoken
  * by Soniox instead: yes for the spend cap and for a fault on Google's side or on the way there; no
  * for an ordinary 429 (busy, which the callers back off on), a line Gemini had no audio for, our

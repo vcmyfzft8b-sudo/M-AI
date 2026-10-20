@@ -38,6 +38,7 @@ import {
 import { synthesizeTtsChunkWithTimestamps } from "@/lib/note-tts-synthesis";
 import {
   GeminiSpeechUnavailableError,
+  configuredSpeechModel,
   speechModel,
   speechModelFor,
   speechProvider,
@@ -865,12 +866,12 @@ export async function getOrCreatePodcastSegment(params: {
   const voice = params.voices[turn.speaker];
   const provider = speechProvider();
   let model = speechModelFor(provider);
-  const cached = await getCachedSegmentRow({
-    podcastId: params.podcast.id,
-    segmentIndex: params.segmentIndex,
-    voice,
-    model,
-  });
+  const configuredModel = configuredSpeechModel();
+  const segment = { podcastId: params.podcast.id, segmentIndex: params.segmentIndex, voice };
+  /* While Soniox stands in, a turn already made in the configured voice is still served as it is. */
+  const cached =
+    (await getCachedSegmentRow({ ...segment, model })) ??
+    (model === configuredModel ? null : await getCachedSegmentRow({ ...segment, model: configuredModel }));
 
   if (cached) {
     /*

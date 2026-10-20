@@ -18,6 +18,13 @@ import { requireSonioxEnv } from "@/lib/server-env";
 
 let client: SonioxNodeClient | undefined;
 
+/**
+ * How long a stream may go without a byte before it is given up. Soniox's first audio arrives in
+ * under a second; a stream silent this long is stuck, and it holds one of the organization's
+ * concurrent streams for as long as it is left open.
+ */
+const SONIOX_SPEECH_IDLE_TIMEOUT_MS = 15_000;
+
 function getClient() {
   client ??= new SonioxNodeClient({ api_key: requireSonioxEnv().SONIOX_API_KEY });
 
@@ -47,13 +54,24 @@ export async function startSonioxSpeech(params: {
   sampleRate: number;
   signal?: AbortSignal;
 }): Promise<AsyncGenerator<Uint8Array, void, undefined>> {
-  const stream = await getClient().realtime.tts({
-    model: requireSonioxEnv().SONIOX_TTS_MODEL,
-    voice: params.voice,
-    language: params.language,
-    audio_format: "pcm_s16le",
-    sample_rate: params.sampleRate,
-  });
+  const stream = await getClient()
+    .realtime.tts({
+      model: requireSonioxEnv().SONIOX_TTS_MODEL,
+      voice: params.voice,
+      language: params.language,
+      audio_format: "pcm_s16le",
+      sample_rate: params.sampleRate,
+    })
+    .catch((error: unknown) => {
+      // A refusal at connect time (the concurrent-stream cap among them) keeps its status, so the
+      // route can still answer "busy" rather than "broken".
+      const statusCode = (error as { statusCode?: unknown } | null)?.statusCode;
+
+      throw new SonioxSpeechError(
+        `Soniox speech could not start: ${error instanceof Error ? error.message : String(error)}`,
+        typeof statusCode === "number" ? statusCode : null,
+      );
+    });
   const queue: Uint8Array[] = [];
   let finished = false;
   let failure: SonioxSpeechError | null = null;
@@ -76,26 +94,41 @@ export async function startSonioxSpeech(params: {
     close();
   });
   stream.on("terminated", close);
-  params.signal?.addEventListener("abort", () => {
+  const abort = () => {
     stream.close();
     close();
-  }, { once: true });
+  };
+  params.signal?.addEventListener("abort", abort, { once: true });
   stream.sendText(params.text, { end: true });
 
   const next = async () => {
     while (queue.length === 0 && !finished) {
+      const idle = setTimeout(() => {
+        failure = new SonioxSpeechError(
+          `Soniox speech sent nothing for ${SONIOX_SPEECH_IDLE_TIMEOUT_MS}ms.`,
+          null,
+        );
+        stream.close();
+        close();
+      }, SONIOX_SPEECH_IDLE_TIMEOUT_MS);
+
       await new Promise<void>((resolve) => {
         wake = resolve;
       });
+      clearTimeout(idle);
     }
 
     return queue.shift() ?? null;
+  };
+  const release = () => {
+    params.signal?.removeEventListener("abort", abort);
+    stream.close();
   };
 
   const first = await next();
 
   if (!first) {
-    stream.close();
+    release();
     throw failure ?? new SonioxSpeechError("Soniox returned no audio.", null);
   }
 
@@ -125,7 +158,7 @@ export async function startSonioxSpeech(params: {
         throw failure;
       }
     } finally {
-      stream.close();
+      release();
     }
   })();
 }

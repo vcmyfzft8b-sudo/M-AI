@@ -32,6 +32,7 @@ import { isMissingLectureReferenceError } from "@/lib/postgres-errors";
 import { getServerEnv, requireSonioxEnv } from "@/lib/server-env";
 import {
   GeminiSpeechUnavailableError,
+  configuredSpeechModel,
   speechModel,
   speechModelFor,
   speechProvider,
@@ -1178,7 +1179,10 @@ export async function getOrCreateTtsChunk(params: {
     voice,
     model,
   };
-  const cached = await getCachedTtsChunkRow(identity);
+  const configuredModel = configuredSpeechModel();
+  const cached =
+    (await getCachedTtsChunkRow(identity)) ??
+    (model === configuredModel ? null : await getCachedTtsChunkRow({ ...identity, model: configuredModel }));
   const usage = await getTtsUsageState({
     userId: params.userId,
     hasPaidAccess: params.quotaContext.hasPaidAccess,

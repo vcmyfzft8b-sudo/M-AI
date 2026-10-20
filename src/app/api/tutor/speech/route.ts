@@ -96,7 +96,8 @@ export async function POST(request: Request) {
 
   let audio: AsyncGenerator<Uint8Array, unknown, undefined>;
   let first: IteratorResult<Uint8Array, unknown>;
-  let spokenBy = env.GEMINI_API_KEY ? speechProvider() : "soniox";
+  /* Soniox when TTS_PROVIDER says so, when there is no Gemini key, or while Gemini is refusing. */
+  let spokenBy = speechProvider();
   const logGeminiFailure = (error: unknown) =>
     after(() =>
       logGeminiUsageEvent({

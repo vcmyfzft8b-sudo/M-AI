@@ -8,6 +8,7 @@ import { getStripeClient } from "@/lib/billing";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 import {
+  FALLBACK_EUR_PER_USD,
   fixedMonthlyCents,
   projectMetered,
   shareBefore,
@@ -30,9 +31,6 @@ import { DASHBOARD_REFRESH_SECONDS } from "./refresh.ts";
  * in progress is re-read on the dashboard's quarter-hour beat; a month that
  * has closed cannot change and is kept for a week.
  */
-
-/** ECB's rate on 30 Sep 2026, used only if the live rate cannot be fetched. */
-const FALLBACK_EUR_PER_USD = 1 / 1.1355;
 
 const TIMEOUT_MS = 10_000;
 

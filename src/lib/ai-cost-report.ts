@@ -14,6 +14,10 @@
  * Until 2026-10-02 the log missed a large share of September's ~$73 OpenRouter bill and all of
  * the $42.63 Soniox one: an unpriced model, two stale prices, and no speech at all.
  * `unpricedCalls` exists so that kind of gap shows up in the next morning's report.
+ *
+ * The days arrive already aggregated (migration 0072's `ai_cost_report_window`, one UTC day per
+ * call): production writes ~17,500 rows a day, and the old raw-row read stopped at 60,000 rows
+ * oldest-first, so "yesterday" read $0 and the 2026-10-20 Gemini spending cap arrived unannounced.
  */
 
 export type AiUsageRow = {
@@ -119,8 +123,13 @@ function truncateReason(message: string | null | undefined): string {
 /**
  * Who has to act on a failure. The morning report leads with this, because "3 of yesterday's 4
  * failures were bad uploads" and "3 of them were our schema" call for very different mornings.
+ *
+ * `billing` is the provider refusing because of our account, not its load: a spending cap, a
+ * budget or credits ran out. No retry helps and nothing recovers until someone raises a limit,
+ * which is why it is kept apart from `provider` (2026-10-20: the Gemini cap's 429 read as
+ * "overloaded" while every new note, scan and voice failed for 35 minutes).
  */
-export type FailureCategory = "upload" | "our-code" | "provider" | "unknown";
+export type FailureCategory = "upload" | "our-code" | "provider" | "billing" | "unknown";
 
 export type FailureExplanation = {
   /** One sentence, no jargon, safe to paste into a summary as-is. */
@@ -260,6 +269,21 @@ const FAILURE_RULES: Array<{ match: RegExp; plain: string; category: FailureCate
     category: "our-code",
   },
 
+  // --- Our account with the provider ran out of money. Before the provider rules: the Gemini
+  // cap arrives as a 429 RESOURCE_EXHAUSTED, which the quota rule below would call a rate limit.
+  {
+    match: /spending cap|spend(ing)? limit/i,
+    plain:
+      "Google refused the call because the Gemini project reached its monthly spending cap; nothing on Google works again until the cap is raised at https://ai.studio/spend.",
+    category: "billing",
+  },
+  {
+    // OpenRouter's 402 when the prepaid balance is gone.
+    match: /insufficient credits|requires more credits/i,
+    plain: "OpenRouter refused the call because our prepaid credits ran out.",
+    category: "billing",
+  },
+
   // --- Gemini/OpenRouter's side. Transient, and the retry usually covers it.
   {
     match: /overloaded|high demand/i,
@@ -298,15 +322,18 @@ export function explainFailure(message: string | null | undefined): FailureExpla
     : { plain: truncateReason(text), category: "unknown" };
 }
 
+/** One failure message, or `count` failures that share it exactly (as the SQL aggregate groups). */
+type FailureSample = { message: string | null; count?: number };
+
 /** Roll-up over every failure of a day, not just the top groups the report prints. */
 function countCategories(
-  failures: Array<{ message: string | null }>,
+  failures: FailureSample[],
 ): Array<{ category: FailureCategory; count: number }> {
   const counts = new Map<FailureCategory, number>();
 
   for (const failure of failures) {
     const { category } = explainFailure(failure.message);
-    counts.set(category, (counts.get(category) ?? 0) + 1);
+    counts.set(category, (counts.get(category) ?? 0) + (failure.count ?? 1));
   }
 
   return [...counts.entries()]
@@ -319,7 +346,7 @@ function countCategories(
  * most often in it, so the caller gets a stable count next to text a human can act on.
  */
 function groupFailureReasons(
-  failures: Array<{ message: string | null }>,
+  failures: FailureSample[],
 ): Array<{ reason: string; plain: string; category: FailureCategory; count: number }> {
   const groups = new Map<string, { count: number; labels: Map<string, number> }>();
 
@@ -327,9 +354,10 @@ function groupFailureReasons(
     const key = failureReasonKey(failure.message);
     const group = groups.get(key) ?? { count: 0, labels: new Map<string, number>() };
     const label = truncateReason(failure.message);
+    const count = failure.count ?? 1;
 
-    group.count += 1;
-    group.labels.set(label, (group.labels.get(label) ?? 0) + 1);
+    group.count += count;
+    group.labels.set(label, (group.labels.get(label) ?? 0) + count);
     groups.set(key, group);
   }
 
@@ -342,6 +370,117 @@ function groupFailureReasons(
     .sort((left, right) => right.count - left.count);
 }
 
+/** One (model, stage) pair of a window: the `groups` of migration 0072's function. */
+export type AiUsageGroup = {
+  model: string;
+  stage: string;
+  calls: number;
+  failed_calls: number;
+  cost_usd: number;
+  /** Calls that used tokens but logged no cost. */
+  unpriced_calls: number;
+};
+
+export type AiUsageLectureTotal = { lecture_id: string; cost_usd: number; calls: number };
+
+/** Failed calls sharing an exact stage, provider code and message. */
+export type AiUsageFailureGroup = {
+  stage: string;
+  error_code: string | null;
+  error_message: string | null;
+  failures: number;
+};
+
+/**
+ * One window of `ai_usage_events`, aggregated: what `ai_cost_report_window` (migration 0072)
+ * returns for one UTC day, and what {@link aggregateAiUsageRows} builds from raw rows.
+ */
+export type AiUsageWindow = {
+  groups: AiUsageGroup[];
+  /** The window's most expensive lectures (the SQL keeps the top 10). */
+  lectures: AiUsageLectureTotal[];
+  failures: AiUsageFailureGroup[];
+};
+
+/**
+ * Raw rows bucketed by UTC day into the same aggregates the SQL returns, so the two can be held
+ * against each other (tests/migrations.test.mjs) and the summary has one input shape.
+ */
+export function aggregateAiUsageRows(rows: AiUsageRow[]): Record<string, AiUsageWindow> {
+  const days = new Map<
+    string,
+    {
+      groups: Map<string, AiUsageGroup>;
+      lectures: Map<string, AiUsageLectureTotal>;
+      failures: Map<string, AiUsageFailureGroup>;
+    }
+  >();
+
+  for (const row of rows) {
+    const date = row.created_at.slice(0, 10);
+    let day = days.get(date);
+
+    if (!day) {
+      day = { groups: new Map(), lectures: new Map(), failures: new Map() };
+      days.set(date, day);
+    }
+
+    const usd = row.estimated_cost_usd ?? 0;
+    const groupKey = JSON.stringify([row.model, row.stage]);
+    const group = day.groups.get(groupKey) ?? {
+      model: row.model,
+      stage: row.stage,
+      calls: 0,
+      failed_calls: 0,
+      cost_usd: 0,
+      unpriced_calls: 0,
+    };
+
+    group.calls += 1;
+    group.cost_usd += usd;
+    group.failed_calls += row.success ? 0 : 1;
+    group.unpriced_calls +=
+      row.estimated_cost_usd == null && (row.prompt_token_count ?? 0) > 0 ? 1 : 0;
+    day.groups.set(groupKey, group);
+
+    if (row.lecture_id) {
+      const lecture = day.lectures.get(row.lecture_id) ?? {
+        lecture_id: row.lecture_id,
+        cost_usd: 0,
+        calls: 0,
+      };
+
+      lecture.cost_usd += usd;
+      lecture.calls += 1;
+      day.lectures.set(row.lecture_id, lecture);
+    }
+
+    if (!row.success) {
+      const failureKey = JSON.stringify([row.stage, row.error_code, row.error_message]);
+      const failure = day.failures.get(failureKey) ?? {
+        stage: row.stage,
+        error_code: row.error_code,
+        error_message: row.error_message,
+        failures: 0,
+      };
+
+      failure.failures += 1;
+      day.failures.set(failureKey, failure);
+    }
+  }
+
+  return Object.fromEntries(
+    [...days.entries()].map(([date, day]) => [
+      date,
+      {
+        groups: [...day.groups.values()],
+        lectures: [...day.lectures.values()],
+        failures: [...day.failures.values()],
+      },
+    ]),
+  );
+}
+
 type DayAccumulator = {
   totalUsd: number;
   googleUsd: number;
@@ -352,16 +491,17 @@ type DayAccumulator = {
   failedCalls: number;
   stages: Map<string, { usd: number; calls: number }>;
   lectures: Map<string, { usd: number; calls: number }>;
-  callFailures: Map<string, Array<{ message: string | null }>>;
+  callFailures: Map<string, FailureSample[]>;
   unpriced: Map<string, number>;
 };
 
 /**
- * @param soniox Soniox's own per-day meter, keyed by UTC date like the rows. A day with speech
+ * @param days Each UTC day's aggregate, keyed by `YYYY-MM-DD`.
+ * @param soniox Soniox's own per-day meter, keyed by UTC date like the days. A day with speech
  *   but no model calls still gets a summary.
  */
-export function summarizeAiUsageByDay(
-  rows: AiUsageRow[],
+export function summarizeAiUsageDays(
+  days: Record<string, AiUsageWindow>,
   soniox?: Record<string, SonioxDayUsage> | null,
 ): DailyCostSummary[] {
   const byDay = new Map<string, DayAccumulator>();
@@ -399,48 +539,58 @@ export function summarizeAiUsageByDay(
     day.sonioxModels = usage.models;
   }
 
-  for (const row of rows) {
-    const date = row.created_at.slice(0, 10);
-    const usd = row.estimated_cost_usd ?? 0;
+  for (const [date, window] of Object.entries(days)) {
+    if (window.groups.length === 0) {
+      continue;
+    }
+
     const day = dayFor(date);
 
-    day.totalUsd += usd;
-    day.calls += 1;
+    for (const group of window.groups) {
+      // numeric arrives as a JSON number from jsonb, but a string from a plain numeric column;
+      // Number() takes both.
+      const usd = Number(group.cost_usd) || 0;
+      const calls = Number(group.calls) || 0;
+      const unpriced = Number(group.unpriced_calls) || 0;
 
-    if (row.estimated_cost_usd == null && (row.prompt_token_count ?? 0) > 0) {
-      day.unpriced.set(row.model, (day.unpriced.get(row.model) ?? 0) + 1);
+      day.totalUsd += usd;
+      day.calls += calls;
+      day.failedCalls += Number(group.failed_calls) || 0;
+
+      if (unpriced > 0) {
+        day.unpriced.set(group.model, (day.unpriced.get(group.model) ?? 0) + unpriced);
+      }
+
+      if (isOpenRouterBilledModel(group.model)) {
+        day.openRouterUsd += usd;
+      } else {
+        day.googleUsd += usd;
+      }
+
+      const stage = day.stages.get(group.stage) ?? { usd: 0, calls: 0 };
+      stage.usd += usd;
+      stage.calls += calls;
+      day.stages.set(group.stage, stage);
     }
 
-    if (!row.success) {
-      day.failedCalls += 1;
+    for (const lecture of window.lectures) {
+      const total = day.lectures.get(lecture.lecture_id) ?? { usd: 0, calls: 0 };
+      total.usd += Number(lecture.cost_usd) || 0;
+      total.calls += Number(lecture.calls) || 0;
+      day.lectures.set(lecture.lecture_id, total);
+    }
 
+    for (const failure of window.failures) {
       // error_code is the provider's own label ("503", "RESOURCE_EXHAUSTED"); it makes an
       // otherwise generic message tell you which fault you are looking at.
-      const stageFailures = day.callFailures.get(row.stage) ?? [];
+      const stageFailures = day.callFailures.get(failure.stage) ?? [];
       stageFailures.push({
-        message: row.error_code
-          ? `${row.error_code}: ${row.error_message ?? ""}`.trim().replace(/:$/, "")
-          : row.error_message,
+        message: failure.error_code
+          ? `${failure.error_code}: ${failure.error_message ?? ""}`.trim().replace(/:$/, "")
+          : failure.error_message,
+        count: Number(failure.failures) || 0,
       });
-      day.callFailures.set(row.stage, stageFailures);
-    }
-
-    if (isOpenRouterBilledModel(row.model)) {
-      day.openRouterUsd += usd;
-    } else {
-      day.googleUsd += usd;
-    }
-
-    const stage = day.stages.get(row.stage) ?? { usd: 0, calls: 0 };
-    stage.usd += usd;
-    stage.calls += 1;
-    day.stages.set(row.stage, stage);
-
-    if (row.lecture_id) {
-      const lecture = day.lectures.get(row.lecture_id) ?? { usd: 0, calls: 0 };
-      lecture.usd += usd;
-      lecture.calls += 1;
-      day.lectures.set(row.lecture_id, lecture);
+      day.callFailures.set(failure.stage, stageFailures);
     }
   }
 
@@ -474,6 +624,14 @@ export function summarizeAiUsageByDay(
         .map(([model, calls]) => ({ model, calls }))
         .sort((left, right) => right.calls - left.calls),
     }));
+}
+
+/** {@link summarizeAiUsageDays} over raw rows: the same summary, aggregated in memory. */
+export function summarizeAiUsageByDay(
+  rows: AiUsageRow[],
+  soniox?: Record<string, SonioxDayUsage> | null,
+): DailyCostSummary[] {
+  return summarizeAiUsageDays(aggregateAiUsageRows(rows), soniox);
 }
 
 /**
@@ -523,7 +681,15 @@ export function parseSonioxUsageSummary(body: unknown): Record<string, SonioxDay
   return byDay;
 }
 
-export type CostAnomaly = { kind: "daily_total" | "single_lecture"; message: string };
+export type CostAnomaly = {
+  kind:
+    | "daily_total"
+    | "single_lecture"
+    | "monthly_cap_used"
+    | "monthly_cap_forecast"
+    | "report_incomplete";
+  message: string;
+};
 
 /**
  * The alarm thresholds sit well above the healthy baseline and below a looping day: tripping one
@@ -576,6 +742,231 @@ export function findCostAnomalies(
         message: `Lecture ${lecture.lectureId} spent $${lecture.usd.toFixed(2)} on ${day.date} across ${lecture.calls} calls (limit $${lectureLimit}).`,
       });
     }
+  }
+
+  return anomalies;
+}
+
+/**
+ * Monthly spending limits that switch a provider off outright when reached.
+ *
+ * Google's is the Gemini project's spending cap in AI Studio (https://ai.studio/spend). When it
+ * is reached Gemini answers every call with a 429 until the cap is raised or the month turns, and
+ * that stops every new note (embeddings), all photo and PDF reading and every voice. It hit
+ * €100 on 2026-10-20 13:23 UTC, five days after all voices moved to Gemini TTS took Google spend
+ * from ~$1.5 to ~$10 a day; the owner raised it to €200 the same afternoon. It resets at
+ * midnight Pacific time on the 1st, which is the month measured here.
+ *
+ * The figure here is what production logs, and Google's cap meter reads higher: it counts cost
+ * before Google's "savings", and every other user of the same key (local runs and evals, the
+ * note-triage replays) spends against it without writing to production's log. On 2026-10-20 the
+ * log said $62.28 when the meter said €100.07. Warning at 70% of the cap and on a month-end
+ * forecast over it leaves room for that gap; giving non-production its own key closes it.
+ *
+ * Soniox has an organisation budget of its own (it ran out at about $50 on 2026-10-14, which
+ * stopped transcription). It is only checked when SONIOX_MONTHLY_BUDGET_USD is set, and against
+ * Soniox's own meter, which counts in whole UTC days, so its month is the UTC calendar month.
+ */
+export const DEFAULT_GEMINI_MONTHLY_SPEND_CAP_EUR = 200;
+export const GEMINI_SPEND_CAP_TIME_ZONE = "America/Los_Angeles";
+export const SONIOX_BUDGET_TIME_ZONE = "UTC";
+/** Share of a cap at which the alarm fires, whatever the forecast says. */
+export const CAP_WARN_SHARE = 0.7;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Minutes `timeZone` is ahead of UTC at `at` (-420 for Pacific daylight time). */
+function zoneOffsetMinutes(at: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(at);
+  const part = (type: string) => Number(parts.find((entry) => entry.type === type)?.value);
+  const wallClockAsUtc = Date.UTC(
+    part("year"),
+    part("month") - 1,
+    part("day"),
+    part("hour"),
+    part("minute"),
+    part("second"),
+  );
+
+  return Math.round((wallClockAsUtc - Math.floor(at.getTime() / 1000) * 1000) / 60_000);
+}
+
+/** The instant of midnight on a calendar day in `timeZone`. `monthIndex` may overflow (12 = next January). */
+function zonedMidnight(year: number, monthIndex: number, day: number, timeZone: string): Date {
+  const wallClock = Date.UTC(year, monthIndex, day);
+  const firstGuess = wallClock - zoneOffsetMinutes(new Date(wallClock), timeZone) * 60_000;
+
+  // Near a daylight-saving change the offset at midnight differs from the one at UTC midnight.
+  return new Date(wallClock - zoneOffsetMinutes(new Date(firstGuess), timeZone) * 60_000);
+}
+
+export type BillingMonth = {
+  /** "YYYY-MM" in the provider's time zone. */
+  key: string;
+  timeZone: string;
+  startIso: string;
+  /** Exclusive: midnight starting the next month. */
+  endIso: string;
+};
+
+/** The calendar month `now` falls in, as the provider's time zone counts it. */
+export function billingMonth(now: Date, timeZone: string): BillingMonth {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(now);
+  const year = Number(parts.find((entry) => entry.type === "year")?.value);
+  const month = Number(parts.find((entry) => entry.type === "month")?.value);
+
+  return {
+    key: `${year}-${String(month).padStart(2, "0")}`,
+    timeZone,
+    startIso: zonedMidnight(year, month - 1, 1, timeZone).toISOString(),
+    endIso: zonedMidnight(year, month, 1, timeZone).toISOString(),
+  };
+}
+
+export type MonthlyCapStatus = {
+  provider: "google" | "soniox";
+  month: BillingMonth;
+  currency: "EUR" | "USD";
+  /** The limit, in its own currency. */
+  cap: number;
+  /** Spent this billing month so far, in the cap's currency and in dollars. */
+  spent: number;
+  spentUsd: number;
+  usedShare: number;
+  /**
+   * The pace the forecast assumes, in dollars a day: the faster of yesterday and the last seven
+   * days' average, so a step change (a new voice model, a viral day) shows up the next morning.
+   */
+  paceUsdPerDay: number;
+  /** Where the month ends at that pace. */
+  forecast: number;
+  forecastUsd: number;
+  forecastShare: number;
+  /** The UTC date the cap is reached at that pace, or null when that is after the month ends. */
+  capReachedOn: string | null;
+  /** False when a day of the month could not be read: every figure is then a floor. */
+  complete: boolean;
+};
+
+export function assessMonthlyCap(params: {
+  provider: "google" | "soniox";
+  month: BillingMonth;
+  now: Date;
+  cap: number;
+  currency: "EUR" | "USD";
+  /** Dollars to the cap's currency: the euro rate for Google, 1 for Soniox. */
+  capCurrencyPerUsd: number;
+  spentUsd: number;
+  /** Spend of each complete UTC day before today, oldest first. */
+  recentDailyUsd: number[];
+  complete: boolean;
+}): MonthlyCapStatus {
+  const { now, cap, capCurrencyPerUsd } = params;
+  const monthEnd = Date.parse(params.month.endIso);
+  const lastWeek = params.recentDailyUsd.slice(-7);
+  const yesterday = lastWeek.at(-1) ?? 0;
+  const weekAverage =
+    lastWeek.length > 0 ? lastWeek.reduce((sum, value) => sum + value, 0) / lastWeek.length : 0;
+  const pace = Math.max(yesterday, weekAverage);
+  const remainingDays = Math.max(0, (monthEnd - now.getTime()) / DAY_MS);
+  const forecastUsd = params.spentUsd + pace * remainingDays;
+  const capUsd = cap / capCurrencyPerUsd;
+
+  let capReachedOn: string | null = null;
+
+  if (params.spentUsd >= capUsd) {
+    capReachedOn = now.toISOString().slice(0, 10);
+  } else if (pace > 0) {
+    const reachedAt = now.getTime() + ((capUsd - params.spentUsd) / pace) * DAY_MS;
+    capReachedOn = reachedAt < monthEnd ? new Date(reachedAt).toISOString().slice(0, 10) : null;
+  }
+
+  const spent = params.spentUsd * capCurrencyPerUsd;
+  const forecast = forecastUsd * capCurrencyPerUsd;
+
+  return {
+    provider: params.provider,
+    month: params.month,
+    currency: params.currency,
+    cap,
+    spent: round2(spent),
+    spentUsd: round2(params.spentUsd),
+    usedShare: round(spent / cap),
+    paceUsdPerDay: round2(pace),
+    forecast: round2(forecast),
+    forecastUsd: round2(forecastUsd),
+    forecastShare: round(forecast / cap),
+    capReachedOn,
+    complete: params.complete,
+  };
+}
+
+function round2(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function money(amount: number, currency: "EUR" | "USD") {
+  return `${currency === "EUR" ? "€" : "$"}${amount.toFixed(2)}`;
+}
+
+const CAP_COPY: Record<MonthlyCapStatus["provider"], { name: string; limit: string; stops: string }> =
+  {
+    google: {
+      name: "Google Gemini (direct) spend",
+      limit: "monthly spending cap",
+      stops:
+        "When it is reached, new notes, photo and PDF reading and every voice stop: raise it at https://ai.studio/spend. Our log reads below Google's meter, which also counts other uses of the key.",
+    },
+    soniox: {
+      name: "Soniox spend",
+      limit: "monthly budget",
+      stops:
+        "When it is reached, transcription and the tutor's listening stop: raise it in the Soniox console.",
+    },
+  };
+
+/** The cap alarms: 70% of the cap already spent, or a month-end forecast past it. */
+export function findCapAnomalies(
+  status: MonthlyCapStatus,
+  warnShare: number = CAP_WARN_SHARE,
+): CostAnomaly[] {
+  const copy = CAP_COPY[status.provider];
+  const cap = money(status.cap, status.currency);
+  const floor = status.complete ? "" : " (at least: some days could not be read)";
+  const anomalies: CostAnomaly[] = [];
+
+  if (status.usedShare >= warnShare) {
+    anomalies.push({
+      kind: "monthly_cap_used",
+      message: `${copy.name} for ${status.month.key} is ${money(status.spent, status.currency)}${floor}, ${Math.round(status.usedShare * 100)}% of the ${cap} ${copy.limit}.`,
+    });
+  }
+
+  if (status.forecastShare > 1) {
+    anomalies.push({
+      kind: "monthly_cap_forecast",
+      message: `At $${status.paceUsdPerDay.toFixed(2)} a day, ${copy.name} reaches the ${cap} ${copy.limit}${status.capReachedOn ? ` around ${status.capReachedOn}` : ""} (month-end forecast ${money(status.forecast, status.currency)}).`,
+    });
+  }
+
+  // What happens at the cap and where to raise it, said once however many alarms fired.
+  const last = anomalies.at(-1);
+
+  if (last) {
+    last.message = `${last.message} ${copy.stops}`;
   }
 
   return anomalies;

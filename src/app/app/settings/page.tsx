@@ -1,6 +1,6 @@
 import { getAppleEntitlement } from "@/lib/mobile/apple";
 import { SettingsScreen } from "@/components/settings-screen";
-import { getViewerAppState } from "@/lib/billing";
+import { getViewerAppState, isCompSubscriptionRow } from "@/lib/billing";
 import { requireUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/super-admin";
 import { readTestPersonaOrReal } from "@/lib/test-persona-server";
@@ -43,6 +43,9 @@ export default async function SettingsPage() {
   const apple = await getAppleEntitlement(user.id);
   // An old cancelled web subscription must not hide the active Apple plan.
   const subscription = apple ? null : appState?.subscription ?? null;
+  // A comp has nothing in Stripe to manage, so it gets no portal button: opening one would make
+  // the learner a Stripe customer only to show them an empty page.
+  const comp = Boolean(subscription && isCompSubscriptionRow(subscription));
   // The badge on the "add to home screen" row comes from the profile rather
   // than from this browser's storage, so opening the guide once answers it on
   // every device this account signs in on.
@@ -51,12 +54,15 @@ export default async function SettingsPage() {
   return (
     <SettingsScreen
       email={email}
-      hasSubscription={Boolean(subscription || apple)}
+      hasSubscription={Boolean((subscription && !comp) || apple)}
       appleSubscription={Boolean(apple && !subscription)}
+      compSubscription={comp}
       installGuideSeen={installGuideSeen}
       testPersona={testPersona}
       planLabel={
-        subscription
+        comp
+          ? t("settings.plan.comp")
+          : subscription
           ? t("settings.plan.summary", {
               plan: t(PLAN_LABEL_KEYS[subscription.plan]),
               status: t(SUBSCRIPTION_STATUS_KEYS[subscription.status]),

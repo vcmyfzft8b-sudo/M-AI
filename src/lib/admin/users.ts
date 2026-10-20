@@ -2,11 +2,12 @@ import "server-only";
 
 import { loadEveryRow } from "@/lib/admin/paged-rows";
 import { type DateRange, eachDay, rangeToTimestamps, todayInReportZone } from "@/lib/admin/ranges";
+import { isCompSubscriptionRow } from "@/lib/billing-access";
 import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 import {
   ACTIVE_STATUS_LIST,
-  ACTIVE_STATUSES,
   classifyPlanMembership,
+  holdsPlan,
   type PlanMembership,
 } from "@/lib/admin/user-plans";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
@@ -22,6 +23,8 @@ export type AdminUserListItem = {
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
   hasPaidAccess: boolean;
+  /** The row shown is a comp: free premium granted by hand, not a sale. */
+  isComp: boolean;
   trialConsumedAt: string | null;
   lastSeenAt: string | null;
   isOnline: boolean;
@@ -54,7 +57,7 @@ async function loadPlanMembership(
 ): Promise<PlanMembership> {
   const { data, error } = await serviceRole
     .from("billing_subscriptions")
-    .select("user_id, status")
+    .select("user_id, status, stripe_subscription_id")
     .in("status", [...ACTIVE_STATUS_LIST]);
 
   if (error) {
@@ -62,7 +65,7 @@ async function loadPlanMembership(
   }
 
   return classifyPlanMembership(
-    (data ?? []) as Array<{ user_id: string; status: string }>,
+    (data ?? []) as Array<{ user_id: string; status: string; stripe_subscription_id: string }>,
   );
 }
 
@@ -149,8 +152,8 @@ export async function listUsers(options: {
     for (const row of (subscriptionResult.data ?? []) as BillingSubscriptionRow[]) {
       const existing = subscriptions.get(row.user_id);
 
-      // Prefer a live subscription over a stale cancelled one.
-      if (!existing || (!ACTIVE_STATUSES.has(existing.status) && ACTIVE_STATUSES.has(row.status))) {
+      // Prefer a live subscription over a stale cancelled one, or an ended comp.
+      if (!existing || (!holdsPlan(existing) && holdsPlan(row))) {
         subscriptions.set(row.user_id, row);
       }
     }
@@ -164,9 +167,8 @@ export async function listUsers(options: {
 
   const users: AdminUserListItem[] = profiles.map((profile) => {
     const subscription = subscriptions.get(profile.id) ?? null;
-    const hasPaidAccess = subscription
-      ? ACTIVE_STATUSES.has(subscription.status)
-      : false;
+    const hasPaidAccess = subscription ? holdsPlan(subscription) : false;
+    const isComp = subscription ? isCompSubscriptionRow(subscription) : false;
 
     return {
       id: profile.id,
@@ -177,8 +179,10 @@ export async function listUsers(options: {
       plan: subscription?.plan ?? null,
       subscriptionStatus: subscription?.status ?? null,
       currentPeriodEnd: subscription?.current_period_end ?? null,
-      cancelAtPeriodEnd: subscription?.cancel_at_period_end ?? false,
+      // A comp is written to end, which is not the same as somebody cancelling.
+      cancelAtPeriodEnd: !isComp && (subscription?.cancel_at_period_end ?? false),
       hasPaidAccess,
+      isComp,
       trialConsumedAt: profile.trial_consumed_at,
       lastSeenAt: null,
       isOnline: online.has(profile.id),
@@ -285,12 +289,12 @@ export async function getUserTotals(range: DateRange): Promise<UserTotals> {
       .lt("onboarding_completed_at", toIso),
     serviceRole
       .from("billing_subscriptions")
-      .select("user_id, status")
+      .select("user_id, status, stripe_subscription_id")
       .in("status", [...ACTIVE_STATUS_LIST]),
   ]);
 
   const { paying, trialing } = classifyPlanMembership(
-    (subscriptions.data ?? []) as Array<{ user_id: string; status: string }>,
+    (subscriptions.data ?? []) as Array<{ user_id: string; status: string; stripe_subscription_id: string }>,
   );
 
   return {

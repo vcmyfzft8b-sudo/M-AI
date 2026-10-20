@@ -55,6 +55,7 @@ export const sr: Messages = {
   "settings.plan.eyebrow": "Paket",
   "settings.plan.choose": "Izaberi paket",
   "settings.plan.none": "Bez pretplate",
+  "settings.plan.comp": "Besplatni Premium",
   "settings.plan.summary": "{plan} ({status})",
   "settings.plan.activeUntil": "Aktivno do {date}",
   "settings.plan.choosePrompt": "Izaberi paket za beleške sa svih predavanja i sve alate za učenje.",

@@ -6,7 +6,12 @@ import { cache } from "react";
 import Stripe from "stripe";
 import { getAppleEntitlement } from "@/lib/mobile/apple";
 import { isNativeUserAgent } from "@/lib/mobile/runtime";
-import { hasPaidAccess } from "@/lib/billing-access";
+import {
+  getActiveSubscription,
+  hasPaidAccess,
+  hasPriorSubscriptionHistory,
+  isCompSubscriptionRow,
+} from "@/lib/billing-access";
 import {
   type BillingSubscriptionsTable,
   writeStripeSubscriptionRow,
@@ -32,7 +37,7 @@ import { getServerEnv } from "@/lib/server-env";
 import { resolveSiteOrigin } from "@/lib/site-url";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
-export { hasPaidAccess };
+export { getActiveSubscription, hasPaidAccess, hasPriorSubscriptionHistory, isCompSubscriptionRow };
 
 export type BillingPlan = "weekly" | "monthly" | "yearly";
 export type PurchasableBillingPlan = Exclude<BillingPlan, "weekly">;
@@ -149,13 +154,6 @@ export async function getPricingCountry(): Promise<string | null> {
 }
 
 
-export function hasPriorSubscriptionHistory(
-  profile: ProfileRow | null,
-  subscriptions: BillingSubscriptionRow[],
-) {
-  return Boolean(profile?.subscription_trial_started_at || subscriptions.length > 0);
-}
-
 export async function hasStripeSubscriptionHistory(params: {
   stripe?: Stripe;
   customerId: string | null;
@@ -210,21 +208,6 @@ export async function hasStripeSubscriptionHistory(params: {
   } while (startingAfter);
 
   return false;
-}
-
-export function getActiveSubscription(
-  subscriptions: BillingSubscriptionRow[],
-): BillingSubscriptionRow | null {
-  const nowMs = Date.now();
-  const sorted = [...subscriptions].sort((left, right) =>
-    right.updated_at.localeCompare(left.updated_at),
-  );
-
-  return (
-    sorted.find((subscription) => hasPaidAccess(subscription, nowMs)) ??
-    sorted[0] ??
-    null
-  );
 }
 
 function hasCompletedOnboardingProfile(profile: ProfileRow | null) {

@@ -41,7 +41,7 @@ written server-side with the service role after the allowlist check.
 | `/admin/contracts` | Every creator contract, stored for good: contracts created on a creator's page for creators already in the program (their own pay; copy the signing link and send it yourself, nothing is emailed) and the terms accepted applicants signed. Each signed one shows the exact text accepted. See [ugc-creator-program.md](ugc-creator-program.md) |
 | `/admin/sales` | Revenue, MRR, trial pipeline and projections, revenue by discount code |
 | `/admin/visitors` | Visits, page views, who is online, top pages, referrers, countries, devices |
-| `/admin/users` | Every account, plan and subscription status, searchable; the onboarding survey broken down per question; open any account with **View as user** |
+| `/admin/users` | Every account, plan and subscription status, searchable; the onboarding survey broken down per question; open any account with **View as user**. A comp (free premium granted by hand, a `comp_…` row in `billing_subscriptions`) shows as **comp** / **comp ended** and counts as neither paying nor on trial |
 | `/admin/settings` | Admin allowlist, Memo AI detection rules, collection status |
 
 Every page has a Today / 7 days / 30 days / This month / All time switch, and
@@ -616,6 +616,8 @@ rather than being crushed.
   captions taken from the live campaign.
 - `tests/admin-sales.test.mjs` covers revenue, MRR, trial conversion and promo
   attribution.
+- `tests/admin-user-plans.test.mjs` covers the paying / trialing / free split
+  on `/admin/users`, comps included.
 - `tests/admin-ranges.test.mjs` covers the reporting windows and the
   Europe/Ljubljana day boundaries.
 - `tests/ugc-tiktok-links.test.mjs` parses all 14 campaign links exactly as

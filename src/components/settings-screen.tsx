@@ -83,6 +83,7 @@ export function SettingsScreen({
   planDetail,
   hasSubscription,
   appleSubscription = false,
+  compSubscription = false,
   installGuideSeen = false,
   isDemo = false,
   testPersona = null,
@@ -92,6 +93,8 @@ export function SettingsScreen({
   planDetail: string;
   hasSubscription: boolean;
   appleSubscription?: boolean;
+  /** Free premium we granted by hand: nothing to manage and nothing to buy while it lasts. */
+  compSubscription?: boolean;
   /**
    * Whether this account has already opened the home screen guide. Read from
    * the profile so the badge is answered once and stays answered on every
@@ -496,7 +499,7 @@ export function SettingsScreen({
               </span>
               {hasSubscription ? (
                 <BillingPortalButton apple={appleSubscription} />
-              ) : (
+              ) : compSubscription ? null : (
                 <InstantLink href={startHref} className="memo-primary-pill">
                   <Emoji symbol="✨" size="1rem" />
                   <span>{t("settings.plan.choose")}</span>

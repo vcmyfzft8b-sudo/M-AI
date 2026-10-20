@@ -1,4 +1,4 @@
-import type { BillingSubscriptionRow } from "@/lib/database.types";
+import type { BillingSubscriptionRow, ProfileRow } from "@/lib/database.types";
 
 export const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing", "past_due"]);
 
@@ -16,7 +16,10 @@ export const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing", "past
  */
 export const PERIOD_ROLLOVER_GRACE_MS = 2 * 60 * 60 * 1000;
 
-export function subscriptionPeriodAllowsAccess(subscription: BillingSubscriptionRow, nowMs = Date.now()) {
+export function subscriptionPeriodAllowsAccess(
+  subscription: Pick<BillingSubscriptionRow, "current_period_end" | "cancel_at_period_end">,
+  nowMs = Date.now(),
+) {
   if (!subscription.current_period_end) {
     return true;
   }
@@ -44,4 +47,56 @@ export function hasPaidAccess(subscription: BillingSubscriptionRow | null, nowMs
  */
 export function hasLiveStripeSubscription(subscriptions: ReadonlyArray<{ status: string }>) {
   return subscriptions.some((subscription) => ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status));
+}
+
+/**
+ * Whether a row is a comp: free premium we granted by hand, with nothing behind it in Stripe.
+ *
+ * A comp is a row written straight into `billing_subscriptions` for somebody with no Stripe
+ * subscription to extend: `stripe_subscription_id` is `comp_<user id prefix>_<end date>`, with no
+ * customer, no price and an amount of 0. It grants access like any other row until its
+ * `current_period_end`, but no webhook ever touches it, so its status stays `active` after it
+ * ends. Stripe's own ids start with `sub_`, never `comp_`.
+ */
+export function isCompSubscriptionRow(row: Pick<BillingSubscriptionRow, "stripe_subscription_id">) {
+  return row.stripe_subscription_id.startsWith("comp_");
+}
+
+/**
+ * Whether this account has had a subscription before, which costs it the free trial at checkout.
+ *
+ * A comp is not one. On 2026-10-20 four free learners were given three comped days as an
+ * apology for an outage, and counting those rows here would have quietly and permanently taken
+ * away the three-day trial every one of them was still owed.
+ */
+export function hasPriorSubscriptionHistory(
+  profile: Pick<ProfileRow, "subscription_trial_started_at"> | null,
+  subscriptions: ReadonlyArray<Pick<BillingSubscriptionRow, "stripe_subscription_id">>,
+) {
+  return Boolean(
+    profile?.subscription_trial_started_at ||
+      subscriptions.some((subscription) => !isCompSubscriptionRow(subscription)),
+  );
+}
+
+/**
+ * The row that grants access, or else the latest one to describe the account by.
+ *
+ * An ended comp is never that description. Its status still says `active`, so settings would
+ * show a plan the account no longer has and offer to manage it in a Stripe portal that has
+ * nothing in it; without a row the account reads as having no subscription, which is true.
+ */
+export function getActiveSubscription(
+  subscriptions: BillingSubscriptionRow[],
+  nowMs = Date.now(),
+): BillingSubscriptionRow | null {
+  const sorted = [...subscriptions].sort((left, right) =>
+    right.updated_at.localeCompare(left.updated_at),
+  );
+
+  return (
+    sorted.find((subscription) => hasPaidAccess(subscription, nowMs)) ??
+    sorted.find((subscription) => !isCompSubscriptionRow(subscription)) ??
+    null
+  );
 }

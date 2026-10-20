@@ -55,6 +55,7 @@ export const en: Messages = {
   "settings.plan.eyebrow": "Plan",
   "settings.plan.choose": "Choose a plan",
   "settings.plan.none": "No subscription",
+  "settings.plan.comp": "Free Premium",
   "settings.plan.summary": "{plan} ({status})",
   "settings.plan.activeUntil": "Active until {date}",
   "settings.plan.choosePrompt": "Choose a plan for notes from every lecture and all study tools.",

@@ -1441,6 +1441,7 @@ export const en: Messages = {
   /* ---- AI and pipeline messages ---- */
   "ai.saveTimeout": "Saving the notes took too long. Try again in a minute.",
   "ai.providerOverloaded": "Our AI provider is overloaded right now. Try again in a minute.",
+  "ai.providerSpendCap": "We hit a temporary problem on our side, so we couldn't finish your notes yet. Your material is saved, and we'll finish the notes for you automatically once it's fixed.",
   "ai.processingTooLong": "Processing took too long and stopped. Try again.",
   "ai.sourceTooExtensive": "The material is too extensive to process in one piece. Split it into smaller parts and add each one as its own note.",
   "ai.unexpectedError": "Something unexpected went wrong during processing.",

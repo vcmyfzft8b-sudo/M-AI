@@ -1451,6 +1451,7 @@ export const hr: Messages = {
   /* ---- AI and pipeline messages ---- */
   "ai.saveTimeout": "Spremanje bilježaka trajalo je predugo. Pokušaj ponovno za minutu.",
   "ai.providerOverloaded": "Naš AI pružatelj trenutačno je preopterećen. Pokušaj ponovno za minutu.",
+  "ai.providerSpendCap": "Kod nas je došlo do privremenog problema pa tvoje bilješke još nismo mogli dovršiti. Tvoje gradivo je spremljeno i bilješke ćemo automatski dovršiti čim problem riješimo.",
   "ai.processingTooLong": "Obrada je trajala predugo i zaustavila se. Pokušaj ponovno.",
   "ai.sourceTooExtensive": "Gradivo je preopsežno da bismo ga obradili u jednom komadu. Podijeli ga na manje dijelove i svaki dio dodaj kao vlastitu bilješku.",
   "ai.unexpectedError": "Tijekom obrade došlo je do neočekivane pogreške.",

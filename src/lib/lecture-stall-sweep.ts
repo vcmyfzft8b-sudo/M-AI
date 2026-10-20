@@ -1,5 +1,7 @@
 import "server-only";
 
+import { AI_PROVIDER_SPEND_CAP_FAILURE_CODE } from "@/lib/ai/errors";
+import { probeGemini } from "@/lib/ai/gemini";
 import type { LectureRow } from "@/lib/database.types";
 import {
   enqueueLectureDocumentProcessing,
@@ -9,6 +11,7 @@ import {
   enqueueLectureScanProcessing,
 } from "@/lib/jobs";
 import { expectedInputFailure, sourceLocaleMessage } from "@/lib/lecture-failure-text";
+import { LECTURE_FAILURE_METADATA_KEY } from "@/lib/lecture-failure-codes";
 import { LectureProcessingStalledError } from "@/lib/lecture-processing-errors";
 import {
   planStalledLecture,
@@ -20,7 +23,12 @@ import {
 } from "@/lib/lecture-stall-plan";
 import { reconcileLecturesWithArtifacts } from "@/lib/lectures";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
+import {
+  planProviderOutageRetry,
+  withProviderOutageRetryMark,
+} from "@/lib/provider-outage-plan";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { HAS_TEXT_PATTERN, backfillTranscriptEmbeddings } from "@/lib/transcript-embeddings";
 import { salvageAbandonedUpload, UPLOAD_SALVAGE_AFTER_MS } from "@/lib/upload-salvage";
 
 /**
@@ -50,6 +58,35 @@ const MAX_RESUMES_PER_RUN = 10;
 /** Nothing older than this can still be pending anything; older rows are abandoned, not stalled. */
 const MAX_CANDIDATE_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
+/**
+ * Lectures the spend cap stopped that one run will retry once Gemini answers. Higher than the
+ * stall resumes: these are not suspect runs but healthy ones that were refused, and on 2026-10-20
+ * all 17 the cap had failed went through at once when re-run by hand. A longer outage leaves more,
+ * and the rest follow an hour apart rather than all at once on a provider that has just come back.
+ */
+const MAX_OUTAGE_RETRIES_PER_RUN = 25;
+
+/**
+ * How far back the sweep looks for transcript rows saved without an embedding. The cap resets on
+ * the 1st, so an outage can last days; two weeks covers that with room, without retrying forever
+ * a row Google will never embed.
+ */
+const EMBEDDING_BACKFILL_LOOKBACK_MS = 14 * 24 * 60 * 60 * 1000;
+
+/** Rows one run embeds. About twenty seconds of work; a larger backlog finishes over a few runs. */
+const EMBEDDING_BACKFILL_MAX_SEGMENTS_PER_RUN = 1_000;
+
+export type ProviderOutageOutcome = {
+  /** Whether Gemini was asked, and what it said. Only asked when there is something to recover. */
+  probe: "skipped" | "ok" | "spend_cap" | "unavailable";
+  retried: Array<{ lectureId: string; job: StallResumeJob }>;
+  /** Spend-cap lectures past this run's limit, left for the next one. */
+  deferred: number;
+  embeddingsFilled: number;
+  /** A backfill that failed: logged with the outcome, and retried by the next run. */
+  embeddingBackfillError: string | null;
+};
+
 export type StallSweepOutcome = {
   scanned: number;
   reconciled: number;
@@ -62,6 +99,8 @@ export type StallSweepOutcome = {
   waiting: number;
   deferred: number;
   errors: Array<{ lectureId: string; message: string }>;
+  /** Lectures and transcripts the Gemini spend cap left unfinished. See `recoverFromProviderOutage`. */
+  providerOutage: ProviderOutageOutcome;
 };
 
 type SweepLectureRow = Pick<
@@ -173,6 +212,171 @@ async function discardEmptyDraft(lectureId: string) {
   }
 }
 
+/** Failed lectures recorded with the spend-cap code. A handful normally; none most days. */
+async function loadSpendCapFailures(now: number): Promise<LectureRow[]> {
+  const { data, error } = await createSupabaseServiceRoleClient()
+    .from("lectures")
+    .select("*")
+    .eq("status", "failed")
+    .eq(`processing_metadata->${LECTURE_FAILURE_METADATA_KEY}->>code`, AI_PROVIDER_SPEND_CAP_FAILURE_CODE)
+    .gt("updated_at", new Date(now - MAX_CANDIDATE_AGE_MS).toISOString())
+    .order("updated_at", { ascending: true })
+    .limit(MAX_CANDIDATES);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as LectureRow[];
+}
+
+/** Whether any recent transcript row is still waiting for its embedding. One row is enough. */
+async function hasMissingEmbeddings(since: string) {
+  const { data, error } = await createSupabaseServiceRoleClient()
+    .from("transcript_segments")
+    .select("id")
+    .is("embedding", null)
+    .filter("text", "match", HAS_TEXT_PATTERN)
+    .gte("created_at", since)
+    .limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).length > 0;
+}
+
+/**
+ * Re-queues one lecture the spend cap stopped, the way the learner's retry button would.
+ *
+ * The row is stamped and requeued in one conditional write — only while it is still the failed row
+ * that was read — and before the job exists, never after, for the reason `markResumed` gives: the
+ * stamp is what stops a second retry, so it must be durable first. A row that changed was retried
+ * or deleted by its owner in the meantime and is left to that.
+ */
+async function retryAfterProviderOutage(
+  lecture: LectureRow,
+  job: StallResumeJob,
+  nowIso: string,
+): Promise<boolean> {
+  const { data, error } = await createSupabaseServiceRoleClient()
+    .from("lectures")
+    .update({
+      status: "queued",
+      error_message: null,
+      processing_metadata: withProviderOutageRetryMark(lecture.processing_metadata, nowIso),
+    } as never)
+    .eq("id", lecture.id)
+    .eq("status", "failed")
+    // Unchanged since it was read: a learner who retried it in between, and saw it fail again for
+    // another reason, is not overruled by a plan made from the row before theirs.
+    .eq("updated_at", lecture.updated_at)
+    .select("id");
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || data.length === 0) {
+    return false;
+  }
+
+  try {
+    await RESUME_JOBS[job](lecture.id);
+  } catch (enqueueError) {
+    // As in the retry route: a job that could not even be started is a failure the learner sees,
+    // with its own message rather than the spend cap's, and with the stamp on the row it is not
+    // retried again by the sweep.
+    await markLecturePipelineFailed({ lectureId: lecture.id, error: enqueueError });
+    throw enqueueError;
+  }
+
+  return true;
+}
+
+/**
+ * Finishes what the Gemini spend cap stopped, once Gemini answers again.
+ *
+ * Two kinds of leftovers: lectures that failed with the spend-cap code (photos and scanned PDFs
+ * have no other reader, so those fail honestly and wait here), and transcripts saved without their
+ * search embeddings (src/lib/transcript-embeddings.ts). Gemini is asked first, with one embedding
+ * of one word, and only when there is something to recover — so an outage that is still going
+ * costs one refused call an hour, and a normal day costs two empty reads.
+ */
+async function recoverFromProviderOutage(
+  now: number,
+  errors: StallSweepOutcome["errors"],
+): Promise<ProviderOutageOutcome> {
+  const outcome: ProviderOutageOutcome = {
+    probe: "skipped",
+    retried: [],
+    deferred: 0,
+    embeddingsFilled: 0,
+    embeddingBackfillError: null,
+  };
+  const backfillSince = new Date(now - EMBEDDING_BACKFILL_LOOKBACK_MS).toISOString();
+  const failures = await loadSpendCapFailures(now);
+  const withTranscript = await loadTranscriptPresence(failures.map((lecture) => lecture.id));
+  const plans = failures.flatMap((lecture) => {
+    const plan = planProviderOutageRetry({
+      status: lecture.status,
+      processingMetadata: lecture.processing_metadata,
+      sourceType: lecture.source_type,
+      storagePath: lecture.storage_path,
+      hasTranscript: withTranscript.has(lecture.id),
+    });
+
+    return plan.action === "retry" ? [{ lecture, job: plan.job }] : [];
+  });
+
+  if (plans.length === 0 && !(await hasMissingEmbeddings(backfillSince))) {
+    return outcome;
+  }
+
+  const probe = await probeGemini();
+
+  if (!probe.ok) {
+    outcome.probe = probe.spendCap ? "spend_cap" : "unavailable";
+    outcome.deferred = plans.length;
+    return outcome;
+  }
+
+  outcome.probe = "ok";
+  const nowIso = new Date(now).toISOString();
+
+  for (const { lecture, job } of plans) {
+    if (outcome.retried.length >= MAX_OUTAGE_RETRIES_PER_RUN) {
+      outcome.deferred += 1;
+      continue;
+    }
+
+    try {
+      if (await retryAfterProviderOutage(lecture, job, nowIso)) {
+        outcome.retried.push({ lectureId: lecture.id, job });
+      }
+    } catch (error) {
+      errors.push({
+        lectureId: lecture.id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  try {
+    const backfill = await backfillTranscriptEmbeddings({
+      since: backfillSince,
+      maxSegments: EMBEDDING_BACKFILL_MAX_SEGMENTS_PER_RUN,
+    });
+
+    outcome.embeddingsFilled = backfill.filled;
+  } catch (error) {
+    outcome.embeddingBackfillError = error instanceof Error ? error.message : String(error);
+  }
+
+  return outcome;
+}
+
 export async function sweepStalledLectures(now = Date.now()): Promise<StallSweepOutcome> {
   const outcome: StallSweepOutcome = {
     scanned: 0,
@@ -184,13 +388,29 @@ export async function sweepStalledLectures(now = Date.now()): Promise<StallSweep
     waiting: 0,
     deferred: 0,
     errors: [],
+    providerOutage: {
+      probe: "skipped",
+      retried: [],
+      deferred: 0,
+      embeddingsFilled: 0,
+      embeddingBackfillError: null,
+    },
   };
 
+  await settleStalledLectures(now, outcome);
+
+  // After the stalls, so a lecture re-queued here is not also looked at as a stall in the same run.
+  outcome.providerOutage = await recoverFromProviderOutage(now, outcome.errors);
+
+  return outcome;
+}
+
+async function settleStalledLectures(now: number, outcome: StallSweepOutcome) {
   const candidates = await loadCandidates(now);
   outcome.scanned = candidates.length;
 
   if (candidates.length === 0) {
-    return outcome;
+    return;
   }
 
   // First, the free tier: a lecture whose notes were written but whose status never caught up is
@@ -289,6 +509,4 @@ export async function sweepStalledLectures(now = Date.now()): Promise<StallSweep
       });
     }
   }
-
-  return outcome;
 }

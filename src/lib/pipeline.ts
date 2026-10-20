@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import {
   AI_SOURCE_TOO_EXTENSIVE_MESSAGE,
+  isAiProviderSpendCapError,
   toAiFailureCode,
   isBudgetOverrunFailure,
   toUserFacingAiErrorMessage,
@@ -73,13 +74,13 @@ import {
 import { createAiChunkSelector } from "@/lib/source-condensation-ai";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { normalizeMimeType } from "@/lib/storage";
+import { embedTranscriptTexts, backfillTranscriptEmbeddings } from "@/lib/transcript-embeddings";
 import { serializeVector } from "@/lib/utils";
 import { findTranscriptCoverageShortfall } from "@/lib/transcription/coverage";
 import { getTranscriptionProvider } from "@/lib/transcription/provider";
 import { NoClearSpeechDetectedError } from "@/lib/transcription/types";
 
 const transcriptionProvider = getTranscriptionProvider();
-const EMBEDDING_BATCH_SIZE = 100;
 const TRANSCRIPT_SEGMENT_INSERT_BATCH_SIZE = 25;
 
 /** Validates a replayed condensation checkpoint before it stands in for the model's selection. */
@@ -424,14 +425,12 @@ export async function transcribeLectureContent(params: { lectureId: string }) {
     });
   }
 
-  const embeddings: number[][] = [];
-
-  for (let start = 0; start < transcript.segments.length; start += EMBEDDING_BATCH_SIZE) {
-    const batch = transcript.segments.slice(start, start + EMBEDDING_BATCH_SIZE);
-    embeddings.push(
-      ...(await createEmbeddings(batch.map((segment: { text: string }) => segment.text))),
-    );
-  }
+  // Search embeddings only serve chat citations, so a provider refusing them costs the citations
+  // until they are backfilled, never the note (src/lib/transcript-embeddings.ts).
+  const embeddings = await embedTranscriptTexts({
+    texts: transcript.segments.map((segment: { text: string }) => segment.text),
+    lectureId: lecture.id,
+  });
 
   await supabase.from("transcript_segments").delete().eq("lecture_id", lecture.id);
 
@@ -537,14 +536,10 @@ export async function generateLectureNotesFromStoredTranscript(params: {
       throw new Error("Transcript is empty.");
     }
 
-    const embeddings: number[][] = [];
-
-    for (let start = 0; start < syntheticSegments.length; start += EMBEDDING_BATCH_SIZE) {
-      const batch = syntheticSegments.slice(start, start + EMBEDDING_BATCH_SIZE);
-      embeddings.push(
-        ...(await createEmbeddings(batch.map((segment: { text: string }) => segment.text))),
-      );
-    }
+    const embeddings = await embedTranscriptTexts({
+      texts: syntheticSegments.map((segment: { text: string }) => segment.text),
+      lectureId: lecture.id,
+    });
 
     const transcriptRows = syntheticSegments.map((segment, index) => ({
       lecture_id: lecture.id,
@@ -1087,6 +1082,11 @@ export async function markLecturePipelineFailed(params: {
  * POST /api/inngest. Recording the failure here also lets the step succeed, so Inngest stops
  * retrying a transcription that will never find speech that is not in the file.
  *
+ * The Gemini spend cap is recorded here for the same reason. It is not the learner's input, but it
+ * is just as certain not to clear on Inngest's retries a few seconds apart, and across the step
+ * boundary it would arrive in the function body as a bare Error. Recorded here, the lecture fails
+ * once with the spend-cap code, which the stall sweep retries once Gemini answers again.
+ *
  * Anything else — a retryable AI error, a broken query, a timeout — still throws, and still fails
  * the step so it can be retried and reported.
  */
@@ -1099,7 +1099,7 @@ export async function runLectureStage(params: {
 
     return { completed: true };
   } catch (error) {
-    if (!isExpectedLectureInputFailure(error)) {
+    if (!isExpectedLectureInputFailure(error) && !isAiProviderSpendCapError(error)) {
       throw error;
     }
 
@@ -1187,6 +1187,13 @@ async function streamChatAnswer(
 }
 
 /**
+ * How many unembedded rows one chat question will embed before it is answered. A lecture-length
+ * transcript is a few hundred segments, so this is most notes whole, in about a second; a longer
+ * one finishes over the next questions or the hourly sweep.
+ */
+const CHAT_EMBEDDING_BACKFILL_MAX_SEGMENTS = 300;
+
+/**
  * The transcript chunks nearest the question — or none of them.
  *
  * Retrieval is two dependencies deep (an embedding call to a model provider,
@@ -1208,6 +1215,16 @@ async function retrieveLectureContext(params: {
     if (!embedding) {
       return [];
     }
+
+    // The question embedded, so Gemini is answering: a note saved while it was not (its rows have
+    // no embedding, and the search below skips them) gets its search back before this question is
+    // matched against it. A note with nothing missing costs one indexed read that finds no rows.
+    await backfillTranscriptEmbeddings({
+      lectureId: params.lectureId,
+      maxSegments: CHAT_EMBEDDING_BACKFILL_MAX_SEGMENTS,
+    }).catch((error: unknown) => {
+      console.warn("[chat] embedding backfill failed; searching what is embedded", error);
+    });
 
     const { data, error } = await supabase.rpc("match_transcript_segments" as never, {
       filter_lecture_id: params.lectureId,

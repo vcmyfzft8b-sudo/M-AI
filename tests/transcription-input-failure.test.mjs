@@ -176,7 +176,12 @@ test("the failure path and the step ask the same question about an error", () =>
   const stageBody = PIPELINE_SOURCE.slice(stage, PIPELINE_SOURCE.indexOf("\nexport ", stage + 1));
 
   assert.ok(stage > 0, "runLectureStage is gone; the classification is back across the boundary");
-  assert.ok(stageBody.includes("if (!isExpectedLectureInputFailure(error)) {\n      throw error;"));
+  // The spend cap is recorded on this side too (tests/spend-cap-pipeline.test.mjs).
+  assert.ok(
+    stageBody.includes(
+      "if (!isExpectedLectureInputFailure(error) && !isAiProviderSpendCapError(error)) {\n      throw error;",
+    ),
+  );
   assert.ok(
     stageBody.indexOf("markLecturePipelineFailed") < stageBody.indexOf("return { completed: false }"),
     "the failure has to be recorded before the step reports it as handled",

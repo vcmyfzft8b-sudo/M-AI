@@ -16,7 +16,11 @@ import {
   isAttemptTimeoutAbort,
   isWorkAbortedError,
 } from "@/lib/abort-context";
-import { isRetryableAiError } from "@/lib/ai/errors";
+import {
+  isAiProviderSpendCapError,
+  isRetryableAiError,
+  toProviderBillingError,
+} from "@/lib/ai/errors";
 import { resolvePartMediaResolution } from "@/lib/ai/gemini-models";
 import {
   GeminiTruncatedOutputError,
@@ -367,6 +371,12 @@ ${params.input}`,
         throw error;
       }
 
+      // The spend cap refuses every attempt until it is raised. The loop below would back off and
+      // ask three more times over a minute, then report the cap as an ordinary failure.
+      if (isAiProviderSpendCapError(error)) {
+        throw toProviderBillingError(error);
+      }
+
       if (useResponseSchema && isGeminiSchemaTooComplexError(error)) {
         useResponseSchema = false;
       }
@@ -406,12 +416,16 @@ export async function generateTextWithGeminiFile(params: {
   await fs.writeFile(tempPath, bytes);
 
   try {
-    const uploaded = await ai.files.upload({
-      file: tempPath,
-      config: {
-        mimeType: params.file.type || "application/octet-stream",
-      },
-    });
+    const uploaded = await ai.files
+      .upload({
+        file: tempPath,
+        config: {
+          mimeType: params.file.type || "application/octet-stream",
+        },
+      })
+      .catch((error: unknown) => {
+        throw toProviderBillingError(error);
+      });
 
     uploadedFileName = uploaded.name ?? null;
 
@@ -509,6 +523,11 @@ export async function generateTextWithGeminiFile(params: {
           throw error;
         }
 
+        // Refused for billing, not for this file: every further attempt is refused the same way.
+        if (isAiProviderSpendCapError(error)) {
+          throw toProviderBillingError(error);
+        }
+
         lastError = error;
 
         // The same verbatim request is withheld every time; asking again only pays for it again.
@@ -584,7 +603,9 @@ export async function createGeminiEmbeddings(texts: string[]) {
           continue;
         }
 
-        throw error;
+        // The spend cap is not retryable, so it lands here on its first attempt; named, so the
+        // note pipeline can save the transcript without embeddings instead of failing on it.
+        throw toProviderBillingError(error);
       }
     }
 
@@ -600,4 +621,35 @@ export async function createGeminiEmbeddings(texts: string[]) {
   }
 
   return embeddings;
+}
+
+const GEMINI_PROBE_TIMEOUT_MS = 10_000;
+
+export type GeminiProbeResult = { ok: true } | { ok: false; spendCap: boolean; message: string };
+
+/**
+ * Whether Gemini is answering at all: one embedding of one word, asked once, with a short timeout.
+ *
+ * The stall sweep asks this before it retries what the spend cap stopped, so a cap that is still
+ * in force costs one refused call an hour rather than a failed run per lecture. An embedding is
+ * the cheapest call the project can make, and the cap is project-wide: if this is refused for
+ * billing, so is everything else, and if it answers, so does everything else.
+ */
+export async function probeGemini(): Promise<GeminiProbeResult> {
+  try {
+    const response = await getGeminiClient().models.embedContent({
+      model: requireGeminiEnv().GEMINI_EMBEDDING_MODEL,
+      contents: ["ping"],
+      config: {
+        outputDimensionality: GEMINI_EMBEDDING_DIMENSION,
+        abortSignal: AbortSignal.timeout(GEMINI_PROBE_TIMEOUT_MS),
+      },
+    });
+
+    return response.embeddings?.[0]?.values?.length
+      ? { ok: true }
+      : { ok: false, spendCap: false, message: "Gemini answered the probe without an embedding." };
+  } catch (error) {
+    return { ok: false, spendCap: isAiProviderSpendCapError(error), message: toErrorMessage(error) };
+  }
 }

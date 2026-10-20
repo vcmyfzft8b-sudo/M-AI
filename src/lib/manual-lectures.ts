@@ -11,7 +11,11 @@ import { applyAiHighlightsToNote } from "@/lib/notes/ai-highlights";
 import JSZip from "jszip";
 import mammoth from "mammoth";
 
-import { isRetryableAiError, toUserFacingAiErrorMessage } from "@/lib/ai/errors";
+import {
+  isAiProviderSpendCapError,
+  isRetryableAiError,
+  toUserFacingAiErrorMessage,
+} from "@/lib/ai/errors";
 import {
   GeminiEmptyTextOutputError,
   generateTextWithGeminiFile,
@@ -44,12 +48,12 @@ import {
 import { classifyImageOcrText, hasFailurePhrase, isLabelOnlyOcrReading } from "@/lib/scan-ocr-text";
 import { getServerEnv } from "@/lib/server-env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { embedTranscriptTexts } from "@/lib/transcript-embeddings";
 import {
   buildSyntheticTranscriptFromTextSource,
   estimateTextSourceDurationSeconds,
   type StructuredSourceBlock,
 } from "@/lib/text-source-processing";
-import { createEmbeddings as createAiEmbeddings } from "@/lib/ai/embeddings";
 import {
   condenseSourceMaterial,
   MAX_RAW_SOURCE_TEXT_CHARS,
@@ -639,10 +643,11 @@ async function extractVisualTextFromPptxSlideImages(
           // One unreadable image must not sink the deck; the merge simply sees less.
           results[index] = null;
 
-          // The provider was still busy after the retry. Every failed attempt is already a row in
-          // ai_usage_events, and the deck continues without this image, so a handled capacity
-          // outage is not a code defect and does not open one in Sentry. Anything else does.
-          if (isRetryableAiError(error)) {
+          // The provider was still busy after the retry, or refused for billing. Every failed
+          // attempt is already a row in ai_usage_events, and the deck continues without this image,
+          // so neither is a code defect, and a deck of 24 images must not file 24 spend-cap events
+          // (the cap reaches Sentry from the paths it actually stops). Anything else does.
+          if (isRetryableAiError(error) || isAiProviderSpendCapError(error)) {
             console.warn("PPTX slide image provider was temporarily unavailable; skipping the image.", {
               mediaPath: candidate.mediaPath,
             });
@@ -765,10 +770,6 @@ async function extractTextFromPptx(file: File) {
     text,
     pages: mergedSlides,
   };
-}
-
-async function createEmbeddings(texts: string[]) {
-  return createAiEmbeddings(texts);
 }
 
 function extractTitle(html: string) {
@@ -1931,6 +1932,12 @@ export async function extractTextFromImage(file: File, context?: ImageOcrContext
         throw error;
       }
 
+      // Every reader below is Gemini, and the spend cap refuses them all alike. Kept as itself, so
+      // the lecture is recorded with the spend-cap code the stall sweep retries, not as overloaded.
+      if (isAiProviderSpendCapError(error)) {
+        throw error;
+      }
+
       const empty = error instanceof GeminiEmptyTextOutputError;
       sawAnswer ||= empty;
       if (!empty) {
@@ -2193,7 +2200,10 @@ export async function createLectureFromTextSource(params: {
     }
 
     const activeLectureId = lectureId;
-    const embeddings = await createEmbeddings(transcript.map((segment) => segment.text));
+    const embeddings = await embedTranscriptTexts({
+      texts: transcript.map((segment) => segment.text),
+      lectureId: activeLectureId,
+    });
 
     await requireActiveLecture(activeLectureId);
 

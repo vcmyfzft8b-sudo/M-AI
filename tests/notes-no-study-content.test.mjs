@@ -112,7 +112,7 @@ test("the failed note stops offering a retry that cannot work", () => {
 test("the notes step classifies input failures on the throwing side of the boundary", () => {
   assert.match(
     FUNCTIONS_SOURCE,
-    /isLectureGenerationBudgetExceededError\(error\) \|\| isExpectedLectureInputFailure\(error\)/,
+    /isLectureGenerationBudgetExceededError\(error\) \|\|\s*isExpectedLectureInputFailure\(error\)/,
     "runNotesStageWithGuard records input failures instead of failing its step",
   );
 });

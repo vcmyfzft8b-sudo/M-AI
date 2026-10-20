@@ -20,7 +20,8 @@ test("an optional document-image description retries one transient provider fail
 });
 
 test("an exhausted transient outage degrades without opening a Sentry defect", () => {
-  const transientGuard = DESCRIPTION_SOURCE.indexOf("if (isRetryableAiError(error))");
+  // The guard also takes the spend cap (`|| isAiProviderSpendCapError(error)`), so match its start.
+  const transientGuard = DESCRIPTION_SOURCE.indexOf("if (isRetryableAiError(error)");
   const transientFallback = DESCRIPTION_SOURCE.indexOf("return undefined", transientGuard);
   const unexpectedCapture = DESCRIPTION_SOURCE.indexOf("captureBackgroundError(error", transientGuard);
 

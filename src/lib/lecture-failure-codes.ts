@@ -65,6 +65,9 @@ export const LECTURE_FAILURE_MESSAGE_KEYS: Record<string, MessageKey> = {
   // can show them in the reader's language rather than the run's.
   ai_save_timeout: "ai.saveTimeout",
   ai_provider_overloaded: "ai.providerOverloaded",
+  // Our Gemini project hit its monthly spend cap. Retryable on purpose: the learner's button works
+  // the moment the cap is lifted, and the stall sweep presses it for them otherwise.
+  ai_provider_spend_cap: "ai.providerSpendCap",
   ai_processing_too_long: "ai.processingTooLong",
   ai_unexpected: "ai.unexpectedError",
 };

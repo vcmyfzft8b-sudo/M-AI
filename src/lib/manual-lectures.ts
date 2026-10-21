@@ -21,6 +21,7 @@ import {
   generateTextWithGeminiFile,
   isGeminiRecitationBlock,
 } from "@/lib/ai/gemini";
+import { MAX_SCAN_IMAGE_BYTES, MAX_SCAN_IMAGE_COUNT } from "@/lib/constants";
 import {
   sanitizeJsonForDatabase,
   stripUnstorableCharacters,
@@ -91,6 +92,12 @@ import {
 import { mergeCookieHeaders, shareLinkDownloadUrl } from "@/lib/link-share-downloads";
 import { serializeVector } from "@/lib/utils";
 import { looksLikeBotChallenge } from "@/lib/link-bot-challenge";
+import {
+  extractGooglePhotosAlbumPhotos,
+  googlePhotosDownloadUrl,
+  isGooglePhotosAlbumUrl,
+} from "@/lib/google-photos-album";
+import { normalizeScanImageForOcr } from "@/lib/scan-image-normalize";
 import { isLegiblePdfTextLayer } from "@/lib/pdf-text-layer";
 import {
   IMAGE_OCR_INSTRUCTIONS,
@@ -1488,7 +1495,83 @@ export async function fetchReadableWebpage(params: { url: string }) {
 
 export type LinkSource =
   | ({ kind: "webpage" } & Awaited<ReturnType<typeof readWebpageFromResponse>>)
-  | { kind: "document"; file: File; finalUrl: string; title: string };
+  | { kind: "document"; file: File; finalUrl: string; title: string }
+  | {
+      kind: "photos";
+      finalUrl: string;
+      title: string;
+      text: string;
+      blocks: StructuredSourceBlock[];
+    };
+
+/** Photos read at once from a shared album; the scan pipeline reads uploads the same way. */
+const GOOGLE_PHOTOS_ALBUM_CONCURRENCY = 3;
+
+/**
+ * A Google Photos shared album, read through its photos with the reader a photo upload uses, as
+ * many as an upload takes. A photo with nothing legible on it is skipped, like an upload's; an
+ * album with nothing legible at all fails as a page with too little text, as it did before.
+ */
+async function readGooglePhotosAlbum(params: {
+  url: URL;
+  html: string;
+  context?: ImageOcrContext;
+}): Promise<LinkSource> {
+  const photos = extractGooglePhotosAlbumPhotos(params.html).slice(0, MAX_SCAN_IMAGE_COUNT);
+  const texts = new Array<string>(photos.length).fill("");
+  let cursor = 0;
+
+  await Promise.all(
+    Array.from({ length: Math.min(GOOGLE_PHOTOS_ALBUM_CONCURRENCY, photos.length) }, async () => {
+      while (cursor < photos.length) {
+        const index = cursor;
+        cursor += 1;
+        const { response } = await fetchReadableWebpageResponse(
+          googlePhotosDownloadUrl(photos[index]),
+        );
+        const contentType = response.headers.get("content-type") ?? "";
+
+        if (!response.ok || !contentType.startsWith("image/")) {
+          await response.body?.cancel().catch(() => null);
+          continue;
+        }
+
+        const bytes = await readResponseBytesWithLimit(response, MAX_SCAN_IMAGE_BYTES);
+        const file = await normalizeScanImageForOcr(
+          new File([Buffer.from(bytes)], `photo-${index + 1}.jpg`, { type: contentType }),
+        );
+
+        try {
+          const extracted = await extractTextFromImage(file, {
+            ...params.context,
+            imageIndex: index,
+          });
+          texts[index] = extracted.text.trim();
+        } catch (error) {
+          if (!(error instanceof NoReadableScanTextError)) {
+            throw error;
+          }
+        }
+      }
+    }),
+  );
+
+  const blocks = texts.flatMap((text, index) =>
+    text ? [{ label: `photo-${index + 1}`, pageNumber: index + 1, text }] : [],
+  );
+
+  if (blocks.length === 0) {
+    throw expectedInputFailure("link_not_enough_text");
+  }
+
+  return {
+    kind: "photos",
+    finalUrl: params.url.toString(),
+    title: extractTitle(params.html).replace(/\s*[-–]\s*Google\s+Photos\s*$/i, ""),
+    text: blocks.map((block) => block.text).join("\n\n"),
+    blocks,
+  };
+}
 
 /**
  * Everything a pasted link can lead to that we can make notes from: a web page, or a document
@@ -1496,7 +1579,11 @@ export type LinkSource =
  * link points to a file, download it and upload it" -- three of the week's failed notes -- when
  * downloading it is exactly what we can do ourselves.
  */
-export async function fetchLinkSource(params: { url: string }): Promise<LinkSource> {
+export async function fetchLinkSource(params: {
+  url: string;
+  /** Who the photo reads of a shared album are billed to. */
+  context?: ImageOcrContext;
+}): Promise<LinkSource> {
   const shareDownload = await fetchShareLinkDownload(params.url);
 
   if (shareDownload) {
@@ -1517,6 +1604,13 @@ export async function fetchLinkSource(params: { url: string }): Promise<LinkSour
 
   if (!isReadableLinkContentType(contentType)) {
     throw expectedInputFailure("unsupported_link_content_type");
+  }
+
+  // A shared photo album is its photos; the page around them is an app shell.
+  if (isGooglePhotosAlbumUrl(opened.url)) {
+    const html = await readResponseBodyWithLimit(opened.response, MAX_LINK_FETCH_BYTES);
+
+    return readGooglePhotosAlbum({ url: opened.url, html, context: params.context });
   }
 
   // A digital library's catalogue page links the work itself; read that rather than the card.

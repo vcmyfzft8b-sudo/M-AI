@@ -114,7 +114,31 @@ export async function processStoredLinkLecture(params: {
     return { needsNotesGeneration: true };
   }
 
-  const source = await fetchLinkSource({ url: pendingLinkUrl });
+  const source = await fetchLinkSource({
+    url: pendingLinkUrl,
+    context: { userId: lectureRow.user_id, lectureId: lectureRow.id },
+  });
+
+  // A shared photo album is read like the same photos uploaded: one block per photo.
+  if (source.kind === "photos") {
+    await prepareLectureFromTextSource({
+      lectureId: lectureRow.id,
+      userId: lectureRow.user_id,
+      sourceType: "link",
+      text: source.text,
+      blocks: source.blocks,
+      titleHint: source.title || undefined,
+      languageHint: lectureRow.language_hint ?? undefined,
+      modelMetadata: {
+        importMode: "link",
+        linkKind: "photo_album",
+        sourceUrl: pendingLinkUrl,
+        photoCount: source.blocks.length,
+      },
+    });
+
+    return { needsNotesGeneration: true };
+  }
 
   // A link straight to a PDF, Word or PowerPoint file is read exactly like the same file uploaded.
   if (source.kind === "document") {

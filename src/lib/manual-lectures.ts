@@ -93,6 +93,11 @@ import { serializeVector } from "@/lib/utils";
 import { looksLikeBotChallenge } from "@/lib/link-bot-challenge";
 import { isLegiblePdfTextLayer } from "@/lib/pdf-text-layer";
 import {
+  DOCX_PICTURE_MIME_BY_EXTENSION,
+  docxTextNeedsPictures,
+  orderDocxPicturePaths,
+} from "@/lib/docx-pictures";
+import {
   IMAGE_OCR_INSTRUCTIONS,
   IMAGE_RESTATE_INSTRUCTIONS,
   PDF_EXTRACT_INSTRUCTIONS,
@@ -1776,6 +1781,83 @@ export async function extractTextFromPdf(file: File) {
   };
 }
 
+/** Each picture is one photo read; a document of text with a few figures never gets here. */
+const MAX_DOCX_PICTURES = 8;
+/** Bullets and icons are smaller than this; a diagram or a photographed page is bigger. */
+const MIN_DOCX_PICTURE_BYTES = 4 * 1024;
+const MAX_DOCX_PICTURE_BYTES = 8 * 1024 * 1024;
+const DOCX_PICTURE_CONCURRENCY = 3;
+
+/**
+ * The text of a Word document's pictures, in page order, read the way a photo is. A picture with
+ * nothing on it is skipped; the gate after extraction then decides as it would for the text alone.
+ */
+async function readDocxPictures(buffer: Buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  const [documentXml, relsXml] = await Promise.all([
+    zip.file("word/document.xml")?.async("string"),
+    zip.file("word/_rels/document.xml.rels")?.async("string"),
+  ]);
+
+  if (!documentXml || !relsXml) {
+    return [];
+  }
+
+  const pictures: Array<{ path: string; bytes: Uint8Array }> = [];
+
+  for (const path of orderDocxPicturePaths({ documentXml, relsXml })) {
+    if (pictures.length >= MAX_DOCX_PICTURES) {
+      break;
+    }
+
+    const bytes = await zip.file(path)?.async("uint8array");
+
+    if (
+      bytes &&
+      bytes.byteLength >= MIN_DOCX_PICTURE_BYTES &&
+      bytes.byteLength <= MAX_DOCX_PICTURE_BYTES
+    ) {
+      pictures.push({ path, bytes });
+    }
+  }
+
+  const texts = new Array<string>(pictures.length).fill("");
+  let cursor = 0;
+
+  await Promise.all(
+    Array.from({ length: Math.min(DOCX_PICTURE_CONCURRENCY, pictures.length) }, async () => {
+      while (cursor < pictures.length) {
+        const index = cursor;
+        cursor += 1;
+        const { path, bytes } = pictures[index];
+        const fileName = path.split("/").pop() ?? "picture";
+        const extension = fileName.split(".").pop()?.toLowerCase() ?? "";
+        const picture = new File([Buffer.from(bytes)], fileName, {
+          type: DOCX_PICTURE_MIME_BY_EXTENSION[extension],
+        });
+
+        try {
+          texts[index] = (await extractTextFromImage(picture)).text;
+        } catch (error) {
+          // The spend cap must keep its code so the stall sweep retries the note, and an abort
+          // must stay an abort.
+          if (isWorkAbortedError(error) || isAiProviderSpendCapError(error)) {
+            throw error;
+          }
+
+          // One unreadable picture must not sink the document; it simply contributes nothing.
+          console.warn("Word document picture could not be read; skipping it.", {
+            path,
+            message: toSafeErrorMessage(error),
+          });
+        }
+      }
+    }),
+  );
+
+  return texts.filter(Boolean);
+}
+
 export async function extractTextFromDocument(file: File) {
   if (isPdfDocument(file)) {
     return extractTextFromPdf(file);
@@ -1811,10 +1893,13 @@ export async function extractTextFromDocument(file: File) {
   if (isDocxDocument(file)) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const extracted = await mammoth.extractRawText({ buffer });
+    const text = normalizeWhitespace(extracted.value);
+    // Raw text skips pictures, so a document that is a pasted diagram or page read as empty.
+    const pictureTexts = docxTextNeedsPictures(text) ? await readDocxPictures(buffer) : [];
 
     return {
       title: file.name.replace(/\.[^.]+$/i, "") || "Word dokument",
-      text: normalizeWhitespace(extracted.value),
+      text: normalizeWhitespace([text, ...pictureTexts].filter(Boolean).join("\n\n")),
       pages: [] as Array<{ pageNumber: number; text: string }>,
     };
   }

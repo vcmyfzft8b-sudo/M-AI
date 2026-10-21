@@ -40,7 +40,7 @@ import {
 } from "../src/lib/ocr-prompts.ts";
 import { pickPageArticleHtml, pickRoleMainHtml } from "../src/lib/link-main-article.ts";
 import { docxTextNeedsPictures, orderDocxPicturePaths } from "../src/lib/docx-pictures.ts";
-import { isLegiblePdfTextLayer } from "../src/lib/pdf-text-layer.ts";
+import { isLegiblePdfTextLayer, isPdfTextLayerTheDocument } from "../src/lib/pdf-text-layer.ts";
 import { isLabelOnlyOcrReading } from "../src/lib/scan-ocr-text.ts";
 import { hasEnoughSourceTextToTeach } from "../src/lib/source-text-gate.ts";
 import { runCase } from "./lib/note-replay.mjs";
@@ -146,9 +146,9 @@ async function readPdfTextLayer(bytes) {
       const parts = content.items.flatMap((item) => (typeof item.str === "string" && item.str.trim() ? [item.hasEOL ? `${item.str.trim()}\n` : item.str.trim()] : []));
       pages.push(parts.join(" ").replace(/[ \t]+/g, " ").trim());
     }
-    return pages.filter(Boolean).join("\n\n").trim();
+    return { text: pages.filter(Boolean).join("\n\n").trim(), pageCount: document.numPages };
   } catch {
-    return "";
+    return { text: "", pageCount: 0 };
   } finally {
     await loadingTask.destroy();
   }
@@ -157,11 +157,12 @@ async function readPdfTextLayer(bytes) {
 /** Production's order: the text layer when it is legible, then extraction, then restatement. */
 async function readPdf(bytes) {
   const attempts = [];
-  const layer = await readPdfTextLayer(bytes);
+  const { text: layer, pageCount } = await readPdfTextLayer(bytes);
   if (layer.split(/\s+/).filter(Boolean).length >= 40) {
     const legible = isLegiblePdfTextLayer(layer);
-    attempts.push({ stage: "pdf_text_layer", legible, chars: layer.length });
-    if (legible) return { text: layer, attempts };
+    const taken = isPdfTextLayerTheDocument({ text: layer, pageCount });
+    attempts.push({ stage: "pdf_text_layer", legible, taken, pages: pageCount, chars: layer.length });
+    if (taken) return { text: layer, attempts };
   }
   for (const [stage, model, instructions] of [
     ["pdf_extract", OCR_LITE_MODEL, PDF_EXTRACT_INSTRUCTIONS],

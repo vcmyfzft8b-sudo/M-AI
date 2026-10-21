@@ -264,7 +264,10 @@ export async function prepareLectureFromDocumentFile(params: {
     : isPptxDocument(file)
       ? "presentation"
       : "text";
-  const extracted = await extractTextFromDocument(file);
+  const extracted = await extractTextFromDocument(file, {
+    userId: params.userId,
+    lectureId: params.lectureId,
+  });
 
   await params.onImageStage?.();
 

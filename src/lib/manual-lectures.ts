@@ -99,7 +99,12 @@ import {
   type GooglePhotosAlbumPhoto,
 } from "@/lib/google-photos-album";
 import { normalizeScanImageForOcr } from "@/lib/scan-image-normalize";
-import { isLegiblePdfTextLayer } from "@/lib/pdf-text-layer";
+import { isPdfTextLayerTheDocument, isPdfTextLayerWorthKeeping } from "@/lib/pdf-text-layer";
+import {
+  DOCX_PICTURE_MIME_BY_EXTENSION,
+  docxTextNeedsPictures,
+  orderDocxPicturePaths,
+} from "@/lib/docx-pictures";
 import {
   IMAGE_OCR_INSTRUCTIONS,
   IMAGE_RESTATE_INSTRUCTIONS,
@@ -1752,6 +1757,12 @@ async function fetchRepositoryDocument(params: {
 
 export async function extractTextFromPdf(file: File) {
   const fileBytes = new Uint8Array(await file.arrayBuffer());
+  // A layer too thin to be the document, kept for when the reader finds nothing on the pages.
+  let thinTextLayer: {
+    title: string;
+    text: string;
+    pages: Array<{ pageNumber: number; text: string }>;
+  } | null = null;
   try {
     const pdfjs = await getPdfJs();
     const loadingTask = pdfjs.getDocument({
@@ -1818,11 +1829,16 @@ export async function extractTextFromPdf(file: File) {
             : "") ||
           file.name.replace(/\.pdf$/i, "");
 
-        if (
-          parsedText.split(/\s+/).filter(Boolean).length >= 40 &&
-          isLegiblePdfTextLayer(parsedText)
-        ) {
+        if (isPdfTextLayerTheDocument({ text: parsedText, pageCount: document.numPages })) {
           return {
+            title: metadataTitle || "PDF document",
+            text: parsedText,
+            pages: pageTexts.filter((page) => page.text.length > 0),
+          };
+        }
+
+        if (isPdfTextLayerWorthKeeping(parsedText)) {
+          thinTextLayer = {
             title: metadataTitle || "PDF document",
             text: parsedText,
             pages: pageTexts.filter((page) => page.text.length > 0),
@@ -1885,6 +1901,12 @@ export async function extractTextFromPdf(file: File) {
     }
 
     if (!fallbackText.trim()) {
+      // The pages gave nothing, but the layer names what they are about: teach that rather than
+      // fail, as the layer alone did before it had to carry 8 words a page.
+      if (thinTextLayer) {
+        return thinTextLayer;
+      }
+
       throw expectedInputFailure("pdf_no_text");
     }
   }
@@ -1896,7 +1918,90 @@ export async function extractTextFromPdf(file: File) {
   };
 }
 
-export async function extractTextFromDocument(file: File) {
+/** Each picture is one photo read; a document of text with a few figures never gets here. */
+const MAX_DOCX_PICTURES = 8;
+/** Bullets and icons are smaller than this; a diagram or a photographed page is bigger. */
+const MIN_DOCX_PICTURE_BYTES = 4 * 1024;
+const MAX_DOCX_PICTURE_BYTES = 8 * 1024 * 1024;
+const DOCX_PICTURE_CONCURRENCY = 3;
+
+/**
+ * The text of a Word document's pictures, in page order, read the way a photo is. A picture with
+ * nothing on it is skipped; the gate after extraction then decides as it would for the text alone.
+ */
+async function readDocxPictures(buffer: Buffer, context?: ImageOcrContext) {
+  const zip = await JSZip.loadAsync(buffer);
+  const [documentXml, relsXml] = await Promise.all([
+    zip.file("word/document.xml")?.async("string"),
+    zip.file("word/_rels/document.xml.rels")?.async("string"),
+  ]);
+
+  if (!documentXml || !relsXml) {
+    return [];
+  }
+
+  const pictures: Array<{ path: string; bytes: Uint8Array }> = [];
+
+  for (const path of orderDocxPicturePaths({ documentXml, relsXml })) {
+    if (pictures.length >= MAX_DOCX_PICTURES) {
+      break;
+    }
+
+    const bytes = await zip.file(path)?.async("uint8array");
+
+    if (
+      bytes &&
+      bytes.byteLength >= MIN_DOCX_PICTURE_BYTES &&
+      bytes.byteLength <= MAX_DOCX_PICTURE_BYTES
+    ) {
+      pictures.push({ path, bytes });
+    }
+  }
+
+  const texts = new Array<string>(pictures.length).fill("");
+  let cursor = 0;
+
+  await Promise.all(
+    Array.from({ length: Math.min(DOCX_PICTURE_CONCURRENCY, pictures.length) }, async () => {
+      while (cursor < pictures.length) {
+        const index = cursor;
+        cursor += 1;
+        const { path, bytes } = pictures[index];
+        const fileName = path.split("/").pop() ?? "picture";
+        const extension = fileName.split(".").pop()?.toLowerCase() ?? "";
+        const picture = new File([Buffer.from(bytes)], fileName, {
+          type: DOCX_PICTURE_MIME_BY_EXTENSION[extension],
+        });
+
+        try {
+          texts[index] = (
+            await extractTextFromImage(picture, { ...context, imageIndex: index })
+          ).text;
+        } catch (error) {
+          // The spend cap must keep its code so the stall sweep retries the note, and an abort
+          // must stay an abort.
+          if (isWorkAbortedError(error) || isAiProviderSpendCapError(error)) {
+            throw error;
+          }
+
+          // One unreadable picture must not sink the document; it simply contributes nothing.
+          console.warn("Word document picture could not be read; skipping it.", {
+            path,
+            message: toSafeErrorMessage(error),
+          });
+        }
+      }
+    }),
+  );
+
+  return texts.filter(Boolean);
+}
+
+export async function extractTextFromDocument(
+  file: File,
+  /** Who the picture reads of a Word document are billed to. */
+  context?: ImageOcrContext,
+) {
   if (isPdfDocument(file)) {
     return extractTextFromPdf(file);
   }
@@ -1931,10 +2036,13 @@ export async function extractTextFromDocument(file: File) {
   if (isDocxDocument(file)) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const extracted = await mammoth.extractRawText({ buffer });
+    const text = normalizeWhitespace(extracted.value);
+    // Raw text skips pictures, so a document that is a pasted diagram or page read as empty.
+    const pictureTexts = docxTextNeedsPictures(text) ? await readDocxPictures(buffer, context) : [];
 
     return {
       title: file.name.replace(/\.[^.]+$/i, "") || "Word dokument",
-      text: normalizeWhitespace(extracted.value),
+      text: normalizeWhitespace([text, ...pictureTexts].filter(Boolean).join("\n\n")),
       pages: [] as Array<{ pageNumber: number; text: string }>,
     };
   }

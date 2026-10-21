@@ -39,7 +39,8 @@ import {
   PDF_RESTATE_INSTRUCTIONS,
 } from "../src/lib/ocr-prompts.ts";
 import { pickPageArticleHtml, pickRoleMainHtml } from "../src/lib/link-main-article.ts";
-import { isLegiblePdfTextLayer } from "../src/lib/pdf-text-layer.ts";
+import { docxTextNeedsPictures, orderDocxPicturePaths } from "../src/lib/docx-pictures.ts";
+import { isLegiblePdfTextLayer, isPdfTextLayerTheDocument } from "../src/lib/pdf-text-layer.ts";
 import { isLabelOnlyOcrReading } from "../src/lib/scan-ocr-text.ts";
 import { hasEnoughSourceTextToTeach } from "../src/lib/source-text-gate.ts";
 import { runCase } from "./lib/note-replay.mjs";
@@ -145,9 +146,9 @@ async function readPdfTextLayer(bytes) {
       const parts = content.items.flatMap((item) => (typeof item.str === "string" && item.str.trim() ? [item.hasEOL ? `${item.str.trim()}\n` : item.str.trim()] : []));
       pages.push(parts.join(" ").replace(/[ \t]+/g, " ").trim());
     }
-    return pages.filter(Boolean).join("\n\n").trim();
+    return { text: pages.filter(Boolean).join("\n\n").trim(), pageCount: document.numPages };
   } catch {
-    return "";
+    return { text: "", pageCount: 0 };
   } finally {
     await loadingTask.destroy();
   }
@@ -156,11 +157,12 @@ async function readPdfTextLayer(bytes) {
 /** Production's order: the text layer when it is legible, then extraction, then restatement. */
 async function readPdf(bytes) {
   const attempts = [];
-  const layer = await readPdfTextLayer(bytes);
+  const { text: layer, pageCount } = await readPdfTextLayer(bytes);
   if (layer.split(/\s+/).filter(Boolean).length >= 40) {
     const legible = isLegiblePdfTextLayer(layer);
-    attempts.push({ stage: "pdf_text_layer", legible, chars: layer.length });
-    if (legible) return { text: layer, attempts };
+    const taken = isPdfTextLayerTheDocument({ text: layer, pageCount });
+    attempts.push({ stage: "pdf_text_layer", legible, taken, pages: pageCount, chars: layer.length });
+    if (taken) return { text: layer, attempts };
   }
   for (const [stage, model, instructions] of [
     ["pdf_extract", OCR_LITE_MODEL, PDF_EXTRACT_INSTRUCTIONS],
@@ -172,6 +174,27 @@ async function readPdf(bytes) {
     if (result.text.trim()) return { text: result.text, attempts };
   }
   return { text: "", attempts };
+}
+
+/** Production's order: the raw text, then the pictures in page order when the text is thin. */
+async function readDocx(bytes) {
+  const { default: mammoth } = await import("mammoth");
+  const { default: JSZip } = await import("jszip");
+  const text = (await mammoth.extractRawText({ buffer: bytes })).value.replace(/\s+/g, " ").trim();
+  const attempts = [{ stage: "docx_text", chars: text.length }];
+  if (!docxTextNeedsPictures(text)) return { text, attempts };
+  const zip = await JSZip.loadAsync(bytes);
+  const documentXml = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  const relsXml = (await zip.file("word/_rels/document.xml.rels")?.async("string")) ?? "";
+  const texts = [text];
+  for (const picturePath of orderDocxPicturePaths({ documentXml, relsXml }).slice(0, 8)) {
+    const picture = await zip.file(picturePath)?.async("nodebuffer");
+    if (!picture || picture.length < 4 * 1024 || picture.length > 8 * 1024 * 1024) continue;
+    const read = await readPhoto(picture);
+    attempts.push({ stage: "docx_picture", picture: path.basename(picturePath), attempts: read.attempts, chars: read.text.length });
+    texts.push(read.text);
+  }
+  return { text: texts.filter(Boolean).join("\n\n"), attempts };
 }
 
 // A saved web page. Production's htmlToText (manual-lectures.ts) is server-only; this takes the
@@ -253,6 +276,10 @@ for (const objectPath of files) {
     if (read.text) readTexts.push(read.text);
   } else if (/\.html?$/i.test(name)) {
     const read = readHtml(bytes);
+    report.reads.push({ file: name, ...read, text: undefined });
+    if (read.text) readTexts.push(read.text);
+  } else if (/\.docx$/i.test(name)) {
+    const read = await readDocx(bytes);
     report.reads.push({ file: name, ...read, text: undefined });
     if (read.text) readTexts.push(read.text);
   } else {

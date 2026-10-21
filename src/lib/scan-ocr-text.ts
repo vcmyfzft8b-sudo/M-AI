@@ -94,11 +94,31 @@ export function classifyImageOcrText(text: string): ImageOcrVerdict {
  * (one heading, one exercise) does not. Measured on a whiteboard circuit diagram on 2026-10-18:
  * both verbatim reads returned 54-67 characters of labels, the restatement ~1000 characters
  * explaining the circuit.
+ *
+ * A heading over many labels counts too: a labelling worksheet ("LABORATORY EQUIPMENT" over 24
+ * numbered drawings) reads as one title and a column of numbers, and the drawings are the whole
+ * lesson. Production refused one such reading as having nothing to study on 2026-10-21.
  */
+const WORD = /\p{L}{4,}/u;
+const MIN_LABEL_LINES_UNDER_A_HEADING = 6;
+const LABEL_LINES_PER_WORDED_LINE = 4;
+
 export function isLabelOnlyOcrReading(text: string) {
   const normalized = stripUnstorableCharacters(text).trim();
 
-  return normalized.length > 0 && !/\p{L}{4,}/u.test(normalized);
+  if (!normalized) {
+    return false;
+  }
+
+  const lines = normalized.split("\n").map((line) => line.trim()).filter(Boolean);
+  const wordedLines = lines.filter((line) => WORD.test(line)).length;
+  const labelLines = lines.length - wordedLines;
+
+  return (
+    wordedLines === 0 ||
+    (labelLines >= MIN_LABEL_LINES_UNDER_A_HEADING &&
+      labelLines >= wordedLines * LABEL_LINES_PER_WORDED_LINE)
+  );
 }
 
 export function isAcceptableImageOcrText(text: string) {

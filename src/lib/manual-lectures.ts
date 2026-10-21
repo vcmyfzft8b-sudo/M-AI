@@ -1792,7 +1792,7 @@ const DOCX_PICTURE_CONCURRENCY = 3;
  * The text of a Word document's pictures, in page order, read the way a photo is. A picture with
  * nothing on it is skipped; the gate after extraction then decides as it would for the text alone.
  */
-async function readDocxPictures(buffer: Buffer) {
+async function readDocxPictures(buffer: Buffer, context?: ImageOcrContext) {
   const zip = await JSZip.loadAsync(buffer);
   const [documentXml, relsXml] = await Promise.all([
     zip.file("word/document.xml")?.async("string"),
@@ -1837,7 +1837,9 @@ async function readDocxPictures(buffer: Buffer) {
         });
 
         try {
-          texts[index] = (await extractTextFromImage(picture)).text;
+          texts[index] = (
+            await extractTextFromImage(picture, { ...context, imageIndex: index })
+          ).text;
         } catch (error) {
           // The spend cap must keep its code so the stall sweep retries the note, and an abort
           // must stay an abort.
@@ -1858,7 +1860,11 @@ async function readDocxPictures(buffer: Buffer) {
   return texts.filter(Boolean);
 }
 
-export async function extractTextFromDocument(file: File) {
+export async function extractTextFromDocument(
+  file: File,
+  /** Who the picture reads of a Word document are billed to. */
+  context?: ImageOcrContext,
+) {
   if (isPdfDocument(file)) {
     return extractTextFromPdf(file);
   }
@@ -1895,7 +1901,7 @@ export async function extractTextFromDocument(file: File) {
     const extracted = await mammoth.extractRawText({ buffer });
     const text = normalizeWhitespace(extracted.value);
     // Raw text skips pictures, so a document that is a pasted diagram or page read as empty.
-    const pictureTexts = docxTextNeedsPictures(text) ? await readDocxPictures(buffer) : [];
+    const pictureTexts = docxTextNeedsPictures(text) ? await readDocxPictures(buffer, context) : [];
 
     return {
       title: file.name.replace(/\.[^.]+$/i, "") || "Word dokument",

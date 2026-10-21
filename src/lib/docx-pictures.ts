@@ -36,7 +36,12 @@ export function orderDocxPicturePaths(params: { documentXml: string; relsXml: st
     const target = /\bTarget="([^"]+)"/.exec(tag)?.[1];
 
     if (id && target && /\/image"/.test(tag) && !/TargetMode="External"/.test(tag)) {
-      targetById.set(id, `word/${target.replace(/^\.?\//, "")}`);
+      // Relative to word/ ("media/image1.png"), or absolute from the package root
+      // ("/word/media/image1.png"), which some generators write.
+      targetById.set(
+        id,
+        target.startsWith("/") ? target.slice(1) : `word/${target.replace(/^\.\//, "")}`,
+      );
     }
   }
 

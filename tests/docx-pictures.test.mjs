@@ -50,3 +50,10 @@ test("a document with no pictures has none to read", () => {
     [],
   );
 });
+
+test("a picture addressed from the package root is found too", () => {
+  const relsXml = `<Relationships>${relationship("rId9", "image", "/word/media/image7.png")}</Relationships>`;
+  const documentXml = '<w:body><w:p><a:blip r:embed="rId9"/></w:p></w:body>';
+
+  assert.deepEqual(orderDocxPicturePaths({ documentXml, relsXml }), ["word/media/image7.png"]);
+});

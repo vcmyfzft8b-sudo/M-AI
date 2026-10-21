@@ -39,6 +39,7 @@ import {
   PDF_RESTATE_INSTRUCTIONS,
 } from "../src/lib/ocr-prompts.ts";
 import { pickPageArticleHtml, pickRoleMainHtml } from "../src/lib/link-main-article.ts";
+import { docxTextNeedsPictures, orderDocxPicturePaths } from "../src/lib/docx-pictures.ts";
 import { isLegiblePdfTextLayer, isPdfTextLayerTheDocument } from "../src/lib/pdf-text-layer.ts";
 import { isLabelOnlyOcrReading } from "../src/lib/scan-ocr-text.ts";
 import { hasEnoughSourceTextToTeach } from "../src/lib/source-text-gate.ts";
@@ -175,6 +176,27 @@ async function readPdf(bytes) {
   return { text: "", attempts };
 }
 
+/** Production's order: the raw text, then the pictures in page order when the text is thin. */
+async function readDocx(bytes) {
+  const { default: mammoth } = await import("mammoth");
+  const { default: JSZip } = await import("jszip");
+  const text = (await mammoth.extractRawText({ buffer: bytes })).value.replace(/\s+/g, " ").trim();
+  const attempts = [{ stage: "docx_text", chars: text.length }];
+  if (!docxTextNeedsPictures(text)) return { text, attempts };
+  const zip = await JSZip.loadAsync(bytes);
+  const documentXml = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  const relsXml = (await zip.file("word/_rels/document.xml.rels")?.async("string")) ?? "";
+  const texts = [text];
+  for (const picturePath of orderDocxPicturePaths({ documentXml, relsXml }).slice(0, 8)) {
+    const picture = await zip.file(picturePath)?.async("nodebuffer");
+    if (!picture || picture.length < 4 * 1024 || picture.length > 8 * 1024 * 1024) continue;
+    const read = await readPhoto(picture);
+    attempts.push({ stage: "docx_picture", picture: path.basename(picturePath), attempts: read.attempts, chars: read.text.length });
+    texts.push(read.text);
+  }
+  return { text: texts.filter(Boolean).join("\n\n"), attempts };
+}
+
 // A saved web page. Production's htmlToText (manual-lectures.ts) is server-only; this takes the
 // same region (article, else role="main", else the page) and drops the same chrome, which is
 // enough to tell an empty read from a page with something to teach.
@@ -254,6 +276,10 @@ for (const objectPath of files) {
     if (read.text) readTexts.push(read.text);
   } else if (/\.html?$/i.test(name)) {
     const read = readHtml(bytes);
+    report.reads.push({ file: name, ...read, text: undefined });
+    if (read.text) readTexts.push(read.text);
+  } else if (/\.docx$/i.test(name)) {
+    const read = await readDocx(bytes);
     report.reads.push({ file: name, ...read, text: undefined });
     if (read.text) readTexts.push(read.text);
   } else {

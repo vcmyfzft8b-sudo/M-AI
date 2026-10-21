@@ -91,7 +91,7 @@ import {
 import { mergeCookieHeaders, shareLinkDownloadUrl } from "@/lib/link-share-downloads";
 import { serializeVector } from "@/lib/utils";
 import { looksLikeBotChallenge } from "@/lib/link-bot-challenge";
-import { isLegiblePdfTextLayer } from "@/lib/pdf-text-layer";
+import { isPdfTextLayerTheDocument } from "@/lib/pdf-text-layer";
 import {
   IMAGE_OCR_INSTRUCTIONS,
   IMAGE_RESTATE_INSTRUCTIONS,
@@ -1698,10 +1698,7 @@ export async function extractTextFromPdf(file: File) {
             : "") ||
           file.name.replace(/\.pdf$/i, "");
 
-        if (
-          parsedText.split(/\s+/).filter(Boolean).length >= 40 &&
-          isLegiblePdfTextLayer(parsedText)
-        ) {
+        if (isPdfTextLayerTheDocument({ text: parsedText, pageCount: document.numPages })) {
           return {
             title: metadataTitle || "PDF document",
             text: parsedText,

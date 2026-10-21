@@ -26,3 +26,31 @@ export function isLegiblePdfTextLayer(text: string) {
 
   return letters / characters.length >= 0.4 && glyphCodes / characters.length <= 0.05;
 }
+
+/** Fewer words than this in the whole layer is too little to be the document. */
+const MIN_TEXT_LAYER_WORDS = 40;
+
+/**
+ * A page of study material holds sentences; a layer averaging fewer words than this a page is
+ * the furniture printed around scanned or pasted-in pages (dates, page numbers, a running head).
+ */
+const MIN_TEXT_LAYER_WORDS_PER_PAGE = 8;
+
+/**
+ * Whether a PDF's embedded text layer is the document, or the reader must look at the pages.
+ *
+ * Only words with a letter in them count. A handout of slide pictures printed with a date and page
+ * numbers in its header has a perfectly legible layer of ~70 "words" ("5. 10. 2026 1 1 2" a page),
+ * which the word count took as the document, and the note failed as too short with the slides
+ * never read (note triage, lectures 83c02ac7 and 4dde789e: 12 pages, 241 characters). Such a layer
+ * goes to the OCR reader instead; a sparse but real layer only costs an OCR read.
+ */
+export function isPdfTextLayerTheDocument(params: { text: string; pageCount: number }) {
+  const words = params.text.split(/\s+/u).filter((word) => /\p{L}/u.test(word)).length;
+
+  return (
+    words >= MIN_TEXT_LAYER_WORDS &&
+    words >= MIN_TEXT_LAYER_WORDS_PER_PAGE * Math.max(1, params.pageCount) &&
+    isLegiblePdfTextLayer(params.text)
+  );
+}

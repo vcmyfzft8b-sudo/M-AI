@@ -91,7 +91,7 @@ import {
 import { mergeCookieHeaders, shareLinkDownloadUrl } from "@/lib/link-share-downloads";
 import { serializeVector } from "@/lib/utils";
 import { looksLikeBotChallenge } from "@/lib/link-bot-challenge";
-import { isPdfTextLayerTheDocument } from "@/lib/pdf-text-layer";
+import { isPdfTextLayerTheDocument, isPdfTextLayerWorthKeeping } from "@/lib/pdf-text-layer";
 import {
   IMAGE_OCR_INSTRUCTIONS,
   IMAGE_RESTATE_INSTRUCTIONS,
@@ -1632,6 +1632,12 @@ async function fetchRepositoryDocument(params: {
 
 export async function extractTextFromPdf(file: File) {
   const fileBytes = new Uint8Array(await file.arrayBuffer());
+  // A layer too thin to be the document, kept for when the reader finds nothing on the pages.
+  let thinTextLayer: {
+    title: string;
+    text: string;
+    pages: Array<{ pageNumber: number; text: string }>;
+  } | null = null;
   try {
     const pdfjs = await getPdfJs();
     const loadingTask = pdfjs.getDocument({
@@ -1705,6 +1711,14 @@ export async function extractTextFromPdf(file: File) {
             pages: pageTexts.filter((page) => page.text.length > 0),
           };
         }
+
+        if (isPdfTextLayerWorthKeeping(parsedText)) {
+          thinTextLayer = {
+            title: metadataTitle || "PDF document",
+            text: parsedText,
+            pages: pageTexts.filter((page) => page.text.length > 0),
+          };
+        }
       } finally {
         await document.cleanup();
         await document.destroy();
@@ -1762,6 +1776,12 @@ export async function extractTextFromPdf(file: File) {
     }
 
     if (!fallbackText.trim()) {
+      // The pages gave nothing, but the layer names what they are about: teach that rather than
+      // fail, as the layer alone did before it had to carry 8 words a page.
+      if (thinTextLayer) {
+        return thinTextLayer;
+      }
+
       throw expectedInputFailure("pdf_no_text");
     }
   }

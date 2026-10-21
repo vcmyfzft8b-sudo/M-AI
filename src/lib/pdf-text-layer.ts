@@ -46,11 +46,21 @@ const MIN_TEXT_LAYER_WORDS_PER_PAGE = 8;
  * goes to the OCR reader instead; a sparse but real layer only costs an OCR read.
  */
 export function isPdfTextLayerTheDocument(params: { text: string; pageCount: number }) {
-  const words = params.text.split(/\s+/u).filter((word) => /\p{L}/u.test(word)).length;
-
   return (
-    words >= MIN_TEXT_LAYER_WORDS &&
-    words >= MIN_TEXT_LAYER_WORDS_PER_PAGE * Math.max(1, params.pageCount) &&
-    isLegiblePdfTextLayer(params.text)
+    isPdfTextLayerWorthKeeping(params.text) &&
+    countLetterWords(params.text) >= MIN_TEXT_LAYER_WORDS_PER_PAGE * Math.max(1, params.pageCount)
   );
+}
+
+/**
+ * Whether a layer that is not the document still says something, so the note is made from it when
+ * the reader finds nothing on the pages either. A running head over withheld scanned pages names
+ * the topic, which is enough for a topic note; dates and page numbers are not.
+ */
+export function isPdfTextLayerWorthKeeping(text: string) {
+  return countLetterWords(text) >= MIN_TEXT_LAYER_WORDS && isLegiblePdfTextLayer(text);
+}
+
+function countLetterWords(text: string) {
+  return text.split(/\s+/u).filter((word) => /\p{L}/u.test(word)).length;
 }

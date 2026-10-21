@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isLegiblePdfTextLayer, isPdfTextLayerTheDocument } from "../src/lib/pdf-text-layer.ts";
+import {
+  isLegiblePdfTextLayer,
+  isPdfTextLayerTheDocument,
+  isPdfTextLayerWorthKeeping,
+} from "../src/lib/pdf-text-layer.ts";
 
 test("a real text layer is taken as the document", () => {
   assert.equal(
@@ -61,4 +65,19 @@ test("a real text layer is the document", () => {
   assert.equal(isPdfTextLayerTheDocument({ text, pageCount: 4 }), true);
   // Too little to be the document, however legible.
   assert.equal(isPdfTextLayerTheDocument({ text: page, pageCount: 1 }), false);
+});
+
+test("a running head is kept for when the pages read as nothing; dates and numbers are not", () => {
+  const runningHead = Array.from(
+    { length: 30 },
+    (_, index) => `Uvod v ekonomiko podjetja ${index + 1}`,
+  ).join("\n\n");
+  const furniture = Array.from(
+    { length: 12 },
+    (_, index) => `5. 10. 2026 ${index + 1} ${index * 2 + 1} ${index * 2 + 2}`,
+  ).join("\n\n");
+
+  assert.equal(isPdfTextLayerWorthKeeping(runningHead), true);
+  assert.equal(isPdfTextLayerWorthKeeping(furniture), false);
+  assert.equal(isPdfTextLayerWorthKeeping(""), false);
 });

@@ -102,8 +102,10 @@ import { normalizeScanImageForOcr } from "@/lib/scan-image-normalize";
 import { isPdfTextLayerTheDocument, isPdfTextLayerWorthKeeping } from "@/lib/pdf-text-layer";
 import {
   DOCX_PICTURE_MIME_BY_EXTENSION,
+  DOCX_TEXT_PICTURE_EXTENSIONS,
   docxTextNeedsPictures,
   orderDocxPicturePaths,
+  readEmfText,
 } from "@/lib/docx-pictures";
 import {
   IMAGE_OCR_INSTRUCTIONS,
@@ -1920,7 +1922,10 @@ export async function extractTextFromPdf(file: File) {
 
 /** Each picture is one photo read; a document of text with a few figures never gets here. */
 const MAX_DOCX_PICTURES = 8;
-/** Bullets and icons are smaller than this; a diagram or a photographed page is bigger. */
+/**
+ * Bullets and icons are smaller than this; a diagram or a photographed page is bigger. A metafile
+ * is exempt: its text is read for free, and a pasted line of text is a small one.
+ */
 const MIN_DOCX_PICTURE_BYTES = 4 * 1024;
 const MAX_DOCX_PICTURE_BYTES = 8 * 1024 * 1024;
 const DOCX_PICTURE_CONCURRENCY = 3;
@@ -1948,10 +1953,11 @@ async function readDocxPictures(buffer: Buffer, context?: ImageOcrContext) {
     }
 
     const bytes = await zip.file(path)?.async("uint8array");
+    const extension = path.split(".").pop()?.toLowerCase() ?? "";
 
     if (
       bytes &&
-      bytes.byteLength >= MIN_DOCX_PICTURE_BYTES &&
+      (bytes.byteLength >= MIN_DOCX_PICTURE_BYTES || DOCX_TEXT_PICTURE_EXTENSIONS.has(extension)) &&
       bytes.byteLength <= MAX_DOCX_PICTURE_BYTES
     ) {
       pictures.push({ path, bytes });
@@ -1969,6 +1975,13 @@ async function readDocxPictures(buffer: Buffer, context?: ImageOcrContext) {
         const { path, bytes } = pictures[index];
         const fileName = path.split("/").pop() ?? "picture";
         const extension = fileName.split(".").pop()?.toLowerCase() ?? "";
+
+        // A metafile carries its text as text; the photo reader could not open it anyway.
+        if (DOCX_TEXT_PICTURE_EXTENSIONS.has(extension)) {
+          texts[index] = readEmfText(bytes);
+          continue;
+        }
+
         const picture = new File([Buffer.from(bytes)], fileName, {
           type: DOCX_PICTURE_MIME_BY_EXTENSION[extension],
         });

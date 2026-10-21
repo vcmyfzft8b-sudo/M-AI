@@ -96,6 +96,7 @@ import {
   extractGooglePhotosAlbumPhotos,
   googlePhotosDownloadUrl,
   isGooglePhotosAlbumUrl,
+  type GooglePhotosAlbumPhoto,
 } from "@/lib/google-photos-album";
 import { normalizeScanImageForOcr } from "@/lib/scan-image-normalize";
 import { isLegiblePdfTextLayer } from "@/lib/pdf-text-layer";
@@ -1508,6 +1509,40 @@ export type LinkSource =
 const GOOGLE_PHOTOS_ALBUM_CONCURRENCY = 3;
 
 /**
+ * One album photo, ready for the reader, or null when it could not be fetched or decoded. A photo
+ * that times out or fails to download is skipped like an unreadable one, rather than failing the
+ * whole album as a broken link; the album still fails as too little text if every photo is lost.
+ */
+async function downloadGooglePhotosAlbumPhoto(photo: GooglePhotosAlbumPhoto, index: number) {
+  try {
+    const { response } = await fetchReadableWebpageResponse(googlePhotosDownloadUrl(photo));
+    const contentType = response.headers.get("content-type") ?? "";
+
+    if (!response.ok || !contentType.startsWith("image/")) {
+      await response.body?.cancel().catch(() => null);
+      return null;
+    }
+
+    const bytes = await readResponseBytesWithLimit(response, MAX_SCAN_IMAGE_BYTES);
+
+    return await normalizeScanImageForOcr(
+      new File([Buffer.from(bytes)], `photo-${index + 1}.jpg`, { type: contentType }),
+    );
+  } catch (error) {
+    if (isWorkAbortedError(error)) {
+      throw error;
+    }
+
+    console.warn("Google Photos album photo could not be downloaded; skipping it.", {
+      index,
+      message: toSafeErrorMessage(error),
+    });
+
+    return null;
+  }
+}
+
+/**
  * A Google Photos shared album, read through its photos with the reader a photo upload uses, as
  * many as an upload takes. A photo with nothing legible on it is skipped, like an upload's; an
  * album with nothing legible at all fails as a page with too little text, as it did before.
@@ -1526,20 +1561,11 @@ async function readGooglePhotosAlbum(params: {
       while (cursor < photos.length) {
         const index = cursor;
         cursor += 1;
-        const { response } = await fetchReadableWebpageResponse(
-          googlePhotosDownloadUrl(photos[index]),
-        );
-        const contentType = response.headers.get("content-type") ?? "";
+        const file = await downloadGooglePhotosAlbumPhoto(photos[index], index);
 
-        if (!response.ok || !contentType.startsWith("image/")) {
-          await response.body?.cancel().catch(() => null);
+        if (!file) {
           continue;
         }
-
-        const bytes = await readResponseBytesWithLimit(response, MAX_SCAN_IMAGE_BYTES);
-        const file = await normalizeScanImageForOcr(
-          new File([Buffer.from(bytes)], `photo-${index + 1}.jpg`, { type: contentType }),
-        );
 
         try {
           const extracted = await extractTextFromImage(file, {

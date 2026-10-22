@@ -68,9 +68,12 @@ const IDENTITY_PROVIDER_HOSTS = [
 // Teams message or channel link answers a cookieless fetch with a 200 "Join conversation"
 // launcher page that holds no text, so without this the learner is told the page is thin.
 // Rokus Klett's e-textbook reader is the same: an empty app shell that asks for a Rokus
-// account before it loads a licensed book.
+// account before it loads a licensed book. MiTeam, the learning platform training centres run
+// on their own `*.miteam.si` host, serves its course material through the same kind of shell
+// and answers an anonymous visitor with "no access".
 const SIGN_IN_ONLY_APP_HOSTS = [
   "folio.rokus-klett.si",
+  "miteam.si",
   "teams.cloud.microsoft",
   "teams.live.com",
   "teams.microsoft.com",

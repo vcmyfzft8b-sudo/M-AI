@@ -86,6 +86,13 @@ test("a Rokus Klett e-textbook link is always behind a sign-in", () => {
   assert.equal(isLoginWallUrl("https://www.rokus-klett.si/"), false);
 });
 
+test("a MiTeam course link is always behind a sign-in", () => {
+  // Each training centre has its own MiTeam host; the asset page is an empty app shell and the
+  // asset itself answers an anonymous visitor with "no access".
+  assert.equal(isLoginWallUrl("https://example-centre.miteam.si/asset/EXAMPLEASSETID"), true);
+  assert.equal(isLoginWallUrl("https://notmiteam.si/asset/EXAMPLEASSETID"), false);
+});
+
 test("matches an identity provider only as the host or its parent domain", () => {
   // A lookalike host must not inherit the provider's meaning.
   assert.equal(isLoginWallUrl("https://notaccounts.google.com.evil.test/x"), false);

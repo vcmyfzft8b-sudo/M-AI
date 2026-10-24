@@ -472,9 +472,13 @@ export async function retryPendingFiscalInvoices(limit = 50) {
     return { configured: false, processed: 0, confirmed: 0 };
   }
 
+  // Rows the webhook is still working on are left alone: sending one invoice twice makes FURS
+  // issue two EORs for it.
+  const settled = new Date(Date.now() - 2 * 60 * 1000).toISOString();
   const { data, error } = await db()
     .from("fiscal_invoices" as never)
     .select("*")
+    .lt("created_at", settled)
     .or("status.eq.pending,and(emailed_at.is.null,email_to.not.is.null)")
     .order("issued_at", { ascending: true })
     .limit(limit);

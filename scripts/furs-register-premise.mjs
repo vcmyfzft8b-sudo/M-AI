@@ -15,17 +15,10 @@
  */
 
 import crypto from "node:crypto";
-import https from "node:https";
 import { parseArgs } from "node:util";
 
-import {
-  buildBusinessPremiseRequest,
-  jwsHeader,
-  openFursToken,
-  readBusinessPremiseAnswer,
-  rfc2253Name,
-  signJws,
-} from "../src/lib/fiscal/furs-protocol.ts";
+import { buildBusinessPremiseRequest, readBusinessPremiseAnswer } from "../src/lib/fiscal/furs-protocol.ts";
+import { fursScriptClient } from "./lib/furs-script-client.mjs";
 
 const { values } = parseArgs({
   options: {
@@ -38,48 +31,16 @@ const { values } = parseArgs({
   },
 });
 
-const pem = (name) => {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`${name} is not set.`);
-  return value.replace(/\\n/g, "\n");
-};
-
-const environment = process.env.FURS_ENVIRONMENT?.trim();
-const hosts = { test: ["blagajne-test.fu.gov.si", 9002], production: ["blagajne.fu.gov.si", 9003] };
-
-if (!hosts[environment]) throw new Error('FURS_ENVIRONMENT must be "test" or "production".');
 if (!values.cadastral || !values.building || !values.section || !values["valid-from"]) {
   throw new Error("--cadastral, --building, --section and --valid-from are required.");
 }
 
-const certPem = pem("FURS_CERT_PEM");
-const keyPem = pem("FURS_KEY_PEM");
-const caPem = pem("FURS_CA_PEM");
-const taxNumber = Number(process.env.FURS_TAX_NUMBER);
-const certificate = new crypto.X509Certificate(certPem);
-const [host, port] = hosts[environment];
-
-function post(path, body) {
-  return new Promise((resolve, reject) => {
-    const request = https.request(
-      { host, port, path, method: "POST", key: keyPem, cert: certPem, ca: caPem, minVersion: "TLSv1.2",
-        headers: { "Content-Type": "application/json; charset=UTF-8", "Content-Length": Buffer.byteLength(body) },
-        timeout: 15000 },
-      (response) => {
-        const chunks = [];
-        response.on("data", (chunk) => chunks.push(chunk));
-        response.on("end", () => resolve({ status: response.statusCode, text: Buffer.concat(chunks).toString("utf8") }));
-      },
-    );
-    request.on("timeout", () => request.destroy(new Error("FURS did not answer within 15 s.")));
-    request.on("error", reject);
-    request.end(body);
-  });
-}
+const furs = fursScriptClient();
+const taxNumber = furs.taxNumber;
 
 if (values.echo) {
-  const echo = await post("/v1/cash_registers/echo", JSON.stringify({ EchoRequest: "furs" }));
-  console.log(`Echo (${environment}): ${echo.status} ${echo.text}`);
+  const echo = await furs.echo();
+  console.log(`Echo (${furs.environment}): ${echo.status} ${echo.text}`);
 }
 
 const payload = buildBusinessPremiseRequest({
@@ -107,17 +68,8 @@ if (!values.send) {
   process.exit(0);
 }
 
-const header = jwsHeader(
-  process.env.FURS_CERT_SUBJECT_NAME?.trim() || rfc2253Name(certificate.subject),
-  process.env.FURS_CERT_ISSUER_NAME?.trim() || rfc2253Name(certificate.issuer),
-  certificate.serialNumber,
-);
-const token = signJws(header, payload, crypto.createPrivateKey(keyPem));
-const response = await post("/v1/cash_registers/invoices/register", JSON.stringify({ token }));
-const trusted = (caPem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? []).map(
-  (block) => new crypto.X509Certificate(block),
-);
-const answer = readBusinessPremiseAnswer(openFursToken(JSON.parse(response.text).token, trusted));
+const exchange = await furs.send("business_premise", payload);
+const answer = readBusinessPremiseAnswer(exchange.payload);
 
-console.log(`\nFURS (${environment}) answered ${response.status}:`, answer);
+console.log(`\nFURS (${furs.environment}) answered ${exchange.status}:`, answer);
 process.exit(answer.ok ? 0 : 1);

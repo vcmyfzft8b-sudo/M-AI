@@ -74,9 +74,13 @@ Nothing runs until every value below is set. Do the steps in this order.
 
 ## Not done here, on purpose
 
-- **Payments before fiscal verification starts (backlog).** About 370 payments since 3. 9. 2026.
-  FURS's only published procedure is FAQ Q304 (`#OLDINV;`, a separate device label, an amended
-  internal act). The owner asked FURS how to handle it; nothing is back-filed until FURS answers.
+- **Payments before fiscal verification starts (backlog).** FURS's answer: invoices must be
+  verified "od dneva registracije dejavnosti dalje", so payments from 3. 9. 2026 until the
+  switch-over (368 payments and 12 refunds by 24. 10. 2026), and none before the s.p. existed.
+  `scripts/furs-backfill-old-invoices.mjs` follows FURS FAQ Q304: premise `P1`, a device label
+  used only for this (`STARI`, named in the internal act first), the original payment time,
+  `SubsequentSubmit` and `SpecialNotes: "#OLDINV;"`, credit notes for the refunds, and nothing sent
+  to customers. Dry run by default. The owner asked FURS to confirm the procedure before `--send`.
 - **The notice to buyers** that the seller must issue an invoice and the buyer must take it has to
   be published on the website where people buy (OPIS §6.1, FAQ Q234). The exact wording still
   needs to be taken from FURS before it goes on the paywall, in all five catalogues, web only.

@@ -25,6 +25,23 @@ test("a thin page of real words is not label-only, so it is kept as it is", () =
   assert.equal(isLabelOnlyOcrReading("Vaja 4"), false);
 });
 
+/*
+ * A labelling worksheet photographed on 2026-10-21: a heading over numbered drawings. The verbatim
+ * reader returned the heading and the numbers, the restatement was skipped because the heading is
+ * a word, and the note failed as having nothing to study. Written from scratch, same shape.
+ */
+const LABELLING_SHEET = ["KUHINJSKI PRIBOR", ...Array.from({ length: 18 }, (_, index) => String(index + 1))].join("\n\n");
+
+test("a heading over a column of numbered labels is label-only", () => {
+  assert.deepEqual(classifyImageOcrText(LABELLING_SHEET), { acceptable: false, rejection: "too_short" });
+  assert.equal(isLabelOnlyOcrReading(LABELLING_SHEET), true);
+});
+
+test("a short exercise with a few numbers is still real words", () => {
+  assert.equal(isLabelOnlyOcrReading("Naloga 1\n2 + 3 =\n4 + 5 =\n6 + 7 ="), false);
+  assert.equal(isLabelOnlyOcrReading("Seštej števila.\n12\n15\n18\n21\n24\n27\nKoliko dobiš?"), false);
+});
+
 test("an empty reading is not a label-only one", () => {
   assert.equal(isLabelOnlyOcrReading(""), false);
   assert.equal(isLabelOnlyOcrReading("   \n "), false);

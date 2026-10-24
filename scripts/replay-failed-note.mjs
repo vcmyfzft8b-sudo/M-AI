@@ -39,7 +39,12 @@ import {
   PDF_RESTATE_INSTRUCTIONS,
 } from "../src/lib/ocr-prompts.ts";
 import { pickPageArticleHtml, pickRoleMainHtml } from "../src/lib/link-main-article.ts";
-import { docxTextNeedsPictures, orderDocxPicturePaths } from "../src/lib/docx-pictures.ts";
+import {
+  DOCX_TEXT_PICTURE_EXTENSIONS,
+  docxTextNeedsPictures,
+  orderDocxPicturePaths,
+  readEmfText,
+} from "../src/lib/docx-pictures.ts";
 import { isLegiblePdfTextLayer, isPdfTextLayerTheDocument } from "../src/lib/pdf-text-layer.ts";
 import { isLabelOnlyOcrReading } from "../src/lib/scan-ocr-text.ts";
 import { hasEnoughSourceTextToTeach } from "../src/lib/source-text-gate.ts";
@@ -189,7 +194,14 @@ async function readDocx(bytes) {
   const texts = [text];
   for (const picturePath of orderDocxPicturePaths({ documentXml, relsXml }).slice(0, 8)) {
     const picture = await zip.file(picturePath)?.async("nodebuffer");
-    if (!picture || picture.length < 4 * 1024 || picture.length > 8 * 1024 * 1024) continue;
+    const isMetafile = DOCX_TEXT_PICTURE_EXTENSIONS.has(path.extname(picturePath).slice(1).toLowerCase());
+    if (!picture || (!isMetafile && picture.length < 4 * 1024) || picture.length > 8 * 1024 * 1024) continue;
+    if (isMetafile) {
+      const metafileText = readEmfText(picture);
+      attempts.push({ stage: "docx_metafile", picture: path.basename(picturePath), chars: metafileText.length });
+      texts.push(metafileText);
+      continue;
+    }
     const read = await readPhoto(picture);
     attempts.push({ stage: "docx_picture", picture: path.basename(picturePath), attempts: read.attempts, chars: read.text.length });
     texts.push(read.text);

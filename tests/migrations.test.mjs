@@ -1451,3 +1451,49 @@ test("a chat answer can carry the study set it made, and older rows carry none",
 
   assert.deepEqual(stored.attachment_json, set);
 });
+
+test("fiscal invoice numbers run without gaps, once per payment and per refund", options, async () => {
+  const { query } = await migratedDatabase();
+  const allocate = (overrides = {}) => {
+    const row = {
+      kind: "invoice",
+      year: 2026,
+      issuedAt: "2026-10-26T09:00:00Z",
+      amount: 2000,
+      paymentIntent: null,
+      refund: null,
+      reference: null,
+      ...overrides,
+    };
+    return query(
+      `select * from public.allocate_fiscal_invoice($1,$2,'P1','SPLET',$3,$4,'Naročnina Memo AI','SPLET',52958248,
+         'kupec@example.com',null,$5,null,null,$6,$7,null)`,
+      [row.kind, row.year, row.issuedAt, row.amount, row.paymentIntent, row.refund, row.reference],
+    ).then((rows) => rows[0]);
+  };
+
+  const first = await allocate({ paymentIntent: "pi_1" });
+  const second = await allocate({ paymentIntent: "pi_2" });
+  assert.deepEqual([first.invoice_number, second.invoice_number].map(Number), [1, 2]);
+  assert.equal(first.zoi, null, "the ZOI is filled in after the number exists");
+
+  // Stripe redelivers webhooks: the same payment gets the same invoice and burns no number.
+  const repeat = await allocate({ paymentIntent: "pi_1" });
+  assert.equal(repeat.id, first.id);
+
+  // A refund is a negative credit note in the same series that points at the original.
+  const credit = await allocate({ kind: "credit_note", amount: -2000, paymentIntent: "pi_1", refund: "re_1", reference: first.id });
+  assert.equal(Number(credit.invoice_number), 3);
+  assert.equal((await allocate({ kind: "credit_note", amount: -2000, paymentIntent: "pi_1", refund: "re_1", reference: first.id })).id, credit.id);
+  await assert.rejects(allocate({ kind: "credit_note", amount: -500, refund: "re_2" }), /fiscal_invoices_credit_note_reference/);
+
+  // A rejected insert gives its number back, so the series stays gapless.
+  assert.equal(Number((await allocate({ paymentIntent: "pi_3" })).invoice_number), 4);
+
+  // Each business year starts again at 1.
+  assert.equal(Number((await allocate({ year: 2027, issuedAt: "2027-01-01T08:00:00Z", paymentIntent: "pi_4" })).invoice_number), 1);
+
+  const unprotected = await query(`select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and relname like 'fiscal_invoice%' and c.relkind = 'r' and c.relrowsecurity = false`);
+  assert.deepEqual(unprotected, [], "fiscal tables are service-role only");
+});

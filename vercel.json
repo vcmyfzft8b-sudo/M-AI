@@ -28,6 +28,10 @@
       "schedule": "25 3 * * *"
     },
     {
+      "path": "/api/cron/fiscal-invoices",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/push-queue",
       "schedule": "* * * * *"
     }

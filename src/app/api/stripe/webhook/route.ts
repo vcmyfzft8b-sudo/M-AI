@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
+import {
+  issueFiscalCreditNotesForCharge,
+  issueFiscalInvoiceForCheckoutSession,
+  issueFiscalInvoiceForStripeInvoice,
+} from "@/lib/fiscal/fiscal-invoices";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
 import { getServerEnv } from "@/lib/server-env";
 import { syncStripeSubscription } from "@/lib/billing";
@@ -93,6 +98,24 @@ export async function POST(request: Request) {
 
     if (subscriptionId) {
       await syncStripeSubscription(subscriptionId);
+    }
+
+    /*
+     * Card payments through Stripe count as cash under ZDavPR, so each one gets an invoice that
+     * FURS confirms, and each refund a credit note (docs/fiscal-verification.md). Nothing happens
+     * until FURS_ENABLED and the certificate are configured. A FURS outage does not fail the
+     * webhook: the invoice is issued without an EOR and the cron sends it again.
+     */
+    if (event.type === "invoice.paid") {
+      await issueFiscalInvoiceForStripeInvoice(stripe, event.data.object as Stripe.Invoice);
+    }
+
+    if (event.type === "checkout.session.completed") {
+      await issueFiscalInvoiceForCheckoutSession(event.data.object as Stripe.Checkout.Session);
+    }
+
+    if (event.type === "charge.refunded") {
+      await issueFiscalCreditNotesForCharge(stripe, event.data.object as Stripe.Charge);
     }
 
     return NextResponse.json({ received: true });

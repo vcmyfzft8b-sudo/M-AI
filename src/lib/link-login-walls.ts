@@ -86,11 +86,31 @@ const SIGN_IN_ONLY_APP_HOSTS = [
 // learner to paste the final address -- the address they had pasted.
 const SESSION_SIGNING_ROUTES = [{ host: "drive.google.com", pathPrefix: "/viewerng/noncesigner" }];
 
+// Share links of a document app whose file is only handed to a signed-in account, matched on the
+// host or its parent domain plus the share route, because the rest of the site is ordinary
+// readable pages. A WPS Office share (`eu.wps.com/cms/docs/d/...`, `/l/...`) is a landing page
+// and an online viewer with no text; even an "anyone with the link" share answers the download
+// with "User not signed in".
+const SIGN_IN_ONLY_SHARE_ROUTES = [
+  { host: "wps.com", pathPrefix: "/cms/docs/d/" },
+  { host: "wps.com", pathPrefix: "/l/" },
+];
+
 function isSessionSigningRoute(url: URL) {
   const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
 
   return SESSION_SIGNING_ROUTES.some(
     (route) => hostname === route.host && url.pathname.toLowerCase().startsWith(route.pathPrefix),
+  );
+}
+
+function isSignInOnlyShareRoute(url: URL) {
+  const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+
+  return SIGN_IN_ONLY_SHARE_ROUTES.some(
+    (route) =>
+      (hostname === route.host || hostname.endsWith(`.${route.host}`)) &&
+      url.pathname.toLowerCase().startsWith(route.pathPrefix),
   );
 }
 
@@ -115,7 +135,11 @@ export function isLoginWallUrl(value: string | URL) {
     return false;
   }
 
-  if (isIdentityProviderHost(url.hostname) || isSessionSigningRoute(url)) {
+  if (
+    isIdentityProviderHost(url.hostname) ||
+    isSessionSigningRoute(url) ||
+    isSignInOnlyShareRoute(url)
+  ) {
     return true;
   }
 

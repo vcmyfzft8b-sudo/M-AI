@@ -93,6 +93,15 @@ test("a MiTeam course link is always behind a sign-in", () => {
   assert.equal(isLoginWallUrl("https://notmiteam.si/asset/EXAMPLEASSETID"), false);
 });
 
+test("a WPS Office share link is behind a sign-in, the rest of the site is not", () => {
+  // The share page is a landing page and an online viewer with no text, and even an "anyone
+  // with the link" share only hands the file to a signed-in account.
+  assert.equal(isLoginWallUrl("https://eu.wps.com/cms/docs/d/EXAMPLESHAREID?refer=copylink"), true);
+  assert.equal(isLoginWallUrl("https://eu.wps.com/l/EXAMPLESHAREID"), true);
+  assert.equal(isLoginWallUrl("https://www.wps.com/blog/example-article/"), false);
+  assert.equal(isLoginWallUrl("https://notwps.com/l/EXAMPLESHAREID"), false);
+});
+
 test("matches an identity provider only as the host or its parent domain", () => {
   // A lookalike host must not inherit the provider's meaning.
   assert.equal(isLoginWallUrl("https://notaccounts.google.com.evil.test/x"), false);

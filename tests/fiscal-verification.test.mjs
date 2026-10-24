@@ -132,7 +132,7 @@ test("a small taxpayer's invoice carries only ExemptVATTaxableAmount, never VAT 
       Invoice: {
         TaxNumber: 12345678,
         IssueDateTime: "2026-10-24T14:03:11",
-        NumberingStructure: "C",
+        NumberingStructure: "B",
         InvoiceIdentifier: { BusinessPremiseID: "P1", ElectronicDeviceID: "SPLET", InvoiceNumber: "57" },
         InvoiceAmount: 20,
         PaymentAmount: 20,
@@ -234,11 +234,15 @@ test("FURS's answers: the EOR, or the error code in any case", () => {
   assert.equal(readBusinessPremiseAnswer({}).ok, false);
 });
 
-test("certificate names are written most specific first, commas escaped", () => {
+test("certificate names are written most specific first, escaped once, serialNumber as its OID", () => {
+  // A real certificate whose name has a comma, like the s.p.'s own ("MEMO AI, NACE VALENČIČ S.P.").
+  const certificate = new crypto.X509Certificate(readFileSync(new URL("./fixtures/fiscal/test-certificate.pem", import.meta.url)));
+
   assert.equal(
-    rfc2253Name("C=SI\nO=state-institutions\nOU=DavPotRacTEST\nCN=ITM STORITVE, ŠPELA PERGAR S.P."),
-    "CN=ITM STORITVE\\, ŠPELA PERGAR S.P.,OU=DavPotRacTEST,O=state-institutions,C=SI",
+    rfc2253Name(certificate.subject),
+    "CN=MEMO AI\\, NACE VALENČIČ S.P.,2.5.4.5=#130131,OU=12345678,OU=DavPotRacTEST,O=state-institutions,C=SI",
   );
+  assert.match(jwsHeader(rfc2253Name(certificate.subject), "CN=CA", certificate.serialNumber), /"serial":2575988469811686647}$/);
 });
 
 test("the Stripe webhook issues fiscal documents for payments and refunds", () => {

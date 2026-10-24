@@ -1463,12 +1463,14 @@ test("fiscal invoice numbers run without gaps, once per payment and per refund",
       paymentIntent: null,
       refund: null,
       reference: null,
+      environment: "production",
+      stripeInvoice: null,
       ...overrides,
     };
     return query(
-      `select * from public.allocate_fiscal_invoice($1,$2,'P1','SPLET',$3,$4,'Naročnina Memo AI','SPLET',52958248,
-         'kupec@example.com',null,$5,null,null,$6,$7,null)`,
-      [row.kind, row.year, row.issuedAt, row.amount, row.paymentIntent, row.refund, row.reference],
+      `select * from public.allocate_fiscal_invoice($8,$1,$2,'P1','SPLET',$3,$4,'Naročnina Memo AI','SPLET',52958248,
+         'kupec@example.com',null,$5,$9,null,$6,$7,null)`,
+      [row.kind, row.year, row.issuedAt, row.amount, row.paymentIntent, row.refund, row.reference, row.environment, row.stripeInvoice],
     ).then((rows) => rows[0]);
   };
 
@@ -1489,6 +1491,15 @@ test("fiscal invoice numbers run without gaps, once per payment and per refund",
 
   // A rejected insert gives its number back, so the series stays gapless.
   assert.equal(Number((await allocate({ paymentIntent: "pi_3" })).invoice_number), 4);
+
+  // A payment known only by its Stripe invoice is still invoiced once.
+  const byInvoice = await allocate({ stripeInvoice: "in_1" });
+  assert.equal((await allocate({ stripeInvoice: "in_1" })).id, byInvoice.id);
+  await assert.rejects(allocate({}), /needs the Stripe payment/);
+
+  // FURS's test system has its own series: a test run never takes a production number.
+  assert.equal(Number((await allocate({ environment: "test", paymentIntent: "pi_1" })).invoice_number), 1);
+  assert.equal(Number((await allocate({ paymentIntent: "pi_5" })).invoice_number), 6);
 
   // Each business year starts again at 1.
   assert.equal(Number((await allocate({ year: 2027, issuedAt: "2027-01-01T08:00:00Z", paymentIntent: "pi_4" })).invoice_number), 1);

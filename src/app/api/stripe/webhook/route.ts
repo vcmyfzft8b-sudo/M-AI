@@ -118,6 +118,17 @@ export async function POST(request: Request) {
       await issueFiscalCreditNotesForCharge(stripe, event.data.object as Stripe.Charge);
     }
 
+    // A card refund can still be pending when charge.refunded arrives; it gets its credit note
+    // when it succeeds.
+    if (event.type === "charge.refund.updated") {
+      const refund = event.data.object as Stripe.Refund;
+      const chargeId = typeof refund.charge === "string" ? refund.charge : refund.charge?.id;
+
+      if (refund.status === "succeeded" && chargeId) {
+        await issueFiscalCreditNotesForCharge(stripe, await stripe.charges.retrieve(chargeId));
+      }
+    }
+
     return NextResponse.json({ received: true });
   } catch (error) {
     console.error("Stripe webhook processing failed", {

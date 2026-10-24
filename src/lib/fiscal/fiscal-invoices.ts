@@ -42,6 +42,7 @@ export const FISCAL_OPERATOR_LABEL = "SPLET";
 type FiscalInvoiceRow = {
   id: string;
   kind: "invoice" | "credit_note";
+  furs_environment: "test" | "production";
   business_year: number;
   premise_id: string;
   device_id: string;
@@ -57,6 +58,7 @@ type FiscalInvoiceRow = {
   delivered_without_eor: boolean;
   send_attempts: number;
   emailed_at: string | null;
+  email_attempts: number;
   email_to: string | null;
   reference_invoice_id: string | null;
   special_notes: string | null;
@@ -77,9 +79,9 @@ type IssueParams = {
   referenceInvoiceId?: string | null;
 };
 
-async function allocate(credentials: FursCredentials, params: IssueParams) {
-  const issuedAt = new Date();
+async function allocate(credentials: FursCredentials, params: IssueParams, issuedAt: Date) {
   const { data, error } = await db().rpc("allocate_fiscal_invoice" as never, {
+    p_furs_environment: credentials.environment,
     p_kind: params.kind,
     p_business_year: businessYear(issuedAt),
     p_premise_id: FISCAL_PREMISE_ID,
@@ -142,11 +144,17 @@ async function loadReference(row: FiscalInvoiceRow) {
     return null;
   }
 
-  const { data } = await db()
+  const { data, error } = await db()
     .from("fiscal_invoices" as never)
     .select("premise_id, device_id, invoice_number, issued_at")
     .eq("id", row.reference_invoice_id)
     .single();
+
+  // A credit note sent without its reference would be a free-standing negative invoice.
+  if (error) {
+    throw new Error(`Could not read the invoice credit note ${row.id} refers to: ${error.message}`);
+  }
+
   const reference = data as unknown as Pick<
     FiscalInvoiceRow,
     "premise_id" | "device_id" | "invoice_number" | "issued_at"
@@ -187,7 +195,7 @@ async function submit(credentials: FursCredentials, row: FiscalInvoiceRow & { zo
   const eor = answer?.ok ? answer.eor : null;
   const failure = exchange.transportError ?? (answer && !answer.ok ? `${answer.errorCode} ${answer.errorMessage}` : null);
 
-  await db()
+  const logged = await db()
     .from("fiscal_invoice_messages" as never)
     .insert({
       fiscal_invoice_id: row.id,
@@ -202,16 +210,29 @@ async function submit(credentials: FursCredentials, row: FiscalInvoiceRow & { zo
       eor,
     } as never);
 
+  if (logged.error) {
+    captureBackgroundError(new Error(`Could not log a FURS exchange: ${logged.error.message}`), {
+      operation: "fiscal-invoice-submit",
+      tags: { fiscal_invoice_id: row.id },
+      extra: { eor, requestToken: exchange.requestToken, responseToken: exchange.responseToken },
+    });
+  }
+
   const now = new Date().toISOString();
   const update = eor
     ? { status: "confirmed", eor, confirmed_at: now, last_error: null }
     : { last_error: failure ?? "FURS gave no EOR." };
 
-  await db()
+  const stored = await db()
     .from("fiscal_invoices" as never)
     .update({ ...update, send_attempts: row.send_attempts + 1, last_attempt_at: now } as never)
     .eq("id", row.id)
     .eq("status", "pending");
+
+  // An EOR FURS gave but this row never recorded would make the cron register the invoice again.
+  if (stored.error) {
+    throw new Error(`FURS answered (EOR ${eor ?? "none"}) but fiscal invoice ${row.id} was not updated: ${stored.error.message}`);
+  }
 
   if (!eor) {
     captureBackgroundError(new Error(`FURS did not confirm fiscal invoice: ${failure}`), {
@@ -230,6 +251,11 @@ async function submit(credentials: FursCredentials, row: FiscalInvoiceRow & { zo
  */
 async function deliver(row: FiscalInvoiceRow & { zoi: string }) {
   if (row.emailed_at || !row.email_to) {
+    return row;
+  }
+
+  // FURS's test system confirms nothing real: a customer must never receive a test invoice.
+  if (row.furs_environment === "test") {
     return row;
   }
 
@@ -265,7 +291,8 @@ async function deliver(row: FiscalInvoiceRow & { zoi: string }) {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "Idempotency-Key": `fiscal-invoice-${row.id}`,
+      // The body changes once the EOR is in, and Resend refuses a reused key with another body.
+      "Idempotency-Key": `fiscal-invoice-${row.id}-${row.status === "confirmed" ? "eor" : "zoi"}`,
     },
     body: JSON.stringify({
       from: process.env.FISCAL_EMAIL_FROM?.trim() || "Memo AI <racuni@memoai.eu>",
@@ -280,6 +307,10 @@ async function deliver(row: FiscalInvoiceRow & { zoi: string }) {
   }).catch((error: unknown) => error);
 
   if (!(response instanceof Response) || !response.ok) {
+    await db()
+      .from("fiscal_invoices" as never)
+      .update({ email_attempts: row.email_attempts + 1, last_email_attempt_at: new Date().toISOString() } as never)
+      .eq("id", row.id);
     const detail =
       response instanceof Response
         ? `Resend answered ${response.status}: ${(await response.text().catch(() => "")).slice(0, 300)}`
@@ -305,7 +336,7 @@ async function advance(credentials: FursCredentials, row: FiscalInvoiceRow) {
   let current = await ensureZoi(credentials, row);
   const withZoi = current as FiscalInvoiceRow & { zoi: string };
 
-  if (withZoi.status === "pending") {
+  if (withZoi.status === "pending" && withZoi.send_attempts < MAX_SEND_ATTEMPTS) {
     current = await submit(credentials, withZoi);
   }
 
@@ -323,7 +354,15 @@ async function issue(params: IssueParams) {
     return null;
   }
 
-  const row = await allocate(credentials, params);
+  const issuedAt = new Date();
+  const row = await allocate(credentials, params, issuedAt);
+
+  // A redelivered webhook gets the existing row back. Whoever created it may still be sending it
+  // to FURS, and a second send would get a second EOR, so an existing row is left to the cron.
+  if (new Date(row.issued_at).getTime() !== issuedAt.getTime()) {
+    return row;
+  }
+
   return advance(credentials, row);
 }
 
@@ -424,12 +463,18 @@ export async function issueFiscalCreditNotesForCharge(stripe: Stripe, charge: St
     return [];
   }
 
-  const { data } = await db()
+  const { data, error } = await db()
     .from("fiscal_invoices" as never)
     .select("id, description, email_to, user_id")
     .eq("kind", "invoice")
+    .eq("furs_environment", getFursCredentials()?.environment ?? "")
     .eq("stripe_payment_intent_id", paymentIntentId)
     .maybeSingle();
+
+  // Thrown, not swallowed: the webhook then fails and Stripe delivers the refund again.
+  if (error) {
+    throw new Error(`Could not look up the invoice for refunded charge ${charge.id}: ${error.message}`);
+  }
   const original = data as unknown as { id: string; description: string; email_to: string | null; user_id: string | null } | null;
 
   if (!original) {
@@ -461,42 +506,73 @@ export async function issueFiscalCreditNotesForCharge(stripe: Stripe, charge: St
   return issued;
 }
 
+/** FURS sends per invoice stop after this many; then it needs a person (Sentry has every failure). */
+const MAX_SEND_ATTEMPTS = 20;
+const MAX_EMAIL_ATTEMPTS = 10;
+const BATCH = 20;
+
 /**
  * The cron's job: every invoice FURS has not confirmed yet is sent again (with SubsequentSubmit
- * once the customer has it), and every confirmed one that was never emailed is emailed.
+ * once the customer has it), and every invoice the customer has not received is emailed. Rows
+ * rotate by their last attempt, so a few that keep failing cannot starve newer ones, and the run
+ * stops well inside the function's time limit rather than being cut off mid-send.
  */
-export async function retryPendingFiscalInvoices(limit = 50) {
+export async function retryPendingFiscalInvoices(budgetMs = 80_000) {
   const credentials = getFursCredentials();
 
   if (!credentials) {
     return { configured: false, processed: 0, confirmed: 0 };
   }
 
+  const startedAt = Date.now();
   // Rows the webhook is still working on are left alone: sending one invoice twice makes FURS
   // issue two EORs for it.
-  const settled = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-  const { data, error } = await db()
+  const settled = new Date(startedAt - 2 * 60 * 1000).toISOString();
+
+  const unconfirmed = await db()
     .from("fiscal_invoices" as never)
     .select("*")
+    .eq("furs_environment", credentials.environment)
+    .eq("status", "pending")
     .lt("created_at", settled)
-    .or("status.eq.pending,and(emailed_at.is.null,email_to.not.is.null)")
-    .order("issued_at", { ascending: true })
-    .limit(limit);
+    .lt("send_attempts", MAX_SEND_ATTEMPTS)
+    .order("last_attempt_at", { ascending: true, nullsFirst: true })
+    .limit(BATCH);
+  const undelivered = await db()
+    .from("fiscal_invoices" as never)
+    .select("*")
+    .eq("furs_environment", credentials.environment)
+    .is("emailed_at", null)
+    .not("email_to", "is", null)
+    .lt("created_at", settled)
+    .lt("email_attempts", MAX_EMAIL_ATTEMPTS)
+    .order("last_email_attempt_at", { ascending: true, nullsFirst: true })
+    .limit(BATCH);
 
-  if (error) {
-    throw new Error(`Could not read pending fiscal invoices: ${error.message}`);
+  if (unconfirmed.error || undelivered.error) {
+    throw new Error(`Could not read pending fiscal invoices: ${(unconfirmed.error ?? undelivered.error)?.message}`);
   }
 
-  let confirmed = 0;
-  const rows = (data ?? []) as unknown as FiscalInvoiceRow[];
+  const rows = new Map<string, FiscalInvoiceRow>();
+  for (const row of [...(unconfirmed.data ?? []), ...(undelivered.data ?? [])] as unknown as FiscalInvoiceRow[]) {
+    rows.set(row.id, row);
+  }
 
-  for (const row of rows) {
+  let processed = 0;
+  let confirmed = 0;
+
+  for (const row of rows.values()) {
+    if (Date.now() - startedAt > budgetMs) {
+      break;
+    }
+
     const result = await advance(credentials, row);
+    processed += 1;
 
     if (result.status === "confirmed" && row.status === "pending") {
       confirmed += 1;
     }
   }
 
-  return { configured: true, processed: rows.length, confirmed };
+  return { configured: true, processed, confirmed };
 }

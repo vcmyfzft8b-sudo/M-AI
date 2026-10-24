@@ -101,8 +101,9 @@ async function collectDocuments() {
     if (charge.amount_refunded > 0) {
       for await (const refund of stripe.refunds.list({ charge: charge.id, limit: 100 })) {
         if (refund.status !== "succeeded" || refund.amount <= 0) continue;
-        // A refund made after the switch-over is handled by the live webhook only if the payment
-        // had a live invoice; these payments do not, so their refunds belong here whenever made.
+        // A refund made after the switch-over is a live credit note: the webhook issues it,
+        // references this back-filed invoice, and sends it to the customer.
+        if (refund.created * 1000 >= until.getTime()) continue;
         documents.push({
           kind: "credit_note",
           issuedAt: new Date(refund.created * 1000),
@@ -160,7 +161,7 @@ async function rest(path, init = {}) {
 /** The row for an invoice, by payment intent: the reference a credit note points at. */
 async function originalFor(paymentIntentId) {
   const rows = await rest(
-    `fiscal_invoices?kind=eq.invoice&stripe_payment_intent_id=eq.${encodeURIComponent(paymentIntentId)}&select=*`,
+    `fiscal_invoices?kind=eq.invoice&furs_environment=eq.${furs.environment}&stripe_payment_intent_id=eq.${encodeURIComponent(paymentIntentId)}&select=*`,
   );
   return rows[0] ?? null;
 }
@@ -178,6 +179,7 @@ for (const doc of documents) {
   const row = await rest("rpc/allocate_fiscal_invoice", {
     method: "POST",
     body: JSON.stringify({
+      p_furs_environment: furs.environment,
       p_kind: doc.kind,
       p_business_year: businessYear(doc.issuedAt),
       p_premise_id: PREMISE_ID,

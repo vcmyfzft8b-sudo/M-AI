@@ -11,7 +11,10 @@ is the seller there.
    `mode: payment` (tutor minutes) to `/api/stripe/webhook`.
 2. `allocate_fiscal_invoice` (migration 0073) takes the next number in `P1-SPLET-n` under a row lock
    and writes the invoice in the same statement. A redelivered webhook gets the same invoice back
-   and burns no number. Numbers restart at 1 each business year (Slovenian calendar year).
+   and burns no number, and leaves sending it to whoever created it (two sends would get two
+   EORs). Numbers restart at 1 each business year (Slovenian calendar year), are numbered per
+   device (`NumberingStructure: "B"`), and FURS's test and production systems keep separate
+   series, so a test run can never take a real number.
 3. The ZOI is computed and stored (`src/lib/fiscal/furs-protocol.ts`).
 4. The invoice is signed (RS256 JWS) and sent to FURS over two-way TLS
    (`src/lib/fiscal/furs-client.ts`). The signed request and FURS's signed answer are logged in
@@ -21,9 +24,11 @@ is the seller there.
 6. If FURS could not be reached or refused it, the invoice still goes out at once, with the ZOI but
    without an EOR (ZDavPR art. 9), and `/api/cron/fiscal-invoices` sends it again every 15 minutes
    with `SubsequentSubmit` until FURS confirms it. The law allows two working days. An EOR that comes
-   later is kept in the database and never added to the customer's copy.
+   later is kept in the database and never added to the customer's copy. The cron takes rows
+   oldest-attempt first, stops after 20 FURS attempts or 10 email attempts per invoice (each failure
+   is in Sentry), and ends its run inside the function's time limit.
 
-A refund (`charge.refunded`) gets a credit note (dobropis): a negative invoice in the same series
+A refund (`charge.refunded`, or `charge.refund.updated` once a pending refund succeeds) gets a credit note (dobropis): a negative invoice in the same series
 with a `ReferenceInvoice` to the original. Refunds of payments made before fiscal verification was
 switched on have no original to reference and get nothing.
 
@@ -44,7 +49,9 @@ Nothing runs until every value below is set. Do the steps in this order.
    (`openssl x509 -inform der` if they are DER):
    - https://www.si-trust.gov.si/assets/si-trust-root/povezovalni-podrejeni/sigovca-2/sigov-ca2.xcert.crt
    - https://www.si-trust.gov.si/assets/si-trust-root/korensko-potrdilo/si-trust-root.crt
-4. **Environment (Vercel, Production only; never on Preview).**
+4. **Environment (Vercel, Production only).** Test mode (`FURS_ENVIRONMENT=test`) is for a local
+   run against the staging database with Stripe in test mode, never on Production: it keeps its own
+   number series and sends no email to customers, but it would still read real payments there.
    | Variable | Value |
    |---|---|
    | `FURS_ENABLED` | `true` |
@@ -55,12 +62,12 @@ Nothing runs until every value below is set. Do the steps in this order.
    | `FURS_TAX_NUMBER` | `52958248` (on test: the number in the test certificate) |
    | `RESEND_API_KEY` | already used for creator emails |
    | `FISCAL_EMAIL_FROM` | optional, default `Memo AI <racuni@memoai.eu>` |
-5. **Stripe webhook events.** Add `invoice.paid` and `charge.refunded` to the production webhook
+5. **Stripe webhook events.** Add `invoice.paid`, `charge.refunded` and `charge.refund.updated` to the production webhook
    endpoint (it already receives `checkout.session.completed` and the subscription events).
 6. **Internal act (interni akt).** Must exist before the first invoice. It names the premise `P1`
-   (the seat, Zgoša 87), the device `SPLET` (the server that issues invoices), numbering
-   `NumberingStructure C` (centrally per premise, `P1-SPLET-n`, restarting each year) and the
-   operator label `SPLET`. A draft is in the owner's filing folder; FURS publishes templates on
+   (the seat, Zgoša 87), the device `SPLET` (the server that issues invoices), numbering per device
+   (`P1-SPLET-n`, restarting each year), the back-filing device `STARI` and the operator label
+   `SPLET`. A draft is in the owner's filing folder; FURS publishes templates on
    eDavki under "Interni akt".
 7. **Register the premise** before the first invoice (FURS answers `S006` otherwise):
    ```
@@ -69,8 +76,9 @@ Nothing runs until every value below is set. Do the steps in this order.
    ```
    The cadastral municipality, building and part numbers of Zgoša 87 come from GURS (e-prostor).
    FURS: send zeros if the building has no number.
-8. Run on `test` for at least two days (FURS's recommendation), then switch `FURS_ENVIRONMENT` and
-   the certificate to production and register the premise there.
+8. Run on `test` for at least two days (FURS's recommendation; locally against staging, see step 4),
+   then set the production certificate and `FURS_ENVIRONMENT=production` on Production and register
+   the premise there.
 
 ## Not done here, on purpose
 

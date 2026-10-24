@@ -150,7 +150,9 @@ export function buildInvoiceRequest(input: InvoiceRequestInput) {
   const invoice: Record<string, unknown> = {
     TaxNumber: input.taxNumber,
     IssueDateTime: fursDateTime(input.issuedAt),
-    NumberingStructure: "C",
+    // "B": numbered per electronic device, so the live series (SPLET) and the back-filing series
+    // the internal act names (STARI) can each run from 1 under the same premise.
+    NumberingStructure: "B",
     InvoiceIdentifier: {
       BusinessPremiseID: input.premiseId,
       ElectronicDeviceID: input.deviceId,
@@ -289,9 +291,13 @@ export function signJws(headerJson: string, payload: unknown, privateKey: crypto
 }
 
 /**
- * A certificate's distinguished name in RFC 2253 form, most specific first, commas escaped:
- * what FURS's own sample header carries. FURS finds the certificate by its serial, and the
- * spec is not consistent about this string, so FURS_CERT_SUBJECT_NAME can override it.
+ * A certificate's distinguished name in RFC 2253 form, most specific first: what FURS's own
+ * sample header carries ("CN=ITM STORITVE\, ŠPELA PERGAR S.P.,2.5.4.5=#130131,OU=…,C=SI").
+ * Node's `X509Certificate.subject` already escapes special characters (a comma comes out as
+ * `\,`), so the values are only reordered, never escaped again. serialNumber has no RFC 2253
+ * keyword and is written as its OID with the DER of the PrintableString value, as Java does.
+ * FURS finds the certificate by its serial and its spec is not consistent about this string, so
+ * FURS_CERT_SUBJECT_NAME can override it.
  */
 export function rfc2253Name(nodeName: string) {
   return nodeName
@@ -301,7 +307,13 @@ export function rfc2253Name(nodeName: string) {
     .map((rdn) => {
       const separator = rdn.indexOf("=");
       const type = rdn.slice(0, separator);
-      const value = rdn.slice(separator + 1).replace(/([,+"\\<>;])/g, "\\$1");
+      const value = rdn.slice(separator + 1);
+
+      if (type === "serialNumber") {
+        const bytes = Buffer.from(value, "ascii");
+        return `2.5.4.5=#13${bytes.length.toString(16).padStart(2, "0")}${bytes.toString("hex")}`;
+      }
+
       return `${type}=${value}`;
     })
     .join(",");

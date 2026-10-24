@@ -31,6 +31,30 @@ import { renderInvoiceHtml, renderInvoiceText } from "../src/lib/fiscal/invoice-
 
 const { privateKey, publicKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
 
+const TEST_CERTIFICATE = `-----BEGIN CERTIFICATE-----
+MIIDjzCCAncCCCO/v914oKz3MA0GCSqGSIb3DQEBCwUAMIGJMQswCQYDVQQGEwJT
+STEbMBkGA1UECgwSc3RhdGUtaW5zdGl0dXRpb25zMRYwFAYDVQQLDA1EYXZQb3RS
+YWNURVNUMREwDwYDVQQLDAgxMjM0NTY3ODEKMAgGA1UEBRMBMTEmMCQGA1UEAwwd
+TUVNTyBBSSwgTkFDRSBWQUxFTsSMScSMIFMuUC4wHhcNMjYxMDI0MTIyOTM2WhcN
+MzYxMDIxMTIyOTM2WjCBiTELMAkGA1UEBhMCU0kxGzAZBgNVBAoMEnN0YXRlLWlu
+c3RpdHV0aW9uczEWMBQGA1UECwwNRGF2UG90UmFjVEVTVDERMA8GA1UECwwIMTIz
+NDU2NzgxCjAIBgNVBAUTATExJjAkBgNVBAMMHU1FTU8gQUksIE5BQ0UgVkFMRU7E
+jEnEjCBTLlAuMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq3TFduNI
+Sk1tOG/9/g6B1eNGiozQk2V24AjlidtEeOqOgJRZRXEyQqS6Da7o+s7/9HELS8Us
+xhldo+ROyIiZAWt2c0uuMgqNbmpqboOSc5meF3nPpMAtWQeLrPINHqRs2p/zMSZf
+JLKB/+Zo/YmbH+jDRbSRdEWc2Mt9TF+xHTNj7WF9Kx1q4MxtrBkE9w0NEv8tWegr
+bZeB8w9lmuTLwrz+4OvCiK045sbnywsQ2Lbaybttclmol8OnMvJDL7Tfi68QIV8s
+NNMrwAVaGGG/oGBTU0IXdMJqZaiPdrEHuToEce+dx5FmdC+jmqT5eAGyX8M5LFsO
+kLfR5FitxdoxvwIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBOMatYwYpJLOX27oc1
+OckSyMfI3RqOX6clEXxk/tEig2dv2J4isV5R/H0ZOzY6lrjubEa7RabQdw0iaTCw
+BjPJP/hiqEduvWvRhyMnrZxVA0J7J6omcExU+rOq5gbeFhm1b6f4QJi33V5rS5v0
+BDQceZ3wELzP16TvybYRbtWUkfTjkff+U4UWEYewg6I+2nEwgtcr6iJhfswOVdUn
+JutdXUMvDhF35+QJhc8k7XnFHX2IrAHDzmC0X/dgbjyomwr3vVpKZ06uGvKS3s3a
+aVe/xRExt4M4VqWzaB8j/4HuUhLZZf7Se+gOYMbHDXJ3ObjUOPpUqNH+BRYCOfhV
+Y2xA
+-----END CERTIFICATE-----
+`;
+
 test("amounts use a dot and always two decimals, negatives included", () => {
   assert.equal(formatAmount(2000), "20.00");
   assert.equal(formatAmount(1299), "12.99");
@@ -235,8 +259,9 @@ test("FURS's answers: the EOR, or the error code in any case", () => {
 });
 
 test("certificate names are written most specific first, escaped once, serialNumber as its OID", () => {
-  // A real certificate whose name has a comma, like the s.p.'s own ("MEMO AI, NACE VALENČIČ S.P.").
-  const certificate = new crypto.X509Certificate(readFileSync(new URL("./fixtures/fiscal/test-certificate.pem", import.meta.url)));
+  // A real certificate whose name has a comma, like the s.p.'s own ("MEMO AI, NACE VALENČIČ S.P."):
+  // self-signed with openssl, serial 2575988469811686647 as in FURS's sample. Public part only.
+  const certificate = new crypto.X509Certificate(TEST_CERTIFICATE);
 
   assert.equal(
     rfc2253Name(certificate.subject),

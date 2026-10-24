@@ -97,3 +97,26 @@ test("no other lecture-scoped table hides a storage path behind the cascade", ()
     );
   }
 });
+
+test("every 500 the DELETE handler returns is reported with the query that failed", () => {
+  // Three production 500s on this route left nothing but an empty log record, because every
+  // refusal returned without a trace. A refusal written straight back out as a bare 500 would
+  // make the next one undiagnosable again.
+  assert.doesNotMatch(
+    DELETE_HANDLER,
+    /if \([A-Za-z]+\) \{\n\s+return NextResponse\.json\([^)]*\{ status: 500 \}/,
+    "a DELETE refusal returns a 500 without reporting it",
+  );
+
+  for (const operation of [
+    "selectNoteMedia",
+    "selectPodcasts",
+    "selectPodcastSegments",
+    "selectTtsChunks",
+    "deleteLecture",
+  ]) {
+    assert.match(DELETE_HANDLER, new RegExp(`return failDelete\\("${operation}", `));
+  }
+
+  assert.match(DELETE_HANDLER, /captureRouteError\(error, \{\n\s+route: "\/api\/lectures\/\[id\]"/);
+});

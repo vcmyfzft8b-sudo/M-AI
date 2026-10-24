@@ -22,6 +22,7 @@ import {
   hasPreparedManualImportText,
   readProcessingUpdatedAt,
 } from "@/lib/lecture-stall-plan";
+import { captureRouteError } from "@/lib/monitoring";
 import { markLecturePipelineFailed } from "@/lib/pipeline";
 import { parseJsonRequest } from "@/lib/request-validation";
 import { enforceRateLimit, rateLimitPresets } from "@/lib/rate-limit";
@@ -269,6 +270,24 @@ export async function DELETE(
     return NextResponse.json({ error: await tr("api.notFound") }, { status: 404 });
   }
 
+  /*
+   * Every refusal below is a 500 the learner sees as a delete that did not happen. They used to
+   * return without a word, so three production 500s (2026-10-21T10:27:52Z, 2026-10-24T04:53:01Z
+   * and 09:48:55Z, each cleared by a retry seconds later) left an empty log record that could not
+   * say which query failed or what Supabase answered. The operation names the query.
+   */
+  const failDelete = async (operation: string, error: unknown) => {
+    captureRouteError(error, {
+      route: "/api/lectures/[id]",
+      operation,
+      request,
+      userId: user.id,
+      lectureId: id,
+    });
+
+    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
+  };
+
   const service = createSupabaseServiceRoleClient();
   const { data: noteMediaRows, error: noteMediaError } = await service
     .from("lecture_note_media")
@@ -277,7 +296,7 @@ export async function DELETE(
     .eq("user_id", user.id);
 
   if (noteMediaError) {
-    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
+    return failDelete("selectNoteMedia", noteMediaError);
   }
 
   /*
@@ -296,7 +315,7 @@ export async function DELETE(
     .eq("lecture_id", id);
 
   if (podcastRowsError) {
-    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
+    return failDelete("selectPodcasts", podcastRowsError);
   }
 
   const podcastIds = ((podcastRows ?? []) as Array<{ id: string }>).map((row) => row.id);
@@ -309,7 +328,7 @@ export async function DELETE(
       : { data: [], error: null };
 
   if (podcastSegmentsError) {
-    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
+    return failDelete("selectPodcastSegments", podcastSegmentsError);
   }
 
   // Read-aloud audio has to be read before the delete for the same reason: lecture_tts_chunks
@@ -322,7 +341,7 @@ export async function DELETE(
     .eq("lecture_id", id);
 
   if (ttsChunkError) {
-    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
+    return failDelete("selectTtsChunks", ttsChunkError);
   }
 
   const { error } = await supabase
@@ -332,7 +351,7 @@ export async function DELETE(
     .eq("user_id", user.id);
 
   if (error) {
-    return NextResponse.json({ error: await tr("common.somethingWentWrong") }, { status: 500 });
+    return failDelete("deleteLecture", error);
   }
 
   const chunkPaths = parseAudioChunkManifest(
